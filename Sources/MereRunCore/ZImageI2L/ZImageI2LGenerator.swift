@@ -1,0 +1,523 @@
+import Foundation
+import MLX
+import MLXNN
+import MLXRandom
+
+// MARK: - Z-Image-i2L Generator
+//
+// Converts input images to LoRA weights using:
+// 1. SigLIP2-G384 vision encoder (1536-dim)
+// 2. DINOv3-7B vision encoder (4096-dim)
+// 3. Z-Image-i2L projection model
+//
+// Pipeline:
+//   images -> [SigLIP2 || DINOv3] -> concat(5632-dim) -> I2L model -> LoRA weights
+
+public actor ZImageI2LGenerator {
+    private struct LoadedModels {
+        let siglip2: SigLIP2VisionModel
+        let dinov3: DINOv3VisionModel
+        let i2l: ZImageI2LModel
+        let configs: ZImageI2LModelConfigs
+    }
+
+    private var loaded: LoadedModels?
+    private let dtype: DType = .bfloat16
+
+    /// Optional explicit model paths (for app-bundled models)
+    private var explicitSiglip2Path: URL?
+    private var explicitDinov3Path: URL?
+    private var explicitI2LPath: URL?
+    private var resolvedModelRoot: URL?
+
+    public init() {}
+
+    /// Initialize with explicit model paths (for app-bundled models)
+    public init(siglip2Path: URL? = nil, dinov3Path: URL? = nil, i2lPath: URL? = nil) {
+        self.explicitSiglip2Path = siglip2Path
+        self.explicitDinov3Path = dinov3Path
+        self.explicitI2LPath = i2lPath
+    }
+
+    // MARK: - Public API
+
+    /// Generate LoRA weights from input images
+    public func generateLoRA(
+        from images: [URL],
+        outputPath: URL,
+        progressHandler: (@Sendable (String) -> Void)? = nil
+    ) async throws {
+        progressHandler?("Loading models...")
+        let models = try await loadModelsIfNeeded(progressHandler: progressHandler)
+
+        progressHandler?("Processing \(images.count) image(s)...")
+
+        // Load and preprocess images
+        var combinedEmbeddings: [MLXArray] = []
+        combinedEmbeddings.reserveCapacity(images.count)
+
+        for (idx, imageURL) in images.enumerated() {
+            progressHandler?("Encoding image \(idx + 1)/\(images.count)...")
+
+            // Match DiffSynth preprocessing:
+            // - center crop + resize to 1024x1024 (aspect-fill)
+            // - SigLIP2 processor then resizes to 384 and normalizes with mean/std = 0.5
+            // - DINOv3 processor then resizes to 224 and normalizes with ImageNet stats
+            let (siglipInput, dinoInput) = try loadImageForEncoders(from: imageURL)
+
+            // Encode with SigLIP2 (384x384)
+            let siglipEmb = models.siglip2.encode(siglipInput)
+            // Encode with DINOv3 (224x224)
+            let dinoEmb = models.dinov3.encode(dinoInput)
+
+            // Ensure embeddings are 1D, then concatenate.
+            let siglip1D = siglipEmb.ndim == 2 ? siglipEmb.squeezed(axis: 0) : siglipEmb
+            let dino1D = dinoEmb.ndim == 2 ? dinoEmb.squeezed(axis: 0) : dinoEmb
+            let combined = MLX.concatenated([siglip1D, dino1D], axis: -1)  // [5632]
+            combinedEmbeddings.append(combined)
+
+            eval(siglipEmb, dinoEmb, combined)
+        }
+
+        progressHandler?("Generating LoRA weights...")
+        var perImageLoRAs: [[String: MLXArray]] = []
+        perImageLoRAs.reserveCapacity(combinedEmbeddings.count)
+        for embedding in combinedEmbeddings {
+            let loraOutput = models.i2l(embedding)
+            let loraDict = loraOutput.toDict()
+            // Evaluate the LoRA arrays
+            eval(Array(loraDict.values))
+            perImageLoRAs.append(loraDict)
+        }
+
+        // Merge LoRAs across images (DiffSynth `merge_lora`):
+        // - concat lora_A along dim 0
+        // - concat lora_B along dim 1
+        // - scale lora_A by alpha=1/N
+        let merged: [String: MLXArray] = {
+            guard let first = perImageLoRAs.first else { return [:] }
+            guard perImageLoRAs.count > 1 else { return first }
+
+            let alpha = Float(1.0) / Float(perImageLoRAs.count)
+            let alphaArr = MLXArray(alpha)
+
+            var out: [String: MLXArray] = [:]
+            out.reserveCapacity(first.count)
+
+            for key in first.keys where key.contains(".lora_A.") {
+                let upKey = key.replacingOccurrences(of: ".lora_A.", with: ".lora_B.")
+                guard first[upKey] != nil else { continue }
+
+                var downs: [MLXArray] = []
+                var ups: [MLXArray] = []
+                downs.reserveCapacity(perImageLoRAs.count)
+                ups.reserveCapacity(perImageLoRAs.count)
+
+                for lora in perImageLoRAs {
+                    guard let down = lora[key], let up = lora[upKey] else { continue }
+                    downs.append(down)
+                    ups.append(up)
+                }
+
+                // Defensive: if any image is missing a key, skip merging that key.
+                guard downs.count == perImageLoRAs.count, ups.count == perImageLoRAs.count else { continue }
+
+                let mergedDown = MLX.concatenated(downs, axis: 0) * alphaArr
+                let mergedUp = MLX.concatenated(ups, axis: 1)
+                out[key] = mergedDown
+                out[upKey] = mergedUp
+            }
+
+            return out
+        }()
+
+        progressHandler?("Saving to \(outputPath.lastPathComponent)...")
+
+        // Evaluate all arrays before saving (MLX lazy evaluation)
+        eval(Array(merged.values))
+
+        try saveLoRA(merged, to: outputPath)
+
+        progressHandler?("Done! LoRA saved to \(outputPath.path)")
+    }
+
+    /// Unload models to free memory
+    public func unload() {
+        loaded = nil
+        Memory.clearCache()
+    }
+
+    // MARK: - Model Loading
+
+    private func loadModelsIfNeeded(progressHandler: (@Sendable (String) -> Void)?) async throws -> LoadedModels {
+        if let loaded = loaded {
+            return loaded
+        }
+
+        let configs = ZImageI2LModelConfigs()
+
+        progressHandler?("Loading SigLIP2-G384...")
+        let siglip2 = try await loadSigLIP2(config: configs.siglip2, progressHandler: progressHandler)
+
+        progressHandler?("Loading DINOv3-7B...")
+        let dinov3 = try await loadDINOv3(config: configs.dinov3, progressHandler: progressHandler)
+
+        progressHandler?("Loading Z-Image-i2L...")
+        let i2l = try await loadI2L(config: configs.i2l, progressHandler: progressHandler)
+
+        let models = LoadedModels(
+            siglip2: siglip2,
+            dinov3: dinov3,
+            i2l: i2l,
+            configs: configs
+        )
+
+        loaded = models
+        return models
+    }
+
+    private func loadSigLIP2(config: SigLIP2Config, progressHandler: (@Sendable (String) -> Void)?) async throws -> SigLIP2VisionModel {
+        var weightsURL: URL?
+
+        // Check explicit path first (for app-bundled models)
+        if let explicit = explicitSiglip2Path, FileManager.default.fileExists(atPath: explicit.path) {
+            weightsURL = explicit
+        }
+
+        if weightsURL == nil {
+            let modelRoot = try await resolveModelRoot(progressHandler: progressHandler)
+            let resources = ZImageI2LResources(rootURL: modelRoot)
+            weightsURL = resources.resolvedSigLIP2WeightsURL()
+        }
+
+        guard let weightsURL = weightsURL else {
+            throw ZImageI2LError.modelNotFound(
+                "SigLIP2-G384 not found in local i2l model store. Run `mere.run model pull zeta-i2l`."
+            )
+        }
+
+        let model = SigLIP2VisionModel(config: config)
+
+        progressHandler?("Loading SigLIP2 weights...")
+        let rawWeights = try MLX.loadArrays(url: weightsURL)
+        // Transpose conv weights from PyTorch OIHW to MLX OHWI format
+        var weights: [String: MLXArray] = [:]
+        for (key, value) in rawWeights {
+            if value.ndim == 4 {
+                weights[key] = HFSafetensorsWeightsLoader.convWeightOIHWToOHWI(value)
+            } else {
+                weights[key] = value
+            }
+        }
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: .noUnusedKeys)
+
+        eval(model)
+        return model
+    }
+
+    private func loadDINOv3(config: DINOv3Config, progressHandler: (@Sendable (String) -> Void)?) async throws -> DINOv3VisionModel {
+        var weightsURL: URL?
+
+        // Check explicit path first (for app-bundled models)
+        if let explicit = explicitDinov3Path, FileManager.default.fileExists(atPath: explicit.path) {
+            weightsURL = explicit
+        }
+
+        if weightsURL == nil {
+            let modelRoot = try await resolveModelRoot(progressHandler: progressHandler)
+            let resources = ZImageI2LResources(rootURL: modelRoot)
+            weightsURL = resources.resolvedDINOv3WeightsURL()
+        }
+
+        guard let weightsURL = weightsURL else {
+            throw ZImageI2LError.modelNotFound(
+                "DINOv3-7B not found in local i2l model store. Run `mere.run model pull zeta-i2l`."
+            )
+        }
+
+        let model = DINOv3VisionModel(config: config)
+
+        progressHandler?("Loading DINOv3 weights...")
+        let rawWeights = try MLX.loadArrays(url: weightsURL)
+        // Transpose conv weights from PyTorch OIHW to MLX OHWI format
+        var weights: [String: MLXArray] = [:]
+        for (key, value) in rawWeights {
+            if value.ndim == 4 {
+                weights[key] = HFSafetensorsWeightsLoader.convWeightOIHWToOHWI(value)
+            } else {
+                weights[key] = value
+            }
+        }
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: .noUnusedKeys)
+
+        eval(model)
+        return model
+    }
+
+    private func loadI2L(config: ZImageI2LConfig, progressHandler: (@Sendable (String) -> Void)?) async throws -> ZImageI2LModel {
+        progressHandler?("Loading Z-Image-i2L model...")
+
+        var weightsURL: URL?
+
+        // Check explicit path first (for app-bundled models)
+        if let explicit = explicitI2LPath, FileManager.default.fileExists(atPath: explicit.path) {
+            weightsURL = explicit
+        }
+
+        if weightsURL == nil {
+            let modelRoot = try await resolveModelRoot(progressHandler: progressHandler)
+            let resources = ZImageI2LResources(rootURL: modelRoot)
+            weightsURL = resources.resolvedI2LModelURL()
+        }
+
+        guard let weightsURL = weightsURL else {
+            throw ZImageI2LError.modelNotFound(
+                "Z-Image-i2L model not found in local i2l model store. Run `mere.run model pull zeta-i2l`."
+            )
+        }
+
+        let model = ZImageI2LModel(config: config)
+
+        let weights = try MLX.loadArrays(url: weightsURL)
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: .noUnusedKeys)
+
+        eval(model)
+        return model
+    }
+
+    private func resolveModelRoot(
+        progressHandler: (@Sendable (String) -> Void)?
+    ) async throws -> URL {
+        if let resolvedModelRoot {
+            return resolvedModelRoot
+        }
+
+        if let installed = ZImageI2LResources.resolveInstalledRoot(fileManager: .default) {
+            resolvedModelRoot = installed
+            return installed
+        }
+
+        let root = try await PretrainedModelLoader.fromPretrainedArchive(
+            modelPath: nil,
+            modelId: ZImageI2LRepository.modelId,
+            defaultModelIds: [
+                ZImageI2LRepository.modelId,
+                ZImageI2LRepository.archiveAliasModelId,
+            ],
+            storageId: ZImageI2LRepository.modelId,
+            archiveKey: ZImageI2LRepository.archiveKey,
+            archiveSize: ZImageI2LRepository.archiveSize,
+            normalize: { base, fileManager in
+                ZImageI2LResources.resolveNestedIfNeeded(base: base, fileManager: fileManager)
+            },
+            validate: { root, fileManager in
+                ZImageI2LResources(rootURL: root).validate(fileManager: fileManager)
+            },
+            progress: { event in
+                switch event {
+                case .downloading(let percent):
+                    progressHandler?("Downloading image-to-LoRA models... \(percent)%")
+                case .extracting:
+                    progressHandler?("Extracting image-to-LoRA models...")
+                }
+            }
+        )
+        resolvedModelRoot = root
+        return root
+    }
+
+    // MARK: - Image Processing
+
+    private func loadImageForEncoders(from url: URL) throws -> (siglip: MLXArray, dino: MLXArray) {
+        #if os(macOS)
+        guard let nsImage = NSImage(contentsOf: url),
+              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw ZImageI2LError.imageLoadFailed(url.path)
+        }
+
+        // 1) Crop+resize to 1024x1024 using DiffSynth's `ImageCropAndResize` logic.
+        let highRes = try cropAndResizeAspectFill(cgImage, targetSize: 1024)
+
+        // 2) Resize for each encoder.
+        let siglipImage = try resizeImage(highRes, targetSize: 384)
+        let dinoImage = try resizeImage(highRes, targetSize: 224)
+
+        // 3) Convert to NCHW tensors with the correct per-encoder normalization.
+        let siglip = try cgImageToMLXArray(
+            siglipImage,
+            mean: [0.5, 0.5, 0.5],
+            std: [0.5, 0.5, 0.5]
+        )
+        let dino = try cgImageToMLXArray(
+            dinoImage,
+            mean: [0.485, 0.456, 0.406],
+            std: [0.229, 0.224, 0.225]
+        )
+        return (siglip: siglip, dino: dino)
+        #else
+        throw ZImageI2LError.unsupportedPlatform
+        #endif
+    }
+
+    #if os(macOS)
+    private func cgImageToMLXArray(_ cgImage: CGImage, mean: [Float], std: [Float]) throws -> MLXArray {
+        let width = cgImage.width
+        let height = cgImage.height
+
+        guard mean.count == 3, std.count == 3 else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+
+        // Make y=0 correspond to the top row (PIL-style).
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: 1, y: -1)
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        guard let data = context.data else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+
+        let ptr = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        var rgbData: [Float] = []
+        rgbData.reserveCapacity(width * height * 3)
+
+        for c in 0..<3 {  // R, G, B channels
+            for y in 0..<height {
+                for x in 0..<width {
+                    let idx = (y * width + x) * 4
+                    let value = Float(ptr[idx + c]) / 255.0
+                    let normalized = (value - mean[c]) / std[c]
+                    rgbData.append(normalized)
+                }
+            }
+        }
+
+        return MLXArray(rgbData).reshaped(1, 3, height, width).asType(dtype)
+    }
+
+    private func resizeImage(_ cgImage: CGImage, targetSize: Int) throws -> CGImage {
+        guard let context = CGContext(
+            data: nil,
+            width: targetSize,
+            height: targetSize,
+            bitsPerComponent: 8,
+            bytesPerRow: targetSize * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+
+        context.translateBy(x: 0, y: CGFloat(targetSize))
+        context.scaleBy(x: 1, y: -1)
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+
+        guard let out = context.makeImage() else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+        return out
+    }
+
+    private func cropAndResizeAspectFill(_ cgImage: CGImage, targetSize: Int) throws -> CGImage {
+        let srcW = cgImage.width
+        let srcH = cgImage.height
+
+        guard srcW > 0, srcH > 0 else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+
+        // Matches DiffSynth `ImageCropAndResize.crop_and_resize`:
+        //   scale = max(targetW/srcW, targetH/srcH)
+        //   resize to (round(srcH*scale), round(srcW*scale))
+        //   center crop (targetH, targetW)
+        let scale = max(Double(targetSize) / Double(srcW), Double(targetSize) / Double(srcH))
+        let scaledW = Int((Double(srcW) * scale).rounded())
+        let scaledH = Int((Double(srcH) * scale).rounded())
+
+        // torchvision center_crop uses integer top/left = floor((scaled - target)/2)
+        let left = max(0, (scaledW - targetSize) / 2)
+        let top = max(0, (scaledH - targetSize) / 2)
+
+        guard let context = CGContext(
+            data: nil,
+            width: targetSize,
+            height: targetSize,
+            bitsPerComponent: 8,
+            bytesPerRow: targetSize * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+
+        context.translateBy(x: 0, y: CGFloat(targetSize))
+        context.scaleBy(x: 1, y: -1)
+
+        context.interpolationQuality = .high
+        let drawRect = CGRect(
+            x: -CGFloat(left),
+            y: -CGFloat(top),
+            width: CGFloat(scaledW),
+            height: CGFloat(scaledH)
+        )
+        context.draw(cgImage, in: drawRect)
+
+        guard let out = context.makeImage() else {
+            throw ZImageI2LError.imageProcessingFailed
+        }
+        return out
+    }
+    #endif
+
+    // MARK: - LoRA Saving
+
+    private func saveLoRA(_ weights: [String: MLXArray], to url: URL) throws {
+        // Ensure directory exists
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        // Save as safetensors
+        try MLX.save(arrays: weights, url: url)
+    }
+}
+
+// MARK: - Errors
+
+public enum ZImageI2LError: Error, LocalizedError {
+    case modelNotFound(String)
+    case imageLoadFailed(String)
+    case imageProcessingFailed
+    case unsupportedPlatform
+
+    public var errorDescription: String? {
+        switch self {
+        case .modelNotFound(let msg): return msg
+        case .imageLoadFailed(let path): return "Failed to load image: \(path)"
+        case .imageProcessingFailed: return "Failed to process image"
+        case .unsupportedPlatform: return "Platform not supported"
+        }
+    }
+}
+
+#if os(macOS)
+import AppKit
+#endif

@@ -1,0 +1,24 @@
+# Summary
+
+- [mere.run Documentation](./README.md)
+- [Getting Started](./getting-started.md)
+- [CLI Reference](./cli.md)
+- [Configuration](./configuration.md)
+- [Model Sources](./model-sources.md)
+- [Migration](./migration.md)
+- [Repository Tour](./repository-tour.md)
+- [Development Workflow](./development-workflow.md)
+- [Testing Guide](./testing.md)
+- [Architecture Reading Map](./architecture.md)
+- Runtime Families
+  - [Image Runtime](./runtime/image.md)
+  - [Text Runtime](./runtime/text.md)
+  - [Speech Runtime](./runtime/speech.md)
+  - [Vision Runtime](./runtime/vision.md)
+  - [Music Runtime](./runtime/music.md)
+  - [Video Runtime](./runtime/video.md)
+  - [Model Management](./runtime/model-management.md)
+  - [Local API Server](./runtime/api-server.md)
+- Internals
+  - [CLI and Runtime Internals](./internals/cli-and-runtime.md)
+  - [Source Layout Reference](./internals/source-layout.md)

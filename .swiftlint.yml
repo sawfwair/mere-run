@@ -1,0 +1,35 @@
+included:
+  - Sources
+  - Tests
+  - Package.swift
+
+excluded:
+  - .build
+  - node_modules
+  - vendor
+
+only_rules:
+  - custom_rules
+  - force_cast
+  - force_try
+  - todo
+
+force_cast:
+  severity: error
+
+force_try:
+  severity: error
+
+todo:
+  severity: error
+
+custom_rules:
+  typed_boundary_parsing:
+    name: "Typed Boundary Parsing"
+    included:
+      - Sources/AudioSTT/Qwen3ASR/Qwen3ASRConfigs.swift
+      - Sources/AudioTTS/Qwen3TTS/Qwen3TTSTokenizer.swift
+      - Sources/MereRunCore/Psi/GLM47ToolParser.swift
+    regex: 'JSONSerialization\.jsonObject|\[String:\s*Any\]|\[\[String:\s*Any\]\]'
+    message: "Use Decodable or a typed compatibility enum at agent-facing boundaries."
+    severity: error

@@ -1,0 +1,9 @@
+.build/
+.swiftpm/
+.DS_Store
+Package.resolved
+DerivedData/
+*.xcuserstate
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
