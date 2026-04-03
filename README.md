@@ -9,7 +9,7 @@ The public OSS repo currently supports:
 - local image generation and deterministic image validation
 - local text chat, code generation, and embeddings
 - local speech synthesis, transcription, and voice-profile management
-- local vision captioning, inspection, and OCR
+- local vision captioning, inspection, segmentation, tracking, and OCR
 - native music and video generation
 - managed model installs into a shared local model store
 - a local API surface for supported engines
@@ -60,6 +60,16 @@ swift run mere.run speech synthesize \
 # Inspect an image
 swift run mere.run vision inspect ./image.png "Describe this image."
 
+# Segment an image
+swift run mere.run model pull vision-segment-sam31
+swift run mere.run vision segment ./image.png --prompt "a person"
+
+# Track prompted objects through a video
+swift run mere.run vision track ./clip.mp4 --prompt "a person"
+
+# Record a short camera session and track it
+swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
+
 # Generate music
 swift run mere.run music generate \
   "upbeat electronic groove" \
@@ -87,12 +97,22 @@ The public CLI is modality-first:
 - `mere.run speech profile { list, create, delete }`
 - `mere.run vision caption`
 - `mere.run vision inspect`
+- `mere.run vision segment`
+- `mere.run vision track`
+- `mere.run vision track-live`
 - `mere.run vision ocr`
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, info, pull, remove, repair-manifests }`
 - `mere.run api serve`
+
+## Vision notes
+
+- `vision-segment-sam31` is the single managed SAM 3.1 package for segmentation and tracking
+- `mere.run vision segment` supports text prompts plus box and point prompting
+- `mere.run vision track` seeds objects on the init frame, then propagates them through later frames
+- `mere.run vision track-live` currently records a camera clip first and then runs tracking over that recording
 
 ## Model store
 
@@ -159,6 +179,7 @@ Core guides:
 - [`docs/repository-tour.md`](./docs/repository-tour.md): top-level layout and module ownership
 - [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day
 - [`docs/testing.md`](./docs/testing.md): validation layers, smoke runs, and troubleshooting
+- [`docs/runtime/vision.md`](./docs/runtime/vision.md): native SAM 3.1 segmentation and tracking details
 
 Configuration and model management:
 

@@ -65,11 +65,14 @@ public enum MereRunModelValidator {
         }
 
         let supportsImagePipeline: Bool
+        let supportsVisionModel: Bool
         if let unwrappedManifest = manifest {
             let supports = Set(unwrappedManifest.supports ?? [])
             supportsImagePipeline = supports.contains(.txt2img) || supports.contains(.img2img) || supports.contains(.referenceEdit)
+            supportsVisionModel = supports.contains(.visionSegmentation) || supports.contains(.visionTracking) || unwrappedManifest.family == .sam
         } else {
             supportsImagePipeline = true
+            supportsVisionModel = false
         }
 
         if let manifest = manifest {
@@ -94,111 +97,120 @@ public enum MereRunModelValidator {
 
         let modelResolver = ModelResolver(fileManager: fileManager)
         let componentRefs = manifest?.components
-
-        // Required components for generation/training.
         let transformerDir: URL?
-        if supportsImagePipeline {
-            transformerDir = resolveComponentDirectory(
-                componentRefs?.transformer ?? .local(path: "transformer"),
-                modelRoot: rootURL,
-                modelResolver: modelResolver,
-                fileManager: fileManager,
-                label: "transformer",
-                report: { errors.append($0) }
-            )
-        } else {
-            transformerDir = nil
-        }
-        if let transformerDir {
-            validateComponentDirectory(
-                componentDir: transformerDir,
-                label: "transformer",
-                requiredConfigFilename: "config.json",
-                requireWeights: true,
-                errors: &errors,
-                fileManager: fileManager
-            )
-        }
-
-        let textEncoderDir = resolveComponentDirectory(
-            componentRefs?.textEncoder ?? .local(path: "text_encoder"),
-            modelRoot: rootURL,
-            modelResolver: modelResolver,
-            fileManager: fileManager,
-            label: "text_encoder",
-            report: { errors.append($0) }
-        )
-        if let textEncoderDir {
-            validateComponentDirectory(
-                componentDir: textEncoderDir,
-                label: "text_encoder",
-                requiredConfigFilename: "config.json",
-                requireWeights: true,
-                errors: &errors,
-                fileManager: fileManager
-            )
-        }
-
+        let textEncoderDir: URL?
         let vaeDir: URL?
-        if supportsImagePipeline {
-            vaeDir = resolveComponentDirectory(
-                componentRefs?.vae ?? .local(path: "vae"),
+        let tokenizerDir: URL?
+
+        if supportsVisionModel {
+            errors.append(contentsOf: SAM31Resources.validateRoot(rootURL, fileManager: fileManager))
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
+        } else {
+            // Required components for generation/training.
+            if supportsImagePipeline {
+                transformerDir = resolveComponentDirectory(
+                    componentRefs?.transformer ?? .local(path: "transformer"),
+                    modelRoot: rootURL,
+                    modelResolver: modelResolver,
+                    fileManager: fileManager,
+                    label: "transformer",
+                    report: { errors.append($0) }
+                )
+            } else {
+                transformerDir = nil
+            }
+            if let transformerDir {
+                validateComponentDirectory(
+                    componentDir: transformerDir,
+                    label: "transformer",
+                    requiredConfigFilename: "config.json",
+                    requireWeights: true,
+                    errors: &errors,
+                    fileManager: fileManager
+                )
+            }
+
+            textEncoderDir = resolveComponentDirectory(
+                componentRefs?.textEncoder ?? .local(path: "text_encoder"),
                 modelRoot: rootURL,
                 modelResolver: modelResolver,
                 fileManager: fileManager,
-                label: "vae",
+                label: "text_encoder",
                 report: { errors.append($0) }
             )
-        } else {
-            vaeDir = nil
-        }
-        if let vaeDir {
-            validateComponentDirectory(
-                componentDir: vaeDir,
-                label: "vae",
-                requiredConfigFilename: "config.json",
-                requireWeights: true,
-                errors: &errors,
-                fileManager: fileManager
-            )
-        }
+            if let textEncoderDir {
+                validateComponentDirectory(
+                    componentDir: textEncoderDir,
+                    label: "text_encoder",
+                    requiredConfigFilename: "config.json",
+                    requireWeights: true,
+                    errors: &errors,
+                    fileManager: fileManager
+                )
+            }
 
-        // Strict policy: tokenizer and scheduler are required for end-to-end pipelines.
-        let tokenizerDir = resolveComponentDirectory(
-            componentRefs?.tokenizer ?? .local(path: "tokenizer"),
-            modelRoot: rootURL,
-            modelResolver: modelResolver,
-            fileManager: fileManager,
-            label: "tokenizer",
-            report: { _ in }
-        )
-        if let tokenizerDir {
-            validateTokenizerDirectory(
-                tokenizerDir,
-                warnings: &warnings,
-                fileManager: fileManager
-            )
-        } else {
-            errors.append("Missing tokenizer directory.")
-        }
+            if supportsImagePipeline {
+                vaeDir = resolveComponentDirectory(
+                    componentRefs?.vae ?? .local(path: "vae"),
+                    modelRoot: rootURL,
+                    modelResolver: modelResolver,
+                    fileManager: fileManager,
+                    label: "vae",
+                    report: { errors.append($0) }
+                )
+            } else {
+                vaeDir = nil
+            }
+            if let vaeDir {
+                validateComponentDirectory(
+                    componentDir: vaeDir,
+                    label: "vae",
+                    requiredConfigFilename: "config.json",
+                    requireWeights: true,
+                    errors: &errors,
+                    fileManager: fileManager
+                )
+            }
 
-        let schedulerDir: URL?
-        if supportsImagePipeline {
-            schedulerDir = resolveComponentDirectory(
-                componentRefs?.scheduler ?? .local(path: "scheduler"),
+            tokenizerDir = resolveComponentDirectory(
+                componentRefs?.tokenizer ?? .local(path: "tokenizer"),
                 modelRoot: rootURL,
                 modelResolver: modelResolver,
                 fileManager: fileManager,
-                label: "scheduler",
+                label: "tokenizer",
                 report: { _ in }
             )
-        } else {
-            schedulerDir = nil
-        }
-        if let schedulerDir {
-            let schedulerConfig = schedulerDir.appendingPathComponent("scheduler_config.json")
-            if !fileManager.fileExists(atPath: schedulerConfig.path) {
-                errors.append("Missing scheduler/scheduler_config.json.")
+            if let tokenizerDir {
+                validateTokenizerDirectory(
+                    tokenizerDir,
+                    warnings: &warnings,
+                    fileManager: fileManager
+                )
+            } else {
+                errors.append("Missing tokenizer directory.")
+            }
+
+            let schedulerDir: URL?
+            if supportsImagePipeline {
+                schedulerDir = resolveComponentDirectory(
+                    componentRefs?.scheduler ?? .local(path: "scheduler"),
+                    modelRoot: rootURL,
+                    modelResolver: modelResolver,
+                    fileManager: fileManager,
+                    label: "scheduler",
+                    report: { _ in }
+                )
+            } else {
+                schedulerDir = nil
+            }
+            if let schedulerDir {
+                let schedulerConfig = schedulerDir.appendingPathComponent("scheduler_config.json")
+                if !fileManager.fileExists(atPath: schedulerConfig.path) {
+                    errors.append("Missing scheduler/scheduler_config.json.")
+                }
             }
         }
 
@@ -262,6 +274,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
             case .qwen where engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
+            case .sam where engine != .samSegmentation:
+                warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
             default:
                 break
             }
@@ -314,6 +328,10 @@ public enum MereRunModelValidator {
             let supports = Set(manifest.supports ?? [])
             return supports.contains(.txt2img) || supports.contains(.img2img) || supports.contains(.referenceEdit)
         }()
+        let supportsVisionModel = {
+            let supports = Set(manifest.supports ?? [])
+            return supports.contains(.visionSegmentation) || supports.contains(.visionTracking) || manifest.family == .sam
+        }()
 
         guard let components = manifest.components else {
             errors.append("Manifest missing components.")
@@ -321,6 +339,10 @@ public enum MereRunModelValidator {
         }
 
         if components.tokenizer == nil { errors.append("Manifest components missing tokenizer.") }
+        if supportsVisionModel {
+            return
+        }
+
         if components.textEncoder == nil { errors.append("Manifest components missing text_encoder.") }
         if supportsImagePipeline && components.transformer == nil { errors.append("Manifest components missing transformer.") }
         if supportsImagePipeline && components.vae == nil { errors.append("Manifest components missing vae.") }
@@ -330,6 +352,7 @@ public enum MereRunModelValidator {
     private static func inferFamily(from modelId: String) -> MereRunModelManifest.Family? {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
+        if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId == ModelResolver.ModelID.q35.rawValue || modelId == ModelResolver.ModelID.q35Nano.rawValue {
             return .qwen
         }

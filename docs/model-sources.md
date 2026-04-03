@@ -26,10 +26,20 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
 | Vision OCR | `vision-ocr-lighton` |
+| Vision segmentation / tracking | `vision-segment-sam31` |
 | Music | `music-acestep` |
 | Video | `video-ltx-av` |
 
 Some commands also support local or upstream model layouts outside this managed table, but the IDs above are the only canonical managed names in this repo.
+
+`vision-segment-sam31` packages the native SAM 3.1 segmentation and tracking runtime used by `mere.run vision segment`, `mere.run vision track`, and `mere.run vision track-live`. Managed or local SAM roots are expected to contain:
+
+- `config.json`
+- `tokenizer/`
+- `model.safetensors` or `model.safetensors.index.json`
+
+The manifest for this package advertises both `vision_segmentation` and
+`vision_tracking` capabilities.
 
 ## Archive resolution
 

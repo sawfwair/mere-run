@@ -39,6 +39,18 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidSAM31Model(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        let tokenizerDir = root.appendingPathComponent("tokenizer", isDirectory: true)
+        try TestFileSystem.createDirectory(tokenizerDir)
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -88,5 +100,18 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-q35")
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
+    }
+
+    func testSAM31VisionSegmentationRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("vision-segment-sam31", isDirectory: true)
+        try writeMinimalValidSAM31Model(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "vision-segment-sam31")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.visionSegmentation, .visionTracking]))
     }
 }

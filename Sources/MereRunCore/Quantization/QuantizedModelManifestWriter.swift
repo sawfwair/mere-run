@@ -23,6 +23,7 @@ public enum QuantizedModelManifestWriter {
         func inferFamily(from id: String) -> MereRunModelManifest.Family? {
             if id.hasPrefix("image-klein-") { return .klein }
             if id.hasPrefix("image-zimage-") { return .zimage }
+            if id.hasPrefix("vision-segment-") { return .sam }
             return nil
         }
 
@@ -38,12 +39,14 @@ public enum QuantizedModelManifestWriter {
             case .flux2Klein: return .klein
             case .zimageTurbo: return .zimage
             case .qwen35HybridMoE: return .qwen
+            case .samSegmentation: return .sam
             }
         }()
 
         let tier = baseManifest.tier ?? inferTier(from: id)
 
         let variant = baseManifest.variant ?? {
+            if family == .sam { return .standard }
             if tier == .base { return .base }
             return .distilled
         }()
@@ -65,6 +68,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img, .img2img, .loraInference]
                 case .qwen35HybridMoE:
                     return [.chat]
+                case .samSegmentation:
+                    return [.visionSegmentation, .visionTracking]
                 }
             }()
             return baseline.filter { $0 != .loraTraining }
@@ -116,6 +121,8 @@ public enum QuantizedModelManifestWriter {
             case .zimageTurbo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
             case .qwen35HybridMoE:
+                break
+            case .samSegmentation:
                 break
             }
         }

@@ -85,4 +85,23 @@ final class ModelResolverTests: MereRunCoreTestCase {
         XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
         XCTAssertEqual(resolved.source, .localModelStore)
     }
+
+    func testResolvesVisionSegmentSAM31FromProcessModelStoreOverride() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let modelRoot = modelsRoot.appendingPathComponent("vision-segment-sam31", isDirectory: true)
+        try TestFileSystem.createDirectory(modelRoot)
+        try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+
+        let resolver = ModelResolver()
+        let resolved = try resolver.resolve(.visionSegmentSAM31)
+
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
+        XCTAssertEqual(resolved.source, .localModelStore)
+    }
 }

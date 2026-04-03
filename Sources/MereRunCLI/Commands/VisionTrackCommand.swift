@@ -1,0 +1,149 @@
+import ArgumentParser
+import Foundation
+import MereRunCore
+
+struct VisionTrack: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "track",
+        abstract: "Track prompted objects through a video with the native SAM 3.1 runtime."
+    )
+
+    @Argument(help: "Video file path.")
+    var video: String
+
+    @Option(
+        name: [.long],
+        parsing: .upToNextOption,
+        help: "One or more text prompts used to seed tracked objects on the init frame."
+    )
+    var prompt: [String] = []
+
+    @Option(name: [.long], help: "Box prompt in image pixels: x1,y1,x2,y2[,label]. Repeat for multiple objects.")
+    var box: [String] = []
+
+    @Option(name: [.long], help: "Point prompt in image pixels: x,y,positive[,label] or x,y,negative[,label]. Repeat for multiple objects.")
+    var point: [String] = []
+
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local SAM 3.1 model root.")
+    var model: String?
+
+    @Option(name: [.customShort("o"), .long], help: "Annotated output video path (default: <video>_tracked.mp4).")
+    var output: String?
+
+    @Option(name: [.customLong("json-output")], help: "Tracking JSON path (default: <video>_tracked.json).")
+    var jsonOutput: String?
+
+    @Option(name: [.customLong("mask-output-dir")], help: "Optional directory for per-frame mask PNG exports.")
+    var maskOutputDir: String?
+
+    @Option(name: [.customLong("init-frame")], help: "Initial frame index used to seed tracking (default: 0).")
+    var initFrame: Int = 0
+
+    @Option(name: [.customLong("end-frame")], help: "Optional inclusive final frame index.")
+    var endFrame: Int?
+
+    @Option(name: [.long], help: "Score threshold between 0 and 1 (default: 0.3).")
+    var threshold: Double = 0.3
+
+    @Option(name: [.long], help: "Square input resolution used for SAM 3.1 preprocessing (default: 1008).")
+    var resolution: Int = 1008
+
+    @Flag(name: [.long], help: "Draw bounding boxes over tracked masks in the annotated video.")
+    var showBoxes: Bool = false
+
+    @Flag(name: [.customLong("show-labels")], help: "Reserved for labeled video overlays.")
+    var showLabels: Bool = false
+
+    func validate() throws {
+        guard !prompt.isEmpty || !box.isEmpty || !point.isEmpty else {
+            throw ValidationError("Provide at least one --prompt, --box, or --point value.")
+        }
+        guard (0.0...1.0).contains(threshold) else {
+            throw ValidationError("--threshold must be between 0 and 1.")
+        }
+        guard resolution > 0 else {
+            throw ValidationError("--resolution must be greater than 0.")
+        }
+        guard initFrame >= 0 else {
+            throw ValidationError("--init-frame must be greater than or equal to 0.")
+        }
+        if let endFrame, endFrame < initFrame {
+            throw ValidationError("--end-frame must be greater than or equal to --init-frame.")
+        }
+        _ = try parsedPromptSet()
+        _ = showLabels
+    }
+
+    func run() async throws {
+        try MLXBundleSupport.ensureAvailable(quiet: false)
+
+        let videoURL = URL(fileURLWithPath: video).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            throw ValidationError("Video not found: \(videoURL.path)")
+        }
+
+        let resolvedModel = try VisionSegment.resolveModelRoot(model)
+        let outputVideoURL = Self.resolveOutputURL(output, inputVideoURL: videoURL)
+        let outputJSONURL = Self.resolveJSONOutputURL(jsonOutput, inputVideoURL: videoURL)
+        let maskOutputDirectoryURL = VisionSegment.resolveDirectoryURL(maskOutputDir)
+        let promptSet = try parsedPromptSet()
+
+        let segmenter = try SAM31ImageSegmenter(
+            modelRootURL: resolvedModel.rootURL,
+            expectedModelID: resolvedModel.isManaged ? resolvedModel.modelID : nil
+        )
+        let tracker = SAM31VideoTracker(segmenter: segmenter)
+        let result = try tracker.track(
+            videoURL: videoURL,
+            promptSet: promptSet,
+            outputVideoURL: outputVideoURL,
+            jsonOutputURL: outputJSONURL,
+            initFrameIndex: initFrame,
+            endFrameIndex: endFrame,
+            threshold: Float(threshold),
+            resolution: resolution,
+            showBoxes: showBoxes,
+            showLabels: showLabels,
+            maskOutputDirectoryURL: maskOutputDirectoryURL
+        )
+
+        print("Model: \(result.modelID)")
+        print("Objects: \(result.objects.count)")
+        print("Frames: \(result.frames.count)")
+        print("Video: \(result.annotatedVideoPath)")
+        if let jsonOutputPath = result.jsonOutputPath {
+            print("JSON: \(jsonOutputPath)")
+        }
+        if let maskOutputDirectoryURL {
+            print("Masks: \(maskOutputDirectoryURL.path)")
+        }
+    }
+
+    func parsedPromptSet() throws -> SAM31PromptSet {
+        SAM31PromptSet(
+            textPrompts: prompt.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
+            boxPrompts: try box.map(VisionSegment.parseBoxPrompt),
+            pointPrompts: try point.map(VisionSegment.parsePointPrompt)
+        )
+    }
+
+    static func resolveOutputURL(_ rawOutput: String?, inputVideoURL: URL) -> URL {
+        guard let rawOutput, !rawOutput.isEmpty else {
+            let parent = inputVideoURL.deletingLastPathComponent()
+            let stem = inputVideoURL.deletingPathExtension().lastPathComponent
+            return parent.appendingPathComponent("\(stem)_tracked").appendingPathExtension("mp4")
+        }
+        let outputURL = URL(fileURLWithPath: rawOutput).standardizedFileURL
+        return outputURL.pathExtension.isEmpty ? outputURL.appendingPathExtension("mp4") : outputURL
+    }
+
+    static func resolveJSONOutputURL(_ rawOutput: String?, inputVideoURL: URL) -> URL {
+        guard let rawOutput, !rawOutput.isEmpty else {
+            let parent = inputVideoURL.deletingLastPathComponent()
+            let stem = inputVideoURL.deletingPathExtension().lastPathComponent
+            return parent.appendingPathComponent("\(stem)_tracked").appendingPathExtension("json")
+        }
+        let outputURL = URL(fileURLWithPath: rawOutput).standardizedFileURL
+        return outputURL.pathExtension.isEmpty ? outputURL.appendingPathExtension("json") : outputURL
+    }
+}

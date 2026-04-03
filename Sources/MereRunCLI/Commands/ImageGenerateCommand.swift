@@ -159,7 +159,7 @@ struct ImageGenerate: AsyncParsableCommand {
         case .zimage:
             let generator = ZImageTurboGenerator()
             result = try await generator.generate(request, progressHandler: progressHandler)
-        case .qwen, nil:
+        case .qwen, .sam, nil:
             throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
         }
 

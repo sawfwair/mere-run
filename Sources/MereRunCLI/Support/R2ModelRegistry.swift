@@ -27,6 +27,8 @@ enum R2ModelRegistry {
         ModelEntry(id: "speech-tts-qwen3-customvoice",  category: "speech-tts", archiveKey: "models/speech-tts-qwen3-customvoice.tar.gz"),
         // OCR
         ModelEntry(id: "vision-ocr-lighton", category: "vision-ocr", archiveKey: "models/vision-ocr-lighton.tar.gz"),
+        // Segmentation
+        ModelEntry(id: "vision-segment-sam31", category: "vision-segment", archiveKey: "models/vision-segment-sam31.tar.gz"),
         // ASR
         ModelEntry(id: "speech-asr-qwen3",      category: "speech-asr", archiveKey: "models/speech-asr-qwen3.tar.gz"),
         ModelEntry(id: "speech-asr-parakeet",   category: "speech-asr", archiveKey: "models/speech-asr-parakeet.tar.gz"),

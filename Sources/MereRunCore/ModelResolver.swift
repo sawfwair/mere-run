@@ -19,6 +19,7 @@ public struct ModelResolver {
         case zetaNano = "image-zimage-nano"
         case zetaMax = "image-zimage-max"
         case zetaBase = "image-zimage-base"
+        case visionSegmentSAM31 = "vision-segment-sam31"
     }
 
     public enum Source: String, Hashable, Sendable {

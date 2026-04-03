@@ -95,11 +95,30 @@ Captioning and inspect flows:
 - CLI:
   - `Sources/MereRunCLI/Commands/VisionCaptionCommand.swift`
   - `Sources/MereRunCLI/Commands/VisionInspectCommand.swift`
+  - `Sources/MereRunCLI/Commands/VisionSegmentCommand.swift`
 - Runtime roots:
   - `Sources/MereRunCore/VLM/QwenVLCaptioner.swift`
   - `Sources/MereRunCore/VLM/Qwen3VLAutoCaptioner.swift`
   - `Sources/MereRunCore/VLM/QwenVLEncoder.swift`
   - `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/Vision/QwenVisionAttention.swift`
+
+Segmentation and tracking runtime:
+
+- CLI:
+  - `Sources/MereRunCLI/Commands/VisionSegmentCommand.swift`
+  - `Sources/MereRunCLI/Commands/VisionTrackCommand.swift`
+  - `Sources/MereRunCLI/Commands/VisionTrackLiveCommand.swift`
+- Native runtime:
+  - `Sources/MereRunCore/SAM3/SAM31Config.swift`
+  - `Sources/MereRunCore/SAM3/SAM31Resources.swift`
+  - `Sources/MereRunCore/SAM3/SAM31Tokenizer.swift`
+  - `Sources/MereRunCore/SAM3/SAM31Model.swift`
+  - `Sources/MereRunCore/SAM3/SAM31InteractiveSAM.swift`
+  - `Sources/MereRunCore/SAM3/SAM31Prompts.swift`
+  - `Sources/MereRunCore/SAM3/SAM31ImageSegmenter.swift`
+  - `Sources/MereRunCore/SAM3/SAM31VideoIO.swift`
+  - `Sources/MereRunCore/SAM3/SAM31VideoTracker.swift`
+  - `Sources/MereRunCore/SAM3/SAM31CameraCapture.swift`
 
 ## Music and video
 

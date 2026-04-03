@@ -20,18 +20,22 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case zimageTurbo = "zimage-turbo"
         /// Q35 family (Qwen3.5 hybrid MoE + hybrid attention).
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
+        /// SAM image segmentation family.
+        case samSegmentation = "sam-segmentation"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
         case klein
         case zimage
         case qwen
+        case sam
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
         case nano
         case base
         case max
+        case latest
     }
 
     public enum Variant: String, Codable, CaseIterable, Hashable, Sendable {
@@ -39,6 +43,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case distilled
         /// Base / undistilled variants (slower, higher diversity; used for training).
         case base
+        /// Non-distilled runtime families that do not map onto the image-generation variants.
+        case standard
     }
 
     public enum Precision: String, Codable, CaseIterable, Hashable, Sendable {
@@ -57,6 +63,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case chat = "chat"
         case loraInference = "lora_inference"
         case loraTraining = "lora_training"
+        case visionSegmentation = "vision_segmentation"
+        case visionTracking = "vision_tracking"
     }
 
     public enum ComponentRef: Codable, Hashable, Sendable {
@@ -380,6 +388,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             vae: nil,
             scheduler: nil
         )
+        let samComponents = Components(
+            tokenizer: .local(path: "tokenizer"),
+            textEncoder: nil,
+            transformer: nil,
+            vae: nil,
+            scheduler: nil
+        )
 
         switch modelID {
         case .kleinNano:
@@ -541,6 +556,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.txt2img, .img2img, .loraInference, .loraTraining],
                 components: hybridComponents,
                 upstreamRepoId: nil,
+                createdAt: createdAt
+            )
+        case .visionSegmentSAM31:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .samSegmentation,
+                family: .sam,
+                tier: .latest,
+                variant: .standard,
+                precision: .unknown,
+                defaults: nil,
+                supports: [.visionSegmentation, .visionTracking],
+                components: samComponents,
+                upstreamRepoId: "facebook/sam3.1",
                 createdAt: createdAt
             )
         }

@@ -22,6 +22,9 @@ Public tree:
 - `mere.run speech profile { list, create, delete }`
 - `mere.run vision caption`
 - `mere.run vision inspect`
+- `mere.run vision segment`
+- `mere.run vision track`
+- `mere.run vision track-live`
 - `mere.run vision ocr`
 - `mere.run music generate`
 - `mere.run video generate`
@@ -54,6 +57,7 @@ See [`model-sources.md`](./model-sources.md) for the full source story. The most
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
 - Vision OCR: `vision-ocr-lighton`
+- Vision segmentation / tracking: `vision-segment-sam31`
 - Music: `music-acestep`
 - Video: `video-ltx-av`
 
@@ -102,10 +106,12 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
-### Inspect and OCR images
+### Inspect, segment, track, and OCR
 
 ```bash
 swift run mere.run vision inspect ./diagram.png "What does this diagram show?"
+swift run mere.run vision segment ./photo.jpg --prompt "a cat"
+swift run mere.run vision track ./clip.mp4 --prompt "a cat"
 swift run mere.run vision ocr ./page.png --backend lighton
 ```
 
@@ -358,6 +364,115 @@ Ask a direct question about an image.
 ```bash
 swift run mere.run vision inspect ./diagram.png "What does this diagram show?"
 ```
+
+### `mere.run vision segment`
+
+Segment prompted objects in an image using the native SAM 3.1 runtime.
+
+```bash
+swift run mere.run model pull vision-segment-sam31
+swift run mere.run vision segment ./photo.jpg --prompt "a cat"
+```
+
+Key options:
+
+- `--prompt`: one or more text object prompts
+- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts
+- `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]` geometry prompts
+- `--model`: managed model id or local SAM 3.1 model root
+- `--output`: annotated image path
+- `--json-output`: metadata path
+- `--mask-output-dir`: optional per-object mask export directory
+- `--threshold`
+- `--resolution`
+- `--show-boxes`
+- `--multimask`: emit up to three candidates per geometry-prompted object
+
+Defaults:
+
+- annotated image: `<image-stem>_segmented.<ext>`
+- JSON metadata: `<image-stem>_segmented.json`
+
+Notes:
+
+- still-image runs accept text, box, and point prompts in the same invocation
+- `--mask-output-dir` writes one PNG mask per exported detection candidate
+- zero detections still produce annotated output plus JSON metadata
+
+Examples:
+
+```bash
+swift run mere.run vision segment ./photo.jpg --prompt "a cat"
+swift run mere.run vision segment ./photo.jpg --prompt "a person" "a phone" --show-boxes
+swift run mere.run vision segment ./photo.jpg --box "120,80,420,760,person" --mask-output-dir ./masks
+swift run mere.run vision segment ./photo.jpg --point "512,384,positive,person" --point "700,200,negative,person"
+swift run mere.run vision segment ./photo.jpg --prompt "a dog" --output ./photo-segmented.png --json-output ./photo-segmented.json
+```
+
+### `mere.run vision track`
+
+Track prompted objects through a video with the native SAM 3.1 runtime.
+
+```bash
+swift run mere.run model pull vision-segment-sam31
+swift run mere.run vision track ./clip.mp4 --prompt "a dog"
+```
+
+Key options:
+
+- `--prompt`: one or more text prompts used to seed objects on the init frame
+- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts
+- `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]` geometry prompts
+- `--init-frame`: starting frame index for seeding
+- `--end-frame`: optional inclusive final frame index
+- `--output`: annotated video path
+- `--json-output`: tracking metadata path
+- `--mask-output-dir`: optional per-frame mask export directory
+- `--show-boxes`
+- `--show-labels`
+
+Defaults:
+
+- annotated video: `<video-stem>_tracked.mp4`
+- JSON metadata: `<video-stem>_tracked.json`
+
+Notes:
+
+- text prompts seed objects on `--init-frame`, then the native tracker reuses geometry prompts for later frames
+- box and point prompts seed explicit tracked objects directly on the init frame
+- `--mask-output-dir` writes per-frame mask PNGs under frame-named subdirectories
+- zero seeded objects still produce an annotated video and JSON summary
+
+Examples:
+
+```bash
+swift run mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12
+swift run mere.run vision track ./clip.mp4 --box "40,50,120,180,dog" --box "200,80,320,260,person" --show-boxes
+```
+
+### `mere.run vision track-live`
+
+Capture a camera clip and run native SAM 3.1 tracking over the recorded session.
+
+```bash
+swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
+```
+
+Key options:
+
+- `--prompt`: one or more text prompts used to seed objects from the first captured frame
+- `--camera`: camera device index
+- `--duration-seconds`
+- `--output`: annotated video path
+- `--json-output`: tracking metadata path
+- `--show-boxes`
+- `--show-labels`
+
+Notes:
+
+- `track-live` currently records a camera clip first, then runs tracking over the recorded media
+- live mode accepts text prompts only in the current implementation
+- `--output` is required; `--json-output` is optional
 
 ### `mere.run vision ocr`
 

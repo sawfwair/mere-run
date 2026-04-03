@@ -131,6 +131,15 @@ swift run mere.run speech synthesize \
 swift run mere.run vision inspect ./image.png "Describe this image."
 ```
 
+### Vision segment
+
+```bash
+swift run mere.run model pull vision-segment-sam31
+swift run mere.run vision segment ./image.png --prompt "a person"
+swift run mere.run vision track ./clip.mp4 --prompt "a person"
+swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
+```
+
 ## Validate your local environment
 
 Run the repo validation script:
