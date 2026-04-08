@@ -14,6 +14,7 @@ public struct ModelResolver {
         case kleinBase = "image-klein-base"
         case kleinShared = "image-klein-shared"
         case mebot = "text-chat-mebot"
+        case gemma4 = "text-chat-gemma4"
         case q35 = "text-chat-q35"
         case q35Nano = "text-chat-q35-nano"
         case zetaNano = "image-zimage-nano"

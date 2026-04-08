@@ -10,19 +10,25 @@ struct ModelList: ParsableCommand {
 
     func run() throws {
         let resolver = ModelResolver()
+        let knownEntries = Dictionary(uniqueKeysWithValues: R2ModelRegistry.allEntries.map { ($0.id, $0) })
+        var idsInOrder = R2ModelRegistry.allEntries.map(\.id)
+        for modelID in ModelResolver.ModelID.allCases.map(\.rawValue) where knownEntries[modelID] == nil {
+            idsInOrder.append(modelID)
+        }
 
         printRow("ID", "Category", "Status", "Size")
         print(String(repeating: "-", count: 72))
 
-        for entry in R2ModelRegistry.allEntries {
+        for id in idsInOrder {
+            let entry = knownEntries[id]
             let status: String
             let size: String
 
             // For image gen models that have a ModelResolver.ModelID, check via resolver too
-            let modelID = ModelResolver.ModelID(rawValue: entry.id)
+            let modelID = ModelResolver.ModelID(rawValue: id)
             let resolvedViaResolver = modelID.flatMap { resolver.resolveIfPresent($0) }
 
-            let flatDir = MereRunModelPaths.modelDir(entry.id)
+            let flatDir = MereRunModelPaths.modelDir(id)
             let flatInstalled = isNonEmptyDirectory(flatDir)
 
             if let resolution = resolvedViaResolver {
@@ -38,7 +44,7 @@ struct ModelList: ParsableCommand {
                 size = "—"
             }
 
-            printRow(entry.id, entry.category, status, size)
+            printRow(id, entry?.category ?? inferCategory(for: id), status, size)
         }
     }
 
@@ -57,5 +63,19 @@ struct ModelList: ParsableCommand {
             + status.padding(toLength: 12, withPad: " ", startingAt: 0)
             + size
         print(row)
+    }
+
+    private func inferCategory(for id: String) -> String {
+        if id.hasPrefix("text-chat-") { return "text-chat" }
+        if id.hasPrefix("text-code-") { return "text-code" }
+        if id.hasPrefix("text-embed-") { return "text-embed" }
+        if id.hasPrefix("image-") { return "image" }
+        if id.hasPrefix("speech-tts-") { return "speech-tts" }
+        if id.hasPrefix("speech-asr-") { return "speech-asr" }
+        if id.hasPrefix("vision-ocr-") { return "vision-ocr" }
+        if id.hasPrefix("vision-segment-") { return "vision-segment" }
+        if id.hasPrefix("music-") { return "music" }
+        if id.hasPrefix("video-") { return "video" }
+        return "other"
     }
 }

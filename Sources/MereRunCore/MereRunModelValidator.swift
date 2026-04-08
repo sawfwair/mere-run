@@ -272,6 +272,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=klein expects flux2-klein.")
             case .zimage where engine != .zimageTurbo:
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
+            case .gemma where engine != .gemma4:
+                warnings.append("Manifest engine mismatch: family=gemma expects gemma-4.")
             case .qwen where engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
             case .sam where engine != .samSegmentation:
@@ -353,6 +355,9 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("vision-segment-") { return .sam }
+        if modelId == ModelResolver.ModelID.gemma4.rawValue {
+            return .gemma
+        }
         if modelId == ModelResolver.ModelID.q35.rawValue || modelId == ModelResolver.ModelID.q35Nano.rawValue {
             return .qwen
         }

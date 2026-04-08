@@ -48,6 +48,7 @@ Commands are grouped by user intent:
 The runtime uses explicit public IDs such as:
 
 - `image-klein-max`
+- `text-chat-gemma4`
 - `text-chat-q35`
 - `speech-tts-qwen3-nano`
 

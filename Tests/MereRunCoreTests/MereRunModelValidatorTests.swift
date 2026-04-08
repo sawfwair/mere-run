@@ -39,6 +39,16 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidGemma4Model(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .gemma4, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+    }
+
     private func writeMinimalValidSAM31Model(at root: URL) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -100,6 +110,19 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-q35")
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
+    }
+
+    func testGemma4ChatOnlyRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("text-chat-gemma4", isDirectory: true)
+        try writeMinimalValidGemma4Model(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-gemma4")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .gemma)
     }
 
     func testSAM31VisionSegmentationRootLayoutPassesValidation() throws {

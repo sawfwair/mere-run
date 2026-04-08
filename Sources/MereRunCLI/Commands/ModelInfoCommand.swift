@@ -8,7 +8,7 @@ struct ModelInfo: ParsableCommand {
         abstract: "Print a model's manifest, validation status, and resolved component paths."
     )
 
-    @Argument(help: "Canonical model id (for example: text-chat-q35 or image-zimage-max) or local model root path.")
+    @Argument(help: "Canonical model id (for example: text-chat-gemma4 or image-zimage-max) or local model root path.")
     var target: String
 
     @Flag(name: [.long], help: "Print the raw `mererun_model.json` (if present) to stdout.")
@@ -36,6 +36,9 @@ struct ModelInfo: ParsableCommand {
                 rootURL = r.rootURL
                 expectedModelID = id.rawValue
             } catch {
+                if id == .gemma4 {
+                    throw ValidationError("Model \(id.rawValue) is not installed in the local model store. Gemma4 resolves through the native Hugging Face snapshot path on first use, or you can point info at a local model path.")
+                }
                 throw ValidationError("Model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or point info at a local model path.")
             }
         } else {

@@ -18,6 +18,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case flux2Klein = "flux2-klein"
         /// Zeta family (Z-Image Turbo based).
         case zimageTurbo = "zimage-turbo"
+        /// Gemma 4 family via the native Swift runtime.
+        case gemma4 = "gemma-4"
         /// Q35 family (Qwen3.5 hybrid MoE + hybrid attention).
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
         /// SAM image segmentation family.
@@ -27,6 +29,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
         case klein
         case zimage
+        case gemma
         case qwen
         case sam
     }
@@ -388,6 +391,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             vae: nil,
             scheduler: nil
         )
+        let gemma4TextComponents = Components(
+            tokenizer: .local(path: "."),
+            textEncoder: .local(path: "."),
+            transformer: nil,
+            vae: nil,
+            scheduler: nil
+        )
         let samComponents = Components(
             tokenizer: .local(path: "tokenizer"),
             textEncoder: nil,
@@ -446,6 +456,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 precision: .unknown,
                 supports: [.chat, .loraInference],
                 components: mebotTextComponents,
+                createdAt: createdAt
+            )
+        case .gemma4:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .base,
+                variant: .standard,
+                precision: .unknown,
+                defaults: nil,
+                supports: [.chat],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.defaultUpstreamModelId,
                 createdAt: createdAt
             )
         case .q35:

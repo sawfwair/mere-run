@@ -32,6 +32,14 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 Some commands also support local or upstream model layouts outside this managed table, but the IDs above are the only canonical managed names in this repo.
 
+`text-chat-gemma4` is also a canonical chat model in the CLI, but it does not use
+`mere.run model pull`. It resolves through the native Hugging Face snapshot path
+on first use unless you point it at a local model root.
+
+Useful environment variables for that path:
+
+- `MERERUN_HUB_CACHE`: override the native Hugging Face snapshot cache path
+
 `vision-segment-sam31` packages the native SAM 3.1 segmentation and tracking runtime used by `mere.run vision segment`, `mere.run vision track`, and `mere.run vision track-live`. Managed or local SAM roots are expected to contain:
 
 - `config.json`

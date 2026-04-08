@@ -7,3 +7,13 @@ DerivedData/
 node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+.gitnexus
+
+# Build artifacts
+dist/
+
+# Cloudflare Wrangler local state
+.wrangler/
+
+# Claude Code local settings (skills are tracked)
+.claude/settings.local.json

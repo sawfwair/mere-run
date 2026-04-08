@@ -13,6 +13,7 @@ embeddings.
 
 ### Chat
 
+- `text-chat-gemma4`
 - `text-chat-q35`
 - `text-chat-q35-nano`
 - `text-chat-mebot`
@@ -32,7 +33,7 @@ embeddings.
 
 ```bash
 swift run mere.run text chat \
-  --model text-chat-q35 \
+  --model text-chat-gemma4 \
   --prompt "Summarize diffusion models in one paragraph."
 ```
 
@@ -62,6 +63,7 @@ swift run mere.run text embed \
 ### Chat families
 
 - `Sources/MereRunCore/Q35/`
+- `Sources/MereRunCore/Gemma4/`
 - `Sources/MereRunCore/Psi/`
 - `Sources/MereRunCore/MeBot/`
 

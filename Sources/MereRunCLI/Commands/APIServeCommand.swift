@@ -24,8 +24,8 @@ struct APIServe: AsyncParsableCommand {
           # Start with a specific GGUF model
           mere.run api serve -m ~/models/Qwen3-Coder-Next-Q4_K_M.gguf
 
-          # Start a Q35 text-chat server
-          mere.run api serve --engine text-chat-q35
+          # Start a Gemma 4 text-chat server
+          mere.run api serve --engine text-chat-gemma4
 
           # Start a Q35 text-chat server with an explicit nano model root
           mere.run api serve --engine text-chat-q35 -m ~/Library/Application\\ Support/MereRun/models/text-chat-q35-nano
@@ -46,10 +46,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-q35, pass a Q35 text chat model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Q35 text chat model root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-code (default), text-chat-klein, or text-chat-q35.")
+    @Option(name: [.long], help: "Serving engine: text-code (default), text-chat-klein, text-chat-gemma4, or text-chat-q35.")
     var engine: APIEngine = .textCode
 
     @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
@@ -58,13 +58,27 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Context size (default: 32768).")
     var contextSize: Int = 32768
 
+    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform and integer/.5 widths for turboquant.")
+    var kvBits: Double?
+
+    @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform or turboquant.")
+    var kvQuantScheme: String = Gemma4Resources.defaultKVQuantizationScheme.rawValue
+
+    @Option(name: [.long], help: "Gemma4 KV cache quantization group size.")
+    var kvGroupSize: Int = Gemma4Resources.defaultKVGroupSize
+
+    @Option(name: [.long], help: "Gemma4 token offset at which KV cache quantization begins.")
+    var quantizedKVStart: Int = Gemma4Resources.defaultQuantizedKVStart
+
     func run() async throws {
         let resolvedModelPath = try resolveModelPath()
+        let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
         let server = try await CodeGenServer(
             modelPath: resolvedModelPath,
             fallbackLoraPath: lora,
             engine: engine,
-            contextSize: contextSize
+            contextSize: contextSize,
+            gemma4KVCacheQuantization: gemma4KVCacheQuantization
         )
         try await server.run(host: host, port: port)
     }
@@ -86,6 +100,14 @@ struct APIServe: AsyncParsableCommand {
                 return resolved.rootURL.path
             }
             throw ValidationError("Model 'text-chat-mebot' is not installed. Download image-klein-nano or image-klein-max first.")
+        case .textChatGemma4:
+            if let explicit = model {
+                return explicit
+            }
+            if let resolved = ModelResolver().resolveIfPresent(.gemma4) {
+                return resolved.rootURL.path
+            }
+            return nil
         case .textChatQ35:
             if let explicit = model {
                 return explicit
@@ -100,11 +122,26 @@ struct APIServe: AsyncParsableCommand {
             return nil
         }
     }
+
+    private func resolveGemma4KVCacheQuantization() throws -> Gemma4KVCacheQuantization {
+        guard let scheme = Gemma4KVQuantizationScheme(
+            rawValue: kvQuantScheme.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        ) else {
+            throw ValidationError("Unsupported --kv-quant-scheme '\(kvQuantScheme)'. Expected 'uniform' or 'turboquant'.")
+        }
+        return Gemma4KVCacheQuantization(
+            bits: kvBits,
+            scheme: scheme,
+            groupSize: kvGroupSize,
+            quantizedStart: quantizedKVStart
+        )
+    }
 }
 
 enum APIEngine: String, ExpressibleByArgument {
     case textCode = "text-code"
     case textChatKlein = "text-chat-klein"
+    case textChatGemma4 = "text-chat-gemma4"
     case textChatQ35 = "text-chat-q35"
 }
 
@@ -138,6 +175,7 @@ actor CodeGenServer {
     private let engine: APIEngine
     private let llamaGenerator: CodeGenGenerator?
     private let mlxGenerator: Flux2KleinGenerator?
+    private let gemma4Generator: Gemma4Generator?
     private let q35Generator: Q35Generator?
     private let modelPath: String?
     private let fallbackLoraPath: String?
@@ -149,7 +187,8 @@ actor CodeGenServer {
         modelPath: String?,
         fallbackLoraPath: String?,
         engine: APIEngine,
-        contextSize: Int = 32768
+        contextSize: Int = 32768,
+        gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization()
     ) async throws {
         self.contextSize = contextSize
         self.engine = engine
@@ -160,6 +199,8 @@ actor CodeGenServer {
                 switch engine {
                 case .textChatKlein:
                     return ModelResolver.ModelID.mebot.rawValue
+                case .textChatGemma4:
+                    return ModelResolver.ModelID.gemma4.rawValue
                 case .textChatQ35:
                     return ModelResolver.ModelID.q35.rawValue
                 case .textCode:
@@ -172,6 +213,7 @@ actor CodeGenServer {
             let generator = CodeGenGenerator(modelId: modelPath ?? CodeGenResources.defaultModelId)
             self.llamaGenerator = generator
             self.mlxGenerator = nil
+            self.gemma4Generator = nil
             self.q35Generator = nil
             self.useStandaloneModel = false
 
@@ -182,14 +224,30 @@ actor CodeGenServer {
         case .textChatKlein:
             self.llamaGenerator = nil
             self.mlxGenerator = Flux2KleinGenerator()
+            self.gemma4Generator = nil
             self.q35Generator = nil
             // Check if the resolved path is a standalone MeBot Instruct model
             self.useStandaloneModel = MeBotModelCatalog.resolveModelPath() != nil
                 && modelPath == MeBotModelCatalog.resolveModelPath()
+        case .textChatGemma4:
+            let generator = Gemma4Generator(
+                modelId: Gemma4Resources.defaultModelId,
+                kvCacheQuantization: gemma4KVCacheQuantization
+            )
+            self.llamaGenerator = nil
+            self.mlxGenerator = nil
+            self.gemma4Generator = generator
+            self.q35Generator = nil
+            self.useStandaloneModel = false
+
+            try await generator.prepare(modelPath: modelPath) { progress in
+                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+            }
         case .textChatQ35:
             let generator = Q35Generator(modelId: Q35Resources.defaultModelId)
             self.llamaGenerator = nil
             self.mlxGenerator = nil
+            self.gemma4Generator = nil
             self.q35Generator = generator
             self.useStandaloneModel = false
 
@@ -403,6 +461,11 @@ actor CodeGenServer {
             }
             if useStandaloneModel {
                 return try await generator.chatStandalone(request, modelPath: modelPath, progressHandler: progressHandler)
+            }
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatGemma4:
+            guard let generator = gemma4Generator else {
+                throw Gemma4Error.modelNotLoaded
             }
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatQ35:

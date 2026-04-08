@@ -36,7 +36,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-max`, `image-zimage-max`
-- text: `text-chat-q35`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-q35`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`

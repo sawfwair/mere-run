@@ -38,6 +38,7 @@ public enum QuantizedModelManifestWriter {
             switch engine {
             case .flux2Klein: return .klein
             case .zimageTurbo: return .zimage
+            case .gemma4: return .gemma
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
             }
@@ -66,6 +67,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img, .referenceEdit, .loraInference]
                 case .zimageTurbo:
                     return [.txt2img, .img2img, .loraInference]
+                case .gemma4:
+                    return [.chat]
                 case .qwen35HybridMoE:
                     return [.chat]
                 case .samSegmentation:
@@ -120,6 +123,8 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
             case .zimageTurbo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
+            case .gemma4:
+                break
             case .qwen35HybridMoE:
                 break
             case .samSegmentation:

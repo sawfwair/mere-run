@@ -33,7 +33,7 @@ package-scoped.
 ## Example
 
 ```bash
-swift run mere.run api serve --engine text-chat-q35
+swift run mere.run api serve --engine text-chat-gemma4
 ```
 
 ## Design notes

@@ -51,7 +51,7 @@ export MERERUN_MODELS_DIR=/Volumes/FastSSD/mererun-models
 See [`model-sources.md`](./model-sources.md) for the full source story. The most common managed IDs are:
 
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
-- Text chat: `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
 - Text code: `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
@@ -137,7 +137,7 @@ swift run mere.run video generate \
 ### Serve a local API
 
 ```bash
-swift run mere.run api serve --engine text-chat-q35
+swift run mere.run api serve --engine text-chat-gemma4
 ```
 
 ## Command reference
@@ -195,7 +195,7 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Q35 or Psi family.
+Run local text chat with the Gemma 4, Q35, or Psi family.
 
 ```bash
 swift run mere.run text chat --prompt "<text>" [options]
@@ -609,7 +609,7 @@ Inspect a canonical model ID or a local model root.
 ```bash
 swift run mere.run model info image-zimage-max
 swift run mere.run model info /path/to/model/root --components
-swift run mere.run model info text-chat-q35 --json
+swift run mere.run model info text-chat-gemma4
 ```
 
 ### `mere.run model remove`
@@ -648,13 +648,14 @@ Engine values:
 
 - `text-code`
 - `text-chat-klein`
+- `text-chat-gemma4`
 - `text-chat-q35`
 
 Examples:
 
 ```bash
 swift run mere.run api serve
-swift run mere.run api serve --engine text-chat-q35
+swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
 swift run mere.run api serve --host 0.0.0.0 --port 11434
 ```

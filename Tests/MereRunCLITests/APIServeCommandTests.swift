@@ -17,24 +17,36 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertNil(cmd.model)
         XCTAssertNil(cmd.lora)
         XCTAssertEqual(cmd.contextSize, 32_768)
+        XCTAssertNil(cmd.kvBits)
+        XCTAssertEqual(cmd.kvQuantScheme, "uniform")
+        XCTAssertEqual(cmd.kvGroupSize, 64)
+        XCTAssertEqual(cmd.quantizedKVStart, 5_000)
     }
 
     func testAPIServeParsesOverrides() throws {
         let cmd = try APIServe.parse([
             "--host", "0.0.0.0",
             "--port", "11434",
-            "--engine", "text-chat-q35",
-            "--model-path", "/tmp/q35",
+            "--engine", "text-chat-gemma4",
+            "--model-path", "/tmp/gemma4",
             "--lora", "/tmp/adapter.safetensors",
             "--context-size", "8192",
+            "--kv-bits", "3.5",
+            "--kv-quant-scheme", "turboquant",
+            "--kv-group-size", "32",
+            "--quantized-kv-start", "2048",
         ])
 
         XCTAssertEqual(cmd.host, "0.0.0.0")
         XCTAssertEqual(cmd.port, 11_434)
-        XCTAssertEqual(cmd.engine, .textChatQ35)
-        XCTAssertEqual(cmd.model, "/tmp/q35")
+        XCTAssertEqual(cmd.engine, .textChatGemma4)
+        XCTAssertEqual(cmd.model, "/tmp/gemma4")
         XCTAssertEqual(cmd.lora, "/tmp/adapter.safetensors")
         XCTAssertEqual(cmd.contextSize, 8192)
+        XCTAssertEqual(cmd.kvBits, 3.5)
+        XCTAssertEqual(cmd.kvQuantScheme, "turboquant")
+        XCTAssertEqual(cmd.kvGroupSize, 32)
+        XCTAssertEqual(cmd.quantizedKVStart, 2048)
     }
 
     func testHealthContractUsesStablePayload() {

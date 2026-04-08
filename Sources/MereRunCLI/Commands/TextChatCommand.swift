@@ -11,8 +11,9 @@ struct TextChat: AsyncParsableCommand {
         discussion: """
         Auto-downloads the selected model on first use.
         Known model IDs:
-          - text-chat-q35 (Qwen3.5-122B-A10B 4-bit, default)
+          - text-chat-gemma4 (Gemma 4 31B native Swift runtime, default)
           - text-chat-q35-nano (Qwen3.5-35B-A3B 4-bit)
+          - text-chat-q35
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
@@ -35,11 +36,23 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Top-p.")
     var topP: Double = 0.9
 
+    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform and integer/.5 widths for turboquant.")
+    var kvBits: Double?
+
+    @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform or turboquant.")
+    var kvQuantScheme: String = Gemma4Resources.defaultKVQuantizationScheme.rawValue
+
+    @Option(name: [.long], help: "Gemma4 KV cache quantization group size.")
+    var kvGroupSize: Int = Gemma4Resources.defaultKVGroupSize
+
+    @Option(name: [.long], help: "Gemma4 token offset at which KV cache quantization begins.")
+    var quantizedKVStart: Int = Gemma4Resources.defaultQuantizedKVStart
+
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Canonical model id: text-chat-q35 (default), text-chat-q35-nano, or text-chat-psi-agent.")
-    var model: String = Q35Resources.defaultModelId
+    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default), text-chat-q35, text-chat-q35-nano, or text-chat-psi-agent.")
+    var model: String = Gemma4Resources.defaultModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
     var thinking: Bool = false
@@ -82,6 +95,19 @@ struct TextChat: AsyncParsableCommand {
         let result: ChatResponse
         if normalizedModelId == Psi3ChatResources.defaultModelId {
             let generator = Psi3ChatGenerator(modelId: Psi3ChatResources.defaultModelId)
+            result = try await generator.chat(request, modelPath: modelRoot, progressHandler: progressHandler)
+        } else if Gemma4Resources.handles(modelSpec: normalizedModelId) {
+            let effectiveModelId = normalizedModelId.isEmpty ? Gemma4Resources.defaultModelId : normalizedModelId
+            let scheme = try parseGemma4KVQuantizationScheme(kvQuantScheme)
+            let generator = Gemma4Generator(
+                modelId: effectiveModelId,
+                kvCacheQuantization: Gemma4KVCacheQuantization(
+                    bits: kvBits,
+                    scheme: scheme,
+                    groupSize: kvGroupSize,
+                    quantizedStart: quantizedKVStart
+                )
+            )
             result = try await generator.chat(request, modelPath: modelRoot, progressHandler: progressHandler)
         } else {
             let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
@@ -127,5 +153,14 @@ struct TextChat: AsyncParsableCommand {
         cleaned = cleaned.replacingOccurrences(of: "<think>", with: "")
         cleaned = cleaned.replacingOccurrences(of: "</think>", with: "")
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func parseGemma4KVQuantizationScheme(_ raw: String) throws -> Gemma4KVQuantizationScheme {
+        guard let scheme = Gemma4KVQuantizationScheme(
+            rawValue: raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        ) else {
+            throw ValidationError("Unsupported --kv-quant-scheme '\(raw)'. Expected 'uniform' or 'turboquant'.")
+        }
+        return scheme
     }
 }

@@ -36,6 +36,9 @@ struct ModelPull: AsyncParsableCommand {
             }
         } else {
             guard let target else { return }
+            if target.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == ModelResolver.ModelID.gemma4.rawValue {
+                throw ValidationError("text-chat-gemma4 is not distributed as an R2 archive. It resolves through the native Hugging Face snapshot path on first chat/API use, or you can install a local Gemma 4 root and point commands at it directly.")
+            }
             let entry = resolveEntry(target)
             guard let entry else {
                 throw ValidationError("Unknown canonical model id: \(target)")

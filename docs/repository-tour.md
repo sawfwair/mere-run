@@ -50,7 +50,7 @@ Key subdirectories:
 - `Flux2Klein/`: Klein image-family runtime
 - `ZImageTurbo/`: ZImage image-family runtime
 - `QwenImageEdit/`: image editing flow
-- `Q35/`, `Psi/`, `MeBot/`: text/chat model families
+- `Gemma4/`, `Q35/`, `Psi/`, `MeBot/`: text/chat model families
 - `Embeddings/`: embedding-generation support
 - `LightOnOCR/`: OCR runtime
 - `VLM/`: vision-language model helpers

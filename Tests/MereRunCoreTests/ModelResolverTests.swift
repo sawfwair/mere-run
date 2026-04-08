@@ -86,6 +86,25 @@ final class ModelResolverTests: MereRunCoreTestCase {
         XCTAssertEqual(resolved.source, .localModelStore)
     }
 
+    func testResolvesGemma4FromProcessModelStoreOverride() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let modelRoot = modelsRoot.appendingPathComponent("text-chat-gemma4", isDirectory: true)
+        try TestFileSystem.createDirectory(modelRoot)
+        try MereRunModelManifest.template(for: .gemma4, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+
+        let resolver = ModelResolver()
+        let resolved = try resolver.resolve(.gemma4)
+
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
+        XCTAssertEqual(resolved.source, .localModelStore)
+    }
+
     func testResolvesVisionSegmentSAM31FromProcessModelStoreOverride() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
