@@ -176,15 +176,9 @@ public enum R2DownloadRequestBuilder {
             return BuildResult(request: request, mode: .signed)
         }
 
-        let configuredBaseURLString = environment[MereRunModelSourceConfiguration.baseURLEnvironmentKey]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
         let baseURL: URL
-        if let configuredBaseURLString, !configuredBaseURLString.isEmpty {
-            guard let resolved = URL(string: configuredBaseURLString) else {
-                throw BuildError.invalidBaseURL(configuredBaseURLString)
-            }
-            baseURL = resolved
+        if let configuredBaseURL = MereRunModelSourceConfiguration.publicBaseURL(environment: environment) {
+            baseURL = configuredBaseURL
         } else if let defaultPublicBaseURL {
             guard let resolved = URL(string: defaultPublicBaseURL) else {
                 throw BuildError.invalidBaseURL(defaultPublicBaseURL)

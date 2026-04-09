@@ -4,7 +4,7 @@ import Foundation
 public struct Qwen3ASRResources: Sendable, Hashable {
     public static let defaultModelId = "speech-asr-qwen3"
     public static let defaultRepoId = "mlx-community/Qwen3-ASR-1.7B-8bit"
-    public static let r2ArchiveKey = "models/speech-asr-qwen3.tar.gz"
+    public static let r2ArchiveKey = "models/asr.tar.gz"
     public static let r2ArchiveSize: Int64 = 0
     public static let sampleRate = 16000
 

@@ -15,6 +15,8 @@ public struct ModelResolver {
         case kleinShared = "image-klein-shared"
         case mebot = "text-chat-mebot"
         case gemma4 = "text-chat-gemma4"
+        case gemma4Nano = "text-chat-gemma4-nano"
+        case gemma4Max = "text-chat-gemma4-max"
         case q35 = "text-chat-q35"
         case q35Nano = "text-chat-q35-nano"
         case zetaNano = "image-zimage-nano"
@@ -83,17 +85,33 @@ public struct ModelResolver {
             return Resolution(modelID: modelID, rootURL: kleinMax.rootURL, source: kleinMax.source)
         }
 
-        var searched: [URL] = []
-
-        for modelsRoot in candidateModelRoots() {
-            let modelRoot = modelsRoot.appendingPathComponent(modelID.rawValue, isDirectory: true)
-            searched.append(modelRoot)
-            if isValidModelRoot(modelRoot, expectedModelID: modelID) {
-                return Resolution(modelID: modelID, rootURL: modelRoot, source: .localModelStore)
+        if modelID == .gemma4 {
+            if let direct = resolveDirect(.gemma4) {
+                return direct
             }
+            if let max = resolveDirect(.gemma4Max) {
+                return Resolution(modelID: modelID, rootURL: max.rootURL, source: max.source)
+            }
+            if let nano = resolveDirect(.gemma4Nano) {
+                return Resolution(modelID: modelID, rootURL: nano.rootURL, source: nano.source)
+            }
+
+            throw ResolverError.modelNotFound(
+                modelID,
+                searched: searchedPaths(for: [.gemma4, .gemma4Max, .gemma4Nano]),
+                upstreamRepoId: Gemma4Resources.defaultUpstreamModelId
+            )
         }
 
-        throw ResolverError.modelNotFound(modelID, searched: searched, upstreamRepoId: nil)
+        if let direct = resolveDirect(modelID) {
+            return direct
+        }
+
+        throw ResolverError.modelNotFound(
+            modelID,
+            searched: searchedPaths(for: [modelID]),
+            upstreamRepoId: nil
+        )
     }
 
     public func resolveIfPresent(_ modelID: ModelID) -> Resolution? {
@@ -102,6 +120,22 @@ public struct ModelResolver {
 
     private func candidateModelRoots() -> [URL] {
         [MereRunModelPaths.modelsDir.standardizedFileURL]
+    }
+
+    private func resolveDirect(_ modelID: ModelID) -> Resolution? {
+        for modelsRoot in candidateModelRoots() {
+            let modelRoot = modelsRoot.appendingPathComponent(modelID.rawValue, isDirectory: true)
+            if isValidModelRoot(modelRoot, expectedModelID: modelID) {
+                return Resolution(modelID: modelID, rootURL: modelRoot, source: .localModelStore)
+            }
+        }
+        return nil
+    }
+
+    private func searchedPaths(for modelIDs: [ModelID]) -> [URL] {
+        candidateModelRoots().flatMap { modelsRoot in
+            modelIDs.map { modelsRoot.appendingPathComponent($0.rawValue, isDirectory: true) }
+        }
     }
 
     private func isValidModelRoot(_ url: URL, expectedModelID: ModelID? = nil) -> Bool {

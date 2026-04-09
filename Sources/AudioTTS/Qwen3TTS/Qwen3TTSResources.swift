@@ -4,7 +4,7 @@ import AudioCore
 public struct Qwen3TTSResources: Sendable, Hashable {
     public static let defaultModelId = "speech-tts-qwen3-nano"
     public static let sampleRate = 24000
-    public static let r2ArchiveKey = "models/speech-tts-qwen3-nano.tar.gz"
+    public static let r2ArchiveKey = "models/talk-nano.tar.gz"
     public static let r2ArchiveSize: Int64 = 3_691_910_698
 
     // Special token IDs (from model config)

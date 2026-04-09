@@ -463,13 +463,41 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 id: modelID.rawValue,
                 engine: .gemma4,
                 family: .gemma,
-                tier: .base,
+                tier: .latest,
                 variant: .standard,
-                precision: .unknown,
+                precision: .bf16,
                 defaults: nil,
                 supports: [.chat],
                 components: gemma4TextComponents,
                 upstreamRepoId: Gemma4Resources.defaultUpstreamModelId,
+                createdAt: createdAt
+            )
+        case .gemma4Nano:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.nanoUpstreamModelId,
+                createdAt: createdAt
+            )
+        case .gemma4Max:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
                 createdAt: createdAt
             )
         case .q35:

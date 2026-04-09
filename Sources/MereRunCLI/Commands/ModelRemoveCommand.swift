@@ -20,18 +20,30 @@ struct ModelRemove: ParsableCommand {
             throw ValidationError("Unknown canonical model id: \(target)")
         }
 
-        let flatDir = MereRunModelPaths.modelDir(id)
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: flatDir.path, isDirectory: &isDir), isDir.boolValue else {
-            throw ValidationError("\(id) is not installed.")
+        let resolver = ModelResolver()
+        let modelID = ModelResolver.ModelID(rawValue: id)
+        let installURL: URL
+        if let modelID, let resolved = resolver.resolveIfPresent(modelID) {
+            installURL = resolved.rootURL
+        } else {
+            if let aliasFallback = gemmaAliasInstallURL(for: id) {
+                installURL = aliasFallback
+            } else {
+                let flatDir = MereRunModelPaths.modelDir(id)
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: flatDir.path, isDirectory: &isDir), isDir.boolValue else {
+                    throw ValidationError("\(id) is not installed.")
+                }
+                installURL = flatDir
+            }
         }
 
-        let bytes = FileSystemHelper.directorySize(at: flatDir)
+        let bytes = FileSystemHelper.directorySize(at: installURL)
         let sizeStr = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
 
         if !force {
             print("Remove \(id)?")
-            print("  Path: \(flatDir.path)")
+            print("  Path: \(installURL.path)")
             print("  Size: \(sizeStr)")
             print("")
             print("Confirm? [y/N] ", terminator: "")
@@ -41,13 +53,34 @@ struct ModelRemove: ParsableCommand {
             }
         }
 
-        try FileManager.default.removeItem(at: flatDir)
+        try FileManager.default.removeItem(at: installURL)
         print("Removed \(id) (\(sizeStr))")
     }
 
     /// Resolve a user-supplied string to a canonical model id.
     private func resolveID(_ raw: String) -> String? {
         let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return R2ModelRegistry.entry(for: normalized).map(\.id)
+        if let registryID = R2ModelRegistry.entry(for: normalized).map(\.id) {
+            return registryID
+        }
+        return ModelResolver.ModelID(rawValue: normalized)?.rawValue
+    }
+
+    private func gemmaAliasInstallURL(for id: String) -> URL? {
+        guard id == Gemma4Resources.defaultModelId else {
+            return nil
+        }
+
+        let candidates = [
+            MereRunModelPaths.modelDir(Gemma4Resources.maxModelId),
+            MereRunModelPaths.modelDir(Gemma4Resources.nanoModelId),
+        ]
+        for candidate in candidates {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDir), isDir.boolValue {
+                return candidate
+            }
+        }
+        return nil
     }
 }

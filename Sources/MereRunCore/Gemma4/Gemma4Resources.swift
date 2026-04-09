@@ -2,7 +2,11 @@ import Foundation
 
 public struct Gemma4Resources: Sendable, Hashable {
     public static let defaultModelId = "text-chat-gemma4"
-    public static let defaultUpstreamModelId = "google/gemma-4-31B-it"
+    public static let nanoModelId = "text-chat-gemma4-nano"
+    public static let maxModelId = "text-chat-gemma4-max"
+    public static let nanoUpstreamModelId = "google/gemma-4-E4B-it"
+    public static let maxUpstreamModelId = "google/gemma-4-31B-it"
+    public static let defaultUpstreamModelId = maxUpstreamModelId
     public static let defaultContextLength = 32_768
     public static let defaultKVGroupSize = 64
     public static let defaultQuantizedKVStart = 5_000

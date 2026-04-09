@@ -8,7 +8,7 @@ struct ModelPull: AsyncParsableCommand {
         abstract: "Download a managed model into the local model store."
     )
 
-    @Argument(help: "Canonical model id (for example: image-klein-nano or text-chat-q35). Omit when using --all.")
+    @Argument(help: "Canonical model id (for example: image-klein-nano, text-chat-gemma4-max, or text-chat-q35). Omit when using --all.")
     var target: String?
 
     @Flag(name: [.long], help: "Pull every model that has an R2 archive.")
@@ -36,9 +36,6 @@ struct ModelPull: AsyncParsableCommand {
             }
         } else {
             guard let target else { return }
-            if target.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == ModelResolver.ModelID.gemma4.rawValue {
-                throw ValidationError("text-chat-gemma4 is not distributed as an R2 archive. It resolves through the native Hugging Face snapshot path on first chat/API use, or you can install a local Gemma 4 root and point commands at it directly.")
-            }
             let entry = resolveEntry(target)
             guard let entry else {
                 throw ValidationError("Unknown canonical model id: \(target)")
@@ -77,7 +74,7 @@ struct ModelPull: AsyncParsableCommand {
         try fm.createDirectory(at: modelDir, withIntermediateDirectories: true)
         try fm.createDirectory(at: archiveFile.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        try await downloadR2Archive(key: entry.archiveKey, to: archiveFile)
+        try await downloadR2Archive(for: entry, to: archiveFile)
 
         if !quiet { stderr("[\(entry.id)] extracting…") }
         try extractArchive(archiveFile, to: modelDir)
@@ -106,10 +103,33 @@ struct ModelPull: AsyncParsableCommand {
 
     // MARK: - R2 Download
 
-    private func downloadR2Archive(key: String, to archiveFile: URL) async throws {
+    private func downloadR2Archive(for entry: R2ModelRegistry.ModelEntry, to archiveFile: URL) async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let usePackagedPublicSource =
+            !MereRunModelSourceConfiguration.hasExplicitDownloadConfiguration(environment: environment)
+            && MereRunModelSourceConfiguration.publicBaseURL(environment: environment) != nil
+
+        let requestKey: String
+        if usePackagedPublicSource {
+            guard let packagedArchiveKey = entry.packagedArchiveKey else {
+                throw CleanExit.message(
+                    """
+                    No packaged public download is configured for \(entry.id).
+                    Set MERERUN_MODEL_SOURCE_BASE_URL or signed R2 credentials to provide this archive.
+                    """
+                )
+            }
+            requestKey = packagedArchiveKey
+        } else {
+            requestKey = entry.archiveKey
+        }
+
         let request: URLRequest
         do {
-            request = try await R2DownloadRequestBuilder.makeGETRequest(key: key).request
+            request = try await R2DownloadRequestBuilder.makeGETRequest(
+                key: requestKey,
+                environment: environment
+            ).request
         } catch let error as R2DownloadRequestBuilder.BuildError {
             throw CleanExit.message(error.localizedDescription)
         }

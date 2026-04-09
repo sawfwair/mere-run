@@ -5,7 +5,7 @@ public struct ParakeetResources: Sendable, Hashable {
     public static let defaultModelId = "speech-asr-parakeet"
     public static let defaultRepoId = "mlx-community/parakeet-tdt-0.6b-v3"
     public static let sampleRate = 16_000
-    public static let r2ArchiveKey = "models/speech-asr-parakeet.tar.gz"
+    public static let r2ArchiveKey = "models/asr-parakeet.tar.gz"
     public static let r2ArchiveSize: Int64 = 2_332_340_210
 
     public var rootURL: URL

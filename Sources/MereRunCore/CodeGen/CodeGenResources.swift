@@ -3,7 +3,7 @@ import Foundation
 /// Resource paths and validation for CodeGen (Qwen3-Coder) models.
 public struct CodeGenResources: Sendable, Hashable {
     public static let defaultModelId = "text-code-qwen3"
-    public static let r2ArchiveKey = "models/text-code-qwen3.tar.gz"
+    public static let r2ArchiveKey = "models/qwen3-coder-next.tar.gz"
     public static let r2ArchiveSize: Int64 = 47_530_770_762  // Q4_K_M GGUF tar.gz
 
     public var ggufURL: URL

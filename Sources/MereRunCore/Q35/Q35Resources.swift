@@ -26,7 +26,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let defaultModelId = "text-chat-q35"
     public static let nanoModelId = "text-chat-q35-nano"
 
-    public static let r2ArchiveKey = "models/text-chat-q35.tar.gz"
+    public static let r2ArchiveKey = "models/q35.tar.gz"
     public static let r2ArchiveSize: Int64 = 55_965_575_798
 
     public static let upstreamRepoId = "mlx-community/Qwen3.5-122B-A10B-4bit"

@@ -3,7 +3,7 @@ import Foundation
 /// Resource paths and validation for Psi3 (GLM-4.7 Flash) chat models.
 public struct Psi3ChatResources: Sendable, Hashable {
     public static let defaultModelId = "text-chat-psi-agent"
-    public static let r2ArchiveKey = "models/text-chat-psi-agent.tar.gz"
+    public static let r2ArchiveKey = "models/psi-agent.tar.gz"
     public static let r2ArchiveSize: Int64 = 30_257_308_652
 
     public var rootURL: URL

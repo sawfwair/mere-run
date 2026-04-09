@@ -3,7 +3,7 @@ import Foundation
 public enum Qwen3EmbeddingCatalog {
     public static let modelId = "text-embed-qwen3-0.6b"
     public static let modelDirectoryName = "Qwen3-Embedding-0.6B"
-    public static let archiveKey = "models/text-embed-qwen3-0.6b.tar.gz"
+    public static let archiveKey = "models/qwen3-embedding-0.6b.tar.gz"
     public static let archiveSize: Int64 = 0  // Unknown at compile-time.
     public static var archiveURL: URL? {
         MereRunModelSourceConfiguration.publicArchiveURL(for: archiveKey)

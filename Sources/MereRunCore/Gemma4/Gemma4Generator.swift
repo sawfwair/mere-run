@@ -195,19 +195,48 @@ public actor Gemma4Generator: ChatGenerator {
             return try await resolveModelLocation(explicit, progressHandler: progressHandler)
         }
 
-        if let resolved = ModelResolver().resolveIfPresent(.gemma4) {
+        let trimmedModelId = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestedModelId = trimmedModelId.isEmpty ? Gemma4Resources.defaultModelId : trimmedModelId
+
+        if let modelID = ModelResolver.ModelID(rawValue: requestedModelId),
+           let resolved = ModelResolver().resolveIfPresent(modelID) {
             return resolved.rootURL
         }
 
-        let trimmedModelId = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedModelId.isEmpty, trimmedModelId != Gemma4Resources.defaultModelId {
-            return try await resolveModelLocation(trimmedModelId, progressHandler: progressHandler)
+        if let fallback = resolveInstalledGemmaRoot(for: requestedModelId) {
+            return fallback
+        }
+
+        if requestedModelId != Gemma4Resources.defaultModelId {
+            return try await resolveModelLocation(requestedModelId, progressHandler: progressHandler)
         }
 
         return try await resolveHubSnapshot(
             repoId: Gemma4Resources.defaultUpstreamModelId,
             progressHandler: progressHandler
         )
+    }
+
+    private func resolveInstalledGemmaRoot(for requestedModelId: String) -> URL? {
+        func existingModelDir(_ id: String) -> URL? {
+            let url = MereRunModelPaths.modelDir(id)
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
+                return nil
+            }
+            guard (try? FileManager.default.contentsOfDirectory(atPath: url.path))?.isEmpty == false else {
+                return nil
+            }
+            return url.standardizedFileURL
+        }
+
+        if requestedModelId == Gemma4Resources.defaultModelId {
+            return existingModelDir(Gemma4Resources.defaultModelId)
+                ?? existingModelDir(Gemma4Resources.maxModelId)
+                ?? existingModelDir(Gemma4Resources.nanoModelId)
+        }
+
+        return existingModelDir(requestedModelId)
     }
 
     private func resolveModelLocation(

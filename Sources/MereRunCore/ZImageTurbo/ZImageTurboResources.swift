@@ -5,8 +5,8 @@ public enum ZImageTurboRepository {
     public static let revision = "main"
     public static let defaultModelID: ModelResolver.ModelID = .zetaMax
     public static let r2ArchiveByModelID: [ModelResolver.ModelID: (key: String, size: Int64)] = [
-        .zetaNano: ("models/image-zimage-nano.tar.gz", 5_980_168_600),
-        .zetaMax: ("models/image-zimage-max.tar.gz", 18_092_604_557),
+        .zetaNano: ("models/zeta-nano.tar.gz", 5_980_168_600),
+        .zetaMax: ("models/zeta-max.tar.gz", 18_092_604_557),
         .zetaBase: ("models/image-zimage-base.tar.gz", 0),
     ]
 

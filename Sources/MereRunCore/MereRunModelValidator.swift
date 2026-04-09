@@ -355,7 +355,9 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("vision-segment-") { return .sam }
-        if modelId == ModelResolver.ModelID.gemma4.rawValue {
+        if modelId == ModelResolver.ModelID.gemma4.rawValue
+            || modelId == ModelResolver.ModelID.gemma4Nano.rawValue
+            || modelId == ModelResolver.ModelID.gemma4Max.rawValue {
             return .gemma
         }
         if modelId == ModelResolver.ModelID.q35.rawValue || modelId == ModelResolver.ModelID.q35Nano.rawValue {

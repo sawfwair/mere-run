@@ -11,7 +11,9 @@ struct TextChat: AsyncParsableCommand {
         discussion: """
         Auto-downloads the selected model on first use.
         Known model IDs:
-          - text-chat-gemma4 (Gemma 4 31B native Swift runtime, default)
+          - text-chat-gemma4 (Gemma 4 default alias, currently 31B)
+          - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
+          - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-q35-nano (Qwen3.5-35B-A3B 4-bit)
           - text-chat-q35
           - text-chat-psi-agent
@@ -51,7 +53,7 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default), text-chat-q35, text-chat-q35-nano, or text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default alias), text-chat-gemma4-max, text-chat-gemma4-nano, text-chat-q35, text-chat-q35-nano, or text-chat-psi-agent.")
     var model: String = Gemma4Resources.defaultModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")

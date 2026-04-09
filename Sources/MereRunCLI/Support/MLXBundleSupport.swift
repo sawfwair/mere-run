@@ -15,6 +15,21 @@ enum MLXBundleSupport {
             return
         }
 
+        let installCandidates = bundleInstallCandidates(executableDir: execDir)
+        for candidateDir in installCandidates {
+            let sourceBundleURL = candidateDir.appendingPathComponent(bundleName, isDirectory: true)
+            guard fm.fileExists(atPath: sourceBundleURL.path) else {
+                continue
+            }
+
+            try? fm.removeItem(at: destBundleURL)
+            try fm.copyItem(at: sourceBundleURL, to: destBundleURL)
+            if !quiet {
+                CLIStderr.write("[mererun] Installed \(bundleName) for mlx-swift Metal shaders.\n")
+            }
+            return
+        }
+
         let rootCandidates = workspaceRootCandidates(executableDir: execDir)
         for root in rootCandidates {
             if let sourceBundleURL = findMlxSwiftBundle(workspaceRoot: root) {
@@ -88,6 +103,44 @@ enum MLXBundleSupport {
 
         var seen = Set<String>()
         return roots.filter { seen.insert($0.standardizedFileURL.path).inserted }
+    }
+
+    private static func bundleInstallCandidates(executableDir: URL) -> [URL] {
+        var candidates: [URL] = []
+
+        if let invocationPath = apparentInvocationPath() {
+            candidates.append(invocationPath.deletingLastPathComponent())
+        }
+
+        candidates.append(URL(fileURLWithPath: "/usr/local/bin", isDirectory: true))
+        candidates.append(URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true))
+
+        var seen = Set<String>([executableDir.standardizedFileURL.path])
+        return candidates.filter { seen.insert($0.standardizedFileURL.path).inserted }
+    }
+
+    private static func apparentInvocationPath() -> URL? {
+        let argument = CommandLine.arguments[0]
+        guard !argument.isEmpty else {
+            return nil
+        }
+
+        let fm = FileManager.default
+        if argument.contains("/") {
+            let cwd = URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true)
+            return URL(fileURLWithPath: argument, relativeTo: cwd).standardizedFileURL
+        }
+
+        let pathEntries = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":") ?? []
+        for entry in pathEntries {
+            let candidate = URL(fileURLWithPath: String(entry), isDirectory: true)
+                .appendingPathComponent(argument, isDirectory: false)
+            if fm.isExecutableFile(atPath: candidate.path) {
+                return candidate.standardizedFileURL
+            }
+        }
+
+        return nil
     }
 
     private static func inferWorkspaceRoot(fromExecutableDir executableDir: URL) -> URL? {

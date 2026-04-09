@@ -9,6 +9,16 @@ BIN_PATH="${BIN_PATH:-$(swift build -c release --product mere.run --show-bin-pat
 DMG_PATH="${DMG_PATH:-$ROOT_DIR/dist/mere-run.dmg}"
 VOLUME_NAME="${VOLUME_NAME:-mere.run}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Kyle McCullough (S5JDPCT8RC)}"
+MODEL_SOURCE_BASE_URL="${MODEL_SOURCE_BASE_URL:-https://public.stereovoid.com/}"
+MODEL_SOURCE_CONFIG_FILENAME="mererun-model-source-base-url.txt"
+
+sign_code_asset() {
+  local path="$1"
+  shift || true
+  echo "[make_dmg] signing: $path"
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$@" "$path"
+  codesign -v "$path"
+}
 
 if [[ ! -x "$BIN_PATH" ]]; then
   echo "[make_dmg] binary not found at: $BIN_PATH" >&2
@@ -33,6 +43,23 @@ echo "[make_dmg] staging..."
 # Binary
 cp "$BIN_PATH" "$STAGING_DIR/mere.run"
 chmod +x "$STAGING_DIR/mere.run"
+
+# SwiftPM release products can depend on colocated frameworks and resource bundles.
+BIN_DIR="$(dirname "$BIN_PATH")"
+shopt -s nullglob
+runtime_assets=("$BIN_DIR"/*.framework "$BIN_DIR"/*.bundle)
+shopt -u nullglob
+for asset in "${runtime_assets[@]}"; do
+  ditto "$asset" "$STAGING_DIR/$(basename "$asset")"
+done
+
+printf '%s\n' "$MODEL_SOURCE_BASE_URL" > "$STAGING_DIR/$MODEL_SOURCE_CONFIG_FILENAME"
+
+for asset in "$STAGING_DIR"/*.framework; do
+  [[ -e "$asset" ]] || continue
+  sign_code_asset "$asset"
+done
+sign_code_asset "$STAGING_DIR/mere.run" --options runtime
 
 # Skill
 mkdir -p "$STAGING_DIR/skills/mere-run"

@@ -30,10 +30,15 @@ struct ModelList: ParsableCommand {
 
             let flatDir = MereRunModelPaths.modelDir(id)
             let flatInstalled = isNonEmptyDirectory(flatDir)
+            let gemmaAliasInstall = gemmaAliasInstallURL(for: id)
 
             if let resolution = resolvedViaResolver {
                 status = "installed"
                 let bytes = FileSystemHelper.directorySize(at: resolution.rootURL)
+                size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            } else if let gemmaAliasInstall {
+                status = "installed"
+                let bytes = FileSystemHelper.directorySize(at: gemmaAliasInstall)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
             } else if flatInstalled {
                 status = "installed"
@@ -55,6 +60,24 @@ struct ModelList: ParsableCommand {
             return false
         }
         return (try? fm.contentsOfDirectory(atPath: url.path))?.isEmpty == false
+    }
+
+    private func gemmaAliasInstallURL(for id: String) -> URL? {
+        guard id == Gemma4Resources.defaultModelId else {
+            return nil
+        }
+
+        let maxURL = MereRunModelPaths.modelDir(Gemma4Resources.maxModelId)
+        if isNonEmptyDirectory(maxURL) {
+            return maxURL
+        }
+
+        let nanoURL = MereRunModelPaths.modelDir(Gemma4Resources.nanoModelId)
+        if isNonEmptyDirectory(nanoURL) {
+            return nanoURL
+        }
+
+        return nil
     }
 
     private func printRow(_ id: String, _ category: String, _ status: String, _ size: String) {
