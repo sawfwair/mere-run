@@ -128,22 +128,9 @@ public actor Qwen3ASRGenerator: ASRGenerator {
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> URL {
         do {
-            return try await PretrainedModelLoader.fromPretrainedArchive(
-                modelPath: modelPath,
-                modelId: modelId,
-                defaultModelIds: [
-                    Qwen3ASRResources.defaultModelId,
-                    Qwen3ASRResources.defaultRepoId
-                ],
-                storageId: Qwen3ASRResources.defaultModelId,
-                archiveKey: Qwen3ASRResources.r2ArchiveKey,
-                archiveSize: Qwen3ASRResources.r2ArchiveSize,
-                normalize: { base, fileManager in
-                    Qwen3ASRResources.resolveNestedIfNeeded(base: base, fileManager: fileManager)
-                },
-                validate: { root, fileManager in
-                    Qwen3ASRResources(rootURL: root).validate(fileManager: fileManager)
-                },
+            let resolved = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: modelPath ?? modelId,
+                defaultModelID: Qwen3ASRResources.defaultModelId,
                 progress: { event in
                     switch event {
                     case .downloading(let percent):
@@ -157,8 +144,9 @@ public actor Qwen3ASRGenerator: ASRGenerator {
                     }
                 }
             )
-        } catch let error as PretrainedModelLoader.LoadError {
-            throw mapModelLoaderError(error)
+            return resolved.url
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw Qwen3ASRError.downloadFailed(error.localizedDescription)
         }
     }
 

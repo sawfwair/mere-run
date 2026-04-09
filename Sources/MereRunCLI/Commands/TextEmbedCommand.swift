@@ -34,8 +34,8 @@ struct TextEmbed: AsyncParsableCommand {
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: false)
 
-        let resolvedModelPath = try resolveModelPath()
-        let resources = Qwen3EmbeddingResources(rootURL: URL(fileURLWithPath: resolvedModelPath))
+        let resolvedModelRoot = try await resolveModelRoot()
+        let resources = Qwen3EmbeddingResources(rootURL: resolvedModelRoot)
         let model = try Qwen3EmbeddingModel(resources: resources)
         let result = try model.embed(texts: texts, maxTokens: maxTokens)
 
@@ -72,43 +72,17 @@ struct TextEmbed: AsyncParsableCommand {
         }
     }
 
-    private func resolveModelPath() throws -> String {
-        let fm = FileManager.default
-
-        if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-            let asPath = URL(fileURLWithPath: trimmed).standardizedFileURL
-            if fm.fileExists(atPath: asPath.path) {
-                return asPath.path
-            }
-
-            let normalized = trimmed.lowercased()
-            if normalized == Qwen3EmbeddingCatalog.modelId {
-                if let resolved = Qwen3EmbeddingCatalog.resolveModelPath(fileManager: fm) {
-                    return resolved
-                }
-                throw ValidationError(
-                    """
-                    Embedding model '\(Qwen3EmbeddingCatalog.modelId)' not found.
-                    Upload/download the model archive (\(Qwen3EmbeddingCatalog.archiveKey)) first.
-                    """
-                )
-            }
-
-            throw ValidationError("Model path not found: \(trimmed)")
+    private func resolveModelRoot() async throws -> URL {
+        do {
+            let resolved = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: model,
+                defaultModelID: Qwen3EmbeddingCatalog.modelId,
+                progress: nil
+            )
+            return resolved.url
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw ValidationError(error.localizedDescription)
         }
-
-        if let resolved = Qwen3EmbeddingCatalog.resolveModelPath(fileManager: fm) {
-            return resolved
-        }
-
-        throw ValidationError(
-            """
-            Embedding model not found.
-            Expected model id: \(Qwen3EmbeddingCatalog.modelId)
-            Upload/download archive: \(Qwen3EmbeddingCatalog.archiveKey)
-            """
-        )
     }
 }
 

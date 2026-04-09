@@ -13,6 +13,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
         Example:
           mere.run music generate "upbeat electronic groove" \
+            --model music-acestep \
             --lyrics "[verse]\\nwe dance all night" \
             --text-subdirectory Qwen3-Embedding-0.6B \
             -o out.wav
@@ -30,6 +31,9 @@ struct MusicGenerate: AsyncParsableCommand {
 
     @Option(name: [.customShort("o"), .long], help: "Output WAV path (default: ./mererun-music-<timestamp>.wav).")
     var output: String?
+
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the ACE-Step model root/checkpoints root.")
+    var model: String = ModelResolver.ModelID.aceStep.rawValue
 
     @Option(name: [.customLong("checkpoints-root")], help: "Root directory containing ACE-Step checkpoint subdirectories. Auto-discovered if not set.")
     var checkpointsRoot: String?
@@ -143,7 +147,7 @@ struct MusicGenerate: AsyncParsableCommand {
             throw ValidationError("Pass either --lyrics or --lyrics-file, not both.")
         }
 
-        let checkpointsRootURL = try resolveACEStepCheckpointsRoot()
+        let checkpointsRootURL = try await resolveACEStepCheckpointsRoot()
         let resolvedLMSubdirectory = try resolveACEStepLMSubdirectory(
             at: checkpointsRootURL,
             explicit: lmSubdirectory
@@ -333,7 +337,7 @@ struct MusicGenerate: AsyncParsableCommand {
         return rawItems.filter { !$0.isEmpty }
     }
 
-    private func resolveACEStepCheckpointsRoot() throws -> URL {
+    private func resolveACEStepCheckpointsRoot() async throws -> URL {
         let candidates = buildAcestepCheckpointCandidates()
 
         for candidate in candidates {
@@ -348,6 +352,23 @@ struct MusicGenerate: AsyncParsableCommand {
 
         if let explicit = checkpointsRoot, !explicit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ValidationError("Checkpoints root not found or incomplete: \(explicit)")
+        }
+
+        do {
+            let resolved = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: model,
+                defaultModelID: ModelResolver.ModelID.aceStep.rawValue
+            )
+            let root = resolved.url
+            if isUsableCheckpointsRoot(root) {
+                return root
+            }
+            let nested = root.appendingPathComponent("checkpoints", isDirectory: true)
+            if isUsableCheckpointsRoot(nested) {
+                return nested
+            }
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw ValidationError(error.localizedDescription)
         }
 
         throw ValidationError("Music Acestep checkpoints not found. Add --checkpoints-root or set MERERUN_MUSIC_ACESTEP_ROOT.")
@@ -457,6 +478,13 @@ struct MusicGenerate: AsyncParsableCommand {
             candidates.append(URL(fileURLWithPath: explicit).standardizedFileURL)
         }
 
+        if let explicitModel = model.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty {
+            let url = URL(fileURLWithPath: explicitModel).standardizedFileURL
+            if FileManager.default.fileExists(atPath: url.path) {
+                candidates.append(url)
+            }
+        }
+
         if let envRoot = ProcessInfo.processInfo.environment["MERERUN_MUSIC_ACESTEP_ROOT"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !envRoot.isEmpty
@@ -503,6 +531,12 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         return true
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
     }
 }
 

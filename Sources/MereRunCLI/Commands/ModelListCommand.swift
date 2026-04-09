@@ -10,17 +10,15 @@ struct ModelList: ParsableCommand {
 
     func run() throws {
         let resolver = ModelResolver()
-        let knownEntries = Dictionary(uniqueKeysWithValues: R2ModelRegistry.allEntries.map { ($0.id, $0) })
-        var idsInOrder = R2ModelRegistry.allEntries.map(\.id)
-        for modelID in ModelResolver.ModelID.allCases.map(\.rawValue) where knownEntries[modelID] == nil {
-            idsInOrder.append(modelID)
-        }
+        let specs = ManagedModelCatalog.allSpecs
+        let knownSpecs = Dictionary(uniqueKeysWithValues: specs.map { ($0.id, $0) })
+        let idsInOrder = specs.map(\.id)
 
         printRow("ID", "Category", "Status", "Size")
         print(String(repeating: "-", count: 72))
 
         for id in idsInOrder {
-            let entry = knownEntries[id]
+            let spec = knownSpecs[id]
             let status: String
             let size: String
 
@@ -40,7 +38,7 @@ struct ModelList: ParsableCommand {
                 status = "installed"
                 let bytes = FileSystemHelper.directorySize(at: gemmaAliasInstall)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-            } else if flatInstalled {
+            } else if flatInstalled || spec?.managedRuntimeURL() != nil {
                 status = "installed"
                 let bytes = FileSystemHelper.directorySize(at: flatDir)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
@@ -49,7 +47,7 @@ struct ModelList: ParsableCommand {
                 size = "—"
             }
 
-            printRow(id, entry?.category ?? inferCategory(for: id), status, size)
+            printRow(id, spec?.category.rawValue ?? inferCategory(for: id), status, size)
         }
     }
 

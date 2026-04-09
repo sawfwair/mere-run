@@ -1,5 +1,24 @@
 import Foundation
 
+public struct HubFallbackConfig: Sendable, Hashable {
+    public let repoId: String
+    public let revision: String
+    public let patterns: [String]
+    public let filePath: String?
+
+    public init(
+        repoId: String,
+        revision: String = "main",
+        patterns: [String],
+        filePath: String? = nil
+    ) {
+        self.repoId = repoId
+        self.revision = revision
+        self.patterns = patterns
+        self.filePath = filePath
+    }
+}
+
 /// Shared model-loading utilities for local path resolution and managed model directories.
 public enum PretrainedModelLoader {
     public enum ProgressEvent: Sendable, Hashable {
@@ -82,6 +101,7 @@ public enum PretrainedModelLoader {
         storageId: String,
         archiveKey: String,
         archiveSize: Int64,
+        hubFallback: HubFallbackConfig? = nil,
         strictArchiveSize: Bool = true,
         fileManager: FileManager = .default,
         normalize: (URL, FileManager) -> URL = { base, _ in base },
@@ -112,6 +132,22 @@ public enum PretrainedModelLoader {
 
         if managed.isComplete {
             return managed.resolvedRoot
+        }
+
+        if !MereRunModelSourceConfiguration.hasAnyDownloadSource() {
+            if let hubFallback {
+                let snapshotURL = try await downloadViaHubSnapshot(config: hubFallback, progress: progress)
+                let resolvedRoot = normalize(snapshotURL, fileManager)
+                let missingAfter = validate(resolvedRoot, fileManager)
+                guard missingAfter.isEmpty else {
+                    throw LoadError.missingFiles(missingAfter.map(\.lastPathComponent))
+                }
+                return resolvedRoot
+            }
+
+            throw LoadError.downloadFailed(
+                MereRunModelSourceConfiguration.missingConfigurationMessage()
+            )
         }
 
         let archiveFile = MereRunModelPaths.downloadsDir.appendingPathComponent(archiveKey)
@@ -153,6 +189,7 @@ public enum PretrainedModelLoader {
         relativePath: String,
         remoteKey: String,
         expectedSize: Int64,
+        hubFallback: HubFallbackConfig? = nil,
         strictSizeCheck: Bool = true,
         sizeMismatchPrefix: String = "File size mismatch",
         fileManager: FileManager = .default,
@@ -178,6 +215,25 @@ public enum PretrainedModelLoader {
 
         if validate(managedFile, fileManager).isEmpty {
             return managedFile
+        }
+
+        if !MereRunModelSourceConfiguration.hasAnyDownloadSource() {
+            if let hubFallback {
+                let fileURL = try await downloadViaHubSnapshot(
+                    config: hubFallback,
+                    relativePath: relativePath,
+                    progress: progress
+                )
+                let missingAfter = validate(fileURL, fileManager)
+                guard missingAfter.isEmpty else {
+                    throw LoadError.missingFiles(missingAfter.map(\.lastPathComponent))
+                }
+                return fileURL
+            }
+
+            throw LoadError.downloadFailed(
+                MereRunModelSourceConfiguration.missingConfigurationMessage()
+            )
         }
 
         try fileManager.createDirectory(
@@ -301,5 +357,51 @@ public enum PretrainedModelLoader {
         #else
         throw LoadError.extractionFailed
         #endif
+    }
+
+    private static func downloadViaHubSnapshot(
+        config: HubFallbackConfig,
+        progress: (@Sendable (ProgressEvent) -> Void)?
+    ) async throws -> URL {
+        do {
+            let snapshot = try makeHubSnapshot(config: config)
+            return try await snapshot.prepare { snapshotProgress in
+                let percent = min(100, max(0, Int(snapshotProgress.fractionCompleted * 100)))
+                progress?(.downloading(percent: percent))
+            }
+        } catch let error as LoadError {
+            throw error
+        } catch {
+            throw LoadError.downloadFailed(error.localizedDescription)
+        }
+    }
+
+    private static func downloadViaHubSnapshot(
+        config: HubFallbackConfig,
+        relativePath: String,
+        progress: (@Sendable (ProgressEvent) -> Void)?
+    ) async throws -> URL {
+        do {
+            let snapshot = try makeHubSnapshot(config: config)
+            let resolvedPath = config.filePath ?? relativePath
+            return try await snapshot.fileURL(for: resolvedPath) { snapshotProgress in
+                let percent = min(100, max(0, Int(snapshotProgress.fractionCompleted * 100)))
+                progress?(.downloading(percent: percent))
+            }
+        } catch let error as LoadError {
+            throw error
+        } catch {
+            throw LoadError.downloadFailed(error.localizedDescription)
+        }
+    }
+
+    private static func makeHubSnapshot(config: HubFallbackConfig) throws -> HubSnapshot {
+        try HubSnapshot(
+            options: HubSnapshotOptions(
+                repoId: config.repoId,
+                revision: config.revision,
+                patterns: config.patterns
+            )
+        )
     }
 }

@@ -36,7 +36,7 @@ struct VideoExportLatents: AsyncParsableCommand {
 
         Example:
           swift run mere.run video export-latents \\
-            --model-root ~/Library/Application\\ Support/MereRun/models/LTX-2-distilled-bf16 \\
+            --model video-ltx-av \\
             -o out.safetensors \\
             "a cinematic drone flyover at sunrise"
         """
@@ -45,8 +45,11 @@ struct VideoExportLatents: AsyncParsableCommand {
     @Argument(help: "Prompt for latent generation.")
     var prompt: String
 
-    @Option(name: [.customLong("model-root")], help: "Local path to the distilled LTX model root.")
-    var modelRoot: String
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LTX model root.")
+    var model: String = ModelResolver.ModelID.ltxVideoAV.rawValue
+
+    @Option(name: [.customLong("model-root")], help: "Local path to the distilled LTX model root. Takes precedence over --model.")
+    var modelRoot: String?
 
     @Option(name: [.customShort("o"), .long], help: "Output safetensors path for final stage latents.")
     var output: String?
@@ -69,7 +72,12 @@ struct VideoExportLatents: AsyncParsableCommand {
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
-        let rootURL = URL(fileURLWithPath: modelRoot).standardizedFileURL
+        let rootURL = try await resolveVideoModelRoot(
+            explicitModelRoot: modelRoot,
+            requestedModel: model,
+            variant: .distilled,
+            allowAutoDownload: true
+        )
         try validateNativeModelRoot(rootURL)
 
         let upsamplerWeights = rootURL.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
@@ -118,7 +126,7 @@ struct VideoGenerate: AsyncParsableCommand {
         Examples:
           swift run mere.run video generate "a cinematic drone flythrough over snowy mountains"
           swift run mere.run video generate "woman walking in neon rain" --image frame.png
-          swift run mere.run video generate "city time-lapse" --variant unified-av --model-root ~/models/video-ltx-av
+          swift run mere.run video generate "city time-lapse" --variant unified-av --model video-ltx-av
         """
     )
 
@@ -128,10 +136,13 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output MP4 path (default: ./mererun-video-<timestamp>.mp4).")
     var output: String?
 
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LTX model root.")
+    var model: String = ModelResolver.ModelID.ltxVideoAV.rawValue
+
     @Option(name: [.customLong("variant")], help: "Native model variant to run.")
     var variant: LTXVideoVariant = .distilled
 
-    @Option(name: [.customLong("model-root")], help: "Local LTX model root. Falls back to MERERUN_VIDEO_LTX_MODEL_ROOT or common local model-store paths.")
+    @Option(name: [.customLong("model-root")], help: "Local LTX model root. Takes precedence over --model.")
     var modelRoot: String?
 
     @Option(name: [.long], help: "Output width (must be divisible by 64; auto-snapped down).")
@@ -206,12 +217,11 @@ struct VideoGenerate: AsyncParsableCommand {
             sourceImageURL = nil
         }
 
-        let resolvedModelRoot = normalizedOptional(modelRoot) ?? suggestedNativeModelRoot(for: variant)
-        guard let resolvedModelRoot else {
-            throw ValidationError(
-                "--model-root is required for native generation. Set --model-root /path/to/LTX model root or MERERUN_VIDEO_LTX_MODEL_ROOT."
-            )
-        }
+        let resolvedModelRoot = try await resolveVideoModelRoot(
+            explicitModelRoot: modelRoot,
+            requestedModel: model,
+            variant: variant
+        ).path
 
         try await runNativeGenerate(
             prompt: trimmedPrompt,
@@ -226,57 +236,6 @@ struct VideoGenerate: AsyncParsableCommand {
             modelRoot: resolvedModelRoot,
             outputURL: outputURL
         )
-    }
-
-    private func normalizedOptional(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func suggestedNativeModelRoot(for variant: LTXVideoVariant) -> String? {
-        if let envPath = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_MODEL_ROOT"], !envPath.isEmpty,
-           isNativeModelRootAvailable(at: envPath) {
-            return envPath
-        }
-
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
-        let zeroModels = MereRunModelPaths.modelsDir
-        let candidates: [String] = {
-            switch variant {
-            case .distilled:
-                return [
-                    zeroModels.appendingPathComponent("LTX-2-distilled-bf16", isDirectory: true).path,
-                    zeroModels.appendingPathComponent("ltx-video-distilled", isDirectory: true).path,
-                    home.appendingPathComponent("models/LTX-2-distilled-bf16", isDirectory: true).path,
-                    home.appendingPathComponent("Models/LTX-2-distilled-bf16", isDirectory: true).path,
-                ]
-            case .unifiedAV:
-                return [
-                    zeroModels.appendingPathComponent("video-ltx-av", isDirectory: true).path,
-                    zeroModels.appendingPathComponent("LTX-2-mlx-av", isDirectory: true).path,
-                    home.appendingPathComponent("models/video-ltx-av", isDirectory: true).path,
-                    home.appendingPathComponent("models/LTX-2-mlx-av", isDirectory: true).path,
-                    home.appendingPathComponent("Models/LTX-2-mlx-av", isDirectory: true).path,
-                ]
-            }
-        }()
-
-        for candidate in candidates where isNativeModelRootAvailable(at: candidate) {
-            return candidate
-        }
-        return nil
-    }
-
-    private func isNativeModelRootAvailable(at path: String) -> Bool {
-        let rootURL = URL(fileURLWithPath: path).standardizedFileURL
-        do {
-            try validateNativeModelRoot(rootURL)
-            return true
-        } catch {
-            return false
-        }
     }
 
     private func runNativeGenerate(
@@ -454,4 +413,94 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
 
 private func shapeString(_ shape: [Int]) -> String {
     "[" + shape.map(String.init).joined(separator: ", ") + "]"
+}
+
+private func resolveVideoModelRoot(
+    explicitModelRoot: String?,
+    requestedModel: String,
+    variant: LTXVideoVariant,
+    allowAutoDownload: Bool = true
+) async throws -> URL {
+    if let explicitModelRoot, !explicitModelRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return URL(fileURLWithPath: explicitModelRoot).standardizedFileURL
+    }
+
+    let trimmedModel = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmedModel.isEmpty {
+        let explicitModelURL = URL(fileURLWithPath: trimmedModel).standardizedFileURL
+        if FileManager.default.fileExists(atPath: explicitModelURL.path)
+            || trimmedModel.lowercased() != ModelResolver.ModelID.ltxVideoAV.rawValue
+        {
+            do {
+                let resolved = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: trimmedModel,
+                    defaultModelID: ModelResolver.ModelID.ltxVideoAV.rawValue,
+                    allowAutoDownload: allowAutoDownload
+                )
+                return resolved.url
+            } catch let error as ManagedModelResolver.ResolverError {
+                throw ValidationError(error.localizedDescription)
+            }
+        }
+    }
+
+    if let suggested = suggestedVideoModelRoot(for: variant) {
+        return URL(fileURLWithPath: suggested).standardizedFileURL
+    }
+
+    do {
+        let resolved = try await ManagedModelResolver.resolveForRuntime(
+            requestedModel: ModelResolver.ModelID.ltxVideoAV.rawValue,
+            defaultModelID: ModelResolver.ModelID.ltxVideoAV.rawValue,
+            allowAutoDownload: allowAutoDownload
+        )
+        return resolved.url
+    } catch let error as ManagedModelResolver.ResolverError {
+        throw ValidationError(error.localizedDescription)
+    }
+}
+
+private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
+    if let envPath = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_MODEL_ROOT"], !envPath.isEmpty,
+       isNativeVideoModelRootAvailable(at: envPath) {
+        return envPath
+    }
+
+    let fm = FileManager.default
+    let home = fm.homeDirectoryForCurrentUser
+    let zeroModels = MereRunModelPaths.modelsDir
+    let candidates: [String] = {
+        switch variant {
+        case .distilled:
+            return [
+                zeroModels.appendingPathComponent("LTX-2-distilled-bf16", isDirectory: true).path,
+                zeroModels.appendingPathComponent("ltx-video-distilled", isDirectory: true).path,
+                home.appendingPathComponent("models/LTX-2-distilled-bf16", isDirectory: true).path,
+                home.appendingPathComponent("Models/LTX-2-distilled-bf16", isDirectory: true).path,
+            ]
+        case .unifiedAV:
+            return [
+                zeroModels.appendingPathComponent("video-ltx-av", isDirectory: true).path,
+                zeroModels.appendingPathComponent("LTX-2-mlx-av", isDirectory: true).path,
+                home.appendingPathComponent("models/video-ltx-av", isDirectory: true).path,
+                home.appendingPathComponent("models/LTX-2-mlx-av", isDirectory: true).path,
+                home.appendingPathComponent("Models/LTX-2-mlx-av", isDirectory: true).path,
+            ]
+        }
+    }()
+
+    for candidate in candidates where isNativeVideoModelRootAvailable(at: candidate) {
+        return candidate
+    }
+    return nil
+}
+
+private func isNativeVideoModelRootAvailable(at path: String) -> Bool {
+    let rootURL = URL(fileURLWithPath: path).standardizedFileURL
+    do {
+        try validateNativeModelRoot(rootURL)
+        return true
+    } catch {
+        return false
+    }
 }

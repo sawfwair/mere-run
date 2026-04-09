@@ -21,6 +21,14 @@ public struct Q35Resources: Sendable, Hashable {
             self.upstreamRepoId = upstreamRepoId
             self.upstreamRevision = upstreamRevision
         }
+
+        public var hubFallbackConfig: HubFallbackConfig {
+            HubFallbackConfig(
+                repoId: upstreamRepoId,
+                revision: upstreamRevision,
+                patterns: Q35Resources.snapshotPatterns
+            )
+        }
     }
 
     public static let defaultModelId = "text-chat-q35"
@@ -65,6 +73,16 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static let defaultContextLength = 16_384
+    public static let snapshotPatterns = [
+        "config.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "*.safetensors",
+    ]
 
     public var rootURL: URL
 

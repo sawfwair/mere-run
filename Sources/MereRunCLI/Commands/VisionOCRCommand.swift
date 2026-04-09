@@ -16,8 +16,8 @@ struct VisionOCR: AsyncParsableCommand {
         discussion: """
         Performs OCR on one or more images and outputs the extracted text.
 
-        LightOnOCR model should be installed in the local mere.run model store:
-          mere.run model pull vision-ocr-lighton
+        LightOnOCR uses the managed model id `vision-ocr-lighton` by default.
+        You can also pass --model with either a canonical managed id or a local model path.
 
         GLM-OCR support uses the upstream `glmocr` CLI. Install and configure it per:
           https://github.com/zai-org/GLM-OCR
@@ -33,8 +33,8 @@ struct VisionOCR: AsyncParsableCommand {
     @Flag(name: [.long], help: "Run both backends and output both results (requires LightOn model).")
     var compare: Bool = false
 
-    @Option(name: [.customShort("m"), .long], help: "Path to LightOnOCR-2-1B model directory (required for lighton/compare).")
-    var model: String?
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LightOnOCR model directory.")
+    var model: String = ModelResolver.ModelID.lightOnOCR.rawValue
 
     @Option(name: [.long], help: "Path to `glmocr` CLI (default: glmocr, resolved via PATH).")
     var glmocrCLI: String = "glmocr"
@@ -64,14 +64,15 @@ struct VisionOCR: AsyncParsableCommand {
         let needsLightOn = compare || backend == .lighton
         let modelURL: URL?
         if needsLightOn {
-            guard let model else {
-                throw ValidationError("Missing --model (required for backend=lighton or --compare).")
+            do {
+                let resolved = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: model,
+                    defaultModelID: ModelResolver.ModelID.lightOnOCR.rawValue
+                )
+                modelURL = resolved.url
+            } catch let error as ManagedModelResolver.ResolverError {
+                throw ValidationError(error.localizedDescription)
             }
-            let url = URL(fileURLWithPath: model).standardizedFileURL
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw ValidationError("Model path not found: \(url.path)")
-            }
-            modelURL = url
         } else {
             modelURL = nil
         }
@@ -101,9 +102,7 @@ struct VisionOCR: AsyncParsableCommand {
 
             let output: OCROutput
             if compare {
-                guard let modelURL else {
-                    throw ValidationError("Missing --model (required for --compare).")
-                }
+                guard let modelURL else { throw ValidationError("LightOn model resolution failed.") }
                 let lighton = try await generator.ocr(
                     imageURL: imageURL,
                     modelPath: modelURL.path,
@@ -117,9 +116,7 @@ struct VisionOCR: AsyncParsableCommand {
                     glmJSON: glmResult.json
                 )
             } else if backend == .lighton {
-                guard let modelURL else {
-                    throw ValidationError("Missing --model (required for backend=lighton).")
-                }
+                guard let modelURL else { throw ValidationError("LightOn model resolution failed.") }
                 let result = try await generator.ocr(
                     imageURL: imageURL,
                     modelPath: modelURL.path,

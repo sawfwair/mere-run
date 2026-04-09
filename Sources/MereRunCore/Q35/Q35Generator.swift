@@ -282,20 +282,9 @@ public actor Q35Generator: ChatGenerator {
         }
 
         do {
-            let root = try await PretrainedModelLoader.fromPretrainedArchive(
-                modelPath: modelPath,
-                modelId: profile.modelId,
-                defaultModelIds: Q35Resources.supportedModelIds,
-                storageId: profile.modelId,
-                archiveKey: profile.archiveKey,
-                archiveSize: profile.archiveSize,
-                strictArchiveSize: false,
-                normalize: { base, fileManager in
-                    Q35Resources.normalizedRootURL(base, fileManager: fileManager)
-                },
-                validate: { root, fileManager in
-                    Q35Resources(rootURL: root).validate(fileManager: fileManager)
-                },
+            let root = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: modelPath ?? modelId,
+                defaultModelID: profile.modelId,
                 progress: { event in
                     switch event {
                     case .downloading(let percent):
@@ -305,9 +294,9 @@ public actor Q35Generator: ChatGenerator {
                     }
                 }
             )
-            return Q35Resources.normalizedRootURL(root)
-        } catch let error as PretrainedModelLoader.LoadError {
-            throw mapLoaderError(error)
+            return Q35Resources.normalizedRootURL(root.url)
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw Q35Error.downloadFailed(error.localizedDescription)
         }
     }
 

@@ -13,16 +13,26 @@ public struct ModelResolver {
         case kleinMax = "image-klein-max"
         case kleinBase = "image-klein-base"
         case kleinShared = "image-klein-shared"
+        case zetaNano = "image-zimage-nano"
+        case zetaMax = "image-zimage-max"
+        case zetaBase = "image-zimage-base"
         case mebot = "text-chat-mebot"
+        case psiAgent = "text-chat-psi-agent"
         case gemma4 = "text-chat-gemma4"
         case gemma4Nano = "text-chat-gemma4-nano"
         case gemma4Max = "text-chat-gemma4-max"
         case q35 = "text-chat-q35"
         case q35Nano = "text-chat-q35-nano"
-        case zetaNano = "image-zimage-nano"
-        case zetaMax = "image-zimage-max"
-        case zetaBase = "image-zimage-base"
+        case qwen3TTSNano = "speech-tts-qwen3-nano"
+        case qwen3TTSCustomVoice = "speech-tts-qwen3-customvoice"
+        case qwen3ASR = "speech-asr-qwen3"
+        case parakeetASR = "speech-asr-parakeet"
+        case qwen3Code = "text-code-qwen3"
+        case qwen3Embedding = "text-embed-qwen3-0.6b"
+        case lightOnOCR = "vision-ocr-lighton"
         case visionSegmentSAM31 = "vision-segment-sam31"
+        case aceStep = "music-acestep"
+        case ltxVideoAV = "video-ltx-av"
     }
 
     public enum Source: String, Hashable, Sendable {
@@ -76,41 +86,24 @@ public struct ModelResolver {
     }
 
     public func resolve(_ modelID: ModelID) throws -> Resolution {
-        if modelID == .mebot {
-            if let kleinNano = try? resolve(.kleinNano) {
-                return Resolution(modelID: modelID, rootURL: kleinNano.rootURL, source: kleinNano.source)
-            }
-
-            let kleinMax = try resolve(.kleinMax)
-            return Resolution(modelID: modelID, rootURL: kleinMax.rootURL, source: kleinMax.source)
-        }
-
-        if modelID == .gemma4 {
-            if let direct = resolveDirect(.gemma4) {
-                return direct
-            }
-            if let max = resolveDirect(.gemma4Max) {
-                return Resolution(modelID: modelID, rootURL: max.rootURL, source: max.source)
-            }
-            if let nano = resolveDirect(.gemma4Nano) {
-                return Resolution(modelID: modelID, rootURL: nano.rootURL, source: nano.source)
-            }
-
-            throw ResolverError.modelNotFound(
-                modelID,
-                searched: searchedPaths(for: [.gemma4, .gemma4Max, .gemma4Nano]),
-                upstreamRepoId: Gemma4Resources.defaultUpstreamModelId
-            )
-        }
-
         if let direct = resolveDirect(modelID) {
             return direct
         }
 
+        let spec = ManagedModelCatalog.spec(for: modelID.rawValue)
+        for fallbackID in spec?.resolutionFallbackIDs ?? [] {
+            guard let fallbackModelID = ModelID(rawValue: fallbackID),
+                  let resolved = resolveDirect(fallbackModelID) else {
+                continue
+            }
+            return Resolution(modelID: modelID, rootURL: resolved.rootURL, source: resolved.source)
+        }
+
+        let searchedIDs = [modelID] + (spec?.resolutionFallbackIDs.compactMap(ModelID.init(rawValue:)) ?? [])
         throw ResolverError.modelNotFound(
             modelID,
-            searched: searchedPaths(for: [modelID]),
-            upstreamRepoId: nil
+            searched: searchedPaths(for: searchedIDs),
+            upstreamRepoId: spec?.upstreamRepoId
         )
     }
 
@@ -123,9 +116,13 @@ public struct ModelResolver {
     }
 
     private func resolveDirect(_ modelID: ModelID) -> Resolution? {
+        guard let spec = ManagedModelCatalog.spec(for: modelID.rawValue) else {
+            return nil
+        }
+
         for modelsRoot in candidateModelRoots() {
             let modelRoot = modelsRoot.appendingPathComponent(modelID.rawValue, isDirectory: true)
-            if isValidModelRoot(modelRoot, expectedModelID: modelID) {
+            if isValidModelRoot(modelRoot, spec: spec, expectedModelID: modelID) {
                 return Resolution(modelID: modelID, rootURL: modelRoot, source: .localModelStore)
             }
         }
@@ -138,25 +135,27 @@ public struct ModelResolver {
         }
     }
 
-    private func isValidModelRoot(_ url: URL, expectedModelID: ModelID? = nil) -> Bool {
+    private func isValidModelRoot(
+        _ url: URL,
+        spec: ManagedModelSpec,
+        expectedModelID: ModelID? = nil
+    ) -> Bool {
         var isDir: ObjCBool = false
         guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
             return false
         }
 
-        // Strict policy: only treat directories with a manifest as valid model roots.
-        let manifest = url.appendingPathComponent(MereRunModelManifest.filename)
-        guard fileManager.fileExists(atPath: manifest.path) else {
-            return false
-        }
-
         guard let expectedModelID else {
-            return true
+            return spec.isManagedRootComplete(url, fileManager: fileManager)
         }
 
-        guard let loaded = try? MereRunModelManifest.loadRequired(from: url, fileManager: fileManager) else {
-            return false
+        let manifestURL = url.appendingPathComponent(MereRunModelManifest.filename)
+        if fileManager.fileExists(atPath: manifestURL.path),
+           let loaded = try? MereRunModelManifest.loadRequired(from: url, fileManager: fileManager),
+           loaded.id == expectedModelID.rawValue {
+            return spec.isManagedRootComplete(url, fileManager: fileManager)
         }
-        return loaded.id == expectedModelID.rawValue
+
+        return false
     }
 }

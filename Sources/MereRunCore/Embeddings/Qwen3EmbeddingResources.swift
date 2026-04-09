@@ -5,6 +5,26 @@ public enum Qwen3EmbeddingCatalog {
     public static let modelDirectoryName = "Qwen3-Embedding-0.6B"
     public static let archiveKey = "models/qwen3-embedding-0.6b.tar.gz"
     public static let archiveSize: Int64 = 0  // Unknown at compile-time.
+    public static let defaultRepoId = "Qwen/Qwen3-Embedding-0.6B"
+    public static let defaultRevision = "main"
+    public static let hubFallbackConfig = HubFallbackConfig(
+        repoId: defaultRepoId,
+        revision: defaultRevision,
+        patterns: [
+            "config.json",
+            "config_sentence_transformers.json",
+            "generation_config.json",
+            "modules.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "added_tokens.json",
+            "merges.txt",
+            "vocab.json",
+            "1_Pooling/*",
+        ]
+    )
+
     public static var archiveURL: URL? {
         MereRunModelSourceConfiguration.publicArchiveURL(for: archiveKey)
     }
@@ -54,6 +74,20 @@ public enum Qwen3EmbeddingCatalog {
         }
 
         return nil
+    }
+
+    public static func resolveProvidedModelRoot(
+        modelPath: String?,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        guard let modelPath else { return nil }
+
+        let trimmed = modelPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let candidate = URL(fileURLWithPath: trimmed).standardizedFileURL
+        guard fileManager.fileExists(atPath: candidate.path) else { return nil }
+        return candidate
     }
 }
 

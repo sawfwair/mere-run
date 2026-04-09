@@ -41,6 +41,14 @@ public enum QuantizedModelManifestWriter {
             case .gemma4: return .gemma
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
+            case .qwen3TTS: return .tts
+            case .qwen3ASR, .parakeetASR: return .asr
+            case .qwen3Embedding: return .embed
+            case .qwen3Coder: return .code
+            case .lightOnOCR: return .ocr
+            case .aceStep: return .music
+            case .ltxVideo: return .video
+            case .psiChat: return .psi
             }
         }()
 
@@ -73,6 +81,22 @@ public enum QuantizedModelManifestWriter {
                     return [.chat]
                 case .samSegmentation:
                     return [.visionSegmentation, .visionTracking]
+                case .qwen3TTS:
+                    return [.speechSynthesis]
+                case .qwen3ASR, .parakeetASR:
+                    return [.speechRecognition]
+                case .qwen3Embedding:
+                    return [.textEmbedding]
+                case .qwen3Coder:
+                    return [.chat, .codeGeneration]
+                case .lightOnOCR:
+                    return [.visionOCR]
+                case .aceStep:
+                    return [.musicGeneration]
+                case .ltxVideo:
+                    return [.videoGeneration]
+                case .psiChat:
+                    return [.chat]
                 }
             }()
             return baseline.filter { $0 != .loraTraining }
@@ -129,6 +153,10 @@ public enum QuantizedModelManifestWriter {
                 break
             case .samSegmentation:
                 break
+            case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .qwen3Coder, .lightOnOCR, .psiChat:
+                break
+            case .aceStep, .ltxVideo:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)
             }
         }
 

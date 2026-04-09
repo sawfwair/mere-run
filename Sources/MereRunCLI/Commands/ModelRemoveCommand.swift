@@ -54,14 +54,15 @@ struct ModelRemove: ParsableCommand {
         }
 
         try FileManager.default.removeItem(at: installURL)
+        try removeManagedAliasesIfNeeded(for: id)
         print("Removed \(id) (\(sizeStr))")
     }
 
     /// Resolve a user-supplied string to a canonical model id.
     private func resolveID(_ raw: String) -> String? {
         let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let registryID = R2ModelRegistry.entry(for: normalized).map(\.id) {
-            return registryID
+        if ManagedModelCatalog.spec(for: normalized) != nil {
+            return normalized
         }
         return ModelResolver.ModelID(rawValue: normalized)?.rawValue
     }
@@ -82,5 +83,23 @@ struct ModelRemove: ParsableCommand {
             }
         }
         return nil
+    }
+
+    private func removeManagedAliasesIfNeeded(for id: String) throws {
+        guard let spec = ManagedModelCatalog.spec(for: id) else {
+            return
+        }
+        switch spec.aliasKind {
+        case .none:
+            return
+        case .codegenGGUF:
+            let aliasURL = MereRunModelPaths.modelsDir.appendingPathComponent(
+                CodeGenResources.managedRelativePath,
+                isDirectory: false
+            )
+            if FileManager.default.fileExists(atPath: aliasURL.path) {
+                try? FileManager.default.removeItem(at: aliasURL)
+            }
+        }
     }
 }

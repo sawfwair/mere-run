@@ -4,6 +4,19 @@ import XCTest
 @testable import MereRunCLI
 
 final class VisionSegmentCommandParsingTests: XCTestCase {
+    private func writeMinimalSAM31Model(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
+
+        try Data("{}".utf8).write(to: root.appendingPathComponent("config.json"))
+        try Data().write(to: root.appendingPathComponent("model.safetensors"))
+        try Data("{}".utf8).write(to: tokenizer.appendingPathComponent("tokenizer.json"))
+        try Data("{}".utf8).write(to: tokenizer.appendingPathComponent("tokenizer_config.json"))
+    }
+
     override func tearDown() {
         MereRunModelPaths.setProcessModelsDirOverride(nil)
         super.tearDown()
@@ -114,8 +127,7 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let modelRoot = modelsRoot.appendingPathComponent("vision-segment-sam31", isDirectory: true)
-        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
-        try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+        try writeMinimalSAM31Model(at: modelRoot)
 
         let resolved = try VisionSegment.resolveModelRoot(nil)
         XCTAssertEqual(resolved.modelID, "vision-segment-sam31")

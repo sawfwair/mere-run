@@ -108,16 +108,9 @@ public actor Psi3ChatGenerator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> URL {
         do {
-            return try await PretrainedModelLoader.fromPretrainedArchive(
-                modelPath: modelPath,
-                modelId: modelId,
-                defaultModelIds: [Psi3ChatResources.defaultModelId],
-                storageId: Psi3ChatResources.defaultModelId,
-                archiveKey: Psi3ChatResources.r2ArchiveKey,
-                archiveSize: Psi3ChatResources.r2ArchiveSize,
-                validate: { root, fileManager in
-                    Psi3ChatResources(rootURL: root).validate(fileManager: fileManager)
-                },
+            let resolved = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: modelPath ?? modelId,
+                defaultModelID: Psi3ChatResources.defaultModelId,
                 progress: { event in
                     switch event {
                     case .downloading(let percent):
@@ -131,8 +124,9 @@ public actor Psi3ChatGenerator: ChatGenerator {
                     }
                 }
             )
-        } catch let error as PretrainedModelLoader.LoadError {
-            throw mapModelLoaderError(error)
+            return resolved.url
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw Psi3ChatError.downloadFailed(error.localizedDescription)
         }
     }
 

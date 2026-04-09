@@ -34,4 +34,20 @@ final class MereRunModelSourceConfigurationTests: XCTestCase {
 
         XCTAssertEqual(resolved?.absoluteString, "https://example.com/")
     }
+
+    func testHasAnyDownloadSourceTrueForExplicitConfiguration() {
+        XCTAssertTrue(
+            MereRunModelSourceConfiguration.hasAnyDownloadSource(
+                environment: ["MERERUN_R2_ACCOUNT_ID": "abc123"]
+            )
+        )
+    }
+
+    func testHasAnyDownloadSourceFalseWithoutConfiguredSource() {
+        XCTAssertFalse(
+            MereRunModelSourceConfiguration.hasAnyDownloadSource(
+                environment: [:]
+            )
+        )
+    }
 }

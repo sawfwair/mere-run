@@ -9,6 +9,24 @@ public enum ZImageTurboRepository {
         .zetaMax: ("models/zeta-max.tar.gz", 18_092_604_557),
         .zetaBase: ("models/image-zimage-base.tar.gz", 0),
     ]
+    public static func hubFallbackConfig(for modelID: ModelResolver.ModelID) -> HubFallbackConfig? {
+        guard modelID == .zetaMax else {
+            return nil
+        }
+
+        return HubFallbackConfig(
+            repoId: id,
+            revision: revision,
+            patterns: [
+                "model_index.json",
+                "tokenizer/*",
+                "text_encoder/*",
+                "transformer/*",
+                "vae/*",
+                "scheduler/*",
+            ]
+        )
+    }
 
     public static func resolveModelID(from modelSpec: String) -> ModelResolver.ModelID? {
         let raw = modelSpec
@@ -55,6 +73,7 @@ public enum ZImageTurboRepository {
             storageId: modelID.rawValue,
             archiveKey: archive.key,
             archiveSize: archive.size,
+            hubFallback: hubFallbackConfig(for: modelID),
             fileManager: fileManager,
             validate: { root, manager in
                 ZImageTurboResources.validateDownloadedRoot(

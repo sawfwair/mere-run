@@ -12,17 +12,9 @@ extension Qwen3TTSGenerator {
         progressHandler: (@Sendable (TTSProgress) -> Void)?
     ) async throws -> URL {
         do {
-            return try await PretrainedModelLoader.fromPretrainedArchive(
-                modelPath: modelPath,
-                modelId: modelId,
-                defaultModelIds: [Qwen3TTSResources.defaultModelId],
-                storageId: Qwen3TTSResources.defaultModelId,
-                archiveKey: Qwen3TTSResources.r2ArchiveKey,
-                archiveSize: Qwen3TTSResources.r2ArchiveSize,
-                strictArchiveSize: false,
-                validate: { root, fileManager in
-                    Qwen3TTSResources(rootURL: root).validate(fileManager: fileManager)
-                },
+            let resolved = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: modelPath ?? modelId,
+                defaultModelID: modelId,
                 progress: { event in
                     switch event {
                     case .downloading(let percent):
@@ -30,13 +22,11 @@ extension Qwen3TTSGenerator {
                     case .extracting:
                         progressHandler?(TTSProgress(stage: .loadingModel, message: "Extracting model..."))
                     }
-                },
-                onArchiveSizeMismatch: { actual, expected in
-                    print("Warning: talk archive size mismatch (got \(actual), expected \(expected)); continuing")
                 }
             )
-        } catch let error as PretrainedModelLoader.LoadError {
-            throw mapModelLoaderError(error)
+            return resolved.url
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw Qwen3TTSError.downloadFailed(error.localizedDescription)
         }
     }
 

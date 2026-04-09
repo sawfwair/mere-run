@@ -86,6 +86,8 @@ public enum MereRunModelValidator {
             errors.append("Missing \(MereRunModelManifest.filename). Manifests are required (no heuristic guessing).")
         }
 
+        let spec = manifest.flatMap { ManagedModelCatalog.spec(for: $0.id) }
+
         // Root marker checks: diffusers-style models should have model_index.json, but allow fallback markers.
         let modelIndex = rootURL.appendingPathComponent("model_index.json")
         let rootConfig = rootURL.appendingPathComponent("config.json")
@@ -102,7 +104,19 @@ public enum MereRunModelValidator {
         let vaeDir: URL?
         let tokenizerDir: URL?
 
-        if supportsVisionModel {
+        if spec?.validationKind == .codegenGGUF {
+            errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
+        } else if spec?.validationKind == .aceStep || spec?.validationKind == .ltxVideo {
+            errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
+        } else if supportsVisionModel {
             errors.append(contentsOf: SAM31Resources.validateRoot(rootURL, fileManager: fileManager))
             transformerDir = nil
             textEncoderDir = nil
@@ -278,6 +292,22 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
             case .sam where engine != .samSegmentation:
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
+            case .tts where engine != .qwen3TTS:
+                warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts.")
+            case .asr where engine != .qwen3ASR && engine != .parakeetASR:
+                warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr or parakeet-asr.")
+            case .embed where engine != .qwen3Embedding:
+                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding.")
+            case .code where engine != .qwen3Coder:
+                warnings.append("Manifest engine mismatch: family=code expects qwen3-coder.")
+            case .ocr where engine != .lightOnOCR:
+                warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr.")
+            case .music where engine != .aceStep:
+                warnings.append("Manifest engine mismatch: family=music expects ace-step.")
+            case .video where engine != .ltxVideo:
+                warnings.append("Manifest engine mismatch: family=video expects ltx-video.")
+            case .psi where engine != .psiChat:
+                warnings.append("Manifest engine mismatch: family=psi expects psi-chat.")
             default:
                 break
             }
@@ -334,14 +364,28 @@ public enum MereRunModelValidator {
             let supports = Set(manifest.supports ?? [])
             return supports.contains(.visionSegmentation) || supports.contains(.visionTracking) || manifest.family == .sam
         }()
+        let skipsComponentValidation = {
+            switch manifest.engine {
+            case .qwen3Coder?, .aceStep?, .ltxVideo?:
+                return true
+            default:
+                return false
+            }
+        }()
 
         guard let components = manifest.components else {
+            if skipsComponentValidation {
+                return
+            }
             errors.append("Manifest missing components.")
             return
         }
 
         if components.tokenizer == nil { errors.append("Manifest components missing tokenizer.") }
         if supportsVisionModel {
+            return
+        }
+        if skipsComponentValidation {
             return
         }
 
@@ -355,6 +399,14 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("vision-segment-") { return .sam }
+        if modelId.hasPrefix("speech-tts-") { return .tts }
+        if modelId.hasPrefix("speech-asr-") { return .asr }
+        if modelId.hasPrefix("text-embed-") { return .embed }
+        if modelId.hasPrefix("text-code-") { return .code }
+        if modelId.hasPrefix("vision-ocr-") { return .ocr }
+        if modelId.hasPrefix("music-") { return .music }
+        if modelId.hasPrefix("video-") { return .video }
+        if modelId.hasPrefix("text-chat-psi-") { return .psi }
         if modelId == ModelResolver.ModelID.gemma4.rawValue
             || modelId == ModelResolver.ModelID.gemma4Nano.rawValue
             || modelId == ModelResolver.ModelID.gemma4Max.rawValue {

@@ -3,6 +3,62 @@ import XCTest
 @testable import MereRunCore
 
 final class ModelResolverTests: MereRunCoreTestCase {
+    private func writeMinimalImageModel(at root: URL, id: ModelResolver.ModelID) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("model_index.json"), contents: Data("{}".utf8))
+
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoder = root.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformer = root.appendingPathComponent("transformer", isDirectory: true)
+        let vae = root.appendingPathComponent("vae", isDirectory: true)
+        let scheduler = root.appendingPathComponent("scheduler", isDirectory: true)
+
+        try TestFileSystem.createDirectory(tokenizer)
+        try TestFileSystem.createDirectory(textEncoder)
+        try TestFileSystem.createDirectory(transformer)
+        try TestFileSystem.createDirectory(vae)
+        try TestFileSystem.createDirectory(scheduler)
+
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("merges.txt"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("vocab.json"), contents: Data("{}".utf8))
+
+        try TestFileSystem.writeFile(textEncoder.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(textEncoder.appendingPathComponent("model.safetensors"), contents: Data())
+
+        try TestFileSystem.writeFile(transformer.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(transformer.appendingPathComponent("diffusion_pytorch_model.safetensors"), contents: Data())
+
+        try TestFileSystem.writeFile(vae.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(vae.appendingPathComponent("diffusion_pytorch_model.safetensors"), contents: Data())
+
+        try TestFileSystem.writeFile(scheduler.appendingPathComponent("scheduler_config.json"), contents: Data("{}".utf8))
+    }
+
+    private func writeMinimalTextRoot(
+        at root: URL,
+        id: ModelResolver.ModelID
+    ) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+    }
+
+    private func writeMinimalSAM31Model(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        try TestFileSystem.createDirectory(tokenizer)
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
+    }
 
     func testResolvesFromProcessModelStoreOverride() throws {
         let temp = try TestFileSystem.makeTempDir()
@@ -14,10 +70,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
 
         let modelRoot = modelsRoot
             .appendingPathComponent("image-zimage-nano", isDirectory: true)
-        try TestFileSystem.createDirectory(modelRoot)
-
-        let manifest = MereRunModelManifest.template(for: .zetaNano, createdAt: Date(timeIntervalSince1970: 0))
-        try manifest.write(to: modelRoot)
+        try writeMinimalImageModel(at: modelRoot, id: .zetaNano)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.zetaNano)
@@ -36,9 +89,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
 
         let nanoRoot = modelsRoot
             .appendingPathComponent("image-klein-nano", isDirectory: true)
-        try TestFileSystem.createDirectory(nanoRoot)
-        try MereRunModelManifest.template(for: .kleinNano, createdAt: Date(timeIntervalSince1970: 0))
-            .write(to: nanoRoot)
+        try writeMinimalImageModel(at: nanoRoot, id: .kleinNano)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.mebot)
@@ -76,8 +127,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let modelRoot = modelsRoot.appendingPathComponent("text-chat-q35", isDirectory: true)
-        try TestFileSystem.createDirectory(modelRoot)
-        try MereRunModelManifest.template(for: .q35, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+        try writeMinimalTextRoot(at: modelRoot, id: .q35)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.q35)
@@ -95,8 +145,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let modelRoot = modelsRoot.appendingPathComponent("text-chat-gemma4", isDirectory: true)
-        try TestFileSystem.createDirectory(modelRoot)
-        try MereRunModelManifest.template(for: .gemma4, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+        try writeMinimalTextRoot(at: modelRoot, id: .gemma4)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.gemma4)
@@ -114,8 +163,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let modelRoot = modelsRoot.appendingPathComponent("text-chat-gemma4-max", isDirectory: true)
-        try TestFileSystem.createDirectory(modelRoot)
-        try MereRunModelManifest.template(for: .gemma4Max, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+        try writeMinimalTextRoot(at: modelRoot, id: .gemma4Max)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.gemma4)
@@ -133,8 +181,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let modelRoot = modelsRoot.appendingPathComponent("text-chat-gemma4-nano", isDirectory: true)
-        try TestFileSystem.createDirectory(modelRoot)
-        try MereRunModelManifest.template(for: .gemma4Nano, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+        try writeMinimalTextRoot(at: modelRoot, id: .gemma4Nano)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.gemma4Nano)
@@ -152,8 +199,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let modelRoot = modelsRoot.appendingPathComponent("vision-segment-sam31", isDirectory: true)
-        try TestFileSystem.createDirectory(modelRoot)
-        try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: modelRoot)
+        try writeMinimalSAM31Model(at: modelRoot)
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.visionSegmentSAM31)

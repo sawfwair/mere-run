@@ -24,6 +24,24 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
         /// SAM image segmentation family.
         case samSegmentation = "sam-segmentation"
+        /// Qwen3 TTS family.
+        case qwen3TTS = "qwen3-tts"
+        /// Qwen3 ASR family.
+        case qwen3ASR = "qwen3-asr"
+        /// Parakeet ASR family.
+        case parakeetASR = "parakeet-asr"
+        /// Qwen3 embeddings family.
+        case qwen3Embedding = "qwen3-embedding"
+        /// GGUF code generation family.
+        case qwen3Coder = "qwen3-coder"
+        /// LightOn OCR family.
+        case lightOnOCR = "lighton-ocr"
+        /// ACE-Step music family.
+        case aceStep = "ace-step"
+        /// LTX video family.
+        case ltxVideo = "ltx-video"
+        /// Psi agent chat family.
+        case psiChat = "psi-chat"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -32,6 +50,14 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case gemma
         case qwen
         case sam
+        case tts
+        case asr
+        case embed
+        case code
+        case ocr
+        case music
+        case video
+        case psi
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
@@ -64,6 +90,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case img2img = "img2img"
         case referenceEdit = "reference_edit"
         case chat = "chat"
+        case codeGeneration = "code_generation"
+        case textEmbedding = "text_embedding"
+        case speechSynthesis = "speech_synthesis"
+        case speechRecognition = "speech_recognition"
+        case visionOCR = "vision_ocr"
+        case musicGeneration = "music_generation"
+        case videoGeneration = "video_generation"
         case loraInference = "lora_inference"
         case loraTraining = "lora_training"
         case visionSegmentation = "vision_segmentation"
@@ -391,6 +424,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             vae: nil,
             scheduler: nil
         )
+        let genericTextComponents = Components(
+            tokenizer: .local(path: "."),
+            textEncoder: .local(path: "."),
+            transformer: nil,
+            vae: nil,
+            scheduler: nil
+        )
         let gemma4TextComponents = Components(
             tokenizer: .local(path: "."),
             textEncoder: .local(path: "."),
@@ -622,6 +662,151 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.visionSegmentation, .visionTracking],
                 components: samComponents,
                 upstreamRepoId: "facebook/sam3.1",
+                createdAt: createdAt
+            )
+        case .psiAgent:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .psiChat,
+                family: .psi,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: genericTextComponents,
+                createdAt: createdAt
+            )
+        case .qwen3TTSNano:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3TTS,
+                family: .tts,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.speechSynthesis],
+                components: genericTextComponents,
+                upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+                createdAt: createdAt
+            )
+        case .qwen3TTSCustomVoice:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3TTS,
+                family: .tts,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.speechSynthesis],
+                components: genericTextComponents,
+                upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                createdAt: createdAt
+            )
+        case .qwen3ASR:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3ASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .int8,
+                defaults: nil,
+                supports: [.speechRecognition],
+                components: genericTextComponents,
+                upstreamRepoId: "mlx-community/Qwen3-ASR-1.7B-8bit",
+                createdAt: createdAt
+            )
+        case .parakeetASR:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .parakeetASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.speechRecognition],
+                components: genericTextComponents,
+                upstreamRepoId: "mlx-community/parakeet-tdt-0.6b-v3",
+                createdAt: createdAt
+            )
+        case .qwen3Code:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3Coder,
+                family: .code,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: nil,
+                upstreamRepoId: CodeGenResources.defaultRepoId,
+                createdAt: createdAt
+            )
+        case .qwen3Embedding:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3Embedding,
+                family: .embed,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.textEmbedding],
+                components: genericTextComponents,
+                upstreamRepoId: Qwen3EmbeddingCatalog.defaultRepoId,
+                createdAt: createdAt
+            )
+        case .lightOnOCR:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lightOnOCR,
+                family: .ocr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.visionOCR],
+                components: Components(
+                    tokenizer: .anyOf([.local(path: "tokenizer"), .local(path: ".")]),
+                    textEncoder: .local(path: "."),
+                    transformer: nil,
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "lightonai/LightOnOCR-2-1B",
+                createdAt: createdAt
+            )
+        case .aceStep:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .aceStep,
+                family: .music,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: Defaults(steps: 8, cfg: 1.0),
+                supports: [.musicGeneration],
+                components: nil,
+                upstreamRepoId: "ACE-Step/Ace-Step1.5",
+                createdAt: createdAt
+            )
+        case .ltxVideoAV:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 8, cfg: 1.0),
+                supports: [.videoGeneration],
+                components: nil,
+                upstreamRepoId: "mlx-community/LTX-2-distilled-bf16",
                 createdAt: createdAt
             )
         }

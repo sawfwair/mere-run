@@ -123,22 +123,9 @@ public actor ParakeetGenerator: ASRGenerator {
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> URL {
         do {
-            return try await PretrainedModelLoader.fromPretrainedArchive(
-                modelPath: modelPath,
-                modelId: modelId,
-                defaultModelIds: [
-                    ParakeetResources.defaultModelId,
-                    ParakeetResources.defaultRepoId
-                ],
-                storageId: ParakeetResources.defaultModelId,
-                archiveKey: ParakeetResources.r2ArchiveKey,
-                archiveSize: ParakeetResources.r2ArchiveSize,
-                normalize: { base, fileManager in
-                    ParakeetResources.resolveNestedIfNeeded(base: base, fileManager: fileManager)
-                },
-                validate: { root, fileManager in
-                    ParakeetResources(rootURL: root).validate(fileManager: fileManager)
-                },
+            let resolved = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: modelPath ?? modelId,
+                defaultModelID: ParakeetResources.defaultModelId,
                 progress: { event in
                     switch event {
                     case .downloading(let percent):
@@ -152,8 +139,9 @@ public actor ParakeetGenerator: ASRGenerator {
                     }
                 }
             )
-        } catch let error as PretrainedModelLoader.LoadError {
-            throw mapModelLoaderError(error)
+            return resolved.url
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw ParakeetError.downloadFailed(error.localizedDescription)
         }
     }
 

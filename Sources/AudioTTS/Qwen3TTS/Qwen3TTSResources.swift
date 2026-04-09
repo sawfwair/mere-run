@@ -1,11 +1,24 @@
 import Foundation
 import AudioCore
+import MereRunCore
 
 public struct Qwen3TTSResources: Sendable, Hashable {
     public static let defaultModelId = "speech-tts-qwen3-nano"
+    public static let customVoiceModelId = "speech-tts-qwen3-customvoice"
     public static let sampleRate = 24000
-    public static let r2ArchiveKey = "models/talk-nano.tar.gz"
-    public static let r2ArchiveSize: Int64 = 3_691_910_698
+    public static let voiceDesignRepoId = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+    public static let customVoiceRepoId = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+    public static let defaultRevision = "main"
+    public static let supportedModelIds: Set<String> = [defaultModelId, customVoiceModelId]
+    public static let snapshotPatterns = [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "speech_tokenizer/*",
+        "tokenizer_config.json",
+        "vocab.json",
+    ]
 
     // Special token IDs (from model config)
     public static let ttsBosTokenId = 151672
@@ -26,6 +39,43 @@ public struct Qwen3TTSResources: Sendable, Hashable {
 
     public init(rootURL: URL) {
         self.rootURL = rootURL
+    }
+
+    public static func archiveKey(for modelId: String) -> String {
+        switch modelId {
+        case customVoiceModelId:
+            return "models/speech-tts-qwen3-customvoice.tar.gz"
+        default:
+            return "models/talk-nano.tar.gz"
+        }
+    }
+
+    public static func archiveSize(for modelId: String) -> Int64 {
+        switch modelId {
+        case customVoiceModelId:
+            return 0
+        default:
+            return 3_691_910_698
+        }
+    }
+
+    public static func hubFallbackConfig(for modelId: String) -> HubFallbackConfig? {
+        switch modelId {
+        case customVoiceModelId:
+            return HubFallbackConfig(
+                repoId: customVoiceRepoId,
+                revision: defaultRevision,
+                patterns: snapshotPatterns
+            )
+        case defaultModelId:
+            return HubFallbackConfig(
+                repoId: voiceDesignRepoId,
+                revision: defaultRevision,
+                patterns: snapshotPatterns
+            )
+        default:
+            return nil
+        }
     }
 
     // Model weights

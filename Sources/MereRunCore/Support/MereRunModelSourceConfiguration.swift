@@ -86,6 +86,13 @@ public enum MereRunModelSourceConfiguration {
         }
     }
 
+    public static func hasAnyDownloadSource(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        hasExplicitDownloadConfiguration(environment: environment)
+            || publicBaseURL(environment: environment) != nil
+    }
+
     private static func packagedPublicBaseURL(
         currentDirectoryPath: String,
         commandPath: String,

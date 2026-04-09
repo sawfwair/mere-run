@@ -145,16 +145,9 @@ public actor CodeGenGenerator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> URL {
         do {
-            return try await PretrainedModelLoader.fromPretrainedFile(
-                modelPath: modelPath,
-                modelId: modelId,
-                defaultModelIds: [CodeGenResources.defaultModelId],
-                relativePath: "\(CodeGenResources.defaultModelId).gguf",
-                remoteKey: CodeGenResources.r2ArchiveKey,
-                expectedSize: CodeGenResources.r2ArchiveSize,
-                validate: { file, fileManager in
-                    CodeGenResources(ggufURL: file).validate(fileManager: fileManager)
-                },
+            let resolution = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: modelPath ?? modelId,
+                defaultModelID: CodeGenResources.defaultModelId,
                 progress: { event in
                     switch event {
                     case .downloading(let percent):
@@ -168,8 +161,11 @@ public actor CodeGenGenerator: ChatGenerator {
                     }
                 }
             )
+            return resolution.url
         } catch let error as PretrainedModelLoader.LoadError {
             throw mapModelLoaderError(error)
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw CodeGenError.downloadFailed(error.localizedDescription)
         }
     }
 
