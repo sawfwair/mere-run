@@ -245,16 +245,9 @@ public enum ManagedModelResolver {
         // Prefer Hugging Face Hub downloads — individual files are natively resumable.
         // Fall back to R2 packaged archives only when no Hub source is configured.
         if let hubFallback = spec.hubFallback {
-            let snapshotURL = try await downloadHubSnapshot(
+            let snapshotURL = try await downloadHubSnapshotWithByteProgress(
                 config: hubFallback,
-                progress: { event in
-                    switch event {
-                    case .downloading(let percent):
-                        progress?(.downloadingBytes(completed: Int64(percent), total: 100))
-                    case .extracting:
-                        progress?(.extracting)
-                    }
-                }
+                progress: progress
             )
             try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
             let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: snapshotURL)
@@ -351,6 +344,29 @@ public enum ManagedModelResolver {
             return try await snapshot.prepare { snapshotProgress in
                 let percent = min(100, max(0, Int(snapshotProgress.fractionCompleted * 100)))
                 progress?(.downloading(percent: percent))
+            }
+        } catch {
+            throw ResolverError.downloadFailed(error.localizedDescription)
+        }
+    }
+
+    private static func downloadHubSnapshotWithByteProgress(
+        config: HubFallbackConfig,
+        progress: (@Sendable (InstallProgress) -> Void)?
+    ) async throws -> URL {
+        do {
+            let snapshot = try HubSnapshot(
+                options: HubSnapshotOptions(
+                    repoId: config.repoId,
+                    revision: config.revision,
+                    patterns: config.patterns
+                )
+            )
+            return try await snapshot.prepare { snapshotProgress in
+                progress?(.downloadingBytes(
+                    completed: snapshotProgress.completedUnitCount,
+                    total: snapshotProgress.totalUnitCount > 0 ? snapshotProgress.totalUnitCount : nil
+                ))
             }
         } catch {
             throw ResolverError.downloadFailed(error.localizedDescription)
