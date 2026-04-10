@@ -115,18 +115,20 @@ public enum ManagedModelResolver {
 
         switch spec.installShape {
         case .directoryRoot:
-            guard let archiveSource = spec.archiveSource else {
-                if let hubFallback = spec.hubFallback {
-                    let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
-                    let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
-                    let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
-                    guard missing.isEmpty else {
-                        throw ResolverError.invalidInstalledModel(
-                            "Missing required files after Hugging Face download: \(missing.map(\.lastPathComponent).joined(separator: ", "))"
-                        )
-                    }
-                    return RuntimeResolution(spec: spec, url: normalized, source: .hubSnapshot)
+            // Prefer Hugging Face Hub — individual files are natively resumable.
+            if let hubFallback = spec.hubFallback {
+                let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
+                let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
+                let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
+                guard missing.isEmpty else {
+                    throw ResolverError.invalidInstalledModel(
+                        "Missing required files after Hugging Face download: \(missing.map(\.lastPathComponent).joined(separator: ", "))"
+                    )
                 }
+                return RuntimeResolution(spec: spec, url: normalized, source: .hubSnapshot)
+            }
+
+            guard let archiveSource = spec.archiveSource else {
                 throw ResolverError.downloadFailed(
                     MereRunModelSourceConfiguration.missingConfigurationMessage(
                         purpose: "Managed model downloads for \(spec.id)"
@@ -142,7 +144,7 @@ public enum ManagedModelResolver {
                     storageId: spec.id,
                     archiveKey: archiveSource.key,
                     archiveSize: archiveSource.size,
-                    hubFallback: spec.hubFallback,
+                    hubFallback: nil,
                     strictArchiveSize: archiveSource.size > 0,
                     fileManager: fileManager,
                     normalize: { root, manager in
@@ -189,14 +191,7 @@ public enum ManagedModelResolver {
             }
 
         case .structuredRoot:
-            if !MereRunModelSourceConfiguration.hasAnyDownloadSource() {
-                guard let hubFallback = spec.hubFallback else {
-                    throw ResolverError.downloadFailed(
-                        MereRunModelSourceConfiguration.missingConfigurationMessage(
-                            purpose: "Managed model downloads for \(spec.id)"
-                        )
-                    )
-                }
+            if let hubFallback = spec.hubFallback {
                 let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
                 try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
                 let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
@@ -247,27 +242,28 @@ public enum ManagedModelResolver {
             try? fileManager.removeItem(at: modelDir)
         }
 
-        if MereRunModelSourceConfiguration.hasAnyDownloadSource(),
-           let archiveSource = spec.archiveSource {
-            try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
-            let archiveFile = MereRunModelPaths.downloadsDir.appendingPathComponent(archiveSource.key)
-            try fileManager.createDirectory(at: archiveFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-
-            try await downloadArchive(
-                spec: spec,
-                archiveSource: archiveSource,
-                to: archiveFile,
-                fileManager: fileManager,
-                progress: progress
+        // Prefer Hugging Face Hub downloads — individual files are natively resumable.
+        // Fall back to R2 packaged archives only when no Hub source is configured.
+        if let hubFallback = spec.hubFallback {
+            let snapshotURL = try await downloadHubSnapshot(
+                config: hubFallback,
+                progress: { event in
+                    switch event {
+                    case .downloading(let percent):
+                        progress?(.downloadingBytes(completed: Int64(percent), total: 100))
+                    case .extracting:
+                        progress?(.extracting)
+                    }
+                }
             )
-            progress?(.extracting)
-            try extractArchive(archiveFile, to: modelDir)
-            try? fileManager.removeItem(at: archiveFile)
-            try normalizeManagedLayoutIfNeeded(for: spec, in: modelDir, fileManager: fileManager)
-            let normalizedRoot = spec.normalizedRootURL(modelDir, fileManager: fileManager)
-            let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
-            try installManagedAliasesIfNeeded(for: spec, rootURL: modelDir, fileManager: fileManager)
-            let missing = spec.missingPaths(in: normalizedRoot, fileManager: fileManager)
+            try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
+            let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: snapshotURL)
+            try installManagedAliasesIfNeeded(for: spec, rootURL: snapshotURL, fileManager: fileManager)
+            try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fileManager.createSymbolicLink(at: modelDir, withDestinationURL: snapshotURL)
+
+            let normalized = spec.normalizedRootURL(modelDir, fileManager: fileManager)
+            let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
             guard missing.isEmpty else {
                 throw ResolverError.invalidInstalledModel(
                     "Installed model is incomplete: \(missing.map(\.path).joined(separator: ", "))"
@@ -276,7 +272,8 @@ public enum ManagedModelResolver {
             return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: false)
         }
 
-        guard let hubFallback = spec.hubFallback else {
+        guard MereRunModelSourceConfiguration.hasAnyDownloadSource(),
+              let archiveSource = spec.archiveSource else {
             throw ResolverError.downloadFailed(
                 MereRunModelSourceConfiguration.missingConfigurationMessage(
                     purpose: "Managed model downloads for \(spec.id)"
@@ -284,25 +281,25 @@ public enum ManagedModelResolver {
             )
         }
 
-        let snapshotURL = try await downloadHubSnapshot(
-            config: hubFallback,
-            progress: { event in
-                switch event {
-                case .downloading(let percent):
-                    progress?(.downloadingBytes(completed: Int64(percent), total: 100))
-                case .extracting:
-                    progress?(.extracting)
-                }
-            }
-        )
-        try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
-        let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: snapshotURL)
-        try installManagedAliasesIfNeeded(for: spec, rootURL: snapshotURL, fileManager: fileManager)
-        try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try fileManager.createSymbolicLink(at: modelDir, withDestinationURL: snapshotURL)
+        try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        let archiveFile = MereRunModelPaths.downloadsDir.appendingPathComponent(archiveSource.key)
+        try fileManager.createDirectory(at: archiveFile.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        let normalized = spec.normalizedRootURL(modelDir, fileManager: fileManager)
-        let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
+        try await downloadArchive(
+            spec: spec,
+            archiveSource: archiveSource,
+            to: archiveFile,
+            fileManager: fileManager,
+            progress: progress
+        )
+        progress?(.extracting)
+        try extractArchive(archiveFile, to: modelDir)
+        try? fileManager.removeItem(at: archiveFile)
+        try normalizeManagedLayoutIfNeeded(for: spec, in: modelDir, fileManager: fileManager)
+        let normalizedRoot = spec.normalizedRootURL(modelDir, fileManager: fileManager)
+        let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
+        try installManagedAliasesIfNeeded(for: spec, rootURL: modelDir, fileManager: fileManager)
+        let missing = spec.missingPaths(in: normalizedRoot, fileManager: fileManager)
         guard missing.isEmpty else {
             throw ResolverError.invalidInstalledModel(
                 "Installed model is incomplete: \(missing.map(\.path).joined(separator: ", "))"
@@ -384,7 +381,7 @@ public enum ManagedModelResolver {
             requestKey = archiveSource.key
         }
 
-        let request: URLRequest
+        var request: URLRequest
         do {
             request = try await R2DownloadRequestBuilder.makeGETRequest(
                 key: requestKey,
@@ -394,20 +391,53 @@ public enum ManagedModelResolver {
             throw ResolverError.downloadFailed(error.localizedDescription)
         }
 
-        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ResolverError.downloadFailed("Download failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+        let tempURL = archiveFile.appendingPathExtension("partial")
+
+        // Resume from existing partial download if present.
+        var resumeOffset: Int64 = 0
+        if let attrs = try? fileManager.attributesOfItem(atPath: tempURL.path),
+           let existingSize = attrs[.size] as? Int64,
+           existingSize > 0 {
+            resumeOffset = existingSize
+            request.setValue("bytes=\(existingSize)-", forHTTPHeaderField: "Range")
         }
 
-        let totalSize = httpResponse.expectedContentLength > 0 ? httpResponse.expectedContentLength : nil
-        let tempURL = archiveFile.appendingPathExtension("partial")
-        try? fileManager.removeItem(at: tempURL)
-        fileManager.createFile(atPath: tempURL.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: tempURL)
+        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ResolverError.downloadFailed("Download failed: no HTTP response")
+        }
+
+        let resumed: Bool
+        if resumeOffset > 0 && httpResponse.statusCode == 206 {
+            resumed = true
+        } else if httpResponse.statusCode == 200 {
+            resumed = false
+            resumeOffset = 0
+        } else {
+            throw ResolverError.downloadFailed("Download failed: HTTP \(httpResponse.statusCode)")
+        }
+
+        let totalSize: Int64?
+        if resumed {
+            totalSize = (httpResponse.expectedContentLength > 0)
+                ? resumeOffset + httpResponse.expectedContentLength
+                : (archiveSource.size > 0 ? archiveSource.size : nil)
+        } else {
+            totalSize = httpResponse.expectedContentLength > 0 ? httpResponse.expectedContentLength : nil
+        }
+
+        let handle: FileHandle
+        if resumed {
+            handle = try FileHandle(forWritingTo: tempURL)
+            handle.seekToEndOfFile()
+        } else {
+            try? fileManager.removeItem(at: tempURL)
+            fileManager.createFile(atPath: tempURL.path, contents: nil)
+            handle = try FileHandle(forWritingTo: tempURL)
+        }
         defer { try? handle.close() }
 
-        var bytesWritten: Int64 = 0
+        var bytesWritten: Int64 = resumeOffset
         var buffer = Data()
         let bufferSize = 1024 * 1024
         for try await byte in asyncBytes {

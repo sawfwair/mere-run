@@ -134,17 +134,18 @@ public enum PretrainedModelLoader {
             return managed.resolvedRoot
         }
 
-        if !MereRunModelSourceConfiguration.hasAnyDownloadSource() {
-            if let hubFallback {
-                let snapshotURL = try await downloadViaHubSnapshot(config: hubFallback, progress: progress)
-                let resolvedRoot = normalize(snapshotURL, fileManager)
-                let missingAfter = validate(resolvedRoot, fileManager)
-                guard missingAfter.isEmpty else {
-                    throw LoadError.missingFiles(missingAfter.map(\.lastPathComponent))
-                }
-                return resolvedRoot
+        // Prefer Hugging Face Hub — individual files are natively resumable.
+        if let hubFallback {
+            let snapshotURL = try await downloadViaHubSnapshot(config: hubFallback, progress: progress)
+            let resolvedRoot = normalize(snapshotURL, fileManager)
+            let missingAfter = validate(resolvedRoot, fileManager)
+            guard missingAfter.isEmpty else {
+                throw LoadError.missingFiles(missingAfter.map(\.lastPathComponent))
             }
+            return resolvedRoot
+        }
 
+        guard MereRunModelSourceConfiguration.hasAnyDownloadSource() else {
             throw LoadError.downloadFailed(
                 MereRunModelSourceConfiguration.missingConfigurationMessage()
             )
@@ -217,20 +218,21 @@ public enum PretrainedModelLoader {
             return managedFile
         }
 
-        if !MereRunModelSourceConfiguration.hasAnyDownloadSource() {
-            if let hubFallback {
-                let fileURL = try await downloadViaHubSnapshot(
-                    config: hubFallback,
-                    relativePath: relativePath,
-                    progress: progress
-                )
-                let missingAfter = validate(fileURL, fileManager)
-                guard missingAfter.isEmpty else {
-                    throw LoadError.missingFiles(missingAfter.map(\.lastPathComponent))
-                }
-                return fileURL
+        // Prefer Hugging Face Hub — individual files are natively resumable.
+        if let hubFallback {
+            let fileURL = try await downloadViaHubSnapshot(
+                config: hubFallback,
+                relativePath: relativePath,
+                progress: progress
+            )
+            let missingAfter = validate(fileURL, fileManager)
+            guard missingAfter.isEmpty else {
+                throw LoadError.missingFiles(missingAfter.map(\.lastPathComponent))
             }
+            return fileURL
+        }
 
+        guard MereRunModelSourceConfiguration.hasAnyDownloadSource() else {
             throw LoadError.downloadFailed(
                 MereRunModelSourceConfiguration.missingConfigurationMessage()
             )
@@ -273,22 +275,46 @@ public enum PretrainedModelLoader {
         progressPercent: (@Sendable (Int) -> Void)?,
         onSizeMismatch: (@Sendable (Int64, Int64) -> Void)?
     ) async throws {
-        let request = try await R2DownloadRequestBuilder.makeGETRequest(key: key).request
-
-        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw LoadError.downloadFailed("HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
-        }
+        var request = try await R2DownloadRequestBuilder.makeGETRequest(key: key).request
 
         let tempURL = destination.appendingPathExtension("partial")
-        try? fileManager.removeItem(at: tempURL)
 
-        fileManager.createFile(atPath: tempURL.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: tempURL)
+        // Resume from existing partial download if present.
+        var resumeOffset: Int64 = 0
+        if let attrs = try? fileManager.attributesOfItem(atPath: tempURL.path),
+           let existingSize = attrs[.size] as? Int64,
+           existingSize > 0 {
+            resumeOffset = existingSize
+            request.setValue("bytes=\(existingSize)-", forHTTPHeaderField: "Range")
+        }
+
+        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LoadError.downloadFailed("HTTP response unavailable")
+        }
+
+        let resumed: Bool
+        if resumeOffset > 0 && httpResponse.statusCode == 206 {
+            resumed = true
+        } else if httpResponse.statusCode == 200 {
+            resumed = false
+            resumeOffset = 0
+        } else {
+            throw LoadError.downloadFailed("HTTP \(httpResponse.statusCode)")
+        }
+
+        let handle: FileHandle
+        if resumed {
+            handle = try FileHandle(forWritingTo: tempURL)
+            handle.seekToEndOfFile()
+        } else {
+            try? fileManager.removeItem(at: tempURL)
+            fileManager.createFile(atPath: tempURL.path, contents: nil)
+            handle = try FileHandle(forWritingTo: tempURL)
+        }
         defer { try? handle.close() }
 
-        var bytesWritten: Int64 = 0
+        var bytesWritten: Int64 = resumeOffset
         var buffer = Data()
         let bufferSize = 1024 * 1024
 
