@@ -2,12 +2,29 @@ import Foundation
 import MLX
 import MLXNN
 
-/// Auto-captioner using Phi Nano (Apache 2.0 licensed vision-language model).
-/// Downloads model on first use via R2, then caches locally.
+/// Auto-captioner using a Hugging Face snapshot of Qwen3-VL.
+/// Downloads the upstream model on first use, then adapts it to the local VLM layout.
 public actor Qwen3VLAutoCaptioner {
-    public static let modelId = "vision-vlm-phi-nano"
-    private static let archiveKey = "models/phi-nano.tar.gz"
-    private static let archiveSize: Int64 = 1_527_005_575  // ~1.5GB
+    public static let modelId = "mlx-community/Qwen3-VL-2B-Instruct-4bit"
+    private static let storageId = "vision-vlm-qwen3-vl-2b-instruct-4bit"
+    private static let adaptedDirectoryName = "qwen3-vl-2b-instruct-4bit"
+    private static let hubFallback = HubFallbackConfig(
+        repoId: modelId,
+        patterns: [
+            "config.json",
+            "generation_config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "vocab.json",
+            "merges.txt",
+            "added_tokens.json",
+            "special_tokens_map.json",
+            "preprocessor_config.json",
+            "model.safetensors",
+            "model.safetensors.index.json",
+            "*.safetensors",
+        ]
+    )
 
     public enum CaptionerError: Error, LocalizedError {
         case modelNotReady
@@ -72,7 +89,7 @@ public actor Qwen3VLAutoCaptioner {
             return cached
         }
 
-        progressHandler?(DownloadProgress(fraction: 0, status: "Downloading Phi Nano..."))
+        progressHandler?(DownloadProgress(fraction: 0, status: "Downloading Qwen3-VL..."))
 
         let path = try await resolveRawModelRoot(progressHandler: progressHandler)
 
@@ -109,7 +126,7 @@ public actor Qwen3VLAutoCaptioner {
         }
 
         // Check for adapted structure
-        let adaptedPath = appSupport.appendingPathComponent("MereRun/phi-nano")
+        let adaptedPath = appSupport.appendingPathComponent("MereRun/\(Self.adaptedDirectoryName)")
         if fm.fileExists(atPath: adaptedPath.appendingPathComponent("text_encoder/config.json").path) {
             return adaptedPath
         }
@@ -125,9 +142,11 @@ public actor Qwen3VLAutoCaptioner {
                 modelPath: nil,
                 modelId: Self.modelId,
                 defaultModelIds: [Self.modelId],
-                storageId: Self.modelId,
-                archiveKey: Self.archiveKey,
-                archiveSize: Self.archiveSize,
+                storageId: Self.storageId,
+                archiveKey: "",
+                archiveSize: 0,
+                hubFallback: Self.hubFallback,
+                strictArchiveSize: false,
                 normalize: { base, fileManager in
                     Self.resolveNestedIfNeeded(base: base, fileManager: fileManager)
                 },
@@ -140,10 +159,10 @@ public actor Qwen3VLAutoCaptioner {
                         let clamped = max(0, min(percent, 100))
                         progressHandler?(DownloadProgress(
                             fraction: Double(clamped) / 100.0 * 0.8,
-                            status: "Downloading Phi Nano (\(clamped)%)"
+                            status: "Downloading Qwen3-VL (\(clamped)%)"
                         ))
                     case .extracting:
-                        progressHandler?(DownloadProgress(fraction: 0.82, status: "Extracting..."))
+                        progressHandler?(DownloadProgress(fraction: 0.82, status: "Preparing model..."))
                     }
                 }
             )
@@ -213,7 +232,7 @@ public actor Qwen3VLAutoCaptioner {
         case .unsupportedModelId(let modelID):
             return .downloadFailed("Unsupported model id: \(modelID)")
         case .missingFiles(let files):
-            return .generationFailed("Phi Nano model files missing: \(files.joined(separator: ", "))")
+            return .generationFailed("Qwen3-VL model files missing: \(files.joined(separator: ", "))")
         case .downloadFailed(let message):
             return .downloadFailed(message)
         case .extractionFailed:
@@ -228,7 +247,7 @@ public actor Qwen3VLAutoCaptioner {
             throw CaptionerError.generationFailed("Cannot find app support directory")
         }
 
-        let targetPath = appSupport.appendingPathComponent("MereRun/phi-nano")
+        let targetPath = appSupport.appendingPathComponent("MereRun/\(Self.adaptedDirectoryName)")
 
         // Check if already adapted
         if fm.fileExists(atPath: targetPath.appendingPathComponent("text_encoder/config.json").path) {
