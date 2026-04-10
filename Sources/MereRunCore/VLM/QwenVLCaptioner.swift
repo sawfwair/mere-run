@@ -280,10 +280,17 @@ public final class QwenVLCaptioner: @unchecked Sendable {
         )
 
         // Optional separate vision tower weights.
+        // Skip if the vision_tower directory points to the same file as text_encoder
+        // (unified models store both text and vision weights in a single safetensors).
         let visionWeightsURL = visionDir.appendingPathComponent("model.safetensors")
         let visionIndexURL = visionDir.appendingPathComponent("model.safetensors.index.json")
-        if FileManager.default.fileExists(atPath: visionWeightsURL.path) || FileManager.default.fileExists(atPath: visionIndexURL.path) {
-            let visionIsQuantized = textIsQuantized || Self.isQuantizedWeights(indexURL: visionIndexURL)
+        let textWeightsResolved = textWeightsURL.resolvingSymlinksInPath()
+        let visionWeightsResolved = visionWeightsURL.resolvingSymlinksInPath()
+        let isSameFile = textWeightsResolved == visionWeightsResolved
+
+        if !isSameFile,
+           FileManager.default.fileExists(atPath: visionWeightsURL.path) || FileManager.default.fileExists(atPath: visionIndexURL.path) {
+            let visionIsQuantized = Self.isQuantizedWeights(indexURL: visionIndexURL)
             try Self.applyWeights(
                 weightsURL: visionWeightsURL,
                 indexURL: visionIndexURL,

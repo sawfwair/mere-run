@@ -22,6 +22,7 @@ public actor CodeGenGenerator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
         let modelURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
+            .resolvingSymlinksInPath()
 
         if loadedModelPath != modelURL.path {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
@@ -74,6 +75,7 @@ public actor CodeGenGenerator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
         let modelURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+            .resolvingSymlinksInPath()
 
         if loadedModelPath != modelURL.path {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
@@ -125,6 +127,7 @@ public actor CodeGenGenerator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
         let modelURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+            .resolvingSymlinksInPath()
         if loadedModelPath != modelURL.path {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
             llamaContext = try await LlamaContext.createContext(path: modelURL.path)

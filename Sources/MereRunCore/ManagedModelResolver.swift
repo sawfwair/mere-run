@@ -40,6 +40,7 @@ public enum ManagedModelResolver {
 
     public enum InstallProgress: Sendable, Hashable {
         case downloadingBytes(completed: Int64, total: Int64?)
+        case downloadingPercent(percent: Int, speedBytesPerSecond: Double?)
         case extracting
     }
 
@@ -215,6 +216,8 @@ public enum ManagedModelResolver {
                             let percent = min(100, max(0, Int(Double(completed) / Double(total) * 100)))
                             progress?(.downloading(percent: percent))
                         }
+                    case .downloadingPercent(let percent, _):
+                        progress?(.downloading(percent: percent))
                     case .extracting:
                         progress?(.extracting)
                     }
@@ -363,9 +366,10 @@ public enum ManagedModelResolver {
                 )
             )
             return try await snapshot.prepare { snapshotProgress in
-                progress?(.downloadingBytes(
-                    completed: snapshotProgress.completedUnitCount,
-                    total: snapshotProgress.totalUnitCount > 0 ? snapshotProgress.totalUnitCount : nil
+                let percent = min(100, max(0, Int(snapshotProgress.fractionCompleted * 100)))
+                progress?(.downloadingPercent(
+                    percent: percent,
+                    speedBytesPerSecond: snapshotProgress.estimatedSpeedBytesPerSecond
                 ))
             }
         } catch {

@@ -656,7 +656,7 @@ public extension ManagedModelSpec {
     }
 
     func normalizedRootURL(_ rootURL: URL, fileManager: FileManager = .default) -> URL {
-        let base = rootURL.standardizedFileURL
+        let base = rootURL.resolvingSymlinksInPath()
         switch normalizationKind {
         case .none, .musicACEStep:
             return base
@@ -948,8 +948,9 @@ public extension ManagedModelSpec {
     }
 
     static func findFirstGGUFFile(in rootURL: URL, fileManager: FileManager = .default) -> URL? {
+        let resolvedRoot = rootURL.resolvingSymlinksInPath()
         let enumerator = fileManager.enumerator(
-            at: rootURL,
+            at: resolvedRoot,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         )

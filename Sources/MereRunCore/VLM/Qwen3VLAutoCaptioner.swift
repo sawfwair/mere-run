@@ -274,6 +274,25 @@ public actor Qwen3VLAutoCaptioner {
             }
         }
 
+        // Symlink model weights into vision_tower so vision weights are loaded too
+        // (the single safetensors file contains both text and vision weights)
+        let visionDir = targetPath.appendingPathComponent("vision_tower")
+        try fm.createDirectory(at: visionDir, withIntermediateDirectories: true)
+        let visionWeightsTarget = visionDir.appendingPathComponent("model.safetensors")
+        if !fm.fileExists(atPath: visionWeightsTarget.path) {
+            let sourceWeights = sourcePath.appendingPathComponent("model.safetensors")
+            if fm.fileExists(atPath: sourceWeights.path) {
+                try fm.createSymbolicLink(at: visionWeightsTarget, withDestinationURL: sourceWeights)
+            }
+        }
+        let visionIndexTarget = visionDir.appendingPathComponent("model.safetensors.index.json")
+        if !fm.fileExists(atPath: visionIndexTarget.path) {
+            let sourceIndex = sourcePath.appendingPathComponent("model.safetensors.index.json")
+            if fm.fileExists(atPath: sourceIndex.path) {
+                try fm.createSymbolicLink(at: visionIndexTarget, withDestinationURL: sourceIndex)
+            }
+        }
+
         // Copy tokenizer files
         let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt", "added_tokens.json", "special_tokens_map.json"]
         for filename in tokenizerFiles {

@@ -79,6 +79,13 @@ struct ModelPull: AsyncParsableCommand {
                     } else {
                         stderrRaw("\r[\(spec.id)] \(done)          ")
                     }
+                case .downloadingPercent(let percent, let speed):
+                    if let speed, speed > 0 {
+                        let speedText = ByteCountFormatter.string(fromByteCount: Int64(speed), countStyle: .file)
+                        stderrRaw("\r[\(spec.id)] \(percent)%  (\(speedText)/s)          ")
+                    } else {
+                        stderrRaw("\r[\(spec.id)] \(percent)%          ")
+                    }
                 case .extracting:
                     stderrRaw("\r[\(spec.id)] extracting…          ")
                 }
