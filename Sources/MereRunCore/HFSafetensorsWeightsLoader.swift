@@ -17,6 +17,13 @@ public enum HFSafetensorsWeightsLoader {
         return raw == "1" || raw == "true" || raw == "yes"
     }()
 
+    private static let verifyUnusedKeys: Bool = {
+        guard let raw = ProcessInfo.processInfo.environment["MERERUN_VERIFY_UNUSED_KEYS"]?.lowercased() else {
+            return false
+        }
+        return raw == "1" || raw == "true" || raw == "yes"
+    }()
+
     public enum LoaderError: LocalizedError {
         case indexFileMissing(URL)
         case shardFileMissing(URL)
@@ -416,7 +423,8 @@ public enum HFSafetensorsWeightsLoader {
         }
 
         if !remainingUpdates.isEmpty {
-            try model.update(parameters: ModuleParameters.unflattened(remainingUpdates), verify: .none)
+            let verify: Module.VerifyUpdate = Self.verifyUnusedKeys ? .noUnusedKeys : .none
+            try model.update(parameters: ModuleParameters.unflattened(remainingUpdates), verify: verify)
         }
 
         if residualApplied > 0, Self.residualDebug {
@@ -590,7 +598,8 @@ public enum HFSafetensorsWeightsLoader {
         }
 
         if !remainingUpdates.isEmpty {
-            try model.update(parameters: ModuleParameters.unflattened(remainingUpdates), verify: .none)
+            let verify: Module.VerifyUpdate = Self.verifyUnusedKeys ? .noUnusedKeys : .none
+            try model.update(parameters: ModuleParameters.unflattened(remainingUpdates), verify: verify)
         }
 
         if residualApplied > 0, Self.residualDebug {

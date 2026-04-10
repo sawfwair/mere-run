@@ -146,42 +146,26 @@ enum QwenVLImageLoader {
         patchSize: Int,
         mergeSize: Int
     ) -> (width: Int, height: Int) {
-        // Round to nearest multiple of patch_size
+        // Match Hugging Face's Qwen2/3-VL smart_resize exactly by rounding on the
+        // combined patch*merge factor instead of approximating with patch alignment first.
+        let factor = max(1, patchSize * mergeSize)
+
         func roundToFactor(_ value: Int, factor: Int) -> Int {
-            max(factor, ((value + factor / 2) / factor) * factor)
+            max(factor, Int((Double(value) / Double(factor)).rounded()) * factor)
         }
 
-        // Start with current dimensions rounded to patch_size
-        var targetW = roundToFactor(w, factor: patchSize)
-        var targetH = roundToFactor(h, factor: patchSize)
+        var targetH = roundToFactor(h, factor: factor)
+        var targetW = roundToFactor(w, factor: factor)
 
-        // Scale down if exceeds max_pixels (only if constraint is specified)
-        if let maxPixels = maxPixels {
-            let currentPixels = targetW * targetH
-            if currentPixels > maxPixels {
-                let scale = sqrt(Double(maxPixels) / Double(currentPixels))
-                targetW = roundToFactor(Int((Double(targetW) * scale).rounded()), factor: patchSize)
-                targetH = roundToFactor(Int((Double(targetH) * scale).rounded()), factor: patchSize)
-            }
+        if let maxPixels, targetH * targetW > maxPixels {
+            let beta = sqrt(Double(h * w) / Double(maxPixels))
+            targetH = max(factor, Int(floor(Double(h) / beta / Double(factor))) * factor)
+            targetW = max(factor, Int(floor(Double(w) / beta / Double(factor))) * factor)
+        } else if let minPixels, targetH * targetW < minPixels {
+            let beta = sqrt(Double(minPixels) / Double(h * w))
+            targetH = Int(ceil(Double(h) * beta / Double(factor))) * factor
+            targetW = Int(ceil(Double(w) * beta / Double(factor))) * factor
         }
-
-        // Scale up if below min_pixels (only if constraint is specified)
-        if let minPixels = minPixels {
-            let minScaledPixels = targetW * targetH
-            if minScaledPixels < minPixels {
-                let scale = sqrt(Double(minPixels) / Double(minScaledPixels))
-                targetW = roundToFactor(Int((Double(targetW) * scale).rounded()), factor: patchSize)
-                targetH = roundToFactor(Int((Double(targetH) * scale).rounded()), factor: patchSize)
-            }
-        }
-
-        // Ensure grid dimensions (patches) are divisible by merge_size
-        let gridW = targetW / patchSize
-        let gridH = targetH / patchSize
-        let alignedGridW = max(mergeSize, (gridW / mergeSize) * mergeSize)
-        let alignedGridH = max(mergeSize, (gridH / mergeSize) * mergeSize)
-        targetW = alignedGridW * patchSize
-        targetH = alignedGridH * patchSize
 
         return (targetW, targetH)
     }
@@ -209,4 +193,3 @@ enum QwenVLImageLoader {
         return ctx.makeImage() ?? cgImage
     }
 }
-

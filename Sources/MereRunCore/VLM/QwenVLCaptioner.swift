@@ -8,6 +8,13 @@ import MLXNN
 /// This is intentionally lightweight: it loads only the multimodal encoder pieces needed to
 /// generate short captions for LoRA training datasets (one caption per image).
 public final class QwenVLCaptioner: @unchecked Sendable {
+    private static let debugLogits: Bool = {
+        guard let raw = ProcessInfo.processInfo.environment["MERERUN_VLM_DEBUG_LOGITS"]?.lowercased() else {
+            return false
+        }
+        return raw == "1" || raw == "true" || raw == "yes"
+    }()
+
     public struct ModelConfig: Sendable, Hashable {
         public var maxNewTokens: Int
         public var temperature: Float
@@ -183,19 +190,30 @@ public final class QwenVLCaptioner: @unchecked Sendable {
             patchSize: encoder.visionPatchSize,
             spatialMergeSize: encoder.visionSpatialMergeSize
         )
-        // Qwen3-VL chat format - single <|image_pad|> placeholder that gets expanded
+        let grid = [(1, pixelValues.dim(2) / encoder.visionPatchSize, pixelValues.dim(3) / encoder.visionPatchSize)]
+        let imageTokenCount = max(
+            1,
+            grid.reduce(0) { partial, item in
+                partial + item.0 * max(1, item.1 / encoder.visionSpatialMergeSize) * max(1, item.2 / encoder.visionSpatialMergeSize)
+            }
+        )
+        let expandedImagePlaceholders = Array(
+            repeating: "<|image_pad|>",
+            count: imageTokenCount
+        ).joined()
+
+        // Match the HF processor by expanding the image placeholder count before tokenization.
         let formattedPrompt =
             "<|im_start|>user\n" +
-            "<|vision_start|><|image_pad|><|vision_end|>" +
+            "<|vision_start|>\(expandedImagePlaceholders)<|vision_end|>" +
             prompt +
             "<|im_end|>\n" +
             "<|im_start|>assistant\n"
 
         let tokenIds = tokenizer.encodeText(formattedPrompt)
         let inputIds = MLXArray(tokenIds.map { Int32($0) }).reshaped(1, tokenIds.count)
-        let grid = [(1, pixelValues.dim(2) / encoder.visionPatchSize, pixelValues.dim(3) / encoder.visionPatchSize)]
 
-        // Prefill with vision embeddings inserted at placeholder (expands sequence)
+        // Prefill with vision embeddings replacing the expanded image-token span in place.
         let (logits, cache, finalSeqLen, ropeDelta) = try encoder.forwardPrefillForGeneration(
             inputIds: inputIds,
             imageTokenId: imageTokenId,
@@ -207,6 +225,10 @@ public final class QwenVLCaptioner: @unchecked Sendable {
         var generatedTokens: [Int] = []
         var runningLogits = logits
         let cacheRef = cache
+
+        if Self.debugLogits {
+            Self.logTopLogits(label: "prefill", logits: runningLogits[0, -1, 0...], tokenizer: tokenizer)
+        }
 
         let generationConfig = PromptEnhanceConfig(
             maxNewTokens: config.maxNewTokens,
@@ -240,14 +262,19 @@ public final class QwenVLCaptioner: @unchecked Sendable {
 
             // Position for new token = finalSeqLen + generatedCount - 1 + ropeDelta
             let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
+            let nextEmbed = encoder.textEncoder.encoder.embed(inputIds: nextInput)
             let posValue = Int32(finalSeqLen + generatedTokens.count - 1 + ropeDelta)
             let posIds = MLXArray([posValue]).reshaped(1, 1)
             runningLogits = encoder.textEncoder.encoder.forwardCausal(
-                inputIds: nextInput,
+                embeddings: nextEmbed,
                 cache: cacheRef,
                 positionIds: posIds
             )
             MLX.eval(runningLogits)
+
+            if Self.debugLogits {
+                Self.logTopLogits(label: "step\(generatedTokens.count)", logits: runningLogits[0, -1, 0...], tokenizer: tokenizer)
+            }
         }
 
         let decoded = tokenizer.decode(tokens: generatedTokens)
@@ -420,5 +447,21 @@ public final class QwenVLCaptioner: @unchecked Sendable {
         key = key.replacingOccurrences(of: ".mlp.linear_fc2.", with: ".mlp.fc2.")
 
         return key
+    }
+
+    private static func logTopLogits(label: String, logits: MLXArray, tokenizer: QwenTokenizer, count: Int = 5) {
+        let logitsF32 = logits.asType(.float32)
+        MLX.eval(logitsF32)
+        let sortedIndices = argSort(logitsF32, axis: -1)
+        let topIndices = sortedIndices[(sortedIndices.dim(0) - count)...].asArray(Int32.self).map(Int.init)
+        let sorted = topIndices.sorted { lhs, rhs in
+            logitsF32[lhs].item(Float.self) > logitsF32[rhs].item(Float.self)
+        }
+        let formatted = sorted.map { token -> String in
+            let logit = logitsF32[token].item(Float.self)
+            let piece = tokenizer.decode(tokens: [token]).replacingOccurrences(of: "\n", with: "\\n")
+            return "\(token):\(String(format: "%.3f", logit)):'\(piece)'"
+        }
+        print("[QwenVLCaptioner] \(label) top\(count)=\(formatted.joined(separator: ", "))")
     }
 }
