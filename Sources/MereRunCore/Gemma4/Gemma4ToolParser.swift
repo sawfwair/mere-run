@@ -14,13 +14,22 @@ public enum Gemma4ToolParser {
         var results: [ToolCall] = []
         var searchRange = text.startIndex..<text.endIndex
 
-        while let startRange = text.range(of: toolCallStart, range: searchRange),
-              let endRange = text.range(of: toolCallEnd, range: startRange.upperBound..<text.endIndex) {
-            let payload = String(text[startRange.upperBound..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        while let startRange = text.range(of: toolCallStart, range: searchRange) {
+            let afterStart = startRange.upperBound
+            let payloadEnd: String.Index
+            if let endRange = text.range(of: toolCallEnd, range: afterStart..<text.endIndex) {
+                payloadEnd = endRange.lowerBound
+                searchRange = endRange.upperBound..<text.endIndex
+            } else {
+                // No closing tag — generation stopped on the <tool_call|> EOS token,
+                // so it was consumed and not included in the decoded text.
+                payloadEnd = text.endIndex
+                searchRange = text.endIndex..<text.endIndex
+            }
+            let payload = String(text[afterStart..<payloadEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
             if let call = parseSingleCall(payload) {
                 results.append(call)
             }
-            searchRange = endRange.upperBound..<text.endIndex
         }
 
         return results
