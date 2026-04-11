@@ -556,9 +556,6 @@ public enum ManagedModelCatalog {
                 repoId: "mlx-community/sam3.1-bf16",
                 patterns: [
                     "config.json",
-                    "tokenizer.json",
-                    "tokenizer_config.json",
-                    "tokenizer/*",
                     "model.safetensors",
                     "model.safetensors.index.json",
                     "*.safetensors",

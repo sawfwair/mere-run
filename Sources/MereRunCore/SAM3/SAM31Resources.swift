@@ -29,14 +29,8 @@ public struct SAM31Resources: Sendable, Hashable {
             missing.append(weightsURL)
         }
 
-        let tokenizerJSON = tokenizerRootURL.appendingPathComponent("tokenizer.json")
-        let tokenizerConfig = tokenizerRootURL.appendingPathComponent("tokenizer_config.json")
-        if !fileManager.fileExists(atPath: tokenizerJSON.path) {
-            missing.append(tokenizerJSON)
-        }
-        if !fileManager.fileExists(atPath: tokenizerConfig.path) {
-            missing.append(tokenizerConfig)
-        }
+        // Tokenizer files are optional — SAM is a vision-only model.
+        // Some archives bundle a tokenizer directory; HF snapshots may not.
 
         return missing
     }
