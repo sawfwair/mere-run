@@ -58,19 +58,7 @@ public final class Gemma4TokenizerAndTemplate {
         includeThinking: Bool,
         maxLength: Int
     ) throws -> [Int] {
-        let renderedMessages: [Message] = messages.map { message in
-            var rendered: Message = [
-                "role": message.role.rawValue,
-                "content": message.content,
-            ]
-            if let imageURL = message.imageUrl, !imageURL.isEmpty {
-                rendered["content"] = [
-                    ["type": "text", "text": message.content],
-                    ["type": "image", "image_url": imageURL],
-                ]
-            }
-            return rendered
-        }
+        let renderedMessages = Self.renderMessages(messages)
 
         let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
 
@@ -109,5 +97,68 @@ public final class Gemma4TokenizerAndTemplate {
             ids.append(tcEnd)
         }
         return ids
+    }
+
+    static func renderMessages(_ messages: [ChatMessage]) -> [Message] {
+        messages.map(renderMessage)
+    }
+
+    private static func renderMessage(_ message: ChatMessage) -> Message {
+        var rendered: Message = [
+            "role": message.role.rawValue,
+        ]
+
+        switch message.role {
+        case .assistant:
+            let toolCalls = Gemma4ToolParser.parseToolCalls(message.content)
+            if !toolCalls.isEmpty {
+                let renderedToolCalls: [[String: any Sendable]] = toolCalls.map { call in
+                    [
+                        "function": [
+                            "name": call.name,
+                            "arguments": call.arguments,
+                        ] as [String: any Sendable],
+                    ]
+                }
+                rendered["tool_calls"] = renderedToolCalls
+
+                let content = stripToolCalls(from: message.content)
+                if !content.isEmpty {
+                    rendered["content"] = content
+                }
+            } else {
+                rendered["content"] = renderContent(for: message)
+            }
+        case .tool:
+            let toolResponses: [[String: any Sendable]] = [[
+                "name": "tool",
+                "response": message.content,
+            ]]
+            rendered["tool_responses"] = toolResponses
+        default:
+            rendered["content"] = renderContent(for: message)
+        }
+
+        return rendered
+    }
+
+    private static func renderContent(for message: ChatMessage) -> any Sendable {
+        if let imageURL = message.imageUrl, !imageURL.isEmpty {
+            return [
+                ["type": "text", "text": message.content],
+                ["type": "image", "image_url": imageURL],
+            ] as [[String: String]]
+        }
+        return message.content
+    }
+
+    private static func stripToolCalls(from text: String) -> String {
+        text
+            .replacingOccurrences(
+                of: "(?s)<\\|tool_call>.*?(?:<tool_call\\|>|$)",
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
