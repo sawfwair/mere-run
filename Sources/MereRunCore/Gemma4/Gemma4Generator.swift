@@ -117,6 +117,7 @@ public actor Gemma4Generator: ChatGenerator {
         let prefillStart = Date()
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: request.messages,
+            tools: request.tools,
             addGenerationPrompt: true,
             includeThinking: request.showThinking,
             maxLength: effectiveContext
@@ -125,7 +126,8 @@ public actor Gemma4Generator: ChatGenerator {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
 
-        let eosSet = Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds)
+        let hasTools = request.tools?.isEmpty == false
+        let eosSet = Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds(withTools: hasTools))
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
@@ -176,6 +178,11 @@ public actor Gemma4Generator: ChatGenerator {
         let decoded = tokenizerAndTemplate.decode(tokens: generated)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
+        let toolCalls: [ToolCall]? = hasTools ? {
+            let parsed = Gemma4ToolParser.parseToolCalls(decoded)
+            return parsed.isEmpty ? nil : parsed
+        }() : nil
+
         return ChatResponse(
             response: decoded,
             tokensGenerated: generated.count,
@@ -183,7 +190,8 @@ public actor Gemma4Generator: ChatGenerator {
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
                 decodeSeconds: decodeSeconds
-            )
+            ),
+            toolCalls: toolCalls
         )
     }
 

@@ -142,6 +142,62 @@ public struct ChatMessage: Sendable, Hashable, Codable {
     }
 }
 
+// MARK: - Tool Types
+
+public struct ToolParameterProperty: Sendable, Hashable {
+    public let type: String
+    public let description: String
+
+    public init(type: String, description: String) {
+        self.type = type
+        self.description = description
+    }
+}
+
+public struct ToolDefinition: Sendable, Hashable {
+    public let name: String
+    public let description: String
+    public let parameters: [String: ToolParameterProperty]
+    public let required: [String]
+
+    public init(name: String, description: String, parameters: [String: ToolParameterProperty], required: [String]? = nil) {
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+        self.required = required ?? Array(parameters.keys)
+    }
+
+    /// Convert to the ToolSpec format expected by swift-transformers applyChatTemplate.
+    public func toToolSpec() -> [String: any Sendable] {
+        var properties: [String: any Sendable] = [:]
+        for (key, prop) in parameters {
+            properties[key] = ["type": prop.type, "description": prop.description] as [String: String]
+        }
+        return [
+            "type": "function",
+            "function": [
+                "name": name,
+                "description": description,
+                "parameters": [
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                ] as [String: any Sendable],
+            ] as [String: any Sendable],
+        ] as [String: any Sendable]
+    }
+}
+
+public struct ToolCall: Sendable, Hashable {
+    public let name: String
+    public let arguments: [String: String]
+
+    public init(name: String, arguments: [String: String]) {
+        self.name = name
+        self.arguments = arguments
+    }
+}
+
 public struct ChatRequest: Sendable, Hashable {
     public var messages: [ChatMessage]
     public var maxTokens: Int
@@ -150,6 +206,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var showThinking: Bool
     public var lora: LoRA?
     public var requiresJSON: Bool
+    public var tools: [ToolDefinition]?
 
     public init(
         messages: [ChatMessage],
@@ -158,7 +215,8 @@ public struct ChatRequest: Sendable, Hashable {
         topP: Double = 0.9,
         showThinking: Bool = true,
         lora: LoRA? = nil,
-        requiresJSON: Bool = false
+        requiresJSON: Bool = false,
+        tools: [ToolDefinition]? = nil
     ) {
         self.messages = messages
         self.maxTokens = maxTokens
@@ -167,6 +225,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.showThinking = showThinking
         self.lora = lora
         self.requiresJSON = requiresJSON
+        self.tools = tools
     }
 }
 
@@ -190,11 +249,13 @@ public struct ChatResponse: Sendable, Hashable {
     public var response: String
     public var tokensGenerated: Int
     public var timing: ChatTiming?
+    public var toolCalls: [ToolCall]?
 
-    public init(response: String, tokensGenerated: Int, timing: ChatTiming? = nil) {
+    public init(response: String, tokensGenerated: Int, timing: ChatTiming? = nil, toolCalls: [ToolCall]? = nil) {
         self.response = response
         self.tokensGenerated = tokensGenerated
         self.timing = timing
+        self.toolCalls = toolCalls
     }
 }
 

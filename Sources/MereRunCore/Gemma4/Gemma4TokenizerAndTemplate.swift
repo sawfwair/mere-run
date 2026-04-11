@@ -7,17 +7,20 @@ public final class Gemma4TokenizerAndTemplate {
     public let maxLength: Int
     public let eosTokenId: Int?
     public let turnTokenId: Int?
+    public let toolCallEndTokenId: Int?
 
     public init(
         tokenizer: any Tokenizer,
         maxLength: Int,
         eosTokenId: Int?,
-        turnTokenId: Int?
+        turnTokenId: Int?,
+        toolCallEndTokenId: Int? = nil
     ) {
         self.tokenizer = tokenizer
         self.maxLength = maxLength
         self.eosTokenId = eosTokenId
         self.turnTokenId = turnTokenId
+        self.toolCallEndTokenId = toolCallEndTokenId
     }
 
     public static func load(
@@ -43,12 +46,14 @@ public final class Gemma4TokenizerAndTemplate {
             tokenizer: tokenizer,
             maxLength: maxLength,
             eosTokenId: tokenizer.eosTokenId,
-            turnTokenId: tokenizer.convertTokenToId("<turn|>")
+            turnTokenId: tokenizer.convertTokenToId("<turn|>"),
+            toolCallEndTokenId: tokenizer.convertTokenToId("<tool_call|>")
         )
     }
 
     public func encodeForGeneration(
         messages: [ChatMessage],
+        tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         includeThinking: Bool,
         maxLength: Int
@@ -67,13 +72,15 @@ public final class Gemma4TokenizerAndTemplate {
             return rendered
         }
 
+        let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
+
         var encoded = try tokenizer.applyChatTemplate(
             messages: renderedMessages,
             chatTemplate: nil,
             addGenerationPrompt: addGenerationPrompt,
             truncation: false,
             maxLength: nil,
-            tools: nil,
+            tools: toolSpecs,
             additionalContext: ["enable_thinking": includeThinking]
         )
 
@@ -94,5 +101,13 @@ public final class Gemma4TokenizerAndTemplate {
 
     public var stopTokenIds: [Int] {
         [eosTokenId, turnTokenId].compactMap { $0 }
+    }
+
+    public func stopTokenIds(withTools: Bool) -> [Int] {
+        var ids = stopTokenIds
+        if withTools, let tcEnd = toolCallEndTokenId {
+            ids.append(tcEnd)
+        }
+        return ids
     }
 }

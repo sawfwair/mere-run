@@ -207,6 +207,29 @@ mere.run text embed \
 log "Saved: $OUT/embeddings_demo.json (compare cosine similarity — first two should be close)"
 
 # ═══════════════════════════════════════════════════════════════════════════════
+step "BONUS  TOOL USE — Agentic code compile & run"
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if [[ -f "$OUT/code_mandelbrot.txt" ]]; then
+  MANDELBROT_CODE=$(cat "$OUT/code_mandelbrot.txt")
+  mere.run text chat \
+    -p "Here is Swift code for a Mandelbrot set renderer. Extract ONLY the Swift code (no markdown fences), save it to mandelbrot.swift using write_file, then compile it with 'swiftc mandelbrot.swift -o mandelbrot' using shell_exec, and finally run './mandelbrot' using shell_exec. Show me the output.
+
+$MANDELBROT_CODE" \
+    -s "You have write_file and shell_exec tools. Use them step by step. Be concise." \
+    --tools write_file,shell_exec \
+    --tool-loop \
+    --sandbox-dir "$OUT/tool_sandbox" \
+    --max-tokens 4096 \
+    --temperature 0.3 \
+    | tee "$OUT/tool_use_demo.txt"
+  log "Saved: $OUT/tool_use_demo.txt"
+  log "Sandbox: $OUT/tool_sandbox/"
+else
+  log "⚠ Skipping tool use demo — no code output from step 2"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════════
 echo ""

@@ -62,6 +62,15 @@ struct TextChat: AsyncParsableCommand {
     @Flag(name: [.customLong("stats")], help: "Print generation timing and tokens/sec.")
     var stats: Bool = false
 
+    @Option(name: [.customLong("tools")], help: "Comma-separated built-in tool names: write_file, shell_exec.")
+    var tools: String?
+
+    @Flag(name: [.customLong("tool-loop")], help: "Enable agentic tool loop: generate → execute tool calls → feed results back → continue.")
+    var toolLoop: Bool = false
+
+    @Option(name: [.customLong("sandbox-dir")], help: "Working directory for tool execution (default: temp dir).")
+    var sandboxDir: String?
+
     @Flag(name: [.short, .long], help: "Suppress progress output.")
     var quiet: Bool = false
 
@@ -74,12 +83,18 @@ struct TextChat: AsyncParsableCommand {
         }
         messages.append(ChatMessage(role: .user, content: prompt))
 
+        let toolDefs: [ToolDefinition]? = try tools.flatMap { raw in
+            let names = raw.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+            return try BuiltinTools.resolve(names: names)
+        }
+
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
-            showThinking: thinking
+            showThinking: thinking,
+            tools: toolDefs
         )
 
         let progressHandler: (@Sendable (ChatProgress) -> Void)?
@@ -94,55 +109,105 @@ struct TextChat: AsyncParsableCommand {
         let startTime = Date()
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-        let result: ChatResponse
-        if normalizedModelId == Psi3ChatResources.defaultModelId {
-            let generator = Psi3ChatGenerator(modelId: Psi3ChatResources.defaultModelId)
-            result = try await generator.chat(request, modelPath: modelRoot, progressHandler: progressHandler)
-        } else if Gemma4Resources.handles(modelSpec: normalizedModelId) {
-            let effectiveModelId = normalizedModelId.isEmpty ? Gemma4Resources.defaultModelId : normalizedModelId
-            let scheme = try parseGemma4KVQuantizationScheme(kvQuantScheme)
-            let generator = Gemma4Generator(
-                modelId: effectiveModelId,
-                kvCacheQuantization: Gemma4KVCacheQuantization(
-                    bits: kvBits,
-                    scheme: scheme,
-                    groupSize: kvGroupSize,
-                    quantizedStart: quantizedKVStart
+        let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
+            if normalizedModelId == Psi3ChatResources.defaultModelId {
+                let generator = Psi3ChatGenerator(modelId: Psi3ChatResources.defaultModelId)
+                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+            } else if Gemma4Resources.handles(modelSpec: normalizedModelId) {
+                let effectiveModelId = normalizedModelId.isEmpty ? Gemma4Resources.defaultModelId : normalizedModelId
+                let scheme = try self.parseGemma4KVQuantizationScheme(self.kvQuantScheme)
+                let generator = Gemma4Generator(
+                    modelId: effectiveModelId,
+                    kvCacheQuantization: Gemma4KVCacheQuantization(
+                        bits: self.kvBits,
+                        scheme: scheme,
+                        groupSize: self.kvGroupSize,
+                        quantizedStart: self.quantizedKVStart
+                    )
                 )
-            )
-            result = try await generator.chat(request, modelPath: modelRoot, progressHandler: progressHandler)
-        } else {
-            let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
-            let generator = Q35Generator(modelId: effectiveModelId)
-            result = try await generator.chat(request, modelPath: modelRoot, progressHandler: progressHandler)
-        }
-
-        let elapsed = Date().timeIntervalSince(startTime)
-
-        if stats {
-            let e2eTps = elapsed > 0 ? Double(result.tokensGenerated) / elapsed : 0
-            if let timing = result.timing {
-                let decodeTps = timing.decodeSeconds > 0
-                    ? Double(result.tokensGenerated) / timing.decodeSeconds
-                    : 0
-                let line = String(
-                    format: "time=%.2fs load=%.2fs prefill=%.2fs decode=%.2fs tokens=%d decode_tps=%.2f e2e_tps=%.2f",
-                    elapsed,
-                    timing.loadSeconds,
-                    timing.prefillSeconds,
-                    timing.decodeSeconds,
-                    result.tokensGenerated,
-                    decodeTps,
-                    e2eTps
-                )
-                fputs("\(line)\n", stderr)
+                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
             } else {
-                let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
-                fputs("\(line)\n", stderr)
+                let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
+                let generator = Q35Generator(modelId: effectiveModelId)
+                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
             }
         }
 
-        print(cleanResponse(result.response, showThinking: thinking))
+        if toolLoop, let toolDefs, !toolDefs.isEmpty {
+            let sandbox: URL
+            if let sandboxDir {
+                sandbox = URL(fileURLWithPath: sandboxDir).standardizedFileURL
+            } else {
+                sandbox = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("mererun-tools-\(ProcessInfo.processInfo.processIdentifier)")
+            }
+            try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
+            if !quiet { fputs("[tool-loop] Sandbox: \(sandbox.path)\n", stderr) }
+
+            var loopMessages = messages
+            let maxIterations = 10
+
+            for iteration in 0..<maxIterations {
+                var req = request
+                req.messages = loopMessages
+
+                let result = try await chatOnce(req)
+
+                guard let calls = result.toolCalls, !calls.isEmpty else {
+                    print(cleanResponse(result.response, showThinking: thinking))
+                    return
+                }
+
+                // Show the model's response (may contain text before/after tool calls)
+                let textBeforeTools = result.response
+                    .replacingOccurrences(of: "<\\|tool_call>.*?<tool_call\\|>", with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !textBeforeTools.isEmpty {
+                    fputs(cleanResponse(textBeforeTools, showThinking: thinking) + "\n", stderr)
+                }
+
+                loopMessages.append(ChatMessage(role: .assistant, content: result.response))
+
+                for call in calls {
+                    if !quiet { fputs("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n", stderr) }
+                    let output = try BuiltinTools.execute(call, sandboxDir: sandbox)
+                    if !quiet { fputs("[tool] → \(output.prefix(200))\n", stderr) }
+                    loopMessages.append(ChatMessage(role: .tool, content: output))
+                }
+
+                if !quiet { fputs("[tool-loop] Iteration \(iteration + 1)/\(maxIterations)\n", stderr) }
+            }
+
+            fputs("[tool-loop] Hit iteration limit (\(maxIterations))\n", stderr)
+        } else {
+            let result = try await chatOnce(request)
+
+            let elapsed = Date().timeIntervalSince(startTime)
+            if stats {
+                let e2eTps = elapsed > 0 ? Double(result.tokensGenerated) / elapsed : 0
+                if let timing = result.timing {
+                    let decodeTps = timing.decodeSeconds > 0
+                        ? Double(result.tokensGenerated) / timing.decodeSeconds
+                        : 0
+                    let line = String(
+                        format: "time=%.2fs load=%.2fs prefill=%.2fs decode=%.2fs tokens=%d decode_tps=%.2f e2e_tps=%.2f",
+                        elapsed,
+                        timing.loadSeconds,
+                        timing.prefillSeconds,
+                        timing.decodeSeconds,
+                        result.tokensGenerated,
+                        decodeTps,
+                        e2eTps
+                    )
+                    fputs("\(line)\n", stderr)
+                } else {
+                    let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
+                    fputs("\(line)\n", stderr)
+                }
+            }
+
+            print(cleanResponse(result.response, showThinking: thinking))
+        }
     }
 
     private func cleanResponse(_ response: String, showThinking: Bool) -> String {
