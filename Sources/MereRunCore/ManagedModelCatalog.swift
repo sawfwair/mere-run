@@ -554,7 +554,7 @@ public enum ManagedModelCatalog {
                 size: 0
             ),
             hubFallback: HubFallbackConfig(
-                repoId: "facebook/sam3.1",
+                repoId: "mlx-community/sam3.1-bf16",
                 patterns: [
                     "config.json",
                     "tokenizer.json",
@@ -565,7 +565,7 @@ public enum ManagedModelCatalog {
                     "*.safetensors",
                 ]
             ),
-            upstreamRepoId: "facebook/sam3.1",
+            upstreamRepoId: "mlx-community/sam3.1-bf16",
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["vision segment"]
