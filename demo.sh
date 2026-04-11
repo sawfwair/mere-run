@@ -53,9 +53,9 @@ step "3/9  IMAGE — Hero artwork"
 mere.run model pull image-klein-nano 2>/dev/null
 mere.run image generate \
   -m image-klein-nano \
-  -p "A solitary astronaut standing on the edge of a vast crystalline canyon on an alien world, bioluminescent flora glowing in deep turquoise and violet along the cliff walls, three moons visible in a twilight sky streaked with aurora-like ribbons, cinematic composition, hyper-detailed, volumetric lighting, concept art quality" \
-  -n "blurry, low quality, distorted, text, watermark" \
-  -W 1024 -H 1024 \
+  -p "photograph of a lone astronaut in a weathered spacesuit standing at the edge of a massive crystalline canyon on an alien planet, bioluminescent moss and lichen glowing turquoise and violet on the rock faces, three pale moons low in a dusky indigo sky with faint aurora streaks, shot on 35mm film, shallow depth of field, golden hour backlight catching dust particles, photojournalistic composition, ultra realistic, 8k" \
+  -n "painting, illustration, cartoon, anime, 3d render, cgi, blurry, low quality, distorted, text, watermark, oversaturated" \
+  -W 1280 -H 720 \
   -s 8 \
   --seed 7777 \
   -o "$OUT/image_hero.png"
@@ -166,7 +166,8 @@ step "8/9  VIDEO — Cinematic scene"
 
 if mere.run model pull video-ltx-av 2>/dev/null; then
   mere.run video generate \
-    "cinematic slow dolly forward through a bioluminescent alien canyon at twilight, crystalline walls glowing turquoise and violet, particles floating in the air, volumetric fog, three moons visible in the sky, smooth camera movement, film grain" \
+    "EXT. ALIEN CANYON – TWILIGHT – CINEMATIC ESTABLISHING SHOT. The camera begins on a wide shot of a vast crystalline canyon stretching to the horizon, walls covered in bioluminescent moss glowing deep turquoise and violet. Three pale moons hang low in an indigo sky streaked with shimmering aurora ribbons. The camera pushes forward in a slow, steady dolly move, gliding just above the canyon floor. Tiny luminous particles drift through the air like embers, catching the faint moonlight. Volumetric fog rolls through the lower passages, partially obscuring jagged crystal formations that jut from the walls. The ambient sound is a deep, resonant hum — the canyon itself vibrating at some low alien frequency — layered with the soft chime of crystal faces shifting in a gentle wind. As the camera advances, the bioluminescent glow intensifies, casting rippling turquoise reflections across the fog. The shot holds a shallow depth of field, the foreground crystals softly blurred as the vast canyon beyond sharpens into focus. Film grain texture, anamorphic lens flares from the brightest crystal clusters." \
+    --variant unified-av \
     --width 768 --height 512 \
     --num-frames 65 \
     --fps 24 \
@@ -177,7 +178,8 @@ if mere.run model pull video-ltx-av 2>/dev/null; then
   # img2vid from hero image
   if [[ -f "$OUT/image_hero.png" ]]; then
     mere.run video generate \
-      "the scene slowly comes to life, bioluminescent plants gently pulsing, aurora ribbons shifting in the sky, the astronaut turns their head slightly" \
+      "The still scene slowly comes to life. A faint wind picks up, causing the bioluminescent moss on the cliff walls to pulse gently in waves of turquoise light. The astronaut, silhouetted against the canyon, shifts their weight and turns their head slightly to the right, gazing upward at the three moons. Aurora ribbons in the sky begin to ripple and shift, their colors bleeding from violet into emerald green. Small luminous spores lift off the canyon floor and drift upward past the astronaut like slow-motion fireflies. The camera holds steady for a beat, then begins a barely perceptible push-in toward the astronaut's visor, where the aurora light reflects across the curved glass. The ambient sound is a low crystalline resonance with the soft whisper of alien wind." \
+      --variant unified-av \
       --image "$OUT/image_hero.png" \
       --image-strength 0.9 \
       --width 768 --height 512 \

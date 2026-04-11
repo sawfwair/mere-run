@@ -505,7 +505,6 @@ public enum ManagedModelCatalog {
                     "model.safetensors",
                     "tokenizer.json",
                     "tokenizer_config.json",
-                    "added_tokens.json",
                     "merges.txt",
                     "vocab.json",
                     "1_Pooling/*",

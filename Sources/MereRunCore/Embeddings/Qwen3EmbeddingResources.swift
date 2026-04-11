@@ -18,7 +18,6 @@ public enum Qwen3EmbeddingCatalog {
             "model.safetensors",
             "tokenizer.json",
             "tokenizer_config.json",
-            "added_tokens.json",
             "merges.txt",
             "vocab.json",
             "1_Pooling/*",
@@ -111,7 +110,6 @@ public struct Qwen3EmbeddingResources: Sendable, Hashable {
         var required: [URL] = [
             configURL,
             tokenizerConfigURL,
-            addedTokensURL,
         ]
 
         let weightsOK =
