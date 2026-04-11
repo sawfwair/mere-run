@@ -370,6 +370,7 @@ struct VideoGenerate: AsyncParsableCommand {
 
 func validateNativeModelRoot(_ rootURL: URL) throws {
     let fm = FileManager.default
+    let rootURL = rootURL.resolvingSymlinksInPath()
     var isDirectory: ObjCBool = false
     guard fm.fileExists(atPath: rootURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
         throw ValidationError("Model root directory not found: \(rootURL.path)")
