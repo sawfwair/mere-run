@@ -552,15 +552,6 @@ public enum ManagedModelCatalog {
                 key: "models/vision-segment-sam31.tar.gz",
                 size: 0
             ),
-            hubFallback: HubFallbackConfig(
-                repoId: "mlx-community/sam3.1-bf16",
-                patterns: [
-                    "config.json",
-                    "model.safetensors",
-                    "model.safetensors.index.json",
-                    "*.safetensors",
-                ]
-            ),
             upstreamRepoId: "mlx-community/sam3.1-bf16",
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
