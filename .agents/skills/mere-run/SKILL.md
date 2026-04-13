@@ -1,6 +1,6 @@
 ---
 name: mere-run
-description: Use mere.run for local AI inference — text chat, code generation, image generation, speech synthesis/transcription, vision (captioning, inspection, segmentation, tracking, OCR), music, video, embeddings, and API serving. Activate when the user wants to run local AI models, generate content, or serve models via API.
+description: Use mere.run for local AI inference — text chat, code generation, image generation, speech synthesis/transcription, vision (captioning, inspection, grounding, segmentation, tracking, OCR), music, video, embeddings, and API serving. Activate when the user wants to run local AI models, generate content, or serve models via API.
 user-invocable: false
 ---
 
@@ -102,6 +102,21 @@ mere.run vision inspect diagram.png "List all the components"
 
 Qwen3-VL. Options: `-m` model, `--max-tokens` (default 2048), `--temperature` (default 0.7)
 
+### Vision — Grounding (Falcon Perception)
+
+```bash
+mere.run model pull vision-ground-falcon-perception
+mere.run vision ground photo.jpg --query "person"
+mere.run vision ground photo.jpg --query "person in red" --query "phone" -o grounded.png
+mere.run vision ground photo.jpg --query "cat" --json-output grounded.json --mask-output-dir ./masks
+```
+
+Native Falcon Perception (grounded detection + segmentation). If `--model` is omitted, the command resolves the managed model id `vision-ground-falcon-perception`.
+
+**Key options:** positional image path, `--query`/`--prompt` repeated grounding expressions, `-m`/`--model` managed id or local model root, `-o` annotated output image, `--json-output`, `--mask-output-dir`
+
+**Output shape:** annotated image written to `<image>_grounded.<ext>` by default, JSON metadata written to `<image>_grounded.json`, optional per-detection mask PNGs under `--mask-output-dir`. JSON detections include `query`, normalized `xy`, normalized `hw`, derived `box`, optional `score`, and optional `maskPath`.
+
 ### Vision — Segmentation (SAM 3.1)
 
 ```bash
@@ -168,6 +183,7 @@ Serves at `http://localhost:8080` by default. Endpoints: `GET /health`, `GET /v1
 ```bash
 mere.run model list                    # Show all models and install status
 mere.run model pull text-chat-gemma4   # Download a model
+mere.run model pull vision-ground-falcon-perception
 mere.run model remove text-chat-q35    # Remove a model
 mere.run model info text-chat-gemma4   # Show manifest and validation
 mere.run model repair-manifests        # Fix missing manifests

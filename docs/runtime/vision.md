@@ -1,11 +1,12 @@
 # Vision Runtime
 
-This page covers captioning, inspection, segmentation, tracking, and OCR.
+This page covers captioning, inspection, grounding, segmentation, tracking, and OCR.
 
 ## Public surface
 
 - `mere.run vision caption`
 - `mere.run vision inspect`
+- `mere.run vision ground`
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
@@ -14,9 +15,13 @@ This page covers captioning, inspection, segmentation, tracking, and OCR.
 ## Model family
 
 - `vision-ocr-lighton`
+- `vision-ground-falcon-perception`
 - `vision-segment-sam31`
 
 Captioning and inspect flows also depend on vision-language support code in
+`MereRunCore`.
+
+Grounding runs natively through the Swift/MLX Falcon Perception stack in
 `MereRunCore`.
 
 Segmentation and tracking run natively through the Swift/MLX SAM 3.1 stack in
@@ -57,6 +62,13 @@ swift run mere.run model pull vision-segment-sam31
 swift run mere.run vision segment ./image.png --prompt "a person"
 ```
 
+### Ground objects with Falcon Perception
+
+```bash
+swift run mere.run model pull vision-ground-falcon-perception
+swift run mere.run vision ground ./image.png --query "a person"
+```
+
 ### Track objects through a video
 
 ```bash
@@ -71,6 +83,19 @@ swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
 ```
 
 ## Output artifacts
+
+### `vision ground`
+
+- annotated image written to `<stem>_grounded.<ext>` unless `--output` is provided
+- JSON metadata written to `<stem>_grounded.json` unless `--json-output` is provided
+- optional mask PNGs written to `--mask-output-dir`
+
+The JSON includes:
+
+- `schemaVersion`
+- model and input/output paths
+- query list
+- detections with `query`, normalized `xy`, normalized `hw`, derived `box`, optional `score`, and optional `maskPath`
 
 ### `vision segment`
 
@@ -112,6 +137,7 @@ swift run mere.run vision ocr ./page.png --backend lighton
 
 - `Sources/MereRunCLI/Commands/VisionCaptionCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionInspectCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionGroundCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionSegmentCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionTrackCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionTrackLiveCommand.swift`
@@ -131,7 +157,17 @@ swift run mere.run vision ocr ./page.png --backend lighton
 - `Sources/MereRunCore/Qwen25VLEncoder.swift`
 - `Sources/MereRunCore/QwenVisionAttention.swift`
 
-### Segmentation runtime
+### Falcon grounding runtime
+
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionConfig.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionResources.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionProcessor.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionAnyUp.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
+
+### SAM 3.1 runtime
 
 - `Sources/MereRunCore/SAM3/SAM31Config.swift`
 - `Sources/MereRunCore/SAM3/SAM31Resources.swift`
@@ -161,6 +197,14 @@ swift run mere.run vision ocr ./page.png --backend lighton
 4. geometry prompts use the interactive SAM path, and video tracking reuses those prompts frame to frame after the seed frame
 5. native postprocessing applies thresholding, mask resize, score ordering, NMS, and optional mask export
 6. the runtime writes annotated media plus structured JSON metadata
+
+## How grounding works
+
+1. the CLI resolves `vision-ground-falcon-perception` from the model store or uses the local root passed with `--model`
+2. the native Falcon runtime validates the root, loads config/tokenizer/weights, and preprocesses the image plus text query
+3. the model autoregressively emits grounded detections, including coordinate and size tokens, and decodes optional segmentation masks
+4. native postprocessing derives normalized centers, sizes, bounding boxes, and optional exported mask artifacts
+5. the runtime writes an annotated image plus structured JSON metadata designed for downstream agent use
 
 ## How caption and inspect differ
 
