@@ -9,6 +9,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case speechASR = "speech-asr"
     case visionOCR = "vision-ocr"
     case visionSegment = "vision-segment"
+    case visionGround = "vision-ground"
     case music = "music"
     case video = "video"
 }
@@ -43,6 +44,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case codegenGGUF
     case lightOnOCR
     case sam31
+    case falconPerception
     case aceStep
     case ltxVideo
     case hfTextChat
@@ -558,6 +560,34 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["vision segment"]
         ),
         ManagedModelSpec(
+            id: "vision-ground-falcon-perception",
+            category: .visionGround,
+            installShape: .directoryRoot,
+            archiveSource: ManagedModelArchiveSource(
+                key: "models/vision-ground-falcon-perception.tar.gz",
+                size: 0
+            ),
+            hubFallback: HubFallbackConfig(
+                repoId: "tiiuae/Falcon-Perception",
+                revision: "main",
+                patterns: [
+                    "config.json",
+                    "tokenizer.json",
+                    "tokenizer_config.json",
+                    "special_tokens_map.json",
+                    "generation_config.json",
+                    "model.safetensors",
+                    "model.safetensors.index.json",
+                    "*.safetensors",
+                ]
+            ),
+            upstreamRepoId: "tiiuae/Falcon-Perception",
+            upstreamRevision: "main",
+            validationKind: .falconPerception,
+            runtimeAutoDownloadAllowed: false,
+            defaultCLICommands: ["vision ground"]
+        ),
+        ManagedModelSpec(
             id: "music-acestep",
             category: .music,
             installShape: .structuredRoot,
@@ -676,6 +706,8 @@ public extension ManagedModelSpec {
             return Q35Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
         case .sam31:
             return SAM31Resources(modelRootURL: normalizedRootURL(rootURL, fileManager: fileManager)).missingRequiredPaths(fileManager: fileManager)
+        case .falconPerception:
+            return FalconPerceptionResources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
         case .qwen3TTS:
             return Self.missingQwen3TTSPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
         case .qwen3ASR:
@@ -701,6 +733,8 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .sam31:
             return SAM31Resources.validateRoot(normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+        case .falconPerception:
+            return FalconPerceptionResources.validateRoot(normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
                 .map { "Missing required LTX file: \($0.path)" }

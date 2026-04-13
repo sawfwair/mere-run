@@ -45,4 +45,16 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(loaded.id, "image-zimage-max")
         XCTAssertEqual(loaded.engine, .zimageTurbo)
     }
+
+    func testFalconPerceptionTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, "vision-ground-falcon-perception")
+        XCTAssertEqual(manifest.engine, .falconPerception)
+        XCTAssertEqual(manifest.family, .falcon)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.precision, .unknown)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.visionGrounding, .visionDetection, .visionSegmentation]))
+        XCTAssertEqual(manifest.upstreamRepoId, "tiiuae/Falcon-Perception")
+    }
 }

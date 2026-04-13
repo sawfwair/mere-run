@@ -7,6 +7,7 @@ struct Vision: ParsableCommand {
         subcommands: [
             VisionCaption.self,
             VisionInspect.self,
+            VisionGround.self,
             VisionSegment.self,
             VisionTrack.self,
             VisionTrackLive.self,

@@ -95,6 +95,7 @@ struct ModelList: ParsableCommand {
         if id.hasPrefix("speech-asr-") { return "speech-asr" }
         if id.hasPrefix("vision-ocr-") { return "vision-ocr" }
         if id.hasPrefix("vision-segment-") { return "vision-segment" }
+        if id.hasPrefix("vision-ground-") { return "vision-ground" }
         if id.hasPrefix("music-") { return "music" }
         if id.hasPrefix("video-") { return "video" }
         return "other"

@@ -24,6 +24,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
         /// SAM image segmentation family.
         case samSegmentation = "sam-segmentation"
+        /// Falcon Perception grounded detection and segmentation family.
+        case falconPerception = "falcon-perception"
         /// Qwen3 TTS family.
         case qwen3TTS = "qwen3-tts"
         /// Qwen3 ASR family.
@@ -50,6 +52,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case gemma
         case qwen
         case sam
+        case falcon
         case tts
         case asr
         case embed
@@ -101,6 +104,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case loraTraining = "lora_training"
         case visionSegmentation = "vision_segmentation"
         case visionTracking = "vision_tracking"
+        case visionGrounding = "vision_grounding"
+        case visionDetection = "vision_detection"
     }
 
     public enum ComponentRef: Codable, Hashable, Sendable {
@@ -445,6 +450,16 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             vae: nil,
             scheduler: nil
         )
+        let falconPerceptionComponents = Components(
+            tokenizer: .anyOf([
+                .local(path: "tokenizer"),
+                .local(path: "."),
+            ]),
+            textEncoder: nil,
+            transformer: nil,
+            vae: nil,
+            scheduler: nil
+        )
 
         switch modelID {
         case .kleinNano:
@@ -662,6 +677,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.visionSegmentation, .visionTracking],
                 components: samComponents,
                 upstreamRepoId: "facebook/sam3.1",
+                createdAt: createdAt
+            )
+        case .visionGroundFalconPerception:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .falconPerception,
+                family: .falcon,
+                tier: .latest,
+                variant: .standard,
+                precision: .unknown,
+                defaults: nil,
+                supports: [.visionGrounding, .visionDetection, .visionSegmentation],
+                components: falconPerceptionComponents,
+                upstreamRepoId: "tiiuae/Falcon-Perception",
                 createdAt: createdAt
             )
         case .psiAgent:

@@ -61,6 +61,18 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
     }
 
+    private func writeMinimalValidFalconModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        let tokenizerDir = root.appendingPathComponent("tokenizer", isDirectory: true)
+        try TestFileSystem.createDirectory(tokenizerDir)
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -164,5 +176,58 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
         XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.visionSegmentation, .visionTracking]))
+    }
+
+    func testFalconVisionGroundRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("vision-ground-falcon-perception", isDirectory: true)
+        try writeMinimalValidFalconModel(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "vision-ground-falcon-perception")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .falcon)
+        XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.visionGrounding, .visionDetection, .visionSegmentation]))
+    }
+
+    func testFalconValidationFailsWithoutTokenizer() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("vision-ground-falcon-perception", isDirectory: true)
+        try writeMinimalValidFalconModel(at: root)
+        try FileManager.default.removeItem(at: root.appendingPathComponent("tokenizer/tokenizer.json"))
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "vision-ground-falcon-perception")
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { $0.contains("tokenizer.json") })
+    }
+
+    func testFalconValidationFailsWithoutConfig() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("vision-ground-falcon-perception", isDirectory: true)
+        try writeMinimalValidFalconModel(at: root)
+        try FileManager.default.removeItem(at: root.appendingPathComponent("config.json"))
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "vision-ground-falcon-perception")
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { $0.contains("config.json") })
+    }
+
+    func testFalconValidationFailsWithoutWeights() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("vision-ground-falcon-perception", isDirectory: true)
+        try writeMinimalValidFalconModel(at: root)
+        try FileManager.default.removeItem(at: root.appendingPathComponent("model.safetensors"))
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "vision-ground-falcon-perception")
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { $0.contains("model.safetensors.index.json") })
     }
 }

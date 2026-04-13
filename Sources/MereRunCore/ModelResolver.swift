@@ -31,6 +31,7 @@ public struct ModelResolver {
         case qwen3Embedding = "text-embed-qwen3-0.6b"
         case lightOnOCR = "vision-ocr-lighton"
         case visionSegmentSAM31 = "vision-segment-sam31"
+        case visionGroundFalconPerception = "vision-ground-falcon-perception"
         case aceStep = "music-acestep"
         case ltxVideoAV = "video-ltx-av"
     }

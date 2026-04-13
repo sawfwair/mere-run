@@ -12,6 +12,7 @@ enum MLXBundleSupport {
         let destBundleURL = execDir.appendingPathComponent(bundleName, isDirectory: true)
 
         if fm.fileExists(atPath: destBundleURL.path) {
+            try installCompatibilityMetallibs(bundleURL: destBundleURL, executableDir: execDir)
             return
         }
 
@@ -24,6 +25,7 @@ enum MLXBundleSupport {
 
             try? fm.removeItem(at: destBundleURL)
             try fm.copyItem(at: sourceBundleURL, to: destBundleURL)
+            try installCompatibilityMetallibs(bundleURL: destBundleURL, executableDir: execDir)
             if !quiet {
                 CLIStderr.write("[mererun] Installed \(bundleName) for mlx-swift Metal shaders.\n")
             }
@@ -32,13 +34,14 @@ enum MLXBundleSupport {
 
         let rootCandidates = workspaceRootCandidates(executableDir: execDir)
         for root in rootCandidates {
-            if let sourceBundleURL = findMlxSwiftBundle(workspaceRoot: root) {
-                try? fm.removeItem(at: destBundleURL)
-                try fm.copyItem(at: sourceBundleURL, to: destBundleURL)
-                if !quiet {
-                    CLIStderr.write("[mererun] Installed \(bundleName) for mlx-swift Metal shaders.\n")
-                }
-                return
+                if let sourceBundleURL = findMlxSwiftBundle(workspaceRoot: root) {
+                    try? fm.removeItem(at: destBundleURL)
+                    try fm.copyItem(at: sourceBundleURL, to: destBundleURL)
+                    try installCompatibilityMetallibs(bundleURL: destBundleURL, executableDir: execDir)
+                    if !quiet {
+                        CLIStderr.write("[mererun] Installed \(bundleName) for mlx-swift Metal shaders.\n")
+                    }
+                    return
             }
         }
 
@@ -57,6 +60,35 @@ enum MLXBundleSupport {
               swift build
             """
         )
+    }
+
+    private static func installCompatibilityMetallibs(bundleURL: URL, executableDir: URL) throws {
+        let fm = FileManager.default
+        let defaultMetallibURL = bundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("default.metallib", isDirectory: false)
+
+        guard fm.fileExists(atPath: defaultMetallibURL.path) else {
+            return
+        }
+
+        let resourcesDir = executableDir.appendingPathComponent("Resources", isDirectory: true)
+        try fm.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+
+        let destinations: [URL] = [
+            executableDir.appendingPathComponent("mlx.metallib", isDirectory: false),
+            resourcesDir.appendingPathComponent("mlx.metallib", isDirectory: false),
+            resourcesDir.appendingPathComponent("default.metallib", isDirectory: false),
+        ]
+
+        for destination in destinations {
+            if fm.fileExists(atPath: destination.path) {
+                continue
+            }
+            try? fm.removeItem(at: destination)
+            try fm.copyItem(at: defaultMetallibURL, to: destination)
+        }
     }
 
     private static func executableDirectory() -> URL {

@@ -24,6 +24,7 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("image-klein-") { return .klein }
             if id.hasPrefix("image-zimage-") { return .zimage }
             if id.hasPrefix("vision-segment-") { return .sam }
+            if id.hasPrefix("vision-ground-") { return .falcon }
             return nil
         }
 
@@ -41,6 +42,7 @@ public enum QuantizedModelManifestWriter {
             case .gemma4: return .gemma
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
+            case .falconPerception: return .falcon
             case .qwen3TTS: return .tts
             case .qwen3ASR, .parakeetASR: return .asr
             case .qwen3Embedding: return .embed
@@ -55,7 +57,7 @@ public enum QuantizedModelManifestWriter {
         let tier = baseManifest.tier ?? inferTier(from: id)
 
         let variant = baseManifest.variant ?? {
-            if family == .sam { return .standard }
+            if family == .sam || family == .falcon { return .standard }
             if tier == .base { return .base }
             return .distilled
         }()
@@ -81,6 +83,8 @@ public enum QuantizedModelManifestWriter {
                     return [.chat]
                 case .samSegmentation:
                     return [.visionSegmentation, .visionTracking]
+                case .falconPerception:
+                    return [.visionGrounding, .visionDetection, .visionSegmentation]
                 case .qwen3TTS:
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR:
@@ -151,7 +155,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .qwen35HybridMoE:
                 break
-            case .samSegmentation:
+            case .samSegmentation, .falconPerception:
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .qwen3Coder, .lightOnOCR, .psiChat:
                 break

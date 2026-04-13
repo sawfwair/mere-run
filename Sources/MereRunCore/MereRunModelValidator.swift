@@ -69,7 +69,12 @@ public enum MereRunModelValidator {
         if let unwrappedManifest = manifest {
             let supports = Set(unwrappedManifest.supports ?? [])
             supportsImagePipeline = supports.contains(.txt2img) || supports.contains(.img2img) || supports.contains(.referenceEdit)
-            supportsVisionModel = supports.contains(.visionSegmentation) || supports.contains(.visionTracking) || unwrappedManifest.family == .sam
+            supportsVisionModel = supports.contains(.visionGrounding)
+                || supports.contains(.visionDetection)
+                || supports.contains(.visionSegmentation)
+                || supports.contains(.visionTracking)
+                || unwrappedManifest.family == .sam
+                || unwrappedManifest.family == .falcon
         } else {
             supportsImagePipeline = true
             supportsVisionModel = false
@@ -116,12 +121,32 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if supportsVisionModel {
+        } else if spec?.validationKind == .sam31 {
             errors.append(contentsOf: SAM31Resources.validateRoot(rootURL, fileManager: fileManager))
             transformerDir = nil
             textEncoderDir = nil
             vaeDir = nil
-            tokenizerDir = nil
+            tokenizerDir = resolveComponentDirectory(
+                componentRefs?.tokenizer ?? .local(path: "tokenizer"),
+                modelRoot: rootURL,
+                modelResolver: modelResolver,
+                fileManager: fileManager,
+                label: "tokenizer",
+                report: { _ in }
+            )
+        } else if spec?.validationKind == .falconPerception {
+            errors.append(contentsOf: FalconPerceptionResources.validateRoot(rootURL, fileManager: fileManager))
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = resolveComponentDirectory(
+                componentRefs?.tokenizer ?? .local(path: "."),
+                modelRoot: rootURL,
+                modelResolver: modelResolver,
+                fileManager: fileManager,
+                label: "tokenizer",
+                report: { errors.append($0) }
+            )
         } else {
             // Required components for generation/training.
             if supportsImagePipeline {
@@ -292,6 +317,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
             case .sam where engine != .samSegmentation:
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
+            case .falcon where engine != .falconPerception:
+                warnings.append("Manifest engine mismatch: family=falcon expects falcon-perception.")
             case .tts where engine != .qwen3TTS:
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts.")
             case .asr where engine != .qwen3ASR && engine != .parakeetASR:
@@ -362,7 +389,12 @@ public enum MereRunModelValidator {
         }()
         let supportsVisionModel = {
             let supports = Set(manifest.supports ?? [])
-            return supports.contains(.visionSegmentation) || supports.contains(.visionTracking) || manifest.family == .sam
+            return supports.contains(.visionGrounding)
+                || supports.contains(.visionDetection)
+                || supports.contains(.visionSegmentation)
+                || supports.contains(.visionTracking)
+                || manifest.family == .sam
+                || manifest.family == .falcon
         }()
         let skipsComponentValidation = {
             switch manifest.engine {
@@ -399,6 +431,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("vision-segment-") { return .sam }
+        if modelId.hasPrefix("vision-ground-") { return .falcon }
         if modelId.hasPrefix("speech-tts-") { return .tts }
         if modelId.hasPrefix("speech-asr-") { return .asr }
         if modelId.hasPrefix("text-embed-") { return .embed }

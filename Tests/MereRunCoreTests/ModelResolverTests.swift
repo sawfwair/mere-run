@@ -60,6 +60,17 @@ final class ModelResolverTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
     }
 
+    private func writeMinimalFalconModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        try TestFileSystem.createDirectory(tokenizer)
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizer.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
+    }
+
     func testResolvesFromProcessModelStoreOverride() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -203,6 +214,24 @@ final class ModelResolverTests: MereRunCoreTestCase {
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.visionSegmentSAM31)
+
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
+        XCTAssertEqual(resolved.source, .localModelStore)
+    }
+
+    func testResolvesVisionGroundFalconPerceptionFromProcessModelStoreOverride() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let modelRoot = modelsRoot.appendingPathComponent("vision-ground-falcon-perception", isDirectory: true)
+        try writeMinimalFalconModel(at: modelRoot)
+
+        let resolver = ModelResolver()
+        let resolved = try resolver.resolve(.visionGroundFalconPerception)
 
         XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
         XCTAssertEqual(resolved.source, .localModelStore)
