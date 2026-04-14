@@ -2,6 +2,12 @@ import Foundation
 import MereRunCore
 
 enum BuiltinTools {
+    struct ToolExecutionPolicy {
+        let sandboxDir: URL
+        let allowShellExec: Bool
+        let allowAbsolutePaths: Bool
+    }
+
     static let writeFile = ToolDefinition(
         name: "write_file",
         description: "Write content to a file at the given path. Creates parent directories if needed.",
@@ -35,12 +41,12 @@ enum BuiltinTools {
         }
     }
 
-    static func execute(_ call: ToolCall, sandboxDir: URL) throws -> String {
+    static func execute(_ call: ToolCall, policy: ToolExecutionPolicy) throws -> String {
         switch call.name {
         case "write_file":
-            return try executeWriteFile(call, sandboxDir: sandboxDir)
+            return try executeWriteFile(call, policy: policy)
         case "shell_exec":
-            return try executeShellExec(call, sandboxDir: sandboxDir)
+            return try executeShellExec(call, policy: policy)
         default:
             return "Error: unknown tool '\(call.name)'"
         }
@@ -48,7 +54,7 @@ enum BuiltinTools {
 
     // MARK: - Tool Implementations
 
-    private static func executeWriteFile(_ call: ToolCall, sandboxDir: URL) throws -> String {
+    private static func executeWriteFile(_ call: ToolCall, policy: ToolExecutionPolicy) throws -> String {
         guard let path = call.arguments["path"], !path.isEmpty else {
             return "Error: 'path' argument is required"
         }
@@ -56,12 +62,7 @@ enum BuiltinTools {
             return "Error: 'content' argument is required"
         }
 
-        let fileURL: URL
-        if path.hasPrefix("/") {
-            fileURL = URL(fileURLWithPath: path).standardizedFileURL
-        } else {
-            fileURL = sandboxDir.appendingPathComponent(path).standardizedFileURL
-        }
+        let fileURL = try resolveWriteTarget(path: path, policy: policy)
 
         // Ensure parent directory exists
         let parentDir = fileURL.deletingLastPathComponent()
@@ -71,15 +72,18 @@ enum BuiltinTools {
         return "Wrote \(content.count) bytes to \(fileURL.path)"
     }
 
-    private static func executeShellExec(_ call: ToolCall, sandboxDir: URL) throws -> String {
+    private static func executeShellExec(_ call: ToolCall, policy: ToolExecutionPolicy) throws -> String {
         guard let command = call.arguments["command"], !command.isEmpty else {
             return "Error: 'command' argument is required"
+        }
+        guard policy.allowShellExec else {
+            return "Denied: 'shell_exec' requires --allow-shell-exec."
         }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-c", command]
-        process.currentDirectoryURL = sandboxDir
+        process.currentDirectoryURL = policy.sandboxDir
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -99,6 +103,29 @@ enum BuiltinTools {
         }
     }
 
+    private static func resolveWriteTarget(path: String, policy: ToolExecutionPolicy) throws -> URL {
+        let sandboxRoot = policy.sandboxDir.standardizedFileURL
+
+        if path.hasPrefix("/") {
+            guard policy.allowAbsolutePaths else {
+                throw ToolPathError.absolutePathsDisabled
+            }
+            return URL(fileURLWithPath: path).standardizedFileURL
+        }
+
+        let candidate = sandboxRoot.appendingPathComponent(path).standardizedFileURL
+        guard isWithinSandbox(candidate, sandboxRoot: sandboxRoot) else {
+            throw ToolPathError.escapesSandbox(path: path, sandbox: sandboxRoot.path)
+        }
+        return candidate
+    }
+
+    private static func isWithinSandbox(_ candidate: URL, sandboxRoot: URL) -> Bool {
+        let sandboxPath = sandboxRoot.path
+        let candidatePath = candidate.path
+        return candidatePath == sandboxPath || candidatePath.hasPrefix(sandboxPath + "/")
+    }
+
     enum ToolError: LocalizedError {
         case unknownTool(String, available: [String])
 
@@ -106,6 +133,20 @@ enum BuiltinTools {
             switch self {
             case .unknownTool(let name, let available):
                 return "Unknown tool '\(name)'. Available: \(available.joined(separator: ", "))"
+            }
+        }
+    }
+
+    enum ToolPathError: LocalizedError {
+        case absolutePathsDisabled
+        case escapesSandbox(path: String, sandbox: String)
+
+        var errorDescription: String? {
+            switch self {
+            case .absolutePathsDisabled:
+                return "Absolute paths are disabled for tool writes. Use a relative path inside the sandbox."
+            case .escapesSandbox(let path, let sandbox):
+                return "Path '\(path)' escapes sandbox '\(sandbox)'."
             }
         }
     }

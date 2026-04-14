@@ -1,8 +1,8 @@
 # Falcon Perception Disparity Report
 
 Date: 2026-04-12
-Repo: `/Users/nerd/mere/run`
-Reference: `~/third_party/mlx-vlm/mlx_vlm/models/falcon_perception`
+Repo: `mere-run`
+Reference: `../mlx-vlm/mlx_vlm/models/falcon_perception`
 
 ## Goal
 
@@ -10,7 +10,7 @@ Trace the native Swift Falcon Perception path end to end, compare it to the `mlx
 reference implementation, and identify the concrete disparities that explain why:
 
 ```bash
-mere.run vision ground ~/Desktop/test.jpeg --query "person"
+ mere.run vision ground ./test.jpeg --query "person"
 ```
 
 currently returns clearly wrong results:
@@ -18,8 +18,8 @@ currently returns clearly wrong results:
 - `Detections: 55`
 - repeated centerline boxes with nearly identical `x`, `h`, and only slightly varying `y`
 - output written to:
-  - `/Users/nerd/Desktop/test_grounded.jpeg`
-  - `/Users/nerd/Desktop/test_grounded.json`
+  - `./test_grounded.jpeg`
+  - `./test_grounded.json`
 
 Observed sample from the emitted JSON:
 
@@ -35,7 +35,7 @@ This is not “over-detecting people.” It is a malformed generation pattern.
 
 Swift path:
 
-- `/Users/nerd/mere/run/Sources/MereRunCLI/Commands/VisionGroundCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionGroundCommand.swift`
 
 Behavior:
 
@@ -52,15 +52,15 @@ Status:
 
 Swift paths:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift`
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionConfig.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionConfig.swift`
 
 Model root used on this machine:
 
-- `/Users/nerd/Library/Application Support/MereRun/models/vision-ground-falcon-perception`
+- `<models-root>/vision-ground-falcon-perception`
 - symlink target:
-  `/Users/nerd/Library/Application Support/MereRun/hub/models/tiiuae/Falcon-Perception`
+  `<models-root>/hub/models/tiiuae/Falcon-Perception`
 
 Validated assets present:
 
@@ -104,11 +104,11 @@ Status:
 
 Reference path:
 
-- `~/third_party/mlx-vlm/mlx_vlm/models/falcon_perception/processing_falcon_perception.py`
+- `../mlx-vlm/mlx_vlm/models/falcon_perception/processing_falcon_perception.py`
 
 Swift path:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionProcessor.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionProcessor.swift`
 
 Reference behavior:
 
@@ -140,13 +140,13 @@ Findings:
 
 Reference paths:
 
-- `~/third_party/mlx-vlm/mlx_vlm/models/falcon_perception/falcon_perception.py`
-- `~/third_party/mlx-vlm/mlx_vlm/models/falcon_perception/language.py`
+- `../mlx-vlm/mlx_vlm/models/falcon_perception/falcon_perception.py`
+- `../mlx-vlm/mlx_vlm/models/falcon_perception/language.py`
 
 Swift paths:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
 
 Reference behavior:
 
@@ -189,7 +189,7 @@ Status:
 
 Swift path:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
 
 Checkpoint inspected directly from the `model.safetensors` header.
 
@@ -228,12 +228,12 @@ Implication:
 
 Reference paths:
 
-- `~/third_party/mlx-vlm/mlx_vlm/models/falcon_perception/language.py`
-- `~/third_party/mlx-vlm/mlx_vlm/models/base.py`
+- `../mlx-vlm/mlx_vlm/models/falcon_perception/language.py`
+- `../mlx-vlm/mlx_vlm/models/base.py`
 
 Swift path:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
 
 Reference behavior:
 
@@ -279,11 +279,11 @@ Reason:
 
 Reference path:
 
-- `~/third_party/mlx-vlm/mlx_vlm/models/falcon_perception/falcon_perception.py`
+- `../mlx-vlm/mlx_vlm/models/falcon_perception/falcon_perception.py`
 
 Swift path:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
 
 Comparison:
 
@@ -303,8 +303,8 @@ Finding:
 
 Swift paths:
 
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionAnyUp.swift`
-- `/Users/nerd/mere/run/Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionAnyUp.swift`
+- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
 
 Status:
 
@@ -424,7 +424,7 @@ disparity.
    - `mask`
    - `sinks`
 4. Re-run:
-   - `mere.run vision ground ~/Desktop/test.jpeg --query "person"`
+   - `mere.run vision ground ./test.jpeg --query "person"`
 5. Compare:
    - detection count
    - first 10 detection centers/sizes
@@ -436,19 +436,19 @@ disparity.
 Command:
 
 ```bash
-mere.run vision ground ~/Desktop/test.jpeg --query "person"
+mere.run vision ground ./test.jpeg --query "person"
 ```
 
 Current native result:
 
 - `Model: vision-ground-falcon-perception`
 - `Detections: 55`
-- `Image: /Users/nerd/Desktop/test_grounded.jpeg`
-- `JSON: /Users/nerd/Desktop/test_grounded.json`
+- `Image: ./test_grounded.jpeg`
+- `JSON: ./test_grounded.json`
 
 Key artifact for inspection:
 
-- `/Users/nerd/Desktop/test_grounded.json`
+- `./test_grounded.json`
 
 Symptoms inside JSON:
 

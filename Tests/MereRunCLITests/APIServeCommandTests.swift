@@ -16,6 +16,8 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.engine, .textCode)
         XCTAssertNil(cmd.model)
         XCTAssertNil(cmd.lora)
+        XCTAssertNil(cmd.apiKey)
+        XCTAssertEqual(cmd.rateLimitPerMinute, 60)
         XCTAssertEqual(cmd.contextSize, 32_768)
         XCTAssertNil(cmd.kvBits)
         XCTAssertEqual(cmd.kvQuantScheme, "uniform")
@@ -30,6 +32,8 @@ final class APIServeCommandTests: XCTestCase {
             "--engine", "text-chat-gemma4",
             "--model-path", "/tmp/gemma4",
             "--lora", "/tmp/adapter.safetensors",
+            "--api-key", "secret",
+            "--rate-limit-per-minute", "120",
             "--context-size", "8192",
             "--kv-bits", "3.5",
             "--kv-quant-scheme", "turboquant",
@@ -42,6 +46,8 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.engine, .textChatGemma4)
         XCTAssertEqual(cmd.model, "/tmp/gemma4")
         XCTAssertEqual(cmd.lora, "/tmp/adapter.safetensors")
+        XCTAssertEqual(cmd.apiKey, "secret")
+        XCTAssertEqual(cmd.rateLimitPerMinute, 120)
         XCTAssertEqual(cmd.contextSize, 8192)
         XCTAssertEqual(cmd.kvBits, 3.5)
         XCTAssertEqual(cmd.kvQuantScheme, "turboquant")

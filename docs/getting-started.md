@@ -131,6 +131,13 @@ swift run mere.run speech synthesize \
 swift run mere.run vision inspect ./image.png "Describe this image."
 ```
 
+### Vision ground
+
+```bash
+swift run mere.run model pull vision-ground-falcon-perception
+swift run mere.run vision ground ./image.png --query "a person"
+```
+
 ### Vision segment
 
 ```bash

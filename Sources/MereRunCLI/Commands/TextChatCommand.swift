@@ -1,6 +1,11 @@
 import ArgumentParser
 import Foundation
 import MereRunCore
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 // MARK: - Text Chat Command
 
@@ -71,6 +76,15 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customLong("sandbox-dir")], help: "Working directory for tool execution (default: temp dir).")
     var sandboxDir: String?
 
+    @Flag(name: [.customLong("allow-shell-exec")], help: "Allow the model to execute shell commands when shell_exec is enabled.")
+    var allowShellExec: Bool = false
+
+    @Flag(name: [.customLong("allow-absolute-tool-paths")], help: "Allow write_file to target absolute paths outside the sandbox.")
+    var allowAbsoluteToolPaths: Bool = false
+
+    @Flag(name: [.customLong("auto-approve-tools")], help: "Execute tool calls without interactive confirmation.")
+    var autoApproveTools: Bool = false
+
     @Flag(name: [.short, .long], help: "Suppress progress output.")
     var quiet: Bool = false
 
@@ -86,6 +100,9 @@ struct TextChat: AsyncParsableCommand {
         let toolDefs: [ToolDefinition]? = try tools.flatMap { raw in
             let names = raw.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
             return try BuiltinTools.resolve(names: names)
+        }
+        if toolDefs?.contains(where: { $0.name == "shell_exec" }) == true, !allowShellExec {
+            throw ValidationError("The 'shell_exec' tool requires --allow-shell-exec.")
         }
 
         let request = ChatRequest(
@@ -143,6 +160,11 @@ struct TextChat: AsyncParsableCommand {
             }
             try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
             if !quiet { fputs("[tool-loop] Sandbox: \(sandbox.path)\n", stderr) }
+            let toolPolicy = BuiltinTools.ToolExecutionPolicy(
+                sandboxDir: sandbox,
+                allowShellExec: allowShellExec,
+                allowAbsolutePaths: allowAbsoluteToolPaths
+            )
 
             var loopMessages = messages
             let maxIterations = 10
@@ -170,7 +192,17 @@ struct TextChat: AsyncParsableCommand {
 
                 for call in calls {
                     if !quiet { fputs("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n", stderr) }
-                    let output = try BuiltinTools.execute(call, sandboxDir: sandbox)
+                    let approved = autoApproveTools || confirmToolCall(call, sandbox: sandbox)
+                    let output: String
+                    if approved {
+                        do {
+                            output = try BuiltinTools.execute(call, policy: toolPolicy)
+                        } catch {
+                            output = "Error: \(error.localizedDescription)"
+                        }
+                    } else {
+                        output = "Denied: tool execution was not approved."
+                    }
                     if !quiet { fputs("[tool] → \(output.prefix(200))\n", stderr) }
                     loopMessages.append(ChatMessage(role: .tool, content: output))
                 }
@@ -229,5 +261,30 @@ struct TextChat: AsyncParsableCommand {
             throw ValidationError("Unsupported --kv-quant-scheme '\(raw)'. Expected 'uniform' or 'turboquant'.")
         }
         return scheme
+    }
+
+    private func confirmToolCall(_ call: ToolCall, sandbox: URL) -> Bool {
+        guard Self.stdinIsInteractive() else {
+            fputs("[tool] Denied \(call.name): stdin is not interactive. Re-run with --auto-approve-tools to allow non-interactive execution.\n", stderr)
+            return false
+        }
+
+        let args = call.arguments
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ", ")
+        fputs("[tool] Approve \(call.name)(\(args)) in \(sandbox.path)? [y/N] ", stderr)
+        fflush(stderr)
+
+        guard let line = readLine(strippingNewline: true)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() else {
+            return false
+        }
+        return line == "y" || line == "yes"
+    }
+
+    private static func stdinIsInteractive() -> Bool {
+        isatty(fileno(stdin)) != 0
     }
 }

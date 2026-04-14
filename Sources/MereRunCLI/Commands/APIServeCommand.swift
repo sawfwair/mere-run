@@ -5,6 +5,8 @@ import NIOCore
 import MereRunCore
 
 struct APIServe: AsyncParsableCommand {
+    private static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+
     static let configuration = CommandConfiguration(
         commandName: "serve",
         abstract: "Start an OpenAI-compatible API server for local text-code or text-chat models.",
@@ -30,8 +32,8 @@ struct APIServe: AsyncParsableCommand {
           # Start a Q35 text-chat server with an explicit nano model root
           mere.run api serve --engine text-chat-q35 -m ~/Library/Application\\ Support/MereRun/models/text-chat-q35-nano
 
-          # Custom host/port
-          mere.run api serve --host 0.0.0.0 --port 11434
+          # Custom host/port (non-loopback binds require an API key)
+          mere.run api serve --host 0.0.0.0 --port 11434 --api-key your-secret-key
 
           # Test with curl
           curl http://localhost:8080/v1/chat/completions \\
@@ -55,6 +57,12 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
     var lora: String?
 
+    @Option(name: [.long], help: "Bearer token required by /v1/models and /v1/chat/completions. Also read from MERERUN_API_KEY.")
+    var apiKey: String?
+
+    @Option(name: [.long], help: "Global request limit for /v1/chat/completions per rolling minute.")
+    var rateLimitPerMinute: Int = 60
+
     @Option(name: [.long], help: "Context size (default: 32768).")
     var contextSize: Int = 32768
 
@@ -71,11 +79,15 @@ struct APIServe: AsyncParsableCommand {
     var quantizedKVStart: Int = Gemma4Resources.defaultQuantizedKVStart
 
     func run() async throws {
+        let resolvedAPIKey = resolveAPIKey()
+        try validateServerSecurity(apiKey: resolvedAPIKey)
         let resolvedModelPath = try resolveModelPath()
         let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
         let server = try await CodeGenServer(
             modelPath: resolvedModelPath,
             fallbackLoraPath: lora,
+            apiKey: resolvedAPIKey,
+            rateLimitPerMinute: rateLimitPerMinute,
             engine: engine,
             contextSize: contextSize,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization
@@ -136,6 +148,32 @@ struct APIServe: AsyncParsableCommand {
             quantizedStart: quantizedKVStart
         )
     }
+
+    private func resolveAPIKey() -> String? {
+        if let apiKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty {
+            return apiKey
+        }
+        if let apiKey = ProcessInfo.processInfo.environment[Self.apiKeyEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !apiKey.isEmpty {
+            return apiKey
+        }
+        return nil
+    }
+
+    private func validateServerSecurity(apiKey: String?) throws {
+        guard rateLimitPerMinute > 0 else {
+            throw ValidationError("--rate-limit-per-minute must be greater than zero.")
+        }
+        guard Self.isLoopbackHost(host) || apiKey != nil else {
+            throw ValidationError("Binding to non-loopback hosts requires --api-key or MERERUN_API_KEY.")
+        }
+    }
+
+    private static func isLoopbackHost(_ host: String) -> Bool {
+        let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "127.0.0.1" || normalized == "localhost" || normalized == "::1"
+    }
 }
 
 enum APIEngine: String, ExpressibleByArgument {
@@ -172,6 +210,7 @@ enum APIServerContract {
 // MARK: - Server Implementation
 
 actor CodeGenServer {
+    private let apiKey: String?
     private let engine: APIEngine
     private let llamaGenerator: CodeGenGenerator?
     private let mlxGenerator: Flux2KleinGenerator?
@@ -182,18 +221,23 @@ actor CodeGenServer {
     private let modelId: String
     private let contextSize: Int
     private let useStandaloneModel: Bool
+    private let requestLimiter: APIRateLimiter
 
     init(
         modelPath: String?,
         fallbackLoraPath: String?,
+        apiKey: String?,
+        rateLimitPerMinute: Int,
         engine: APIEngine,
         contextSize: Int = 32768,
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization()
     ) async throws {
+        self.apiKey = apiKey
         self.contextSize = contextSize
         self.engine = engine
         self.fallbackLoraPath = fallbackLoraPath
         self.modelPath = modelPath
+        self.requestLimiter = APIRateLimiter(limitPerMinute: rateLimitPerMinute)
         self.modelId = modelPath.map { URL(fileURLWithPath: $0).lastPathComponent }
             ?? {
                 switch engine {
@@ -285,8 +329,8 @@ actor CodeGenServer {
         }
 
         // List models
-        router.get("/v1/models") { [self] _, _ in
-            return try await self.handleModels()
+        router.get("/v1/models") { [self] request, _ in
+            return try await self.handleModels(request)
         }
 
         // Chat completions
@@ -297,7 +341,10 @@ actor CodeGenServer {
         return router
     }
 
-    private func handleModels() async throws -> Response {
+    private func handleModels(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
         let models = APIServerContract.modelsResponse(modelId: modelId)
 
         let data = try JSONEncoder().encode(models)
@@ -309,9 +356,31 @@ actor CodeGenServer {
     }
 
     private func handleChatCompletions(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
         // Decode request body
-        let body = try await request.body.collect(upTo: 10 * 1024 * 1024) // 10MB limit
-        let openaiRequest = try JSONDecoder().decode(OpenAIChatRequest.self, from: body)
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 10 * 1024 * 1024) // 10MB limit
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        let openaiRequest: OpenAIChatRequest
+        do {
+            openaiRequest = try JSONDecoder().decode(OpenAIChatRequest.self, from: body)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
+        }
 
         // Convert to ChatRequest
         let messages = openaiRequest.messages.map { msg in
@@ -332,10 +401,14 @@ actor CodeGenServer {
             lora: lora
         )
 
-        if openaiRequest.stream == true {
-            return try await handleStreamingChat(chatRequest)
-        } else {
-            return try await handleNonStreamingChat(chatRequest)
+        do {
+            if openaiRequest.stream == true {
+                return try await handleStreamingChat(chatRequest)
+            } else {
+                return try await handleNonStreamingChat(chatRequest)
+            }
+        } catch {
+            return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
         }
     }
 
@@ -425,8 +498,13 @@ actor CodeGenServer {
                 continuation.finish()
             } catch {
                 // Send error in SSE format
-                let errorJson = "{\"error\":{\"message\":\"\(error.localizedDescription)\",\"type\":\"server_error\"}}"
-                continuation.yield(ByteBuffer(string: "data: \(errorJson)\n\n"))
+                let errorResponse = OpenAIErrorResponse(
+                    error: OpenAIError(message: "Request failed.", type: "server_error")
+                )
+                if let data = try? encoder.encode(errorResponse),
+                   let json = String(data: data, encoding: .utf8) {
+                    continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                }
                 continuation.finish()
             }
         }
@@ -474,5 +552,56 @@ actor CodeGenServer {
             }
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }
+    }
+
+    private func unauthorizedResponseIfNeeded(for request: Request) -> Response? {
+        guard let apiKey, !apiKey.isEmpty else { return nil }
+        guard request.headers[.authorization] == "Bearer \(apiKey)" else {
+            return makeErrorResponse(
+                status: .unauthorized,
+                message: "Unauthorized.",
+                type: "authentication_error",
+                extraHeaders: [.init("WWW-Authenticate")!: "Bearer"]
+            )
+        }
+        return nil
+    }
+
+    private func makeErrorResponse(
+        status: HTTPResponse.Status,
+        message: String,
+        type: String,
+        extraHeaders: HTTPFields = [:]
+    ) -> Response {
+        let payload = OpenAIErrorResponse(error: OpenAIError(message: message, type: type))
+        let data = (try? JSONEncoder().encode(payload)) ?? Data("{\"error\":{\"message\":\"\(message)\",\"type\":\"\(type)\"}}".utf8)
+        var headers: HTTPFields = [.contentType: "application/json"]
+        for field in extraHeaders {
+            headers.append(field)
+        }
+        return Response(
+            status: status,
+            headers: headers,
+            body: .init(byteBuffer: ByteBuffer(data: data))
+        )
+    }
+}
+
+actor APIRateLimiter {
+    private let limitPerMinute: Int
+    private var requestTimes: [Date] = []
+
+    init(limitPerMinute: Int) {
+        self.limitPerMinute = limitPerMinute
+    }
+
+    func allowRequest(now: Date = Date()) -> Bool {
+        let cutoff = now.addingTimeInterval(-60)
+        requestTimes.removeAll { $0 < cutoff }
+        guard requestTimes.count < limitPerMinute else {
+            return false
+        }
+        requestTimes.append(now)
+        return true
     }
 }

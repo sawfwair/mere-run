@@ -51,9 +51,8 @@ public enum LoRAWeightLoader {
             return try await downloadR2Object(key: trimmed)
         }
 
-        if let remoteURL = URL(string: trimmed),
-           let scheme = remoteURL.scheme?.lowercased(),
-           scheme == "https" || scheme == "http" {
+        if let remoteURL = URL(string: trimmed) {
+            try validateRemoteURL(remoteURL)
             return try await downloadRemoteFile(url: remoteURL)
         }
 
@@ -213,6 +212,24 @@ public enum LoRAWeightLoader {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         return try await downloadRequest(request, destination: destination)
+    }
+
+    private static func validateRemoteURL(_ url: URL) throws {
+        guard let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased() else {
+            throw LoRAError.invalidFormat("Remote LoRA reference must be a valid URL.")
+        }
+        if scheme == "https" {
+            return
+        }
+        if scheme == "http", isLoopbackHost(host) {
+            return
+        }
+        throw LoRAError.invalidFormat("Remote LoRA references must use HTTPS unless they target localhost.")
+    }
+
+    private static func isLoopbackHost(_ host: String) -> Bool {
+        host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
 
     private static func downloadRequest(

@@ -92,6 +92,7 @@ public enum R2DownloadRequestBuilder {
         case invalidKey(String)
         case invalidBaseURL(String)
         case invalidSignedURLEndpoint(String)
+        case insecureURL(String)
         case invalidSignedURLResponse
         case signedURLLookupFailed(String)
         case missingConfiguration(String)
@@ -104,6 +105,8 @@ public enum R2DownloadRequestBuilder {
                 return "Invalid model source base URL: \(base)"
             case .invalidSignedURLEndpoint(let endpoint):
                 return "Invalid R2 signed URL endpoint: \(endpoint)"
+            case .insecureURL(let url):
+                return "Insecure download URL is not allowed: \(url)"
             case .invalidSignedURLResponse:
                 return "Signed URL endpoint returned an invalid response"
             case .signedURLLookupFailed(let message):
@@ -183,15 +186,18 @@ public enum R2DownloadRequestBuilder {
             guard let resolved = URL(string: defaultPublicBaseURL) else {
                 throw BuildError.invalidBaseURL(defaultPublicBaseURL)
             }
+            try validateDownloadURL(resolved)
             baseURL = resolved
         } else {
             throw BuildError.missingConfiguration(
                 MereRunModelSourceConfiguration.missingConfigurationMessage()
             )
         }
+        try validateDownloadURL(baseURL)
         guard let url = URL(string: normalizedKey, relativeTo: baseURL.appendingPathComponent(""))?.absoluteURL else {
             throw BuildError.invalidKey(normalizedKey)
         }
+        try validateDownloadURL(url)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -220,6 +226,7 @@ public enum R2DownloadRequestBuilder {
               endpointURL.host != nil else {
             throw BuildError.invalidSignedURLEndpoint(endpoint)
         }
+        try validateDownloadURL(endpointURL)
 
         var lookupRequest = URLRequest(url: endpointURL)
         lookupRequest.httpMethod = "POST"
@@ -241,6 +248,7 @@ public enum R2DownloadRequestBuilder {
         }
 
         let resolved = try parseSignedURLResponse(data: data)
+        try validateDownloadURL(resolved.url)
 
         var request = URLRequest(url: resolved.url)
         request.httpMethod = resolved.method
@@ -285,5 +293,23 @@ public enum R2DownloadRequestBuilder {
             return false
         }
         return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
+    }
+
+    private static func validateDownloadURL(_ url: URL) throws {
+        guard let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased() else {
+            throw BuildError.insecureURL(url.absoluteString)
+        }
+        if scheme == "https" {
+            return
+        }
+        if scheme == "http", isLoopbackHost(host) {
+            return
+        }
+        throw BuildError.insecureURL(url.absoluteString)
+    }
+
+    private static func isLoopbackHost(_ host: String) -> Bool {
+        host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
 }

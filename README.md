@@ -60,6 +60,10 @@ swift run mere.run speech synthesize \
 # Inspect an image
 swift run mere.run vision inspect ./image.png "Describe this image."
 
+# Ground objects in an image
+swift run mere.run model pull vision-ground-falcon-perception
+swift run mere.run vision ground ./image.png --query "a person"
+
 # Segment an image
 swift run mere.run model pull vision-segment-sam31
 swift run mere.run vision segment ./image.png --prompt "a person"
@@ -97,6 +101,7 @@ The public CLI is modality-first:
 - `mere.run speech profile { list, create, delete }`
 - `mere.run vision caption`
 - `mere.run vision inspect`
+- `mere.run vision ground`
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
