@@ -73,15 +73,17 @@ if [[ -f "$OUT/image_hero.png" ]]; then
     | tee "$OUT/vision_analysis.txt"
   log "Saved: $OUT/vision_analysis.txt"
 
-  # Segment the astronaut
-  if mere.run model pull vision-segment-sam31 2>/dev/null; then
-    mere.run vision segment "$OUT/image_hero.png" \
-      --prompt "astronaut" "canyon" "moons" \
-      -o "$OUT/vision_segmented.png" \
-      --show-boxes
-    log "Saved: $OUT/vision_segmented.png"
+  # Ground objects with Falcon Perception
+  if mere.run model pull vision-ground-falcon-perception 2>/dev/null; then
+    mere.run vision ground "$OUT/image_hero.png" \
+      --query "astronaut" --query "crystal canyon" --query "moon" \
+      -o "$OUT/vision_grounded.png" \
+      --json-output "$OUT/vision_grounded.json" \
+      --mask-output-dir "$OUT/vision_masks"
+    log "Saved: $OUT/vision_grounded.png"
+    log "Saved: $OUT/vision_grounded.json"
   else
-    log "⚠ Skipping segmentation — model pull failed"
+    log "⚠ Skipping grounding — model pull failed"
   fi
 else
   log "⚠ Skipping vision — no hero image generated"
@@ -210,24 +212,17 @@ log "Saved: $OUT/embeddings_demo.json (compare cosine similarity — first two s
 step "BONUS  TOOL USE — Agentic code compile & run"
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if [[ -f "$OUT/code_mandelbrot.txt" ]]; then
-  MANDELBROT_CODE=$(cat "$OUT/code_mandelbrot.txt")
-  mere.run text chat \
-    -p "Here is Swift code for a Mandelbrot set renderer. Extract ONLY the Swift code (no markdown fences), save it to mandelbrot.swift using write_file, then compile it with 'swiftc mandelbrot.swift -o mandelbrot' using shell_exec, and finally run './mandelbrot' using shell_exec. Show me the output.
-
-$MANDELBROT_CODE" \
-    -s "You have write_file and shell_exec tools. Use them step by step. Be concise." \
-    --tools write_file,shell_exec \
-    --tool-loop \
-    --sandbox-dir "$OUT/tool_sandbox" \
-    --max-tokens 4096 \
-    --temperature 0.3 \
-    | tee "$OUT/tool_use_demo.txt"
-  log "Saved: $OUT/tool_use_demo.txt"
-  log "Sandbox: $OUT/tool_sandbox/"
-else
-  log "⚠ Skipping tool use demo — no code output from step 2"
-fi
+mere.run text chat \
+  -p "Write a Swift program that prints the Mandelbrot set as ASCII art (60x30 characters, using characters ' .:-=+*#%@' for increasing iteration depth). Save it to mandelbrot.swift using write_file, then compile and run it in one shell_exec call: 'swiftc mandelbrot.swift -o mandelbrot && ./mandelbrot'." \
+  -s "You have write_file and shell_exec tools. Use them to complete the task. Be concise." \
+  --tools write_file,shell_exec \
+  --tool-loop \
+  --sandbox-dir "$OUT/tool_sandbox" \
+  --max-tokens 2048 \
+  --temperature 0.3 \
+  | tee "$OUT/tool_use_demo.txt"
+log "Saved: $OUT/tool_use_demo.txt"
+log "Sandbox: $OUT/tool_sandbox/"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  SUMMARY
