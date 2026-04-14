@@ -11,6 +11,7 @@ VOLUME_NAME="${VOLUME_NAME:-mere.run}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Kyle McCullough (S5JDPCT8RC)}"
 MODEL_SOURCE_BASE_URL="${MODEL_SOURCE_BASE_URL:-https://public.stereovoid.com/}"
 MODEL_SOURCE_CONFIG_FILENAME="mererun-model-source-base-url.txt"
+SKILL_SOURCE_DIR="${SKILL_SOURCE_DIR:-}"
 
 sign_code_asset() {
   local path="$1"
@@ -23,6 +24,19 @@ sign_code_asset() {
 if [[ ! -x "$BIN_PATH" ]]; then
   echo "[make_dmg] binary not found at: $BIN_PATH" >&2
   echo "[make_dmg] run scripts/build_release.sh first." >&2
+  exit 1
+fi
+
+if [[ -z "$SKILL_SOURCE_DIR" ]]; then
+  if [[ -d "$ROOT_DIR/.agents/skills/mere-run" ]]; then
+    SKILL_SOURCE_DIR="$ROOT_DIR/.agents/skills/mere-run"
+  else
+    SKILL_SOURCE_DIR="$ROOT_DIR/.claude/skills/mere-run"
+  fi
+fi
+
+if [[ ! -d "$SKILL_SOURCE_DIR" ]]; then
+  echo "[make_dmg] skill directory not found at: $SKILL_SOURCE_DIR" >&2
   exit 1
 fi
 
@@ -63,7 +77,7 @@ sign_code_asset "$STAGING_DIR/mere.run" --options runtime
 
 # Skill
 mkdir -p "$STAGING_DIR/skills/mere-run"
-cp -R "$ROOT_DIR/.claude/skills/mere-run/" "$STAGING_DIR/skills/mere-run/"
+cp -R "$SKILL_SOURCE_DIR/" "$STAGING_DIR/skills/mere-run/"
 
 # Installer
 cp "$ROOT_DIR/scripts/install.sh" "$STAGING_DIR/install.sh"
