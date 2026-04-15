@@ -69,6 +69,25 @@ if (( ${#support_items[@]} > 0 )); then
   fi
 fi
 
+# Install MLX Metal shader resources alongside the binary.
+# mlx-swift looks for metallib files in a Resources/ directory next to the executable.
+MLX_BUNDLE="$(dirname "$BIN_DEST")/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+if [[ -f "$MLX_BUNDLE" ]]; then
+  echo "[mere.run] installing MLX Metal shaders..."
+  RESOURCES_DIR="$(dirname "$BIN_DEST")/Resources"
+  if [[ -w "$(dirname "$BIN_DEST")" ]] 2>/dev/null; then
+    mkdir -p "$RESOURCES_DIR"
+    cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/default.metallib"
+    cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/mlx.metallib"
+    cp -f "$MLX_BUNDLE" "$(dirname "$BIN_DEST")/mlx.metallib"
+  else
+    sudo mkdir -p "$RESOURCES_DIR"
+    sudo cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/default.metallib"
+    sudo cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/mlx.metallib"
+    sudo cp -f "$MLX_BUNDLE" "$(dirname "$BIN_DEST")/mlx.metallib"
+  fi
+fi
+
 # Install Claude Code skill
 mkdir -p "$SKILL_DEST"
 cp -R "$SKILL_SRC/" "$SKILL_DEST/"
