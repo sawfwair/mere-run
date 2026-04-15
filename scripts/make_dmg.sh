@@ -9,7 +9,7 @@ BIN_PATH="${BIN_PATH:-$(swift build -c release --product mere.run --show-bin-pat
 DMG_PATH="${DMG_PATH:-$ROOT_DIR/dist/mere-run.dmg}"
 VOLUME_NAME="${VOLUME_NAME:-mere.run}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Kyle McCullough (S5JDPCT8RC)}"
-MODEL_SOURCE_BASE_URL="${MODEL_SOURCE_BASE_URL:-https://public.stereovoid.com/}"
+MODEL_SOURCE_BASE_URL="${MODEL_SOURCE_BASE_URL:-}"
 MODEL_SOURCE_CONFIG_FILENAME="mererun-model-source-base-url.txt"
 SKILL_SOURCE_DIR="${SKILL_SOURCE_DIR:-}"
 
@@ -67,7 +67,9 @@ for asset in "${runtime_assets[@]}"; do
   ditto "$asset" "$STAGING_DIR/$(basename "$asset")"
 done
 
-printf '%s\n' "$MODEL_SOURCE_BASE_URL" > "$STAGING_DIR/$MODEL_SOURCE_CONFIG_FILENAME"
+if [[ -n "$MODEL_SOURCE_BASE_URL" ]]; then
+  printf '%s\n' "$MODEL_SOURCE_BASE_URL" > "$STAGING_DIR/$MODEL_SOURCE_CONFIG_FILENAME"
+fi
 
 for asset in "$STAGING_DIR"/*.framework; do
   [[ -e "$asset" ]] || continue
@@ -82,6 +84,9 @@ cp -R "$SKILL_SOURCE_DIR/" "$STAGING_DIR/skills/mere-run/"
 # Installer
 cp "$ROOT_DIR/scripts/install.sh" "$STAGING_DIR/install.sh"
 chmod +x "$STAGING_DIR/install.sh"
+
+# Public notices
+cp "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$STAGING_DIR/THIRD_PARTY_NOTICES.md"
 
 # README
 GIT_SHORT_HASH="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"

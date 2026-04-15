@@ -7,13 +7,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 DMG_PATH="${DMG_PATH:-$ROOT_DIR/dist/mere-run.dmg}"
 PROFILE_NAME="${PROFILE_NAME:-mere-notary}"
-TEAM_ID="${TEAM_ID:-S5JDPCT8RC}"
+TEAM_ID="${TEAM_ID:-}"
 
-# API key auth (same credentials as Zero pipeline).
-# Omit all three to fall back to keychain profile.
-KEY_PATH="${KEY_PATH:-$HOME/.config/appstore/AuthKey_VGHT4C4L72.p8}"
-KEY_ID="${KEY_ID:-VGHT4C4L72}"
-ISSUER_ID="${ISSUER_ID:-69a6de8e-a5b4-47e3-e053-5b8c7c11a4d1}"
+# Set all three API-key variables to use key-based auth.
+# Leave them empty to fall back to a saved keychain profile.
+KEY_PATH="${KEY_PATH:-}"
+KEY_ID="${KEY_ID:-}"
+ISSUER_ID="${ISSUER_ID:-}"
 
 if [[ ! -f "$DMG_PATH" ]]; then
   echo "[notarize] dmg not found at: $DMG_PATH" >&2
@@ -45,7 +45,11 @@ echo "[notarize] submitting to Apple Notary Service..."
 SUBMIT_JSON="$(xcrun notarytool submit "$ZIP_PATH" "${NOTARY_AUTH_ARGS[@]}" --wait --output-format json)" || {
   echo "[notarize] submit failed." >&2
   echo "[notarize] to create a keychain profile:" >&2
-  echo "  xcrun notarytool store-credentials \"$PROFILE_NAME\" --team-id \"$TEAM_ID\" --key /path/to/AuthKey.p8 --key-id KEY_ID --issuer ISSUER_ID" >&2
+  if [[ -n "$TEAM_ID" ]]; then
+    echo "  xcrun notarytool store-credentials \"$PROFILE_NAME\" --team-id \"$TEAM_ID\" --key /path/to/AuthKey.p8 --key-id KEY_ID --issuer ISSUER_ID" >&2
+  else
+    echo "  xcrun notarytool store-credentials \"$PROFILE_NAME\" --key /path/to/AuthKey.p8 --key-id KEY_ID --issuer ISSUER_ID" >&2
+  fi
   rm -f "$ZIP_PATH"
   exit 1
 }

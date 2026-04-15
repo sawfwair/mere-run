@@ -50,6 +50,15 @@ Sets the default root used by `mere.run video generate` and `mere.run video expo
 
 Sets the default checkpoint root used by `mere.run music generate` when the command is not resolving from the shared model store.
 
+## API server security
+
+### `MERERUN_API_KEY`
+
+Provides the bearer token accepted by `mere.run api serve` for `/v1/models` and
+`/v1/chat/completions`.
+
+This is optional for loopback-only usage and required for non-loopback binds.
+
 ## Debug toggles
 
 These are quiet by default and are intended for troubleshooting deeper runtime paths.

@@ -14,13 +14,21 @@ The public OSS repo currently supports:
 - managed model installs into a shared local model store
 - a local API surface for supported engines
 
-## What’s here
+## What’s included in this repo
 
 - `Sources/MereRunCore`: shared model resolution, manifests, generation primitives, and MLX-backed inference code
 - `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`: audio generation and transcription support
 - `Sources`: core libraries plus the CLI target that builds the public `mere.run` executable
 - `Tests`: SwiftPM test coverage for the core and CLI surfaces
 - `vendor/llama.xcframework`: vendored `llama.cpp` runtime used by `mere.run text code` and `mere.run api serve`
+- `vendor/mlx-swift_Cmlx.bundle`: vendored Metal shader resources needed by MLX-backed runtime paths
+- [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md): redistribution, provenance, and license notes for bundled third-party artifacts
+
+## Platform expectations
+
+- the public CLI and local runtime are developed and validated on Apple Silicon macOS
+- `swift build` and `swift test` are the supported first-run validation path for contributors
+- some vendored binaries include additional Apple platform slices for package consumers, but the public quickstart is macOS-first
 
 ## Build
 
@@ -51,6 +59,17 @@ swift run mere.run image generate \
 # Run local chat
 swift run mere.run text chat \
   --prompt "Summarize diffusion models in one paragraph."
+
+# Serve the OpenAI-compatible local API on loopback
+swift run mere.run api serve --engine text-chat-gemma4
+
+# Expose the API beyond loopback only with an explicit key
+export MERERUN_API_KEY=change-me
+swift run mere.run api serve \
+  --host 0.0.0.0 \
+  --port 11434 \
+  --api-key "$MERERUN_API_KEY" \
+  --rate-limit-per-minute 120
 
 # Generate speech
 swift run mere.run speech synthesize \
@@ -154,6 +173,26 @@ Configure one of these before pulling models:
 
 If you only want to run against local paths, you do not need any model-source configuration.
 
+Remote artifact fetches are expected to use HTTPS. Plain HTTP is rejected except for loopback and explicit local-development URLs.
+
+## Security defaults
+
+The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
+
+- `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
+- the OpenAI-compatible chat route supports `--rate-limit-per-minute` for basic abuse control
+- tool-loop execution in `mere.run text chat` requires interactive approval unless `--auto-approve-tools` is passed
+- `shell_exec` is disabled unless `--allow-shell-exec` is set
+- `write_file` stays inside the sandbox unless `--allow-absolute-tool-paths` is set
+- remote model and LoRA downloads reject plaintext HTTP except for loopback and local-dev cases
+
+These flags are intentionally explicit because they weaken the default safety posture:
+
+- `--allow-shell-exec`
+- `--allow-absolute-tool-paths`
+- `--auto-approve-tools`
+- non-loopback `api serve` binds
+
 ## Validation
 
 ```bash
@@ -192,6 +231,8 @@ Configuration and model management:
 - [`docs/model-sources.md`](./docs/model-sources.md): managed model IDs, explicit archive configuration, and model-store behavior
 - [`docs/runtime/model-management.md`](./docs/runtime/model-management.md): model store, manifests, and model commands
 - [`docs/migration.md`](./docs/migration.md): hard-cut rename map from the older CLI/model vocabulary
+- [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md): vendored artifact provenance and license notices
+- [`CHANGELOG.md`](./CHANGELOG.md): public release notes and OSS-facing changes
 
 Implementation reading guides:
 

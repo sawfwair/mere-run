@@ -58,8 +58,8 @@ Key subdirectories:
 - `LTX/`: video generation pipeline
 - `LoRA/`: LoRA loading and application support
 - `Support/`: manifests, model resolution, model paths, archive/signing helpers
-- `Training/`, `Quantization/`: advanced internal model workflows kept in the
-  package tree
+- `Training/`, `Quantization/`: advanced model-training and quantization
+  utilities kept in the package tree
 
 ### `Sources/AudioCore`
 
@@ -127,6 +127,15 @@ Vendored `llama.cpp` runtime used by the local code path and API serving.
 The repo expects this artifact to live inside `vendor/`; it is intentionally
 part of the standalone package layout so the package does not depend on the old
 monorepo payload structure.
+
+### `vendor/mlx-swift_Cmlx.bundle`
+
+Vendored MLX shader resources used by the macOS runtime.
+
+### `THIRD_PARTY_NOTICES.md`
+
+Tracks provenance and license notices for vendored artifacts and other bundled
+third-party materials that ship with the public repo.
 
 ## Docs
 

@@ -36,11 +36,27 @@ package-scoped.
 swift run mere.run api serve --engine text-chat-gemma4
 ```
 
+Network-exposed example:
+
+```bash
+export MERERUN_API_KEY=change-me
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --host 0.0.0.0 \
+  --port 11434 \
+  --api-key "$MERERUN_API_KEY" \
+  --rate-limit-per-minute 120
+```
+
 ## Design notes
 
 - the API server follows the same model-resolution and model-store rules as the
   rest of the CLI
 - it is intentionally local-first
 - it should not reintroduce relay, billing, or hosted-infrastructure concerns
+- non-loopback binds require an API key, and the OpenAI-compatible chat route
+  supports basic rate limiting
+- streaming and JSON error paths are sanitized so the local server does not
+  reflect raw internal runtime details back to clients
 
 If you are working on this area, read [CLI and Runtime Internals](../internals/cli-and-runtime.md) after the command source.

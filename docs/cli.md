@@ -397,7 +397,7 @@ Notes:
 
 - still-image runs accept text, box, and point prompts in the same invocation
 - `--mask-output-dir` writes one PNG mask per exported detection candidate
-- zero detections still produce annotated output plus JSON metadata
+- empty detection sets still produce annotated output plus JSON metadata
 
 Examples:
 
@@ -441,7 +441,7 @@ Notes:
 - text prompts seed objects on `--init-frame`, then the native tracker reuses geometry prompts for later frames
 - box and point prompts seed explicit tracked objects directly on the init frame
 - `--mask-output-dir` writes per-frame mask PNGs under frame-named subdirectories
-- zero seeded objects still produce an annotated video and JSON summary
+- empty prompt sets still produce an annotated video and JSON summary
 
 Examples:
 
@@ -644,6 +644,12 @@ Current endpoint surface:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 
+Security defaults:
+
+- loopback binds are local-first and do not require auth
+- non-loopback binds require `--api-key` or `MERERUN_API_KEY`
+- `--rate-limit-per-minute` applies basic request throttling to `POST /v1/chat/completions`
+
 Engine values:
 
 - `text-code`
@@ -657,7 +663,7 @@ Examples:
 swift run mere.run api serve
 swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
-swift run mere.run api serve --host 0.0.0.0 --port 11434
+swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120
 ```
 
 ## Validation and smoke runs
