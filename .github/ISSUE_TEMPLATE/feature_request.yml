@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an improvement for the public mere.run CLI, runtime, or docs.
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What workflow or limitation are you trying to improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the behavior you want and any CLI or docs impact you expect.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Link related issues, docs, or examples if they help.

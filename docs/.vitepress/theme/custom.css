@@ -1,0 +1,39 @@
+:root {
+  --vp-c-brand-1: #2b6cb0;
+  --vp-c-brand-2: #1f5a99;
+  --vp-c-brand-3: #18497d;
+  --vp-c-brand-soft: rgba(43, 108, 176, 0.14);
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #2b6cb0 0%, #16a085 100%);
+  --vp-home-hero-image-background-image: radial-gradient(circle at top left, rgba(43, 108, 176, 0.24), transparent 48%),
+    radial-gradient(circle at bottom right, rgba(22, 160, 133, 0.22), transparent 44%);
+  --vp-home-hero-image-filter: blur(54px);
+}
+
+.VPFeature {
+  border: 1px solid var(--vp-c-divider);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.VPFeature:hover {
+  transform: translateY(-2px);
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.vp-doc h2 {
+  margin-top: 2rem;
+}
+
+.vp-doc h3 {
+  margin-top: 1.4rem;
+}
+
+.vp-doc a {
+  text-underline-offset: 2px;
+}
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+}

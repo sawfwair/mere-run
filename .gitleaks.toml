@@ -1,0 +1,5 @@
+[allowlist]
+description = "Ignore MLX module metadata keys that are not secrets"
+regexes = [
+  '''@ModuleInfo\(key:\s*"(pointwise_conv1|pointwise_conv2|upscale_conv1|upscale_conv2)"\)'''
+]
