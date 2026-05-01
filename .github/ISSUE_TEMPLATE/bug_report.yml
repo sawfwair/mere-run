@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible problem in the public mere.run repo.
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve mere.run. Please keep security vulnerabilities out of public issues and use the private reporting flow described in `SECURITY.md`.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Exact commands, inputs, and files needed to reproduce the issue.
+      placeholder: |
+        1. swift run mere.run ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Share your macOS version, Xcode or Swift toolchain, and any relevant hardware details.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Include focused output that helps explain the failure.

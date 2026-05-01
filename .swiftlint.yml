@@ -1,0 +1,47 @@
+included:
+  - Sources
+  - Tests
+  - Package.swift
+
+excluded:
+  - .build
+  - node_modules
+  - vendor
+
+only_rules:
+  - custom_rules
+  - force_cast
+  - force_try
+  - todo
+
+force_cast:
+  severity: error
+
+force_try:
+  severity: error
+
+todo:
+  severity: error
+
+custom_rules:
+  typed_boundary_parsing:
+    name: "Typed Boundary Parsing"
+    included:
+      - Sources/AudioSTT/Qwen3ASR/Qwen3ASRConfigs.swift
+      - Sources/AudioTTS/Qwen3TTS/Qwen3TTSTokenizer.swift
+      - Sources/MereRunCore/Psi/GLM47ToolParser.swift
+    regex: 'JSONSerialization\.jsonObject|\[String:\s*Any\]|\[\[String:\s*Any\]\]'
+    message: "Use Decodable or a typed compatibility enum at agent-facing boundaries."
+    severity: error
+  raw_dynamic_json_boundary:
+    name: "Raw Dynamic JSON Boundary"
+    included:
+      - Sources/MereRunCore/SafetensorsStreamingLoader.swift
+      - Sources/MereRunCore/Flux2Klein/Flux2KleinGeneratoriOS+ModelLoading.swift
+      - Sources/MereRunCore/LoRA/MFluxCheckpointCompatArtifacts.swift
+      - Sources/MereRunCore/LoRA/MFluxResumeIteratorCompat.swift
+      - Sources/MereRunCore/LoRA/LoRATrainingMetrics.swift
+      - Sources/MereRunCore/Support/LenientJSON.swift
+    regex: 'JSONSerialization\.jsonObject|JSONSerialization\.data\(withJSONObject|\[String\s*:\s*Any\]|\[\[String\s*:\s*Any\]\]|\[Any\]|Any\?'
+    message: "Use Codable payloads or a typed compatibility boundary instead of raw dynamic JSON in Core source."
+    severity: error

@@ -1,0 +1,31 @@
+.build/
+.swiftpm/
+.DS_Store
+DerivedData/
+*.xcuserstate
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+.gitnexus
+
+# Build artifacts
+dist/
+
+# Maintainer-only release helpers
+scripts/build_release.sh
+scripts/make_dmg.sh
+scripts/notarize.sh
+scripts/release.sh
+scripts/upload_release.sh
+
+# Cloudflare Wrangler local state
+.wrangler/
+
+# Local assistant/editor metadata
+.claude/settings.local.json
+.claude/
+.agents/
+
+# Local release/notarization credentials
+.notarize.local.env
+.upload_release.local.env
