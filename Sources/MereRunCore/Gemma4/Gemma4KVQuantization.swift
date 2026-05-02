@@ -47,11 +47,11 @@ public struct Gemma4KVCacheQuantization: Sendable, Hashable {
         let roundedHalf = (bits * 2).rounded() / 2
         switch scheme {
         case .uniform:
-            guard abs(bits.rounded() - bits) < 0.000_001 else {
+            guard Swift.abs(bits.rounded() - bits) < 0.000_001 else {
                 throw Gemma4Error.unsupportedConfiguration("Gemma4 uniform KV quantization requires an integer bit width. Use turboquant for fractional .5 widths.")
             }
         case .turboquant:
-            guard abs(roundedHalf - bits) < 0.000_001 else {
+            guard Swift.abs(roundedHalf - bits) < 0.000_001 else {
                 throw Gemma4Error.unsupportedConfiguration("Gemma4 turboquant currently supports integer and .5 bit widths (received \(bits)).")
             }
         }
