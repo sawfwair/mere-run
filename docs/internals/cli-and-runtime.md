@@ -52,7 +52,8 @@ The runtime uses explicit public IDs such as:
 - `text-chat-q35`
 - `speech-tts-qwen3-nano`
 
-This repo does not accept older pre-rename IDs in the normal runtime path.
+Docs, tests, and examples should use the canonical IDs reported by
+`mere.run model list`.
 
 ### 3. Quiet default output
 

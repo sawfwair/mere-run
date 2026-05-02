@@ -76,7 +76,6 @@ If you are new to the repo, read these in order:
   debug toggles
 - [Model Sources](./model-sources.md): canonical model IDs, archives, and
   explicit download configuration
-- [Migration](./migration.md): one-time rename map from older mere.run CLI builds
 
 ### Repository guides
 

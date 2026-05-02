@@ -42,8 +42,8 @@ Examples:
 - music: `music-acestep`
 - video: `video-ltx-av`
 
-The public runtime is hard-cut to these IDs. Older names belong only in
-`docs/migration.md` and the one-time migration script.
+The public runtime resolves these IDs directly, so docs and examples should use
+the canonical names shown by `mere.run model list`.
 
 ## Runtime entrypoints
 
@@ -75,17 +75,6 @@ Removes a managed install from the local store.
 
 Repairs manifest metadata in the local store when that metadata is missing or
 stale.
-
-## Migration
-
-If you have a pre-rename model store, run:
-
-```bash
-./scripts/migrate_model_store.sh
-```
-
-That script renames known directories to the canonical public IDs used by this
-repo and validates the resulting layout.
 
 ## Related docs
 

@@ -187,8 +187,7 @@ swift run mere.run vision ocr ./page.png --backend lighton
 2. the OCR runtime loads the required components
 3. the input image is normalized into the expected tensor form
 4. OCR inference runs
-5. text is emitted without the internal bring-up noise that older builds used
-   to print
+5. text is emitted without internal bring-up logs on stdout
 
 ## How segmentation and tracking work
 

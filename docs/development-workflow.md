@@ -54,7 +54,6 @@ MERERUN_RUN_E2E=core ./scripts/check.sh
 If the change affects installed-model behavior, also run:
 
 ```bash
-./scripts/migrate_model_store.sh
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 
@@ -64,8 +63,8 @@ The public runtime is hard-cut to the canonical OSS model IDs. That means:
 
 - runtime code should use canonical public IDs only
 - examples should use canonical public IDs only
-- older directory names belong only in `docs/migration.md` and the migration
-  script
+- model-store troubleshooting should point readers at `mere.run model list`,
+  `mere.run model info`, and `mere.run model repair-manifests`
 
 When testing locally, inspect your current state with:
 
@@ -92,8 +91,7 @@ swift run mere.run model info image-klein-max
 
 ### If you touch docs
 
-- teach the current public OSS surface, not the older app/hosted world
-- keep migration vocabulary isolated to `docs/migration.md`
+- teach the current public OSS surface
 - prefer links between docs pages over repeating large blocks of reference text
 
 ## Contribution boundaries

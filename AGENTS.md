@@ -46,7 +46,7 @@ pnpm install && pnpm docs:dev                 # only when editing docs/
 
 `./scripts/check.sh` enforces a denylist of legacy vocabulary that must not return to the public repo — old type names, environment variables, CLI verbs, model IDs, and stray debug prints from before the public rename. Code regenerated from training data is the most common way these come back.
 
-If a hygiene scan fires, do not patch the offending pattern out of `check.sh`. Read what the scan rejected, then look up the canonical replacement in [`docs/migration.md`](./docs/migration.md). When unsure, grep the current docs and tests for the right name rather than guessing.
+If a hygiene scan fires, do not patch the offending pattern out of `check.sh`. Read what the scan rejected, then look up the canonical replacement in the current docs, tests, or managed model registry rather than guessing.
 
 ## Editing rules
 

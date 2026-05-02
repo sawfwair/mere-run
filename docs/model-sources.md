@@ -149,13 +149,3 @@ The unified AV model root is:
 ```
 
 `mere.run video generate --variant unified-av` can use that root directly or resolve it from `MERERUN_VIDEO_LTX_MODEL_ROOT`.
-
-## Migrating an older store
-
-If your model store still contains older directory names, run:
-
-```bash
-./scripts/migrate_model_store.sh
-```
-
-That script renames top-level model directories and rewrites `mererun_model.json` metadata to the canonical OSS IDs used by this repo.

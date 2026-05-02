@@ -13,7 +13,7 @@ workflow.
 - a public executable product named `mere.run`
 - tests and smoke harnesses for the package and CLI surfaces
 
-It does not include the older app, relay, billing, or hosted-service layers.
+It does not include hosted-service, billing, or private-deployment surfaces.
 
 ## Prerequisites
 
@@ -72,15 +72,6 @@ or:
 ```bash
 swift run mere.run --models-root /path/to/models model list
 ```
-
-If you are migrating from an older mere.run CLI build, run:
-
-```bash
-./scripts/migrate_model_store.sh
-```
-
-That renames pre-OSS model directories to the canonical public IDs used by this
-repo.
 
 ## Configure model downloads
 
@@ -161,7 +152,6 @@ Optional end-to-end smoke coverage:
 
 ```bash
 MERERUN_RUN_E2E=core ./scripts/check.sh
-./scripts/migrate_model_store.sh
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 

@@ -6,7 +6,7 @@ The public entrypoint is organized as `mere.run <modality> <action>` rather than
 
 ## 2. Public model IDs are canonical and hard-cut
 
-The OSS repo does not preserve older product vocabulary in normal runtime paths. Legacy names belong in migration docs and migration scripts only, which is why `scripts/check.sh` actively rejects pre-rename vocabulary in primary docs and CLI surfaces.
+The OSS repo keeps model IDs and command names canonical in normal runtime paths. `scripts/check.sh` rejects retired product vocabulary in primary docs and CLI surfaces so contributors keep examples aligned with the public contract.
 
 ## 3. Real-model tests are env-gated
 

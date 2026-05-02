@@ -77,5 +77,4 @@ Use this for:
 - `Package.swift`: public package definition
 - `scripts/check.sh`: main validation gate
 - `scripts/e2e_smoke.sh`: installed-model smoke runner
-- `scripts/migrate_model_store.sh`: one-time model-store migration
 - `vendor/llama.xcframework`: vendored native dependency for code and API paths

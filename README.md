@@ -188,14 +188,6 @@ A second store holds models that resolve through the native Hugging Face snapsho
 
 If you already pull from Hugging Face elsewhere and want to share cached weights, point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
 
-If you already have a pre-rename model store from an older mere.run CLI build, migrate it once:
-
-```bash
-./scripts/migrate_model_store.sh
-```
-
-That script renames legacy model directories to the canonical OSS names used by this repo.
-
 ## Security defaults
 
 The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
@@ -225,7 +217,6 @@ Optional real-world smoke runs:
 
 ```bash
 MERERUN_RUN_E2E=core ./scripts/check.sh
-./scripts/migrate_model_store.sh
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 
@@ -252,7 +243,6 @@ Configuration and model management:
 - [`docs/configuration.md`](./docs/configuration.md): runtime environment variables and supported debug toggles
 - [`docs/model-sources.md`](./docs/model-sources.md): managed model IDs, explicit archive configuration, and model-store behavior
 - [`docs/runtime/model-management.md`](./docs/runtime/model-management.md): model store, manifests, and model commands
-- [`docs/migration.md`](./docs/migration.md): hard-cut rename map from the older CLI/model vocabulary
 - [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md): vendored artifact provenance and license notices
 - [`CHANGELOG.md`](./CHANGELOG.md): public release notes and OSS-facing changes
 

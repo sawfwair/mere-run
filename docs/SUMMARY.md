@@ -5,7 +5,6 @@
 - [CLI Reference](./cli.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
-- [Migration](./migration.md)
 - [Repository Tour](./repository-tour.md)
 - [Development Workflow](./development-workflow.md)
 - [Testing Guide](./testing.md)

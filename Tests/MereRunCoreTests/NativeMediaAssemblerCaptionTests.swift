@@ -8,7 +8,7 @@ import XCTest
 @testable import MereRunCore
 
 final class NativeMediaAssemblerCaptionTests: XCTestCase {
-    func testCaptionsAreBurnedIntoFrames() throws {
+    func testCaptionsAreBurnedIntoFrames() async throws {
         let fm = FileManager.default
         let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("mererun-native-assembler-caption-\(UUID().uuidString)", isDirectory: true)
@@ -81,8 +81,8 @@ final class NativeMediaAssemblerCaptionTests: XCTestCase {
         generator.requestedTimeToleranceAfter = .zero
         generator.requestedTimeToleranceBefore = .zero
 
-        var actual = CMTime.zero
-        let cgImage = try generator.copyCGImage(at: CMTime(seconds: 1.0, preferredTimescale: 600), actualTime: &actual)
+        let frameTime = CMTime(seconds: 1.0, preferredTimescale: 600)
+        let cgImage = try await generateCGImage(with: generator, at: frameTime)
 
         let plainAsset = AVURLAsset(url: noCaptionOutputURL)
         let plainGenerator = AVAssetImageGenerator(asset: plainAsset)
@@ -90,8 +90,7 @@ final class NativeMediaAssemblerCaptionTests: XCTestCase {
         plainGenerator.requestedTimeToleranceAfter = .zero
         plainGenerator.requestedTimeToleranceBefore = .zero
 
-        var plainActual = CMTime.zero
-        let plainCGImage = try plainGenerator.copyCGImage(at: CMTime(seconds: 1.0, preferredTimescale: 600), actualTime: &plainActual)
+        let plainCGImage = try await generateCGImage(with: plainGenerator, at: frameTime)
 
         let changedPixels = pixelDifferenceCount(
             cgImage,
@@ -106,6 +105,32 @@ final class NativeMediaAssemblerCaptionTests: XCTestCase {
             2_000,
             "Expected burned captions to change the rendered frame. Changed pixels: \(changedPixels)."
         )
+    }
+
+    private func generateCGImage(
+        with generator: AVAssetImageGenerator,
+        at time: CMTime
+    ) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            generator.generateCGImageAsynchronously(for: time) { image, _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let image else {
+                    continuation.resume(
+                        throwing: NSError(
+                            domain: "NativeMediaAssemblerCaptionTests",
+                            code: 2
+                        )
+                    )
+                    return
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
     }
 
     private func writeSolidPNG(

@@ -56,7 +56,6 @@ This runs a smaller, stable subset of real workflows. Use it when you touched:
 ### Installed sweep
 
 ```bash
-./scripts/migrate_model_store.sh
 ./scripts/e2e_smoke.sh --installed
 ```
 
@@ -129,12 +128,6 @@ swift run mere.run model list
 swift run mere.run model info image-klein-max
 ```
 
-If you migrated from an older install, run:
-
-```bash
-./scripts/migrate_model_store.sh
-```
-
 ### `mere.run model pull` fails immediately
 
 That usually means model-source configuration is missing. Set one of:
@@ -150,7 +143,7 @@ See [Model Sources](./model-sources.md) and [Configuration](./configuration.md).
 That usually points to:
 
 - an incomplete local model directory
-- stale pre-migration directory names
+- missing or stale manifest metadata
 - family-specific runtime expectations that the core sweep does not exercise
 
 Use `mere.run model info <id>` to inspect the resolved install and compare it

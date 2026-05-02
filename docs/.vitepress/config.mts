@@ -40,8 +40,7 @@ export default defineConfig({
           { text: 'Getting Started', link: '/getting-started' },
           { text: 'CLI Reference', link: '/cli' },
           { text: 'Configuration', link: '/configuration' },
-          { text: 'Model Sources', link: '/model-sources' },
-          { text: 'Migration', link: '/migration' }
+          { text: 'Model Sources', link: '/model-sources' }
         ]
       },
       {

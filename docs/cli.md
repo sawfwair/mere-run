@@ -710,6 +710,5 @@ Fast smoke suite:
 Installed-model sweep:
 
 ```bash
-./scripts/migrate_model_store.sh
 ./scripts/e2e_smoke.sh --installed
 ```

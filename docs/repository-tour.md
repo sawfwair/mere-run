@@ -113,11 +113,6 @@ The main repo validation entrypoint. It runs:
 Sequential real-world smoke tests for installed models. Use this when you want
 to validate actual runtime paths instead of just build and parse coverage.
 
-### `scripts/migrate_model_store.sh`
-
-One-time rename utility for pre-OSS model stores. This keeps the public runtime
-hard-cut and alias-free while still giving existing users a migration path.
-
 ## Vendor artifacts
 
 ### `vendor/llama.xcframework`

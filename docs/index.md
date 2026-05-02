@@ -56,4 +56,3 @@ features:
 
 - [CLI and Runtime Internals](/internals/cli-and-runtime)
 - [Source Layout Reference](/internals/source-layout)
-- [Migration Guide](/migration)
