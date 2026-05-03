@@ -97,6 +97,36 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(scale, 1.0)
     }
 
+    func testChatRequestDecodesStructuredOpenAIContentParts() throws {
+        let data = """
+        {
+          "model": "mererun-test-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                { "type": "text", "text": "hello" },
+                { "type": "input_text", "text": "setup mere.run" }
+              ]
+            },
+            {
+              "role": "assistant"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(OpenAIChatRequest.self, from: data)
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096
+        )
+
+        XCTAssertEqual(chatRequest.messages[0].content, "hello\nsetup mere.run")
+        XCTAssertEqual(chatRequest.messages[1].content, "")
+    }
+
     func testChatRequestValidationRejectsOversizedMaxTokens() {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",

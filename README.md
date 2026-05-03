@@ -71,8 +71,14 @@ swift run mere.run --help
 # List managed models
 swift run mere.run model list
 
-# Pull a managed model from Hugging Face into the local snapshot cache
-swift run mere.run model pull image-zimage-max
+# See what this Mac can run before pulling large models
+swift run mere.run model capabilities
+
+# Choose guided, bring-your-own-agent, or manual setup
+swift run mere.run setup
+
+# Pull a managed model into the local model store
+swift run mere.run model pull image-zimage-nano
 
 # Generate an image
 swift run mere.run image generate \
@@ -152,8 +158,10 @@ The public CLI is modality-first:
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
-- `mere.run model { list, info, pull, remove, repair-manifests }`
+- `mere.run model { list, capabilities, info, pull, remove, repair-manifests }`
 - `mere.run api serve`
+- `mere.run setup`
+- `mere.run agent { onboard, install-pi, start }`
 
 ## Vision notes
 

@@ -4,8 +4,9 @@ enum FileSystemHelper {
     /// Recursively compute the total size of all regular files under a directory.
     static func directorySize(at url: URL) -> Int64 {
         let fm = FileManager.default
+        let root = url.resolvingSymlinksInPath()
         guard let enumerator = fm.enumerator(
-            at: url,
+            at: root,
             includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else { return 0 }

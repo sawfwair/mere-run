@@ -61,7 +61,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
 
     func testMereRunCLIExposesRenamedEntrypoints() {
         let commandNames = Set(MereRunCLI.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(commandNames, Set(["image", "text", "speech", "vision", "music", "video", "model", "api"]))
+        XCTAssertEqual(commandNames, Set(["image", "text", "speech", "vision", "music", "video", "model", "api", "setup", "agent"]))
 
         let speechNames = Set(Speech.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(speechNames, Set(["synthesize", "transcribe", "profile"]))

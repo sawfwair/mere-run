@@ -38,6 +38,56 @@ public struct OpenAIChatMessage: Codable, Sendable {
         self.role = role
         self.content = content
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case role
+        case content
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        content = try container.decodeFlexibleContentIfPresent(forKey: .content) ?? ""
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        try container.encode(content, forKey: .content)
+    }
+}
+
+private struct OpenAIChatContentPart: Decodable {
+    let type: String?
+    let text: String?
+}
+
+private extension KeyedDecodingContainer {
+    func decodeFlexibleContentIfPresent(forKey key: Key) throws -> String? {
+        guard contains(key) else {
+            return nil
+        }
+        if try decodeNil(forKey: key) {
+            return nil
+        }
+        if let content = try? decode(String.self, forKey: key) {
+            return content
+        }
+        if let parts = try? decode([OpenAIChatContentPart].self, forKey: key) {
+            let text = parts
+                .filter { $0.type == nil || $0.type == "text" || $0.type == "input_text" }
+                .compactMap(\.text)
+                .joined(separator: "\n")
+            return text.isEmpty ? nil : text
+        }
+        throw DecodingError.typeMismatch(
+            String.self,
+            DecodingError.Context(
+                codingPath: codingPath + [key],
+                debugDescription: "Expected chat message content to be a string, null, or text content parts."
+            )
+        )
+    }
 }
 
 // MARK: - Response Types

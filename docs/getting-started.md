@@ -88,10 +88,22 @@ Example:
 
 ```bash
 export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
-swift run mere.run model pull image-zimage-max
+swift run mere.run model capabilities
+swift run mere.run model pull image-zimage-nano
 ```
 
 See [Model Sources](./model-sources.md) for the full matrix.
+
+For guided onboarding, run:
+
+```bash
+swift run mere.run setup
+```
+
+The setup command offers a local Mere agent powered by Pi, a bring-your-own-agent
+handoff prompt for Claude/Codex, or manual commands. Use
+`--mode agent --agent-model small` to select the Qwen3.5 9B GGUF setup agent
+explicitly.
 
 ## Run a first workflow
 

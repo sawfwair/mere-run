@@ -6,10 +6,12 @@ the model-management commands.
 ## Public surface
 
 - `mere.run model list`
+- `mere.run model capabilities`
 - `mere.run model info`
 - `mere.run model pull`
 - `mere.run model remove`
 - `mere.run model repair-manifests`
+- `mere.run setup`
 
 ## Default model store
 
@@ -36,7 +38,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-q35`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`
@@ -58,6 +60,12 @@ the canonical names shown by `mere.run model list`.
 
 Shows the canonical managed model table and installed status.
 
+### `mere.run model capabilities`
+
+Summarizes the current Mac, the managed models it can run, what each model
+does, and the recommended first setup package. Pass `--all` to include models
+that are blocked by Apple Silicon or unified-memory requirements.
+
 ### `mere.run model info`
 
 Shows the resolved local install for one canonical model ID.
@@ -65,7 +73,18 @@ Shows the resolved local install for one canonical model ID.
 ### `mere.run model pull`
 
 Downloads a managed model from an explicit configured source. In the OSS repo,
-it does not silently fall back to a baked-in hosted archive URL.
+it does not silently fall back to a baked-in hosted archive URL. Pulls are also
+checked against the managed capability catalog before download so low-memory
+machines do not fetch models they cannot run. Pass `--allow-unsupported` only
+when you intentionally accept that risk or are using external hardware.
+
+### `mere.run setup`
+
+Guided onboarding for the shared model store and first local agent. The command
+offers a Pi-powered Mere agent, a BYOA prompt for Claude/Codex, or manual
+commands. The small local agent model is `text-agent-qwen35-9b`; hardware-tier
+setup can select Q35 nano, Qwen3-Coder Next, or source-configured premier
+Qwen3.5-122B-A10B tiers on large-memory Macs.
 
 ### `mere.run model remove`
 

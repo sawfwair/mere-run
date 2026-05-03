@@ -388,6 +388,20 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["chat", "api serve"]
         ),
         ManagedModelSpec(
+            id: AgentModelResources.qwen35NineBModelId,
+            category: .textCode,
+            installShape: .singleFile(relativePath: AgentModelResources.qwen35NineBRelativePath),
+            archiveSource: ManagedModelArchiveSource(
+                key: "models/text-agent-qwen35-9b.tar.gz",
+                size: AgentModelResources.qwen35NineBArchiveSize
+            ),
+            hubFallback: AgentModelResources.qwen35NineBHubFallbackConfig,
+            upstreamRepoId: AgentModelResources.qwen35NineBRepoId,
+            upstreamRevision: AgentModelResources.qwen35NineBRevision,
+            validationKind: .codegenGGUF,
+            defaultCLICommands: ["api serve", "text code"]
+        ),
+        ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
             category: .speechTTS,
             installShape: .directoryRoot,

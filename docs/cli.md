@@ -29,8 +29,10 @@ Public tree:
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
-- `mere.run model { list, info, pull, remove, repair-manifests }`
+- `mere.run model { list, capabilities, info, pull, remove, repair-manifests }`
 - `mere.run api serve`
+- `mere.run setup`
+- `mere.run agent { onboard, install-pi, start }`
 
 ## Global model-store override
 
@@ -52,7 +54,7 @@ See [`model-sources.md`](./model-sources.md) for the full source story. The most
 
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
-- Text code: `text-code-qwen3`
+- Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
@@ -77,7 +79,8 @@ For subsystem-specific implementation guides, see:
 ```bash
 export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
 swift run mere.run model list
-swift run mere.run model pull image-zimage-max
+swift run mere.run model capabilities
+swift run mere.run model pull image-zimage-nano
 swift run mere.run model info image-zimage-max
 ```
 
@@ -620,11 +623,25 @@ swift run mere.run model list
 
 ### `mere.run model pull`
 
-Download a managed model archive into the local model store.
+Download a managed model archive into the local model store. The command checks
+the model capability catalog before downloading so unsupported Macs do not pull
+models they cannot run.
 
 ```bash
 swift run mere.run model pull image-zimage-max
 swift run mere.run model pull --all
+```
+
+Use `--allow-unsupported` only when you intentionally accept the runtime risk.
+
+### `mere.run model capabilities`
+
+Show this Mac's supported models, recommended setup package, and a short summary
+of what each model does.
+
+```bash
+swift run mere.run model capabilities
+swift run mere.run model capabilities --all
 ```
 
 ### `mere.run model info`
@@ -691,6 +708,66 @@ swift run mere.run api serve
 swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
 swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120
+```
+
+### `mere.run setup`
+
+Choose the public onboarding path. The default interactive command offers the
+local Mere agent powered by Pi, a bring-your-own-agent handoff prompt, or manual
+commands.
+
+```bash
+swift run mere.run setup
+swift run mere.run setup --mode agent --agent-model small --dry-run
+swift run mere.run setup --mode agent --agent-model tier --install --start
+swift run mere.run setup --mode byoa
+swift run mere.run setup --mode manual
+```
+
+Agent model choices:
+
+- `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB Macs
+- `tier`: the best supported local tier for this Mac, currently 9B, Q35 nano, or Qwen3-Coder Next
+- `premier`: Qwen3.5-122B-A10B mxfp4 on 96 GB Macs and 8-bit on 128 GB+ Macs; these are shown as source-configured until mere.run has managed artifacts for those exact variants
+
+BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
+commands for capabilities, model pulls, serving, and optional Pi installation.
+
+### `mere.run agent onboard`
+
+Lower-level agent plumbing used by `mere.run setup`. Print a guided setup
+summary for the current Mac. Optional flags can pull the
+recommended supported model package, install Pi, and write a Pi provider
+extension that points at `mere.run api serve`.
+
+```bash
+swift run mere.run agent onboard
+swift run mere.run agent onboard --pull-recommended
+swift run mere.run agent onboard --install-pi --configure-pi
+swift run mere.run agent onboard --configure-pi --model text-agent-qwen35-9b
+```
+
+### `mere.run agent install-pi`
+
+Install the latest `badlogic/pi-mono` release asset for the current macOS
+architecture into the mere.run application-support directory.
+
+```bash
+swift run mere.run agent install-pi
+```
+
+### `mere.run agent start`
+
+Start a local API server for a selected managed agent model and launch Pi
+against the `mere-run` provider. GGUF models use `--engine text-code`; Q35 nano
+uses `--engine text-chat-q35`. If `--model` is omitted, `agent start` uses the
+configured Pi provider model first, then the best installed startable setup
+agent, then the current machine's startable hardware tier.
+
+```bash
+swift run mere.run model pull text-agent-qwen35-9b
+swift run mere.run agent install-pi
+swift run mere.run agent start --model text-agent-qwen35-9b
 ```
 
 ## Validation and smoke runs

@@ -21,7 +21,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | --- | --- |
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max` |
 | Text chat | `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano` |
-| Text code | `text-code-qwen3` |
+| Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
@@ -31,6 +31,10 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Video | `video-ltx-av` |
 
 Some commands also support local or upstream model layouts outside this managed table, but the IDs above are the only canonical managed names in this repo.
+
+`text-agent-qwen35-9b` is the low-memory setup-agent model. It uses the public
+Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
+`Qwen3.5-9B-Q4_K_M.gguf`.
 
 `text-chat-gemma4` is also a canonical chat model in the CLI, but it does not use
 `mere.run model pull`. It resolves through the native Hugging Face snapshot path
@@ -95,6 +99,23 @@ accepts comma-, semicolon-, or newline-separated `archive/key.tar.gz=<sha256>`
 entries.
 
 Without one of the three configuration paths above, `mere.run model pull` fails fast with a clear configuration error.
+
+## Hardware support checks
+
+Managed pulls are gated by the local capability catalog before any archive is
+downloaded. The check uses Apple Silicon macOS plus unified-memory thresholds
+for each model family, then blocks models that are unlikely to run reliably on
+the current Mac.
+
+Inspect the local recommendation first:
+
+```bash
+swift run mere.run model capabilities
+swift run mere.run model capabilities --all
+```
+
+If you are intentionally testing an unsupported setup, pass
+`--allow-unsupported` to `mere.run model pull`.
 
 ## Model store behavior
 

@@ -20,6 +20,9 @@ struct ModelPull: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Suppress progress output.")
     var quiet: Bool = false
 
+    @Flag(name: [.long], help: "Bypass the Apple Silicon and unified-memory support check.")
+    var allowUnsupported: Bool = false
+
     func validate() throws {
         if target == nil && !all {
             throw ValidationError("Provide a model id or use --all.")
@@ -32,6 +35,13 @@ struct ModelPull: AsyncParsableCommand {
     func run() async throws {
         if all {
             for spec in ManagedModelCatalog.allSpecs {
+                let support = ManagedModelCapabilityCatalog.support(for: spec)
+                if !allowUnsupported, !support.isSupported {
+                    if !quiet {
+                        stderr("[\(spec.id)] skipping (unsupported: \(support.reasons.joined(separator: " ")))")
+                    }
+                    continue
+                }
                 if !spec.hasAnyManagedDownloadSource() {
                     if !quiet {
                         stderr("[\(spec.id)] skipping (no managed download source available in current configuration)")
@@ -47,6 +57,7 @@ struct ModelPull: AsyncParsableCommand {
         guard let spec = ManagedModelCatalog.spec(for: target) else {
             throw ValidationError("Unknown canonical model id: \(target)")
         }
+        try validateHardwareSupport(for: spec)
         if !spec.hasAnyManagedDownloadSource() {
             throw CleanExit.message(
                 MereRunModelSourceConfiguration.missingConfigurationMessage(
@@ -55,6 +66,21 @@ struct ModelPull: AsyncParsableCommand {
             )
         }
         try await pull(spec)
+    }
+
+    private func validateHardwareSupport(for spec: ManagedModelSpec) throws {
+        guard !allowUnsupported else { return }
+        let support = ManagedModelCapabilityCatalog.support(for: spec)
+        guard support.isSupported else {
+            throw ValidationError(
+                """
+                Model \(spec.id) is not supported on this machine.
+                \(support.reasons.map { "- \($0)" }.joined(separator: "\n"))
+
+                Run `mere.run model capabilities --all` to see supported models, or pass --allow-unsupported if you are intentionally using external hardware or accepting the risk.
+                """
+            )
+        }
     }
 
     private func pull(_ spec: ManagedModelSpec) async throws {
