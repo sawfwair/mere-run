@@ -126,7 +126,7 @@ final class FalconPerceptionTraceIntegrationTests: MereRunCoreTestCase {
                 let data = (line + "\n").data(using: .utf8) ?? Data()
                 if FileManager.default.fileExists(atPath: traceLogURL.path) {
                     if let handle = try? FileHandle(forWritingTo: traceLogURL) {
-                        try? handle.seekToEnd()
+                        _ = try? handle.seekToEnd()
                         try? handle.write(contentsOf: data)
                         try? handle.close()
                     }
@@ -338,7 +338,7 @@ final class FalconPerceptionTraceIntegrationTests: MereRunCoreTestCase {
                 let data = (line + "\n").data(using: .utf8) ?? Data()
                 if FileManager.default.fileExists(atPath: traceLogURL.path) {
                     if let handle = try? FileHandle(forWritingTo: traceLogURL) {
-                        try? handle.seekToEnd()
+                        _ = try? handle.seekToEnd()
                         try? handle.write(contentsOf: data)
                         try? handle.close()
                     }
@@ -479,7 +479,7 @@ final class FalconPerceptionTraceIntegrationTests: MereRunCoreTestCase {
                 let data = (line + "\n").data(using: .utf8) ?? Data()
                 if FileManager.default.fileExists(atPath: traceLogURL.path) {
                     if let handle = try? FileHandle(forWritingTo: traceLogURL) {
-                        try? handle.seekToEnd()
+                        _ = try? handle.seekToEnd()
                         try? handle.write(contentsOf: data)
                         try? handle.close()
                     }
