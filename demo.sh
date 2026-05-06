@@ -19,7 +19,7 @@ step "1/9  TEXT — Creative writing"
 
 mere.run model pull text-chat-gemma4 2>/dev/null
 mere.run text chat \
-  -p "Write a short, vivid paragraph describing what it feels like to stand inside a thunderstorm on an alien planet with three moons. Make it poetic but grounded in sensory detail." \
+  -p "Write a short, vivid paragraph describing what it feels like to step into a 1950s American roadside diner just before midnight during a heavy rainstorm. Make it poetic but grounded in sensory detail." \
   -s "You are a literary fiction author known for precise, evocative prose. Never use clichés." \
   --temperature 0.85 \
   --max-tokens 512 \
@@ -53,8 +53,8 @@ step "3/9  IMAGE — Hero artwork"
 mere.run model pull image-klein-nano 2>/dev/null
 mere.run image generate \
   -m image-klein-nano \
-  -p "photograph of a lone astronaut in a weathered spacesuit standing at the edge of a massive crystalline canyon on an alien planet, bioluminescent moss and lichen glowing turquoise and violet on the rock faces, three pale moons low in a dusky indigo sky with faint aurora streaks, shot on 35mm film, shallow depth of field, golden hour backlight catching dust particles, photojournalistic composition, ultra realistic, 8k" \
-  -n "painting, illustration, cartoon, anime, 3d render, cgi, blurry, low quality, distorted, text, watermark, oversaturated" \
+  -p "photograph of a 1950s American roadside diner just before midnight, heavy rain streaking the large plate-glass windows, warm amber tungsten light spilling onto a wet asphalt parking lot, long polished chrome counter and red vinyl stools, a waitress in a mint-green uniform with a white apron pouring coffee from a glass pot for a single customer hunched over the counter in a wool overcoat, glowing red neon EAT sign reflected in the puddles outside, black-and-white checkerboard tile floor, a Wurlitzer jukebox glowing in the corner, faint cigarette smoke curling through the light, shot on Kodak Portra 400 film, anamorphic lens, shallow depth of field, cinematic Edward Hopper composition, ultra realistic, 8k" \
+  -n "painting, illustration, cartoon, anime, 3d render, cgi, blurry, low quality, distorted, text, watermark, oversaturated, modern smartphones, modern cars, modern clothing, anachronistic" \
   -W 1280 -H 720 \
   -s 8 \
   --seed 7777 \
@@ -76,7 +76,7 @@ if [[ -f "$OUT/image_hero.png" ]]; then
   # Ground objects with Falcon Perception
   if mere.run model pull vision-ground-falcon-perception 2>/dev/null; then
     mere.run vision ground "$OUT/image_hero.png" \
-      --query "astronaut" --query "crystal canyon" --query "moon" \
+      --query "waitress" --query "jukebox" --query "neon sign" \
       -o "$OUT/vision_grounded.png" \
       --json-output "$OUT/vision_grounded.json" \
       --mask-output-dir "$OUT/vision_masks"
@@ -96,7 +96,7 @@ step "5/9  SPEECH — Expressive narration"
 mere.run model pull speech-tts-qwen3-nano 2>/dev/null
 
 # Read back the creative text as narration
-NARRATION=$(cat "$OUT/text_creative.txt" 2>/dev/null || echo "The three moons hung low over the crystalline canyon, their light refracting through sheets of alien rain. Thunder rolled across frequencies no human ear was built to parse.")
+NARRATION=$(cat "$OUT/text_creative.txt" 2>/dev/null || echo "Rain drummed against the diner windows like a slow brushed snare. Inside, the jukebox glowed amber, the chrome counter caught the neon, and the coffee pot hissed quietly against the late hour.")
 
 mere.run speech synthesize "$NARRATION" \
   --voice "A deep, resonant male voice with gravitas, like a nature documentary narrator" \
@@ -123,38 +123,38 @@ cat > "$OUT/demo_lyrics.txt" << 'LYRICS'
 [intro]
 
 [verse]
-Standing on the edge of worlds unknown
-Crystal canyons carved from ancient stone
-Three moons rising through the violet haze
-Lost in wonder, lost in endless days
+Rain on the window, neon on the sign
+Coffee getting cold by a quarter past nine
+Jukebox humming an old slow tune
+Waitress smiling like a harvest moon
 
 [chorus]
-We are stardust, we are light
-Burning through the cosmic night
-Every signal, every spark
-Echoes dancing in the dark
+Honey stay one more song with me
+Underneath the chrome and the canopy
+Red vinyl shining in the smoky light
+Save me from the lonely night
 
 [verse]
-Bioluminescent rivers flow
-Painting shadows with an emerald glow
-Thunder speaks in frequencies unheard
-Every silence holds an alien word
+Headlights drifting down the wet asphalt road
+Ceiling fan turning slow and low
+Pie under glass and a cigarette glow
+One more dance before you go
 
 [chorus]
-We are stardust, we are light
-Burning through the cosmic night
-Every signal, every spark
-Echoes dancing in the dark
+Honey stay one more song with me
+Underneath the chrome and the canopy
+Red vinyl shining in the smoky light
+Save me from the lonely night
 
 [outro]
 LYRICS
 
 mere.run music generate \
-  "epic cinematic synthwave with soaring analog synth leads, deep pulsing bass, atmospheric pads, gated reverb snare, arpeggiated sequences, and a building orchestral string section, 1980s retro-futuristic sci-fi film soundtrack quality" \
+  "warm vintage rockabilly ballad with brushed snare, walking upright bass, twangy reverb-soaked Telecaster, dreamy doo-wop backing vocals, a soft tenor saxophone solo, late-night 1950s American diner jukebox sound, analog tape warmth, mono recording" \
   --lyrics-file "$OUT/demo_lyrics.txt" \
   --use-lm \
-  --bpm 126 \
-  --key "E minor" \
+  --bpm 88 \
+  --key "G major" \
   --timesig 4 \
   --duration 60 \
   --steps 8 \
@@ -168,7 +168,7 @@ step "8/9  VIDEO — Cinematic scene"
 
 if mere.run model pull video-ltx-av 2>/dev/null; then
   mere.run video generate \
-    "EXT. ALIEN CANYON – TWILIGHT – CINEMATIC ESTABLISHING SHOT. The camera begins on a wide shot of a vast crystalline canyon stretching to the horizon, walls covered in bioluminescent moss glowing deep turquoise and violet. Three pale moons hang low in an indigo sky streaked with shimmering aurora ribbons. The camera pushes forward in a slow, steady dolly move, gliding just above the canyon floor. Tiny luminous particles drift through the air like embers, catching the faint moonlight. Volumetric fog rolls through the lower passages, partially obscuring jagged crystal formations that jut from the walls. The ambient sound is a deep, resonant hum — the canyon itself vibrating at some low alien frequency — layered with the soft chime of crystal faces shifting in a gentle wind. As the camera advances, the bioluminescent glow intensifies, casting rippling turquoise reflections across the fog. The shot holds a shallow depth of field, the foreground crystals softly blurred as the vast canyon beyond sharpens into focus. Film grain texture, anamorphic lens flares from the brightest crystal clusters." \
+    "EXT./INT. 1950s AMERICAN ROADSIDE DINER – NIGHT – CINEMATIC ESTABLISHING SHOT. The camera begins outside on a rain-slicked asphalt street, glowing red neon EAT and OPEN signs reflecting in deep puddles. A slow, steady dolly push moves the camera toward the large plate-glass window of the diner, rain beading and streaking down the glass. Through the window, warm amber tungsten light reveals a long polished chrome counter, red vinyl stools, and a single customer in a wool overcoat hunched over a coffee cup. A waitress in a mint-green uniform with a white apron pours coffee from a glass pot, steam curling into the light. A Wurlitzer jukebox glows softly in the corner with shifting amber and ruby tones. Cigarette smoke drifts in slow lazy curls through the warm light. The camera continues its push, transitioning through the glass into the diner interior, depth of field shifting as the foreground rain blur dissolves and the chrome counter and red booths sharpen into focus. The shot holds a shallow depth of field, anamorphic lens flares pulling soft horizontal streaks from the neon and polished chrome. 35mm Kodak Portra film grain, slightly desaturated palette except for the warm tungsten interior and the saturated reds and ambers of the neon." \
     --variant unified-av \
     --width 768 --height 512 \
     --num-frames 65 \
@@ -180,7 +180,7 @@ if mere.run model pull video-ltx-av 2>/dev/null; then
   # img2vid from hero image
   if [[ -f "$OUT/image_hero.png" ]]; then
     mere.run video generate \
-      "The still scene slowly comes to life. A faint wind picks up, causing the bioluminescent moss on the cliff walls to pulse gently in waves of turquoise light. The astronaut, silhouetted against the canyon, shifts their weight and turns their head slightly to the right, gazing upward at the three moons. Aurora ribbons in the sky begin to ripple and shift, their colors bleeding from violet into emerald green. Small luminous spores lift off the canyon floor and drift upward past the astronaut like slow-motion fireflies. The camera holds steady for a beat, then begins a barely perceptible push-in toward the astronaut's visor, where the aurora light reflects across the curved glass. The ambient sound is a low crystalline resonance with the soft whisper of alien wind." \
+      "The still scene slowly comes to life. Rain continues to streak the windows, headlights of a passing car briefly washing across the wet street outside. The waitress turns slightly, lifts the glass coffee pot, and tops off the cup, steam curling upward through the warm tungsten light. The customer in the wool overcoat shifts on the stool and lifts the cup to his lips. The jukebox in the corner pulses gently as a record changes, its amber glow brightening for a moment. Cigarette smoke from an ashtray on the counter drifts in slow lazy spirals. The camera holds steady for a beat, then begins a barely perceptible push-in toward the customer's profile, the neon EAT sign blurred but readable in the reflection of the window behind him. The ambient sound is the soft hum of refrigeration, the faint clink of a spoon against ceramic, and the muffled patter of rain on the roof." \
       --variant unified-av \
       --image "$OUT/image_hero.png" \
       --image-strength 0.9 \
@@ -202,8 +202,8 @@ step "9/9  EMBEDDINGS — Semantic similarity"
 
 mere.run model pull text-embed-qwen3-0.6b 2>/dev/null
 mere.run text embed \
-  "astronaut exploring alien canyon" \
-  "bioluminescent crystal caves on another planet" \
+  "rainy 1950s American diner late at night" \
+  "neon-lit chrome counter and red vinyl booths" \
   "a cat sitting on a windowsill" \
   -o "$OUT/embeddings_demo.json" --pretty
 log "Saved: $OUT/embeddings_demo.json (compare cosine similarity — first two should be close)"
