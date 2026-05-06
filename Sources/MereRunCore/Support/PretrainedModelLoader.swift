@@ -349,14 +349,9 @@ public enum PretrainedModelLoader {
             progressPercent?(percent)
         }
 
-        if fileManager.fileExists(atPath: destination.path) {
-            try? fileManager.removeItem(at: destination)
-        }
-        try fileManager.moveItem(at: tempURL, to: destination)
-
         if expectedSize > 0 {
             let actualSize: Int64
-            if let attrs = try? fileManager.attributesOfItem(atPath: destination.path),
+            if let attrs = try? fileManager.attributesOfItem(atPath: tempURL.path),
                let size = attrs[.size] as? Int64 {
                 actualSize = size
             } else {
@@ -365,6 +360,7 @@ public enum PretrainedModelLoader {
 
             if actualSize != expectedSize {
                 if strictSizeCheck {
+                    try? fileManager.removeItem(at: tempURL)
                     throw LoadError.downloadFailed(
                         "\(sizeMismatchPrefix) (got \(actualSize), expected \(expectedSize))"
                     )
@@ -376,11 +372,16 @@ public enum PretrainedModelLoader {
         let configuredSHA256 = expectedSHA256
             ?? MereRunModelSourceConfiguration.archiveSHA256(for: key)
         do {
-            try ArchiveIntegrity.verify(file: destination, expectedSHA256: configuredSHA256)
+            try ArchiveIntegrity.verify(file: tempURL, expectedSHA256: configuredSHA256)
         } catch {
-            try? fileManager.removeItem(at: destination)
+            try? fileManager.removeItem(at: tempURL)
             throw LoadError.downloadFailed(error.localizedDescription)
         }
+
+        if fileManager.fileExists(atPath: destination.path) {
+            try? fileManager.removeItem(at: destination)
+        }
+        try fileManager.moveItem(at: tempURL, to: destination)
     }
 
     private static func extractArchive(_ archiveFile: URL, to modelDir: URL) throws {
