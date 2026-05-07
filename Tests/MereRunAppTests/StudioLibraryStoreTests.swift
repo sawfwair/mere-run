@@ -16,7 +16,8 @@ final class StudioLibraryStoreTests: XCTestCase {
             updatedAt: Date(),
             status: .completed,
             exitCode: 0,
-            commandPreview: "mere.run image generate"
+            commandPreview: "mere.run image generate",
+            outputText: nil
         )
 
         store.upsert(item)
@@ -50,12 +51,44 @@ final class StudioLibraryStoreTests: XCTestCase {
             id: request.id,
             exitCode: 0,
             outputURL: URL(fileURLWithPath: "/tmp/plate.png"),
+            outputText: nil,
             commandPreview: "preview"
         )
 
         XCTAssertEqual(store.items.first?.status, .completed)
         XCTAssertEqual(store.items.first?.exitCode, 0)
         XCTAssertEqual(store.items.first?.outputURL?.path, "/tmp/plate.png")
+    }
+
+    func testLibraryCompletionPersistsStdoutOnlyRuns() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let request = try StudioCommandAdapter.makeRequest(
+            mode: .chat,
+            draft: {
+                var draft = StudioDraft()
+                draft.reset(for: .chat)
+                draft.prompt = "Hello"
+                return draft
+            }()
+        )
+
+        store.start(request: request, commandPreview: "preview")
+        store.complete(
+            id: request.id,
+            exitCode: 0,
+            outputURL: nil,
+            outputText: "Hi from local chat.",
+            commandPreview: "preview"
+        )
+
+        let item = try XCTUnwrap(store.items.first)
+        XCTAssertEqual(item.status, .completed)
+        XCTAssertNil(item.outputURL)
+        XCTAssertEqual(item.outputText, "Hi from local chat.")
+
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(reloaded.items.first?.outputText, "Hi from local chat.")
     }
 
     func testCorruptLibraryRecoversToEmptyList() throws {

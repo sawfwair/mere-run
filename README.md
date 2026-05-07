@@ -95,6 +95,7 @@ swift run mere.run image generate \
 
 # Run local chat
 swift run mere.run text chat \
+  --stream \
   --prompt "Summarize diffusion models in one paragraph."
 
 # Serve the OpenAI-compatible local API on loopback

@@ -52,7 +52,8 @@ final class StudioLibraryStore: ObservableObject {
             updatedAt: Date(),
             status: .running,
             exitCode: nil,
-            commandPreview: commandPreview
+            commandPreview: commandPreview,
+            outputText: nil
         )
         upsert(item)
         return item
@@ -62,6 +63,7 @@ final class StudioLibraryStore: ObservableObject {
         id: UUID,
         exitCode: Int32,
         outputURL: URL?,
+        outputText: String?,
         commandPreview: String
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -73,6 +75,7 @@ final class StudioLibraryStore: ObservableObject {
         if let outputURL {
             item.outputURL = outputURL
         }
+        item.outputText = outputText
 
         if shouldKeep(item) {
             items[index] = item
@@ -94,6 +97,7 @@ final class StudioLibraryStore: ObservableObject {
     private func shouldKeep(_ item: StudioLibraryItem) -> Bool {
         item.status == .completed
             || item.outputURL != nil
+            || item.outputText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || !item.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || item.inputURL != nil
     }

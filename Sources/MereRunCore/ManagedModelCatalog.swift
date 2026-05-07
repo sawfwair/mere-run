@@ -735,56 +735,63 @@ public extension ManagedModelSpec {
         case .none, .musicACEStep:
             return base
         case .qwen3ASRNested:
-            let direct = missingPaths(in: base, fileManager: fileManager)
+            let direct = missingPathsWithoutNormalization(in: base, fileManager: fileManager)
             if direct.isEmpty {
                 return base
             }
             let nested = base.appendingPathComponent(id, isDirectory: true)
-            return missingPaths(in: nested, fileManager: fileManager).isEmpty ? nested : base
+            return missingPathsWithoutNormalization(in: nested, fileManager: fileManager).isEmpty ? nested : base
         case .parakeetNested:
-            let direct = missingPaths(in: base, fileManager: fileManager)
+            let direct = missingPathsWithoutNormalization(in: base, fileManager: fileManager)
             if direct.isEmpty {
                 return base
             }
             let nested = base.appendingPathComponent(id, isDirectory: true)
-            return missingPaths(in: nested, fileManager: fileManager).isEmpty ? nested : base
+            return missingPathsWithoutNormalization(in: nested, fileManager: fileManager).isEmpty ? nested : base
         }
     }
 
     func missingPaths(in rootURL: URL, fileManager: FileManager = .default) -> [URL] {
+        missingPathsWithoutNormalization(
+            in: normalizedRootURL(rootURL, fileManager: fileManager),
+            fileManager: fileManager
+        )
+    }
+
+    private func missingPathsWithoutNormalization(in rootURL: URL, fileManager: FileManager = .default) -> [URL] {
         switch validationKind {
         case .flux2Klein:
-            return Self.missingDiffusersImagePaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingDiffusersImagePaths(in: rootURL, fileManager: fileManager)
         case .zimageTurbo:
-            return ZImageTurboResources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
+            return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
-            return Gemma4Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
+            return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .q35:
-            return Q35Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
+            return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .sam31:
-            return SAM31Resources(modelRootURL: normalizedRootURL(rootURL, fileManager: fileManager)).missingRequiredPaths(fileManager: fileManager)
+            return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
-            return FalconPerceptionResources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
+            return FalconPerceptionResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwen3TTS:
-            return Self.missingQwen3TTSPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingQwen3TTSPaths(in: rootURL, fileManager: fileManager)
         case .qwen3ASR:
-            return Self.missingQwen3ASRPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingQwen3ASRPaths(in: rootURL, fileManager: fileManager)
         case .parakeet:
-            return Self.missingParakeetPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingParakeetPaths(in: rootURL, fileManager: fileManager)
         case .qwen3Embedding:
-            return Qwen3EmbeddingResources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
+            return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .privacyFilter:
-            return OpenAIPrivacyFilterResources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager)).validate(fileManager: fileManager)
+            return OpenAIPrivacyFilterResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .codegenGGUF:
-            return Self.missingCodeGenPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingCodeGenPaths(in: rootURL, fileManager: fileManager)
         case .lightOnOCR:
-            return Self.missingLightOnOCRPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingLightOnOCRPaths(in: rootURL, fileManager: fileManager)
         case .aceStep:
-            return Self.missingACEStepPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingACEStepPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo:
-            return Self.missingLTXVideoPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .hfTextChat:
-            return Self.missingHFTextRootPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
+            return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }
     }
 

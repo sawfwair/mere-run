@@ -67,6 +67,9 @@ struct TextChat: AsyncParsableCommand {
     @Flag(name: [.customLong("stats")], help: "Print generation timing and tokens/sec.")
     var stats: Bool = false
 
+    @Flag(name: [.customLong("stream")], help: "Stream generated text to stdout as tokens arrive.")
+    var stream: Bool = false
+
     @Option(name: [.customLong("tools")], help: "Comma-separated built-in tool names: write_file, shell_exec.")
     var tools: String?
 
@@ -114,11 +117,15 @@ struct TextChat: AsyncParsableCommand {
             tools: toolDefs
         )
 
+        let streamingOutput = StreamingChatOutput(enabled: stream)
         let progressHandler: (@Sendable (ChatProgress) -> Void)?
         if quiet {
             progressHandler = nil
         } else {
             progressHandler = { progress in
+                if streamingOutput.write(progress: progress) {
+                    return
+                }
                 fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
             }
         }
@@ -176,7 +183,11 @@ struct TextChat: AsyncParsableCommand {
                 let result = try await chatOnce(req)
 
                 guard let calls = result.toolCalls, !calls.isEmpty else {
-                    print(cleanResponse(result.response, showThinking: thinking))
+                    if stream && streamingOutput.hasWritten {
+                        streamingOutput.finishLine()
+                    } else {
+                        print(cleanResponse(result.response, showThinking: thinking))
+                    }
                     return
                 }
 
@@ -243,7 +254,11 @@ struct TextChat: AsyncParsableCommand {
                 }
             }
 
-            print(cleanResponse(result.response, showThinking: thinking))
+            if stream && streamingOutput.hasWritten {
+                streamingOutput.finishLine()
+            } else {
+                print(cleanResponse(result.response, showThinking: thinking))
+            }
         }
     }
 
@@ -299,5 +314,47 @@ struct TextChat: AsyncParsableCommand {
 
     private static func stdinIsInteractive() -> Bool {
         isatty(fileno(stdin)) != 0
+    }
+}
+
+private final class StreamingChatOutput: @unchecked Sendable {
+    let enabled: Bool
+
+    private let lock = NSLock()
+    private var wroteOutput = false
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    var hasWritten: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return wroteOutput
+    }
+
+    func write(progress: ChatProgress) -> Bool {
+        guard enabled, progress.stage == .generating else {
+            return false
+        }
+
+        let text = progress.message ?? ""
+        guard !text.isEmpty, text != "Generating..." else {
+            return true
+        }
+
+        lock.lock()
+        defer { lock.unlock() }
+        fputs(text, stdout)
+        fflush(stdout)
+        wroteOutput = true
+        return true
+    }
+
+    func finishLine() {
+        lock.lock()
+        defer { lock.unlock() }
+        fputs("\n", stdout)
+        fflush(stdout)
     }
 }

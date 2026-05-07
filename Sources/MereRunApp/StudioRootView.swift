@@ -57,6 +57,7 @@ struct StudioRootView: View {
                     readiness: readiness,
                     error: studioError,
                     logs: controller.logs,
+                    liveOutputText: controller.liveOutputText,
                     onOpen: openSelectedOutput,
                     onReveal: revealSelectedOutput,
                     onPullModel: pullModel,
@@ -124,6 +125,7 @@ struct StudioRootView: View {
                 id: activeLibraryID,
                 exitCode: result.exitCode,
                 outputURL: result.outputURL,
+                outputText: result.outputText,
                 commandPreview: result.commandPreview.maskingAPIKeyValue()
             )
             selectedLibraryID = activeLibraryID
@@ -330,15 +332,24 @@ private struct StudioCanvas: View {
     let readiness: ModelReadinessState
     let error: String?
     let logs: [LogLine]
+    let liveOutputText: String
     let onOpen: () -> Void
     let onReveal: () -> Void
     let onPullModel: () -> Void
     let onShowDetails: () -> Void
 
+    private var visibleLiveOutputText: String? {
+        guard isRunning, mode == .chat || mode == .code else { return nil }
+        let text = liveOutputText
+            .replacingOccurrences(of: "\0", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
     var body: some View {
         ZStack {
             if let item {
-                StudioOutputView(item: item, onOpen: onOpen, onReveal: onReveal)
+                StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal)
                     .padding(32)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
@@ -346,7 +357,7 @@ private struct StudioCanvas: View {
                     .padding(32)
             }
 
-            if isRunning {
+            if isRunning && visibleLiveOutputText == nil {
                 StudioRunningOverlay(status: status, latestLog: logs.last?.text)
                     .transition(.opacity)
             }
@@ -467,6 +478,7 @@ private struct StudioReadinessOverlay: View {
 
 private struct StudioOutputView: View {
     let item: StudioLibraryItem
+    let liveOutputText: String?
     let onOpen: () -> Void
     let onReveal: () -> Void
 
@@ -536,6 +548,14 @@ private struct StudioOutputView: View {
                     .lineLimit(1)
             }
             .padding(22)
+        } else if let text = liveOutputText ?? item.outputText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ScrollView {
+                Text(text)
+                    .font(item.mode == .chat ? MereRunTheme.bodyFont : MereRunTheme.monoFont)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(22)
+            }
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "doc")

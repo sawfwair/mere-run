@@ -401,6 +401,7 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var status: StudioLibraryStatus
     var exitCode: Int32?
     var commandPreview: String
+    var outputText: String?
 
     var displayTitle: String {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)

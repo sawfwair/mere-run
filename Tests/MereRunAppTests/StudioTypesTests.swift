@@ -16,6 +16,24 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(StudioMode.video.defaultTemplateID, .videoGenerate)
     }
 
+    func testCodeStudioDefaultsUsePublicModelID() throws {
+        let codeTemplate = try XCTUnwrap(CommandCatalog.template(id: .textCode))
+        XCTAssertEqual(codeTemplate.defaultModel, "text-code-qwen3")
+
+        var draft = StudioDraft()
+        draft.reset(for: .code)
+        XCTAssertEqual(draft.model, "text-code-qwen3")
+        XCTAssertEqual(StudioCommandAdapter.requiredModel(for: .code, draft: draft), "text-code-qwen3")
+    }
+
+    func testChatStudioDefaultsToStreamingOutput() throws {
+        let chatTemplate = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        let draft = chatTemplate.defaultDraft()
+
+        XCTAssertTrue(draft.stream)
+        XCTAssertTrue(chatTemplate.arguments(from: draft).contains("--stream"))
+    }
+
     func testStudioRunRequestBuildsImageCommandWithDefaultOutput() throws {
         var draft = StudioDraft()
         draft.reset(for: .createImage)

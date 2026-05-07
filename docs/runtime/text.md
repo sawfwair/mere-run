@@ -38,6 +38,7 @@ embeddings, and PII anonymization.
 
 ```bash
 swift run mere.run text chat \
+  --stream \
   --model text-chat-gemma4 \
   --prompt "Summarize diffusion models in one paragraph."
 ```
@@ -98,7 +99,8 @@ swift run mere.run text anonymize \
 ### `mere.run text chat`
 
 Use this for local assistant-style generation. It supports prompt/system
-control, token limits, and the chat-oriented model families.
+control, token limits, token streaming with `--stream`, and the chat-oriented
+model families.
 
 ### `mere.run text code`
 

@@ -179,9 +179,12 @@ struct CommandTemplate: Identifiable, Equatable {
         draft.extraArguments = defaultExtraArguments
 
         switch id {
+        case .textChat:
+            draft.stream = true
         case .textCode:
             draft.temperature = 1.0
             draft.topP = 0.95
+            draft.stream = true
         case .visionCaption, .visionOCR:
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
@@ -353,6 +356,7 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.secondaryText.isBlank { args += ["--system", draft.secondaryText] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.stream { args.append("--stream") }
             if draft.all { args.append("--thinking") }
             if draft.force { args.append("--stats") }
             if draft.quiet { args.append("--quiet") }
@@ -535,7 +539,7 @@ enum CommandCatalog {
             title: "Agent onboarding",
             subtitle: "Check local readiness and prepare Pi integration",
             systemImage: "person.crop.circle.badge.gearshape",
-            defaultModel: "text-code-qwen3-coder"
+            defaultModel: "text-code-qwen3"
         ),
         CommandTemplate(
             id: .agentInstallPi,
@@ -600,7 +604,7 @@ enum CommandCatalog {
             promptLabel: "Prompt",
             secondaryLabel: "System",
             defaultPrompt: "Write a tiny Swift function that formats byte counts.",
-            defaultModel: "text-code-qwen3-coder"
+            defaultModel: "text-code-qwen3"
         ),
         CommandTemplate(
             id: .textEmbed,

@@ -213,6 +213,7 @@ Key options:
 - `--max-tokens`
 - `--temperature`
 - `--top-p`
+- `--stream`
 - `--thinking`
 - `--stats`
 - `--quiet`
@@ -222,6 +223,7 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model text-chat-q35-nano --prompt "Explain speculative decoding."
+swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
 ```
 

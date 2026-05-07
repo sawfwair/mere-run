@@ -141,6 +141,7 @@ swift run mere.run image generate \
 
 ```bash
 swift run mere.run text chat \
+  --stream \
   --prompt "Explain classifier-free guidance in one paragraph."
 ```
 

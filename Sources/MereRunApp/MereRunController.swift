@@ -80,8 +80,8 @@ enum CLIResolver {
         let roots = packageRootCandidates(fileManager: fm)
         let candidates = bundledCandidates()
             + siblingCandidates()
-            + installedCandidates()
             + buildProductCandidates(packageRoots: roots)
+            + installedCandidates()
 
         for candidate in candidates {
             if fm.isExecutableFile(atPath: candidate.path) {
@@ -123,10 +123,10 @@ enum CLIResolver {
     private static func buildProductCandidates(packageRoots: [URL]) -> [URL] {
         packageRoots.flatMap { root in
             [
-                ".build/arm64-apple-macosx/release/mere.run",
                 ".build/arm64-apple-macosx/debug/mere.run",
-                ".build/release/mere.run",
+                ".build/arm64-apple-macosx/release/mere.run",
                 ".build/debug/mere.run",
+                ".build/release/mere.run",
             ].map { root.appendingPathComponent($0) }
         }
     }
@@ -283,6 +283,7 @@ struct MereRunRunResult: Identifiable, Equatable {
     let commandPreview: String
     let exitCode: Int32
     let outputURL: URL?
+    let outputText: String?
     let completedAt = Date()
 }
 
@@ -310,6 +311,7 @@ final class MereRunController: ObservableObject {
     @Published var workingDirectory: String {
         didSet { UserDefaults.standard.set(workingDirectory, forKey: Keys.workingDirectory) }
     }
+    @Published private(set) var liveOutputText = ""
 
     private enum Keys {
         static let cliPath = "mererun.app.cliPath"
@@ -436,6 +438,7 @@ final class MereRunController: ObservableObject {
 
         logs.removeAll()
         stdoutBuffer.removeAll(keepingCapacity: true)
+        liveOutputText = ""
         lastOutputURL = nil
         lastExitCode = nil
 
@@ -476,7 +479,8 @@ final class MereRunController: ObservableObject {
                     templateID: activeRunTemplateID,
                     commandPreview: activeRunPreview,
                     exitCode: -1,
-                    outputURL: nil
+                    outputURL: nil,
+                    outputText: capturedStdoutText()
                 )
             }
             activeRunTemplateID = nil
@@ -507,6 +511,7 @@ final class MereRunController: ObservableObject {
         lastExitCode = exitCode
 
         let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
+        let outputText = capturedStdoutText()
         lastOutputURL = detectedOutput
 
         if exitCode == 0 {
@@ -522,7 +527,8 @@ final class MereRunController: ObservableObject {
                 templateID: activeRunTemplateID,
                 commandPreview: activeRunPreview,
                 exitCode: exitCode,
-                outputURL: detectedOutput
+                outputURL: detectedOutput,
+                outputText: outputText
             )
         }
         activeRunTemplateID = nil
@@ -533,6 +539,7 @@ final class MereRunController: ObservableObject {
         if stream == .stdout {
             stdoutBuffer += text
             trimStdoutBuffer()
+            liveOutputText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
         }
 
         let normalized = text
@@ -553,6 +560,13 @@ final class MereRunController: ObservableObject {
     private func trimStdoutBuffer() {
         guard stdoutBuffer.utf8.count > Self.stdoutBufferByteLimit else { return }
         stdoutBuffer = String(decoding: stdoutBuffer.utf8.suffix(Self.stdoutBufferByteLimit), as: UTF8.self)
+    }
+
+    private func capturedStdoutText() -> String? {
+        let trimmed = stdoutBuffer
+            .replacingOccurrences(of: "\0", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func expectedOutputURL() -> URL? {
