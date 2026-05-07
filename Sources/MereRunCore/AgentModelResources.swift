@@ -95,11 +95,8 @@ public enum MereRunAgentModelCatalog {
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
         guard machine.isAppleSiliconMac else { return nil }
-        if machine.unifiedMemoryGB >= 128 {
-            return qwen35122B8Bit()
-        }
         if machine.unifiedMemoryGB >= 96 {
-            return qwen35122BMXFP4()
+            return qwen35122B4Bit()
         }
         if machine.unifiedMemoryGB >= 64 {
             return qwen3CoderNext()
@@ -123,6 +120,9 @@ public enum MereRunAgentModelCatalog {
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
         guard machine.isAppleSiliconMac else { return nil }
+        if machine.unifiedMemoryGB >= 96 {
+            return qwen35122B4Bit()
+        }
         if machine.unifiedMemoryGB >= 64 {
             return qwen3CoderNext()
         }
@@ -139,6 +139,7 @@ public enum MereRunAgentModelCatalog {
             qwen35NineB(),
             q35Nano(),
             qwen3CoderNext(),
+            qwen35122B4Bit(),
             qwen35122BMXFP4(),
             qwen35122B8Bit(),
         ].filter { machine.isAppleSiliconMac && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
@@ -177,6 +178,18 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 96,
             servingEngine: .textCode,
             managedModelID: CodeGenResources.defaultModelId
+        )
+    }
+
+    private static func qwen35122B4Bit() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Q35Resources.defaultModelId,
+            displayName: "Qwen3.5-122B-A10B 4-bit",
+            summary: "Premier 122B MoE 4-bit agent tier for 96 GB and larger Macs.",
+            minimumUnifiedMemoryGB: 96,
+            recommendedUnifiedMemoryGB: 128,
+            servingEngine: .textChatQ35,
+            managedModelID: Q35Resources.defaultModelId
         )
     }
 
