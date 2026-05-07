@@ -65,19 +65,11 @@ public enum MereRunModelValidator {
         }
 
         let supportsImagePipeline: Bool
-        let supportsVisionModel: Bool
         if let unwrappedManifest = manifest {
             let supports = Set(unwrappedManifest.supports ?? [])
             supportsImagePipeline = supports.contains(.txt2img) || supports.contains(.img2img) || supports.contains(.referenceEdit)
-            supportsVisionModel = supports.contains(.visionGrounding)
-                || supports.contains(.visionDetection)
-                || supports.contains(.visionSegmentation)
-                || supports.contains(.visionTracking)
-                || unwrappedManifest.family == .sam
-                || unwrappedManifest.family == .falcon
         } else {
             supportsImagePipeline = true
-            supportsVisionModel = false
         }
 
         if let manifest = manifest {

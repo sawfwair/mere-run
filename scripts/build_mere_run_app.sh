@@ -2,6 +2,8 @@
 set -euo pipefail
 
 configuration="${1:-debug}"
+app_version="${MERERUN_APP_VERSION:-0.4.0}"
+app_build="${MERERUN_APP_BUILD:-1}"
 case "$configuration" in
   debug|release) ;;
   *)
@@ -49,8 +51,8 @@ plutil -insert CFBundleIdentifier -string "run.mere.MereRunApp" "${contents}/Inf
 plutil -insert CFBundleName -string "MereRun" "${contents}/Info.plist"
 plutil -insert CFBundleDisplayName -string "MereRun" "${contents}/Info.plist"
 plutil -insert CFBundlePackageType -string "APPL" "${contents}/Info.plist"
-plutil -insert CFBundleVersion -string "1" "${contents}/Info.plist"
-plutil -insert CFBundleShortVersionString -string "0.1" "${contents}/Info.plist"
+plutil -insert CFBundleVersion -string "$app_build" "${contents}/Info.plist"
+plutil -insert CFBundleShortVersionString -string "$app_version" "${contents}/Info.plist"
 plutil -insert LSMinimumSystemVersion -string "15.0" "${contents}/Info.plist"
 plutil -insert NSPrincipalClass -string "NSApplication" "${contents}/Info.plist"
 
