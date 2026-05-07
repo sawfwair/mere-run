@@ -4,7 +4,7 @@ layout: home
 hero:
   name: mere.run
   text: Local-first inference on Apple Silicon
-  tagline: A public Swift package and CLI for image, text, speech, vision, music, video, model management, and local API serving.
+  tagline: A public Swift package, CLI, and optional macOS studio for image, text, speech, vision, music, video, model management, and local API serving.
   actions:
     - theme: brand
       text: Get Started
@@ -19,6 +19,8 @@ hero:
 features:
   - title: One CLI, clear modalities
     details: The public surface is organized around image, text, speech, vision, music, video, model management, and local API serving.
+  - title: Native macOS studio
+    details: The optional SwiftUI app opens to a prompt-first canvas, local output library, guided readiness, and advanced CLI details.
   - title: Canonical model system
     details: Public model IDs, shared model-store rules, and explicit source configuration make installs predictable and scriptable.
   - title: Readable runtime families

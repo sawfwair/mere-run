@@ -11,6 +11,8 @@ workflow.
 - reusable inference libraries in `Sources/MereRunCore`, `Sources/AudioCore`,
   `Sources/AudioCodecs`, `Sources/AudioSTT`, and `Sources/AudioTTS`
 - a public executable product named `mere.run`
+- an optional macOS SwiftUI studio named `mere.run.app` that wraps the public
+  CLI
 - tests and smoke harnesses for the package and CLI surfaces
 
 It does not include hosted-service, billing, or private-deployment surfaces.
@@ -33,10 +35,30 @@ From the repo root:
 swift build
 swift test
 swift run mere.run --help
+app_path="$(./scripts/build_mere_run_app.sh debug)"
+open "$app_path"
 ```
 
-That confirms the package graph, CLI product, and basic command parsing are all
-working.
+That confirms the package graph, CLI product, optional app product, app bundle,
+and basic command parsing are all working.
+
+## Launch the macOS studio
+
+The app is a user-facing local studio backed by the public CLI. It opens to a
+unified canvas and prompt bar, keeps generated outputs in a local library, and
+keeps command previews and logs in Advanced details. Launch it from a checkout
+with:
+
+```bash
+app_path="$(./scripts/build_mere_run_app.sh debug)"
+open "$app_path"
+```
+
+For contributor smoke tests, `swift run mere.run.app` still builds the executable
+product, but the bundle script is the recommended local launch path for normal
+macOS window behavior. The app auto-detects a bundled CLI first, then nearby
+SwiftPM build products, common install locations, and finally the current
+package checkout.
 
 ## Understand the command tree
 

@@ -17,7 +17,7 @@ mere-run/
 
 ## SwiftPM products
 
-`Package.swift` defines six public products:
+`Package.swift` defines seven public products:
 
 - `MereRunCore`
 - `AudioCore`
@@ -25,8 +25,10 @@ mere-run/
 - `AudioSTT`
 - `AudioTTS`
 - `mere.run` (the executable product backed by the `MereRunCLI` target)
+- `mere.run.app` (the optional SwiftUI studio backed by the `MereRunApp` target)
 
-Those map cleanly to the main runtime families exposed by the CLI.
+Those map cleanly to the main runtime families exposed by the CLI and the
+optional macOS studio.
 
 ## Source tree
 
@@ -40,6 +42,13 @@ The public command-line surface.
   API support
 
 If you want to understand the CLI end to end, start here.
+
+### `Sources/MereRunApp`
+
+The optional macOS studio. It does not own runtime behavior; it turns
+user-facing studio requests into `mere.run` arguments, launches the CLI as a
+child process, streams stdout and stderr, saves local library metadata, and keeps
+the raw command surface available in Advanced details.
 
 ### `Sources/MereRunCore`
 

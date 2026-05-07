@@ -10,7 +10,7 @@
 
 # mere.run
 
-mere.run is a Swift package and CLI for local-first inference on Apple Silicon. This OSS repo contains the core inference libraries plus the public `mere.run` executable for image, text, speech, vision, music, video, model management, and local API serving.
+mere.run is a Swift package, CLI, and optional macOS studio for local-first inference on Apple Silicon. This OSS repo contains the core inference libraries, the public `mere.run` executable, and a SwiftUI app that keeps the user-facing experience prompt-first while still running the public CLI underneath.
 
 ## What works today
 
@@ -23,12 +23,14 @@ The public OSS repo currently supports:
 - native music and video generation
 - managed model installs into a shared local model store
 - a local API surface for supported engines
+- an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
 
 ## What’s included in this repo
 
 - `Sources/MereRunCore`: shared model resolution, manifests, generation primitives, and MLX-backed inference code
 - `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`: audio generation and transcription support
-- `Sources`: core libraries plus the CLI target that builds the public `mere.run` executable
+- `Sources/MereRunCLI`: the target that builds the public `mere.run` executable
+- `Sources/MereRunApp`: a SwiftUI `mere.run.app` target with a user-facing studio and advanced CLI details
 - `Tests`: SwiftPM test coverage for the core and CLI surfaces
 - `vendor/llama.xcframework`: vendored `llama.cpp` runtime used by `mere.run text code` and `mere.run api serve`
 - `vendor/mlx-swift_Cmlx.bundle`: vendored Metal shader resources needed by MLX-backed runtime paths
@@ -60,6 +62,8 @@ brew install node pnpm gitleaks
 swift build
 swift test
 swift run mere.run --help
+app_path="$(./scripts/build_mere_run_app.sh debug)"
+open "$app_path"
 ```
 
 ## Quick start
@@ -67,6 +71,10 @@ swift run mere.run --help
 ```bash
 # See the public command tree
 swift run mere.run --help
+
+# Launch the optional macOS studio
+app_path="$(./scripts/build_mere_run_app.sh debug)"
+open "$app_path"
 
 # List managed models
 swift run mere.run model list
@@ -162,6 +170,10 @@ The public CLI is modality-first:
 - `mere.run api serve`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`
+
+The optional `mere.run.app` product opens to a user-facing studio for the same
+command families and keeps raw command previews, logs, runtime paths, model
+management, API serving, and arbitrary arguments in Advanced details.
 
 ## Vision notes
 

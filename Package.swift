@@ -10,7 +10,8 @@ let package = Package(
     .library(name: "AudioCodecs", targets: ["AudioCodecs"]),
     .library(name: "AudioSTT", targets: ["AudioSTT"]),
     .library(name: "AudioTTS", targets: ["AudioTTS"]),
-    .executable(name: "mere.run", targets: ["MereRunCLI"])
+    .executable(name: "mere.run", targets: ["MereRunCLI"]),
+    .executable(name: "mere.run.app", targets: ["MereRunApp"])
   ],
   dependencies: [
     .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0"),
@@ -108,6 +109,11 @@ let package = Package(
       ]
     ),
     .executableTarget(
+      name: "MereRunApp",
+      dependencies: [],
+      path: "Sources/MereRunApp"
+    ),
+    .executableTarget(
       name: "MereRunCLI",
       dependencies: [
         "MereRunCore",
@@ -147,6 +153,11 @@ let package = Package(
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
+    ),
+    .testTarget(
+      name: "MereRunAppTests",
+      dependencies: ["MereRunApp"],
+      path: "Tests/MereRunAppTests"
     ),
   ]
 )

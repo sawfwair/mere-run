@@ -1,7 +1,7 @@
 # mere.run Documentation
 
 This documentation set is organized like a practical manual for the public
-`mere.run` package and CLI. The goal is to make it easy to learn the tool,
+`mere.run` package, CLI, and optional macOS studio. The goal is to make it easy to learn the tool,
 understand the repository, and navigate the runtime code without guessing where
 things live.
 
