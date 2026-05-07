@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://mere.run">mere.run</a> ·
+  <a href="https://sawfwair.github.io/mere-run/">Docs</a> ·
   <a href="https://public.stereovoid.com/mere-run-releases/mere-run.dmg">Download DMG</a> ·
   <code>swift build</code>
 </p>
@@ -245,6 +246,7 @@ MERERUN_RUN_E2E=installed ./scripts/check.sh
 
 Start with the docs home:
 
+- Published docs: [`sawfwair.github.io/mere-run`](https://sawfwair.github.io/mere-run/)
 - [`docs/README.md`](./docs/README.md): navigation hub for the full docs set
 - local docs site: `pnpm install && pnpm docs:dev`
 - production docs build: `pnpm docs:build`
