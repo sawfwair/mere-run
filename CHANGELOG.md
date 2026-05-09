@@ -8,6 +8,16 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.4 - 2026-05-09
+
+### Added
+
+- added a site-matched MereRun app icon for the macOS Studio bundle
+
+### Changed
+
+- polished the public DMG into a drag-to-Applications layout with release support files hidden under `.mere-run`
+
 ## 0.4.3 - 2026-05-09
 
 ### Added

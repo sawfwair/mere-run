@@ -14,6 +14,7 @@ esac
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
+app_icon="${repo_root}/assets/MereRunApp/AppIcon.icns"
 
 swift_args=(build --product mere.run.app)
 if [[ "$configuration" == "release" ]]; then
@@ -55,6 +56,11 @@ plutil -insert CFBundleVersion -string "$app_build" "${contents}/Info.plist"
 plutil -insert CFBundleShortVersionString -string "$app_version" "${contents}/Info.plist"
 plutil -insert LSMinimumSystemVersion -string "15.0" "${contents}/Info.plist"
 plutil -insert NSPrincipalClass -string "NSApplication" "${contents}/Info.plist"
+
+if [[ -f "$app_icon" ]]; then
+  cp "$app_icon" "${resources}/AppIcon.icns"
+  plutil -insert CFBundleIconFile -string "AppIcon" "${contents}/Info.plist"
+fi
 
 codesign --force --sign - "$bundle" >/dev/null
 echo "$repo_root/$bundle"
