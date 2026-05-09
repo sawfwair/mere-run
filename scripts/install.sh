@@ -8,7 +8,33 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BIN_SRC="$SCRIPT_DIR/mere.run"
 BIN_DEST="${MERERUN_INSTALL_BIN_DEST:-/usr/local/bin/mere.run}"
+BIN_DEST_DIR="$(dirname "$BIN_DEST")"
 MODEL_SOURCE_CONFIG_FILENAME="mererun-model-source-base-url.txt"
+
+usage() {
+  cat <<'USAGE'
+Usage: ./install.sh [--help]
+
+Install the packaged mere.run CLI and colocated runtime assets.
+
+Environment:
+  MERERUN_INSTALL_BIN_DEST  Override install path (default: /usr/local/bin/mere.run)
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    echo "[mere.run] error: unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
+esac
 
 if [[ ! -x "$BIN_SRC" ]]; then
   echo "[mere.run] error: binary not found at $BIN_SRC" >&2
@@ -28,14 +54,18 @@ copy_path() {
   ditto "$src" "$dest_dir/$base"
 }
 
+can_install_without_sudo=false
+if mkdir -p "$BIN_DEST_DIR" 2>/dev/null && [[ -w "$BIN_DEST_DIR" ]]; then
+  can_install_without_sudo=true
+fi
+
 # Install binary
-if [[ -w "$(dirname "$BIN_DEST")" ]] 2>/dev/null; then
-  mkdir -p "$(dirname "$BIN_DEST")"
-  copy_path "$BIN_SRC" "$(dirname "$BIN_DEST")"
+if [[ "$can_install_without_sudo" == true ]]; then
+  copy_path "$BIN_SRC" "$BIN_DEST_DIR"
   chmod +x "$BIN_DEST"
 else
-  echo "[mere.run] need sudo to write to $(dirname "$BIN_DEST")"
-  sudo mkdir -p "$(dirname "$BIN_DEST")"
+  echo "[mere.run] need sudo to write to $BIN_DEST_DIR"
+  sudo mkdir -p "$BIN_DEST_DIR"
   sudo rm -f "$BIN_DEST"
   sudo ditto "$BIN_SRC" "$BIN_DEST"
   sudo chmod +x "$BIN_DEST"
@@ -52,35 +82,35 @@ fi
 
 if (( ${#support_items[@]} > 0 )); then
   echo "[mere.run] installing runtime assets..."
-  if [[ -w "$(dirname "$BIN_DEST")" ]] 2>/dev/null; then
+  if [[ "$can_install_without_sudo" == true ]]; then
     for item in "${support_items[@]}"; do
-      copy_path "$item" "$(dirname "$BIN_DEST")"
+      copy_path "$item" "$BIN_DEST_DIR"
     done
   else
     for item in "${support_items[@]}"; do
       base="$(basename "$item")"
-      sudo rm -rf "$(dirname "$BIN_DEST")/$base"
-      sudo ditto "$item" "$(dirname "$BIN_DEST")/$base"
+      sudo rm -rf "$BIN_DEST_DIR/$base"
+      sudo ditto "$item" "$BIN_DEST_DIR/$base"
     done
   fi
 fi
 
 # Install MLX Metal shader resources alongside the binary.
 # mlx-swift looks for metallib files in a Resources/ directory next to the executable.
-MLX_BUNDLE="$(dirname "$BIN_DEST")/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+MLX_BUNDLE="$BIN_DEST_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
 if [[ -f "$MLX_BUNDLE" ]]; then
   echo "[mere.run] installing MLX Metal shaders..."
-  RESOURCES_DIR="$(dirname "$BIN_DEST")/Resources"
-  if [[ -w "$(dirname "$BIN_DEST")" ]] 2>/dev/null; then
+  RESOURCES_DIR="$BIN_DEST_DIR/Resources"
+  if [[ "$can_install_without_sudo" == true ]]; then
     mkdir -p "$RESOURCES_DIR"
     cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/default.metallib"
     cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/mlx.metallib"
-    cp -f "$MLX_BUNDLE" "$(dirname "$BIN_DEST")/mlx.metallib"
+    cp -f "$MLX_BUNDLE" "$BIN_DEST_DIR/mlx.metallib"
   else
     sudo mkdir -p "$RESOURCES_DIR"
     sudo cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/default.metallib"
     sudo cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/mlx.metallib"
-    sudo cp -f "$MLX_BUNDLE" "$(dirname "$BIN_DEST")/mlx.metallib"
+    sudo cp -f "$MLX_BUNDLE" "$BIN_DEST_DIR/mlx.metallib"
   fi
 fi
 
@@ -90,7 +120,7 @@ echo "  binary: $BIN_DEST"
 if (( ${#support_items[@]} > 0 )); then
   echo "  runtime assets:"
   for item in "${support_items[@]}"; do
-      echo "    $(dirname "$BIN_DEST")/$(basename "$item")"
+      echo "    $BIN_DEST_DIR/$(basename "$item")"
   done
 fi
 echo ""

@@ -1,18 +1,20 @@
 # mere.run Codebase Map
 
-mere.run is a Swift package and CLI for local-first inference on Apple Silicon. The repo exposes one public executable, `mere.run`, backed by a small set of package targets: `MereRunCore` for shared inference and model-management code, `AudioCore` and `AudioCodecs` for shared audio primitives, `AudioSTT` and `AudioTTS` for speech runtimes, and `MereRunCLI` for the modality-first command surface.
+mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo exposes the public `mere.run` executable plus a thin `mere.run.app` SwiftUI wrapper that runs that CLI. Runtime code lives in `MereRunCore`, shared audio primitives live in `AudioCore` and `AudioCodecs`, speech runtimes live in `AudioSTT` and `AudioTTS`, `MereRunCLI` owns the modality-first command surface, and `MereRunApp` owns the GUI shell.
 
 ## Read This First
 
 1. `Package.swift` for target and dependency flow
 2. `Sources/MereRunCLI/MereRunCLI.swift` for the public command tree
-3. `docs/repository-tour.md` for top-level ownership
-4. `docs/architecture.md` for runtime reading order
-5. the module README inside the subsystem you are editing
+3. `Sources/MereRunApp` for the optional SwiftUI wrapper
+4. `docs/repository-tour.md` for top-level ownership
+5. `docs/architecture.md` for runtime reading order
+6. the module README inside the subsystem you are editing
 
 ## Key Modules
 
 - `Sources/MereRunCLI/Commands/`: one file per public command family or large subcommand cluster
+- `Sources/MereRunApp/`: macOS GUI forms, command templates, and CLI process launching
 - `Sources/MereRunCore/`: model paths, manifests, source config, shared runtime helpers, and modality runtime implementations
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic

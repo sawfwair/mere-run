@@ -4,6 +4,23 @@ import XCTest
 final class InstallScriptTests: XCTestCase {
     private let modelSourceConfigFilename = "mererun-model-source-base-url.txt"
 
+    func testInstallerHelpDoesNotInstall() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let result = try runInstaller(
+            scriptURL: fixture.installScriptURL,
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false),
+            arguments: ["--help"]
+        )
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(result.combinedOutput.contains("MERERUN_INSTALL_BIN_DEST"))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: fixture.destDirURL.appendingPathComponent("mere.run").path)
+        )
+    }
+
     func testInstallerIgnoresMissingModelSourceSidecar() throws {
         let fixture = try makeInstallerFixture()
         defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
@@ -25,6 +42,23 @@ final class InstallScriptTests: XCTestCase {
         XCTAssertFalse(result.combinedOutput.contains("Cannot get the real path"))
     }
 
+    func testInstallerCreatesCustomDestinationDirectoryWithoutSudo() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let nestedBinURL = fixture.rootURL
+            .appendingPathComponent("custom", isDirectory: true)
+            .appendingPathComponent("nested", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+            .appendingPathComponent("mere.run", isDirectory: false)
+
+        let result = try runInstaller(scriptURL: fixture.installScriptURL, binDestURL: nestedBinURL)
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: nestedBinURL.path))
+        XCTAssertFalse(result.combinedOutput.contains("need sudo"))
+    }
+
     func testInstallerCopiesPackagedModelSourceSidecarWhenPresent() throws {
         let fixture = try makeInstallerFixture()
         defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
@@ -42,6 +76,51 @@ final class InstallScriptTests: XCTestCase {
         XCTAssertEqual(
             try String(contentsOf: installedConfigURL, encoding: .utf8),
             "https://models.example.com/\n"
+        )
+    }
+
+    func testInstallerCopiesMlxBundleAndCompatibilityMetallibsWhenPresent() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let mlxResourcesURL = fixture.sourceDirURL
+            .appendingPathComponent("mlx-swift_Cmlx.bundle", isDirectory: true)
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: mlxResourcesURL, withIntermediateDirectories: true)
+        try "fake metallib".write(
+            to: mlxResourcesURL.appendingPathComponent("default.metallib", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try runInstaller(
+            scriptURL: fixture.installScriptURL,
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false)
+        )
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL
+                    .appendingPathComponent("mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib")
+                    .path
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("Resources/default.metallib").path
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("Resources/mlx.metallib").path
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("mlx.metallib").path
+            )
         )
     }
 
@@ -80,10 +159,14 @@ final class InstallScriptTests: XCTestCase {
         )
     }
 
-    private func runInstaller(scriptURL: URL, binDestURL: URL) throws -> InstallerRunResult {
+    private func runInstaller(
+        scriptURL: URL,
+        binDestURL: URL,
+        arguments: [String] = []
+    ) throws -> InstallerRunResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [scriptURL.path]
+        process.arguments = [scriptURL.path] + arguments
         var environment = ProcessInfo.processInfo.environment
         environment["MERERUN_INSTALL_BIN_DEST"] = binDestURL.path
         environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"

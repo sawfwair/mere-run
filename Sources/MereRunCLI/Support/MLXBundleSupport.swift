@@ -87,7 +87,14 @@ enum MLXBundleSupport {
                 continue
             }
             try? fm.removeItem(at: destination)
-            try fm.copyItem(at: defaultMetallibURL, to: destination)
+            do {
+                try fm.copyItem(at: defaultMetallibURL, to: destination)
+            } catch {
+                if fm.fileExists(atPath: destination.path) {
+                    continue
+                }
+                throw error
+            }
         }
     }
 

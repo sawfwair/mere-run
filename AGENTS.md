@@ -4,9 +4,10 @@ Guidance for AI coding agents working in this repo. For human contributor expect
 
 ## Repo at a glance
 
-mere.run is a Swift package and CLI for local-first inference on Apple Silicon. The repo ships three things:
+mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo ships four things:
 
-- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
+- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunApp` (the optional `mere.run.app` executable), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
+- SwiftUI wrapper — `Sources/MereRunApp` builds the optional `mere.run.app` executable and runs the public CLI.
 - VitePress docs site — `package.json`, `pnpm-lock.yaml`, `docs/`. Used only to build and preview the public docs.
 - Vendored runtime artifacts — `vendor/llama.xcframework`, `vendor/mlx-swift_Cmlx.bundle`.
 
