@@ -59,6 +59,29 @@ final class InstallScriptTests: XCTestCase {
         XCTAssertFalse(result.combinedOutput.contains("need sudo"))
     }
 
+    func testInstallerUsesCLIPayloadSubdirectoryWhenPresent() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let cliPayloadURL = fixture.sourceDirURL.appendingPathComponent("CLI", isDirectory: true)
+        try FileManager.default.createDirectory(at: cliPayloadURL, withIntermediateDirectories: true)
+        try FileManager.default.moveItem(
+            at: fixture.sourceDirURL.appendingPathComponent("mere.run", isDirectory: false),
+            to: cliPayloadURL.appendingPathComponent("mere.run", isDirectory: false)
+        )
+
+        let result = try runInstaller(
+            scriptURL: fixture.installScriptURL,
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false)
+        )
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: fixture.destDirURL.appendingPathComponent("mere.run").path)
+        )
+        XCTAssertTrue(result.combinedOutput.contains("source: \(cliPayloadURL.path)"))
+    }
+
     func testInstallerDoesNotCopyLegacyModelSourceSidecarWhenPresent() throws {
         let fixture = try makeInstallerFixture()
         defer { try? FileManager.default.removeItem(at: fixture.rootURL) }

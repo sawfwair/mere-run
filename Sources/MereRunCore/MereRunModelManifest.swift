@@ -478,7 +478,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: Defaults(steps: 4, cfg: 1.0),
                 supports: [.txt2img, .referenceEdit, .loraInference],
                 components: defaultComponents,
-                upstreamRepoId: nil,
+                upstreamRepoId: "stereovoid/flux2-klein-4b-4bit",
                 createdAt: createdAt
             )
         case .kleinMax:
@@ -629,7 +629,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: Defaults(steps: 4, cfg: 1.0),
                 supports: [.txt2img, .img2img, .loraInference],
                 components: defaultComponents,
-                upstreamRepoId: nil,
+                upstreamRepoId: "andrevp/Z-Image-Turbo-MLX-4bit@main",
                 createdAt: createdAt
             )
         case .zetaMax:
@@ -680,7 +680,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: nil,
                 supports: [.txt2img, .img2img, .loraInference, .loraTraining],
                 components: hybridComponents,
-                upstreamRepoId: nil,
+                upstreamRepoId: "Tongyi-MAI/Z-Image@main",
                 createdAt: createdAt
             )
         case .visionSegmentSAM31:

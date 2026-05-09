@@ -29,6 +29,7 @@ export default defineConfig({
     nav: [
       { text: 'Getting Started', link: '/getting-started' },
       { text: 'CLI', link: '/cli' },
+      { text: 'Cookbooks', link: '/cookbooks' },
       { text: 'Runtime', link: '/runtime/image' },
       { text: 'Internals', link: '/internals/cli-and-runtime' }
     ],
@@ -39,6 +40,7 @@ export default defineConfig({
           { text: 'Docs Home', link: '/' },
           { text: 'Getting Started', link: '/getting-started' },
           { text: 'CLI Reference', link: '/cli' },
+          { text: 'Cookbooks', link: '/cookbooks' },
           { text: 'Configuration', link: '/configuration' },
           { text: 'Model Sources', link: '/model-sources' }
         ]

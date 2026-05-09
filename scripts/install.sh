@@ -2,11 +2,15 @@
 set -euo pipefail
 
 # mere.run installer — ships inside the DMG.
-# Copies the binary and colocated runtime assets to /usr/local/bin.
+# Copies the binary and packaged runtime assets to /usr/local/bin.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="${MERERUN_INSTALL_SOURCE_DIR:-$SCRIPT_DIR}"
+if [[ ! -x "$SOURCE_DIR/mere.run" && -x "$SCRIPT_DIR/CLI/mere.run" ]]; then
+  SOURCE_DIR="$SCRIPT_DIR/CLI"
+fi
 
-BIN_SRC="$SCRIPT_DIR/mere.run"
+BIN_SRC="$SOURCE_DIR/mere.run"
 BIN_DEST="${MERERUN_INSTALL_BIN_DEST:-/usr/local/bin/mere.run}"
 BIN_DEST_DIR="$(dirname "$BIN_DEST")"
 
@@ -17,7 +21,8 @@ Usage: ./install.sh [--help]
 Install the packaged mere.run CLI and colocated runtime assets.
 
 Environment:
-  MERERUN_INSTALL_BIN_DEST  Override install path (default: /usr/local/bin/mere.run)
+  MERERUN_INSTALL_BIN_DEST     Override install path (default: /usr/local/bin/mere.run)
+  MERERUN_INSTALL_SOURCE_DIR   Override packaged CLI directory (default: ./CLI if present)
 USAGE
 }
 
@@ -41,6 +46,7 @@ if [[ ! -x "$BIN_SRC" ]]; then
 fi
 
 echo "[mere.run] installing mere.run..."
+echo "[mere.run] source: $SOURCE_DIR"
 
 copy_path() {
   local src="$1"
@@ -72,7 +78,7 @@ fi
 
 # Install colocated runtime assets needed by the CLI.
 shopt -s nullglob
-support_items=("$SCRIPT_DIR"/*.framework "$SCRIPT_DIR"/*.bundle)
+support_items=("$SOURCE_DIR"/*.framework "$SOURCE_DIR"/*.bundle)
 shopt -u nullglob
 
 if (( ${#support_items[@]} > 0 )); then

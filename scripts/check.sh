@@ -38,6 +38,7 @@ if [[ ! -x "$mere_run_bin" ]]; then
 fi
 
 "$mere_run_bin" --help >/dev/null
+"$mere_run_bin" guide --help >/dev/null
 "$mere_run_bin" image generate --help >/dev/null
 "$mere_run_bin" image validate --help >/dev/null
 "$mere_run_bin" text chat --help >/dev/null

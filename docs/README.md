@@ -34,9 +34,10 @@ If you are new to the repo, read these in order:
 
 1. [Getting Started](./getting-started.md)
 2. [CLI Reference](./cli.md)
-3. [Configuration](./configuration.md)
-4. [Model Sources](./model-sources.md)
-5. [Repository Tour](./repository-tour.md)
+3. [Cookbooks](./cookbooks.md)
+4. [Configuration](./configuration.md)
+5. [Model Sources](./model-sources.md)
+6. [Repository Tour](./repository-tour.md)
 
 ## Choose your path
 
@@ -44,6 +45,7 @@ If you are new to the repo, read these in order:
 
 - [Getting Started](./getting-started.md)
 - [CLI Reference](./cli.md)
+- [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
 
@@ -72,6 +74,8 @@ If you are new to the repo, read these in order:
 
 - [Getting Started](./getting-started.md): clone, build, first commands, first
   model pulls, and local setup
+- [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
+  prompting, parameters, examples, and troubleshooting
 - [Configuration](./configuration.md): supported environment variables and
   debug toggles
 - [Model Sources](./model-sources.md): canonical model IDs, Hugging Face sources,

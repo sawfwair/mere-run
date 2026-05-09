@@ -3,25 +3,41 @@ import Foundation
 public enum ZImageTurboRepository {
     public static let id = "Tongyi-MAI/Z-Image-Turbo"
     public static let revision = "main"
+    public static let baseRepoId = "Tongyi-MAI/Z-Image"
+    public static let nanoRepoId = "andrevp/Z-Image-Turbo-MLX-4bit"
     public static let defaultModelID: ModelResolver.ModelID = .zetaMax
+    public static let snapshotPatterns = [
+        "model_index.json",
+        "tokenizer/*",
+        "text_encoder/*",
+        "transformer/*",
+        "vae/*",
+        "scheduler/*",
+    ]
 
     public static func hubFallbackConfig(for modelID: ModelResolver.ModelID) -> HubFallbackConfig? {
-        guard modelID == .zetaMax else {
+        switch modelID {
+        case .zetaNano:
+            return HubFallbackConfig(
+                repoId: nanoRepoId,
+                revision: revision,
+                patterns: snapshotPatterns
+            )
+        case .zetaMax:
+            return HubFallbackConfig(
+                repoId: id,
+                revision: revision,
+                patterns: snapshotPatterns
+            )
+        case .zetaBase:
+            return HubFallbackConfig(
+                repoId: baseRepoId,
+                revision: revision,
+                patterns: snapshotPatterns
+            )
+        default:
             return nil
         }
-
-        return HubFallbackConfig(
-            repoId: id,
-            revision: revision,
-            patterns: [
-                "model_index.json",
-                "tokenizer/*",
-                "text_encoder/*",
-                "transformer/*",
-                "vae/*",
-                "scheduler/*",
-            ]
-        )
     }
 
     public static func resolveModelID(from modelSpec: String) -> ModelResolver.ModelID? {
