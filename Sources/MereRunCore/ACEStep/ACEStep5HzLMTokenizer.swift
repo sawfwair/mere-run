@@ -106,9 +106,7 @@ public final class ACEStep5HzLMTokenizer {
         }
 
         let data = try Data(contentsOf: url)
-        guard let obj = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
-            return ([], [:])
-        }
+        let obj = (try? JSONDecoder().decode([String: LenientInt].self, from: data)) ?? [:]
 
         var ids: Set<Int> = []
         var map: [Int: Int] = [:]
@@ -120,7 +118,7 @@ public final class ACEStep5HzLMTokenizer {
 
         for (token, rawId) in obj {
             guard token.hasPrefix(prefix), token.hasSuffix(suffix) else { continue }
-            guard let id = rawId as? Int else { continue }
+            let id = rawId.value
 
             let start = token.index(token.startIndex, offsetBy: prefix.count)
             let end = token.index(token.endIndex, offsetBy: -suffix.count)
@@ -136,15 +134,8 @@ public final class ACEStep5HzLMTokenizer {
 
     private static func makeBPETokenizerData(vocabURL: URL, mergesURL: URL) throws -> Config {
         let vocabData = try Data(contentsOf: vocabURL)
-        guard let vocabObject = try JSONSerialization.jsonObject(with: vocabData, options: []) as? [String: Any] else {
-            throw ACEStep5HzLMTokenizerError.fileNotFound(vocabURL)
-        }
-
-        var vocab: [String: Int] = [:]
-        vocab.reserveCapacity(vocabObject.count)
-        for (k, v) in vocabObject {
-            if let i = v as? Int { vocab[k] = i }
-        }
+        let decodedVocab = try JSONDecoder().decode([String: LenientInt].self, from: vocabData)
+        let vocab = decodedVocab.mapValues(\.value)
 
         let mergesText = try String(contentsOf: mergesURL, encoding: .utf8)
         let merges: [String] = mergesText
@@ -152,23 +143,33 @@ public final class ACEStep5HzLMTokenizer {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }
 
-        let tokenizerDict: [String: Any] = [
-            "model": [
-                "vocab": vocab,
-                "merges": merges,
-            ],
-            "preTokenizer": [
-                "type": "ByteLevel",
-                "addPrefixSpace": false,
-                "trimOffsets": true,
-                "useRegex": true,
-            ],
-            "decoder": [
-                "type": "ByteLevel",
-            ],
-        ]
-
-        let raw = try JSONSerialization.data(withJSONObject: tokenizerDict, options: [])
+        let raw = try JSONEncoder().encode(ACEStepBPETokenizerConfig(vocab: vocab, merges: merges))
         return try JSONDecoder().decode(Config.self, from: raw)
+    }
+}
+
+private struct ACEStepBPETokenizerConfig: Encodable {
+    let model: Model
+    let preTokenizer = ByteLevelPreTokenizer()
+    let decoder = ByteLevelDecoder()
+
+    init(vocab: [String: Int], merges: [String]) {
+        self.model = Model(vocab: vocab, merges: merges)
+    }
+
+    struct Model: Encodable {
+        let vocab: [String: Int]
+        let merges: [String]
+    }
+
+    struct ByteLevelPreTokenizer: Encodable {
+        let type = "ByteLevel"
+        let addPrefixSpace = false
+        let trimOffsets = true
+        let useRegex = true
+    }
+
+    struct ByteLevelDecoder: Encodable {
+        let type = "ByteLevel"
     }
 }

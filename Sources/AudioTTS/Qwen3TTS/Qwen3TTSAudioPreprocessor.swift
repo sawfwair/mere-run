@@ -1,7 +1,16 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 import Accelerate
 import MLX
+
+private final class AudioConverterInputState: @unchecked Sendable {
+    var didProvideInput = false
+    let buffer: AVAudioPCMBuffer
+
+    init(buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+}
 
 public enum Qwen3TTSAudioPreprocessor {
     public struct ProcessedReference: Sendable, Hashable {
@@ -229,16 +238,16 @@ public enum Qwen3TTSAudioPreprocessor {
             throw Error.readFailed("Failed to create output buffer")
         }
 
-        var didConvert = false
+        let inputState = AudioConverterInputState(buffer: buffer)
         var conversionError: NSError?
         converter.convert(to: output, error: &conversionError) { _, outStatus in
-            if didConvert {
+            if inputState.didProvideInput {
                 outStatus.pointee = .noDataNow
                 return nil
             }
-            didConvert = true
+            inputState.didProvideInput = true
             outStatus.pointee = .haveData
-            return buffer
+            return inputState.buffer
         }
 
         if let conversionError {

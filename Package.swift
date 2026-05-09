@@ -40,8 +40,35 @@ let package = Package(
       ],
       path: "Sources/MereRunCore",
       exclude: [
+        "README.md",
+        "ACEStep/README.md",
+        "ACEStep/Model/README.md",
+        "ACEStep/VAE/README.md",
+        "CodeGen/README.md",
+        "FalconPerception/README.md",
+        "Flux2Klein/README.md",
+        "Flux2Klein/Model/Transformer/README.md",
+        "Gemma4/README.md",
+        "LightOnOCR/README.md",
         "LTX/README.md",
-        "LoRA/README.md"
+        "LoRA/README.md",
+        "PrivacyFilter/README.md",
+        "Psi/README.md",
+        "Q35/README.md",
+        "QwenImageEdit/README.md",
+        "QwenImageEdit/Model/Transformer/README.md",
+        "QwenImageEdit/Model/VAE/README.md",
+        "SAM3/README.md",
+        "Support/README.md",
+        "VLM/README.md",
+        "ZImageI2L/README.md",
+        "ZImageI2L/Model/README.md",
+        "ZImageTurbo/README.md",
+        "ZImageTurbo/Model/TextEncoder/README.md",
+        "ZImageTurbo/Model/TextEncoder/Vision/README.md",
+        "ZImageTurbo/Model/Transformer/README.md",
+        "ZImageTurbo/Model/VAE/README.md",
+        "ZImageTurbo/Util/README.md"
       ],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
@@ -54,6 +81,9 @@ let package = Package(
       name: "AudioCore",
       dependencies: [],
       path: "Sources/AudioCore",
+      exclude: [
+        "README.md"
+      ],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
@@ -64,6 +94,9 @@ let package = Package(
         .product(name: "MLX", package: "mlx-swift")
       ],
       path: "Sources/AudioCodecs",
+      exclude: [
+        "README.md"
+      ],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
@@ -82,6 +115,8 @@ let package = Package(
       ],
       path: "Sources/AudioSTT",
       exclude: [
+        "Parakeet/README.md",
+        "Qwen3ASR/Model/README.md",
         "Qwen3ASR/README.md"
       ],
       swiftSettings: [
@@ -111,7 +146,10 @@ let package = Package(
     .executableTarget(
       name: "MereRunApp",
       dependencies: [],
-      path: "Sources/MereRunApp"
+      path: "Sources/MereRunApp",
+      exclude: [
+        "README.md"
+      ]
     ),
     .executableTarget(
       name: "MereRunCLI",
@@ -126,7 +164,8 @@ let package = Package(
       ],
       path: "Sources/MereRunCLI",
       exclude: [
-        "Commands/README.md"
+        "Commands/README.md",
+        "Support/README.md"
       ],
       swiftSettings: [
         .interoperabilityMode(.Cxx)

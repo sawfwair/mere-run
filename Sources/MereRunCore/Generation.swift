@@ -144,7 +144,7 @@ public struct ChatMessage: Sendable, Hashable, Codable {
 
 // MARK: - Tool Types
 
-public struct ToolParameterProperty: Sendable, Hashable {
+public struct ToolParameterProperty: Sendable, Hashable, Codable {
     public let type: String
     public let description: String
 
@@ -154,7 +154,7 @@ public struct ToolParameterProperty: Sendable, Hashable {
     }
 }
 
-public struct ToolDefinition: Sendable, Hashable {
+public struct ToolDefinition: Sendable, Hashable, Codable {
     public let name: String
     public let description: String
     public let parameters: [String: ToolParameterProperty]
@@ -186,6 +186,43 @@ public struct ToolDefinition: Sendable, Hashable {
             ] as [String: any Sendable],
         ] as [String: any Sendable]
     }
+
+    public func promptSchemaJSONString() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(ToolPromptSchema(definition: self))
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
+private struct ToolPromptSchema: Encodable {
+    let type = "function"
+    let function: ToolFunctionSchema
+
+    init(definition: ToolDefinition) {
+        self.function = ToolFunctionSchema(definition: definition)
+    }
+}
+
+private struct ToolFunctionSchema: Encodable {
+    let name: String
+    let description: String
+    let parameters: ToolParametersSchema
+
+    init(definition: ToolDefinition) {
+        self.name = definition.name
+        self.description = definition.description
+        self.parameters = ToolParametersSchema(
+            properties: definition.parameters,
+            required: definition.required
+        )
+    }
+}
+
+private struct ToolParametersSchema: Encodable {
+    let type = "object"
+    let properties: [String: ToolParameterProperty]
+    let required: [String]
 }
 
 public struct ToolCall: Sendable, Hashable {

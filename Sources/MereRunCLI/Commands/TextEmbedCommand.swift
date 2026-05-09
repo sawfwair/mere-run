@@ -86,20 +86,20 @@ struct TextEmbed: AsyncParsableCommand {
     }
 }
 
-private struct EmbeddingResponse: Codable, Sendable {
+private struct EmbeddingResponse: Encodable, Sendable {
     let object = "list"
     let model: String
     let data: [EmbeddingDatum]
     let usage: EmbeddingUsage
 }
 
-private struct EmbeddingDatum: Codable, Sendable {
+private struct EmbeddingDatum: Encodable, Sendable {
     let object = "embedding"
     let index: Int
     let embedding: [Float]
 }
 
-private struct EmbeddingUsage: Codable, Sendable {
+private struct EmbeddingUsage: Encodable, Sendable {
     let promptTokens: Int
     let totalTokens: Int
 

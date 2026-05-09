@@ -115,7 +115,7 @@ public final class GLM47Tokenizer {
 
     public func encodeChat(
         messages: [ChatMessage],
-        tools: [[String: Any]]? = nil,
+        tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true
     ) -> [Int] {
         let prompt = GLM47ChatTemplate.render(

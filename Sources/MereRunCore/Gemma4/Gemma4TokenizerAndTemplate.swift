@@ -34,9 +34,9 @@ public final class Gemma4TokenizerAndTemplate {
         let maxLength: Int
         if FileManager.default.fileExists(atPath: tokenizerConfigURL.path),
            let data = try? Data(contentsOf: tokenizerConfigURL),
-           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let configured = object["model_max_length"] as? NSNumber {
-            let raw = configured.intValue
+           let config = try? JSONDecoder().decode(Gemma4TokenizerConfig.self, from: data),
+           let configured = config.modelMaxLength {
+            let raw = configured.value
             maxLength = maxLengthOverride ?? (raw > 0 ? raw : 131_072)
         } else {
             maxLength = maxLengthOverride ?? 131_072
@@ -160,5 +160,13 @@ public final class Gemma4TokenizerAndTemplate {
                 options: .regularExpression
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private struct Gemma4TokenizerConfig: Decodable {
+    let modelMaxLength: LenientInt?
+
+    enum CodingKeys: String, CodingKey {
+        case modelMaxLength = "model_max_length"
     }
 }

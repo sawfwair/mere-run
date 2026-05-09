@@ -14,7 +14,7 @@ public struct Q35TokenizerAndTemplate {
 
     public func encodeForGeneration(
         messages: [ChatMessage],
-        tools: [[String: Any]]? = nil,
+        tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         includeThinking: Bool = true,
         maxLength: Int
@@ -46,7 +46,7 @@ public struct Q35TokenizerAndTemplate {
 
     public func render(
         messages: [ChatMessage],
-        tools: [[String: Any]]? = nil,
+        tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         includeThinking: Bool = true
     ) -> String {
@@ -56,8 +56,7 @@ public struct Q35TokenizerAndTemplate {
             prompt += "<|im_start|>system\n"
             prompt += "# Tools\\n\\nYou have access to the following functions:\\n\\n<tools>"
             for tool in tools {
-                if let data = try? JSONSerialization.data(withJSONObject: tool, options: []),
-                   let json = String(data: data, encoding: .utf8) {
+                if let json = try? tool.promptSchemaJSONString() {
                     prompt += "\\n\(json)"
                 }
             }

@@ -131,7 +131,7 @@ public final class Qwen3ASRAudioTower: Module {
             let featLen = featureLens[b]
             let numChunks = Int(ceil(Double(featLen) / Double(chunkSize)))
             var pos = 0
-            for j in 0..<numChunks {
+            for _ in 0..<numChunks {
                 let remaining = featLen - pos
                 let clen = min(chunkSize, max(0, remaining))
                 guard clen > 0 else { continue }

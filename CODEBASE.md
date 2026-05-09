@@ -27,6 +27,7 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 
 - Fast loop: `swiftlint --strict && swift build && swift test`
 - Main gate: `./scripts/check.sh`
+- Agent-readiness gate: `bash ./scripts/agent_readiness_check.sh`
 - Runtime smoke: `MERERUN_RUN_E2E=core ./scripts/check.sh`
 - Installed-model smoke: `MERERUN_RUN_E2E=installed ./scripts/check.sh`
 
@@ -41,4 +42,5 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 - Prefer typed decoding at config/tokenizer boundaries over `[String: Any]`
 - Keep stdout machine-readable and stderr diagnostic in CLI commands
 - Add or update the closest test file for command parsing, model resolution, or compatibility behavior
+- Add a module README before a source directory grows past 500 direct Swift lines
 - If a change requires real checkpoint assets or GPU-only validation, stop after the local gate and report the remaining validation gap explicitly

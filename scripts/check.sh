@@ -28,26 +28,33 @@ EOF
 fi
 
 swiftlint --strict --cache-path .build/swiftlint.cache
+bash ./scripts/agent_readiness_check.sh
 swift build
 swift test
-swift run mere.run --help >/dev/null
-swift run mere.run image generate --help >/dev/null
-swift run mere.run image validate --help >/dev/null
-swift run mere.run text chat --help >/dev/null
-swift run mere.run text code --help >/dev/null
-swift run mere.run text embed --help >/dev/null
-swift run mere.run speech synthesize --help >/dev/null
-swift run mere.run speech transcribe --help >/dev/null
-swift run mere.run speech profile --help >/dev/null
-swift run mere.run vision inspect --help >/dev/null
-swift run mere.run vision ocr --help >/dev/null
-swift run mere.run music generate --help >/dev/null
-swift run mere.run video generate --help >/dev/null
-swift run mere.run video export-latents --help >/dev/null
-swift run mere.run model --help >/dev/null
-swift run mere.run api serve --help >/dev/null
+mere_run_bin=".build/debug/mere.run"
+if [[ ! -x "$mere_run_bin" ]]; then
+  echo "Expected built executable at $mere_run_bin after swift build." >&2
+  exit 1
+fi
 
-model_list_output="$(swift run mere.run model list)"
+"$mere_run_bin" --help >/dev/null
+"$mere_run_bin" image generate --help >/dev/null
+"$mere_run_bin" image validate --help >/dev/null
+"$mere_run_bin" text chat --help >/dev/null
+"$mere_run_bin" text code --help >/dev/null
+"$mere_run_bin" text embed --help >/dev/null
+"$mere_run_bin" speech synthesize --help >/dev/null
+"$mere_run_bin" speech transcribe --help >/dev/null
+"$mere_run_bin" speech profile --help >/dev/null
+"$mere_run_bin" vision inspect --help >/dev/null
+"$mere_run_bin" vision ocr --help >/dev/null
+"$mere_run_bin" music generate --help >/dev/null
+"$mere_run_bin" video generate --help >/dev/null
+"$mere_run_bin" video export-latents --help >/dev/null
+"$mere_run_bin" model --help >/dev/null
+"$mere_run_bin" api serve --help >/dev/null
+
+model_list_output="$("$mere_run_bin" model list)"
 rg -q '^ID +Category +Status +Size$' <<<"$model_list_output"
 rg -q '^image-klein-max +image +' <<<"$model_list_output"
 

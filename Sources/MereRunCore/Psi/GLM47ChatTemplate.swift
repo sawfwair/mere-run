@@ -3,7 +3,7 @@ import Foundation
 public struct GLM47ChatTemplate {
     public static func render(
         messages: [ChatMessage],
-        tools: [[String: Any]]? = nil,
+        tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         enableThinking: Bool = false
     ) -> String {
@@ -15,7 +15,7 @@ public struct GLM47ChatTemplate {
             prompt.append("You are provided with function signatures within <tools></tools> XML tags:\n")
             prompt.append("<tools>\n")
             for tool in tools {
-                if let json = jsonString(tool) {
+                if let json = try? tool.promptSchemaJSONString() {
                     prompt.append(json)
                 }
                 prompt.append("\n")
@@ -52,13 +52,5 @@ public struct GLM47ChatTemplate {
         }
 
         return prompt
-    }
-
-    private static func jsonString(_ value: [String: Any]) -> String? {
-        guard JSONSerialization.isValidJSONObject(value),
-              let data = try? JSONSerialization.data(withJSONObject: value, options: []) else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
     }
 }

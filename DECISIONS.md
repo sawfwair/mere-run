@@ -23,3 +23,7 @@ Some model and tokenizer formats come from external ecosystems and evolve indepe
 ## 6. Dynamic model JSON is a typed boundary
 
 External model JSON can have dynamic keys, legacy numeric encodings, or open tool schemas, but raw `Any` dictionaries should not be the normal representation inside `MereRunCore`. Prefer typed `Codable` payloads, dynamic `CodingKey` containers, or small lenient scalar wrappers at the ingestion boundary, then pass domain types through the runtime.
+
+## 7. Agent readiness is an executable gate
+
+Agent orientation files are treated like source code. `scripts/agent_readiness_check.sh` keeps `CODEBASE.md` compact, requires module READMEs for large source directories, and inventories remaining raw dynamic JSON boundary files so new untyped parsing cannot spread without an explicit follow-up decision.
