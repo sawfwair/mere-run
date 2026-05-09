@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.3 - 2026-05-09
+
+### Added
+
+- added `mere.run guide`, an offline CLI cookbook reader with per-command guides across image, text, speech, vision, music, video, model management, API serving, setup, and agent workflows
+- added public docs and Codex skills that point agents and users at the same guide material
+
 ## 0.4.2 - 2026-05-09
 
 ### Added
