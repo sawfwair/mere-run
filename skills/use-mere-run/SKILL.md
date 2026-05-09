@@ -17,6 +17,7 @@ Help the user get useful output from the public local-first `mere.run` CLI. Opti
 - Do not assume a model is installed. Check `mere.run model list` or pull the needed model first.
 - Keep commands copy-pasteable and minimal. Add advanced flags only when the user asked for them or the error points there.
 - Explain stderr/progress as normal diagnostic output; preserve stdout when the user needs machine-readable results.
+- When the user asks for a good creative result, not just a command, read `references/creative-recipes.md` and translate their vague request into concrete prompt ingredients, model pulls, flags, and an iteration plan.
 
 ## First Five Minutes
 
@@ -108,6 +109,15 @@ For non-loopback API serving, require an explicit key:
 export MERERUN_API_KEY=change-me
 mere.run api serve --host 0.0.0.0 --api-key "$MERERUN_API_KEY"
 ```
+
+## Creative Guidance
+
+The CLI docs cover the available flags; this skill should supply the missing taste/workflow layer. Read `references/creative-recipes.md` when the user asks for:
+
+- a good song, beat, instrumental, vocal track, soundtrack cue, or lyrics-driven generation
+- a better image/video prompt or visual style choice
+- repeatable variation using `--seed`, duration, steps, or metadata
+- help turning a loose idea into a command that is likely to produce a usable result
 
 ## Model Storage
 
