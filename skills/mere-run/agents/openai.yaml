@@ -1,0 +1,4 @@
+interface:
+  display_name: "mere.run CLI"
+  short_description: "Operate the public mere.run CLI safely"
+  default_prompt: "Use $mere-run to inspect the public CLI command tree and run the right validation."
