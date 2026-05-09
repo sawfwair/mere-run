@@ -55,7 +55,7 @@ struct AgentOnboard: AsyncParsableCommand {
         print("  supportedModels: \(supported.count)")
         print("  unsupportedModels: \(unsupported.count)")
 
-        print("\nRecommended first setup (downloadable with current configuration)")
+        print("\nRecommended first setup (downloadable from Hugging Face)")
         if recommended.isEmpty {
             print("  No recommended managed models are supported on this machine.")
         } else {
@@ -70,7 +70,7 @@ struct AgentOnboard: AsyncParsableCommand {
         }
         if !unavailableRecommended.isEmpty {
             let ids = unavailableRecommended.map(\.spec.id).joined(separator: ", ")
-            print("  Additional supported recommendations need model-source configuration: \(ids)")
+            print("  Additional supported recommendations need local model paths: \(ids)")
         }
 
         print("\nAgent readiness")

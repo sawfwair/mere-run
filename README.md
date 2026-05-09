@@ -264,7 +264,7 @@ Core guides:
 Configuration and model management:
 
 - [`docs/configuration.md`](./docs/configuration.md): runtime environment variables and supported debug toggles
-- [`docs/model-sources.md`](./docs/model-sources.md): managed model IDs, explicit archive configuration, and model-store behavior
+- [`docs/model-sources.md`](./docs/model-sources.md): managed model IDs, Hugging Face sources, and model-store behavior
 - [`docs/runtime/model-management.md`](./docs/runtime/model-management.md): model store, manifests, and model commands
 - [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md): vendored artifact provenance and license notices
 - [`CHANGELOG.md`](./CHANGELOG.md): public release notes and OSS-facing changes

@@ -74,8 +74,8 @@ If you are new to the repo, read these in order:
   model pulls, and local setup
 - [Configuration](./configuration.md): supported environment variables and
   debug toggles
-- [Model Sources](./model-sources.md): canonical model IDs, archives, and
-  explicit download configuration
+- [Model Sources](./model-sources.md): canonical model IDs, Hugging Face sources,
+  and local model-store behavior
 
 ### Repository guides
 

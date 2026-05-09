@@ -21,37 +21,17 @@ Default:
 
 ## Managed model downloads
 
-### `MERERUN_MODEL_SOURCE_BASE_URL`
+### `MERERUN_HUB_CACHE`
 
-Sets the explicit base URL used by `mere.run model pull` for public model archives.
+Overrides the Hugging Face snapshot cache used by managed model pulls.
 
 ```bash
-export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
-export MERERUN_MODEL_SOURCE_SHA256S='models/image-zimage-max.tar.gz=<sha256>'
+export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
 swift run mere.run model pull image-zimage-max
 ```
 
-### `MERERUN_MODEL_SOURCE_SHA256S`
-
-Provides required SHA-256 digests for managed archive downloads when the catalog
-does not include one. Use comma-, semicolon-, or newline-separated
-`archive/key.tar.gz=<sha256>` entries. Archive downloads without a catalog or
-environment digest fail before downloading.
-
-Alternative download configuration is also supported for signed downloads:
-
-- `MERERUN_R2_SIGNED_URL_ENDPOINT`
-- `MERERUN_R2_SIGNED_URL_BEARER_TOKEN`
-- `MERERUN_R2_SIGNED_URL_REQUIRED`
-- `MERERUN_R2_SIGNED_URL_ALLOW_FALLBACK`
-- `MERERUN_R2_ACCOUNT_ID`
-- `MERERUN_R2_ACCESS_KEY_ID`
-- `MERERUN_R2_SECRET_ACCESS_KEY`
-- `MERERUN_R2_BUCKET`
-
-Signed URL endpoint failures stop the download by default. Use
-`MERERUN_R2_SIGNED_URL_ALLOW_FALLBACK=1` only when fallback to direct
-credentials or public archives is intentional.
+Managed pulls use cataloged Hugging Face repos only. Private archive hosts and
+R2 credential flows are not part of the public distribution.
 
 ## Specialized model roots
 

@@ -52,7 +52,6 @@ the canonical names shown by `mere.run model list`.
 - `Sources/MereRunCore/MereRunModelPaths.swift`
 - `Sources/MereRunCore/MereRunModelManifest.swift`
 - `Sources/MereRunCore/ModelResolver.swift`
-- `Sources/MereRunCLI/Support/R2ModelRegistry.swift`
 
 ## Command responsibilities
 
@@ -72,8 +71,7 @@ Shows the resolved local install for one canonical model ID.
 
 ### `mere.run model pull`
 
-Downloads a managed model from an explicit configured source. In the OSS repo,
-it does not silently fall back to a baked-in hosted archive URL. Pulls are also
+Downloads a managed model from its cataloged Hugging Face source. Pulls are
 checked against the managed capability catalog before download so low-memory
 machines do not fetch models they cannot run. Pass `--allow-unsupported` only
 when you intentionally accept that risk or are using external hardware.
@@ -83,7 +81,7 @@ when you intentionally accept that risk or are using external hardware.
 Guided onboarding for the shared model store and first local agent. The command
 offers a Pi-powered Mere agent, a BYOA prompt for Claude/Codex, or manual
 commands. The small local agent model is `text-agent-qwen35-9b`; hardware-tier
-setup can select Q35 nano, Qwen3-Coder Next, or source-configured premier
+setup can select Q35 nano, Qwen3-Coder Next, or Hugging Face-backed premier
 Qwen3.5-122B-A10B tiers on large-memory Macs.
 
 ### `mere.run model remove`

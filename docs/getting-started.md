@@ -95,25 +95,19 @@ or:
 swift run mere.run --models-root /path/to/models model list
 ```
 
-## Configure model downloads
+## Pull a model
 
-The OSS repo does not assume a built-in hosted download endpoint. Before
-running `mere.run model pull`, configure one of these:
-
-- `MERERUN_MODEL_SOURCE_BASE_URL` for unsigned archives
-- `MERERUN_R2_SIGNED_URL_ENDPOINT` for a signed download service
-- direct R2 credentials through
-  `MERERUN_R2_ACCOUNT_ID`, `MERERUN_R2_ACCESS_KEY_ID`, and
-  `MERERUN_R2_SECRET_ACCESS_KEY`
+Managed downloads use cataloged Hugging Face repos. No private model-source host
+or R2 credentials are required.
 
 Example:
 
 ```bash
-export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
 swift run mere.run model capabilities
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-klein-max
 ```
 
+Set `MERERUN_HUB_CACHE` when you want the Hugging Face cache on another disk.
 See [Model Sources](./model-sources.md) for the full matrix.
 
 For guided onboarding, run:

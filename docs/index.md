@@ -22,7 +22,7 @@ features:
   - title: Native macOS studio
     details: The optional SwiftUI app opens to a prompt-first canvas, local output library, guided readiness, and advanced CLI details.
   - title: Canonical model system
-    details: Public model IDs, shared model-store rules, and explicit source configuration make installs predictable and scriptable.
+    details: Public model IDs, shared model-store rules, and Hugging Face-backed pulls make installs predictable and scriptable.
   - title: Readable runtime families
     details: The repo is documented and decomposed so contributors can follow command -> runtime -> model loading -> generation without guesswork.
 ---

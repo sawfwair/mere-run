@@ -6,7 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-No notable changes yet.
+### Changed
+
+- removed private archive/R2 model-source downloads; managed pulls now use cataloged Hugging Face snapshots only
 
 ## 0.4.0 - 2026-05-07
 
@@ -27,7 +29,6 @@ No notable changes yet.
 - hardened API request validation for generation parameters and operator-controlled LoRA selection
 - kept `shell_exec` out of non-interactive tool auto-approval even when `--auto-approve-tools` is passed
 - made signed model-source endpoint failures fail closed unless fallback is explicitly allowed
-- added SHA-256 verification support for managed archive downloads from catalog pins or `MERERUN_MODEL_SOURCE_SHA256S`
 - hardened recoverable runtime construction and conditioning failures to throw typed errors instead of terminating the process
 - default GUI launch instructions now use the app bundle path while keeping `swift run mere.run.app` as a contributor smoke path
 - Studio CLI resolution now prefers local build products before installed binaries during development

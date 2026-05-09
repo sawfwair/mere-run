@@ -130,11 +130,14 @@ swift run mere.run model info image-klein-max
 
 ### `mere.run model pull` fails immediately
 
-That usually means model-source configuration is missing. Set one of:
+That usually means the requested model is local-path-only in the public build or
+the current Mac does not pass the capability check.
 
-- `MERERUN_MODEL_SOURCE_BASE_URL`
-- `MERERUN_R2_SIGNED_URL_ENDPOINT`
-- direct R2 credential variables
+Run:
+
+```bash
+swift run mere.run model capabilities --all
+```
 
 See [Model Sources](./model-sources.md) and [Configuration](./configuration.md).
 

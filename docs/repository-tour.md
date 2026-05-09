@@ -66,7 +66,7 @@ Key subdirectories:
 - `ACEStep/`: music generation pipeline
 - `LTX/`: video generation pipeline
 - `LoRA/`: LoRA loading and application support
-- `Support/`: manifests, model resolution, model paths, archive/signing helpers
+- `Support/`: manifests, model resolution, model paths, and Hub snapshot helpers
 - `Training/`, `Quantization/`: advanced model-training and quantization
   utilities kept in the package tree
 

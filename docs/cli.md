@@ -50,7 +50,9 @@ export MERERUN_MODELS_DIR=/Volumes/FastSSD/mererun-models
 
 ## Canonical managed model IDs
 
-See [`model-sources.md`](./model-sources.md) for the full source story. The most common managed IDs are:
+See [`model-sources.md`](./model-sources.md) for the full source story,
+including which IDs are pullable from Hugging Face. The most common managed IDs
+are:
 
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
@@ -77,10 +79,9 @@ For subsystem-specific implementation guides, see:
 ### Pull and inspect models
 
 ```bash
-export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
 swift run mere.run model list
 swift run mere.run model capabilities
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-klein-max
 swift run mere.run model info image-zimage-max
 ```
 
@@ -145,7 +146,7 @@ swift run mere.run api serve --engine text-chat-gemma4
 
 ## Command reference
 
-Model installation in the OSS repo is explicit. Before running `mere.run model pull`, configure either `MERERUN_MODEL_SOURCE_BASE_URL`, a signed download endpoint, or direct R2 credentials. See [`configuration.md`](./configuration.md) and [`model-sources.md`](./model-sources.md).
+Model installation in the OSS repo is explicit. `mere.run model pull` uses cataloged Hugging Face snapshots only; local-path-only models must be supplied with command-specific `--model` or `--model-root` options. See [`configuration.md`](./configuration.md) and [`model-sources.md`](./model-sources.md).
 
 ### `mere.run image generate`
 
@@ -625,7 +626,7 @@ swift run mere.run model list
 
 ### `mere.run model pull`
 
-Download a managed model archive into the local model store. The command checks
+Download a managed Hugging Face snapshot into the local model store. The command checks
 the model capability catalog before downloading so unsupported Macs do not pull
 models they cannot run.
 
@@ -731,7 +732,7 @@ Agent model choices:
 
 - `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB Macs
 - `tier`: the best supported local tier for this Mac, currently 9B, Q35 nano, or Qwen3-Coder Next
-- `premier`: Qwen3.5-122B-A10B mxfp4 on 96 GB Macs and 8-bit on 128 GB+ Macs; these are shown as source-configured until mere.run has managed artifacts for those exact variants
+- `premier`: Qwen3.5-122B-A10B mxfp4 on 96 GB Macs and 8-bit on 128 GB+ Macs; these require an external local model until mere.run has managed Hugging Face entries for those exact variants
 
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.

@@ -113,7 +113,7 @@ struct Setup: AsyncParsableCommand {
         guard recommendation.isStartableByMereRun else {
             let fallback = MereRunAgentModelCatalog.fallbackStartableRecommendation(on: machine)
             let fallbackText = fallback.map { " Use `--agent-model small` or model \($0.id) to start today." } ?? ""
-            throw ValidationError("\(recommendation.displayName) requires source configuration before mere.run can start it.\(fallbackText)")
+            throw ValidationError("\(recommendation.displayName) requires an external local model before mere.run can start it.\(fallbackText)")
         }
 
         let runtime = try SetupAgentRuntime.runtime(for: recommendation)
@@ -147,7 +147,7 @@ struct Setup: AsyncParsableCommand {
         if recommendation.sourceConfigurationRequired {
             print("")
             print("Status")
-            print("  Premier available after source configuration.")
+            print("  Premier available after external local model setup.")
             if let reason = recommendation.reason {
                 print("  \(reason)")
             }
@@ -204,7 +204,7 @@ struct Setup: AsyncParsableCommand {
             print("  Unavailable on this machine.")
             print("  Qwen3.5-122B-A10B mxfp4 requires at least 96 GB unified memory.")
             print("  Qwen3.5-122B-A10B 8-bit requires at least 128 GB unified memory.")
-            print("  Both premier models also require source configuration.")
+            print("  Both premier models also require external local model setup.")
         }
         print("")
         print("Available paths")
@@ -450,7 +450,7 @@ struct SetupAgentRuntime {
         case .textChatQ35:
             engine = .textChatQ35
         case .sourceConfigured:
-            throw ValidationError("\(recommendation.displayName) requires source configuration before it can be started.")
+            throw ValidationError("\(recommendation.displayName) requires an external local model before it can be started.")
         }
         return SetupAgentRuntime(
             recommendation: recommendation,

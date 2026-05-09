@@ -5,7 +5,6 @@ public struct AgentModelResources: Sendable, Hashable {
     public static let qwen35NineBRepoId = "unsloth/Qwen3.5-9B-GGUF"
     public static let qwen35NineBRevision = "main"
     public static let qwen35NineBGGUFFile = "Qwen3.5-9B-Q4_K_M.gguf"
-    public static let qwen35NineBArchiveSize: Int64 = 0
     public static let qwen35NineBRelativePath = "\(qwen35NineBModelId).gguf"
 
     public static let qwen35NineBHubFallbackConfig = HubFallbackConfig(
@@ -19,7 +18,7 @@ public struct AgentModelResources: Sendable, Hashable {
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
     case textChatQ35 = "text-chat-q35"
-    case sourceConfigured = "source-configured"
+    case sourceConfigured = "external"
 }
 
 public enum MereRunAgentModelChoice: String, CaseIterable, Hashable, Sendable {
@@ -203,7 +202,7 @@ public enum MereRunAgentModelCatalog {
             servingEngine: .sourceConfigured,
             managedModelID: nil,
             sourceConfigurationRequired: true,
-            reason: "Premier source configuration is not managed by mere.run yet."
+            reason: "Premier external model setup is not managed by mere.run yet."
         )
     }
 
@@ -217,7 +216,7 @@ public enum MereRunAgentModelCatalog {
             servingEngine: .sourceConfigured,
             managedModelID: nil,
             sourceConfigurationRequired: true,
-            reason: "Premier source configuration is not managed by mere.run yet."
+            reason: "Premier external model setup is not managed by mere.run yet."
         )
     }
 }
