@@ -3,7 +3,7 @@ import Foundation
 /// A lightweight, human-readable manifest that describes a locally installed model directory.
 ///
 /// This is intentionally independent of external hub cache metadata. For models installed by mere.run
-/// (e.g. via `canonical managed model archives` archives), we write this file into the extracted model root so that:
+/// (e.g. via canonical managed Hugging Face snapshots), we write this file into the model root so that:
 /// - CLI + app can validate a model directory consistently
 /// - inference/training code can branch on a single source of truth (engine, variant, defaults)
 ///
@@ -376,7 +376,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     /// Returns a manifest template for a known `ModelResolver.ModelID`.
     ///
-    /// This is used by the app to write manifests after extracting archives, and by the CLI for validation.
+    /// This is used by the app to write manifests after managed downloads, and by the CLI for validation.
     public static func template(for modelID: ModelResolver.ModelID, createdAt: Date = Date()) -> MereRunModelManifest {
         let defaultComponents = Components(
             tokenizer: .local(path: "tokenizer"),

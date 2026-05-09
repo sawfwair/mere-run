@@ -39,7 +39,7 @@ public actor Qwen3VLAutoCaptioner {
             case .imageLoadFailed(let url): return "Failed to load image: \(url.lastPathComponent)"
             case .generationFailed(let msg): return msg
             case .downloadFailed(let msg): return "Download failed: \(msg)"
-            case .extractionFailed: return "Failed to extract model archive"
+            case .extractionFailed: return "Failed to prepare model files"
             }
         }
     }
@@ -138,15 +138,12 @@ public actor Qwen3VLAutoCaptioner {
         progressHandler: (@Sendable (DownloadProgress) -> Void)?
     ) async throws -> URL {
         do {
-            return try await PretrainedModelLoader.fromPretrainedArchive(
+            return try await PretrainedModelLoader.fromPretrainedSnapshot(
                 modelPath: nil,
                 modelId: Self.modelId,
                 defaultModelIds: [Self.modelId],
                 storageId: Self.storageId,
-                archiveKey: "",
-                archiveSize: 0,
                 hubFallback: Self.hubFallback,
-                strictArchiveSize: false,
                 normalize: { base, fileManager in
                     Self.resolveNestedIfNeeded(base: base, fileManager: fileManager)
                 },
@@ -235,8 +232,6 @@ public actor Qwen3VLAutoCaptioner {
             return .generationFailed("Qwen3-VL model files missing: \(files.joined(separator: ", "))")
         case .downloadFailed(let message):
             return .downloadFailed(message)
-        case .extractionFailed:
-            return .extractionFailed
         }
     }
 

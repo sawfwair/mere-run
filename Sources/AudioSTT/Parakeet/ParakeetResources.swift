@@ -6,8 +6,6 @@ public struct ParakeetResources: Sendable, Hashable {
     public static let defaultRepoId = "mlx-community/parakeet-tdt-0.6b-v3"
     public static let defaultRevision = "main"
     public static let sampleRate = 16_000
-    public static let r2ArchiveKey = "models/asr-parakeet.tar.gz"
-    public static let r2ArchiveSize: Int64 = 2_332_340_210
     public static let hubFallbackConfig = HubFallbackConfig(
         repoId: defaultRepoId,
         revision: defaultRevision,

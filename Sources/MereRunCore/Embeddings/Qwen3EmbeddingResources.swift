@@ -3,8 +3,6 @@ import Foundation
 public enum Qwen3EmbeddingCatalog {
     public static let modelId = "text-embed-qwen3-0.6b"
     public static let modelDirectoryName = "Qwen3-Embedding-0.6B"
-    public static let archiveKey = "models/qwen3-embedding-0.6b.tar.gz"
-    public static let archiveSize: Int64 = 0  // Unknown at compile-time.
     public static let defaultRepoId = "Qwen/Qwen3-Embedding-0.6B"
     public static let defaultRevision = "main"
     public static let hubFallbackConfig = HubFallbackConfig(
@@ -23,10 +21,6 @@ public enum Qwen3EmbeddingCatalog {
             "1_Pooling/*",
         ]
     )
-
-    public static var archiveURL: URL? {
-        MereRunModelSourceConfiguration.publicArchiveURL(for: archiveKey)
-    }
 
     /// Returns path if downloaded, nil otherwise. Usable from both app and CLI.
     /// Also checks the Music Acestep checkpoints location as a compatibility fallback.

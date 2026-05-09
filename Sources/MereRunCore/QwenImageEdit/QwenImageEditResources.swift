@@ -4,8 +4,18 @@ public enum QwenImageEditRepository {
     public static let modelId = "qwen-image-edit"
     public static let id = "Qwen/Qwen-Image-Edit"
     public static let revision = "main"
-    public static let r2ArchiveKey = "models/qwen-image-edit.tar.gz"
-    public static let r2ArchiveSize: Int64 = 0
+    public static let hubFallbackConfig = HubFallbackConfig(
+        repoId: id,
+        revision: revision,
+        patterns: [
+            "model_index.json",
+            "scheduler/*",
+            "text_encoder/*",
+            "tokenizer/*",
+            "transformer/*",
+            "vae/*",
+        ]
+    )
 
     public static func canonicalModelId(for modelSpec: String) -> String? {
         let raw = modelSpec
@@ -46,13 +56,12 @@ public enum QwenImageEditRepository {
             throw PretrainedModelLoader.LoadError.unsupportedModelId(modelSpec)
         }
 
-        return try await PretrainedModelLoader.fromPretrainedArchive(
+        return try await PretrainedModelLoader.fromPretrainedSnapshot(
             modelPath: nil,
             modelId: canonicalId,
             defaultModelIds: [modelId],
             storageId: modelId,
-            archiveKey: r2ArchiveKey,
-            archiveSize: r2ArchiveSize,
+            hubFallback: hubFallbackConfig,
             fileManager: fileManager,
             normalize: { base, manager in
                 resolveNestedIfNeeded(base: base, fileManager: manager)

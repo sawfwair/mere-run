@@ -3,21 +3,15 @@ import Foundation
 public struct Q35Resources: Sendable, Hashable {
     public struct Profile: Sendable, Hashable {
         public let modelId: String
-        public let archiveKey: String
-        public let archiveSize: Int64
         public let upstreamRepoId: String
         public let upstreamRevision: String
 
         public init(
             modelId: String,
-            archiveKey: String,
-            archiveSize: Int64,
             upstreamRepoId: String,
             upstreamRevision: String
         ) {
             self.modelId = modelId
-            self.archiveKey = archiveKey
-            self.archiveSize = archiveSize
             self.upstreamRepoId = upstreamRepoId
             self.upstreamRevision = upstreamRevision
         }
@@ -34,14 +28,8 @@ public struct Q35Resources: Sendable, Hashable {
     public static let defaultModelId = "text-chat-q35"
     public static let nanoModelId = "text-chat-q35-nano"
 
-    public static let r2ArchiveKey = "models/q35.tar.gz"
-    public static let r2ArchiveSize: Int64 = 55_965_575_798
-
     public static let upstreamRepoId = "mlx-community/Qwen3.5-122B-A10B-4bit"
     public static let upstreamRevision = "e9c67b08899964be5fdd069bb1b4bc8907fe68f5"
-
-    public static let nanoArchiveKey = "models/text-chat-q35-nano.tar.gz"
-    public static let nanoArchiveSize: Int64 = 0
 
     public static let nanoUpstreamRepoId = "mlx-community/Qwen3.5-35B-A3B-4bit"
     public static let nanoUpstreamRevision = "1e20fd8d42056f870933bf98ca6211024744f7ec"
@@ -49,15 +37,11 @@ public struct Q35Resources: Sendable, Hashable {
     private static let profilesByModelId: [String: Profile] = [
         defaultModelId: Profile(
             modelId: defaultModelId,
-            archiveKey: r2ArchiveKey,
-            archiveSize: r2ArchiveSize,
             upstreamRepoId: upstreamRepoId,
             upstreamRevision: upstreamRevision
         ),
         nanoModelId: Profile(
             modelId: nanoModelId,
-            archiveKey: nanoArchiveKey,
-            archiveSize: nanoArchiveSize,
             upstreamRepoId: nanoUpstreamRepoId,
             upstreamRevision: nanoUpstreamRevision
         ),
@@ -163,7 +147,7 @@ public enum Q35Error: LocalizedError {
         case .downloadFailed(let message):
             return "Download failed: \(message)"
         case .extractionFailed:
-            return "Failed to extract Q35 archive"
+            return "Failed to prepare Q35 model files"
         }
     }
 }

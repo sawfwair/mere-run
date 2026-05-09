@@ -9,7 +9,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_SRC="$SCRIPT_DIR/mere.run"
 BIN_DEST="${MERERUN_INSTALL_BIN_DEST:-/usr/local/bin/mere.run}"
 BIN_DEST_DIR="$(dirname "$BIN_DEST")"
-MODEL_SOURCE_CONFIG_FILENAME="mererun-model-source-base-url.txt"
 
 usage() {
   cat <<'USAGE'
@@ -75,10 +74,6 @@ fi
 shopt -s nullglob
 support_items=("$SCRIPT_DIR"/*.framework "$SCRIPT_DIR"/*.bundle)
 shopt -u nullglob
-model_source_config="$SCRIPT_DIR/$MODEL_SOURCE_CONFIG_FILENAME"
-if [[ -f "$model_source_config" ]]; then
-  support_items+=("$model_source_config")
-fi
 
 if (( ${#support_items[@]} > 0 )); then
   echo "[mere.run] installing runtime assets..."

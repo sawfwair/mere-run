@@ -180,8 +180,6 @@ public actor CodeGenGenerator: ChatGenerator {
             return .missingFiles(files)
         case .downloadFailed(let message):
             return .downloadFailed(message)
-        case .extractionFailed:
-            return .downloadFailed("Failed to extract model archive")
         }
     }
 

@@ -7,7 +7,7 @@ extension ZImageTurboLoRATrainer {
     // MARK: - Assistant LoRA Resolution
 
     /// Resolves an assistant LoRA path.
-    /// Supports local paths, `models/*` R2 keys, public URLs, and legacy adapter aliases.
+    /// Supports local paths, Hugging Face file references, public URLs, and legacy adapter aliases.
     static func resolveAssistantLoRAPath(_ path: String) async throws -> URL {
         let localURL = URL(fileURLWithPath: path).standardizedFileURL
         if FileManager.default.fileExists(atPath: localURL.path) {

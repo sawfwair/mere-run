@@ -21,45 +21,6 @@ public enum ManagedModelInstallShape: Hashable, Sendable {
     case structuredRoot
 }
 
-public struct ManagedModelArchiveSource: Hashable, Sendable {
-    public let key: String
-    public let size: Int64
-    public let packagedKey: String?
-    public let sha256: String?
-    public let packagedSHA256: String?
-
-    public init(
-        key: String,
-        size: Int64,
-        packagedKey: String? = nil,
-        sha256: String? = nil,
-        packagedSHA256: String? = nil
-    ) {
-        self.key = key
-        self.size = size
-        self.packagedKey = packagedKey
-        self.sha256 = sha256
-        self.packagedSHA256 = packagedSHA256
-    }
-
-    public func expectedSHA256(for requestKey: String) -> String? {
-        let normalizedRequestKey = Self.normalizedKey(requestKey)
-        if normalizedRequestKey == Self.normalizedKey(key) {
-            return sha256
-        }
-        if let packagedKey,
-           normalizedRequestKey == Self.normalizedKey(packagedKey) {
-            return packagedSHA256
-        }
-        return nil
-    }
-
-    private static func normalizedKey(_ key: String) -> String {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasPrefix("/") ? String(trimmed.dropFirst()) : trimmed
-    }
-}
-
 public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case flux2Klein
     case zimageTurbo
@@ -95,7 +56,6 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let id: String
     public let category: ManagedModelCategory
     public let installShape: ManagedModelInstallShape
-    public let archiveSource: ManagedModelArchiveSource?
     public let hubFallback: HubFallbackConfig?
     public let upstreamRepoId: String?
     public let upstreamRevision: String?
@@ -110,7 +70,6 @@ public struct ManagedModelSpec: Hashable, Sendable {
         id: String,
         category: ManagedModelCategory,
         installShape: ManagedModelInstallShape,
-        archiveSource: ManagedModelArchiveSource?,
         hubFallback: HubFallbackConfig? = nil,
         upstreamRepoId: String? = nil,
         upstreamRevision: String? = nil,
@@ -124,7 +83,6 @@ public struct ManagedModelSpec: Hashable, Sendable {
         self.id = id
         self.category = category
         self.installShape = installShape
-        self.archiveSource = archiveSource
         self.hubFallback = hubFallback
         self.upstreamRepoId = upstreamRepoId
         self.upstreamRevision = upstreamRevision
@@ -143,11 +101,6 @@ public enum ManagedModelCatalog {
             id: "image-klein-nano",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/image-klein-nano.tar.gz",
-                size: 7_289_504_269,
-                packagedKey: "models/zero-nano.tar.gz"
-            ),
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
@@ -156,11 +109,6 @@ public enum ManagedModelCatalog {
             id: "image-klein-max",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/image-klein-max.tar.gz",
-                size: 18_991_145_972,
-                packagedKey: "models/zero-max.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "black-forest-labs/FLUX.2-klein-4B",
                 patterns: [
@@ -181,11 +129,6 @@ public enum ManagedModelCatalog {
             id: "image-klein-base",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/image-klein-base.tar.gz",
-                size: 0,
-                packagedKey: "models/zero-base.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "black-forest-labs/FLUX.2-klein-base-4B",
                 patterns: [
@@ -206,7 +149,6 @@ public enum ManagedModelCatalog {
             id: "image-klein-shared",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: nil,
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false
         ),
@@ -214,11 +156,6 @@ public enum ManagedModelCatalog {
             id: "image-zimage-nano",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/image-zimage-nano.tar.gz",
-                size: 5_980_168_600,
-                packagedKey: "models/zeta-nano.tar.gz"
-            ),
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
@@ -227,11 +164,6 @@ public enum ManagedModelCatalog {
             id: "image-zimage-max",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/image-zimage-max.tar.gz",
-                size: 18_092_604_557,
-                packagedKey: "models/zeta-max.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "Tongyi-MAI/Z-Image-Turbo",
                 revision: "main",
@@ -254,10 +186,6 @@ public enum ManagedModelCatalog {
             id: "image-zimage-base",
             category: .image,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/image-zimage-base.tar.gz",
-                size: 0
-            ),
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
@@ -266,11 +194,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-mebot",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-chat-mebot.tar.gz",
-                size: 2_052_847_048,
-                packagedKey: "models/mebot-instruct.tar.gz"
-            ),
             validationKind: .hfTextChat,
             runtimeAutoDownloadAllowed: false,
             resolutionFallbackIDs: ["image-klein-nano", "image-klein-max"],
@@ -280,11 +203,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-psi-agent",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-chat-psi-agent.tar.gz",
-                size: 30_257_308_652,
-                packagedKey: "models/psi-agent.tar.gz"
-            ),
             validationKind: .hfTextChat,
             runtimeAutoDownloadAllowed: false
         ),
@@ -292,7 +210,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-gemma4",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: nil,
             hubFallback: HubFallbackConfig(
                 repoId: Gemma4Resources.defaultUpstreamModelId,
                 patterns: Gemma4Resources.snapshotPatterns
@@ -306,11 +223,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-gemma4-nano",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-chat-gemma4-nano.tar.gz",
-                size: 0,
-                packagedKey: "models/gemma4-nano.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: Gemma4Resources.nanoUpstreamModelId,
                 patterns: Gemma4Resources.snapshotPatterns
@@ -323,11 +235,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-gemma4-max",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-chat-gemma4-max.tar.gz",
-                size: 0,
-                packagedKey: "models/gemma4-max.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: Gemma4Resources.maxUpstreamModelId,
                 patterns: Gemma4Resources.snapshotPatterns
@@ -340,11 +247,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-q35",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-chat-q35.tar.gz",
-                size: 0,
-                packagedKey: "models/q35.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: Q35Resources.upstreamRepoId,
                 revision: Q35Resources.upstreamRevision,
@@ -366,10 +268,6 @@ public enum ManagedModelCatalog {
             id: "text-chat-q35-nano",
             category: .textChat,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-chat-q35-nano.tar.gz",
-                size: 0
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: Q35Resources.nanoUpstreamRepoId,
                 revision: Q35Resources.nanoUpstreamRevision,
@@ -391,10 +289,6 @@ public enum ManagedModelCatalog {
             id: AgentModelResources.qwen35NineBModelId,
             category: .textCode,
             installShape: .singleFile(relativePath: AgentModelResources.qwen35NineBRelativePath),
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-agent-qwen35-9b.tar.gz",
-                size: AgentModelResources.qwen35NineBArchiveSize
-            ),
             hubFallback: AgentModelResources.qwen35NineBHubFallbackConfig,
             upstreamRepoId: AgentModelResources.qwen35NineBRepoId,
             upstreamRevision: AgentModelResources.qwen35NineBRevision,
@@ -405,11 +299,6 @@ public enum ManagedModelCatalog {
             id: "speech-tts-qwen3-nano",
             category: .speechTTS,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/speech-tts-qwen3-nano.tar.gz",
-                size: 3_691_910_698,
-                packagedKey: "models/talk-nano.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 revision: "main",
@@ -432,10 +321,6 @@ public enum ManagedModelCatalog {
             id: "speech-tts-qwen3-customvoice",
             category: .speechTTS,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/speech-tts-qwen3-customvoice.tar.gz",
-                size: 0
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
                 revision: "main",
@@ -458,11 +343,6 @@ public enum ManagedModelCatalog {
             id: "speech-asr-qwen3",
             category: .speechASR,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/speech-asr-qwen3.tar.gz",
-                size: 0,
-                packagedKey: "models/asr.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "mlx-community/Qwen3-ASR-1.7B-8bit",
                 revision: "main",
@@ -490,11 +370,6 @@ public enum ManagedModelCatalog {
             id: "speech-asr-parakeet",
             category: .speechASR,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/speech-asr-parakeet.tar.gz",
-                size: 2_332_340_210,
-                packagedKey: "models/asr-parakeet.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "mlx-community/parakeet-tdt-0.6b-v3",
                 revision: "main",
@@ -518,11 +393,6 @@ public enum ManagedModelCatalog {
             id: "text-code-qwen3",
             category: .textCode,
             installShape: .singleFile(relativePath: CodeGenResources.managedRelativePath),
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-code-qwen3.tar.gz",
-                size: CodeGenResources.r2ArchiveSize,
-                packagedKey: "models/qwen3-coder-next.tar.gz"
-            ),
             hubFallback: CodeGenResources.hubFallbackConfig,
             upstreamRepoId: CodeGenResources.defaultRepoId,
             upstreamRevision: CodeGenResources.defaultRevision,
@@ -534,11 +404,6 @@ public enum ManagedModelCatalog {
             id: "text-embed-qwen3-0.6b",
             category: .textEmbed,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/text-embed-qwen3-0.6b.tar.gz",
-                size: 0,
-                packagedKey: "models/qwen3-embedding-0.6b.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "Qwen/Qwen3-Embedding-0.6B",
                 revision: "main",
@@ -564,10 +429,6 @@ public enum ManagedModelCatalog {
             id: OpenAIPrivacyFilterCatalog.modelId,
             category: .textAnonymize,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: OpenAIPrivacyFilterCatalog.archiveKey,
-                size: OpenAIPrivacyFilterCatalog.archiveSize
-            ),
             hubFallback: OpenAIPrivacyFilterCatalog.hubFallbackConfig,
             upstreamRepoId: OpenAIPrivacyFilterCatalog.defaultRepoId,
             upstreamRevision: OpenAIPrivacyFilterCatalog.defaultRevision,
@@ -578,11 +439,6 @@ public enum ManagedModelCatalog {
             id: "vision-ocr-lighton",
             category: .visionOCR,
             installShape: .structuredRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/vision-ocr-lighton.tar.gz",
-                size: 0,
-                packagedKey: "models/ocr.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "lightonai/LightOnOCR-2-1B",
                 revision: "main",
@@ -607,11 +463,18 @@ public enum ManagedModelCatalog {
             id: "vision-segment-sam31",
             category: .visionSegment,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/vision-segment-sam31.tar.gz",
-                size: 0
+            hubFallback: HubFallbackConfig(
+                repoId: "mlx-community/sam3.1-bf16",
+                revision: "main",
+                patterns: [
+                    "config.json",
+                    "model.safetensors",
+                    "model.safetensors.index.json",
+                    "*.safetensors",
+                ]
             ),
             upstreamRepoId: "mlx-community/sam3.1-bf16",
+            upstreamRevision: "main",
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["vision segment"]
@@ -620,10 +483,6 @@ public enum ManagedModelCatalog {
             id: "vision-ground-falcon-perception",
             category: .visionGround,
             installShape: .directoryRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/vision-ground-falcon-perception.tar.gz",
-                size: 0
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "tiiuae/Falcon-Perception",
                 revision: "main",
@@ -648,11 +507,6 @@ public enum ManagedModelCatalog {
             id: "music-acestep",
             category: .music,
             installShape: .structuredRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/music-acestep.tar.gz",
-                size: 0,
-                packagedKey: "models/acestep-v15-full.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "ACE-Step/Ace-Step1.5",
                 revision: "main",
@@ -674,11 +528,6 @@ public enum ManagedModelCatalog {
             id: "video-ltx-av",
             category: .video,
             installShape: .structuredRoot,
-            archiveSource: ManagedModelArchiveSource(
-                key: "models/video-ltx-av.tar.gz",
-                size: 0,
-                packagedKey: "models/ltx-video-av.tar.gz"
-            ),
             hubFallback: HubFallbackConfig(
                 repoId: "mlx-community/LTX-2-distilled-bf16",
                 revision: "main",
@@ -706,6 +555,10 @@ public enum ManagedModelCatalog {
             $0.id == normalized || $0.upstreamRepoId?.lowercased() == normalized
         }
     }
+
+    public static func missingHubSourceMessage(for modelId: String) -> String {
+        "Model \(modelId) does not have a Hugging Face Hub source in this public build. Install it from a local path or choose a model listed by `mere.run model capabilities --recommended`."
+    }
 }
 
 public extension ManagedModelSpec {
@@ -717,16 +570,8 @@ public extension ManagedModelSpec {
         hubFallback != nil
     }
 
-    func hasAnyManagedDownloadSource(
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> Bool {
-        if hubFallback != nil {
-            return true
-        }
-        guard archiveSource != nil else {
-            return false
-        }
-        return MereRunModelSourceConfiguration.hasAnyDownloadSource(environment: environment)
+    func hasAnyManagedDownloadSource() -> Bool {
+        hubFallback != nil
     }
 
     func normalizedRootURL(_ rootURL: URL, fileManager: FileManager = .default) -> URL {

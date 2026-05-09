@@ -3,7 +3,7 @@ import MLX
 
 // MARK: - Psi3 Chat Generator
 
-/// Actor-based chat generator wrapping GLM-4.7 Flash with automatic R2 download.
+/// Actor-based chat generator wrapping GLM-4.7 Flash with automatic Hugging Face download.
 /// Implements the ChatGenerator protocol for standardized chat access.
 public actor Psi3ChatGenerator: ChatGenerator {
 
@@ -138,8 +138,6 @@ public actor Psi3ChatGenerator: ChatGenerator {
             return .missingFiles(files)
         case .downloadFailed(let message):
             return .downloadFailed(message)
-        case .extractionFailed:
-            return .extractionFailed
         }
     }
 }

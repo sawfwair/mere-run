@@ -3,11 +3,8 @@ import MLX
 
 public enum LoRAWeightLoader {
     private static let remoteCacheDirName = "lora"
-    private static let legacyRemoteRefToR2Key: [String: String] = [
-        "ostris/zimage_turbo_training_adapter": "models/zimage_turbo_training_adapter_v2.safetensors",
-        "ostris/zimage_turbo_training_adapter:zimage_turbo_training_adapter_v2.safetensors": "models/zimage_turbo_training_adapter_v2.safetensors",
-        "ostris/zimage_turbo_training_adapter:zimage_turbo_training_adapter_v2.safetensors.gz": "models/zimage_turbo_training_adapter_v2.safetensors.gz",
-    ]
+    private static let defaultTrainingAdapterRepoId = "ostris/zimage_turbo_training_adapter"
+    private static let defaultTrainingAdapterFile = "zimage_turbo_training_adapter_v2.safetensors"
 
     private static let loraPatterns: [(down: String, up: String)] = [
         (".lora_down.", ".lora_up."),
@@ -34,21 +31,17 @@ public enum LoRAWeightLoader {
 
     /// Resolves a remote LoRA reference to a local file path.
     /// Supported formats:
-    /// - `models/...` (R2 object key)
+    /// - `owner/repo:path` (Hugging Face file reference)
     /// - `https://...` / `http://...` (public URL)
-    /// - legacy adapter aliases (mapped to R2 keys)
+    /// - legacy adapter aliases for `ostris/zimage_turbo_training_adapter`
     public static func resolveRemoteReference(_ reference: String) async throws -> URL {
         let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw LoRAError.invalidFormat("Remote LoRA reference cannot be empty.")
         }
 
-        if let mappedKey = legacyRemoteRefToR2Key[trimmed] {
-            return try await downloadR2Object(key: mappedKey)
-        }
-
-        if trimmed.hasPrefix("models/") {
-            return try await downloadR2Object(key: trimmed)
+        if let hubReference = parseHubReference(trimmed) {
+            return try await downloadHubFile(hubReference)
         }
 
         if let remoteURL = URL(string: trimmed) {
@@ -57,7 +50,7 @@ public enum LoRAWeightLoader {
         }
 
         throw LoRAError.invalidFormat(
-            "Unsupported remote LoRA reference '\(reference)'. Use a local file path, models/* key, or https URL."
+            "Unsupported remote LoRA reference '\(reference)'. Use a local file path, owner/repo:file, or HTTPS URL."
         )
     }
 
@@ -186,19 +179,45 @@ public enum LoRAWeightLoader {
         return fallback
     }
 
-    private static func downloadR2Object(key: String) async throws -> URL {
-        let filename = URL(fileURLWithPath: key).lastPathComponent
-        guard !filename.isEmpty else {
-            throw LoRAError.invalidFormat("Invalid R2 object key: \(key)")
-        }
-        let destination = try cacheFileURL(filename: filename)
+    private struct HubLoRAReference: Hashable, Sendable {
+        let repoId: String
+        let revision: String
+        let filePath: String
+    }
 
-        if FileManager.default.fileExists(atPath: destination.path) {
-            return try maybeDecompressGzip(destination)
+    private static func parseHubReference(_ reference: String) -> HubLoRAReference? {
+        let normalized = reference
+            .replacingOccurrences(of: ":zimage_turbo_training_adapter_v2.safetensors.gz", with: "")
+        if normalized == defaultTrainingAdapterRepoId {
+            return HubLoRAReference(
+                repoId: defaultTrainingAdapterRepoId,
+                revision: "main",
+                filePath: defaultTrainingAdapterFile
+            )
         }
 
-        let request = try await R2DownloadRequestBuilder.makeGETRequest(key: key).request
-        return try await downloadRequest(request, destination: destination)
+        let parts = reference.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2,
+              parts[0].split(separator: "/").count == 2,
+              !parts[1].isEmpty else {
+            return nil
+        }
+        return HubLoRAReference(repoId: parts[0], revision: "main", filePath: parts[1])
+    }
+
+    private static func downloadHubFile(_ reference: HubLoRAReference) async throws -> URL {
+        do {
+            let snapshot = try HubSnapshot(
+                options: HubSnapshotOptions(
+                    repoId: reference.repoId,
+                    revision: reference.revision,
+                    patterns: [reference.filePath]
+                )
+            )
+            return try await snapshot.fileURL(for: reference.filePath)
+        } catch {
+            throw LoRAError.invalidFormat("Remote LoRA download failed: \(error.localizedDescription)")
+        }
     }
 
     private static func downloadRemoteFile(url: URL) async throws -> URL {

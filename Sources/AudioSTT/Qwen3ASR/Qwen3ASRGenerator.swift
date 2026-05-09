@@ -158,8 +158,6 @@ public actor Qwen3ASRGenerator: ASRGenerator {
             return .missingFiles(files)
         case .downloadFailed(let message):
             return .downloadFailed(message)
-        case .extractionFailed:
-            return .extractionFailed
         }
     }
 
@@ -808,7 +806,7 @@ public enum Qwen3ASRError: LocalizedError {
         case .downloadFailed(let message):
             return "Download failed: \(message)"
         case .extractionFailed:
-            return "Failed to extract model archive"
+            return "Failed to prepare model files"
         case .transcriptionFailed(let message):
             return "Transcription failed: \(message)"
         }

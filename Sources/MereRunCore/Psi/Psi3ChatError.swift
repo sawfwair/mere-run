@@ -20,7 +20,7 @@ public enum Psi3ChatError: LocalizedError {
         case .downloadFailed(let message):
             return "Download failed: \(message)"
         case .extractionFailed:
-            return "Failed to extract model archive"
+            return "Failed to prepare model files"
         case .generationFailed(let message):
             return "Generation failed: \(message)"
         }

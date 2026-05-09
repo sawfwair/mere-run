@@ -41,7 +41,7 @@ public enum Qwen3TTSError: LocalizedError {
         case .downloadFailed(let message):
             return "Download failed: \(message)"
         case .extractionFailed:
-            return "Failed to extract model archive"
+            return "Failed to prepare model files"
         case .tokenizationFailed:
             return "Failed to tokenize input text"
         case .generationFailed(let message):

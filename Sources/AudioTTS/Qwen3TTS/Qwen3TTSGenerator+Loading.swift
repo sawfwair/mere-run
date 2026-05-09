@@ -38,8 +38,6 @@ extension Qwen3TTSGenerator {
             return .missingFiles(files)
         case .downloadFailed(let message):
             return .downloadFailed(message)
-        case .extractionFailed:
-            return .extractionFailed
         }
     }
 

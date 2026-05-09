@@ -19,7 +19,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
         abstract: "Generate speech from text using Qwen3-TTS.",
         discussion: """
         Converts text to speech using Qwen3-TTS-12Hz-1.7B-VoiceDesign.
-        Model is downloaded from R2 on first use.
+        Model is downloaded from Hugging Face on first use.
 
         Example:
           mere.run speech synthesize "Hello, world!" -o hello.wav

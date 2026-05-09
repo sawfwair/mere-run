@@ -24,9 +24,15 @@ final class ManagedModelCatalogTests: XCTestCase {
     func testAllRuntimeAutoDownloadSpecsHaveManagedSource() {
         for spec in ManagedModelCatalog.allSpecs where spec.runtimeAutoDownloadAllowed {
             XCTAssertTrue(
-                spec.archiveSource != nil || spec.hubFallback != nil,
-                "Runtime auto-download model \(spec.id) has no configured managed source."
+                spec.hubFallback != nil,
+                "Runtime auto-download model \(spec.id) has no configured Hugging Face source."
             )
+        }
+    }
+
+    func testManagedDownloadSourcesAreHuggingFaceOnly() {
+        for spec in ManagedModelCatalog.allSpecs where spec.hasAnyManagedDownloadSource() {
+            XCTAssertNotNil(spec.hubFallback, "Managed model \(spec.id) should download from Hugging Face.")
         }
     }
 

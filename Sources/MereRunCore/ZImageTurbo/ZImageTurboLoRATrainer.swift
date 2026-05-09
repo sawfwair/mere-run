@@ -313,8 +313,9 @@ public struct ZImageTurboLoRATrainingProgress: Sendable {
 
 public enum ZImageTurboLoRATrainer {
     /// Default training adapter that provides a better starting point for rapid Z-Image-Turbo training.
-    /// Resolved via the R2 signed-URL flow.
-    public static let defaultTrainingAdapterRef = "models/zimage_turbo_training_adapter_v2.safetensors"
+    /// Resolved through Hugging Face Hub.
+    public static let defaultTrainingAdapterRef =
+        "ostris/zimage_turbo_training_adapter:zimage_turbo_training_adapter_v2.safetensors"
 
     /// Trains a LoRA on the given examples.
     public static func train(

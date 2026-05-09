@@ -297,33 +297,83 @@ public actor ZImageI2LGenerator {
             return installed
         }
 
-        let root = try await PretrainedModelLoader.fromPretrainedArchive(
-            modelPath: nil,
-            modelId: ZImageI2LRepository.modelId,
-            defaultModelIds: [
-                ZImageI2LRepository.modelId,
-                ZImageI2LRepository.archiveAliasModelId,
-            ],
-            storageId: ZImageI2LRepository.modelId,
-            archiveKey: ZImageI2LRepository.archiveKey,
-            archiveSize: ZImageI2LRepository.archiveSize,
-            normalize: { base, fileManager in
-                ZImageI2LResources.resolveNestedIfNeeded(base: base, fileManager: fileManager)
-            },
-            validate: { root, fileManager in
-                ZImageI2LResources(rootURL: root).validate(fileManager: fileManager)
-            },
-            progress: { event in
-                switch event {
-                case .downloading(let percent):
-                    progressHandler?("Downloading image-to-LoRA models... \(percent)%")
-                case .extracting:
-                    progressHandler?("Extracting image-to-LoRA models...")
-                }
-            }
-        )
+        let root = try await prepareHuggingFaceModelRoot(progressHandler: progressHandler)
         resolvedModelRoot = root
         return root
+    }
+
+    private func prepareHuggingFaceModelRoot(
+        progressHandler: (@Sendable (String) -> Void)?
+    ) async throws -> URL {
+        let fileManager = FileManager.default
+        let modelDir = MereRunModelPaths.resolveModelDir(ZImageI2LRepository.modelId) { root in
+            let resolved = ZImageI2LResources.resolveNestedIfNeeded(base: root, fileManager: fileManager)
+            return ZImageI2LResources(rootURL: resolved).validate(fileManager: fileManager).isEmpty
+        }
+        try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
+
+        let i2lSnapshot = try await prepareHubSnapshot(
+            config: ZImageI2LRepository.hubFallbackConfig,
+            label: "Z-Image-i2L",
+            progressHandler: progressHandler
+        )
+        let encoderSnapshot = try await prepareHubSnapshot(
+            config: GeneralImageEncodersRepository.hubFallbackConfig,
+            label: "image encoders",
+            progressHandler: progressHandler
+        )
+
+        try createOrReplaceSymlink(
+            at: modelDir.appendingPathComponent("z-image-i2l", isDirectory: true),
+            to: i2lSnapshot,
+            fileManager: fileManager
+        )
+        try createOrReplaceSymlink(
+            at: modelDir.appendingPathComponent("general-image-encoders", isDirectory: true),
+            to: encoderSnapshot,
+            fileManager: fileManager
+        )
+
+        let resolved = ZImageI2LResources.resolveNestedIfNeeded(base: modelDir, fileManager: fileManager)
+        let missing = ZImageI2LResources(rootURL: resolved).validate(fileManager: fileManager)
+        guard missing.isEmpty else {
+            throw ZImageI2LError.modelNotFound(
+                "Downloaded image-to-LoRA model is incomplete: \(missing.map(\.lastPathComponent).joined(separator: ", "))"
+            )
+        }
+        return resolved
+    }
+
+    private func prepareHubSnapshot(
+        config: HubFallbackConfig,
+        label: String,
+        progressHandler: (@Sendable (String) -> Void)?
+    ) async throws -> URL {
+        let snapshot = try HubSnapshot(
+            options: HubSnapshotOptions(
+                repoId: config.repoId,
+                revision: config.revision,
+                patterns: config.patterns
+            )
+        )
+        return try await snapshot.prepare { progress in
+            let percent = min(100, max(0, Int(progress.fractionCompleted * 100)))
+            progressHandler?("Downloading \(label)... \(percent)%")
+        }
+    }
+
+    private func createOrReplaceSymlink(
+        at linkURL: URL,
+        to targetURL: URL,
+        fileManager: FileManager
+    ) throws {
+        if let resourceValues = try? linkURL.resourceValues(forKeys: [.isSymbolicLinkKey]),
+           resourceValues.isSymbolicLink == true {
+            try fileManager.removeItem(at: linkURL)
+        } else if fileManager.fileExists(atPath: linkURL.path) {
+            return
+        }
+        try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: targetURL)
     }
 
     // MARK: - Image Processing

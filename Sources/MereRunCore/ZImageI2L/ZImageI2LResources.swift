@@ -5,18 +5,29 @@ import Foundation
 public enum ZImageI2LRepository {
     /// Canonical local model id used by the mere.run package and CLI.
     public static let modelId = "i2l"
-    /// Backward-compatible alias used by `mere.run model pull`.
-    public static let archiveAliasModelId = "zeta-i2l"
-    public static let archiveKey = "models/zeta-i2l.tar.gz"
-    public static let archiveSize: Int64 = 17_446_111_276
+    /// Backward-compatible alias used by older local installs.
+    public static let legacyModelId = "zeta-i2l"
 
     public static let id = "DiffSynth-Studio/Z-Image-i2L"
     public static let revision = "main"
+    public static let hubFallbackConfig = HubFallbackConfig(
+        repoId: id,
+        revision: revision,
+        patterns: ["model.safetensors"]
+    )
 }
 
 public enum GeneralImageEncodersRepository {
     public static let id = "DiffSynth-Studio/General-Image-Encoders"
     public static let revision = "main"
+    public static let hubFallbackConfig = HubFallbackConfig(
+        repoId: id,
+        revision: revision,
+        patterns: [
+            "SigLIP2-G384/model.safetensors",
+            "DINOv3-7B/model.safetensors",
+        ]
+    )
 }
 
 public enum ZImageRepository {
@@ -104,7 +115,7 @@ public struct ZImageI2LResources: Sendable, Hashable {
     ) -> URL? {
         let storageIDs = [
             ZImageI2LRepository.modelId,
-            ZImageI2LRepository.archiveAliasModelId,
+            ZImageI2LRepository.legacyModelId,
         ]
         for storageID in storageIDs {
             let base = MereRunModelPaths.resolveModelDir(storageID) { root in

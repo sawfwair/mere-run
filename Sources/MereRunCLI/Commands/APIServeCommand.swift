@@ -131,7 +131,7 @@ struct APIServe: AsyncParsableCommand {
             if let resolved = ModelResolver().resolveIfPresent(.q35Nano) {
                 return resolved.rootURL.path
             }
-            // Allow Q35Generator to auto-download from R2 when model path is omitted.
+            // Allow Q35Generator to auto-download from Hugging Face when model path is omitted.
             return nil
         }
     }

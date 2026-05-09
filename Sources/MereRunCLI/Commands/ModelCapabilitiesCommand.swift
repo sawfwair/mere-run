@@ -33,7 +33,7 @@ struct ModelCapabilities: ParsableCommand {
 
         let recommendedReports = ManagedModelCapabilityCatalog.recommendedSetupReports(on: machine)
         if !recommendedReports.isEmpty {
-            print("\nRecommended setup (downloadable with current configuration)")
+            print("\nRecommended setup (downloadable from Hugging Face)")
             for report in recommendedReports {
                 print("  mere.run model pull \(report.spec.id)")
             }
@@ -45,7 +45,7 @@ struct ModelCapabilities: ParsableCommand {
         }
         if !unavailableRecommended.isEmpty {
             let ids = unavailableRecommended.map(\.spec.id).joined(separator: ", ")
-            print("  additional supported recommendations need model-source configuration: \(ids)")
+            print("  additional supported recommendations need local model paths: \(ids)")
         }
 
         print("\nModel capabilities")
@@ -60,13 +60,12 @@ struct ModelCapabilities: ParsableCommand {
 
     private func printCapability(_ report: ManagedModelSupportReport) {
         let status = report.isSupported ? "supported" : "unsupported"
-        let archiveSize = archiveSizeLabel(for: report.spec)
         print("- \(report.spec.id) [\(status)]")
         print("  title: \(report.descriptor.title)")
         print("  category: \(report.spec.category.rawValue)")
         print("  summary: \(report.descriptor.summary)")
         print("  memory: minimum \(report.descriptor.minimumUnifiedMemoryGB) GB, recommended \(report.descriptor.recommendedUnifiedMemoryGB) GB")
-        print("  download: \(archiveSize)")
+        print("  download: \(downloadLabel(for: report.spec))")
         if !report.spec.defaultCLICommands.isEmpty {
             print("  commands: \(report.spec.defaultCLICommands.joined(separator: ", "))")
         }
@@ -75,16 +74,7 @@ struct ModelCapabilities: ParsableCommand {
         }
     }
 
-    private func archiveSizeLabel(for spec: ManagedModelSpec) -> String {
-        guard let archive = spec.archiveSource else {
-            return spec.hubFallback == nil ? "no managed source" : "Hugging Face snapshot"
-        }
-        guard archive.size > 0 else {
-            if spec.hubFallback != nil {
-                return "configured source or Hugging Face snapshot"
-            }
-            return "configured source"
-        }
-        return ByteCountFormatter.string(fromByteCount: archive.size, countStyle: .file)
+    private func downloadLabel(for spec: ManagedModelSpec) -> String {
+        spec.hubFallback == nil ? "local path only" : "Hugging Face snapshot"
     }
 }

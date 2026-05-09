@@ -4,8 +4,6 @@ public enum OpenAIPrivacyFilterCatalog {
     public static let modelId = "text-anonymize-privacy-filter"
     public static let defaultRepoId = "openai/privacy-filter"
     public static let defaultRevision = "main"
-    public static let archiveKey = "models/text-anonymize-privacy-filter.tar.gz"
-    public static let archiveSize: Int64 = 0
 
     public static let hubFallbackConfig = HubFallbackConfig(
         repoId: defaultRepoId,

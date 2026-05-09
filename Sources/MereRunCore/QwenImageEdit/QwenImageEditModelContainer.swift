@@ -31,7 +31,7 @@ public actor QwenImageEditModelContainer {
         self.modelSpec = nil
     }
 
-    /// Initialize with a model spec resolved via mere.run's R2 model loader.
+    /// Initialize with a model spec resolved via mere.run's Hugging Face model loader.
     public init(modelSpec: String = QwenImageEditRepository.id) {
         self.localRootURL = nil
         self.modelSpec = modelSpec

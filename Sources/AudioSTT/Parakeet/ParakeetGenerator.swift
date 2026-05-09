@@ -153,8 +153,6 @@ public actor ParakeetGenerator: ASRGenerator {
             return .missingFiles(files)
         case .downloadFailed(let message):
             return .downloadFailed(message)
-        case .extractionFailed:
-            return .extractionFailed
         }
     }
 
@@ -223,7 +221,7 @@ public enum ParakeetError: LocalizedError {
         case .downloadFailed(let message):
             return message
         case .extractionFailed:
-            return "Failed to extract model archive"
+            return "Failed to prepare model files"
         }
     }
 }

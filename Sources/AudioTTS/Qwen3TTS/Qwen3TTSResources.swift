@@ -41,24 +41,6 @@ public struct Qwen3TTSResources: Sendable, Hashable {
         self.rootURL = rootURL
     }
 
-    public static func archiveKey(for modelId: String) -> String {
-        switch modelId {
-        case customVoiceModelId:
-            return "models/speech-tts-qwen3-customvoice.tar.gz"
-        default:
-            return "models/talk-nano.tar.gz"
-        }
-    }
-
-    public static func archiveSize(for modelId: String) -> Int64 {
-        switch modelId {
-        case customVoiceModelId:
-            return 0
-        default:
-            return 3_691_910_698
-        }
-    }
-
     public static func hubFallbackConfig(for modelId: String) -> HubFallbackConfig? {
         switch modelId {
         case customVoiceModelId:

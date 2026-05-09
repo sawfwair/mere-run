@@ -59,7 +59,7 @@ final class InstallScriptTests: XCTestCase {
         XCTAssertFalse(result.combinedOutput.contains("need sudo"))
     }
 
-    func testInstallerCopiesPackagedModelSourceSidecarWhenPresent() throws {
+    func testInstallerDoesNotCopyLegacyModelSourceSidecarWhenPresent() throws {
         let fixture = try makeInstallerFixture()
         defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
 
@@ -73,10 +73,7 @@ final class InstallScriptTests: XCTestCase {
 
         XCTAssertEqual(result.status, 0, result.combinedOutput)
         let installedConfigURL = fixture.destDirURL.appendingPathComponent(modelSourceConfigFilename, isDirectory: false)
-        XCTAssertEqual(
-            try String(contentsOf: installedConfigURL, encoding: .utf8),
-            "https://models.example.com/\n"
-        )
+        XCTAssertFalse(FileManager.default.fileExists(atPath: installedConfigURL.path))
     }
 
     func testInstallerCopiesMlxBundleAndCompatibilityMetallibsWhenPresent() throws {

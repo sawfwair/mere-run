@@ -4,11 +4,7 @@ public enum ZImageTurboRepository {
     public static let id = "Tongyi-MAI/Z-Image-Turbo"
     public static let revision = "main"
     public static let defaultModelID: ModelResolver.ModelID = .zetaMax
-    public static let r2ArchiveByModelID: [ModelResolver.ModelID: (key: String, size: Int64)] = [
-        .zetaNano: ("models/zeta-nano.tar.gz", 5_980_168_600),
-        .zetaMax: ("models/zeta-max.tar.gz", 18_092_604_557),
-        .zetaBase: ("models/image-zimage-base.tar.gz", 0),
-    ]
+
     public static func hubFallbackConfig(for modelID: ModelResolver.ModelID) -> HubFallbackConfig? {
         guard modelID == .zetaMax else {
             return nil
@@ -61,19 +57,21 @@ public enum ZImageTurboRepository {
         fileManager: FileManager = .default,
         progress: (@Sendable (PretrainedModelLoader.ProgressEvent) -> Void)? = nil
     ) async throws -> URL {
-        guard let modelID = resolveModelID(from: modelSpec),
-              let archive = r2ArchiveByModelID[modelID] else {
+        guard let modelID = resolveModelID(from: modelSpec) else {
             throw PretrainedModelLoader.LoadError.unsupportedModelId(modelSpec)
         }
+        guard let hubFallback = hubFallbackConfig(for: modelID) else {
+            throw PretrainedModelLoader.LoadError.downloadFailed(
+                ManagedModelCatalog.missingHubSourceMessage(for: modelID.rawValue)
+            )
+        }
 
-        let root = try await PretrainedModelLoader.fromPretrainedArchive(
+        let root = try await PretrainedModelLoader.fromPretrainedSnapshot(
             modelPath: nil,
             modelId: modelID.rawValue,
             defaultModelIds: [modelID.rawValue],
             storageId: modelID.rawValue,
-            archiveKey: archive.key,
-            archiveSize: archive.size,
-            hubFallback: hubFallbackConfig(for: modelID),
+            hubFallback: hubFallback,
             fileManager: fileManager,
             validate: { root, manager in
                 ZImageTurboResources.validateDownloadedRoot(

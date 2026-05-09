@@ -116,56 +116,27 @@ public enum ManagedModelResolver {
 
         switch spec.installShape {
         case .directoryRoot:
-            // Prefer Hugging Face Hub — individual files are natively resumable.
-            if let hubFallback = spec.hubFallback {
-                let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
-                let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
-                let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
-                guard missing.isEmpty else {
-                    throw ResolverError.invalidInstalledModel(
-                        "Missing required files after Hugging Face download: \(missing.map(\.lastPathComponent).joined(separator: ", "))"
-                    )
-                }
-                return RuntimeResolution(spec: spec, url: normalized, source: .hubSnapshot)
-            }
-
-            guard let archiveSource = spec.archiveSource else {
+            guard let hubFallback = spec.hubFallback else {
                 throw ResolverError.downloadFailed(
-                    MereRunModelSourceConfiguration.missingConfigurationMessage(
-                        purpose: "Managed model downloads for \(spec.id)"
-                    )
+                    ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
                 )
             }
 
-            do {
-                let rootURL = try await PretrainedModelLoader.fromPretrainedArchive(
-                    modelPath: nil,
-                    modelId: spec.id,
-                    defaultModelIds: [spec.id],
-                    storageId: spec.id,
-                    archiveKey: archiveSource.key,
-                    archiveSize: archiveSource.size,
-                    archiveSHA256: archiveSource.sha256,
-                    hubFallback: nil,
-                    strictArchiveSize: archiveSource.size > 0,
-                    fileManager: fileManager,
-                    normalize: { root, manager in
-                        spec.normalizedRootURL(root, fileManager: manager)
-                    },
-                    validate: { root, manager in
-                        spec.missingPaths(in: root, fileManager: manager)
-                    },
-                    progress: progress
+            let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
+            let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
+            let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
+            guard missing.isEmpty else {
+                throw ResolverError.invalidInstalledModel(
+                    "Missing required files after Hugging Face download: \(missing.map(\.lastPathComponent).joined(separator: ", "))"
                 )
-                _ = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: rootURL)
-                return RuntimeResolution(spec: spec, url: rootURL, source: .managedStore)
-            } catch let error as PretrainedModelLoader.LoadError {
-                throw ResolverError.downloadFailed(error.localizedDescription)
             }
+            return RuntimeResolution(spec: spec, url: normalized, source: .hubSnapshot)
 
         case .singleFile(let relativePath):
-            guard let archiveSource = spec.archiveSource else {
-                throw ResolverError.unsupportedInstallShape(spec.id)
+            guard let hubFallback = spec.hubFallback else {
+                throw ResolverError.downloadFailed(
+                    ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
+                )
             }
             do {
                 let fileURL = try await PretrainedModelLoader.fromPretrainedFile(
@@ -173,11 +144,7 @@ public enum ManagedModelResolver {
                     modelId: spec.id,
                     defaultModelIds: [spec.id],
                     relativePath: relativePath,
-                    remoteKey: archiveSource.key,
-                    expectedSize: archiveSource.size,
-                    expectedSHA256: archiveSource.sha256,
-                    hubFallback: spec.hubFallback,
-                    strictSizeCheck: archiveSource.size > 0,
+                    hubFallback: hubFallback,
                     fileManager: fileManager,
                     validate: { file, manager in
                         spec.validateRuntimeURL(file, fileManager: manager)
@@ -187,45 +154,29 @@ public enum ManagedModelResolver {
                 return RuntimeResolution(
                     spec: spec,
                     url: fileURL,
-                    source: fileURL.path.contains("/hub/") ? .hubSnapshot : .managedStore
+                    source: .hubSnapshot
                 )
             } catch let error as PretrainedModelLoader.LoadError {
                 throw ResolverError.downloadFailed(error.localizedDescription)
             }
 
         case .structuredRoot:
-            if let hubFallback = spec.hubFallback {
-                let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
-                try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
-                let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
-                let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
-                guard missing.isEmpty else {
-                    throw ResolverError.invalidInstalledModel(
-                        "Missing required files after Hugging Face download: \(missing.map(\.path).joined(separator: ", "))"
-                    )
-                }
-                return RuntimeResolution(spec: spec, url: normalized, source: .hubSnapshot)
+            guard let hubFallback = spec.hubFallback else {
+                throw ResolverError.downloadFailed(
+                    ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
+                )
             }
 
-            let installed = try await installManagedModel(
-                id: spec.id,
-                force: false,
-                fileManager: fileManager,
-                progress: { installProgress in
-                    switch installProgress {
-                    case .downloadingBytes(let completed, let total):
-                        if let total, total > 0 {
-                            let percent = min(100, max(0, Int(Double(completed) / Double(total) * 100)))
-                            progress?(.downloading(percent: percent))
-                        }
-                    case .downloadingPercent(let percent, _):
-                        progress?(.downloading(percent: percent))
-                    case .extracting:
-                        progress?(.extracting)
-                    }
-                }
-            )
-            return RuntimeResolution(spec: spec, url: installed.installURL, source: .managedStore)
+            let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
+            try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
+            let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
+            let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
+            guard missing.isEmpty else {
+                throw ResolverError.invalidInstalledModel(
+                    "Missing required files after Hugging Face download: \(missing.map(\.path).joined(separator: ", "))"
+                )
+            }
+            return RuntimeResolution(spec: spec, url: normalized, source: .hubSnapshot)
         }
     }
 
@@ -247,57 +198,24 @@ public enum ManagedModelResolver {
             try? fileManager.removeItem(at: modelDir)
         }
 
-        // Prefer Hugging Face Hub downloads — individual files are natively resumable.
-        // Fall back to R2 packaged archives only when no Hub source is configured.
-        if let hubFallback = spec.hubFallback {
-            let snapshotURL = try await downloadHubSnapshotWithByteProgress(
-                config: hubFallback,
-                progress: progress
-            )
-            try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
-            let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: snapshotURL)
-            try installManagedAliasesIfNeeded(for: spec, rootURL: snapshotURL, fileManager: fileManager)
-            try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try fileManager.createSymbolicLink(at: modelDir, withDestinationURL: snapshotURL)
-
-            let normalized = spec.normalizedRootURL(modelDir, fileManager: fileManager)
-            let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
-            guard missing.isEmpty else {
-                throw ResolverError.invalidInstalledModel(
-                    "Installed model is incomplete: \(missing.map(\.path).joined(separator: ", "))"
-                )
-            }
-            return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: false)
-        }
-
-        guard MereRunModelSourceConfiguration.hasAnyDownloadSource(),
-              let archiveSource = spec.archiveSource else {
+        guard let hubFallback = spec.hubFallback else {
             throw ResolverError.downloadFailed(
-                MereRunModelSourceConfiguration.missingConfigurationMessage(
-                    purpose: "Managed model downloads for \(spec.id)"
-                )
+                ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
             )
         }
 
-        try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
-        let archiveFile = MereRunModelPaths.downloadsDir.appendingPathComponent(archiveSource.key)
-        try fileManager.createDirectory(at: archiveFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-
-        try await downloadArchive(
-            spec: spec,
-            archiveSource: archiveSource,
-            to: archiveFile,
-            fileManager: fileManager,
+        let snapshotURL = try await downloadHubSnapshotWithByteProgress(
+            config: hubFallback,
             progress: progress
         )
-        progress?(.extracting)
-        try extractArchive(archiveFile, to: modelDir)
-        try? fileManager.removeItem(at: archiveFile)
-        try normalizeManagedLayoutIfNeeded(for: spec, in: modelDir, fileManager: fileManager)
-        let normalizedRoot = spec.normalizedRootURL(modelDir, fileManager: fileManager)
-        let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
-        try installManagedAliasesIfNeeded(for: spec, rootURL: modelDir, fileManager: fileManager)
-        let missing = spec.missingPaths(in: normalizedRoot, fileManager: fileManager)
+        try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
+        let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: snapshotURL)
+        try installManagedAliasesIfNeeded(for: spec, rootURL: snapshotURL, fileManager: fileManager)
+        try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: modelDir, withDestinationURL: snapshotURL)
+
+        let normalized = spec.normalizedRootURL(modelDir, fileManager: fileManager)
+        let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
         guard missing.isEmpty else {
             throw ResolverError.invalidInstalledModel(
                 "Installed model is incomplete: \(missing.map(\.path).joined(separator: ", "))"
@@ -377,159 +295,6 @@ public enum ManagedModelResolver {
         } catch {
             throw ResolverError.downloadFailed(error.localizedDescription)
         }
-    }
-
-    private static func downloadArchive(
-        spec: ManagedModelSpec,
-        archiveSource: ManagedModelArchiveSource,
-        to archiveFile: URL,
-        fileManager: FileManager,
-        progress: (@Sendable (InstallProgress) -> Void)?
-    ) async throws {
-        let environment = ProcessInfo.processInfo.environment
-        let usePackagedPublicSource =
-            !MereRunModelSourceConfiguration.hasExplicitDownloadConfiguration(environment: environment)
-            && MereRunModelSourceConfiguration.publicBaseURL(environment: environment) != nil
-
-        let requestKey: String
-        if usePackagedPublicSource {
-            guard let packagedKey = archiveSource.packagedKey else {
-                throw ResolverError.downloadFailed(
-                    "No packaged public download is configured for \(spec.id)."
-                )
-            }
-            requestKey = packagedKey
-        } else {
-            requestKey = archiveSource.key
-        }
-        let expectedSHA256: String
-        do {
-            expectedSHA256 = try ArchiveIntegrity.requiredSHA256(
-                archiveSource.expectedSHA256(for: requestKey)
-                    ?? MereRunModelSourceConfiguration.archiveSHA256(for: requestKey, environment: environment),
-                artifact: requestKey
-            )
-        } catch {
-            throw ResolverError.downloadFailed(error.localizedDescription)
-        }
-
-        var request: URLRequest
-        do {
-            request = try await R2DownloadRequestBuilder.makeGETRequest(
-                key: requestKey,
-                environment: environment
-            ).request
-        } catch let error as R2DownloadRequestBuilder.BuildError {
-            throw ResolverError.downloadFailed(error.localizedDescription)
-        }
-
-        let tempURL = archiveFile.appendingPathExtension("partial")
-
-        // Resume from existing partial download if present.
-        var resumeOffset: Int64 = 0
-        if let attrs = try? fileManager.attributesOfItem(atPath: tempURL.path),
-           let existingSize = attrs[.size] as? Int64,
-           existingSize > 0 {
-            resumeOffset = existingSize
-            request.setValue("bytes=\(existingSize)-", forHTTPHeaderField: "Range")
-        }
-
-        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ResolverError.downloadFailed("Download failed: no HTTP response")
-        }
-
-        let resumed: Bool
-        if resumeOffset > 0 && httpResponse.statusCode == 206 {
-            resumed = true
-        } else if httpResponse.statusCode == 200 {
-            resumed = false
-            resumeOffset = 0
-        } else {
-            throw ResolverError.downloadFailed("Download failed: HTTP \(httpResponse.statusCode)")
-        }
-
-        let totalSize: Int64?
-        if resumed {
-            totalSize = (httpResponse.expectedContentLength > 0)
-                ? resumeOffset + httpResponse.expectedContentLength
-                : (archiveSource.size > 0 ? archiveSource.size : nil)
-        } else {
-            totalSize = httpResponse.expectedContentLength > 0 ? httpResponse.expectedContentLength : nil
-        }
-
-        let handle: FileHandle
-        if resumed {
-            handle = try FileHandle(forWritingTo: tempURL)
-            handle.seekToEndOfFile()
-        } else {
-            try? fileManager.removeItem(at: tempURL)
-            fileManager.createFile(atPath: tempURL.path, contents: nil)
-            handle = try FileHandle(forWritingTo: tempURL)
-        }
-        defer { try? handle.close() }
-
-        var bytesWritten: Int64 = resumeOffset
-        var buffer = Data()
-        let bufferSize = 1024 * 1024
-        for try await byte in asyncBytes {
-            buffer.append(byte)
-            if buffer.count >= bufferSize {
-                try handle.write(contentsOf: buffer)
-                bytesWritten += Int64(buffer.count)
-                buffer.removeAll(keepingCapacity: true)
-                progress?(.downloadingBytes(completed: bytesWritten, total: totalSize))
-            }
-        }
-        if !buffer.isEmpty {
-            try handle.write(contentsOf: buffer)
-            bytesWritten += Int64(buffer.count)
-            progress?(.downloadingBytes(completed: bytesWritten, total: totalSize))
-        }
-        try handle.synchronize()
-
-        if fileManager.fileExists(atPath: archiveFile.path) {
-            try? fileManager.removeItem(at: archiveFile)
-        }
-        try fileManager.moveItem(at: tempURL, to: archiveFile)
-
-        if requestKey == archiveSource.key, archiveSource.size > 0 {
-            let actualSize: Int64
-            if let attrs = try? fileManager.attributesOfItem(atPath: archiveFile.path),
-               let size = attrs[.size] as? Int64 {
-                actualSize = size
-            } else {
-                actualSize = bytesWritten
-            }
-            guard actualSize == archiveSource.size else {
-                try? fileManager.removeItem(at: archiveFile)
-                throw ResolverError.downloadFailed(
-                    "Archive size mismatch (got \(actualSize), expected \(archiveSource.size))"
-                )
-            }
-        }
-
-        do {
-            try ArchiveIntegrity.verify(file: archiveFile, expectedSHA256: expectedSHA256)
-        } catch {
-            try? fileManager.removeItem(at: archiveFile)
-            throw ResolverError.downloadFailed(error.localizedDescription)
-        }
-    }
-
-    private static func extractArchive(_ archiveFile: URL, to destination: URL) throws {
-        #if os(macOS)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-        process.arguments = ["-xzf", archiveFile.path, "-C", destination.path]
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw ResolverError.downloadFailed("tar extraction failed (exit \(process.terminationStatus))")
-        }
-        #else
-        throw ResolverError.downloadFailed("Archive extraction is only supported on macOS.")
-        #endif
     }
 
     private static func normalizeManagedLayoutIfNeeded(

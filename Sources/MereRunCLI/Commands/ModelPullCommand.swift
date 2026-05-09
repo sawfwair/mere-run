@@ -8,10 +8,10 @@ struct ModelPull: AsyncParsableCommand {
         abstract: "Download a managed model into the local model store."
     )
 
-    @Argument(help: "Canonical model id (for example: image-klein-nano, text-chat-gemma4-max, or text-chat-q35). Omit when using --all.")
+    @Argument(help: "Canonical model id (for example: image-klein-max, text-chat-gemma4-max, or text-chat-q35). Omit when using --all.")
     var target: String?
 
-    @Flag(name: [.long], help: "Pull every model that has a managed download source.")
+    @Flag(name: [.long], help: "Pull every model that has a Hugging Face source.")
     var all: Bool = false
 
     @Flag(name: [.long], help: "Re-download even if the model is already installed.")
@@ -44,7 +44,7 @@ struct ModelPull: AsyncParsableCommand {
                 }
                 if !spec.hasAnyManagedDownloadSource() {
                     if !quiet {
-                        stderr("[\(spec.id)] skipping (no managed download source available in current configuration)")
+                        stderr("[\(spec.id)] skipping (no Hugging Face source in this public build)")
                     }
                     continue
                 }
@@ -60,9 +60,7 @@ struct ModelPull: AsyncParsableCommand {
         try validateHardwareSupport(for: spec)
         if !spec.hasAnyManagedDownloadSource() {
             throw CleanExit.message(
-                MereRunModelSourceConfiguration.missingConfigurationMessage(
-                    purpose: "Managed model downloads for \(spec.id)"
-                )
+                ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
             )
         }
         try await pull(spec)
