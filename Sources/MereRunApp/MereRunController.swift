@@ -81,7 +81,7 @@ enum CLIResolver {
         let candidates = bundledCandidates()
             + siblingCandidates()
             + buildProductCandidates(packageRoots: roots)
-            + installedCandidates()
+            + installedCandidates(fileManager: fm)
 
         for candidate in candidates {
             if fm.isExecutableFile(atPath: candidate.path) {
@@ -94,6 +94,12 @@ enum CLIResolver {
         }
 
         return .executable(URL(fileURLWithPath: "/usr/bin/env"))
+    }
+
+    static func existingInstalledCLI(fileManager fm: FileManager = .default) -> URL? {
+        installedCandidates(fileManager: fm).first { candidate in
+            fm.isExecutableFile(atPath: candidate.path)
+        }
     }
 
     private static func bundledCandidates() -> [URL] {
@@ -113,10 +119,15 @@ enum CLIResolver {
         ]
     }
 
-    private static func installedCandidates() -> [URL] {
+    private static func installedCandidates(fileManager fm: FileManager) -> [URL] {
         [
             "/usr/local/bin/mere.run",
             "/opt/homebrew/bin/mere.run",
+            fm.homeDirectoryForCurrentUser
+                .appendingPathComponent(".local", isDirectory: true)
+                .appendingPathComponent("bin", isDirectory: true)
+                .appendingPathComponent("mere.run", isDirectory: false)
+                .path,
         ].map(URL.init(fileURLWithPath:))
     }
 
@@ -325,6 +336,7 @@ final class MereRunController: ObservableObject {
     private var stdoutBuffer = ""
     private var activeRunTemplateID: CommandTemplateID?
     private var activeRunPreview = ""
+    private var didAttemptAutomaticCLIInstall = false
 
     private static let stdoutBufferByteLimit = 32 * 1024
     private static let outputDetectionLineLimit = 40
@@ -362,7 +374,13 @@ final class MereRunController: ObservableObject {
     }
 
     func refreshResolvedCLI() {
-        resolvedCLI = CLIResolver.resolve(customPath: cliPath).sourceDescription
+        if cliPath.isBlank, !didAttemptAutomaticCLIInstall {
+            didAttemptAutomaticCLIInstall = true
+            handleAutomaticCLIInstall(CLIBootstrapInstaller.installBundledCLIIfNeeded())
+        }
+
+        let launch = CLIResolver.resolve(customPath: cliPath)
+        resolvedCLI = displayDescription(for: launch)
     }
 
     func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
@@ -535,6 +553,29 @@ final class MereRunController: ObservableObject {
         activeRunPreview = ""
     }
 
+    private func handleAutomaticCLIInstall(_ outcome: CLIBootstrapInstallOutcome) {
+        switch outcome {
+        case .installed(let url):
+            status = "CLI installed"
+            append("Installed Terminal CLI at \(url.abbreviatedForDisplay).", stream: .system)
+        case .failed(let message):
+            append("Terminal CLI install skipped: \(message)", stream: .stderr)
+        case .alreadyInstalled, .skippedNoBundledCLI:
+            break
+        }
+    }
+
+    private func displayDescription(for launch: MereRunLaunch) -> String {
+        let description = launch.sourceDescription
+        guard case .executable(let url) = launch,
+              Bundle.main.resourceURL.map({ url.path.hasPrefix($0.path) }) == true,
+              let installedURL = CLIResolver.existingInstalledCLI() else {
+            return description
+        }
+
+        return "\(description) + \(installedURL.abbreviatedForDisplay)"
+    }
+
     private func append(_ text: String, stream: LogStream) {
         if stream == .stdout {
             stdoutBuffer += text
@@ -673,6 +714,19 @@ final class MereRunController: ObservableObject {
             return URL(fileURLWithPath: expanded, isDirectory: true)
         }
         return FileManager.default.homeDirectoryForCurrentUser
+    }
+}
+
+private extension URL {
+    var abbreviatedForDisplay: String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        if path == homePath {
+            return "~"
+        }
+        if path.hasPrefix(homePath + "/") {
+            return "~" + path.dropFirst(homePath.count)
+        }
+        return path
     }
 }
 

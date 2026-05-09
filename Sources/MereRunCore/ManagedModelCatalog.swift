@@ -96,11 +96,28 @@ public struct ManagedModelSpec: Hashable, Sendable {
 }
 
 public enum ManagedModelCatalog {
+    private static let diffusersImageSnapshotPatterns = [
+        "model_index.json",
+        "tokenizer/*",
+        "text_encoder/*",
+        "transformer/*",
+        "vae/*",
+        "scheduler/*",
+    ]
+
+    private static let zImageNanoUpstreamRepoId = "andrevp/Z-Image-Turbo-MLX-4bit"
+    private static let kleinNanoUpstreamRepoId = "stereovoid/flux2-klein-4b-4bit"
+
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: "image-klein-nano",
             category: .image,
             installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: kleinNanoUpstreamRepoId,
+                patterns: diffusersImageSnapshotPatterns
+            ),
+            upstreamRepoId: kleinNanoUpstreamRepoId,
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
@@ -111,14 +128,7 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "black-forest-labs/FLUX.2-klein-4B",
-                patterns: [
-                    "model_index.json",
-                    "tokenizer/*",
-                    "text_encoder/*",
-                    "transformer/*",
-                    "vae/*",
-                    "scheduler/*",
-                ]
+                patterns: diffusersImageSnapshotPatterns
             ),
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-4B",
             validationKind: .flux2Klein,
@@ -131,14 +141,7 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "black-forest-labs/FLUX.2-klein-base-4B",
-                patterns: [
-                    "model_index.json",
-                    "tokenizer/*",
-                    "text_encoder/*",
-                    "transformer/*",
-                    "vae/*",
-                    "scheduler/*",
-                ]
+                patterns: diffusersImageSnapshotPatterns
             ),
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-base-4B",
             validationKind: .flux2Klein,
@@ -156,6 +159,13 @@ public enum ManagedModelCatalog {
             id: "image-zimage-nano",
             category: .image,
             installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: zImageNanoUpstreamRepoId,
+                revision: "main",
+                patterns: diffusersImageSnapshotPatterns
+            ),
+            upstreamRepoId: zImageNanoUpstreamRepoId,
+            upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
@@ -167,14 +177,7 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "Tongyi-MAI/Z-Image-Turbo",
                 revision: "main",
-                patterns: [
-                    "model_index.json",
-                    "tokenizer/*",
-                    "text_encoder/*",
-                    "transformer/*",
-                    "vae/*",
-                    "scheduler/*",
-                ]
+                patterns: diffusersImageSnapshotPatterns
             ),
             upstreamRepoId: "Tongyi-MAI/Z-Image-Turbo",
             upstreamRevision: "main",
@@ -186,6 +189,13 @@ public enum ManagedModelCatalog {
             id: "image-zimage-base",
             category: .image,
             installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "Tongyi-MAI/Z-Image",
+                revision: "main",
+                patterns: diffusersImageSnapshotPatterns
+            ),
+            upstreamRepoId: "Tongyi-MAI/Z-Image",
+            upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]

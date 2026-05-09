@@ -6,9 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+No notable changes yet.
+
+## 0.4.2 - 2026-05-09
+
+### Added
+
+- added Hugging Face pull sources for `image-klein-nano`, `image-zimage-nano`, and `image-zimage-base`
+- added Studio first-launch Terminal CLI bootstrap from the app-bundled payload
+
 ### Changed
 
 - removed private archive/R2 model-source downloads; managed pulls now use cataloged Hugging Face snapshots only
+- changed the DMG to a Studio-first layout with a separate `CLI/` payload folder and Applications shortcut
+- taught `install.sh` to install from the DMG `CLI/` payload folder when present
 
 ## 0.4.0 - 2026-05-07
 

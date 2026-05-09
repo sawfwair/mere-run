@@ -36,6 +36,22 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testImageModelsHaveManagedDownloadSources() {
+        let expectedPullableImageIDs = [
+            "image-klein-nano",
+            "image-klein-base",
+            "image-klein-max",
+            "image-zimage-nano",
+            "image-zimage-base",
+            "image-zimage-max",
+        ]
+
+        for id in expectedPullableImageIDs {
+            let spec = ManagedModelCatalog.spec(for: id)
+            XCTAssertNotNil(spec?.hubFallback, "Image model \(id) should be pullable from Hugging Face.")
+        }
+    }
+
     func testNestedASRNormalizationDoesNotRecurseThroughValidation() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

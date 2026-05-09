@@ -22,7 +22,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 | Category | Hugging Face pull IDs |
 | --- | --- |
-| Image | `image-klein-base`, `image-klein-max`, `image-zimage-max` |
+| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max` |
 | Text chat | `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
@@ -37,16 +37,14 @@ Some legacy/local IDs remain in the catalog so existing installs and explicit
 local paths keep working:
 
 ```text
-image-klein-nano
 image-klein-shared
-image-zimage-nano
-image-zimage-base
 text-chat-mebot
 text-chat-psi-agent
 ```
 
-Those IDs are local-path-only in the public build until they have legitimate
-public Hugging Face sources.
+`image-klein-shared` is an internal shared-component install shape, and the
+text-chat IDs listed here remain local-path-only until they have public Hugging
+Face sources.
 
 ## Hugging Face Cache
 
