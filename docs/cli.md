@@ -692,6 +692,7 @@ Security defaults:
 
 - loopback binds are local-first and do not require auth
 - non-loopback binds require `--api-key` or `MERERUN_API_KEY`
+- `POST /v1/chat/completions` requires `Content-Type: application/json`
 - `--rate-limit-per-minute` applies basic request throttling to `POST /v1/chat/completions`
 - generation parameters are bounded before execution; for example, `max_tokens` must fit the configured context size
 - LoRA adapters for the API server are selected by the operator with `--lora`; request bodies cannot provide local LoRA paths

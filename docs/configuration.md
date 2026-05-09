@@ -23,18 +23,20 @@ Default:
 
 ### `MERERUN_MODEL_SOURCE_BASE_URL`
 
-Sets the explicit base URL used by `mere.run model pull` for unsigned public model archives.
+Sets the explicit base URL used by `mere.run model pull` for public model archives.
 
 ```bash
 export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
+export MERERUN_MODEL_SOURCE_SHA256S='models/image-zimage-max.tar.gz=<sha256>'
 swift run mere.run model pull image-zimage-max
 ```
 
 ### `MERERUN_MODEL_SOURCE_SHA256S`
 
-Provides expected SHA-256 digests for managed archive downloads when the catalog
+Provides required SHA-256 digests for managed archive downloads when the catalog
 does not include one. Use comma-, semicolon-, or newline-separated
-`archive/key.tar.gz=<sha256>` entries.
+`archive/key.tar.gz=<sha256>` entries. Archive downloads without a catalog or
+environment digest fail before downloading.
 
 Alternative download configuration is also supported for signed downloads:
 

@@ -68,6 +68,33 @@ final class PretrainedModelLoaderTests: XCTestCase {
         XCTAssertEqual(cached.standardizedFileURL, managedFile.standardizedFileURL)
     }
 
+    func testArchiveDownloadRequiresConfiguredSHA256() async throws {
+        _ = try makeModelsDirectory()
+        setenv(MereRunModelSourceConfiguration.baseURLEnvironmentKey, "http://127.0.0.1:1/", 1)
+
+        do {
+            _ = try await PretrainedModelLoader.fromPretrainedArchive(
+                modelPath: nil,
+                modelId: "poc-archive",
+                defaultModelIds: ["poc-archive"],
+                storageId: "poc-archive",
+                archiveKey: "models/poc-archive.tar.gz",
+                archiveSize: 0,
+                archiveSHA256: nil,
+                hubFallback: nil,
+                strictArchiveSize: false,
+                validate: { root, fileManager in
+                    let expected = root.appendingPathComponent("config.json")
+                    return fileManager.fileExists(atPath: expected.path) ? [] : [expected]
+                }
+            )
+            XCTFail("Expected missing archive SHA-256 to throw")
+        } catch let error as PretrainedModelLoader.LoadError {
+            XCTAssertTrue(error.localizedDescription.contains("Missing required SHA-256 digest"))
+            XCTAssertTrue(error.localizedDescription.contains("models/poc-archive.tar.gz"))
+        }
+    }
+
     private func assertSizeMismatch(
         relativePath: String,
         expectedSize: Int64,

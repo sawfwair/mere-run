@@ -644,6 +644,9 @@ final class MereRunController: ObservableObject {
         if !hubCache.isBlank {
             env["MERERUN_HUB_CACHE"] = NSString(string: hubCache).expandingTildeInPath
         }
+        for (key, value) in CommandLaunchEnvironment.overrides(templateID: selectedTemplate.id, draft: draft) {
+            env[key] = value
+        }
         return env
     }
 

@@ -156,12 +156,22 @@ public enum PretrainedModelLoader {
         try fileManager.createDirectory(at: managed.modelDir, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: archiveFile.deletingLastPathComponent(), withIntermediateDirectories: true)
 
+        let resolvedArchiveSHA256: String
+        do {
+            resolvedArchiveSHA256 = try ArchiveIntegrity.requiredSHA256(
+                archiveSHA256 ?? MereRunModelSourceConfiguration.archiveSHA256(for: archiveKey),
+                artifact: archiveKey
+            )
+        } catch {
+            throw LoadError.downloadFailed(error.localizedDescription)
+        }
+
         progress?(.downloading(percent: 0))
         try await downloadR2Object(
             key: archiveKey,
             to: archiveFile,
             expectedSize: archiveSize,
-            expectedSHA256: archiveSHA256,
+            expectedSHA256: resolvedArchiveSHA256,
             strictSizeCheck: strictArchiveSize,
             sizeMismatchPrefix: "Archive size mismatch",
             fileManager: fileManager,

@@ -257,6 +257,19 @@ enum APIServerContract {
         )
     }
 
+    static func acceptsJSONContentType(_ rawValue: String?) -> Bool {
+        guard let mediaType = rawValue?
+            .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: true)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+            !mediaType.isEmpty
+        else {
+            return false
+        }
+        return mediaType == "application/json" || mediaType.hasSuffix("+json")
+    }
+
     private static func validateMaxTokens(_ rawValue: Int?, contextSize: Int) throws -> Int {
         let value = rawValue ?? defaultMaxTokens
         let upperBound = min(contextSize, Int(Int32.max))
@@ -451,6 +464,13 @@ actor CodeGenServer {
     private func handleChatCompletions(_ request: Request) async throws -> Response {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
         }
         guard await requestLimiter.allowRequest() else {
             return makeErrorResponse(

@@ -402,8 +402,16 @@ public enum ManagedModelResolver {
         } else {
             requestKey = archiveSource.key
         }
-        let expectedSHA256 = archiveSource.expectedSHA256(for: requestKey)
-            ?? MereRunModelSourceConfiguration.archiveSHA256(for: requestKey, environment: environment)
+        let expectedSHA256: String
+        do {
+            expectedSHA256 = try ArchiveIntegrity.requiredSHA256(
+                archiveSource.expectedSHA256(for: requestKey)
+                    ?? MereRunModelSourceConfiguration.archiveSHA256(for: requestKey, environment: environment),
+                artifact: requestKey
+            )
+        } catch {
+            throw ResolverError.downloadFailed(error.localizedDescription)
+        }
 
         var request: URLRequest
         do {

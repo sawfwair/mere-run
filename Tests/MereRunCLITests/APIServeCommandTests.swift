@@ -178,4 +178,18 @@ final class APIServeCommandTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("top_p"))
         }
     }
+
+    func testChatContentTypeValidationRejectsBrowserSimpleTypes() {
+        XCTAssertFalse(APIServerContract.acceptsJSONContentType(nil))
+        XCTAssertFalse(APIServerContract.acceptsJSONContentType(""))
+        XCTAssertFalse(APIServerContract.acceptsJSONContentType("text/plain"))
+        XCTAssertFalse(APIServerContract.acceptsJSONContentType("application/x-www-form-urlencoded"))
+        XCTAssertFalse(APIServerContract.acceptsJSONContentType("multipart/form-data; boundary=abc"))
+    }
+
+    func testChatContentTypeValidationAcceptsJSONTypes() {
+        XCTAssertTrue(APIServerContract.acceptsJSONContentType("application/json"))
+        XCTAssertTrue(APIServerContract.acceptsJSONContentType("application/json; charset=utf-8"))
+        XCTAssertTrue(APIServerContract.acceptsJSONContentType("application/vnd.openai+json"))
+    }
 }

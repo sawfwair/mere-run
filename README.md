@@ -215,7 +215,7 @@ If you already pull from Hugging Face elsewhere and want to share cached weights
 The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
 
 - `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
-- the OpenAI-compatible chat route supports `--rate-limit-per-minute` for basic abuse control and rejects out-of-range generation parameters
+- the OpenAI-compatible chat route requires `Content-Type: application/json`, supports `--rate-limit-per-minute` for basic abuse control, and rejects out-of-range generation parameters
 - API LoRA adapters are operator-controlled with `--lora`; per-request LoRA paths are rejected
 - tool-loop execution in `mere.run text chat` requires interactive approval unless `--auto-approve-tools` is passed for non-shell tools
 - `shell_exec` is disabled unless `--allow-shell-exec` is set, and still requires interactive approval when enabled

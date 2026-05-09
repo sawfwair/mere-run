@@ -34,6 +34,15 @@ final class ArchiveIntegrityTests: XCTestCase {
         }
     }
 
+    func testRequiredSHA256RejectsMissingDigest() {
+        XCTAssertThrowsError(
+            try ArchiveIntegrity.requiredSHA256(nil, artifact: "models/example.tar.gz")
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("Missing required SHA-256 digest"))
+            XCTAssertTrue(error.localizedDescription.contains("models/example.tar.gz"))
+        }
+    }
+
     func testManagedArchiveSourceResolvesDigestByRequestedKey() {
         let source = ManagedModelArchiveSource(
             key: "models/canonical.tar.gz",

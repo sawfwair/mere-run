@@ -56,6 +56,8 @@ swift run mere.run api serve \
 - it should not reintroduce relay, billing, or hosted-infrastructure concerns
 - non-loopback binds require an API key, and the OpenAI-compatible chat route
   supports basic rate limiting
+- chat requests must use `Content-Type: application/json`; browser-simple
+  form/text posts are rejected before the request body is processed
 - chat requests are validated before generation; `max_tokens`, `temperature`,
   and `top_p` must stay within bounded ranges
 - LoRA adapters are configured at server startup with `--lora`; request bodies

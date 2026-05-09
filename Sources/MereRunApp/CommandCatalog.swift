@@ -489,7 +489,6 @@ struct CommandTemplate: Identifiable, Equatable {
         case .apiServe:
             args = ["api", "serve", "--host", draft.host, "--port", String(draft.port), "--engine", draft.engine]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if !draft.apiKey.isBlank { args += ["--api-key", draft.apiKey] }
 
         case .custom:
             return ShellWords.split(draft.extraArguments)
@@ -521,6 +520,17 @@ struct CommandTemplate: Identifiable, Equatable {
 
     private func format(_ value: Double) -> String {
         String(format: "%.4g", value)
+    }
+}
+
+enum CommandLaunchEnvironment {
+    static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+
+    static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
+        guard templateID == .apiServe else { return [:] }
+        let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else { return [:] }
+        return [apiKeyEnvironmentKey: apiKey]
     }
 }
 

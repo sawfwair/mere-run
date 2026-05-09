@@ -4,12 +4,15 @@ import Foundation
 enum ArchiveIntegrity {
     enum IntegrityError: LocalizedError, Equatable {
         case invalidSHA256(String)
+        case missingSHA256(String)
         case sha256Mismatch(expected: String, actual: String)
 
         var errorDescription: String? {
             switch self {
             case .invalidSHA256(let value):
                 return "Invalid SHA-256 digest: \(value)"
+            case .missingSHA256(let artifact):
+                return "Missing required SHA-256 digest for \(artifact). Configure MERERUN_MODEL_SOURCE_SHA256S or add a catalog digest."
             case .sha256Mismatch(let expected, let actual):
                 return "Archive SHA-256 mismatch (got \(actual), expected \(expected))"
             }
@@ -35,6 +38,13 @@ enum ArchiveIntegrity {
         guard normalized.count == 64,
               normalized.allSatisfy({ $0.isHexDigit }) else {
             throw IntegrityError.invalidSHA256(value)
+        }
+        return normalized
+    }
+
+    static func requiredSHA256(_ value: String?, artifact: String) throws -> String {
+        guard let normalized = try normalizedSHA256(value) else {
+            throw IntegrityError.missingSHA256(artifact)
         }
         return normalized
     }

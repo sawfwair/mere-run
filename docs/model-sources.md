@@ -93,10 +93,11 @@ export MERERUN_MODEL_SOURCE_BASE_URL=https://your-host.example/models/
 export MERERUN_MODEL_SOURCE_SHA256S='models/image-zimage-nano.tar.gz=<sha256>'
 ```
 
-Archive downloads verify SHA-256 digests when the managed catalog entry includes
-one or when `MERERUN_MODEL_SOURCE_SHA256S` supplies one. The checksum variable
-accepts comma-, semicolon-, or newline-separated `archive/key.tar.gz=<sha256>`
-entries.
+Archive downloads require a SHA-256 digest from the managed catalog entry or
+from `MERERUN_MODEL_SOURCE_SHA256S`. The checksum variable accepts comma-,
+semicolon-, or newline-separated `archive/key.tar.gz=<sha256>` entries. A
+configured archive source without a matching digest fails before any archive is
+downloaded.
 
 Without one of the three configuration paths above, `mere.run model pull` fails fast with a clear configuration error.
 

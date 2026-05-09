@@ -114,4 +114,17 @@ final class StudioTypesTests: XCTestCase {
             ["api", "serve", "--api-key", "••••••••", "--port", "8080"]
         )
     }
+
+    func testAPIKeyLaunchUsesEnvironmentInsteadOfArguments() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
+        var draft = template.defaultDraft()
+        draft.apiKey = " secret-token "
+
+        let args = template.arguments(from: draft)
+        let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
+
+        XCTAssertFalse(args.contains("--api-key"))
+        XCTAssertFalse(args.contains("secret-token"))
+        XCTAssertEqual(env["MERERUN_API_KEY"], "secret-token")
+    }
 }
