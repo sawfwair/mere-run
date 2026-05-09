@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://mere.run">mere.run</a> ·
   <a href="https://sawfwair.github.io/mere-run/">Docs</a> ·
-  <a href="https://public.stereovoid.com/mere-run-releases/mere-run.dmg">Download DMG</a> ·
+  <a href="https://mere.run/releases/mere-run.dmg">Download DMG</a> ·
   <code>swift build</code>
 </p>
 
