@@ -23,6 +23,7 @@ Prefer the source checkout command while developing:
 
 ```bash
 swift run mere.run --help
+swift run mere.run guide --list
 swift run mere.run model capabilities
 swift run mere.run model list
 ```
@@ -30,6 +31,7 @@ swift run mere.run model list
 Keep the public command tree modality-first:
 
 - `image generate`, `image validate`
+- `guide`, `guide --list`, `guide <command path>`, `guide <command path> --model <model-id>`, `guide <command path> --json`
 - `text chat`, `text code`, `text embed`, `text anonymize`
 - `speech synthesize`, `speech transcribe`, `speech profile`
 - `vision caption`, `vision inspect`, `vision ground`, `vision segment`, `vision track`, `vision track-live`, `vision ocr`

@@ -167,6 +167,9 @@ let package = Package(
         "Commands/README.md",
         "Support/README.md"
       ],
+      resources: [
+        .process("Guides")
+      ],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]

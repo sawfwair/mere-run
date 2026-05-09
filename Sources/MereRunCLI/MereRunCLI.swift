@@ -16,6 +16,7 @@ struct MereRunCLI: AsyncParsableCommand {
         commandName: "mere.run",
         abstract: "Run local inference workflows with MereRunCore.",
         subcommands: [
+            GuideCommand.self,
             Image.self,
             Text.self,
             Speech.self,

@@ -17,7 +17,7 @@ Help the user get useful output from the public local-first `mere.run` CLI. Opti
 - Do not assume a model is installed. Check `mere.run model list` or pull the needed model first.
 - Keep commands copy-pasteable and minimal. Add advanced flags only when the user asked for them or the error points there.
 - Explain stderr/progress as normal diagnostic output; preserve stdout when the user needs machine-readable results.
-- When the user asks for a good creative result, not just a command, read `references/creative-recipes.md` and translate their vague request into concrete prompt ingredients, model pulls, flags, and an iteration plan.
+- When the user asks for a good creative or advanced result, not just a command, run `mere.run guide <command path>` or read the matching `Sources/MereRunCLI/Guides/*.md` resource first. Use the guide to translate their vague request into concrete prompt ingredients, model pulls, flags, and an iteration plan.
 
 ## First Five Minutes
 
@@ -25,6 +25,7 @@ Run these in order, adapting `mere.run` to `swift run mere.run` inside a checkou
 
 ```bash
 mere.run --help
+mere.run guide --list
 mere.run model capabilities
 mere.run model list
 ```
@@ -39,6 +40,7 @@ When helping from a source checkout:
 
 ```bash
 swift run mere.run --help
+swift run mere.run guide --list
 swift run mere.run model capabilities
 swift run mere.run setup
 ```
@@ -110,14 +112,24 @@ export MERERUN_API_KEY=change-me
 mere.run api serve --host 0.0.0.0 --api-key "$MERERUN_API_KEY"
 ```
 
-## Creative Guidance
+## Command Cookbooks
 
-The CLI docs cover the available flags; this skill should supply the missing taste/workflow layer. Read `references/creative-recipes.md` when the user asks for:
+The CLI ships offline cookbooks. Load the relevant guide before coaching creative, model-specific, or advanced workflows:
 
-- a good song, beat, instrumental, vocal track, soundtrack cue, or lyrics-driven generation
-- a better image/video prompt or visual style choice
-- repeatable variation using `--seed`, duration, steps, or metadata
-- help turning a loose idea into a command that is likely to produce a usable result
+```bash
+mere.run guide --list
+mere.run guide image generate
+mere.run guide music generate --model music-acestep
+mere.run guide video generate --json
+```
+
+Inside a source checkout, use:
+
+```bash
+swift run mere.run guide <command path>
+```
+
+If the binary cannot run yet, read the corresponding resource under `Sources/MereRunCLI/Guides/`. The guide command is canonical for per-command purpose, required models, install/check commands, parameters, prompting patterns, examples, iteration tips, troubleshooting, and source links.
 
 ## Model Storage
 
@@ -148,6 +160,7 @@ mere.run model pull image-zimage-max
 - Pull blocked by hardware support: run `mere.run model capabilities --all`, choose a smaller recommended model, or use `--allow-unsupported` only when the user explicitly accepts the risk.
 - Download or disk-space problems: set `MERERUN_MODELS_DIR` and optionally `MERERUN_HUB_CACHE` to a larger disk, then retry the pull.
 - API works locally but not remotely: non-loopback binds require `--api-key` or `MERERUN_API_KEY`.
+- A creative command produces weak results: load `mere.run guide <command path>` and iterate prompt, seed, model, and command-specific controls from the guide.
 - A command is unfamiliar: run `mere.run <group> --help` and then `mere.run <group> <command> --help`.
 
 When the user is stuck, ask for the exact command they ran, the first error line, and the output of `mere.run model list`.

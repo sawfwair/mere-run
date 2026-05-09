@@ -3,6 +3,7 @@
 - [mere.run Documentation](./README.md)
 - [Getting Started](./getting-started.md)
 - [CLI Reference](./cli.md)
+- [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
 - [Repository Tour](./repository-tour.md)
