@@ -246,6 +246,11 @@ struct StudioRunRequest: Identifiable, Equatable {
     }
 }
 
+enum StudioCapabilityRequirement: Equatable {
+    case managedModel(String)
+    case unavailable(String)
+}
+
 enum StudioCommandError: LocalizedError, Equatable {
     case missingPrompt(String)
     case missingInput(String)
@@ -332,7 +337,9 @@ enum StudioCommandAdapter {
     }
 
     static func pullRequest(for mode: StudioMode, draft: StudioDraft) throws -> StudioRunRequest? {
-        let model = requiredModel(for: mode, draft: draft)
+        guard let model = managedCapabilityModelID(for: mode, draft: draft) else {
+            return nil
+        }
         guard !model.isBlank else { return nil }
         guard let template = CommandCatalog.template(id: .modelPull) else {
             throw StudioCommandError.missingTemplate(.modelPull)
@@ -349,11 +356,46 @@ enum StudioCommandAdapter {
         return CommandCatalog.template(id: templateID)?.defaultModel ?? ""
     }
 
+    static func capabilityRequirement(for mode: StudioMode, draft: StudioDraft) -> StudioCapabilityRequirement? {
+        if let modelID = managedCapabilityModelID(for: mode, draft: draft) {
+            return .managedModel(modelID)
+        }
+
+        if mode == .readImage {
+            switch draft.readImageAction {
+            case .inspect, .caption:
+                return .unavailable(unmanagedVisionLanguageMessage(for: draft.readImageAction))
+            case .ocr:
+                return nil
+            }
+        }
+
+        return nil
+    }
+
+    private static func unmanagedVisionLanguageMessage(for action: StudioReadImageAction) -> String {
+        "\(action.title) uses an automatic vision-language model download "
+            + "that is not listed in the managed capability catalog yet."
+    }
+
     private static func templateID(for mode: StudioMode, draft: StudioDraft) -> CommandTemplateID {
         if mode == .readImage {
             return draft.readImageAction.templateID
         }
         return mode.defaultTemplateID
+    }
+
+    private static func managedCapabilityModelID(for mode: StudioMode, draft: StudioDraft) -> String? {
+        let model = requiredModel(for: mode, draft: draft)
+        if !model.isBlank {
+            return model
+        }
+
+        if mode == .listen {
+            return "speech-asr-parakeet"
+        }
+
+        return nil
     }
 
     private static func validate(
@@ -419,11 +461,25 @@ enum ModelReadinessState: Equatable {
 
     var blocksRun: Bool {
         switch self {
-        case .missingModel, .unsupported:
+        case .checking, .missingModel, .unsupported:
             return true
         default:
             return false
         }
+    }
+
+    var canPull: Bool {
+        if case .missingModel = self {
+            return true
+        }
+        return false
+    }
+
+    var isChecking: Bool {
+        if case .checking = self {
+            return true
+        }
+        return false
     }
 
     var title: String {
@@ -449,6 +505,128 @@ enum ModelReadinessState: Equatable {
         case .unknown(let reason):
             return reason
         }
+    }
+}
+
+struct StudioModelCapability: Equatable {
+    let modelID: String
+    let isSupported: Bool
+    let minimumUnifiedMemoryGB: Int?
+    let recommendedUnifiedMemoryGB: Int?
+    let download: String?
+    let reason: String?
+
+    var unavailableMessage: String? {
+        guard !isSupported else { return nil }
+        if let reason, !reason.isBlank {
+            return reason
+        }
+        if let minimumUnifiedMemoryGB {
+            return "Requires at least \(minimumUnifiedMemoryGB) GB unified memory."
+        }
+        return "\(modelID) is not supported on this Mac."
+    }
+}
+
+enum ModelCapabilitiesParser {
+    static func capabilities(from output: String) -> [String: StudioModelCapability] {
+        var capabilities: [String: StudioModelCapability] = [:]
+        var current: CapabilityBuilder?
+
+        func flushCurrent() {
+            guard let built = current?.build() else { return }
+            capabilities[built.modelID] = built
+        }
+
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+
+            if trimmed.hasPrefix("- ") {
+                flushCurrent()
+                current = CapabilityBuilder(header: trimmed)
+                continue
+            }
+
+            guard var builder = current else { continue }
+            builder.read(fieldLine: trimmed)
+            current = builder
+        }
+
+        flushCurrent()
+        return capabilities
+    }
+}
+
+private struct CapabilityBuilder {
+    var modelID: String
+    var isSupported: Bool
+    var minimumUnifiedMemoryGB: Int?
+    var recommendedUnifiedMemoryGB: Int?
+    var download: String?
+    var reason: String?
+
+    init?(header: String) {
+        let statusSuffix: String
+        if header.hasSuffix("[supported]") {
+            statusSuffix = "[supported]"
+            isSupported = true
+        } else if header.hasSuffix("[unsupported]") {
+            statusSuffix = "[unsupported]"
+            isSupported = false
+        } else {
+            return nil
+        }
+
+        let id = header
+            .dropFirst(2)
+            .dropLast(statusSuffix.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty else { return nil }
+        modelID = id
+    }
+
+    mutating func read(fieldLine: String) {
+        if fieldLine.hasPrefix("memory:") {
+            let values = Self.memoryValues(from: fieldLine)
+            minimumUnifiedMemoryGB = values.minimum
+            recommendedUnifiedMemoryGB = values.recommended
+        } else if fieldLine.hasPrefix("download:") {
+            download = Self.value(after: "download:", in: fieldLine)
+        } else if fieldLine.hasPrefix("reason:") {
+            reason = Self.value(after: "reason:", in: fieldLine)
+        }
+    }
+
+    func build() -> StudioModelCapability {
+        StudioModelCapability(
+            modelID: modelID,
+            isSupported: isSupported,
+            minimumUnifiedMemoryGB: minimumUnifiedMemoryGB,
+            recommendedUnifiedMemoryGB: recommendedUnifiedMemoryGB,
+            download: download,
+            reason: reason
+        )
+    }
+
+    private static func value(after prefix: String, in line: String) -> String {
+        String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func memoryValues(from line: String) -> (minimum: Int?, recommended: Int?) {
+        let parts = line
+            .replacingOccurrences(of: "memory:", with: "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        let minimum = parts.first { $0.hasPrefix("minimum ") }.flatMap { Self.firstInteger(in: $0) }
+        let recommended = parts.first { $0.hasPrefix("recommended ") }.flatMap { Self.firstInteger(in: $0) }
+        return (minimum, recommended)
+    }
+
+    private static func firstInteger(in text: String) -> Int? {
+        let digits = text.drop { !$0.isNumber }.prefix { $0.isNumber }
+        return Int(digits)
     }
 }
 

@@ -79,6 +79,37 @@ final class StudioTypesTests: XCTestCase {
         }
     }
 
+    func testListenStudioUsesParakeetForCapabilityAndPullChecks() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .listen)
+
+        XCTAssertEqual(
+            StudioCommandAdapter.capabilityRequirement(for: .listen, draft: draft),
+            .managedModel("speech-asr-parakeet")
+        )
+
+        let request = try XCTUnwrap(StudioCommandAdapter.pullRequest(for: .listen, draft: draft))
+        XCTAssertEqual(request.draft.model, "speech-asr-parakeet")
+    }
+
+    func testReadImageBlocksUnmanagedAutoDownloadUntilCataloged() {
+        var draft = StudioDraft()
+        draft.reset(for: .readImage)
+        let expectedMessage = "Inspect uses an automatic vision-language model download "
+            + "that is not listed in the managed capability catalog yet."
+
+        XCTAssertEqual(
+            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
+            .unavailable(expectedMessage)
+        )
+
+        draft.readImageAction = .ocr
+        XCTAssertEqual(
+            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
+            .managedModel("vision-ocr-lighton")
+        )
+    }
+
     func testModelReadinessParserFindsInstalledMissingAndUnknown() {
         let output = """
         ID Category Status Size
@@ -105,6 +136,43 @@ final class StudioTypesTests: XCTestCase {
         } else {
             XCTFail("Expected unknown readiness for a model absent from the list.")
         }
+    }
+
+    func testModelCapabilitiesParserFindsSupportAndMemoryReasons() throws {
+        let output = """
+        Machine
+          processor: M2 Max
+          unifiedMemory: 32 GB
+          appleSiliconMac: true
+
+        Model capabilities
+        - image-zimage-nano [supported]
+          title: Image, fast realistic
+          category: image
+          memory: minimum 12 GB, recommended 16 GB
+          download: Hugging Face snapshot
+        - image-zimage-max [unsupported]
+          title: Image, realistic quality
+          category: image
+          memory: minimum 48 GB, recommended 64 GB
+          download: Hugging Face snapshot
+          reason: Requires at least 48 GB unified memory; detected 32 GB.
+        """
+
+        let capabilities = ModelCapabilitiesParser.capabilities(from: output)
+        let nano = try XCTUnwrap(capabilities["image-zimage-nano"])
+        let max = try XCTUnwrap(capabilities["image-zimage-max"])
+
+        XCTAssertTrue(nano.isSupported)
+        XCTAssertEqual(nano.minimumUnifiedMemoryGB, 12)
+        XCTAssertNil(nano.unavailableMessage)
+        XCTAssertFalse(max.isSupported)
+        XCTAssertEqual(max.minimumUnifiedMemoryGB, 48)
+        XCTAssertEqual(max.recommendedUnifiedMemoryGB, 64)
+        XCTAssertEqual(
+            max.unavailableMessage,
+            "Requires at least 48 GB unified memory; detected 32 GB."
+        )
     }
 
     func testAPIKeyPreviewMasking() {

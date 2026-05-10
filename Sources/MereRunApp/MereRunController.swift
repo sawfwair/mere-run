@@ -325,6 +325,7 @@ final class MereRunController: ObservableObject {
     @Published var lastOutputURL: URL?
     @Published var lastRunResult: MereRunRunResult?
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
+    @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
     @Published var cliPath: String {
         didSet { UserDefaults.standard.set(cliPath, forKey: Keys.cliPath) }
     }
@@ -351,11 +352,13 @@ final class MereRunController: ObservableObject {
     private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
     private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
     private var stdoutBuffer = ""
+    private var stderrBuffer = ""
     private var activeRunTemplateID: CommandTemplateID?
     private var activeRunPreview = ""
     private var didAttemptAutomaticCLIInstall = false
 
     private static let stdoutBufferByteLimit = 32 * 1024
+    private static let stderrBufferByteLimit = 32 * 1024
     private static let outputDetectionLineLimit = 40
 
     private struct ReadinessRequest: Equatable {
@@ -388,7 +391,8 @@ final class MereRunController: ObservableObject {
         cliPath = UserDefaults.standard.string(forKey: Keys.cliPath) ?? ""
         modelsRoot = UserDefaults.standard.string(forKey: Keys.modelsRoot) ?? ""
         hubCache = UserDefaults.standard.string(forKey: Keys.hubCache) ?? ""
-        workingDirectory = UserDefaults.standard.string(forKey: Keys.workingDirectory) ?? FileManager.default.homeDirectoryForCurrentUser.path
+        workingDirectory = UserDefaults.standard.string(forKey: Keys.workingDirectory)
+            ?? FileManager.default.homeDirectoryForCurrentUser.path
         if resolvesCLIOnInit {
             refreshResolvedCLI()
         }
@@ -434,11 +438,22 @@ final class MereRunController: ObservableObject {
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
-        let modelID = StudioCommandAdapter.requiredModel(for: mode, draft: studioDraft)
-        guard !modelID.isBlank else {
+        let requirement = StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft)
+        guard let requirement else {
             cancelReadinessCheck(for: mode)
             readinessRequests[mode] = nil
             readinessByMode[mode] = .ready
+            return
+        }
+
+        let modelID: String
+        switch requirement {
+        case .managedModel(let id):
+            modelID = id
+        case .unavailable(let message):
+            cancelReadinessCheck(for: mode)
+            readinessRequests[mode] = nil
+            readinessByMode[mode] = .unsupported(message)
             return
         }
 
@@ -455,6 +470,86 @@ final class MereRunController: ObservableObject {
         cancelReadinessCheck(for: mode)
         readinessRequests[mode] = request
         readinessByMode[mode] = .checking
+
+        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+            readinessByMode[mode] = .unsupported(message)
+            return
+        }
+
+        if modelCapabilitiesByID[modelID] != nil {
+            startModelListReadinessCheck(for: mode, modelID: modelID, request: request)
+            return
+        }
+
+        startCapabilityReadinessCheck(for: mode, modelID: modelID, request: request)
+    }
+
+    private func startCapabilityReadinessCheck(
+        for mode: StudioMode,
+        modelID: String,
+        request: ReadinessRequest
+    ) {
+        let launch = CLIResolver.resolve(customPath: cliPath)
+        let capabilityTemplate = CommandCatalog.template(id: .modelCapabilities) ?? selectedTemplate
+        var capabilityDraft = capabilityTemplate.defaultDraft()
+        capabilityDraft.all = true
+        let args = commandArguments(
+            template: capabilityTemplate,
+            draft: capabilityDraft
+        )
+        let output = ReadinessOutputBuffer()
+        let errors = ReadinessOutputBuffer()
+
+        do {
+            readinessProcesses[mode] = try processRunner.start(
+                configuration: processConfiguration(
+                    launch: launch,
+                    args: args,
+                    environmentTemplateID: capabilityTemplate.id,
+                    environmentDraft: capabilityDraft
+                ),
+                stdout: { text in output.append(text) },
+                stderr: { text in errors.append(text) },
+                termination: { [weak self] code in
+                    Task { @MainActor in
+                        guard self?.readinessRequests[mode] == request else { return }
+                        guard let self else { return }
+                        let capabilities = ModelCapabilitiesParser.capabilities(from: output.text())
+                        if !capabilities.isEmpty {
+                            self.modelCapabilitiesByID = capabilities
+                        }
+
+                        if let message = self.modelCapabilitiesByID[modelID]?.unavailableMessage {
+                            self.readinessProcesses[mode] = nil
+                            self.readinessByMode[mode] = .unsupported(message)
+                            return
+                        }
+
+                        if code != 0, capabilities.isEmpty {
+                            self.readinessProcesses[mode] = nil
+                            let detail = errors.text().trimmingCharacters(in: .whitespacesAndNewlines)
+                            self.readinessByMode[mode] = .unknown(
+                                detail.isEmpty ? "Could not check model capabilities." : detail
+                            )
+                            return
+                        }
+
+                        self.startModelListReadinessCheck(for: mode, modelID: modelID, request: request)
+                    }
+                }
+            )
+        } catch {
+            readinessRequests[mode] = nil
+            readinessProcesses[mode] = nil
+            readinessByMode[mode] = .unknown(error.localizedDescription)
+        }
+    }
+
+    private func startModelListReadinessCheck(
+        for mode: StudioMode,
+        modelID: String,
+        request: ReadinessRequest
+    ) {
         let launch = CLIResolver.resolve(customPath: cliPath)
         let modelListTemplate = CommandCatalog.template(id: .modelList) ?? selectedTemplate
         let modelListDraft = modelListTemplate.defaultDraft()
@@ -478,6 +573,10 @@ final class MereRunController: ObservableObject {
                     Task { @MainActor in
                         guard self?.readinessRequests[mode] == request else { return }
                         self?.readinessProcesses[mode] = nil
+                        if let message = self?.modelCapabilitiesByID[modelID]?.unavailableMessage {
+                            self?.readinessByMode[mode] = .unsupported(message)
+                            return
+                        }
                         self?.readinessByMode[mode] = ModelReadinessParser.state(
                             for: modelID,
                             modelListOutput: output.text()
@@ -510,6 +609,7 @@ final class MereRunController: ObservableObject {
 
         logs.removeAll()
         stdoutBuffer.removeAll(keepingCapacity: true)
+        stderrBuffer.removeAll(keepingCapacity: true)
         liveOutputText = ""
         lastOutputURL = nil
         lastExitCode = nil
@@ -552,7 +652,7 @@ final class MereRunController: ObservableObject {
                     commandPreview: activeRunPreview,
                     exitCode: -1,
                     outputURL: nil,
-                    outputText: capturedStdoutText()
+                    outputText: capturedResultText(exitCode: -1)
                 )
             }
             activeRunTemplateID = nil
@@ -583,7 +683,7 @@ final class MereRunController: ObservableObject {
         lastExitCode = exitCode
 
         let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
-        let outputText = capturedStdoutText()
+        let outputText = capturedResultText(exitCode: exitCode)
         lastOutputURL = detectedOutput
 
         if exitCode == 0 {
@@ -640,6 +740,9 @@ final class MereRunController: ObservableObject {
             stdoutBuffer += text
             trimStdoutBuffer()
             liveOutputText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
+        } else if stream == .stderr {
+            stderrBuffer += text
+            trimStderrBuffer()
         }
 
         let normalized = text
@@ -662,11 +765,35 @@ final class MereRunController: ObservableObject {
         stdoutBuffer = String(decoding: stdoutBuffer.utf8.suffix(Self.stdoutBufferByteLimit), as: UTF8.self)
     }
 
+    private func trimStderrBuffer() {
+        guard stderrBuffer.utf8.count > Self.stderrBufferByteLimit else { return }
+        stderrBuffer = String(decoding: stderrBuffer.utf8.suffix(Self.stderrBufferByteLimit), as: UTF8.self)
+    }
+
     private func capturedStdoutText() -> String? {
         let trimmed = stdoutBuffer
             .replacingOccurrences(of: "\0", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func capturedStderrText() -> String? {
+        let trimmed = stderrBuffer
+            .replacingOccurrences(of: "\0", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func capturedResultText(exitCode: Int32) -> String? {
+        let stdout = capturedStdoutText()
+        guard exitCode != 0, let stderr = capturedStderrText() else {
+            return stdout
+        }
+
+        if let stdout {
+            return "\(stdout)\n\nSTDERR\n\(stderr)"
+        }
+        return stderr
     }
 
     private func expectedOutputURL() -> URL? {

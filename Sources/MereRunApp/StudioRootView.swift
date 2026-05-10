@@ -23,6 +23,45 @@ struct StudioRootView: View {
         controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
     }
 
+    private var selectedCapabilityRequirement: StudioCapabilityRequirement? {
+        StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft)
+    }
+
+    private var selectedCapability: StudioModelCapability? {
+        guard let selectedCapabilityRequirement,
+              case .managedModel(let modelID) = selectedCapabilityRequirement else {
+            return nil
+        }
+        return controller.modelCapabilitiesByID[modelID]
+    }
+
+    private var selectedUnavailableCapabilityMessage: String? {
+        guard let selectedCapabilityRequirement,
+              case .unavailable(let message) = selectedCapabilityRequirement else {
+            return nil
+        }
+        return message
+    }
+
+    private var modeCapabilities: [StudioMode: StudioModelCapability] {
+        Dictionary(
+            uniqueKeysWithValues: StudioMode.allCases.compactMap { candidate in
+                var candidateDraft = StudioDraft()
+                candidateDraft.reset(for: candidate)
+                let requirement = StudioCommandAdapter.capabilityRequirement(
+                    for: candidate,
+                    draft: candidateDraft
+                )
+                guard let requirement,
+                      case .managedModel(let modelID) = requirement,
+                      let capability = controller.modelCapabilitiesByID[modelID] else {
+                    return nil
+                }
+                return (candidate, capability)
+            }
+        )
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if showLibrary {
@@ -43,6 +82,7 @@ struct StudioRootView: View {
                     showLibrary: $showLibrary,
                     showAdvanced: $showAdvanced,
                     readiness: readiness,
+                    modeCapabilities: modeCapabilities,
                     resolvedCLI: controller.resolvedCLI
                 )
 
@@ -119,6 +159,9 @@ struct StudioRootView: View {
         .onChange(of: draft.model) { _, _ in
             controller.checkReadiness(for: mode, draft: draft)
         }
+        .onChange(of: draft.readImageAction) { _, _ in
+            controller.checkReadiness(for: mode, draft: draft)
+        }
         .onChange(of: controller.lastRunResult) { _, result in
             guard let result, let activeLibraryID else { return }
             library.complete(
@@ -136,6 +179,16 @@ struct StudioRootView: View {
 
     private func runStudioCommand() {
         studioError = nil
+
+        if let message = selectedUnavailableCapabilityMessage {
+            studioError = message
+            return
+        }
+
+        if let message = selectedCapability?.unavailableMessage {
+            studioError = message
+            return
+        }
 
         if readiness.blocksRun {
             studioError = readiness.message
@@ -156,6 +209,23 @@ struct StudioRootView: View {
     }
 
     private func pullModel() {
+        studioError = nil
+
+        if let message = selectedUnavailableCapabilityMessage {
+            studioError = message
+            return
+        }
+
+        if let message = selectedCapability?.unavailableMessage {
+            studioError = message
+            return
+        }
+
+        guard readiness.canPull else {
+            studioError = readiness.message
+            return
+        }
+
         do {
             guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: draft) else {
                 studioError = "This mode does not need a managed model."
@@ -196,6 +266,7 @@ private struct StudioTopBar: View {
     @Binding var showLibrary: Bool
     @Binding var showAdvanced: Bool
     let readiness: ModelReadinessState
+    let modeCapabilities: [StudioMode: StudioModelCapability]
     let resolvedCLI: String
 
     var body: some View {
@@ -225,8 +296,8 @@ private struct StudioTopBar: View {
                 StudioStatusPill(
                     title: readiness.title,
                     detail: readiness.message,
-                    systemImage: readiness.blocksRun ? "arrow.down.circle" : "checkmark.circle",
-                    color: readiness.blocksRun ? MereRunTheme.yellow : MereRunTheme.green
+                    systemImage: readinessStatusImage,
+                    color: readinessStatusColor
                 )
 
                 StudioStatusPill(
@@ -251,7 +322,8 @@ private struct StudioTopBar: View {
                     ForEach(StudioMode.allCases) { candidate in
                         StudioModeChip(
                             mode: candidate,
-                            isSelected: candidate == mode
+                            isSelected: candidate == mode,
+                            unavailableMessage: modeCapabilities[candidate]?.unavailableMessage
                         ) {
                             withAnimation(.easeOut(duration: 0.18)) {
                                 mode = candidate
@@ -266,11 +338,26 @@ private struct StudioTopBar: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
     }
+
+    private var readinessStatusImage: String {
+        if readiness.isChecking { return "hourglass" }
+        if readiness.canPull { return "arrow.down.circle" }
+        if readiness.blocksRun { return "exclamationmark.triangle" }
+        return "checkmark.circle"
+    }
+
+    private var readinessStatusColor: Color {
+        if readiness.isChecking { return MereRunTheme.yellow }
+        if readiness.canPull { return MereRunTheme.yellow }
+        if readiness.blocksRun { return MereRunTheme.red }
+        return MereRunTheme.green
+    }
 }
 
 private struct StudioModeChip: View {
     let mode: StudioMode
     let isSelected: Bool
+    let unavailableMessage: String?
     let action: () -> Void
 
     var body: some View {
@@ -281,19 +368,43 @@ private struct StudioModeChip: View {
                 Text(mode.title)
                     .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundStyle(isSelected ? MereRunTheme.background : MereRunTheme.textSecondary)
+            .foregroundStyle(foregroundColor)
             .padding(.horizontal, 12)
             .frame(height: 32)
             .background {
                 Capsule()
-                    .fill(isSelected ? MereRunTheme.accent : MereRunTheme.surface)
+                    .fill(backgroundColor)
                     .overlay {
                         Capsule()
-                            .strokeBorder(MereRunTheme.border.opacity(isSelected ? 0 : 0.8), lineWidth: 1)
+                            .strokeBorder(borderColor, lineWidth: 1)
                     }
             }
         }
         .buttonStyle(.plain)
+        .disabled(unavailableMessage != nil)
+        .opacity(unavailableMessage == nil ? 1 : 0.52)
+        .help(unavailableMessage ?? mode.subtitle)
+    }
+
+    private var foregroundColor: Color {
+        if unavailableMessage != nil {
+            return MereRunTheme.textMuted
+        }
+        return isSelected ? MereRunTheme.background : MereRunTheme.textSecondary
+    }
+
+    private var backgroundColor: Color {
+        if unavailableMessage != nil {
+            return MereRunTheme.surface.opacity(0.55)
+        }
+        return isSelected ? MereRunTheme.accent : MereRunTheme.surface
+    }
+
+    private var borderColor: Color {
+        if unavailableMessage != nil {
+            return MereRunTheme.border.opacity(0.7)
+        }
+        return MereRunTheme.border.opacity(isSelected ? 0 : 0.8)
     }
 }
 
@@ -366,7 +477,8 @@ private struct StudioCanvas: View {
                 StudioReadinessOverlay(
                     title: error == nil ? readiness.title : "Needs attention",
                     message: error ?? readiness.message,
-                    canPull: readiness.blocksRun,
+                    canPull: error == nil && readiness.canPull,
+                    isChecking: error == nil && readiness.isChecking,
                     onPullModel: onPullModel,
                     onShowDetails: onShowDetails
                 )
@@ -437,14 +549,15 @@ private struct StudioReadinessOverlay: View {
     let title: String
     let message: String
     let canPull: Bool
+    let isChecking: Bool
     let onPullModel: () -> Void
     let onShowDetails: () -> Void
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: canPull ? "arrow.down.circle" : "exclamationmark.triangle")
+            Image(systemName: statusImage)
                 .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(canPull ? MereRunTheme.yellow : MereRunTheme.red)
+                .foregroundStyle(statusColor)
             Text(title)
                 .font(.system(size: 22, weight: .semibold))
             Text(message)
@@ -473,6 +586,16 @@ private struct StudioReadinessOverlay: View {
         .padding(28)
         .merePanel(cornerRadius: 18)
         .shadow(color: .black.opacity(0.3), radius: 30, y: 12)
+    }
+
+    private var statusImage: String {
+        if isChecking { return "hourglass" }
+        return canPull ? "arrow.down.circle" : "exclamationmark.triangle"
+    }
+
+    private var statusColor: Color {
+        if isChecking { return MereRunTheme.yellow }
+        return canPull ? MereRunTheme.yellow : MereRunTheme.red
     }
 }
 
@@ -770,10 +893,12 @@ private struct StudioPromptBar: View {
                         .frame(width: 38, height: 38)
                         .background {
                             Circle()
-                                .fill(isRunning ? MereRunTheme.red : (readiness.blocksRun ? MereRunTheme.yellow : MereRunTheme.accent))
+                                .fill(runButtonColor)
                         }
                 }
                 .buttonStyle(.plain)
+                .disabled(!isRunning && readiness.blocksRun)
+                .help(isRunning ? "Stop" : readiness.blocksRun ? readiness.message : "Run")
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 14)
@@ -789,11 +914,18 @@ private struct StudioPromptBar: View {
             }
         }
     }
+
+    private var runButtonColor: Color {
+        if isRunning { return MereRunTheme.red }
+        if readiness.blocksRun { return MereRunTheme.yellow }
+        return MereRunTheme.accent
+    }
 }
 
 private struct StudioOptionsSheet: View {
     let mode: StudioMode
     @Binding var draft: StudioDraft
+    @EnvironmentObject private var controller: MereRunController
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -811,7 +943,13 @@ private struct StudioOptionsSheet: View {
             if mode == .readImage {
                 Picker("Task", selection: $draft.readImageAction) {
                     ForEach(StudioReadImageAction.allCases) { action in
-                        Text(action.title).tag(action)
+                        Text(action.title)
+                            .foregroundStyle(readImageActionUnavailableMessage(action) == nil
+                                ? MereRunTheme.textPrimary
+                                : MereRunTheme.textMuted)
+                            .tag(action)
+                            .disabled(readImageActionUnavailableMessage(action) != nil)
+                            .help(readImageActionUnavailableMessage(action) ?? action.title)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -859,6 +997,25 @@ private struct StudioOptionsSheet: View {
         .padding(22)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+    }
+
+    private func readImageActionUnavailableMessage(_ action: StudioReadImageAction) -> String? {
+        guard mode == .readImage else { return nil }
+        var candidateDraft = draft
+        candidateDraft.readImageAction = action
+        let requirement = StudioCommandAdapter.capabilityRequirement(
+            for: .readImage,
+            draft: candidateDraft
+        )
+
+        switch requirement {
+        case .unavailable(let message):
+            return message
+        case .managedModel(let modelID):
+            return controller.modelCapabilitiesByID[modelID]?.unavailableMessage
+        case nil:
+            return nil
+        }
     }
 
     private var secondaryLabel: String? {

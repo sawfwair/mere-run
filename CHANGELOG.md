@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.7 - 2026-05-10
+
+### Changed
+
+- updated Studio readiness so modes respect managed model capability support before offering pulls or runs
+
 ## 0.4.6 - 2026-05-09
 
 ### Fixed
