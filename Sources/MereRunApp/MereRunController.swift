@@ -313,6 +313,21 @@ struct MereRunRunResult: Identifiable, Equatable {
     let completedAt = Date()
 }
 
+struct MereRunUtilityCommandResult: Equatable {
+    let commandPreview: String
+    let exitCode: Int32
+    let stdout: String
+    let stderr: String
+
+    var outputText: String {
+        let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStderr = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedStdout.isEmpty { return trimmedStderr }
+        if trimmedStderr.isEmpty { return trimmedStdout }
+        return "\(trimmedStdout)\n\nSTDERR\n\(trimmedStderr)"
+    }
+}
+
 @MainActor
 final class MereRunController: ObservableObject {
     @Published var selectedTemplate: CommandTemplate
@@ -349,6 +364,7 @@ final class MereRunController: ObservableObject {
 
     private let processRunner: MereRunProcessRunning
     private var currentProcess: MereRunRunningProcess?
+    private var utilityProcesses: [UUID: MereRunRunningProcess] = [:]
     private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
     private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
     private var stdoutBuffer = ""
@@ -431,10 +447,62 @@ final class MereRunController: ObservableObject {
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
     }
 
-    func run(studio request: StudioRunRequest) {
+    func utilityCommandResult(args: [String], masksSecrets: Bool = true) async -> MereRunUtilityCommandResult {
+        let launch = CLIResolver.resolve(customPath: cliPath)
+        let cliArgs: [String]
+        if !modelsRoot.isBlank {
+            cliArgs = ["--models-root", NSString(string: modelsRoot).expandingTildeInPath] + args
+        } else {
+            cliArgs = args
+        }
+        let display = launch.displayCommand(for: masksSecrets ? cliArgs.maskingSecrets() : cliArgs)
+        let output = ReadinessOutputBuffer()
+        let errors = ReadinessOutputBuffer()
+        let id = UUID()
+
+        return await withCheckedContinuation { continuation in
+            do {
+                let process = try processRunner.start(
+                    configuration: processConfiguration(
+                        launch: launch,
+                        args: cliArgs,
+                        environmentTemplateID: .custom,
+                        environmentDraft: CommandDraft()
+                    ),
+                    stdout: { text in output.append(text) },
+                    stderr: { text in errors.append(text) },
+                    termination: { [weak self] code in
+                        let result = MereRunUtilityCommandResult(
+                            commandPreview: display,
+                            exitCode: code,
+                            stdout: output.text(),
+                            stderr: errors.text()
+                        )
+                        Task { @MainActor in
+                            self?.utilityProcesses[id] = nil
+                            continuation.resume(returning: result)
+                        }
+                    }
+                )
+                utilityProcesses[id] = process
+            } catch {
+                continuation.resume(
+                    returning: MereRunUtilityCommandResult(
+                        commandPreview: display,
+                        exitCode: -1,
+                        stdout: "",
+                        stderr: error.localizedDescription
+                    )
+                )
+            }
+        }
+    }
+
+    @discardableResult
+    func run(studio request: StudioRunRequest) -> Bool {
         selectedTemplate = request.template
         draft = request.draft
-        run()
+        return run()
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
@@ -591,21 +659,25 @@ final class MereRunController: ObservableObject {
         }
     }
 
-    func run() {
-        guard !isRunning else { return }
+    @discardableResult
+    func run() -> Bool {
+        guard !isRunning else { return false }
         refreshResolvedCLI()
-
-        if let message = selectedTemplate.validationMessage(for: draft) {
-            append(message, stream: .system)
-            status = message
-            lastExitCode = nil
-            return
-        }
 
         let launch = CLIResolver.resolve(customPath: cliPath)
         let args = commandArguments
         let display = launch.displayCommand(for: args)
         let expectedOutput = expectedOutputURL()
+        activeRunTemplateID = selectedTemplate.id
+        activeRunPreview = display
+
+        if let message = selectedTemplate.validationMessage(for: draft) {
+            append(message, stream: .system)
+            status = message
+            lastExitCode = 64
+            finishPreflightFailure(exitCode: 64, outputText: message)
+            return false
+        }
 
         logs.removeAll()
         stdoutBuffer.removeAll(keepingCapacity: true)
@@ -614,12 +686,14 @@ final class MereRunController: ObservableObject {
         lastOutputURL = nil
         lastExitCode = nil
 
-        guard prepareOutputLocation() else { return }
+        guard prepareOutputLocation() else {
+            lastExitCode = -1
+            finishPreflightFailure(exitCode: -1, outputText: capturedResultText(exitCode: -1) ?? status)
+            return false
+        }
 
         status = selectedTemplate.id == .modelPull ? "Downloading model" : "Running"
         isRunning = true
-        activeRunTemplateID = selectedTemplate.id
-        activeRunPreview = display
 
         append(display, stream: .system)
 
@@ -657,8 +731,9 @@ final class MereRunController: ObservableObject {
             }
             activeRunTemplateID = nil
             activeRunPreview = ""
-            return
+            return false
         }
+        return true
     }
 
     func cancel() {
@@ -703,6 +778,19 @@ final class MereRunController: ObservableObject {
                 outputText: outputText
             )
         }
+        activeRunTemplateID = nil
+        activeRunPreview = ""
+    }
+
+    private func finishPreflightFailure(exitCode: Int32, outputText: String?) {
+        guard let templateID = activeRunTemplateID else { return }
+        lastRunResult = MereRunRunResult(
+            templateID: templateID,
+            commandPreview: activeRunPreview,
+            exitCode: exitCode,
+            outputURL: nil,
+            outputText: outputText
+        )
         activeRunTemplateID = nil
         activeRunPreview = ""
     }

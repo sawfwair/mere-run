@@ -105,7 +105,7 @@ public enum ManagedModelCatalog {
         "scheduler/*",
     ]
 
-    private static let zImageNanoUpstreamRepoId = "andrevp/Z-Image-Turbo-MLX-4bit"
+    private static let zImageNanoUpstreamRepoId = "filipstrand/Z-Image-Turbo-mflux-4bit"
     private static let kleinNanoUpstreamRepoId = "stereovoid/flux2-klein-4b-4bit"
 
     public static let allSpecs: [ManagedModelSpec] = [
@@ -666,6 +666,28 @@ public extension ManagedModelSpec {
 
     func isManagedRootComplete(_ rootURL: URL, fileManager: FileManager = .default) -> Bool {
         missingPaths(in: rootURL, fileManager: fileManager).isEmpty
+            && managedSourceMatches(rootURL, fileManager: fileManager)
+    }
+
+    private func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
+        guard id == ModelResolver.ModelID.zetaNano.rawValue,
+              let expectedRepo = upstreamRepoId else {
+            return true
+        }
+        let normalized = normalizedRootURL(rootURL, fileManager: fileManager)
+        guard let manifest = try? MereRunModelManifest.loadIfPresent(from: normalized, fileManager: fileManager),
+              let installedRepo = manifest.upstreamRepoId else {
+            return true
+        }
+
+        if installedRepo == expectedRepo {
+            return true
+        }
+        if let expectedWithRevision = upstreamRevision.map({ "\(expectedRepo)@\($0)" }),
+           installedRepo == expectedWithRevision {
+            return true
+        }
+        return false
     }
 
     func managedInstallRootURL() -> URL {

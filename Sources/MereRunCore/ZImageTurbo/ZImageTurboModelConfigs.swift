@@ -186,18 +186,126 @@ public struct ZImageTurboModelConfigs: Sendable, Hashable {
         decoder: JSONDecoder = JSONDecoder(),
         fileManager: FileManager = .default
     ) throws -> ZImageTurboModelConfigs {
+        let useMFluxDefaults = resources.hasMFluxWeights(fileManager: fileManager)
+
         func decode<T: Decodable>(_ type: T.Type, url: URL) throws -> T {
             try decoder.decode(T.self, from: Data(contentsOf: url))
+        }
+        func decodeOrMFluxDefault<T: Decodable>(_ type: T.Type, url: URL, fallback: T) throws -> T {
+            if fileManager.fileExists(atPath: url.path) {
+                return try decode(type, url: url)
+            }
+            guard useMFluxDefaults else {
+                return try decode(type, url: url)
+            }
+            return fallback
         }
 
         return ZImageTurboModelConfigs(
             modelIndex: fileManager.fileExists(atPath: resources.modelIndexURL.path)
                 ? try decode(ZImageTurboModelIndex.self, url: resources.modelIndexURL)
                 : nil,
-            transformer: try decode(ZImageTurboTransformerConfig.self, url: resources.transformerConfigURL),
-            vae: try decode(ZImageTurboVAEConfig.self, url: resources.vaeConfigURL),
-            scheduler: try decode(ZImageTurboSchedulerConfig.self, url: resources.schedulerConfigURL),
-            textEncoder: try decode(ZImageTurboTextEncoderConfig.self, url: resources.textEncoderConfigURL)
+            transformer: try decodeOrMFluxDefault(
+                ZImageTurboTransformerConfig.self,
+                url: resources.transformerConfigURL,
+                fallback: ZImageTurboTransformerConfig.mfluxZImageTurbo
+            ),
+            vae: try decodeOrMFluxDefault(
+                ZImageTurboVAEConfig.self,
+                url: resources.vaeConfigURL,
+                fallback: ZImageTurboVAEConfig.mfluxZImageTurbo
+            ),
+            scheduler: try decodeOrMFluxDefault(
+                ZImageTurboSchedulerConfig.self,
+                url: resources.schedulerConfigURL,
+                fallback: ZImageTurboSchedulerConfig.mfluxZImageTurbo
+            ),
+            textEncoder: try decodeOrMFluxDefault(
+                ZImageTurboTextEncoderConfig.self,
+                url: resources.textEncoderConfigURL,
+                fallback: ZImageTurboTextEncoderConfig.mfluxZImageTurbo
+            )
         )
     }
+}
+
+extension ZImageTurboTransformerConfig {
+    static let mfluxZImageTurbo = ZImageTurboTransformerConfig(
+        inChannels: 16,
+        dim: 3840,
+        nLayers: 30,
+        nRefinerLayers: 2,
+        nHeads: 30,
+        nKVHeads: 30,
+        normEps: 1e-5,
+        qkNorm: true,
+        capFeatDim: 2560,
+        ropeTheta: 256.0,
+        tScale: 1000.0,
+        axesDims: [32, 48, 48],
+        axesLens: [1024, 512, 512],
+        allPatchSize: [2],
+        allFPatchSize: [1]
+    )
+}
+
+extension ZImageTurboVAEConfig {
+    static let mfluxZImageTurbo = ZImageTurboVAEConfig(
+        actFn: "silu",
+        blockOutChannels: [128, 256, 512, 512],
+        downBlockTypes: nil,
+        upBlockTypes: nil,
+        forceUpcast: nil,
+        inChannels: 3,
+        latentChannels: 16,
+        layersPerBlock: 2,
+        midBlockAddAttention: true,
+        normNumGroups: 32,
+        outChannels: 3,
+        sampleSize: 1024,
+        scalingFactor: 0.3611,
+        shiftFactor: 0.1159,
+        usePostQuantConv: false,
+        useQuantConv: false,
+        latentsMean: nil,
+        latentsStd: nil
+    )
+}
+
+extension ZImageTurboSchedulerConfig {
+    static let mfluxZImageTurbo = ZImageTurboSchedulerConfig(
+        numTrainTimesteps: 1000,
+        shift: 1.0,
+        useDynamicShifting: false,
+        baseShift: nil,
+        maxShift: nil,
+        baseImageSeqLen: nil,
+        maxImageSeqLen: nil
+    )
+}
+
+extension ZImageTurboTextEncoderConfig {
+    static let mfluxZImageTurbo = ZImageTurboTextEncoderConfig(
+        attentionBias: false,
+        attentionDropout: 0.0,
+        bosTokenId: nil,
+        eosTokenId: nil,
+        headDim: 128,
+        hiddenAct: "silu",
+        hiddenSize: 2560,
+        intermediateSize: 9728,
+        maxPositionEmbeddings: 40960,
+        modelType: "qwen3",
+        numAttentionHeads: 32,
+        numHiddenLayers: 36,
+        numKeyValueHeads: 8,
+        rmsNormEps: 1e-6,
+        ropeTheta: 1_000_000.0,
+        slidingWindow: nil,
+        tieWordEmbeddings: false,
+        torchDtype: "bfloat16",
+        useCache: false,
+        useSlidingWindow: false,
+        vocabSize: 151_936
+    )
 }

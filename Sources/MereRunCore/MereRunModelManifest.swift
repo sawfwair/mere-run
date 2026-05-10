@@ -629,7 +629,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: Defaults(steps: 4, cfg: 1.0),
                 supports: [.txt2img, .img2img, .loraInference],
                 components: defaultComponents,
-                upstreamRepoId: "andrevp/Z-Image-Turbo-MLX-4bit@main",
+                upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@main",
                 createdAt: createdAt
             )
         case .zetaMax:

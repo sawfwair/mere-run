@@ -36,4 +36,25 @@ final class QwenTokenizerCompatibilityTests: MereRunCoreTestCase {
         ])
         XCTAssertNil(tokenizerClass)
     }
+
+    func testSiblingChatTemplateIsLoadedWhenConfigOmitsTemplate() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let configURL = temp.appendingPathComponent("tokenizer_config.json")
+        let templateURL = temp.appendingPathComponent("chat_template.jinja")
+        try TestFileSystem.writeFile(templateURL, contents: Data("hello {{ messages }}".utf8))
+
+        let data = try JSONSerialization.data(withJSONObject: [
+            "tokenizer_class": "TokenizersBackend",
+            "model_max_length": 262_144,
+        ], options: [])
+        let config = try QwenTokenizer.normalizedTokenizerConfig(
+            data: data,
+            url: configURL,
+            overrideTokenizerClass: "Qwen2Tokenizer"
+        )
+
+        XCTAssertEqual(config["chat_template"].string(), "hello {{ messages }}")
+    }
 }

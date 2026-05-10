@@ -150,6 +150,47 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.lastRunResult?.outputText, "unsupported model")
     }
 
+    func testValidationFailurePublishesRunResultWithoutStartingProcess() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        controller.select(template)
+        controller.draft.prompt = ""
+
+        XCTAssertFalse(controller.run())
+
+        XCTAssertTrue(runner.starts.isEmpty)
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertEqual(controller.lastRunResult?.templateID, .imageGenerate)
+        XCTAssertEqual(controller.lastRunResult?.exitCode, 64)
+        XCTAssertEqual(controller.lastRunResult?.outputText, "Prompt is required.")
+    }
+
+    func testOutputPreparationFailurePublishesRunResultWithoutStartingProcess() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MereRunControllerTests-\(UUID().uuidString)", isDirectory: true)
+        let fileParent = temp.appendingPathComponent("not-a-directory", isDirectory: false)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        XCTAssertTrue(FileManager.default.createFile(atPath: fileParent.path, contents: Data()))
+        controller.select(template)
+        controller.draft.prompt = "a ceramic coffee mug"
+        controller.draft.outputPath = fileParent.appendingPathComponent("image.png").path
+
+        XCTAssertFalse(controller.run())
+
+        XCTAssertTrue(runner.starts.isEmpty)
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertEqual(controller.lastRunResult?.templateID, .imageGenerate)
+        XCTAssertEqual(controller.lastRunResult?.exitCode, -1)
+        XCTAssertTrue(controller.lastRunResult?.outputText?.contains("Could not create output directory") == true)
+    }
+
     func testModelPullUsesDownloadingStatusWhileRunning() throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

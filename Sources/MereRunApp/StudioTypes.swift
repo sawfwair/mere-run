@@ -337,7 +337,8 @@ enum StudioCommandAdapter {
     }
 
     static func pullRequest(for mode: StudioMode, draft: StudioDraft) throws -> StudioRunRequest? {
-        guard let model = managedCapabilityModelID(for: mode, draft: draft) else {
+        guard let requirement = capabilityRequirement(for: mode, draft: draft),
+              case .managedModel(let model) = requirement else {
             return nil
         }
         guard !model.isBlank else { return nil }
@@ -357,17 +358,17 @@ enum StudioCommandAdapter {
     }
 
     static func capabilityRequirement(for mode: StudioMode, draft: StudioDraft) -> StudioCapabilityRequirement? {
-        if let modelID = managedCapabilityModelID(for: mode, draft: draft) {
-            return .managedModel(modelID)
-        }
-
         if mode == .readImage {
             switch draft.readImageAction {
             case .inspect, .caption:
                 return .unavailable(unmanagedVisionLanguageMessage(for: draft.readImageAction))
             case .ocr:
-                return nil
+                break
             }
+        }
+
+        if let modelID = managedCapabilityModelID(for: mode, draft: draft) {
+            return .managedModel(modelID)
         }
 
         return nil
@@ -461,7 +462,7 @@ enum ModelReadinessState: Equatable {
 
     var blocksRun: Bool {
         switch self {
-        case .checking, .missingModel, .unsupported:
+        case .checking, .missingModel, .unsupported, .unknown:
             return true
         default:
             return false

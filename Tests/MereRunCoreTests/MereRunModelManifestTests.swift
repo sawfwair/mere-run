@@ -46,6 +46,16 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(loaded.engine, .zimageTurbo)
     }
 
+    func testZImageNanoTemplateUsesMFluxUpstream() throws {
+        let manifest = MereRunModelManifest.template(for: .zetaNano, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, "image-zimage-nano")
+        XCTAssertEqual(manifest.engine, .zimageTurbo)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.upstreamRepoId, "filipstrand/Z-Image-Turbo-mflux-4bit@main")
+    }
+
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
 

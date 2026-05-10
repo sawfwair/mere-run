@@ -4,7 +4,7 @@ public enum ZImageTurboRepository {
     public static let id = "Tongyi-MAI/Z-Image-Turbo"
     public static let revision = "main"
     public static let baseRepoId = "Tongyi-MAI/Z-Image"
-    public static let nanoRepoId = "andrevp/Z-Image-Turbo-MLX-4bit"
+    public static let nanoRepoId = "filipstrand/Z-Image-Turbo-mflux-4bit"
     public static let defaultModelID: ModelResolver.ModelID = .zetaNano
     public static let defaultModelSpec = defaultModelID.rawValue
     public static let snapshotPatterns = [
@@ -159,8 +159,16 @@ public struct ZImageTurboResources: Sendable, Hashable {
         transformerDirURL.appending(path: "diffusion_pytorch_model.safetensors.index.json")
     }
 
+    public var transformerMFluxWeightsIndexURL: URL {
+        transformerDirURL.appending(path: "model.safetensors.index.json")
+    }
+
     public var transformerWeightsURL: URL {
         transformerDirURL.appending(path: "diffusion_pytorch_model.safetensors")
+    }
+
+    public var transformerMFluxWeightsURL: URL {
+        transformerDirURL.appending(path: "model.safetensors")
     }
 
     public var textEncoderConfigURL: URL {
@@ -183,6 +191,14 @@ public struct ZImageTurboResources: Sendable, Hashable {
         vaeDirURL.appending(path: "diffusion_pytorch_model.safetensors")
     }
 
+    public var vaeWeightsIndexURL: URL {
+        vaeDirURL.appending(path: "model.safetensors.index.json")
+    }
+
+    public var vaeMFluxWeightsURL: URL {
+        vaeDirURL.appending(path: "model.safetensors")
+    }
+
     public var tokenizerJSONURL: URL {
         tokenizerDirURL.appending(path: "tokenizer.json")
     }
@@ -200,20 +216,29 @@ public struct ZImageTurboResources: Sendable, Hashable {
     }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
+        let mfluxFormat = hasMFluxWeights(fileManager: fileManager)
         var urls: [URL] = [
-            schedulerConfigURL,
-            transformerConfigURL,
-            textEncoderConfigURL,
-            vaeConfigURL,
             tokenizerJSONURL,
             tokenizerConfigURL,
             tokenizerMergesURL,
             tokenizerVocabURL,
         ]
 
+        if !mfluxFormat {
+            urls.append(contentsOf: [
+                schedulerConfigURL,
+                transformerConfigURL,
+                textEncoderConfigURL,
+                vaeConfigURL,
+            ])
+        }
+
         let transformerWeightsOK =
             fileManager.fileExists(atPath: transformerWeightsIndexURL.path)
             || fileManager.fileExists(atPath: transformerWeightsURL.path)
+            || fileManager.fileExists(atPath: transformerMFluxWeightsIndexURL.path)
+            || fileManager.fileExists(atPath: transformerMFluxWeightsURL.path)
+            || Self.hasSafetensorsShards(in: transformerDirURL, fileManager: fileManager)
         if !transformerWeightsOK {
             urls.append(transformerWeightsIndexURL)
         }
@@ -221,15 +246,56 @@ public struct ZImageTurboResources: Sendable, Hashable {
         let textEncoderWeightsOK =
             fileManager.fileExists(atPath: textEncoderWeightsIndexURL.path)
             || fileManager.fileExists(atPath: textEncoderWeightsURL.path)
+            || Self.hasSafetensorsShards(in: textEncoderDirURL, fileManager: fileManager)
         if !textEncoderWeightsOK {
             urls.append(textEncoderWeightsIndexURL)
         }
 
-        if !fileManager.fileExists(atPath: vaeWeightsURL.path) {
+        let vaeWeightsOK =
+            fileManager.fileExists(atPath: vaeWeightsURL.path)
+            || fileManager.fileExists(atPath: vaeWeightsIndexURL.path)
+            || fileManager.fileExists(atPath: vaeMFluxWeightsURL.path)
+            || Self.hasSafetensorsShards(in: vaeDirURL, fileManager: fileManager)
+        if !vaeWeightsOK {
             urls.append(vaeWeightsURL)
         }
 
         return urls.filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    public func hasMFluxWeights(fileManager: FileManager = .default) -> Bool {
+        (
+            fileManager.fileExists(atPath: transformerMFluxWeightsIndexURL.path)
+            || fileManager.fileExists(atPath: transformerMFluxWeightsURL.path)
+        ) && (
+            fileManager.fileExists(atPath: vaeWeightsIndexURL.path)
+            || fileManager.fileExists(atPath: vaeMFluxWeightsURL.path)
+        )
+    }
+
+    private static func hasSafetensorsShards(in directoryURL: URL, fileManager: FileManager) -> Bool {
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+        return urls.contains { $0.pathExtension == "safetensors" }
+    }
+
+    private static func hasStaleManagedSource(
+        in rootURL: URL,
+        expectedRepoId: String,
+        expectedRevision: String?,
+        fileManager: FileManager
+    ) -> Bool {
+        guard let manifest = try? MereRunModelManifest.loadIfPresent(from: rootURL, fileManager: fileManager),
+              let installed = manifest.upstreamRepoId else {
+            return false
+        }
+        let expected = expectedRevision.map { "\(expectedRepoId)@\($0)" } ?? expectedRepoId
+        return installed != expectedRepoId && installed != expected
     }
 
     public static func validateDownloadedRoot(
@@ -258,6 +324,15 @@ public struct ZImageTurboResources: Sendable, Hashable {
             }
             return missing
         case .zetaNano, .zetaMax:
+            if modelID == .zetaNano,
+               hasStaleManagedSource(
+                in: rootURL,
+                expectedRepoId: ZImageTurboRepository.nanoRepoId,
+                expectedRevision: ZImageTurboRepository.revision,
+                fileManager: fileManager
+               ) {
+                return [rootURL.appendingPathComponent("\(MereRunModelManifest.filename).upstream-mismatch")]
+            }
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
         default:
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)

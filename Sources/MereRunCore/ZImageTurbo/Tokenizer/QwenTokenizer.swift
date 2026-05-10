@@ -160,6 +160,13 @@ public final class QwenTokenizer {
       dict["tokenizer_class"] = overrideTokenizerClass
     }
 
+    if dict["chat_template"] == nil {
+      let chatTemplateURL = url.deletingLastPathComponent().appending(path: "chat_template.jinja")
+      if FileManager.default.fileExists(atPath: chatTemplateURL.path) {
+        dict["chat_template"] = try String(contentsOf: chatTemplateURL, encoding: .utf8)
+      }
+    }
+
     let nsDict: [NSString: Any] = dict.reduce(into: [:]) { partialResult, pair in
       partialResult[pair.key as NSString] = pair.value
     }

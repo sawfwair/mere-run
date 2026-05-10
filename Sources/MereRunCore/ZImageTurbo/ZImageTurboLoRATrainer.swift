@@ -425,7 +425,7 @@ public enum ZImageTurboLoRATrainer {
         let textEncoderComponent = try componentResolver.resolveDirectory(for: .textEncoder, fallbackLocalPath: "text_encoder")
         let transformerComponent = try componentResolver.resolveDirectory(for: .transformer, fallbackLocalPath: "transformer")
         let vaeComponent = try componentResolver.resolveDirectory(for: .vae, fallbackLocalPath: "vae")
-        let schedulerComponent = try componentResolver.resolveDirectory(for: .scheduler, fallbackLocalPath: "scheduler")
+        let schedulerComponent = try? componentResolver.resolveDirectory(for: .scheduler, fallbackLocalPath: "scheduler")
 
         let resources = ZImageTurboResources(
             modelRootURL: modelURL,
@@ -433,11 +433,13 @@ public enum ZImageTurboLoRATrainer {
             textEncoderDirURL: textEncoderComponent.directoryURL,
             transformerDirURL: transformerComponent.directoryURL,
             vaeDirURL: vaeComponent.directoryURL,
-            schedulerDirURL: schedulerComponent.directoryURL
+            schedulerDirURL: schedulerComponent?.directoryURL
+                ?? modelURL.appendingPathComponent("scheduler", isDirectory: true)
         )
         let configs = try ZImageTurboModelConfigs.load(from: resources)
         let textEncoderQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(textEncoderComponent.sourceManifest)
         let transformerQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(transformerComponent.sourceManifest)
+        let vaeQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(vaeComponent.sourceManifest)
 
         // Load tokenizer
         let tokenizerDir = resources.tokenizerDirURL
@@ -492,7 +494,7 @@ public enum ZImageTurboLoRATrainer {
             sampleSize: configs.vae.sampleSize ?? 1024,
             midBlockAddAttention: configs.vae.midBlockAddAttention
         ))
-        try loadVAEWeights(from: resources, into: vae)
+        try loadVAEWeights(from: resources, into: vae, quantization: vaeQuantization)
 
         // Ensure all model weights are evaluated before use
         MLX.eval(textEncoder, transformer, vae)

@@ -66,9 +66,33 @@ extension ZImageTurboLoRATrainer {
             }
             return mapped
         }
-        try ModelWeightsLoader.applyHFSafetensors(
-            indexURL: resources.transformerWeightsIndexURL,
-            singleURL: resources.transformerWeightsURL,
+
+        let fileManager = FileManager.default
+        let hasDiffusersWeights =
+            fileManager.fileExists(atPath: resources.transformerWeightsIndexURL.path)
+            || fileManager.fileExists(atPath: resources.transformerWeightsURL.path)
+        let indexURL = hasDiffusersWeights
+            ? resources.transformerWeightsIndexURL
+            : resources.transformerMFluxWeightsIndexURL
+        let singleURL = hasDiffusersWeights
+            ? resources.transformerWeightsURL
+            : resources.transformerMFluxWeightsURL
+        if fileManager.fileExists(atPath: indexURL.path) || fileManager.fileExists(atPath: singleURL.path) {
+            try ModelWeightsLoader.applyHFSafetensors(
+                indexURL: indexURL,
+                singleURL: singleURL,
+                to: model,
+                dtype: .bfloat16,
+                verify: [.noUnusedKeys, .shapeMismatch],
+                keyMapper: keyMapper,
+                quantization: quantization
+            )
+            return
+        }
+
+        let shardFiles = try ModelWeightsLoader.safetensorsShards(in: resources.transformerDirURL)
+        try ModelWeightsLoader.applySafetensorsShards(
+            files: shardFiles,
             to: model,
             dtype: .bfloat16,
             verify: [.noUnusedKeys, .shapeMismatch],
@@ -79,17 +103,43 @@ extension ZImageTurboLoRATrainer {
 
     static func loadVAEWeights(
         from resources: ZImageTurboResources,
-        into model: AutoencoderKL
+        into model: AutoencoderKL,
+        quantization: ModelWeightsLoader.QuantizationParams?
     ) throws {
-        try HFSafetensorsWeightsLoader.applyWeights(
-            url: resources.vaeWeightsURL,
+        if FileManager.default.fileExists(atPath: resources.vaeWeightsURL.path) {
+            try HFSafetensorsWeightsLoader.applyWeights(
+                url: resources.vaeWeightsURL,
+                to: model,
+                dtype: .bfloat16,
+                verify: [.noUnusedKeys, .shapeMismatch],
+                mapper: { key, value in
+                    let maybeConverted = value.ndim == 4 ? HFSafetensorsWeightsLoader.convWeightOIHWToOHWI(value) : value
+                    return [(key, maybeConverted)]
+                }
+            )
+            return
+        }
+
+        if FileManager.default.fileExists(atPath: resources.vaeWeightsIndexURL.path)
+            || FileManager.default.fileExists(atPath: resources.vaeMFluxWeightsURL.path) {
+            try ModelWeightsLoader.applyHFSafetensors(
+                indexURL: resources.vaeWeightsIndexURL,
+                singleURL: resources.vaeMFluxWeightsURL,
+                to: model,
+                dtype: .bfloat16,
+                verify: [.noUnusedKeys, .shapeMismatch],
+                quantization: quantization
+            )
+            return
+        }
+
+        let shardFiles = try ModelWeightsLoader.safetensorsShards(in: resources.vaeDirURL)
+        try ModelWeightsLoader.applySafetensorsShards(
+            files: shardFiles,
             to: model,
             dtype: .bfloat16,
             verify: [.noUnusedKeys, .shapeMismatch],
-            mapper: { key, value in
-                let maybeConverted = value.ndim == 4 ? HFSafetensorsWeightsLoader.convWeightOIHWToOHWI(value) : value
-                return [(key, maybeConverted)]
-            }
+            quantization: quantization
         )
     }
 

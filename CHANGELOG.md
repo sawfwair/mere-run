@@ -8,6 +8,17 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.10 - 2026-05-10
+
+### Added
+
+- added a Studio Models sheet for inspecting managed models, revealing their folders in Finder, opening the model store, and purging downloaded installs.
+
+### Fixed
+
+- fixed Image Nano (`image-zimage-nano`) to pull and load the public 4-bit mflux Z-Image Turbo quant layout.
+- tightened Studio readiness handling so unsupported or unknown model states cannot be bypassed, model changes refresh capabilities, and preflight failures no longer leave stale running items.
+
 ## 0.4.9 - 2026-05-10
 
 ### Fixed

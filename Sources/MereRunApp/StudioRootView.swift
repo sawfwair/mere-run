@@ -10,6 +10,7 @@ struct StudioRootView: View {
     @State private var showLibrary = true
     @State private var showAdvanced = false
     @State private var showOptions = false
+    @State private var showModels = false
     @State private var activeLibraryID: UUID?
     @State private var selectedLibraryID: UUID?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
@@ -84,7 +85,8 @@ struct StudioRootView: View {
                     showAdvanced: $showAdvanced,
                     readiness: readiness,
                     modeCapabilities: modeCapabilities,
-                    resolvedCLI: controller.resolvedCLI
+                    resolvedCLI: controller.resolvedCLI,
+                    onShowModels: { showModels = true }
                 )
 
                 Divider()
@@ -146,6 +148,10 @@ struct StudioRootView: View {
             StudioOptionsSheet(mode: mode, draft: $draft)
                 .frame(width: 500)
         }
+        .sheet(isPresented: $showModels) {
+            StudioModelsSheet(onModelsChanged: refreshReadiness)
+                .environmentObject(controller)
+        }
         .onAppear {
             draft.reset(for: mode)
             controller.checkReadiness(for: mode, draft: draft)
@@ -158,10 +164,33 @@ struct StudioRootView: View {
             controller.checkReadiness(for: newMode, draft: nextDraft)
         }
         .onChange(of: draft.model) { _, _ in
-            controller.checkReadiness(for: mode, draft: draft)
+            studioError = nil
+            refreshReadiness()
         }
         .onChange(of: draft.readImageAction) { _, _ in
-            controller.checkReadiness(for: mode, draft: draft)
+            studioError = nil
+            refreshReadiness()
+        }
+        .onChange(of: draft.inputPath) { _, _ in
+            studioError = nil
+        }
+        .onChange(of: draft.prompt) { _, _ in
+            studioError = nil
+        }
+        .onChange(of: draft.secondaryText) { _, _ in
+            studioError = nil
+        }
+        .onChange(of: controller.cliPath) { _, _ in
+            studioError = nil
+            refreshReadiness()
+        }
+        .onChange(of: controller.modelsRoot) { _, _ in
+            studioError = nil
+            refreshReadiness()
+        }
+        .onChange(of: controller.hubCache) { _, _ in
+            studioError = nil
+            refreshReadiness()
         }
         .onChange(of: controller.lastRunResult) { _, result in
             guard let result else { return }
@@ -179,11 +208,15 @@ struct StudioRootView: View {
                 self.activeLibraryID = nil
             }
 
+            let mutatedModels = result.templateID == .modelPull
+                || result.templateID == .modelRemove
+                || result.templateID == .modelRepairManifests
+
             if let pendingPullRefresh, result.templateID == .modelPull {
                 self.pendingPullRefresh = nil
                 controller.checkReadiness(for: pendingPullRefresh.mode, draft: pendingPullRefresh.draft)
-            } else if completedLibraryItem {
-                controller.checkReadiness(for: mode, draft: draft)
+            } else if mutatedModels || completedLibraryItem {
+                refreshReadiness()
             }
         }
     }
@@ -245,10 +278,17 @@ struct StudioRootView: View {
             pendingPullRefresh = StudioReadinessRefresh(mode: mode, draft: draft)
             controller.readinessByMode[mode] = .checking
             showAdvanced = true
-            controller.run(studio: request)
+            if !controller.run(studio: request) {
+                pendingPullRefresh = nil
+                refreshReadiness()
+            }
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    private func refreshReadiness() {
+        controller.checkReadiness(for: mode, draft: draft)
     }
 
     private func chooseAttachment() {
@@ -286,6 +326,7 @@ private struct StudioTopBar: View {
     let readiness: ModelReadinessState
     let modeCapabilities: [StudioMode: StudioModelCapability]
     let resolvedCLI: String
+    let onShowModels: () -> Void
 
     var body: some View {
         VStack(spacing: 14) {
@@ -324,6 +365,13 @@ private struct StudioTopBar: View {
                     systemImage: "terminal",
                     color: MereRunTheme.accent
                 )
+
+                Button {
+                    onShowModels()
+                } label: {
+                    Label("Models", systemImage: "shippingbox")
+                }
+                .buttonStyle(.bordered)
 
                 Button {
                     withAnimation(.easeOut(duration: 0.18)) {

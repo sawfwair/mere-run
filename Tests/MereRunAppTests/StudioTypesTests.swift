@@ -111,6 +111,54 @@ final class StudioTypesTests: XCTestCase {
         )
     }
 
+    func testReadImageUnavailableActionCannotBeBypassedWithModelOverride() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .readImage)
+        draft.model = "vision-ocr-lighton"
+        let expectedMessage = "Inspect uses an automatic vision-language model download "
+            + "that is not listed in the managed capability catalog yet."
+
+        XCTAssertEqual(
+            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
+            .unavailable(expectedMessage)
+        )
+        XCTAssertNil(try StudioCommandAdapter.pullRequest(for: .readImage, draft: draft))
+    }
+
+    func testUnknownReadinessBlocksRuns() {
+        XCTAssertTrue(ModelReadinessState.unknown("Could not check models.").blocksRun)
+    }
+
+    func testStudioModelInventoryParserFindsDownloadedRows() {
+        let output = """
+        ID                         Category        Status     Size
+        ----------------------------------------------------------
+        image-zimage-nano          image           installed  4.2 GB
+        text-chat-gemma4           text-chat       missing    —
+        vision-segment-sam31       vision-segment  installed  950 MB
+        """
+
+        let rows = StudioModelInventoryParser.rows(from: output)
+
+        XCTAssertEqual(rows.count, 3)
+        XCTAssertEqual(rows[0].id, "image-zimage-nano")
+        XCTAssertEqual(rows[0].status, "installed")
+        XCTAssertEqual(rows[0].size, "4.2 GB")
+        XCTAssertTrue(rows[2].isInstalled)
+        XCTAssertFalse(rows[1].isInstalled)
+    }
+
+    func testStudioModelInventoryParserFindsModelRoot() throws {
+        let output = """
+        Model Root: /Users/example/Library/Application Support/MereRun/models/image-zimage-nano
+        Model ID: image-zimage-nano
+        """
+
+        let root = try XCTUnwrap(StudioModelInventoryParser.modelRoot(from: output))
+
+        XCTAssertEqual(root.path, "/Users/example/Library/Application Support/MereRun/models/image-zimage-nano")
+    }
+
     func testModelReadinessParserFindsInstalledMissingAndUnknown() {
         let output = """
         ID Category Status Size

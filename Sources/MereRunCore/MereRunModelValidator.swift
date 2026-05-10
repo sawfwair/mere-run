@@ -84,13 +84,15 @@ public enum MereRunModelValidator {
         }
 
         let spec = manifest.flatMap { ManagedModelCatalog.spec(for: $0.id) }
+        let usesMFluxZImage = spec?.validationKind == .zimageTurbo
+            && ZImageTurboResources(rootURL: rootURL).hasMFluxWeights(fileManager: fileManager)
 
         // Root marker checks: diffusers-style models should have model_index.json, but allow fallback markers.
         let modelIndex = rootURL.appendingPathComponent("model_index.json")
         let rootConfig = rootURL.appendingPathComponent("config.json")
 
         let hasRootMarker = fileManager.fileExists(atPath: modelIndex.path) || fileManager.fileExists(atPath: rootConfig.path)
-        if !hasRootMarker {
+        if !hasRootMarker && !usesMFluxZImage {
             warnings.append("Missing model root marker (expected model_index.json).")
         }
 
@@ -157,7 +159,7 @@ public enum MereRunModelValidator {
                 validateComponentDirectory(
                     componentDir: transformerDir,
                     label: "transformer",
-                    requiredConfigFilename: "config.json",
+                    requiredConfigFilename: usesMFluxZImage ? nil : "config.json",
                     requireWeights: true,
                     errors: &errors,
                     fileManager: fileManager
@@ -176,7 +178,7 @@ public enum MereRunModelValidator {
                 validateComponentDirectory(
                     componentDir: textEncoderDir,
                     label: "text_encoder",
-                    requiredConfigFilename: "config.json",
+                    requiredConfigFilename: usesMFluxZImage ? nil : "config.json",
                     requireWeights: true,
                     errors: &errors,
                     fileManager: fileManager
@@ -199,7 +201,7 @@ public enum MereRunModelValidator {
                 validateComponentDirectory(
                     componentDir: vaeDir,
                     label: "vae",
-                    requiredConfigFilename: "config.json",
+                    requiredConfigFilename: usesMFluxZImage ? nil : "config.json",
                     requireWeights: true,
                     errors: &errors,
                     fileManager: fileManager
@@ -237,7 +239,7 @@ public enum MereRunModelValidator {
             } else {
                 schedulerDir = nil
             }
-            if let schedulerDir {
+            if let schedulerDir, !usesMFluxZImage {
                 let schedulerConfig = schedulerDir.appendingPathComponent("scheduler_config.json")
                 if !fileManager.fileExists(atPath: schedulerConfig.path) {
                     errors.append("Missing scheduler/scheduler_config.json.")
@@ -525,14 +527,16 @@ public enum MereRunModelValidator {
     private static func validateComponentDirectory(
         componentDir: URL,
         label: String,
-        requiredConfigFilename: String,
+        requiredConfigFilename: String?,
         requireWeights: Bool,
         errors: inout [String],
         fileManager: FileManager
     ) {
-        let configURL = componentDir.appendingPathComponent(requiredConfigFilename)
-        if !fileManager.fileExists(atPath: configURL.path) {
-            errors.append("Missing \(label)/\(requiredConfigFilename)")
+        if let requiredConfigFilename {
+            let configURL = componentDir.appendingPathComponent(requiredConfigFilename)
+            if !fileManager.fileExists(atPath: configURL.path) {
+                errors.append("Missing \(label)/\(requiredConfigFilename)")
+            }
         }
 
         if requireWeights, !hasAnyWeightFiles(in: componentDir, fileManager: fileManager) {

@@ -52,6 +52,46 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testZImageNanoUsesMFluxHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "filipstrand/Z-Image-Turbo-mflux-4bit")
+        XCTAssertEqual(spec.upstreamRepoId, "filipstrand/Z-Image-Turbo-mflux-4bit")
+        XCTAssertEqual(spec.upstreamRevision, "main")
+    }
+
+    func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalMFluxZImageNano(at: root, upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@main")
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertTrue(ZImageTurboResources(rootURL: root).validate(fileManager: .default).isEmpty)
+
+        let configs = try ZImageTurboModelConfigs.load(from: ZImageTurboResources(rootURL: root))
+        XCTAssertEqual(configs.transformer.dim, 3840)
+        XCTAssertEqual(configs.transformer.axesLens, [1024, 512, 512])
+        XCTAssertEqual(configs.textEncoder.maxPositionEmbeddings, 40960)
+        XCTAssertEqual(configs.vae.scalingFactor, 0.3611, accuracy: 0.0001)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "image-zimage-nano")
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertTrue(report.warnings.isEmpty)
+    }
+
+    func testZImageNanoRejectsStaleManagedSource() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalMFluxZImageNano(at: root, upstreamRepoId: "andrevp/Z-Image-Turbo-MLX-4bit@main")
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertFalse(
+            ZImageTurboResources.validateDownloadedRoot(root, modelID: .zetaNano, fileManager: .default).isEmpty
+        )
+    }
+
     func testNestedASRNormalizationDoesNotRecurseThroughValidation() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -95,5 +135,30 @@ final class ManagedModelCatalogTests: XCTestCase {
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func writeMinimalMFluxZImageNano(at root: URL, upstreamRepoId: String) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        var manifest = MereRunModelManifest.template(for: .zetaNano, createdAt: Date(timeIntervalSince1970: 0))
+        manifest.upstreamRepoId = upstreamRepoId
+        try manifest.write(to: root)
+
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoder = root.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformer = root.appendingPathComponent("transformer", isDirectory: true)
+        let vae = root.appendingPathComponent("vae", isDirectory: true)
+
+        for dir in [tokenizer, textEncoder, transformer, vae] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        for file in ["tokenizer.json", "tokenizer_config.json", "merges.txt", "vocab.json"] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: tokenizer.appendingPathComponent(file).path, contents: Data()))
+        }
+
+        let indexData = Data(#"{"metadata":{"quantization_level":"4","mflux_version":"0.13.0.dev0"},"weight_map":{}}"#.utf8)
+        try indexData.write(to: textEncoder.appendingPathComponent("model.safetensors.index.json"))
+        try indexData.write(to: transformer.appendingPathComponent("model.safetensors.index.json"))
+        try indexData.write(to: vae.appendingPathComponent("model.safetensors.index.json"))
     }
 }
