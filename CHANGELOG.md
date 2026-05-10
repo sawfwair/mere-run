@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.5 - 2026-05-09
+
+### Fixed
+
+- fixed Studio first-open previews so large media outputs are not read into memory as text and image previews are downsampled before display
+- fixed duplicate Studio model-readiness checks from stacking during launch, mode changes, and model changes
+
 ## 0.4.4 - 2026-05-09
 
 ### Added
