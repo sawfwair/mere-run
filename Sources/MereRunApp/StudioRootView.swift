@@ -12,6 +12,7 @@ struct StudioRootView: View {
     @State private var showOptions = false
     @State private var activeLibraryID: UUID?
     @State private var selectedLibraryID: UUID?
+    @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var studioError: String?
 
     private var selectedItem: StudioLibraryItem? {
@@ -163,17 +164,27 @@ struct StudioRootView: View {
             controller.checkReadiness(for: mode, draft: draft)
         }
         .onChange(of: controller.lastRunResult) { _, result in
-            guard let result, let activeLibraryID else { return }
-            library.complete(
-                id: activeLibraryID,
-                exitCode: result.exitCode,
-                outputURL: result.outputURL,
-                outputText: result.outputText,
-                commandPreview: result.commandPreview.maskingAPIKeyValue()
-            )
-            selectedLibraryID = activeLibraryID
-            self.activeLibraryID = nil
-            controller.checkReadiness(for: mode, draft: draft)
+            guard let result else { return }
+
+            let completedLibraryItem = activeLibraryID != nil
+            if let activeLibraryID {
+                library.complete(
+                    id: activeLibraryID,
+                    exitCode: result.exitCode,
+                    outputURL: result.outputURL,
+                    outputText: result.outputText,
+                    commandPreview: result.commandPreview.maskingAPIKeyValue()
+                )
+                selectedLibraryID = activeLibraryID
+                self.activeLibraryID = nil
+            }
+
+            if let pendingPullRefresh, result.templateID == .modelPull {
+                self.pendingPullRefresh = nil
+                controller.checkReadiness(for: pendingPullRefresh.mode, draft: pendingPullRefresh.draft)
+            } else if completedLibraryItem {
+                controller.checkReadiness(for: mode, draft: draft)
+            }
         }
     }
 
@@ -231,6 +242,8 @@ struct StudioRootView: View {
                 studioError = "This mode does not need a managed model."
                 return
             }
+            pendingPullRefresh = StudioReadinessRefresh(mode: mode, draft: draft)
+            controller.readinessByMode[mode] = .checking
             showAdvanced = true
             controller.run(studio: request)
         } catch {
@@ -259,6 +272,11 @@ struct StudioRootView: View {
         guard let url = selectedItem?.outputURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
+}
+
+private struct StudioReadinessRefresh: Equatable {
+    let mode: StudioMode
+    let draft: StudioDraft
 }
 
 private struct StudioTopBar: View {
@@ -457,6 +475,14 @@ private struct StudioCanvas: View {
         return text.isEmpty ? nil : text
     }
 
+    private var recentLogLines: [String] {
+        logs.suffix(4).map(\.text)
+    }
+
+    private var shouldShowReadinessOverlay: Bool {
+        !isRunning && (readiness.blocksRun || error != nil)
+    }
+
     var body: some View {
         ZStack {
             if let item {
@@ -469,11 +495,11 @@ private struct StudioCanvas: View {
             }
 
             if isRunning && visibleLiveOutputText == nil {
-                StudioRunningOverlay(status: status, latestLog: logs.last?.text)
+                StudioRunningOverlay(status: status, recentLogs: recentLogLines)
                     .transition(.opacity)
             }
 
-            if readiness.blocksRun || error != nil {
+            if shouldShowReadinessOverlay {
                 StudioReadinessOverlay(
                     title: error == nil ? readiness.title : "Needs attention",
                     message: error ?? readiness.message,
@@ -488,7 +514,7 @@ private struct StudioCanvas: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeOut(duration: 0.18), value: isRunning)
-        .animation(.easeOut(duration: 0.18), value: readiness.blocksRun)
+        .animation(.easeOut(duration: 0.18), value: shouldShowReadinessOverlay)
     }
 }
 
@@ -522,7 +548,7 @@ private struct StudioEmptyState: View {
 
 private struct StudioRunningOverlay: View {
     let status: String
-    let latestLog: String?
+    let recentLogs: [String]
 
     var body: some View {
         VStack(spacing: 14) {
@@ -530,13 +556,21 @@ private struct StudioRunningOverlay: View {
                 .controlSize(.large)
             Text(status)
                 .font(.system(size: 18, weight: .semibold))
-            if let latestLog {
-                Text(latestLog)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
+            if !recentLogs.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(recentLogs.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(MereRunTheme.monoFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(12)
+                .frame(width: 460, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(MereRunTheme.background.opacity(0.55))
+                }
             }
         }
         .padding(28)

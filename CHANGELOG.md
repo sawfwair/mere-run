@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.9 - 2026-05-10
+
+### Fixed
+
+- fixed Studio model pulls so the missing-model overlay is replaced by download progress and readiness is rechecked after the pull completes.
+
 ## 0.4.8 - 2026-05-10
 
 ### Changed

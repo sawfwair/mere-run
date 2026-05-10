@@ -149,6 +149,24 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.lastRunResult?.exitCode, 64)
         XCTAssertEqual(controller.lastRunResult?.outputText, "unsupported model")
     }
+
+    func testModelPullUsesDownloadingStatusWhileRunning() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .modelPull))
+        controller.select(template)
+        controller.draft.model = "image-zimage-nano"
+
+        controller.run()
+
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertEqual(controller.status, "Downloading model")
+        XCTAssertEqual(
+            runner.starts.first?.configuration.arguments,
+            ["model", "pull", "image-zimage-nano"]
+        )
+    }
 }
 
 private func supportedCapabilitiesOutput(for modelID: String, minimum: Int) -> String {

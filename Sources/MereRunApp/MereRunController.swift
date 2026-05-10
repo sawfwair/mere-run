@@ -616,7 +616,7 @@ final class MereRunController: ObservableObject {
 
         guard prepareOutputLocation() else { return }
 
-        status = "Running"
+        status = selectedTemplate.id == .modelPull ? "Downloading model" : "Running"
         isRunning = true
         activeRunTemplateID = selectedTemplate.id
         activeRunPreview = display
