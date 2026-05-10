@@ -333,6 +333,8 @@ final class MereRunController: ObservableObject {
 
     private let processRunner: MereRunProcessRunning
     private var currentProcess: MereRunRunningProcess?
+    private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
+    private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
     private var stdoutBuffer = ""
     private var activeRunTemplateID: CommandTemplateID?
     private var activeRunPreview = ""
@@ -340,6 +342,13 @@ final class MereRunController: ObservableObject {
 
     private static let stdoutBufferByteLimit = 32 * 1024
     private static let outputDetectionLineLimit = 40
+
+    private struct ReadinessRequest: Equatable {
+        let modelID: String
+        let cliPath: String
+        let modelsRoot: String
+        let hubCache: String
+    }
 
     var commandArguments: [String] {
         commandArguments(template: selectedTemplate, draft: draft)
@@ -353,7 +362,10 @@ final class MereRunController: ObservableObject {
         commandPreview(template: selectedTemplate, draft: draft, masksSecrets: false)
     }
 
-    init(processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner()) {
+    init(
+        processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
+        resolvesCLIOnInit: Bool = true
+    ) {
         self.processRunner = processRunner
         let initial = CommandCatalog.templates.first!
         selectedTemplate = initial
@@ -362,7 +374,9 @@ final class MereRunController: ObservableObject {
         modelsRoot = UserDefaults.standard.string(forKey: Keys.modelsRoot) ?? ""
         hubCache = UserDefaults.standard.string(forKey: Keys.hubCache) ?? ""
         workingDirectory = UserDefaults.standard.string(forKey: Keys.workingDirectory) ?? FileManager.default.homeDirectoryForCurrentUser.path
-        refreshResolvedCLI()
+        if resolvesCLIOnInit {
+            refreshResolvedCLI()
+        }
     }
 
     func select(_ template: CommandTemplate) {
@@ -407,25 +421,48 @@ final class MereRunController: ObservableObject {
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
         let modelID = StudioCommandAdapter.requiredModel(for: mode, draft: studioDraft)
         guard !modelID.isBlank else {
+            cancelReadinessCheck(for: mode)
+            readinessRequests[mode] = nil
             readinessByMode[mode] = .ready
             return
         }
 
+        let request = ReadinessRequest(
+            modelID: modelID,
+            cliPath: cliPath,
+            modelsRoot: modelsRoot,
+            hubCache: hubCache
+        )
+        if readinessRequests[mode] == request, readinessProcesses[mode] != nil {
+            return
+        }
+
+        cancelReadinessCheck(for: mode)
+        readinessRequests[mode] = request
         readinessByMode[mode] = .checking
         let launch = CLIResolver.resolve(customPath: cliPath)
+        let modelListTemplate = CommandCatalog.template(id: .modelList) ?? selectedTemplate
+        let modelListDraft = modelListTemplate.defaultDraft()
         let args = commandArguments(
-            template: CommandCatalog.template(id: .modelList) ?? selectedTemplate,
-            draft: CommandCatalog.template(id: .modelList)?.defaultDraft() ?? CommandDraft()
+            template: modelListTemplate,
+            draft: modelListDraft
         )
         let output = ReadinessOutputBuffer()
 
         do {
-            _ = try processRunner.start(
-                configuration: processConfiguration(launch: launch, args: args),
+            readinessProcesses[mode] = try processRunner.start(
+                configuration: processConfiguration(
+                    launch: launch,
+                    args: args,
+                    environmentTemplateID: modelListTemplate.id,
+                    environmentDraft: modelListDraft
+                ),
                 stdout: { text in output.append(text) },
                 stderr: { _ in },
                 termination: { [weak self] _ in
                     Task { @MainActor in
+                        guard self?.readinessRequests[mode] == request else { return }
+                        self?.readinessProcesses[mode] = nil
                         self?.readinessByMode[mode] = ModelReadinessParser.state(
                             for: modelID,
                             modelListOutput: output.text()
@@ -434,6 +471,8 @@ final class MereRunController: ObservableObject {
                 }
             )
         } catch {
+            readinessRequests[mode] = nil
+            readinessProcesses[mode] = nil
             readinessByMode[mode] = .unknown(error.localizedDescription)
         }
     }
@@ -576,6 +615,11 @@ final class MereRunController: ObservableObject {
         return "\(description) + \(installedURL.abbreviatedForDisplay)"
     }
 
+    private func cancelReadinessCheck(for mode: StudioMode) {
+        readinessProcesses[mode]?.terminate()
+        readinessProcesses[mode] = nil
+    }
+
     private func append(_ text: String, stream: LogStream) {
         if stream == .stdout {
             stdoutBuffer += text
@@ -668,7 +712,7 @@ final class MereRunController: ObservableObject {
         return nil
     }
 
-    private func processEnvironment() -> [String: String] {
+    private func processEnvironment(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = [
             "/opt/homebrew/bin",
@@ -685,25 +729,32 @@ final class MereRunController: ObservableObject {
         if !hubCache.isBlank {
             env["MERERUN_HUB_CACHE"] = NSString(string: hubCache).expandingTildeInPath
         }
-        for (key, value) in CommandLaunchEnvironment.overrides(templateID: selectedTemplate.id, draft: draft) {
+        for (key, value) in CommandLaunchEnvironment.overrides(templateID: templateID, draft: draft) {
             env[key] = value
         }
         return env
     }
 
-    private func processConfiguration(launch: MereRunLaunch, args: [String]) -> MereRunProcessConfiguration {
+    private func processConfiguration(
+        launch: MereRunLaunch,
+        args: [String],
+        environmentTemplateID: CommandTemplateID? = nil,
+        environmentDraft: CommandDraft? = nil
+    ) -> MereRunProcessConfiguration {
         let processArgs: [String]
         if case .executable(let url) = launch, url.path == "/usr/bin/env" {
             processArgs = ["mere.run"] + args
         } else {
             processArgs = launch.processArguments(for: args)
         }
+        let templateID = environmentTemplateID ?? selectedTemplate.id
+        let environmentDraft = environmentDraft ?? draft
 
         return MereRunProcessConfiguration(
             executableURL: launch.executableURL,
             arguments: processArgs,
             currentDirectoryURL: workingDirectoryURL(),
-            environment: processEnvironment()
+            environment: processEnvironment(templateID: templateID, draft: environmentDraft)
         )
     }
 

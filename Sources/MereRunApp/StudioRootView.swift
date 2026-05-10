@@ -521,33 +521,21 @@ private struct StudioOutputView: View {
 
     @ViewBuilder
     private var outputPreview: some View {
-        if let url = item.outputURL, let image = NSImage(contentsOf: url) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
+        if let url = item.outputURL {
+            switch StudioOutputFileKind.classify(url) {
+            case .image:
+                StudioAsyncImagePreview(
+                    url: url,
+                    maxPixelSize: 2_200,
+                    contentMode: .fit,
+                    fallbackSystemImage: iconName(for: url)
+                )
                 .padding(22)
-        } else if let url = item.outputURL, let text = try? String(contentsOf: url, encoding: .utf8) {
-            ScrollView {
-                Text(String(text.prefix(6_000)))
-                    .font(MereRunTheme.monoFont)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(22)
+            case .text:
+                StudioTextFilePreview(url: url)
+            case .other:
+                filePlaceholder(for: url)
             }
-        } else if let url = item.outputURL {
-            VStack(spacing: 12) {
-                Image(systemName: iconName(for: url))
-                    .font(.system(size: 54, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-                Text(url.lastPathComponent)
-                    .font(.system(size: 16, weight: .semibold))
-                    .lineLimit(1)
-                Text(url.deletingLastPathComponent().path)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-            }
-            .padding(22)
         } else if let text = liveOutputText ?? item.outputText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             ScrollView {
                 Text(text)
@@ -566,6 +554,22 @@ private struct StudioOutputView: View {
                     .foregroundStyle(MereRunTheme.textMuted)
             }
         }
+    }
+
+    private func filePlaceholder(for url: URL) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: iconName(for: url))
+                .font(.system(size: 54, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
+            Text(url.lastPathComponent)
+                .font(.system(size: 16, weight: .semibold))
+                .lineLimit(1)
+            Text(url.deletingLastPathComponent().path)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
+        }
+        .padding(22)
     }
 
     private var statusBadge: some View {
@@ -595,6 +599,104 @@ private struct StudioOutputView: View {
         case "json": return "curlybraces"
         case "safetensors": return "shippingbox"
         default: return "doc"
+        }
+    }
+}
+
+private enum StudioImageContentMode: Equatable {
+    case fit
+    case fill
+}
+
+private enum StudioImageLoadState {
+    case loading
+    case loaded(NSImage)
+    case unavailable
+}
+
+private struct StudioAsyncImagePreview: View {
+    let url: URL
+    let maxPixelSize: CGFloat
+    let contentMode: StudioImageContentMode
+    let fallbackSystemImage: String
+
+    @State private var loadState = StudioImageLoadState.loading
+
+    var body: some View {
+        Group {
+            switch loadState {
+            case .loading:
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .loaded(let image):
+                if contentMode == .fill {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                }
+            case .unavailable:
+                Image(systemName: fallbackSystemImage)
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: url) {
+            loadState = .loading
+            let loaded = await Task.detached(priority: .userInitiated) {
+                StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: maxPixelSize)
+            }.value
+            guard !Task.isCancelled else { return }
+            if let image = loaded?.image {
+                loadState = .loaded(image)
+            } else {
+                loadState = .unavailable
+            }
+        }
+    }
+}
+
+private struct StudioTextFilePreview: View {
+    let url: URL
+
+    @State private var text: String?
+    @State private var didLoad = false
+
+    var body: some View {
+        ScrollView {
+            if let text {
+                Text(text)
+                    .font(MereRunTheme.monoFont)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(22)
+            } else if didLoad {
+                Text("Text preview unavailable.")
+                    .font(MereRunTheme.bodyFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(22)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, minHeight: 180)
+                    .padding(22)
+            }
+        }
+        .task(id: url) {
+            text = nil
+            didLoad = false
+            let preview = await Task.detached(priority: .userInitiated) {
+                StudioTextPreviewReader.previewText(from: url)
+            }.value
+            guard !Task.isCancelled else { return }
+            text = preview
+            didLoad = true
         }
     }
 }
@@ -866,10 +968,13 @@ private struct StudioLibraryRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let url = item.outputURL, let image = NSImage(contentsOf: url) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFill()
+        if let url = item.outputURL, StudioOutputFileKind.classify(url) == .image {
+            StudioAsyncImagePreview(
+                url: url,
+                maxPixelSize: 160,
+                contentMode: .fill,
+                fallbackSystemImage: item.mode.systemImage
+            )
         } else {
             Image(systemName: item.mode.systemImage)
                 .font(.system(size: 17, weight: .semibold))
