@@ -4,6 +4,39 @@ import XCTest
 
 @MainActor
 final class MereRunControllerTests: XCTestCase {
+    func testPackageRootSearchStopsAtFilesystemRoot() {
+        let startedAt = Date()
+
+        XCTAssertNil(
+            CLIResolver.nearestPackageRoot(
+                from: URL(fileURLWithPath: "/", isDirectory: true),
+                fileManager: .default
+            )
+        )
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 0.25)
+    }
+
+    func testPackageRootSearchFindsNearestPackageManifest() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MereRunControllerTests-\(UUID().uuidString)", isDirectory: true)
+        let nested = root
+            .appendingPathComponent("a", isDirectory: true)
+            .appendingPathComponent("b", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try "// swift-tools-version: 6.0\n".write(
+            to: root.appendingPathComponent("Package.swift", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        XCTAssertEqual(
+            CLIResolver.nearestPackageRoot(from: nested, fileManager: .default),
+            root
+        )
+    }
+
     func testReadinessCheckDoesNotStartDuplicateInFlightRequest() {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

@@ -163,18 +163,33 @@ enum CLIResolver {
         return roots
     }
 
-    private static func nearestPackageRoot(from anchor: URL, fileManager fm: FileManager) -> URL? {
-        var cursor = anchor.standardizedFileURL
+    static func nearestPackageRoot(from anchor: URL, fileManager fm: FileManager) -> URL? {
+        var cursor = startingDirectoryPath(from: anchor, fileManager: fm)
+        var seen: Set<String> = []
         while true {
-            if fm.fileExists(atPath: cursor.appendingPathComponent("Package.swift").path) {
-                return cursor
+            guard seen.insert(cursor).inserted else {
+                return nil
             }
-            let parent = cursor.deletingLastPathComponent()
-            if parent.path == cursor.path {
+            let packagePath = (cursor as NSString).appendingPathComponent("Package.swift")
+            if fm.fileExists(atPath: packagePath) {
+                return URL(fileURLWithPath: cursor, isDirectory: true)
+            }
+
+            let parent = (cursor as NSString).deletingLastPathComponent
+            if parent == cursor || parent.isEmpty {
                 return nil
             }
             cursor = parent
         }
+    }
+
+    private static func startingDirectoryPath(from anchor: URL, fileManager fm: FileManager) -> String {
+        var path = (anchor.standardizedFileURL.path as NSString).standardizingPath
+        var isDirectory: ObjCBool = false
+        if fm.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue {
+            path = (path as NSString).deletingLastPathComponent
+        }
+        return path.isEmpty ? "/" : path
     }
 }
 

@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.6 - 2026-05-09
+
+### Fixed
+
+- fixed app launch from `/Applications` when no custom CLI path is set by making package-root discovery stop reliably at the filesystem root
+
 ## 0.4.5 - 2026-05-09
 
 ### Fixed
