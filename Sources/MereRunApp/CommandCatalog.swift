@@ -570,7 +570,7 @@ enum CommandCatalog {
         CommandTemplate(id: .modelList, category: .models, title: "List models", subtitle: "Installed and missing managed models", systemImage: "list.bullet.rectangle"),
         CommandTemplate(id: .modelCapabilities, category: .models, title: "Capabilities", subtitle: "Hardware support and recommended pulls", systemImage: "memorychip"),
         CommandTemplate(id: .modelPull, category: .models, title: "Pull model", subtitle: "Download a managed model", systemImage: "arrow.down.circle", defaultModel: "image-zimage-nano"),
-        CommandTemplate(id: .modelInfo, category: .models, title: "Model info", subtitle: "Manifest and validation report", systemImage: "info.circle", defaultModel: "image-zimage-max"),
+        CommandTemplate(id: .modelInfo, category: .models, title: "Model info", subtitle: "Manifest and validation report", systemImage: "info.circle", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelRemove, category: .models, title: "Remove model", subtitle: "Delete a local model install", systemImage: "trash", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelRepairManifests, category: .models, title: "Repair manifests", subtitle: "Write missing known model manifests", systemImage: "wrench.and.screwdriver"),
         CommandTemplate(
@@ -584,7 +584,7 @@ enum CommandCatalog {
             inputKind: .image,
             outputKind: .file("png"),
             defaultPrompt: "a ceramic coffee mug in soft morning light",
-            defaultModel: "image-zimage-max"
+            defaultModel: "image-zimage-nano"
         ),
         CommandTemplate(
             id: .imageValidate,

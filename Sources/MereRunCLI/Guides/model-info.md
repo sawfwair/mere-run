@@ -12,8 +12,8 @@ The target must be either an installed managed id or an existing local model pat
 
 ```bash
 mere.run model list
-mere.run model info image-zimage-max
-mere.run model info image-zimage-max --components
+mere.run model info image-zimage-nano
+mere.run model info image-zimage-nano --components
 ```
 
 ## Parameters

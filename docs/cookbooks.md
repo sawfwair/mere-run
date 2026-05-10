@@ -59,7 +59,7 @@ Some topics support model focus. The CLI validates that the requested model is
 covered by the guide before printing:
 
 ```bash
-mere.run guide image generate --model image-zimage-max
+mere.run guide image generate --model image-zimage-nano
 mere.run guide text chat --model text-chat-gemma4
 mere.run guide speech transcribe --model speech-asr-parakeet
 ```

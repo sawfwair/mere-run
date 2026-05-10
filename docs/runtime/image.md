@@ -30,7 +30,7 @@ Common managed IDs:
 
 ```bash
 swift run mere.run image generate \
-  --model image-zimage-max \
+  --model image-zimage-nano \
   --prompt "a ceramic mug in soft morning light" \
   --output ./mug.png
 ```

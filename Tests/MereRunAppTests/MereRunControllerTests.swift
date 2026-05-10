@@ -68,7 +68,7 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(runner.starts.count, 2)
         XCTAssertEqual(runner.processes.first?.terminateCallCount, 1)
 
-        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "image-zimage-max", minimum: 48))
+        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "image-zimage-nano", minimum: 12))
         runner.starts[0].termination(0)
         await Task.yield()
         await Task.yield()
@@ -97,9 +97,9 @@ final class MereRunControllerTests: XCTestCase {
         controller.checkReadiness(for: .createImage, draft: draft)
         runner.starts[0].stdout(
             unsupportedCapabilitiesOutput(
-                for: "image-zimage-max",
-                minimum: 48,
-                detected: 32
+                for: "image-zimage-nano",
+                minimum: 12,
+                detected: 8
             )
         )
         runner.starts[0].termination(0)
@@ -109,9 +109,9 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(runner.starts.count, 1)
         XCTAssertEqual(
             controller.readinessByMode[.createImage],
-            .unsupported("Requires at least 48 GB unified memory; detected 32 GB.")
+            .unsupported("Requires at least 12 GB unified memory; detected 8 GB.")
         )
-        XCTAssertEqual(controller.modelCapabilitiesByID["image-zimage-max"]?.minimumUnifiedMemoryGB, 48)
+        XCTAssertEqual(controller.modelCapabilitiesByID["image-zimage-nano"]?.minimumUnifiedMemoryGB, 12)
     }
 
     func testReadinessBlocksUnavailableStudioCapabilityWithoutStartingCLI() {

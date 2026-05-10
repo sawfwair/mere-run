@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.8 - 2026-05-10
+
+### Changed
+
+- made Image Nano (`image-zimage-nano`) the default image model for CLI and Studio first-run workflows.
+
 ## 0.4.7 - 2026-05-10
 
 ### Changed

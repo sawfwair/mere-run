@@ -150,8 +150,8 @@ public enum ManagedModelCapabilityCatalog {
             ),
             descriptor(
                 "image-zimage-nano",
-                "Image, fast realistic",
-                "Creates fast Z-Image outputs for photorealistic and general image generation.",
+                "Image Nano",
+                "Creates fast 4-bit Z-Image Turbo outputs for photorealistic and general image generation.",
                 minimum: 12,
                 recommended: 16,
                 setup: true

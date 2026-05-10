@@ -8,7 +8,7 @@ struct ModelInfo: ParsableCommand {
         abstract: "Print a model's manifest, validation status, and resolved component paths."
     )
 
-    @Argument(help: "Canonical model id (for example: text-chat-gemma4 or image-zimage-max) or local model root path.")
+    @Argument(help: "Canonical model id (for example: text-chat-gemma4 or image-zimage-nano) or local model root path.")
     var target: String
 
     @Flag(name: [.long], help: "Print the raw `mererun_model.json` (if present) to stdout.")

@@ -86,7 +86,7 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
     ) async throws -> GenerationResult {
         try ensureOutputDirectory(request.outputURL)
 
-        let modelSpec = request.model ?? ZImageTurboRepository.id
+        let modelSpec = request.model ?? ZImageTurboRepository.defaultModelSpec
         var model = try await loadModelIfNeeded(modelSpec: modelSpec, progressHandler: progressHandler)
         model = try await applyTransformerLoRAIfNeeded(request.lora, model: model, progressHandler: progressHandler)
         let outputURL = request.outputURL
@@ -214,7 +214,7 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
         debugLog?("chat: starting")
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
 
-        let modelSpec = ZImageTurboRepository.id
+        let modelSpec = ZImageTurboRepository.defaultModelSpec
         debugLog?("chat: loading model \(modelSpec)")
         let model = try await loadModelIfNeeded(modelSpec: modelSpec, progressHandler: nil)
         debugLog?("chat: model loaded, applying LoRA if needed")

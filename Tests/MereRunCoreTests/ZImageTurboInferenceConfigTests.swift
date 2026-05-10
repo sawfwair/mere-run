@@ -2,6 +2,10 @@ import XCTest
 @testable import MereRunCore
 
 final class ZImageTurboInferenceConfigTests: MereRunCoreTestCase {
+    func testRepositoryDefaultsToNanoQuant() {
+        XCTAssertEqual(ZImageTurboRepository.defaultModelID, .zetaNano)
+        XCTAssertEqual(ZImageTurboRepository.defaultModelSpec, "image-zimage-nano")
+    }
 
     func testInitTimeStepZeroWhenImg2ImgDisabled() {
         XCTAssertEqual(

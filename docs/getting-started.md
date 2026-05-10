@@ -104,7 +104,7 @@ Example:
 
 ```bash
 swift run mere.run model capabilities
-swift run mere.run model pull image-klein-max
+swift run mere.run model pull image-zimage-nano
 ```
 
 Set `MERERUN_HUB_CACHE` when you want the Hugging Face cache on another disk.

@@ -8,16 +8,16 @@ Create a PNG from a text prompt, optionally conditioned on an input image and Lo
 
 Use one installed image model:
 
-- `image-zimage-max`, `image-zimage-base`, `image-zimage-nano`
+- `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
 - `image-klein-max`, `image-klein-base`, `image-klein-nano`
 
 ## Install And Check
 
 ```bash
 mere.run model capabilities
-mere.run model pull image-zimage-max
+mere.run model pull image-zimage-nano
 mere.run image generate --help
-mere.run guide image generate --model image-zimage-max
+mere.run guide image generate --model image-zimage-nano
 ```
 
 ## Parameters
@@ -50,7 +50,7 @@ mere.run guide image generate --model image-zimage-max
 
 ```bash
 mere.run image generate \
-  --model image-zimage-max \
+  --model image-zimage-nano \
   --prompt "macro product photo of a matte black ceramic mug, warm window light, clean oak table, 85mm lens" \
   --width 1024 --height 1024 \
   --seed 41 \

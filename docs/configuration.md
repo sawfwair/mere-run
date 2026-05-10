@@ -27,7 +27,7 @@ Overrides the Hugging Face snapshot cache used by managed model pulls.
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
-swift run mere.run model pull image-zimage-max
+swift run mere.run model pull image-zimage-nano
 ```
 
 Managed pulls use cataloged Hugging Face repos only. Private archive hosts and

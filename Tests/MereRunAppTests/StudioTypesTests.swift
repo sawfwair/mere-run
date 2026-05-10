@@ -46,6 +46,7 @@ final class StudioTypesTests: XCTestCase {
         let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
 
         XCTAssertEqual(request.templateID, .imageGenerate)
+        XCTAssertEqual(request.draft.model, "image-zimage-nano")
         XCTAssertEqual(request.draft.prompt, "a porcelain teapot on linen")
         XCTAssertEqual(request.draft.secondaryText, "blurry")
         XCTAssertEqual(request.draft.width, 768)
@@ -147,7 +148,7 @@ final class StudioTypesTests: XCTestCase {
 
         Model capabilities
         - image-zimage-nano [supported]
-          title: Image, fast realistic
+          title: Image Nano
           category: image
           memory: minimum 12 GB, recommended 16 GB
           download: Hugging Face snapshot

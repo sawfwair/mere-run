@@ -5,7 +5,8 @@ public enum ZImageTurboRepository {
     public static let revision = "main"
     public static let baseRepoId = "Tongyi-MAI/Z-Image"
     public static let nanoRepoId = "andrevp/Z-Image-Turbo-MLX-4bit"
-    public static let defaultModelID: ModelResolver.ModelID = .zetaMax
+    public static let defaultModelID: ModelResolver.ModelID = .zetaNano
+    public static let defaultModelSpec = defaultModelID.rawValue
     public static let snapshotPatterns = [
         "model_index.json",
         "tokenizer/*",

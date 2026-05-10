@@ -12,7 +12,7 @@ The target model must be installed.
 
 ```bash
 mere.run model list
-mere.run model remove image-zimage-max
+mere.run model remove image-zimage-nano
 ```
 
 ## Parameters
@@ -29,7 +29,7 @@ mere.run model remove image-zimage-max
 ## Examples
 
 ```bash
-mere.run model remove image-zimage-max
+mere.run model remove image-zimage-nano
 ```
 
 ```bash

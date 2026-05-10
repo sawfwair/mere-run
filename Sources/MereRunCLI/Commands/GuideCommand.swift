@@ -11,7 +11,7 @@ struct GuideCommand: ParsableCommand {
         Examples:
           mere.run guide --list
           mere.run guide music generate
-          mere.run guide image generate --model image-zimage-max
+          mere.run guide image generate --model image-zimage-nano
           mere.run guide music generate --json
         """
     )

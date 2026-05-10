@@ -5,6 +5,8 @@ import MereRunCore
 // MARK: - Image Generate Command
 
 struct ImageGenerate: AsyncParsableCommand {
+    static let defaultManagedModelID: ModelResolver.ModelID = .zetaNano
+
     static let configuration = CommandConfiguration(
         commandName: "generate",
         abstract: "Generate images with local image models.",
@@ -41,7 +43,7 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.long], help: "Random seed (UInt64).")
     var seed: UInt64?
 
-    @Option(name: [.customShort("m"), .long], help: "Model path or canonical model id (default: image-zimage-max).")
+    @Option(name: [.customShort("m"), .long], help: "Model path or canonical model id (default: image-zimage-nano).")
     var model: String?
 
     @Option(name: [.customShort("i"), .long], help: "Input image path (enables image-to-image).")
@@ -103,7 +105,9 @@ struct ImageGenerate: AsyncParsableCommand {
                 do {
                     resolvedModel = try resolver.resolve(id).rootURL.path
                 } catch {
-                    throw ValidationError("Model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or point --model at a local path.")
+                    throw ValidationError(
+                        "Model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or point --model at a local path."
+                    )
                 }
             } else {
                 throw ValidationError(
@@ -112,9 +116,12 @@ struct ImageGenerate: AsyncParsableCommand {
             }
         } else {
             do {
-                resolvedModel = try resolver.resolve(.zetaMax).rootURL.path
+                resolvedModel = try resolver.resolve(Self.defaultManagedModelID).rootURL.path
             } catch {
-                throw ValidationError("Image model image-zimage-max not found. Pull it with `mere.run model pull image-zimage-max` or point --model at a local path.")
+                let modelID = Self.defaultManagedModelID.rawValue
+                throw ValidationError(
+                    "Image model \(modelID) not found. Pull it with `mere.run model pull \(modelID)` or point --model at a local path."
+                )
             }
         }
 

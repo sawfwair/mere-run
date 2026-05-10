@@ -53,7 +53,7 @@ when you want large models on an external disk:
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
-swift run mere.run model pull image-zimage-max
+swift run mere.run model pull image-zimage-nano
 ```
 
 Model pulls are resumable at the file level through the Hugging Face snapshot
@@ -89,7 +89,7 @@ Examples:
 
 ```bash
 # Pull into the default model store
-swift run mere.run model pull image-zimage-max
+swift run mere.run model pull image-zimage-nano
 
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q35

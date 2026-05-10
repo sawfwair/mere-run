@@ -81,8 +81,8 @@ For subsystem-specific implementation guides, see:
 ```bash
 swift run mere.run model list
 swift run mere.run model capabilities
-swift run mere.run model pull image-klein-max
-swift run mere.run model info image-zimage-max
+swift run mere.run model pull image-zimage-nano
+swift run mere.run model info image-zimage-nano
 ```
 
 ### Generate an image
@@ -631,7 +631,7 @@ the model capability catalog before downloading so unsupported Macs do not pull
 models they cannot run.
 
 ```bash
-swift run mere.run model pull image-zimage-max
+swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull --all
 ```
 
@@ -652,7 +652,7 @@ swift run mere.run model capabilities --all
 Inspect a canonical model ID or a local model root.
 
 ```bash
-swift run mere.run model info image-zimage-max
+swift run mere.run model info image-zimage-nano
 swift run mere.run model info /path/to/model/root --components
 swift run mere.run model info text-chat-gemma4
 ```
@@ -662,8 +662,8 @@ swift run mere.run model info text-chat-gemma4
 Delete an installed managed model by canonical ID.
 
 ```bash
-swift run mere.run model remove image-zimage-max
-swift run mere.run model remove image-zimage-max --force
+swift run mere.run model remove image-zimage-nano
+swift run mere.run model remove image-zimage-nano --force
 ```
 
 ### `mere.run model repair-manifests`

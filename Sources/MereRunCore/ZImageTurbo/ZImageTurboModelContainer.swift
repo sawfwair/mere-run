@@ -29,7 +29,7 @@ public actor ZImageTurboModelContainer {
         self.modelSpec = nil
     }
 
-    public init(modelSpec: String = ZImageTurboRepository.id) {
+    public init(modelSpec: String = ZImageTurboRepository.defaultModelSpec) {
         self.localRootURL = nil
         self.modelSpec = modelSpec
     }

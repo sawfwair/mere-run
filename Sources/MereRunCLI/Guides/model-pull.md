@@ -12,7 +12,7 @@ No model is required before running pull, but the target id must exist in the ma
 
 ```bash
 mere.run model capabilities
-mere.run model pull image-zimage-max
+mere.run model pull image-zimage-nano
 mere.run model list
 ```
 
