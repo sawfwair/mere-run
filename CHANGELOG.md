@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.11 - 2026-05-11
+
+### Fixed
+
+- fixed public app release bundles so the packaged Studio app embeds a freshly built `mere.run` CLI payload and its runtime support assets from the same checkout.
+
 ## 0.4.10 - 2026-05-10
 
 ### Added
