@@ -24,7 +24,7 @@ The public OSS repo currently supports:
 - local speech synthesis, transcription, and voice-profile management
 - local vision captioning, inspection, grounding, segmentation, tracking, live camera tracking, and OCR
 - native ACEStep music generation and LTX video generation
-- managed model installs into a shared local model store
+- Hugging Face-backed model pulls that resolve into a shared local model store
 - offline command cookbooks through `mere.run guide`
 - a local OpenAI-compatible API surface for supported text engines
 - an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
@@ -105,7 +105,7 @@ swift run mere.run guide --list
 app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 
-# List managed models
+# List known model IDs and local install status
 swift run mere.run model list
 
 # See what this Mac can run before pulling large models
@@ -115,7 +115,7 @@ swift run mere.run model capabilities --recommended
 # Choose guided, bring-your-own-agent, or manual setup
 swift run mere.run setup
 
-# Pull a managed model into the local model store
+# Pull a Hugging Face-backed model into the local model store
 swift run mere.run model pull image-zimage-nano
 
 # Generate an image
