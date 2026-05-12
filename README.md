@@ -17,13 +17,16 @@ mere.run is a Swift package, CLI, and optional macOS studio for local-first infe
 
 The public OSS repo currently supports:
 
-- local image generation and deterministic image validation
+- local image generation across Klein, ZImage, and HiDream O1 families,
+  including image-to-image, HiDream reference images, LoRA input, and
+  deterministic image validation
 - local text chat, code generation, embeddings, and PII anonymization
 - local speech synthesis, transcription, and voice-profile management
-- local vision captioning, inspection, segmentation, tracking, and OCR
-- native music and video generation
+- local vision captioning, inspection, grounding, segmentation, tracking, live camera tracking, and OCR
+- native ACEStep music generation and LTX video generation
 - managed model installs into a shared local model store
-- a local API surface for supported engines
+- offline command cookbooks through `mere.run guide`
+- a local OpenAI-compatible API surface for supported text engines
 - an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
 
 ## What’s included in this repo
@@ -39,11 +42,33 @@ The public OSS repo currently supports:
 
 ## Platform expectations
 
-- the public CLI and local runtime are developed and validated on Apple Silicon macOS
+- the public CLI and local runtime are developed and validated on Apple Silicon macOS 15 or newer
+- `Package.swift` uses Swift tools 6.0 and declares macOS 15 / iOS 18 package platforms
 - `swift build` and `swift test` are the supported first-run validation path for contributors
 - some vendored binaries include additional Apple platform slices for package consumers, but the public quickstart is macOS-first
 
-## Build
+## Install the latest release
+
+The signed and notarized macOS DMG is published at:
+
+```bash
+curl -L https://mere.run/releases/mere-run.dmg -o mere-run.dmg
+open mere-run.dmg
+```
+
+The DMG contains `MereRun.app`, a bundled CLI payload, runtime assets, notices,
+and a terminal installer. Drag `MereRun.app` to Applications for the studio. For
+terminal-only installs, open the mounted DMG and run:
+
+```bash
+cd /Volumes/mere.run/.mere-run
+./install.sh
+```
+
+The installer copies `mere.run` and its colocated runtime assets to
+`/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
+
+## Build from source
 
 Install SwiftLint and ripgrep once if you plan to run the contributor
 validation script:
@@ -73,6 +98,9 @@ open "$app_path"
 # See the public command tree
 swift run mere.run --help
 
+# Read packaged command cookbooks
+swift run mere.run guide --list
+
 # Launch the optional macOS studio
 app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
@@ -82,6 +110,7 @@ swift run mere.run model list
 
 # See what this Mac can run before pulling large models
 swift run mere.run model capabilities
+swift run mere.run model capabilities --recommended
 
 # Choose guided, bring-your-own-agent, or manual setup
 swift run mere.run setup
@@ -94,7 +123,7 @@ swift run mere.run image generate \
   --prompt "a ceramic coffee mug in soft morning light" \
   --output ./mug.png
 
-# HiDream O1 runs natively for text, edit, and multi-reference generation.
+# HiDream O1 runs natively for text-only, edit, and multi-reference generation.
 swift run mere.run image generate \
   --model image-hidream-o1-dev \
   --prompt "a clean studio product photo of the subject" \
@@ -105,6 +134,10 @@ swift run mere.run image generate \
 swift run mere.run text chat \
   --stream \
   --prompt "Summarize diffusion models in one paragraph."
+
+# Redact PII locally
+swift run mere.run text anonymize \
+  "My name is Alice Smith and my email is alice@example.com"
 
 # Serve the OpenAI-compatible local API on loopback
 swift run mere.run api serve --engine text-chat-gemma4
@@ -148,7 +181,7 @@ swift run mere.run music generate \
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant unified-av \
-  --model-root ~/Library/Application\\ Support/MereRun/models/video-ltx-av \
+  --model-root "$HOME/Library/Application Support/MereRun/models/video-ltx-av" \
   --output ./clip.mp4
 ```
 
@@ -156,6 +189,7 @@ swift run mere.run video generate \
 
 The public CLI is modality-first:
 
+- `mere.run guide`
 - `mere.run image generate`
 - `mere.run image validate`
 - `mere.run text chat`
@@ -208,14 +242,18 @@ swift run mere.run --models-root /path/to/models model list
 
 ### Hugging Face snapshot cache
 
-A second store holds models that resolve through the native Hugging Face snapshot path (e.g. `text-chat-gemma4`). It is a mere.run-local cache, not the default `~/.cache/huggingface/hub` — the resolution chain is:
+`mere.run model pull` and runtime auto-download paths use the native Hugging
+Face snapshot cache before linking or resolving prepared models into the local
+model store. It is a mere.run-local cache, not the default
+`~/.cache/huggingface/hub` — the resolution chain is:
 
 1. `MERERUN_HUB_CACHE` (explicit override)
 2. `MERERUN_MODEL_CACHE_HOME/hub` (shared cache root)
 3. `~/Library/Application Support/MereRun/hub` (default)
 4. `~/Library/Caches/MereRun/hub`, then a temp dir as last-resort fallbacks
 
-If you already pull from Hugging Face elsewhere and want to share cached weights, point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
+If you already pull from Hugging Face elsewhere and want to share cached weights,
+point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
 
 ## Security defaults
 
@@ -303,6 +341,9 @@ mere.run exists because the Python MLX community proved that local-first inferen
 - [`ml-explore/mlx-lm`](https://github.com/ml-explore/mlx-lm) — language model inference on MLX; the reference for `mere.run text` engine surfaces and chat / code paths.
 - [`Blaizzy/mlx-vlm`](https://github.com/Blaizzy/mlx-vlm) — vision-language models on MLX; informed `mere.run vision` captioning, OCR, and inspection commands.
 - [`Blaizzy/mlx-audio`](https://github.com/Blaizzy/mlx-audio) — TTS / STT / audio codecs on MLX; shaped `mere.run speech` (synthesis, transcription, voice profiles).
-- [`filipstrand/mflux`](https://github.com/filipstrand/mflux) — FLUX image generation on MLX; shaped how `mere.run image` exposes engines and validates output.
+- [`filipstrand/mflux`](https://github.com/filipstrand/mflux) — MLX
+  image-generation reference work for Z-Image and FLUX-family behavior; shaped
+  how `mere.run image` loads components, schedules denoising, decodes VAE
+  output, exposes engines, and validates generated images.
 
 Where these projects ship runtime artifacts that mere.run actually links against, attribution and license terms live in [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md). The credits above are for the architectural debt: the design conversations, reference implementations, and hard-won model bring-up work these repos held in public before mere.run wrote its first line of Swift.

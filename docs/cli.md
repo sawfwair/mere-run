@@ -12,16 +12,19 @@ swift run mere.run --help
 
 Public tree:
 
+- `mere.run guide`
 - `mere.run image generate`
 - `mere.run image validate`
 - `mere.run text chat`
 - `mere.run text code`
 - `mere.run text embed`
+- `mere.run text anonymize`
 - `mere.run speech synthesize`
 - `mere.run speech transcribe`
 - `mere.run speech profile { list, create, delete }`
 - `mere.run vision caption`
 - `mere.run vision inspect`
+- `mere.run vision ground`
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
@@ -54,14 +57,18 @@ See [`model-sources.md`](./model-sources.md) for the full source story,
 including which IDs are pullable from Hugging Face. The most common managed IDs
 are:
 
-- Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
+- Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
+  `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
+  `image-hidream-o1`, `image-hidream-o1-dev`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
 - Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
+- Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
 - Vision OCR: `vision-ocr-lighton`
 - Vision segmentation / tracking: `vision-segment-sam31`
+- Vision grounding: `vision-ground-falcon-perception`
 - Music: `music-acestep`
 - Video: `video-ltx-av`
 
