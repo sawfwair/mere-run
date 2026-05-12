@@ -50,4 +50,16 @@ final class ZImageTurboLinearSchedulerTests: MereRunCoreTestCase {
         let terminal = scheduler.sigmas[4].item(Float.self)
         XCTAssertEqual(terminal, 0)
     }
+
+    func testShiftedSigmasMatchMFluxAt1024ForFourSteps() {
+        let config = ZImageTurboInferenceConfig(width: 1024, height: 1024, numInferenceSteps: 4)
+        let scheduler = ZImageTurboLinearScheduler(config: config, requiresSigmaShift: true, sigmaShift: nil)
+        let sigmas = scheduler.sigmas.asArray(Float.self)
+
+        XCTAssertEqual(sigmas[0], 1.0, accuracy: 0.000001)
+        XCTAssertEqual(sigmas[1], 0.9045307, accuracy: 0.000001)
+        XCTAssertEqual(sigmas[2], 0.75951093, accuracy: 0.000001)
+        XCTAssertEqual(sigmas[3], 0.51284415, accuracy: 0.000001)
+        XCTAssertEqual(sigmas[4], 0.0, accuracy: 0.000001)
+    }
 }

@@ -321,7 +321,7 @@ public final class QwenTokenizer {
     return QwenTokenBatch(inputIds: inputIds, attentionMask: attentionMask)
   }
 
-  /// Direct tokenization without chat template - used by Z-Image pipeline
+  /// Direct tokenization without a chat template.
   public func encodePlain(
     prompts: [String],
     maxLength: Int? = nil

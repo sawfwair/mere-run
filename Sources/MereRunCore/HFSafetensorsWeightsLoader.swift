@@ -251,6 +251,7 @@ public enum HFSafetensorsWeightsLoader {
         bits: Int = 4,
         applySVDResiduals: Bool? = nil,
         keyMapper: ((String) -> String)? = nil,
+        mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in [(key, value)] },
         progressHandler: (@Sendable (ShardProgress) -> Void)? = nil
     ) throws {
         let useResiduals = applySVDResiduals ?? Self.residualEnabled
@@ -419,7 +420,7 @@ public enum HFSafetensorsWeightsLoader {
         // 5. Apply remaining parameters (non-quantized weights like norms, embeddings, etc.)
         var remainingUpdates: [(String, MLXArray)] = []
         for (key, value) in weights where !usedKeys.contains(key) {
-            remainingUpdates.append((key, value))
+            remainingUpdates.append(contentsOf: mapper(key, value))
         }
 
         if !remainingUpdates.isEmpty {
@@ -441,7 +442,8 @@ public enum HFSafetensorsWeightsLoader {
         groupSize: Int = 64,
         bits: Int = 4,
         applySVDResiduals: Bool? = nil,
-        keyMapper: ((String) -> String)? = nil
+        keyMapper: ((String) -> String)? = nil,
+        mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in [(key, value)] }
     ) throws {
         let useResiduals = applySVDResiduals ?? Self.residualEnabled
 
@@ -594,7 +596,7 @@ public enum HFSafetensorsWeightsLoader {
         // Apply remaining parameters
         var remainingUpdates: [(String, MLXArray)] = []
         for (key, value) in mappedWeights where !usedKeys.contains(key) {
-            remainingUpdates.append((key, value))
+            remainingUpdates.append(contentsOf: mapper(key, value))
         }
 
         if !remainingUpdates.isEmpty {

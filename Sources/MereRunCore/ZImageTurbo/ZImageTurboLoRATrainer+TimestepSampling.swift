@@ -150,7 +150,7 @@ extension ZImageTurboLoRATrainer {
             // Matches ZImageTurboLinearScheduler.applySigmaShift
             let y1: Float = 0.5
             let x1: Float = 256
-            let m = (1.16 - y1) / (4096 - x1)
+            let m = (1.15 - y1) / (4096 - x1)
             let b = y1 - m * x1
             let mu = m * Float(w * h) / 256.0 + b
             let expMu = exp(mu)

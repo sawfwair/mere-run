@@ -128,6 +128,7 @@ extension ZImageTurboLoRATrainer {
                 to: model,
                 dtype: .bfloat16,
                 verify: [.noUnusedKeys, .shapeMismatch],
+                mapper: ZImageTurboMFluxVAEWeights.map,
                 quantization: quantization
             )
             return
@@ -139,6 +140,7 @@ extension ZImageTurboLoRATrainer {
             to: model,
             dtype: .bfloat16,
             verify: [.noUnusedKeys, .shapeMismatch],
+            mapper: ZImageTurboMFluxVAEWeights.map,
             quantization: quantization
         )
     }
