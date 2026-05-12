@@ -8,6 +8,16 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.12 - 2026-05-12
+
+### Added
+
+- added native HiDream O1 image generation support with managed model IDs, validation, CLI reference-image options, tests, docs, and optional e2e smoke coverage.
+
+### Changed
+
+- bumped `github.com/huggingface/swift-transformers` from 1.3.0 to 1.3.2.
+
 ## 0.4.11 - 2026-05-11
 
 ### Fixed
