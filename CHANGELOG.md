@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.13 - 2026-05-12
+
+### Fixed
+
+- fixed Image Nano (`image-zimage-nano`) generation from the public mflux Z-Image checkpoint by mapping mflux VAE wrapper keys onto the Swift VAE loader and aligning sigma shift values with mflux.
+
 ## 0.4.12 - 2026-05-12
 
 ### Added

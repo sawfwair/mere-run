@@ -110,6 +110,7 @@ public enum ModelWeightsLoader {
                     bits: q.bits,
                     applySVDResiduals: q.applySVDResiduals,
                     keyMapper: keyMapper,
+                    mapper: mapper,
                     progressHandler: progressHandler
                 )
             } else {
@@ -140,7 +141,8 @@ public enum ModelWeightsLoader {
                     groupSize: q.groupSize,
                     bits: q.bits,
                     applySVDResiduals: q.applySVDResiduals,
-                    keyMapper: keyMapper
+                    keyMapper: keyMapper,
+                    mapper: mapper
                 )
             } else {
                 try applyNonQuantizedWeightsFromArrays(
@@ -238,7 +240,8 @@ public enum ModelWeightsLoader {
                 groupSize: q.groupSize,
                 bits: q.bits,
                 applySVDResiduals: q.applySVDResiduals,
-                keyMapper: keyMapper
+                keyMapper: keyMapper,
+                mapper: mapper
             )
         } else {
             // Apply each shard sequentially.

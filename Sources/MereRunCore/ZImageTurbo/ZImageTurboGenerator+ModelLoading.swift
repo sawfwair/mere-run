@@ -264,6 +264,7 @@ extension ZImageTurboGenerator {
                 to: model,
                 dtype: .bfloat16,
                 verify: [.noUnusedKeys, .shapeMismatch],
+                mapper: ZImageTurboMFluxVAEWeights.map,
                 quantization: quantization
             )
             return
@@ -275,6 +276,7 @@ extension ZImageTurboGenerator {
             to: model,
             dtype: .bfloat16,
             verify: [.noUnusedKeys, .shapeMismatch],
+            mapper: ZImageTurboMFluxVAEWeights.map,
             quantization: quantization
         )
     }

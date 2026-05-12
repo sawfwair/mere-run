@@ -53,7 +53,7 @@ public struct ZImageTurboLinearScheduler {
         // Ported from mflux `LinearScheduler._get_sigmas` for Z-Image Turbo.
         let y1: Float = 0.5
         let x1: Float = 256
-        let m = (Float(1.16) - y1) / (Float(4096) - x1)
+        let m = (Float(1.15) - y1) / (Float(4096) - x1)
         let b = y1 - m * x1
 
         let mu = m * Float(width * height) / Float(256) + b
