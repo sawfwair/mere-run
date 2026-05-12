@@ -91,11 +91,18 @@ public final class HiDreamO1TokenizerAndTemplate {
 
     private static func readMaxLength(from url: URL) -> Int? {
         guard let data = try? Data(contentsOf: url),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let configured = object["model_max_length"] as? NSNumber else {
+              let config = try? JSONDecoder().decode(TokenizerConfig.self, from: data),
+              let configured = config.modelMaxLength else {
             return nil
         }
-        let value = configured.intValue
-        return value > 0 ? value : nil
+        return configured > 0 ? configured : nil
+    }
+
+    private struct TokenizerConfig: Decodable {
+        let modelMaxLength: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case modelMaxLength = "model_max_length"
+        }
     }
 }
