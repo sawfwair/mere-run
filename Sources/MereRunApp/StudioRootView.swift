@@ -11,7 +11,6 @@ struct StudioRootView: View {
     @State private var showAdvanced = false
     @State private var showOptions = false
     @State private var showModels = false
-    @State private var activeLibraryID: UUID?
     @State private var selectedLibraryID: UUID?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var studioError: String?
@@ -43,6 +42,12 @@ struct StudioRootView: View {
             return nil
         }
         return message
+    }
+
+    private var displayStatus: String {
+        guard controller.queuedRunCount > 0 else { return controller.status }
+        let suffix = controller.queuedRunCount == 1 ? "1 queued" : "\(controller.queuedRunCount) queued"
+        return "\(controller.status) · \(suffix)"
     }
 
     private var modeCapabilities: [StudioMode: StudioModelCapability] {
@@ -96,7 +101,7 @@ struct StudioRootView: View {
                     mode: mode,
                     item: selectedItem,
                     isRunning: controller.isRunning,
-                    status: controller.status,
+                    status: displayStatus,
                     readiness: readiness,
                     error: studioError,
                     logs: controller.logs,
@@ -112,6 +117,7 @@ struct StudioRootView: View {
                     draft: $draft,
                     showOptions: $showOptions,
                     isRunning: controller.isRunning,
+                    queuedCount: controller.queuedRunCount,
                     readiness: readiness,
                     onRun: runStudioCommand,
                     onStop: controller.cancel,
@@ -195,17 +201,16 @@ struct StudioRootView: View {
         .onChange(of: controller.lastRunResult) { _, result in
             guard let result else { return }
 
-            let completedLibraryItem = activeLibraryID != nil
-            if let activeLibraryID {
+            let completedLibraryItem = result.requestID != nil
+            if let requestID = result.requestID {
                 library.complete(
-                    id: activeLibraryID,
+                    id: requestID,
                     exitCode: result.exitCode,
                     outputURL: result.outputURL,
                     outputText: result.outputText,
                     commandPreview: result.commandPreview.maskingAPIKeyValue()
                 )
-                selectedLibraryID = activeLibraryID
-                self.activeLibraryID = nil
+                selectedLibraryID = requestID
             }
 
             let mutatedModels = result.templateID == .modelPull
@@ -218,6 +223,16 @@ struct StudioRootView: View {
             } else if mutatedModels || completedLibraryItem {
                 refreshReadiness()
             }
+        }
+        .onChange(of: controller.activeRunRequestID) { _, requestID in
+            guard let requestID else { return }
+            library.markRunning(id: requestID)
+            selectedLibraryID = requestID
+        }
+        .onChange(of: controller.lastOutputURL) { _, outputURL in
+            guard let requestID = controller.activeRunRequestID, let outputURL else { return }
+            library.updateOutput(id: requestID, outputURL: outputURL)
+            selectedLibraryID = requestID
         }
     }
 
@@ -243,8 +258,8 @@ struct StudioRootView: View {
             let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
             let preview = controller
                 .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
-            library.start(request: request, commandPreview: preview)
-            activeLibraryID = request.id
+            let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0 ? .queued : .running
+            library.start(request: request, commandPreview: preview, status: status)
             selectedLibraryID = request.id
             controller.run(studio: request)
         } catch {
@@ -516,7 +531,7 @@ private struct StudioCanvas: View {
     let onShowDetails: () -> Void
 
     private var visibleLiveOutputText: String? {
-        guard isRunning, mode == .chat || mode == .code else { return nil }
+        guard isRunning else { return nil }
         let text = liveOutputText
             .replacingOccurrences(of: "\0", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -791,6 +806,7 @@ private struct StudioOutputView: View {
 
     private var statusColor: Color {
         switch item.status {
+        case .queued: return MereRunTheme.textMuted
         case .running: return MereRunTheme.yellow
         case .completed: return MereRunTheme.green
         case .failed: return MereRunTheme.red
@@ -911,6 +927,7 @@ private struct StudioPromptBar: View {
     @Binding var draft: StudioDraft
     @Binding var showOptions: Bool
     let isRunning: Bool
+    let queuedCount: Int
     let readiness: ModelReadinessState
     let onRun: () -> Void
     let onStop: () -> Void
@@ -966,21 +983,32 @@ private struct StudioPromptBar: View {
                 .buttonStyle(.plain)
                 .help("Options")
 
+                if isRunning {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(MereRunTheme.red)
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop current run")
+                }
+
                 Button {
-                    isRunning ? onStop() : onRun()
+                    onRun()
                 } label: {
-                    Image(systemName: isRunning ? "stop.fill" : "arrow.up")
+                    Image(systemName: "arrow.up")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(MereRunTheme.background)
                         .frame(width: 38, height: 38)
                         .background {
                             Circle()
                                 .fill(runButtonColor)
-                        }
+                    }
                 }
                 .buttonStyle(.plain)
-                .disabled(!isRunning && readiness.blocksRun)
-                .help(isRunning ? "Stop" : readiness.blocksRun ? readiness.message : "Run")
+                .disabled(readiness.blocksRun)
+                .help(runButtonHelp)
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 14)
@@ -998,9 +1026,17 @@ private struct StudioPromptBar: View {
     }
 
     private var runButtonColor: Color {
-        if isRunning { return MereRunTheme.red }
         if readiness.blocksRun { return MereRunTheme.yellow }
         return MereRunTheme.accent
+    }
+
+    private var runButtonHelp: String {
+        if readiness.blocksRun { return readiness.message }
+        if isRunning {
+            let queueLabel = queuedCount == 0 ? "Queue run" : "Queue run (\(queuedCount) waiting)"
+            return queueLabel
+        }
+        return "Run"
     }
 }
 

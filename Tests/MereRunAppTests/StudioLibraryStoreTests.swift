@@ -60,6 +60,28 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.outputURL?.path, "/tmp/plate.png")
     }
 
+    func testRunningLibraryItemStartsWithoutOutputAndCanPublishOutput() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let request = try StudioCommandAdapter.makeRequest(
+            mode: .createImage,
+            draft: {
+                var draft = StudioDraft()
+                draft.reset(for: .createImage)
+                draft.prompt = "a blue plate"
+                return draft
+            }()
+        )
+
+        store.start(request: request, commandPreview: "preview")
+        XCTAssertNil(store.items.first?.outputURL)
+
+        store.updateOutput(id: request.id, outputURL: URL(fileURLWithPath: "/tmp/plate.png"))
+
+        XCTAssertEqual(store.items.first?.status, .running)
+        XCTAssertEqual(store.items.first?.outputURL?.path, "/tmp/plate.png")
+    }
+
     func testLibraryCompletionPersistsStdoutOnlyRuns() throws {
         let url = try temporaryLibraryURL()
         let store = StudioLibraryStore(libraryURL: url)

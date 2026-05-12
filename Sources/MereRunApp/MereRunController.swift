@@ -304,13 +304,34 @@ private final class ReadinessOutputBuffer: @unchecked Sendable {
 }
 
 struct MereRunRunResult: Identifiable, Equatable {
-    let id = UUID()
+    let id: UUID
+    let requestID: UUID?
     let templateID: CommandTemplateID
     let commandPreview: String
     let exitCode: Int32
     let outputURL: URL?
     let outputText: String?
-    let completedAt = Date()
+    let completedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        requestID: UUID? = nil,
+        templateID: CommandTemplateID,
+        commandPreview: String,
+        exitCode: Int32,
+        outputURL: URL?,
+        outputText: String?,
+        completedAt: Date = Date()
+    ) {
+        self.id = id
+        self.requestID = requestID
+        self.templateID = templateID
+        self.commandPreview = commandPreview
+        self.exitCode = exitCode
+        self.outputURL = outputURL
+        self.outputText = outputText
+        self.completedAt = completedAt
+    }
 }
 
 struct MereRunUtilityCommandResult: Equatable {
@@ -339,6 +360,8 @@ final class MereRunController: ObservableObject {
     @Published var resolvedCLI = ""
     @Published var lastOutputURL: URL?
     @Published var lastRunResult: MereRunRunResult?
+    @Published private(set) var activeRunRequestID: UUID?
+    @Published private(set) var queuedRunCount = 0
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
     @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
     @Published var cliPath: String {
@@ -371,6 +394,8 @@ final class MereRunController: ObservableObject {
     private var stderrBuffer = ""
     private var activeRunTemplateID: CommandTemplateID?
     private var activeRunPreview = ""
+    private var outputWatchTask: Task<Void, Never>?
+    private var queuedRuns: [StudioRunRequest] = []
     private var didAttemptAutomaticCLIInstall = false
 
     private static let stdoutBufferByteLimit = 32 * 1024
@@ -500,9 +525,14 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
+        if isRunning || !queuedRuns.isEmpty {
+            enqueue(request)
+            return true
+        }
+
         selectedTemplate = request.template
         draft = request.draft
-        return run()
+        return startRun(requestID: request.id)
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
@@ -661,6 +691,11 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run() -> Bool {
+        startRun(requestID: nil)
+    }
+
+    @discardableResult
+    private func startRun(requestID: UUID?) -> Bool {
         guard !isRunning else { return false }
         refreshResolvedCLI()
 
@@ -670,6 +705,7 @@ final class MereRunController: ObservableObject {
         let expectedOutput = expectedOutputURL()
         activeRunTemplateID = selectedTemplate.id
         activeRunPreview = display
+        activeRunRequestID = requestID
 
         if let message = selectedTemplate.validationMessage(for: draft) {
             append(message, stream: .system)
@@ -696,6 +732,7 @@ final class MereRunController: ObservableObject {
         isRunning = true
 
         append(display, stream: .system)
+        startOutputWatch(expectedOutput: expectedOutput)
 
         do {
             currentProcess = try processRunner.start(
@@ -722,6 +759,7 @@ final class MereRunController: ObservableObject {
             append(error.localizedDescription, stream: .stderr)
             if let activeRunTemplateID {
                 lastRunResult = MereRunRunResult(
+                    requestID: activeRunRequestID,
                     templateID: activeRunTemplateID,
                     commandPreview: activeRunPreview,
                     exitCode: -1,
@@ -731,6 +769,9 @@ final class MereRunController: ObservableObject {
             }
             activeRunTemplateID = nil
             activeRunPreview = ""
+            activeRunRequestID = nil
+            stopOutputWatch()
+            startNextQueuedRun()
             return false
         }
         return true
@@ -755,6 +796,7 @@ final class MereRunController: ObservableObject {
     private func finishRun(exitCode: Int32, expectedOutput: URL?) {
         currentProcess = nil
         isRunning = false
+        stopOutputWatch()
         lastExitCode = exitCode
 
         let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
@@ -771,6 +813,7 @@ final class MereRunController: ObservableObject {
 
         if let activeRunTemplateID {
             lastRunResult = MereRunRunResult(
+                requestID: activeRunRequestID,
                 templateID: activeRunTemplateID,
                 commandPreview: activeRunPreview,
                 exitCode: exitCode,
@@ -780,11 +823,14 @@ final class MereRunController: ObservableObject {
         }
         activeRunTemplateID = nil
         activeRunPreview = ""
+        activeRunRequestID = nil
+        startNextQueuedRun()
     }
 
     private func finishPreflightFailure(exitCode: Int32, outputText: String?) {
         guard let templateID = activeRunTemplateID else { return }
         lastRunResult = MereRunRunResult(
+            requestID: activeRunRequestID,
             templateID: templateID,
             commandPreview: activeRunPreview,
             exitCode: exitCode,
@@ -793,6 +839,49 @@ final class MereRunController: ObservableObject {
         )
         activeRunTemplateID = nil
         activeRunPreview = ""
+        activeRunRequestID = nil
+        stopOutputWatch()
+        startNextQueuedRun()
+    }
+
+    private func enqueue(_ request: StudioRunRequest) {
+        queuedRuns.append(request)
+        queuedRunCount = queuedRuns.count
+        append("Queued \(request.mode.title.lowercased()) job.", stream: .system)
+    }
+
+    private func startNextQueuedRun() {
+        guard !isRunning, currentProcess == nil, !queuedRuns.isEmpty else { return }
+        let next = queuedRuns.removeFirst()
+        queuedRunCount = queuedRuns.count
+        selectedTemplate = next.template
+        draft = next.draft
+        _ = startRun(requestID: next.id)
+    }
+
+    private func startOutputWatch(expectedOutput: URL?) {
+        stopOutputWatch()
+        outputWatchTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await MainActor.run {
+                    self?.publishDetectedOutputIfNeeded(expectedOutput: expectedOutput)
+                }
+                try? await Task.sleep(for: .milliseconds(350))
+            }
+        }
+    }
+
+    private func stopOutputWatch() {
+        outputWatchTask?.cancel()
+        outputWatchTask = nil
+    }
+
+    private func publishDetectedOutputIfNeeded(expectedOutput: URL?) {
+        guard isRunning else { return }
+        let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
+        guard let detectedOutput, detectedOutput != lastOutputURL else { return }
+        lastOutputURL = detectedOutput
+        status = "Generated: \(detectedOutput.lastPathComponent)"
     }
 
     private func handleAutomaticCLIInstall(_ outcome: CLIBootstrapInstallOutcome) {
@@ -828,6 +917,7 @@ final class MereRunController: ObservableObject {
             stdoutBuffer += text
             trimStdoutBuffer()
             liveOutputText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
+            publishDetectedOutputIfNeeded(expectedOutput: expectedOutputURL())
         } else if stream == .stderr {
             stderrBuffer += text
             trimStderrBuffer()
@@ -885,7 +975,7 @@ final class MereRunController: ObservableObject {
     }
 
     private func expectedOutputURL() -> URL? {
-        guard selectedTemplate.outputKind.isFile, !draft.outputPath.isBlank else {
+        guard selectedTemplate.outputKind != .none, !draft.outputPath.isBlank else {
             return nil
         }
         return URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
