@@ -23,6 +23,7 @@ public enum QuantizedModelManifestWriter {
         func inferFamily(from id: String) -> MereRunModelManifest.Family? {
             if id.hasPrefix("image-klein-") { return .klein }
             if id.hasPrefix("image-zimage-") { return .zimage }
+            if id.hasPrefix("image-hidream-") { return .hidream }
             if id.hasPrefix("vision-segment-") { return .sam }
             if id.hasPrefix("vision-ground-") { return .falcon }
             return nil
@@ -39,6 +40,7 @@ public enum QuantizedModelManifestWriter {
             switch engine {
             case .flux2Klein: return .klein
             case .zimageTurbo: return .zimage
+            case .hidreamO1: return .hidream
             case .gemma4: return .gemma
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
@@ -78,6 +80,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img, .referenceEdit, .loraInference]
                 case .zimageTurbo:
                     return [.txt2img, .img2img, .loraInference]
+                case .hidreamO1:
+                    return [.txt2img, .referenceEdit, .subjectPersonalization]
                 case .gemma4:
                     return [.chat]
                 case .qwen35HybridMoE:
@@ -154,6 +158,8 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
             case .zimageTurbo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
+            case .hidreamO1:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 28, cfg: 0.0)
             case .gemma4:
                 break
             case .qwen35HybridMoE:

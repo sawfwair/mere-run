@@ -352,16 +352,18 @@ public final class QwenEncoder: Module {
   public func forward(
     embeddings: MLXArray,
     attentionMask: MLXArray?,
+    positionIds: MLXArray? = nil,
+    tokenTypes: MLXArray? = nil,
     outputHiddenStates: Bool = false
   ) -> (lastHiddenState: MLXArray, hiddenStates: [MLXArray]?) {
     var h = embeddings.dtype == .bfloat16 ? embeddings : embeddings.asType(.bfloat16)
 
-    let mask = createAttentionMask(h: h, attentionMask: attentionMask)
+    let mask = createAttentionMask(h: h, attentionMask: attentionMask, tokenTypes: tokenTypes)
 
     var allHiddenStates: [MLXArray]? = outputHiddenStates ? [h] : nil
 
     for layer in layers {
-      h = layer(h, mask: mask)
+      h = layer(h, mask: mask, positionIds: positionIds)
       if outputHiddenStates {
         allHiddenStates?.append(h)
       }
@@ -377,10 +379,17 @@ public final class QwenEncoder: Module {
     return (h, allHiddenStates)
   }
 
-  private func createAttentionMask(h: MLXArray, attentionMask: MLXArray?) -> MLXFast.ScaledDotProductAttentionMaskMode {
+  private func createAttentionMask(
+    h: MLXArray,
+    attentionMask: MLXArray?,
+    tokenTypes: MLXArray? = nil
+  ) -> MLXFast.ScaledDotProductAttentionMaskMode {
     let L = h.dim(1)
 
     let causalMask = MLXFast.ScaledDotProductAttentionMaskMode.causal
+    if let tokenTypes {
+      return generationAttentionMask(h: h, tokenTypes: tokenTypes)
+    }
 
     if let attentionMask = attentionMask {
       let paddingMask = attentionMask.asType(h.dtype)
@@ -405,6 +414,32 @@ public final class QwenEncoder: Module {
     }
 
     return causalMask
+  }
+
+  private func generationAttentionMask(
+    h: MLXArray,
+    tokenTypes: MLXArray
+  ) -> MLXFast.ScaledDotProductAttentionMaskMode {
+    let batch = h.dim(0)
+    let length = h.dim(1)
+    let minValue = MLXArray(-Float.greatestFiniteMagnitude).asType(h.dtype)
+    let zeros = MLX.zeros([batch, length, length], dtype: h.dtype)
+    let idx = MLXArray(0..<length)
+    let rows = idx.reshaped(1, length, 1)
+    let cols = idx.reshaped(1, 1, length)
+    var blocked = cols .> rows
+
+    var types = tokenTypes
+    if types.ndim == 1 {
+      types = types.reshaped(1, length)
+    }
+    if types.dim(0) == 1 && batch > 1 {
+      types = MLX.broadcast(types, to: [batch, length])
+    }
+    let generationRows = (types .> MLXArray(0)).reshaped(batch, length, 1)
+    blocked = blocked .&& (.!generationRows)
+    let additive = MLX.where(blocked, zeros + minValue, zeros).reshaped(batch, 1, length, length)
+    return .array(additive)
   }
 }
 

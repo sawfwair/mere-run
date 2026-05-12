@@ -63,6 +63,7 @@ public struct ManagedModelArchiveSource: Hashable, Sendable {
 public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case flux2Klein
     case zimageTurbo
+    case hidreamO1
     case gemma4
     case q35
     case qwen3TTS
@@ -259,6 +260,64 @@ public enum ManagedModelCatalog {
                 size: 0
             ),
             validationKind: .zimageTurbo,
+            runtimeAutoDownloadAllowed: false,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: "image-hidream-o1",
+            category: .image,
+            installShape: .directoryRoot,
+            archiveSource: nil,
+            hubFallback: HubFallbackConfig(
+                repoId: "HiDream-ai/HiDream-O1-Image",
+                revision: "main",
+                patterns: [
+                    "config.json",
+                    "configuration.json",
+                    "generation_config.json",
+                    "chat_template.json",
+                    "tokenizer.json",
+                    "tokenizer_config.json",
+                    "vocab.json",
+                    "merges.txt",
+                    "preprocessor_config.json",
+                    "video_preprocessor_config.json",
+                    "model.safetensors.index.json",
+                    "model-*.safetensors",
+                ]
+            ),
+            upstreamRepoId: "HiDream-ai/HiDream-O1-Image",
+            upstreamRevision: "main",
+            validationKind: .hidreamO1,
+            runtimeAutoDownloadAllowed: false,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: "image-hidream-o1-dev",
+            category: .image,
+            installShape: .directoryRoot,
+            archiveSource: nil,
+            hubFallback: HubFallbackConfig(
+                repoId: "HiDream-ai/HiDream-O1-Image-Dev",
+                revision: "main",
+                patterns: [
+                    "config.json",
+                    "configuration.json",
+                    "generation_config.json",
+                    "chat_template.json",
+                    "tokenizer.json",
+                    "tokenizer_config.json",
+                    "vocab.json",
+                    "merges.txt",
+                    "preprocessor_config.json",
+                    "video_preprocessor_config.json",
+                    "model.safetensors.index.json",
+                    "model-*.safetensors",
+                ]
+            ),
+            upstreamRepoId: "HiDream-ai/HiDream-O1-Image-Dev",
+            upstreamRevision: "main",
+            validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
         ),
@@ -764,6 +823,8 @@ public extension ManagedModelSpec {
             return Self.missingDiffusersImagePaths(in: rootURL, fileManager: fileManager)
         case .zimageTurbo:
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .hidreamO1:
+            return HiDreamO1Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .q35:

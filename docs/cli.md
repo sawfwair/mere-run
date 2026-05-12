@@ -161,9 +161,11 @@ Key options:
 - `--model`: canonical model id or local model path
 - `--output`: output PNG path
 - `--width`, `--height`
-- `--steps`
-- `--cfg`
+- `--steps`: override the model-specific step default
+- `--cfg`: override the model-specific CFG default
 - `--input`: image-to-image source
+- `--ref-image`: repeatable HiDream O1 reference image
+- `--keep-original-aspect`: preserve one HiDream reference image's aspect ratio
 - `--strength`: image-to-image strength
 - `--lora`, `--lora-scale`
 - `--quiet`
@@ -174,6 +176,11 @@ Examples:
 swift run mere.run image generate --prompt "a black cat on a red sofa"
 swift run mere.run image generate --model image-zimage-nano --prompt "retro robot illustration" --output ./robot.png
 swift run mere.run image generate --prompt "turn this into a pencil sketch" --input ./photo.png --strength 0.6
+swift run mere.run image generate \
+  --model image-hidream-o1-dev \
+  --prompt "put this subject in a studio portrait" \
+  --ref-image ./subject.png \
+  --output ./portrait.png
 ```
 
 ### `mere.run image validate`

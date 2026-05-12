@@ -49,6 +49,19 @@ final class ModelResolverTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalHiDreamRoot(
+        at root: URL,
+        id: ModelResolver.ModelID
+    ) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("preprocessor_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+    }
+
     private func writeMinimalSAM31Model(at root: URL) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -142,6 +155,42 @@ final class ModelResolverTests: MereRunCoreTestCase {
 
         let resolver = ModelResolver()
         let resolved = try resolver.resolve(.q35)
+
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
+        XCTAssertEqual(resolved.source, .localModelStore)
+    }
+
+    func testResolvesHiDreamFromProcessModelStoreOverride() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let modelRoot = modelsRoot.appendingPathComponent("image-hidream-o1-dev", isDirectory: true)
+        try writeMinimalHiDreamRoot(at: modelRoot, id: .hidreamO1Dev)
+
+        let resolver = ModelResolver()
+        let resolved = try resolver.resolve(.hidreamO1Dev)
+
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
+        XCTAssertEqual(resolved.source, .localModelStore)
+    }
+
+    func testResolvesHiDreamFullFromProcessModelStoreOverride() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let modelRoot = modelsRoot.appendingPathComponent("image-hidream-o1", isDirectory: true)
+        try writeMinimalHiDreamRoot(at: modelRoot, id: .hidreamO1)
+
+        let resolver = ModelResolver()
+        let resolved = try resolver.resolve(.hidreamO1)
 
         XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
         XCTAssertEqual(resolved.source, .localModelStore)

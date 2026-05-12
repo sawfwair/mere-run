@@ -19,7 +19,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 | Category | Canonical IDs |
 | --- | --- |
-| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max` |
+| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
 | Text chat | `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
@@ -52,6 +52,39 @@ Useful environment variables for that path:
 
 The manifest for this package advertises both `vision_segmentation` and
 `vision_tracking` capabilities.
+
+`image-hidream-o1` and `image-hidream-o1-dev` map to the public HiDream O1
+image checkpoints:
+
+- `HiDream-ai/HiDream-O1-Image`
+- `HiDream-ai/HiDream-O1-Image-Dev`
+
+HiDream O1 uses a unified pixel-transformer root layout rather than a
+VAE/text-encoder component tree. Managed or local roots are expected to contain:
+
+- `config.json`
+- `tokenizer_config.json`
+- `tokenizer.json` or `vocab.json` plus `merges.txt`
+- `preprocessor_config.json`
+- `model.safetensors` or `model.safetensors.index.json`
+
+The native Swift runtime validates this layout, decodes the typed root
+configuration, prepares text/reference sample metadata, and runs generation
+through the downloaded Qwen3-VL decoder, vision tower, timestep embedder, patch
+embedder, generation-aware attention mask, and HiDream pixel head. Text-only
+generation, one-reference instruction editing, and multi-reference subject
+personalization share the same native path; reference modes additionally run
+Qwen3-VL vision preprocessing and replace chat-template image placeholders
+before denoising.
+
+Runtime defaults come from the managed manifest:
+
+- `image-hidream-o1-dev`: 28 steps, CFG 0.0, fixed flash FlowMatch schedule
+- `image-hidream-o1`: 50 steps, CFG 5.0, shifted Flow UniPC schedule
+
+Both checkpoints are large BF16 unified-transformer roots, about 33 GiB on disk
+each before filesystem compression effects. Expect high unified-memory pressure
+and prefer one-step smokes before full-quality 28/50 step runs.
 
 ## Archive resolution
 

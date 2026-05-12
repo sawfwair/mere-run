@@ -93,6 +93,13 @@ swift run mere.run image generate \
   --prompt "a ceramic coffee mug in soft morning light" \
   --output ./mug.png
 
+# HiDream O1 runs natively for text, edit, and multi-reference generation.
+swift run mere.run image generate \
+  --model image-hidream-o1-dev \
+  --prompt "a clean studio product photo of the subject" \
+  --ref-image ./subject.png \
+  --output ./subject-studio.png
+
 # Run local chat
 swift run mere.run text chat \
   --stream \

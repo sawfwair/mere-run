@@ -18,6 +18,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case flux2Klein = "flux2-klein"
         /// Zeta family (Z-Image Turbo based).
         case zimageTurbo = "zimage-turbo"
+        /// HiDream O1 unified pixel transformer family.
+        case hidreamO1 = "hidream-o1"
         /// Gemma 4 family via the native Swift runtime.
         case gemma4 = "gemma-4"
         /// Q35 family (Qwen3.5 hybrid MoE + hybrid attention).
@@ -51,6 +53,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
         case klein
         case zimage
+        case hidream
         case gemma
         case qwen
         case sam
@@ -95,6 +98,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case txt2img = "txt2img"
         case img2img = "img2img"
         case referenceEdit = "reference_edit"
+        case subjectPersonalization = "subject_personalization"
         case chat = "chat"
         case codeGeneration = "code_generation"
         case textEmbedding = "text_embedding"
@@ -681,6 +685,46 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.txt2img, .img2img, .loraInference, .loraTraining],
                 components: hybridComponents,
                 upstreamRepoId: nil,
+                createdAt: createdAt
+            )
+        case .hidreamO1:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .hidreamO1,
+                family: .hidream,
+                tier: .max,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 50, cfg: 5.0),
+                supports: [.txt2img, .referenceEdit, .subjectPersonalization],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "HiDream-ai/HiDream-O1-Image",
+                createdAt: createdAt
+            )
+        case .hidreamO1Dev:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .hidreamO1,
+                family: .hidream,
+                tier: .max,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 28, cfg: 0.0),
+                supports: [.txt2img, .referenceEdit, .subjectPersonalization],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "HiDream-ai/HiDream-O1-Image-Dev",
                 createdAt: createdAt
             )
         case .visionSegmentSAM31:

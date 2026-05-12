@@ -171,6 +171,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                "image-hidream-o1-dev",
+                "Image, HiDream dev",
+                "Runs the distilled HiDream O1 image model for text, reference editing, and subject personalization.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
+                "image-hidream-o1",
+                "Image, HiDream full",
+                "Runs the full HiDream O1 image model for high-quality text, reference editing, and personalization workflows.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 "text-chat-mebot",
                 "Local personal chat",
                 "Adds a compact local chat model for API serving and personal-agent style workflows.",

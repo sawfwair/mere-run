@@ -8,7 +8,7 @@ public enum LoRA: Sendable, Hashable {
 public struct GenerationRequest: Sendable, Hashable {
     public var prompt: String
     public var negativePrompt: String?
-    /// Reference images for FLUX.2 Klein multi-reference editing (0–4).
+    /// Reference images for model families that support edit or personalization modes.
     public var referenceImages: [URL]
     /// Reference strength for FLUX.2 Klein editing (0.0 = preserve, 1.0 = max change).
     public var referenceStrength: Double
@@ -24,6 +24,8 @@ public struct GenerationRequest: Sendable, Hashable {
     public var enhancePrompt: Bool
     public var inputImage: URL?
     public var strength: Double
+    /// Preserve the single reference image aspect ratio for model families that support it.
+    public var keepOriginalAspect: Bool
     public var useBetaSigmas: Bool
     public var sigmaShift: Float?
 
@@ -44,6 +46,7 @@ public struct GenerationRequest: Sendable, Hashable {
         enhancePrompt: Bool = false,
         inputImage: URL? = nil,
         strength: Double = 0.75,
+        keepOriginalAspect: Bool = false,
         useBetaSigmas: Bool = false,
         sigmaShift: Float? = nil
     ) {
@@ -63,6 +66,7 @@ public struct GenerationRequest: Sendable, Hashable {
         self.enhancePrompt = enhancePrompt
         self.inputImage = inputImage
         self.strength = strength
+        self.keepOriginalAspect = keepOriginalAspect
         self.useBetaSigmas = useBetaSigmas
         self.sigmaShift = sigmaShift
     }
