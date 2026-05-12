@@ -50,9 +50,10 @@ Face sources.
 Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
 `Qwen3.5-9B-Q4_K_M.gguf`.
 
-`text-chat-gemma4` is also a canonical chat model in the CLI, but it does not use
-`mere.run model pull`. It resolves through the native Hugging Face snapshot path
-on first use unless you point it at a local model root.
+`text-chat-gemma4` is also the default chat model in the CLI. You can install it
+explicitly with `mere.run model pull text-chat-gemma4`, or let supported runtime
+paths resolve a Hugging Face snapshot on first use unless you point them at a
+local model root.
 
 Useful environment variables for that path:
 
