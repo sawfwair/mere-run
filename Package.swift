@@ -49,6 +49,7 @@ let package = Package(
         "Flux2Klein/README.md",
         "Flux2Klein/Model/Transformer/README.md",
         "Gemma4/README.md",
+        "HiDreamO1/README.md",
         "LightOnOCR/README.md",
         "LTX/README.md",
         "LoRA/README.md",
