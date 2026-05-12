@@ -208,6 +208,73 @@ final class MereRunControllerTests: XCTestCase {
             ["model", "pull", "image-zimage-nano"]
         )
     }
+
+    func testStudioRunsQueueBehindActiveProcess() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var firstDraft = template.defaultDraft()
+        firstDraft.extraArguments = "first"
+        var secondDraft = template.defaultDraft()
+        secondDraft.extraArguments = "second"
+        let first = StudioRunRequest(mode: .chat, templateID: .custom, template: template, draft: firstDraft)
+        let second = StudioRunRequest(mode: .code, templateID: .custom, template: template, draft: secondDraft)
+
+        XCTAssertTrue(controller.run(studio: first))
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertEqual(controller.activeRunRequestID, first.id)
+        XCTAssertEqual(runner.starts.count, 1)
+
+        XCTAssertTrue(controller.run(studio: second))
+        XCTAssertEqual(controller.queuedRunCount, 1)
+        XCTAssertEqual(runner.starts.count, 1)
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(controller.lastRunResult?.requestID, first.id)
+        XCTAssertEqual(controller.activeRunRequestID, second.id)
+        XCTAssertEqual(controller.queuedRunCount, 0)
+        XCTAssertEqual(runner.starts.count, 2)
+        XCTAssertEqual(runner.starts[1].configuration.arguments, ["second"])
+
+        runner.starts[1].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertNil(controller.activeRunRequestID)
+        XCTAssertEqual(controller.lastRunResult?.requestID, second.id)
+    }
+
+    func testRunningStudioRunPublishesOutputBeforeProcessExits() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MereRunControllerTests-\(UUID().uuidString)", isDirectory: true)
+        let output = temp.appendingPathComponent("image.png", isDirectory: false)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        var draft = template.defaultDraft()
+        draft.prompt = "a blue plate"
+        draft.outputPath = output.path
+        let request = StudioRunRequest(mode: .createImage, templateID: .imageGenerate, template: template, draft: draft)
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertNil(controller.lastOutputURL)
+
+        try Data("png".utf8).write(to: output)
+        runner.starts[0].stdout("wrote \(output.path)\n")
+        await Task.yield()
+
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertEqual(controller.lastOutputURL?.path, output.path)
+    }
 }
 
 private func supportedCapabilitiesOutput(for modelID: String, minimum: Int) -> String {

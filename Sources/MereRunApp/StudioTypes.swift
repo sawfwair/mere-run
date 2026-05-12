@@ -428,6 +428,7 @@ enum StudioCommandAdapter {
 }
 
 enum StudioLibraryStatus: String, Codable, Equatable {
+    case queued
     case running
     case completed
     case failed

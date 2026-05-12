@@ -41,22 +41,44 @@ final class StudioLibraryStore: ObservableObject {
     }
 
     @discardableResult
-    func start(request: StudioRunRequest, commandPreview: String) -> StudioLibraryItem {
+    func start(
+        request: StudioRunRequest,
+        commandPreview: String,
+        status: StudioLibraryStatus = .running
+    ) -> StudioLibraryItem {
         let item = StudioLibraryItem(
             id: request.id,
             mode: request.mode,
             prompt: request.draft.prompt,
             inputURL: request.draft.inputPath.isBlank ? nil : URL(fileURLWithPath: request.draft.inputPath),
-            outputURL: request.expectedOutputURL,
+            outputURL: nil,
             createdAt: request.createdAt,
             updatedAt: Date(),
-            status: .running,
+            status: status,
             exitCode: nil,
             commandPreview: commandPreview,
             outputText: nil
         )
         upsert(item)
         return item
+    }
+
+    func markRunning(id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var item = items[index]
+        item.status = .running
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+    }
+
+    func updateOutput(id: UUID, outputURL: URL) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var item = items[index]
+        item.outputURL = outputURL
+        item.updatedAt = Date()
+        items[index] = item
+        save()
     }
 
     func complete(
