@@ -64,6 +64,7 @@ package checkout.
 
 The public CLI is modality-first:
 
+- `mere.run guide ...`
 - `mere.run image ...`
 - `mere.run text ...`
 - `mere.run speech ...`
@@ -72,6 +73,8 @@ The public CLI is modality-first:
 - `mere.run video ...`
 - `mere.run model ...`
 - `mere.run api ...`
+- `mere.run setup ...`
+- `mere.run agent ...`
 
 For the full reference, see [CLI Reference](./cli.md).
 
