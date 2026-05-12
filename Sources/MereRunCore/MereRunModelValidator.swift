@@ -98,6 +98,7 @@ public enum MereRunModelValidator {
 
         let modelResolver = ModelResolver(fileManager: fileManager)
         let componentRefs = manifest?.components
+        let usesUnifiedImageTransformer = manifest?.engine == .hidreamO1
         let transformerDir: URL?
         let textEncoderDir: URL?
         let vaeDir: URL?
@@ -185,7 +186,7 @@ public enum MereRunModelValidator {
                 )
             }
 
-            if supportsImagePipeline {
+            if supportsImagePipeline && !usesUnifiedImageTransformer {
                 vaeDir = resolveComponentDirectory(
                     componentRefs?.vae ?? .local(path: "vae"),
                     modelRoot: rootURL,
@@ -227,7 +228,7 @@ public enum MereRunModelValidator {
             }
 
             let schedulerDir: URL?
-            if supportsImagePipeline {
+            if supportsImagePipeline && !usesUnifiedImageTransformer {
                 schedulerDir = resolveComponentDirectory(
                     componentRefs?.scheduler ?? .local(path: "scheduler"),
                     modelRoot: rootURL,
@@ -305,6 +306,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=klein expects flux2-klein.")
             case .zimage where engine != .zimageTurbo:
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
+            case .hidream where engine != .hidreamO1:
+                warnings.append("Manifest engine mismatch: family=hidream expects hidream-o1.")
             case .gemma where engine != .gemma4:
                 warnings.append("Manifest engine mismatch: family=gemma expects gemma-4.")
             case .qwen where engine != .qwen35HybridMoE:
@@ -383,6 +386,7 @@ public enum MereRunModelValidator {
             let supports = Set(manifest.supports ?? [])
             return supports.contains(.txt2img) || supports.contains(.img2img) || supports.contains(.referenceEdit)
         }()
+        let usesUnifiedImageTransformer = manifest.engine == .hidreamO1
         let supportsVisionModel = {
             let supports = Set(manifest.supports ?? [])
             return supports.contains(.visionGrounding)
@@ -419,13 +423,14 @@ public enum MereRunModelValidator {
 
         if components.textEncoder == nil { errors.append("Manifest components missing text_encoder.") }
         if supportsImagePipeline && components.transformer == nil { errors.append("Manifest components missing transformer.") }
-        if supportsImagePipeline && components.vae == nil { errors.append("Manifest components missing vae.") }
-        if supportsImagePipeline && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
+        if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
+        if supportsImagePipeline && !usesUnifiedImageTransformer && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
     }
 
     private static func inferFamily(from modelId: String) -> MereRunModelManifest.Family? {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
+        if modelId.hasPrefix("image-hidream-") { return .hidream }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
         if modelId.hasPrefix("speech-tts-") { return .tts }

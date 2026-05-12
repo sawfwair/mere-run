@@ -68,6 +68,34 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "tiiuae/Falcon-Perception")
     }
 
+    func testHiDreamO1DevTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .hidreamO1Dev, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, "image-hidream-o1-dev")
+        XCTAssertEqual(manifest.engine, .hidreamO1)
+        XCTAssertEqual(manifest.family, .hidream)
+        XCTAssertEqual(manifest.variant, .distilled)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 28)
+        XCTAssertEqual(manifest.defaults?.cfg, 0.0)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img, .referenceEdit, .subjectPersonalization]))
+        XCTAssertEqual(manifest.upstreamRepoId, "HiDream-ai/HiDream-O1-Image-Dev")
+    }
+
+    func testHiDreamO1FullTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .hidreamO1, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, "image-hidream-o1")
+        XCTAssertEqual(manifest.engine, .hidreamO1)
+        XCTAssertEqual(manifest.family, .hidream)
+        XCTAssertEqual(manifest.variant, .base)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 50)
+        XCTAssertEqual(manifest.defaults?.cfg, 5.0)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img, .referenceEdit, .subjectPersonalization]))
+        XCTAssertEqual(manifest.upstreamRepoId, "HiDream-ai/HiDream-O1-Image")
+    }
+
     func testPrivacyFilterTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .privacyFilter, createdAt: Date(timeIntervalSince1970: 0))
 

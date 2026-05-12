@@ -49,6 +49,17 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidHiDreamO1Model(at root: URL, id: ModelResolver.ModelID = .hidreamO1Dev) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("preprocessor_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+    }
+
     private func writeMinimalValidSAM31Model(at root: URL) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -145,6 +156,37 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
         XCTAssertEqual(report.manifest?.family, .gemma)
+    }
+
+    func testHiDreamO1UnifiedRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("image-hidream-o1-dev", isDirectory: true)
+        try writeMinimalValidHiDreamO1Model(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "image-hidream-o1-dev")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .hidream)
+        XCTAssertEqual(report.manifest?.engine, .hidreamO1)
+        XCTAssertEqual(report.manifest?.defaults?.steps, 28)
+    }
+
+    func testHiDreamO1FullUnifiedRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("image-hidream-o1", isDirectory: true)
+        try writeMinimalValidHiDreamO1Model(at: root, id: .hidreamO1)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "image-hidream-o1")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .hidream)
+        XCTAssertEqual(report.manifest?.engine, .hidreamO1)
+        XCTAssertEqual(report.manifest?.defaults?.steps, 50)
+        XCTAssertEqual(report.manifest?.defaults?.cfg, 5.0)
     }
 
     func testGemma4MaxChatOnlyRootLayoutPassesValidation() throws {

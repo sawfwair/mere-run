@@ -22,8 +22,11 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("n"), .customLong("negative-prompt")], help: "Negative prompt (used when --cfg > 1.0).")
     var negativePrompt: String?
 
-    @Option(name: [.customLong("cfg"), .customLong("cfg-scale")], help: "CFG scale (uses negative prompt when > 1.0). Default: 1.0.")
-    var cfgScale: Double = 1.0
+    @Option(
+        name: [.customLong("cfg"), .customLong("cfg-scale")],
+        help: "CFG scale (uses negative prompt when > 1.0; default is model-specific)."
+    )
+    var cfgScale: Double?
 
     @Option(name: [.customLong("sigma-shift")], help: "Sigma shift for the FlowMatch schedule (i2L recommends 8).")
     var sigmaShift: Double?
@@ -37,8 +40,8 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("H"), .long], help: "Output height in pixels.")
     var height: Int = 1024
 
-    @Option(name: [.customShort("s"), .long], help: "Number of inference steps.")
-    var steps: Int = 4
+    @Option(name: [.customShort("s"), .long], help: "Number of inference steps (default is model-specific).")
+    var steps: Int?
 
     @Option(name: [.long], help: "Random seed (UInt64).")
     var seed: UInt64?
@@ -48,6 +51,12 @@ struct ImageGenerate: AsyncParsableCommand {
 
     @Option(name: [.customShort("i"), .long], help: "Input image path (enables image-to-image).")
     var input: String?
+
+    @Option(name: [.customLong("ref-image")], help: "Reference image path for HiDream O1 editing/personalization. Repeat for multiple references.")
+    var referenceImages: [String] = []
+
+    @Flag(name: [.customLong("keep-original-aspect")], help: "For one HiDream reference image, preserve the original aspect ratio.")
+    var keepOriginalAspect: Bool = false
 
     @Option(name: [.customLong("strength"), .customLong("str")], help: "Image-to-image strength 0.0–1.0 (default: 0.75).")
     var strength: Double = 0.75
@@ -67,7 +76,7 @@ struct ImageGenerate: AsyncParsableCommand {
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
-        guard steps > 0 else {
+        if let steps, steps <= 0 {
             throw ValidationError("--steps must be >= 1")
         }
         guard width > 0, height > 0 else {
@@ -92,6 +101,14 @@ struct ImageGenerate: AsyncParsableCommand {
             inputURL = url
         } else {
             inputURL = nil
+        }
+
+        let referenceImageURLs = try referenceImages.map { path in
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Reference image not found: \(url.path)")
+            }
+            return url
         }
 
         let resolvedModel: String?
@@ -136,13 +153,20 @@ struct ImageGenerate: AsyncParsableCommand {
             loraConfig = nil
         }
 
+        let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
+        let effectiveSteps = steps
+            ?? (manifest.family == .hidream ? (manifest.defaults?.steps ?? 4) : 4)
+        let effectiveCFG = cfgScale
+            ?? (manifest.family == .hidream ? (manifest.defaults?.cfg ?? 1.0) : 1.0)
+
         let request = GenerationRequest(
             prompt: prompt,
             negativePrompt: negativePrompt,
+            referenceImages: referenceImageURLs,
             width: width,
             height: height,
-            steps: steps,
-            guidanceScale: cfgScale,
+            steps: effectiveSteps,
+            guidanceScale: effectiveCFG,
             seed: seed,
             outputURL: outputURL,
             model: resolvedModel,
@@ -151,13 +175,13 @@ struct ImageGenerate: AsyncParsableCommand {
             enhancePrompt: false,
             inputImage: inputURL,
             strength: strength,
+            keepOriginalAspect: keepOriginalAspect,
             useBetaSigmas: false,
             sigmaShift: sigmaShift.map { Float($0) }
         )
 
         let progressHandler: (@Sendable (GenerationProgress) -> Void)? = quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
 
-        let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
         let result: GenerationResult
         switch manifest.family {
         case .klein:
@@ -165,6 +189,9 @@ struct ImageGenerate: AsyncParsableCommand {
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .zimage:
             let generator = ZImageTurboGenerator()
+            result = try await generator.generate(request, progressHandler: progressHandler)
+        case .hidream:
+            let generator = HiDreamO1Generator()
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .gemma, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .video, .psi, .privacy, nil:
             throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")

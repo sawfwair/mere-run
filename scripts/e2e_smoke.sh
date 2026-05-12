@@ -124,6 +124,44 @@ make_ocr_fixture() {
   /usr/bin/swift -e 'import AppKit; let size = NSSize(width: 512, height: 160); let image = NSImage(size: size); image.lockFocus(); NSColor.white.setFill(); NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill(); let text = NSString(string: "MERE RUN OCR TEST 123"); let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 54), .foregroundColor: NSColor.black]; text.draw(at: NSPoint(x: 24, y: 52), withAttributes: attrs); image.unlockFocus(); let data = image.tiffRepresentation!; let rep = NSBitmapImageRep(data: data)!; try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]));' "$output_path"
 }
 
+make_hidream_reference_fixture() {
+  local output_path="$1"
+  local variant="${2:-product}"
+  /usr/bin/swift - "$output_path" "$variant" <<'SWIFT'
+import AppKit
+
+let output = CommandLine.arguments[1]
+let variant = CommandLine.arguments[2]
+let size = NSSize(width: 512, height: 640)
+let image = NSImage(size: size)
+image.lockFocus()
+NSColor(calibratedWhite: 0.96, alpha: 1).setFill()
+NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
+
+if variant == "person" {
+    NSColor(calibratedRed: 0.93, green: 0.78, blue: 0.58, alpha: 1).setFill()
+    NSBezierPath(ovalIn: NSRect(x: 176, y: 360, width: 160, height: 160)).fill()
+    NSColor(calibratedRed: 0.25, green: 0.35, blue: 0.85, alpha: 1).setFill()
+    NSBezierPath(roundedRect: NSRect(x: 148, y: 140, width: 216, height: 230), xRadius: 42, yRadius: 42).fill()
+    NSColor.black.setFill()
+    NSBezierPath(ovalIn: NSRect(x: 216, y: 430, width: 18, height: 18)).fill()
+    NSBezierPath(ovalIn: NSRect(x: 278, y: 430, width: 18, height: 18)).fill()
+} else {
+    NSColor(calibratedRed: 0.08, green: 0.50, blue: 0.35, alpha: 1).setFill()
+    NSBezierPath(roundedRect: NSRect(x: 116, y: 140, width: 280, height: 300), xRadius: 46, yRadius: 46).fill()
+    NSColor(calibratedRed: 0.95, green: 0.80, blue: 0.20, alpha: 1).setFill()
+    NSBezierPath(roundedRect: NSRect(x: 156, y: 260, width: 200, height: 90), xRadius: 20, yRadius: 20).fill()
+    NSColor.white.setFill()
+    NSBezierPath(ovalIn: NSRect(x: 216, y: 470, width: 80, height: 80)).fill()
+}
+
+image.unlockFocus()
+let data = image.tiffRepresentation!
+let rep = NSBitmapImageRep(data: data)!
+try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: output))
+SWIFT
+}
+
 core_suite() {
   local speech_tts_wav="$OUT_DIR/speech-tts-qwen3-nano.wav"
 
@@ -198,6 +236,29 @@ installed_suite() {
     run_step "video_generate_ltx_av" 900 \
       "$MERERUN_BIN" video generate "a red cube rotating slowly" --variant unified-av --model-root "$MODELS_ROOT/video-ltx-av" --width 256 --height 256 --num-frames 9 --fps 8 --output "$OUT_DIR/video-ltx-av.mp4" --quiet
     assert_file_nonempty "video_generate_ltx_av_artifact" "$OUT_DIR/video-ltx-av.mp4"
+  fi
+
+  if [[ "${MERERUN_E2E_HIDREAM:-}" == "1" ]] && require_model "image-hidream-o1-dev"; then
+    make_hidream_reference_fixture "$OUT_DIR/hidream-ref-product.png" product
+    make_hidream_reference_fixture "$OUT_DIR/hidream-ref-person.png" person
+
+    run_step "image_generate_hidream_dev_text" 1200 \
+      "$MERERUN_BIN" image generate --prompt "a small brass camera on a clean desk" --model "$MODELS_ROOT/image-hidream-o1-dev" --width 512 --height 512 --steps 1 --output "$OUT_DIR/image-hidream-o1-dev-text.png" --quiet
+    assert_file_nonempty "image_generate_hidream_dev_text_artifact" "$OUT_DIR/image-hidream-o1-dev-text.png"
+
+    run_step "image_generate_hidream_dev_single_ref" 1200 \
+      "$MERERUN_BIN" image generate --prompt "turn this into a clean studio product photo" --model "$MODELS_ROOT/image-hidream-o1-dev" --ref-image "$OUT_DIR/hidream-ref-product.png" --width 512 --height 512 --steps 1 --output "$OUT_DIR/image-hidream-o1-dev-single-ref.png" --quiet
+    assert_file_nonempty "image_generate_hidream_dev_single_ref_artifact" "$OUT_DIR/image-hidream-o1-dev-single-ref.png"
+
+    run_step "image_generate_hidream_dev_multi_ref" 1200 \
+      "$MERERUN_BIN" image generate --prompt "put the same subject into a cinematic city portrait" --model "$MODELS_ROOT/image-hidream-o1-dev" --ref-image "$OUT_DIR/hidream-ref-person.png" --ref-image "$OUT_DIR/hidream-ref-product.png" --width 512 --height 512 --steps 1 --output "$OUT_DIR/image-hidream-o1-dev-multi-ref.png" --quiet
+    assert_file_nonempty "image_generate_hidream_dev_multi_ref_artifact" "$OUT_DIR/image-hidream-o1-dev-multi-ref.png"
+  fi
+
+  if [[ "${MERERUN_E2E_HIDREAM_FULL:-}" == "1" ]] && require_model "image-hidream-o1"; then
+    run_step "image_generate_hidream_full_text" 1200 \
+      "$MERERUN_BIN" image generate --prompt "a small brass camera on a clean desk" --model "$MODELS_ROOT/image-hidream-o1" --width 512 --height 512 --steps 3 --output "$OUT_DIR/image-hidream-o1-full-text.png" --quiet
+    assert_file_nonempty "image_generate_hidream_full_text_artifact" "$OUT_DIR/image-hidream-o1-full-text.png"
   fi
 }
 
