@@ -184,7 +184,8 @@ public enum MereRunAgentModelCatalog {
         MereRunAgentModelRecommendation(
             id: Q35Resources.defaultModelId,
             displayName: "Qwen3.5-122B-A10B 4-bit",
-            summary: "Premier 122B MoE 4-bit agent tier for 96 GB and larger Macs.",
+            summary: "Large Qwen-family 122B MoE 4-bit chat/agent alternative for 96 GB and larger Macs; "
+                + "DeepSeek V4 Flash remains the preferred setup-agent tier when available.",
             minimumUnifiedMemoryGB: 96,
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .textChatQ35,
@@ -210,7 +211,7 @@ public enum MereRunAgentModelCatalog {
         MereRunAgentModelRecommendation(
             id: "text-agent-qwen35-122b-a10b-mxfp4",
             displayName: "Qwen3.5-122B-A10B mxfp4",
-            summary: "Premier 122B MoE agent tier for 96 GB and larger Macs.",
+            summary: "External Qwen-family 122B MoE agent alternative for 96 GB and larger Macs.",
             minimumUnifiedMemoryGB: 96,
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .sourceConfigured,
@@ -224,7 +225,7 @@ public enum MereRunAgentModelCatalog {
         MereRunAgentModelRecommendation(
             id: "text-agent-qwen35-122b-a10b-8bit",
             displayName: "Qwen3.5-122B-A10B 8-bit",
-            summary: "Premier 122B 8-bit agent tier for 128 GB and larger Macs.",
+            summary: "External Qwen-family 122B 8-bit agent alternative for 128 GB and larger Macs.",
             minimumUnifiedMemoryGB: 128,
             recommendedUnifiedMemoryGB: 160,
             servingEngine: .sourceConfigured,

@@ -6,7 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-No notable changes yet.
+### Added
+
+- expanded `mere.run api serve` Chat Completions compatibility with typed
+  OpenAI request fields, per-engine capability validation, native function-tool
+  mapping, and streaming usage chunks.
+
+### Changed
+
+- changed the macOS Studio first-launch behavior so dragging the app into
+  Applications no longer auto-installs the terminal CLI; Settings now provides
+  explicit buttons to install the bundled CLI and optional `use-mere-run` Codex
+  skill.
 
 ## 0.4.13 - 2026-05-12
 

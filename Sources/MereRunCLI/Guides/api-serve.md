@@ -11,13 +11,14 @@ Supported engines:
 - `text-code`: default GGUF code model, usually `text-code-qwen3`.
 - `text-chat-gemma4`: Gemma text chat models.
 - `text-chat-q35`: Qwen3.5 text chat models.
+- `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
 
 ## Install And Check
 
 ```bash
 mere.run model capabilities
-mere.run model pull text-code-qwen3
+mere.run model pull text-agent-deepseek-v4-flash
 mere.run api serve --help
 ```
 
@@ -26,7 +27,7 @@ mere.run api serve --help
 - `--port`, `-p`: listen port, default `8080`.
 - `--host`: bind host, default `127.0.0.1`.
 - `--model`, `-m`, `--model-path`: model path or engine-specific model root.
-- `--engine`: `text-code`, `text-chat-klein`, `text-chat-gemma4`, or `text-chat-q35`.
+- `--engine`: `text-code`, `text-chat-klein`, `text-chat-gemma4`, `text-chat-q35`, or `text-chat-deepseek-v4-flash`.
 - `--lora`: default LoRA adapter path for all requests.
 - `--api-key`: bearer token, also read from `MERERUN_API_KEY`.
 - `--rate-limit-per-minute`: global chat completions limit.
@@ -39,6 +40,9 @@ mere.run api serve --help
 - For non-loopback hosts, always set `MERERUN_API_KEY` or pass `--api-key`.
 - Choose the engine first, then the model path/id.
 - Test `/health`, then `/v1/models`, then `/v1/chat/completions`.
+- DS4 raw-proxies the complete OpenAI chat request to `ds4-server`.
+- Native engines reject unsupported OpenAI fields explicitly instead of silently dropping them.
+- Use `stream_options.include_usage` when a client expects the OpenAI streaming usage chunk.
 
 ## Examples
 
@@ -67,6 +71,7 @@ mere.run api serve --host 0.0.0.0 --api-key "$MERERUN_API_KEY"
 - Non-loopback bind rejected: set `--api-key` or `MERERUN_API_KEY`.
 - Client cannot connect: confirm host, port, and firewall settings.
 - Wrong model family: match `--engine` to the model path.
+- Unsupported OpenAI field: choose a compatible engine or remove the field named in the `invalid_request_error`.
 
 ## Sources
 

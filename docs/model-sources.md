@@ -23,7 +23,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Category | Hugging Face pull IDs |
 | --- | --- |
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
-| Text chat | `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano` |
+| Text chat | `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Text anonymize | `text-anonymize-privacy-filter` |
@@ -49,6 +49,10 @@ Face sources.
 `text-agent-qwen35-9b` is the low-memory setup-agent model. It uses the public
 Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
 `Qwen3.5-9B-Q4_K_M.gguf`.
+
+`text-agent-deepseek-v4-flash` is the preferred managed setup-agent tier on
+96 GB+ Apple Silicon Macs. Q35/Qwen setup agents are lower-memory or comparison
+alternatives, not upgrades from DeepSeek V4 Flash.
 
 `text-chat-gemma4` is also the default chat model in the CLI. You can install it
 explicitly with `mere.run model pull text-chat-gemma4`, or let supported runtime

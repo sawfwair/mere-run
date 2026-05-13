@@ -58,7 +58,10 @@ For contributor smoke tests, `swift run mere.run.app` still builds the executabl
 product, but the bundle script is the recommended local launch path for normal
 macOS window behavior. The app auto-detects a bundled CLI first, then nearby
 SwiftPM build products, common install locations, and finally the current
-package checkout.
+package checkout. It does not silently install the terminal command on launch;
+open Settings and choose `Install CLI` or `Install Skill` when you want the
+bundled command or `use-mere-run` Codex skill copied into user-visible
+locations.
 
 ## Understand the command tree
 
@@ -122,7 +125,8 @@ swift run mere.run setup
 The setup command offers a local Mere agent powered by Pi, a bring-your-own-agent
 handoff prompt for Claude/Codex, or manual commands. Use
 `--mode agent --agent-model small` to select the Qwen3.5 9B GGUF setup agent
-explicitly.
+explicitly. On 96 GB+ Apple Silicon Macs, the hardware-tier and premier agent
+path selects DeepSeek V4 Flash as the preferred setup agent.
 
 ## Run a first workflow
 

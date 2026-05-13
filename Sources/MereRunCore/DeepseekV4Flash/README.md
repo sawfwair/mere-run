@@ -1,0 +1,11 @@
+# DeepseekV4Flash
+
+DeepSeek V4 Flash agent runtime support.
+
+- `DeepseekV4FlashResources.swift`: managed model id, Hugging Face source, GGUF filename, and user-facing errors.
+- `DeepseekV4FlashBinary.swift`: locates the bundled `ds4-server` binaries from installed, SwiftPM, or explicit override layouts.
+- `DeepseekV4FlashGenerator.swift`: starts `ds4-server`, waits for readiness, and proxies OpenAI-compatible chat requests over loopback HTTP.
+
+Keep DS4 process management here. CLI commands should choose the managed model
+and serving engine, then let this module own binary discovery, model-file
+resolution, server startup, and request translation.

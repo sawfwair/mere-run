@@ -67,6 +67,18 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertFalse(reports.contains { $0.spec.id == CodeGenResources.defaultModelId })
     }
 
+    func testRecommendedSetupIncludesDeepseekV4FlashOnLargeAppleSilicon() {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let reports = ManagedModelCapabilityCatalog.recommendedSetupReports(on: machine)
+
+        XCTAssertTrue(reports.contains { $0.spec.id == DeepseekV4FlashResources.defaultModelId })
+    }
+
     func testAgentTierSelectsNineBOnSixteenGB() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 16 * 1_073_741_824,
@@ -145,6 +157,21 @@ final class ManagedModelSupportTests: XCTestCase {
 
         XCTAssertEqual(recommendation.id, DeepseekV4FlashResources.defaultModelId)
         XCTAssertTrue(recommendation.isStartableByMereRun)
+    }
+
+    func testQ35IsDescribedAsAlternativeWhenDeepseekIsAvailable() throws {
+        let q35 = try XCTUnwrap(
+            MereRunAgentModelCatalog.allTierRecommendations(
+                on: MereRunMachineProfile(
+                    physicalMemoryBytes: 128 * 1_073_741_824,
+                    processorName: "M4 Max",
+                    isAppleSiliconMac: true
+                )
+            ).first { $0.id == Q35Resources.defaultModelId }
+        )
+
+        XCTAssertTrue(q35.summary.contains("alternative"))
+        XCTAssertTrue(q35.summary.contains("DeepSeek V4 Flash remains the preferred setup-agent tier"))
     }
 
     func testAgentRecommendationRejectsNonAppleSilicon() {

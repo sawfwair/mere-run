@@ -49,8 +49,6 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             throw DeepseekV4FlashError.serverFailedToStart("no port allocated")
         }
 
-        progressHandler?(ChatProgress(stage: .generating, message: "DS4 chat completion"))
-
         let payload = OpenAIChatRequest(
             model: modelId,
             messages: request.messages.map { OpenAIChatMessage(role: $0.role.rawValue, content: $0.content) },
@@ -97,6 +95,18 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         try await ensureRunning(modelPath: modelPath, progressHandler: progressHandler)
     }
 
+    public func chatCompletionsURL(
+        modelPath: String? = nil,
+        progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
+    ) async throws -> URL {
+        try await ensureRunning(modelPath: modelPath, progressHandler: progressHandler)
+        guard let port,
+              let url = URL(string: "http://127.0.0.1:\(port)/v1/chat/completions") else {
+            throw DeepseekV4FlashError.serverFailedToStart("no port allocated")
+        }
+        return url
+    }
+
     public func shutdown() {
         if let process, process.isRunning {
             process.terminate()
@@ -116,6 +126,13 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         if let process, process.isRunning {
             return
         }
+        if process != nil {
+            process = nil
+            port = nil
+        }
+        if let port, await isDS4ServerReady(port: port) {
+            return
+        }
 
         loadStartedAt = Date()
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Locating ds4-server binary"))
@@ -123,6 +140,18 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Resolving DeepSeek V4 Flash GGUF"))
         let ggufURL = try await resolveGGUF(explicitPath: modelPath, progressHandler: progressHandler)
+        let lockURL = MereRunModelPaths.modelDir(DeepseekV4FlashResources.defaultModelId)
+            .appendingPathComponent("mere-run-ds4-server.lock")
+
+        if let attachedPort = await attachToExistingServer(lockURL: lockURL) {
+            port = attachedPort
+            loadSeconds = loadStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+            progressHandler?(ChatProgress(
+                stage: .loadingModel,
+                message: "Attached to existing ds4-server on 127.0.0.1:\(attachedPort)"
+            ))
+            return
+        }
 
         let chosenPort = try pickFreeLoopbackPort()
         let kvDir = try makeKVDiskDir()
@@ -143,8 +172,6 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         // Scope the ds4-server singleton lock to mere.run so it doesn't collide
         // with a user-launched `ds4` on the side. ds4 honors DS4_LOCK_FILE.
         var env = ProcessInfo.processInfo.environment
-        let lockURL = MereRunModelPaths.modelDir(DeepseekV4FlashResources.defaultModelId)
-            .appendingPathComponent("mere-run-ds4-server.lock")
         env["DS4_LOCK_FILE"] = lockURL.path
         proc.environment = env
 
@@ -219,6 +246,60 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         throw DeepseekV4FlashError.serverFailedToStart(
             "/v1/models did not respond within 5 minutes. Last stderr:\n\(stderrBuffer)"
         )
+    }
+
+    private func attachToExistingServer(lockURL: URL) async -> Int? {
+        guard let pidText = try? String(contentsOf: lockURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            let pid = Int32(pidText),
+            let command = commandLine(forPID: pid),
+            command.contains("ds4-server"),
+            let port = portArgument(in: command),
+            await isDS4ServerReady(port: port) else {
+            return nil
+        }
+        return port
+    }
+
+    private func commandLine(forPID pid: Int32) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-p", String(pid), "-o", "command="]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+        guard process.terminationStatus == 0 else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func portArgument(in command: String) -> Int? {
+        let pieces = command.split(whereSeparator: { $0 == " " || $0 == "\t" })
+        guard let index = pieces.firstIndex(of: "--port") else { return nil }
+        let valueIndex = pieces.index(after: index)
+        guard valueIndex < pieces.endIndex else { return nil }
+        return Int(pieces[valueIndex])
+    }
+
+    private func isDS4ServerReady(port: Int) async -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/v1/models") else {
+            return false
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
     }
 
     private func resolveGGUF(

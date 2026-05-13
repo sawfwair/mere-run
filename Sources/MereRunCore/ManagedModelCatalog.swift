@@ -925,8 +925,7 @@ public extension ManagedModelSpec {
                   candidate.lastPathComponent.lowercased().contains("imatrix") else {
                 continue
             }
-            let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey])
-            if values?.isRegularFile == true {
+            if isRegularFileOrSymlinkTarget(candidate, fileManager: fileManager) {
                 return []
             }
         }
@@ -1029,11 +1028,16 @@ public extension ManagedModelSpec {
         )
         while let candidate = enumerator?.nextObject() as? URL {
             guard candidate.pathExtension.lowercased() == "gguf" else { continue }
-            let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey])
-            if values?.isRegularFile == true {
+            if isRegularFileOrSymlinkTarget(candidate, fileManager: fileManager) {
                 return candidate
             }
         }
         return nil
+    }
+
+    private static func isRegularFileOrSymlinkTarget(_ url: URL, fileManager: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
     }
 }

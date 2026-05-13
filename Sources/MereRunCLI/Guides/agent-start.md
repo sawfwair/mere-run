@@ -6,15 +6,15 @@ Start Pi against a local mere.run setup-agent API server. This is the guided "he
 
 ## Required Models
 
-Use a supported managed agent model such as `text-code-qwen3` or `text-agent-qwen35-9b`, depending on this Mac's capability report.
+Use this Mac's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Qwen/Q35 agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash.
 
 ## Install And Check
 
 ```bash
 mere.run agent onboard
-mere.run model pull text-code-qwen3
+mere.run model pull text-agent-deepseek-v4-flash
 mere.run agent install-pi
-mere.run agent start --model text-code-qwen3
+mere.run agent start --model text-agent-deepseek-v4-flash
 ```
 
 ## Parameters
@@ -29,7 +29,7 @@ mere.run agent start --model text-code-qwen3
 
 ## Usage Patterns
 
-- Run `agent onboard` first and use one of its printed model ids.
+- Run `model capabilities --recommended` or `agent onboard` first and use the recommended setup-agent id.
 - Pull the selected model before `agent start`.
 - Use `--skip-server` only when you already started a compatible local API server.
 - Keep the default prompt unless the user has a specific setup goal.
@@ -37,18 +37,18 @@ mere.run agent start --model text-code-qwen3
 ## Examples
 
 ```bash
-mere.run agent start --model text-code-qwen3
+mere.run agent start --model text-agent-deepseek-v4-flash
 ```
 
 ```bash
 mere.run agent start \
-  --model text-agent-qwen35-9b \
+  --model text-agent-deepseek-v4-flash \
   --prompt "Help me install only speech and OCR models."
 ```
 
 ## Iteration Tips
 
-- Start with the smallest supported model for setup guidance.
+- Use DeepSeek V4 Flash on 96 GB+ Macs; start with a smaller Qwen/Q35 agent only on lower-memory machines or when comparing behavior.
 - Check the server log path printed to stderr when startup hangs.
 - Re-run onboarding after model pulls or provider changes.
 

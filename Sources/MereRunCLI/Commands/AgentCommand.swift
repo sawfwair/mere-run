@@ -55,7 +55,8 @@ struct AgentOnboard: AsyncParsableCommand {
         print("  supportedModels: \(supported.count)")
         print("  unsupportedModels: \(unsupported.count)")
 
-        print("\nRecommended first setup (downloadable from Hugging Face)")
+        print("\nRecommended setup coverage (downloadable from Hugging Face)")
+        print("  Cross-modality starter set; lower-memory agent alternatives are not ranked upgrades.")
         if recommended.isEmpty {
             print("  No recommended managed models are supported on this machine.")
         } else {
@@ -73,20 +74,26 @@ struct AgentOnboard: AsyncParsableCommand {
             print("  Additional supported recommendations need local model paths: \(ids)")
         }
 
+        let startable = MereRunAgentModelCatalog.fallbackStartableRecommendation(on: machine)
+        let selectedAgentID = startable?.id ?? AgentModelResources.qwen35NineBModelId
         print("\nAgent readiness")
+        if let startable {
+            print("  Recommended setup agent: \(startable.id) (\(startable.displayName)).")
+            print("  Start a guided session with: \(CLICommandDisplay.command("agent start --model \(selectedAgentID)"))")
+            if startable.id == DeepseekV4FlashResources.defaultModelId {
+                print("  DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; Q35/Qwen agents are alternatives, not upgrades.")
+            }
+        }
         if let codeReport = reports.first(where: { $0.spec.id == CodeGenResources.defaultModelId }) {
             if codeReport.isSupported {
-                print("  Qwen3-Coder Next is supported for `\(CLICommandDisplay.command("agent start --model \(CodeGenResources.defaultModelId)"))`.")
+                print("  Qwen3-Coder Next is also supported for comparison or coding-specific sessions.")
                 print("  Pull it with: \(CLICommandDisplay.command("model pull \(CodeGenResources.defaultModelId)"))")
             } else {
                 print("  Qwen3-Coder Next is not supported here: \(codeReport.reasons.joined(separator: " "))")
             }
         }
-        let startable = MereRunAgentModelCatalog.fallbackStartableRecommendation(on: machine)
-        let selectedAgentID = startable?.id ?? AgentModelResources.qwen35NineBModelId
         print("  Install Pi with: \(CLICommandDisplay.command("agent install-pi"))")
         print("  Configure Pi provider with: \(CLICommandDisplay.command("agent onboard --configure-pi --model \(selectedAgentID)"))")
-        print("  Start a guided session with: \(CLICommandDisplay.command("agent start --model \(selectedAgentID)"))")
 
         if pullRecommended {
             try await pullRecommendedModels(recommended)
@@ -203,9 +210,7 @@ struct AgentStart: AsyncParsableCommand {
     var piPath: String?
 
     @Option(name: [.long], help: "Initial prompt sent to Pi.")
-    var prompt: String = """
-    Guide me through setting up mere.run on this machine. Start by summarizing what this Mac can run, then help me install only supported models.
-    """
+    var prompt: String = SetupAgentPrompt.defaultUserRequest
 
     @Option(name: [.long], help: "Managed agent model id to serve through Pi.")
     var model: String?
@@ -281,7 +286,12 @@ struct AgentStart: AsyncParsableCommand {
             }
         }
 
-        try runPi(piURL: piURL, modelID: runtime.providerModel.id)
+        try runPi(
+            piURL: piURL,
+            modelID: runtime.providerModel.id,
+            engine: runtime.engine,
+            modelURL: modelURL
+        )
         if serverProcess != nil {
             CLIStderr.write("[agent] Pi is running in Terminal.app. Keep this command running; press Ctrl+C here to stop the API server.\n")
             waitForServerProcess()
@@ -440,45 +450,22 @@ struct AgentStart: AsyncParsableCommand {
         return (process, log.url)
     }
 
-    /// Resolve the current `mere.run` executable's absolute path so we can
-    /// re-spawn it as the API server. `CommandLine.arguments[0]` is just the
-    /// basename when invoked from $PATH, which makes `Process` try a relative
-    /// lookup and fail. `Bundle.main.executablePath` is reliable on macOS.
     private static func currentExecutableURL() -> URL {
-        if let path = Bundle.main.executablePath {
-            return URL(fileURLWithPath: path)
-        }
-        // Fallbacks: $PATH search, then argv[0] as-is.
-        let argv0 = CommandLine.arguments.first ?? "mere.run"
-        if !argv0.hasPrefix("/"),
-           let resolved = which(argv0) {
-            return resolved
-        }
-        return URL(fileURLWithPath: argv0)
+        CurrentExecutable.url()
     }
 
-    private static func which(_ name: String) -> URL? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = [name]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        try? process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let raw = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !raw.isEmpty else { return nil }
-        return URL(fileURLWithPath: raw)
-    }
-
-    private func runPi(piURL: URL, modelID: String) throws {
+    private func runPi(piURL: URL, modelID: String, engine: APIEngine, modelURL: URL?) throws {
         try PiTerminalLauncher.launch(
             piURL: piURL,
             modelID: modelID,
-            prompt: prompt,
+            prompt: SetupAgentPrompt.render(
+                userRequest: prompt,
+                selectedModelID: modelID,
+                engine: engine,
+                modelURL: modelURL,
+                host: host,
+                port: port
+            ),
             homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory()
         )
     }

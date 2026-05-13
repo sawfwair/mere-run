@@ -97,6 +97,35 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.model, AgentModelResources.qwen35NineBModelId)
     }
 
+    func testSetupAgentPromptCarriesBoundedMachineContext() {
+        let prompt = SetupAgentPrompt.render(
+            userRequest: "Set up this Mac.",
+            selectedModelID: DeepseekV4FlashResources.defaultModelId,
+            engine: .textChatDeepseekV4Flash,
+            modelURL: URL(fileURLWithPath: "/tmp/ds4.gguf"),
+            host: "127.0.0.1",
+            port: 8080,
+            machine: MereRunMachineProfile(
+                physicalMemoryBytes: 128 * 1_073_741_824,
+                processorName: "M3 Ultra",
+                isAppleSiliconMac: true
+            )
+        )
+
+        XCTAssertTrue(prompt.contains("Machine: M3 Ultra, 128 GB unified memory"))
+        XCTAssertTrue(prompt.contains("Pi is already using provider `mere-run`"))
+        XCTAssertTrue(prompt.contains("text-agent-deepseek-v4-flash"))
+        XCTAssertTrue(prompt.contains("Recommended setup-agent tier for this Mac"))
+        XCTAssertTrue(prompt.contains("Selected setup-agent is recommended: true"))
+        XCTAssertTrue(prompt.contains("DeepSeek V4 Flash is the preferred premier setup-agent tier"))
+        XCTAssertTrue(prompt.contains("Q35/Qwen agents are alternatives"))
+        XCTAssertTrue(prompt.contains("mere.run model capabilities --recommended"))
+        XCTAssertTrue(prompt.contains("mere.run model list"))
+        XCTAssertTrue(prompt.contains("Do not run demo scripts"))
+        XCTAssertTrue(prompt.contains("demo.sh"))
+        XCTAssertTrue(prompt.contains("Never pass `--allow-unsupported`"))
+    }
+
     func testAgentStartPrefersInstalledStartableAgentModel() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-agent-start-\(UUID().uuidString)", isDirectory: true)
@@ -121,6 +150,41 @@ final class SetupCommandParsingTests: XCTestCase {
         )
 
         XCTAssertEqual(recommendation?.id, AgentModelResources.qwen35NineBModelId)
+    }
+
+    func testAgentStartPrefersInstalledDeepseekOverQwenCode() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-agent-start-ds4-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: root)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(root)
+
+        let qwenFile = root.appendingPathComponent(CodeGenResources.managedRelativePath)
+        try Data("qwen".utf8).write(to: qwenFile)
+
+        let deepseekRoot = root.appendingPathComponent(
+            DeepseekV4FlashResources.defaultModelId,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: deepseekRoot, withIntermediateDirectories: true)
+        let deepseekFile = deepseekRoot.appendingPathComponent(DeepseekV4FlashResources.imatrixGGUFFile)
+        let externalModelRoot = root.appendingPathComponent("external-ds4", isDirectory: true)
+        try FileManager.default.createDirectory(at: externalModelRoot, withIntermediateDirectories: true)
+        let externalModel = externalModelRoot.appendingPathComponent(DeepseekV4FlashResources.imatrixGGUFFile)
+        try Data("ds4".utf8).write(to: externalModel)
+        try FileManager.default.createSymbolicLink(at: deepseekFile, withDestinationURL: externalModel)
+
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M3 Ultra",
+            isAppleSiliconMac: true
+        )
+        let recommendation = AgentStart.bestInstalledStartableAgentModel(on: machine)
+
+        XCTAssertEqual(recommendation?.id, DeepseekV4FlashResources.defaultModelId)
     }
 
     func testConfiguredAgentModelMustBeInstalledToBeStartable() throws {
