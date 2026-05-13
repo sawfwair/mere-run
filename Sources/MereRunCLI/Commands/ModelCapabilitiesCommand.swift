@@ -31,9 +31,19 @@ struct ModelCapabilities: ParsableCommand {
         print("  unifiedMemory: \(machine.unifiedMemoryGB) GB")
         print("  appleSiliconMac: \(machine.isAppleSiliconMac)")
 
+        if let agent = MereRunAgentModelCatalog.recommendation(for: .tier, on: machine) {
+            print("\nRecommended setup agent")
+            print("  \(CLICommandDisplay.command("agent start --model \(agent.id)"))")
+            print("  \(agent.displayName): \(agent.summary)")
+            if agent.id == DeepseekV4FlashResources.defaultModelId {
+                print("  note: DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; Q35/Qwen agents are alternatives, not upgrades.")
+            }
+        }
+
         let recommendedReports = ManagedModelCapabilityCatalog.recommendedSetupReports(on: machine)
         if !recommendedReports.isEmpty {
-            print("\nRecommended setup (downloadable from Hugging Face)")
+            print("\nRecommended setup coverage (downloadable from Hugging Face)")
+            print("  note: cross-modality starter set; lower-memory agent alternatives are not ranked upgrades.")
             for report in recommendedReports {
                 print("  mere.run model pull \(report.spec.id)")
             }

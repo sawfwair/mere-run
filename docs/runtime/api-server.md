@@ -58,11 +58,51 @@ swift run mere.run api serve \
   supports basic rate limiting
 - chat requests must use `Content-Type: application/json`; browser-simple
   form/text posts are rejected before the request body is processed
-- chat requests are validated before generation; `max_tokens`, `temperature`,
-  and `top_p` must stay within bounded ranges
+- chat requests are validated before generation; `max_tokens`,
+  `max_completion_tokens`, `temperature`, and `top_p` must stay within bounded
+  ranges
 - LoRA adapters are configured at server startup with `--lora`; request bodies
   cannot select local LoRA paths
 - streaming and JSON error paths are sanitized so the local server does not
   reflect raw internal runtime details back to clients
+
+## OpenAI chat compatibility
+
+`POST /v1/chat/completions` accepts the common Chat Completions request shape:
+
+- `system`, `developer`, `user`, `assistant`, and `tool` messages
+- string content, text content parts, nullable assistant content, and image
+  content parts when the selected engine supports vision
+- assistant `tool_calls` and tool response messages
+- `tools`, `tool_choice`, `parallel_tool_calls`
+- `response_format`
+- `stream_options.include_usage`
+- `stop`, `seed`, penalties, logprobs, reasoning controls, and
+  provider-thinking controls as typed request fields
+- `max_completion_tokens` alongside legacy `max_tokens`
+
+The server does not silently drop high-impact fields. Native engines either map
+supported fields into `ChatRequest` or return an OpenAI-style
+`invalid_request_error` before generation. Metadata-style fields such as
+`metadata`, `user`, and `service_tier` are accepted as request context but do
+not change local generation.
+
+Engine compatibility:
+
+- `text-chat-deepseek-v4-flash`: raw-proxies the original request body to
+  `ds4-server`, preserving DS4's OpenAI-compatible behavior.
+- `text-chat-gemma4`: accepts function tools and emits OpenAI tool-call
+  responses when the model generates a tool call.
+- `text-chat-q35`: accepts function tools and one image content part per
+  message.
+- `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
+  local JSON retry behavior.
+- `text-code`: accepts plain text chat requests and rejects tools, images,
+  reasoning controls, logprobs, seed, stop sequences, and structured outputs
+  with explicit errors.
+
+Streaming responses only emit assistant content tokens. Local progress labels
+stay in logs/stderr, and `stream_options.include_usage` adds the final usage
+chunk before `[DONE]`.
 
 If you are working on this area, read [CLI and Runtime Internals](../internals/cli-and-runtime.md) after the command source.

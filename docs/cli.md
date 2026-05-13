@@ -718,6 +718,16 @@ Engine values:
 - `text-chat-klein`
 - `text-chat-gemma4`
 - `text-chat-q35`
+- `text-chat-deepseek-v4-flash`
+
+OpenAI chat compatibility:
+
+- DS4 raw-proxies the full `/v1/chat/completions` body to `ds4-server`.
+- Native engines decode the common OpenAI Chat request shape and reject
+  unsupported high-impact fields with `invalid_request_error`.
+- `max_completion_tokens`, `developer` messages, function tools, image content
+  parts, structured JSON mode, and streaming usage are capability-gated by
+  engine.
 
 Examples:
 
@@ -745,8 +755,8 @@ swift run mere.run setup --mode manual
 Agent model choices:
 
 - `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB Macs
-- `tier`: the best supported local tier for this Mac, currently 9B, Q35 nano, or Qwen3-Coder Next
-- `premier`: Qwen3.5-122B-A10B mxfp4 on 96 GB Macs and 8-bit on 128 GB+ Macs; these require an external local model until mere.run has managed Hugging Face entries for those exact variants
+- `tier`: the best supported local tier for this Mac, currently 9B, Q35 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ Macs
+- `premier`: `text-agent-deepseek-v4-flash`, the preferred managed 96 GB+ setup-agent tier served by the bundled DS4 engine
 
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.
@@ -762,7 +772,7 @@ extension that points at `mere.run api serve`.
 swift run mere.run agent onboard
 swift run mere.run agent onboard --pull-recommended
 swift run mere.run agent onboard --install-pi --configure-pi
-swift run mere.run agent onboard --configure-pi --model text-agent-qwen35-9b
+swift run mere.run agent onboard --configure-pi --model text-agent-deepseek-v4-flash
 ```
 
 ### `mere.run agent install-pi`
@@ -777,15 +787,18 @@ swift run mere.run agent install-pi
 ### `mere.run agent start`
 
 Start a local API server for a selected managed agent model and launch Pi
-against the `mere-run` provider. GGUF models use `--engine text-code`; Q35 nano
-uses `--engine text-chat-q35`. If `--model` is omitted, `agent start` uses the
-configured Pi provider model first, then the best installed startable setup
-agent, then the current machine's startable hardware tier.
+against the `mere-run` provider. GGUF code models use `--engine text-code`, Q35
+uses `--engine text-chat-q35`, and DeepSeek V4 Flash uses the DS4-backed
+`--engine text-chat-deepseek-v4-flash`. If `--model` is omitted, `agent start`
+uses the best installed startable setup agent first, then a valid persisted Pi
+provider model, then the current machine's startable hardware tier. On 96 GB+
+Apple Silicon Macs, DeepSeek V4 Flash is the preferred setup-agent tier; Q35 and
+Qwen models are alternatives, not upgrades.
 
 ```bash
-swift run mere.run model pull text-agent-qwen35-9b
+swift run mere.run model pull text-agent-deepseek-v4-flash
 swift run mere.run agent install-pi
-swift run mere.run agent start --model text-agent-qwen35-9b
+swift run mere.run agent start --model text-agent-deepseek-v4-flash
 ```
 
 ## Validation and smoke runs

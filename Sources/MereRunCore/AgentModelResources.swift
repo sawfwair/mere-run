@@ -18,6 +18,7 @@ public struct AgentModelResources: Sendable, Hashable {
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
     case textChatQ35 = "text-chat-q35"
+    case deepseekV4Flash = "text-chat-deepseek-v4-flash"
     case sourceConfigured = "external"
 }
 
@@ -95,7 +96,7 @@ public enum MereRunAgentModelCatalog {
     ) -> MereRunAgentModelRecommendation? {
         guard machine.isAppleSiliconMac else { return nil }
         if machine.unifiedMemoryGB >= 96 {
-            return qwen35122B4Bit()
+            return deepseekV4Flash()
         }
         if machine.unifiedMemoryGB >= 64 {
             return qwen3CoderNext()
@@ -112,7 +113,7 @@ public enum MereRunAgentModelCatalog {
         guard machine.isAppleSiliconMac, machine.unifiedMemoryGB >= 96 else {
             return nil
         }
-        return machine.unifiedMemoryGB >= 128 ? qwen35122B8Bit() : qwen35122BMXFP4()
+        return deepseekV4Flash()
     }
 
     public static func fallbackStartableRecommendation(
@@ -120,7 +121,7 @@ public enum MereRunAgentModelCatalog {
     ) -> MereRunAgentModelRecommendation? {
         guard machine.isAppleSiliconMac else { return nil }
         if machine.unifiedMemoryGB >= 96 {
-            return qwen35122B4Bit()
+            return deepseekV4Flash()
         }
         if machine.unifiedMemoryGB >= 64 {
             return qwen3CoderNext()
@@ -139,8 +140,7 @@ public enum MereRunAgentModelCatalog {
             q35Nano(),
             qwen3CoderNext(),
             qwen35122B4Bit(),
-            qwen35122BMXFP4(),
-            qwen35122B8Bit(),
+            deepseekV4Flash(),
         ].filter { machine.isAppleSiliconMac && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
     }
 
@@ -184,7 +184,8 @@ public enum MereRunAgentModelCatalog {
         MereRunAgentModelRecommendation(
             id: Q35Resources.defaultModelId,
             displayName: "Qwen3.5-122B-A10B 4-bit",
-            summary: "Premier 122B MoE 4-bit agent tier for 96 GB and larger Macs.",
+            summary: "Large Qwen-family 122B MoE 4-bit chat/agent alternative for 96 GB and larger Macs; "
+                + "DeepSeek V4 Flash remains the preferred setup-agent tier when available.",
             minimumUnifiedMemoryGB: 96,
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .textChatQ35,
@@ -192,11 +193,25 @@ public enum MereRunAgentModelCatalog {
         )
     }
 
+    private static func deepseekV4Flash() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: DeepseekV4FlashResources.defaultModelId,
+            displayName: "DeepSeek V4 Flash IQ2 imatrix",
+            summary: "Premier 284B MoE agent tier (~81 GB imatrix-tuned GGUF, the upstream "
+                + "README's preferred quant) for 96 GB and larger Macs. Runs on the bundled "
+                + "ds4-server engine with a 65,536-token configured context.",
+            minimumUnifiedMemoryGB: 96,
+            recommendedUnifiedMemoryGB: 128,
+            servingEngine: .deepseekV4Flash,
+            managedModelID: DeepseekV4FlashResources.defaultModelId
+        )
+    }
+
     private static func qwen35122BMXFP4() -> MereRunAgentModelRecommendation {
         MereRunAgentModelRecommendation(
             id: "text-agent-qwen35-122b-a10b-mxfp4",
             displayName: "Qwen3.5-122B-A10B mxfp4",
-            summary: "Premier 122B MoE agent tier for 96 GB and larger Macs.",
+            summary: "External Qwen-family 122B MoE agent alternative for 96 GB and larger Macs.",
             minimumUnifiedMemoryGB: 96,
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .sourceConfigured,
@@ -210,7 +225,7 @@ public enum MereRunAgentModelCatalog {
         MereRunAgentModelRecommendation(
             id: "text-agent-qwen35-122b-a10b-8bit",
             displayName: "Qwen3.5-122B-A10B 8-bit",
-            summary: "Premier 122B 8-bit agent tier for 128 GB and larger Macs.",
+            summary: "External Qwen-family 122B 8-bit agent alternative for 128 GB and larger Macs.",
             minimumUnifiedMemoryGB: 128,
             recommendedUnifiedMemoryGB: 160,
             servingEngine: .sourceConfigured,

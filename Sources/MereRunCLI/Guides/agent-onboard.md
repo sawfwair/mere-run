@@ -6,7 +6,7 @@ Summarize this Mac's model capabilities and optionally prepare the Pi coding-age
 
 ## Required Models
 
-No model is required to print readiness. Optional model pulls/configuration may use `text-code-qwen3` or `text-agent-qwen35-9b`.
+No model is required to print readiness. Optional model pulls/configuration should use the recommended setup-agent tier; on 96 GB+ Apple Silicon Macs that is `text-agent-deepseek-v4-flash`. Qwen/Q35 agent models are lower-memory or comparison alternatives.
 
 ## Install And Check
 
@@ -38,12 +38,12 @@ mere.run agent onboard
 ```
 
 ```bash
-mere.run agent onboard --install-pi --configure-pi --model text-code-qwen3
+mere.run agent onboard --install-pi --configure-pi --model text-agent-deepseek-v4-flash
 ```
 
 ## Iteration Tips
 
-- Copy the printed model recommendations into later `model pull` or `agent start` commands.
+- Copy the printed recommended setup-agent id into later `model pull` or `agent start` commands.
 - Keep host and port aligned with `api serve`.
 - Re-run after changing hardware, model store, or setup model choice.
 

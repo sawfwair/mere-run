@@ -127,6 +127,217 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.messages[1].content, "")
     }
 
+    func testChatRequestDecodesModernOpenAIFieldsAndUnknownFields() throws {
+        let data = """
+        {
+          "model": "mererun-test-model",
+          "messages": [
+            { "role": "developer", "content": "Follow repo rules." },
+            { "role": "user", "content": "hello" }
+          ],
+          "max_completion_tokens": 77,
+          "stream_options": { "include_usage": true },
+          "parallel_tool_calls": true,
+          "metadata": { "client": "test" },
+          "reasoning_effort": "low",
+          "x-client-extra": { "kept": true }
+        }
+        """.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(OpenAIChatRequest.self, from: data)
+
+        XCTAssertEqual(request.max_completion_tokens, 77)
+        XCTAssertEqual(request.stream_options?.include_usage, true)
+        XCTAssertEqual(request.parallel_tool_calls, true)
+        XCTAssertEqual(request.metadata?["client"], "test")
+        XCTAssertEqual(request.reasoning_effort, "low")
+        XCTAssertEqual(request.unknownFields["x-client-extra"]?.objectValue?["kept"]?.boolValue, true)
+    }
+
+    func testChatRequestMapsDeveloperRoleAndMaxCompletionTokens() throws {
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [
+                OpenAIChatMessage(role: "developer", content: "Follow repo rules."),
+                OpenAIChatMessage(role: "user", content: "hello"),
+            ],
+            max_completion_tokens: 77
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096
+        )
+
+        XCTAssertEqual(chatRequest.maxTokens, 77)
+        XCTAssertEqual(chatRequest.messages[0].role, .system)
+        XCTAssertEqual(chatRequest.messages[0].content, "Follow repo rules.")
+    }
+
+    func testChatRequestValidatesImageContentPartsAgainstEngineCapability() throws {
+        let data = """
+        {
+          "model": "mererun-test-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                { "type": "text", "text": "describe" },
+                { "type": "image_url", "image_url": { "url": "file:///tmp/image.png" } }
+              ]
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(OpenAIChatRequest.self, from: data)
+
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: .localText
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("image content"))
+        }
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .localTextWithToolsAndVision
+        )
+        XCTAssertEqual(chatRequest.messages[0].content, "describe")
+        XCTAssertEqual(chatRequest.messages[0].imageUrl, "file:///tmp/image.png")
+    }
+
+    func testChatRequestMapsSupportedOpenAITools() throws {
+        let tool = OpenAIChatTool(
+            function: OpenAIChatToolFunction(
+                name: "lookup",
+                description: "Look up a value.",
+                parameters: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "query": .object([
+                            "type": .string("string"),
+                            "description": .string("Search query"),
+                        ]),
+                    ]),
+                    "required": .array([.string("query")]),
+                ])
+            )
+        )
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            tools: [tool],
+            tool_choice: .mode("auto")
+        )
+
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: .localText
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("tools"))
+        }
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .localTextWithTools
+        )
+        XCTAssertEqual(chatRequest.tools?.first?.name, "lookup")
+        XCTAssertEqual(chatRequest.tools?.first?.parameters["query"]?.description, "Search query")
+        XCTAssertEqual(chatRequest.tools?.first?.required, ["query"])
+    }
+
+    func testChatRequestValidatesStructuredOutputsAgainstEngineCapability() throws {
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            response_format: OpenAIResponseFormat(type: "json_object")
+        )
+
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: .localText
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("response_format"))
+        }
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .localTextWithStructuredJSON
+        )
+        XCTAssertTrue(chatRequest.requiresJSON)
+    }
+
+    func testChatRequestRejectsUnsupportedHighImpactFields() {
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            stop: .string("END"),
+            seed: 42,
+            presence_penalty: 0.5,
+            logprobs: true,
+            reasoning_effort: "low",
+            think: true
+        )
+
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(from: request, fallbackLoraPath: nil, contextSize: 4_096)
+        ) { error in
+            let message = error.localizedDescription
+            XCTAssertTrue(
+                message.contains("stop")
+                    || message.contains("seed")
+                    || message.contains("presence_penalty")
+                    || message.contains("logprobs")
+                    || message.contains("reasoning_effort")
+                    || message.contains("thinking")
+            )
+        }
+    }
+
+    func testStreamingUsageOptionHonorsCapabilities() throws {
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            stream_options: OpenAIStreamOptions(include_usage: true)
+        )
+
+        XCTAssertTrue(
+            try APIServerContract.includeUsageInStreaming(
+                request,
+                capabilities: .localText
+            )
+        )
+
+        XCTAssertThrowsError(
+            try APIServerContract.includeUsageInStreaming(
+                request,
+                capabilities: APIEngineCapabilities(supportsUsageInStreaming: false)
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("stream_options.include_usage"))
+        }
+    }
+
     func testChatRequestValidationRejectsOversizedMaxTokens() {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",
@@ -191,5 +402,13 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(APIServerContract.acceptsJSONContentType("application/json"))
         XCTAssertTrue(APIServerContract.acceptsJSONContentType("application/json; charset=utf-8"))
         XCTAssertTrue(APIServerContract.acceptsJSONContentType("application/vnd.openai+json"))
+    }
+
+    func testStreamingStatusMessagesAreNotTreatedAsTokens() {
+        XCTAssertTrue(APIServerContract.isStreamingStatusMessage("Generating..."))
+        XCTAssertTrue(APIServerContract.isStreamingStatusMessage("Generating response"))
+        XCTAssertTrue(APIServerContract.isStreamingStatusMessage("Retrying generation"))
+        XCTAssertTrue(APIServerContract.isStreamingStatusMessage("DS4 chat completion"))
+        XCTAssertFalse(APIServerContract.isStreamingStatusMessage("Actual generated text"))
     }
 }

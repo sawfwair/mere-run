@@ -6,7 +6,25 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-No notable changes yet.
+## 0.5.0 - 2026-05-13
+
+### Added
+
+- added the DS4 premier agent tier for 96 GB+ Apple Silicon Macs, including
+  vendored `ds4` runtime packaging, setup readiness checks, and OpenAI-compatible
+  local serving through `mere.run agent start`.
+- added Pi agent installation and launch support so high-memory Macs can choose
+  between the DS4 premier path and the Pi local agent runtime.
+- expanded `mere.run api serve` Chat Completions compatibility with typed
+  OpenAI request fields, per-engine capability validation, native function-tool
+  mapping, and streaming usage chunks.
+
+### Changed
+
+- changed the macOS Studio first-launch behavior so dragging the app into
+  Applications no longer auto-installs the terminal CLI; Settings now provides
+  explicit buttons to install the bundled CLI and optional `use-mere-run` Codex
+  skill.
 
 ## 0.4.13 - 2026-05-12
 

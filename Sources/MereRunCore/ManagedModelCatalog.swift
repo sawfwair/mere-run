@@ -33,6 +33,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case qwen3Embedding
     case privacyFilter
     case codegenGGUF
+    case deepseekV4FlashIMatrixGGUF
     case lightOnOCR
     case sam31
     case falconPerception
@@ -361,6 +362,16 @@ public enum ManagedModelCatalog {
             upstreamRevision: AgentModelResources.qwen35NineBRevision,
             validationKind: .codegenGGUF,
             defaultCLICommands: ["api serve", "text code"]
+        ),
+        ManagedModelSpec(
+            id: DeepseekV4FlashResources.defaultModelId,
+            category: .textChat,
+            installShape: .singleFile(relativePath: DeepseekV4FlashResources.managedRelativePath),
+            hubFallback: DeepseekV4FlashResources.hubFallbackConfig,
+            upstreamRepoId: DeepseekV4FlashResources.defaultRepoId,
+            upstreamRevision: DeepseekV4FlashResources.defaultRevision,
+            validationKind: .deepseekV4FlashIMatrixGGUF,
+            defaultCLICommands: ["api serve", "agent"]
         ),
         ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
@@ -698,6 +709,8 @@ public extension ManagedModelSpec {
             return OpenAIPrivacyFilterResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .codegenGGUF:
             return Self.missingCodeGenPaths(in: rootURL, fileManager: fileManager)
+        case .deepseekV4FlashIMatrixGGUF:
+            return Self.missingDeepseekV4FlashIMatrixPaths(in: rootURL, fileManager: fileManager)
         case .lightOnOCR:
             return Self.missingLightOnOCRPaths(in: rootURL, fileManager: fileManager)
         case .aceStep:
@@ -784,6 +797,13 @@ public extension ManagedModelSpec {
             switch validationKind {
             case .codegenGGUF:
                 return fileManager.fileExists(atPath: url.path) ? [] : [url]
+            case .deepseekV4FlashIMatrixGGUF:
+                // Accept any GGUF whose name marks it as imatrix-tuned.
+                if fileManager.fileExists(atPath: url.path),
+                   url.lastPathComponent.lowercased().contains("imatrix") {
+                    return []
+                }
+                return [url]
             default:
                 return fileManager.fileExists(atPath: url.path) ? [] : [url]
             }
@@ -883,6 +903,35 @@ public extension ManagedModelSpec {
         findFirstGGUFFile(in: rootURL, fileManager: fileManager) == nil ? [rootURL.appendingPathComponent("*.gguf")] : []
     }
 
+    /// DeepSeek V4 Flash explicitly prefers the imatrix-tuned GGUF (per the
+    /// upstream README's "USE THE IMATRIX VERSIONS" note). A directory that
+    /// only contains the legacy non-imatrix GGUF is considered *not* complete,
+    /// so `mere.run model pull` will fetch the preferred variant instead of
+    /// reporting "already installed."
+    private static func missingDeepseekV4FlashIMatrixPaths(
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        let resolved = rootURL.resolvingSymlinksInPath()
+        guard let enumerator = fileManager.enumerator(
+            at: resolved,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return [rootURL.appendingPathComponent("*imatrix*.gguf")]
+        }
+        while let candidate = enumerator.nextObject() as? URL {
+            guard candidate.pathExtension.lowercased() == "gguf",
+                  candidate.lastPathComponent.lowercased().contains("imatrix") else {
+                continue
+            }
+            if isRegularFileOrSymlinkTarget(candidate, fileManager: fileManager) {
+                return []
+            }
+        }
+        return [rootURL.appendingPathComponent("*imatrix*.gguf")]
+    }
+
     private static func missingLightOnOCRPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
         var missing: [URL] = []
         let configURL = rootURL.appendingPathComponent("config.json")
@@ -979,11 +1028,16 @@ public extension ManagedModelSpec {
         )
         while let candidate = enumerator?.nextObject() as? URL {
             guard candidate.pathExtension.lowercased() == "gguf" else { continue }
-            let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey])
-            if values?.isRegularFile == true {
+            if isRegularFileOrSymlinkTarget(candidate, fileManager: fileManager) {
                 return candidate
             }
         }
         return nil
+    }
+
+    private static func isRegularFileOrSymlinkTarget(_ url: URL, fileManager: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
     }
 }

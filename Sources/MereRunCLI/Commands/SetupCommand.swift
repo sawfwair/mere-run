@@ -202,9 +202,8 @@ struct Setup: AsyncParsableCommand {
             print("  No local agent tier is supported on this machine.")
         case .premier:
             print("  Unavailable on this machine.")
-            print("  Qwen3.5-122B-A10B mxfp4 requires at least 96 GB unified memory.")
-            print("  Qwen3.5-122B-A10B 8-bit requires at least 128 GB unified memory.")
-            print("  Both premier models also require external local model setup.")
+            print("  DeepSeek V4 Flash requires at least 96 GB unified memory and Apple Silicon.")
+            print("  It is the preferred managed setup-agent tier when available.")
         }
         print("")
         print("Available paths")
@@ -271,9 +270,14 @@ struct Setup: AsyncParsableCommand {
             }
         }
         CLIStderr.write("[setup] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
-        try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: 60)
+        try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
         CLIStderr.write("[setup] Local API is ready. Opening Pi in Terminal.app.\n")
-        try runPi(piURL: piURL, modelID: runtime.providerModel.id)
+        try runPi(
+            piURL: piURL,
+            modelID: runtime.providerModel.id,
+            engine: runtime.engine,
+            modelURL: modelURL
+        )
         CLIStderr.write("[setup] Pi is running in Terminal.app. Keep this command running; press Ctrl+C here to stop the API server.\n")
         waitForServerProcess()
     }
@@ -281,7 +285,7 @@ struct Setup: AsyncParsableCommand {
     private func startAPIServer(modelURL: URL, engine: APIEngine) throws -> (process: Process, logURL: URL) {
         let log = try AgentServerLog.makeLogHandle(prefix: "setup-api-server")
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+        process.executableURL = CurrentExecutable.url()
         process.arguments = [
             "api",
             "serve",
@@ -302,11 +306,18 @@ struct Setup: AsyncParsableCommand {
         return (process, log.url)
     }
 
-    private func runPi(piURL: URL, modelID: String) throws {
+    private func runPi(piURL: URL, modelID: String, engine: APIEngine, modelURL: URL?) throws {
         try PiTerminalLauncher.launch(
             piURL: piURL,
             modelID: modelID,
-            prompt: setupAgentPrompt(),
+            prompt: SetupAgentPrompt.render(
+                userRequest: SetupAgentPrompt.defaultUserRequest,
+                selectedModelID: modelID,
+                engine: engine,
+                modelURL: modelURL,
+                host: host,
+                port: port
+            ),
             homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory()
         )
     }
@@ -409,15 +420,6 @@ struct Setup: AsyncParsableCommand {
         print("     \(normalized)")
     }
 
-    private func setupAgentPrompt() -> String {
-        """
-        Guide me through setting up mere.run on this machine.
-        Start by summarizing what this Mac can run.
-        Only suggest or run `mere.run model pull` for models that `mere.run model capabilities` reports as supported.
-        Manage local mere.run configuration and setup only.
-        Summarize every change before running commands.
-        """
-    }
 }
 
 struct SetupAgentRuntime {
@@ -425,6 +427,15 @@ struct SetupAgentRuntime {
     let spec: ManagedModelSpec
     let engine: APIEngine
     let providerModel: PiProviderModel
+
+    var healthTimeoutSeconds: TimeInterval {
+        switch engine {
+        case .textChatDeepseekV4Flash:
+            return DeepseekV4FlashResources.serverStartupTimeoutSeconds + 30
+        default:
+            return 60
+        }
+    }
 
     static func recommendation(forManagedModelID modelID: String) -> MereRunAgentModelRecommendation? {
         let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -449,6 +460,8 @@ struct SetupAgentRuntime {
             engine = .textCode
         case .textChatQ35:
             engine = .textChatQ35
+        case .deepseekV4Flash:
+            engine = .textChatDeepseekV4Flash
         case .sourceConfigured:
             throw ValidationError("\(recommendation.displayName) requires an external local model before it can be started.")
         }
@@ -468,7 +481,12 @@ struct SetupAgentRuntime {
     }
 
     static func providerModel(for recommendation: MereRunAgentModelRecommendation) -> PiProviderModel {
-        PiProviderModel(
+        // DeepSeek V4 Flash has a specific Pi compat profile (DSML thinking
+        // format, reasoning effort, etc.) documented in the ds4 README.
+        if recommendation.servingEngine == .deepseekV4Flash {
+            return .deepseekV4Flash
+        }
+        return PiProviderModel(
             id: recommendation.id,
             name: "\(recommendation.displayName) (mere.run)",
             contextWindow: contextWindow(for: recommendation),
@@ -480,6 +498,8 @@ struct SetupAgentRuntime {
         switch recommendation.servingEngine {
         case .textChatQ35:
             return Q35Resources.defaultContextLength
+        case .deepseekV4Flash:
+            return DeepseekV4FlashResources.defaultContextLength
         case .textCode, .sourceConfigured:
             return 32768
         }

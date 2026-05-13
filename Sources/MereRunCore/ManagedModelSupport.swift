@@ -223,7 +223,8 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 "text-chat-q35",
                 "Qwen3.5-122B-A10B chat",
-                "Runs the large Qwen3.5 122B MoE chat tier for premier local tool use and reasoning.",
+                "Runs the large Qwen3.5 122B MoE chat tier as a Qwen-family alternative; "
+                + "DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier when available.",
                 minimum: 96,
                 recommended: 128
             ),
@@ -279,6 +280,15 @@ public enum ManagedModelCapabilityCatalog {
                 "Runs the GGUF Qwen3-Coder Next model through llama.cpp for local coding and agent sessions.",
                 minimum: 64,
                 recommended: 96
+            ),
+            descriptor(
+                DeepseekV4FlashResources.defaultModelId,
+                "DeepSeek V4 Flash IQ2 imatrix",
+                "Premier 284B MoE agent tier served by the bundled ds4-server engine "
+                + "(imatrix-tuned q2 GGUF, ~81 GB) for 96 GB+ Apple Silicon Macs.",
+                minimum: 96,
+                recommended: 128,
+                setup: true
             ),
             descriptor(
                 "text-embed-qwen3-0.6b",

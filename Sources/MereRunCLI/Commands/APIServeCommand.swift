@@ -32,6 +32,9 @@ struct APIServe: AsyncParsableCommand {
           # Start a Q35 text-chat server with an explicit nano model root
           mere.run api serve --engine text-chat-q35 -m ~/Models/text-chat-q35-nano
 
+          # Start the DeepSeek V4 Flash OpenAI-compatible server
+          mere.run api serve --engine text-chat-deepseek-v4-flash
+
           # Custom host/port (non-loopback binds require an API key)
           export MERERUN_API_KEY=change-me
           mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY"
@@ -49,10 +52,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Q35 text chat model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Q35 text chat model root. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-code (default), text-chat-klein, text-chat-gemma4, or text-chat-q35.")
+    @Option(name: [.long], help: "Serving engine: text-code (default), text-chat-klein, text-chat-gemma4, text-chat-q35, or text-chat-deepseek-v4-flash.")
     var engine: APIEngine = .textCode
 
     @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
@@ -133,6 +136,10 @@ struct APIServe: AsyncParsableCommand {
             }
             // Allow Q35Generator to auto-download from Hugging Face when model path is omitted.
             return nil
+        case .textChatDeepseekV4Flash:
+            // DeepseekV4FlashGenerator resolves and (if needed) downloads its own GGUF.
+            // Honor an explicit --model path if provided.
+            return model
         }
     }
 
@@ -185,6 +192,75 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
     case textChatQ35 = "text-chat-q35"
+    case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
+
+    var openAICompatibility: APIEngineCapabilities {
+        switch self {
+        case .textCode:
+            return .localText
+        case .textChatKlein:
+            return .localTextWithStructuredJSON
+        case .textChatGemma4:
+            return .localTextWithTools
+        case .textChatQ35:
+            return .localTextWithToolsAndVision
+        case .textChatDeepseekV4Flash:
+            return .rawProxy
+        }
+    }
+}
+
+struct APIEngineCapabilities: Equatable, Sendable {
+    var supportsRawProxy: Bool = false
+    var supportsTools: Bool = false
+    var supportsToolChoice: Bool = false
+    var supportsDeveloperRole: Bool = true
+    var supportsStructuredOutputs: Bool = false
+    var supportsReasoningEffort: Bool = false
+    var supportsMaxCompletionTokens: Bool = true
+    var supportsUsageInStreaming: Bool = true
+    var supportsVisionContentParts: Bool = false
+    var supportsStrictMode: Bool = false
+    var supportsStopSequences: Bool = false
+    var supportsSeed: Bool = false
+    var supportsPenalties: Bool = false
+    var supportsLogprobs: Bool = false
+    var supportsProviderThinkingControls: Bool = false
+
+    static let localText = APIEngineCapabilities()
+
+    static let localTextWithStructuredJSON = APIEngineCapabilities(
+        supportsStructuredOutputs: true
+    )
+
+    static let localTextWithTools = APIEngineCapabilities(
+        supportsTools: true,
+        supportsToolChoice: true
+    )
+
+    static let localTextWithToolsAndVision = APIEngineCapabilities(
+        supportsTools: true,
+        supportsToolChoice: true,
+        supportsVisionContentParts: true
+    )
+
+    static let rawProxy = APIEngineCapabilities(
+        supportsRawProxy: true,
+        supportsTools: true,
+        supportsToolChoice: true,
+        supportsDeveloperRole: true,
+        supportsStructuredOutputs: true,
+        supportsReasoningEffort: true,
+        supportsMaxCompletionTokens: true,
+        supportsUsageInStreaming: true,
+        supportsVisionContentParts: true,
+        supportsStrictMode: false,
+        supportsStopSequences: true,
+        supportsSeed: true,
+        supportsPenalties: true,
+        supportsLogprobs: true,
+        supportsProviderThinkingControls: true
+    )
 }
 
 struct APIHealthStatus: Codable, Equatable, Sendable {
@@ -215,11 +291,14 @@ enum APIServerContract {
     static func chatRequest(
         from openaiRequest: OpenAIChatRequest,
         fallbackLoraPath: String?,
-        contextSize: Int
+        contextSize: Int,
+        capabilities: APIEngineCapabilities = .localText
     ) throws -> ChatRequest {
         guard !openaiRequest.messages.isEmpty else {
             throw APIRequestValidationError.invalidField("messages", "must contain at least one message")
         }
+
+        try validateTopLevelOptions(openaiRequest, capabilities: capabilities)
 
         if let requestLora = openaiRequest.lora?.trimmingCharacters(in: .whitespacesAndNewlines),
            !requestLora.isEmpty {
@@ -229,15 +308,22 @@ enum APIServerContract {
             )
         }
 
-        let maxTokens = try validateMaxTokens(openaiRequest.max_tokens, contextSize: contextSize)
+        let maxTokens = try validateMaxTokens(
+            maxTokens: openaiRequest.max_tokens,
+            maxCompletionTokens: openaiRequest.max_completion_tokens,
+            contextSize: contextSize,
+            capabilities: capabilities
+        )
         let temperature = try validateTemperature(openaiRequest.temperature)
         let topP = try validateTopP(openaiRequest.top_p)
+        let tools = try toolDefinitions(from: openaiRequest, capabilities: capabilities)
+        let requiresJSON = try requiresJSONResponseFormat(
+            openaiRequest.response_format,
+            capabilities: capabilities
+        )
 
-        let messages = openaiRequest.messages.map { msg in
-            ChatMessage(
-                role: ChatMessage.Role(rawValue: msg.role) ?? .user,
-                content: msg.content
-            )
+        let messages = try openaiRequest.messages.map { msg in
+            try chatMessage(from: msg, capabilities: capabilities)
         }
 
         let lora: LoRA?
@@ -253,8 +339,259 @@ enum APIServerContract {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
-            lora: lora
+            lora: lora,
+            requiresJSON: requiresJSON,
+            tools: tools
         )
+    }
+
+    static func includeUsageInStreaming(
+        _ openaiRequest: OpenAIChatRequest,
+        capabilities: APIEngineCapabilities
+    ) throws -> Bool {
+        guard openaiRequest.stream_options?.include_usage == true else {
+            return false
+        }
+        guard capabilities.supportsUsageInStreaming else {
+            throw APIRequestValidationError.invalidField(
+                "stream_options.include_usage",
+                "this engine cannot emit usage chunks while streaming"
+            )
+        }
+        return true
+    }
+
+    private static func chatMessage(
+        from msg: OpenAIChatMessage,
+        capabilities: APIEngineCapabilities
+    ) throws -> ChatMessage {
+        let normalizedRole = msg.role.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let role: ChatMessage.Role
+        switch normalizedRole {
+        case "system":
+            role = .system
+        case "developer":
+            guard capabilities.supportsDeveloperRole else {
+                throw APIRequestValidationError.invalidField(
+                    "messages.role",
+                    "developer messages are not supported by this engine"
+                )
+            }
+            role = .system
+        case "user":
+            role = .user
+        case "assistant":
+            role = .assistant
+        case "tool":
+            role = .tool
+        default:
+            throw APIRequestValidationError.invalidField(
+                "messages.role",
+                "unsupported role '\(msg.role)'"
+            )
+        }
+
+        let imageURL = try firstImageURL(from: msg, capabilities: capabilities)
+        let content = renderMessageContent(msg)
+        return ChatMessage(
+            role: role,
+            content: content,
+            imageUrl: imageURL
+        )
+    }
+
+    private static func firstImageURL(
+        from msg: OpenAIChatMessage,
+        capabilities: APIEngineCapabilities
+    ) throws -> String? {
+        guard !msg.imageURLs.isEmpty else { return nil }
+        guard capabilities.supportsVisionContentParts else {
+            throw APIRequestValidationError.invalidField(
+                "messages.content",
+                "image content parts are not supported by this engine"
+            )
+        }
+        guard msg.imageURLs.count == 1 else {
+            throw APIRequestValidationError.invalidField(
+                "messages.content",
+                "only one image content part is currently supported"
+            )
+        }
+        return msg.imageURLs.first
+    }
+
+    private static func renderMessageContent(_ msg: OpenAIChatMessage) -> String {
+        guard msg.role.lowercased() == "assistant",
+              let toolCalls = msg.tool_calls,
+              !toolCalls.isEmpty else {
+            return msg.content
+        }
+        let renderedCalls = toolCalls.compactMap { call -> String? in
+            guard call.type == "function", let function = call.function else { return nil }
+            return "<|tool_call>call:\(function.name)\(function.arguments)<tool_call|>"
+        }
+        guard !renderedCalls.isEmpty else {
+            return msg.content
+        }
+        return ([msg.content] + renderedCalls)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    private static func validateTopLevelOptions(
+        _ request: OpenAIChatRequest,
+        capabilities: APIEngineCapabilities
+    ) throws {
+        if let n = request.n, n != 1 {
+            throw APIRequestValidationError.invalidField("n", "only n=1 is supported")
+        }
+        if request.store == true {
+            throw APIRequestValidationError.invalidField("store", "stored chat completions are not supported")
+        }
+        if let modalities = request.modalities,
+           modalities.contains(where: { $0 != "text" }) {
+            throw APIRequestValidationError.invalidField("modalities", "only text output is supported")
+        }
+        if request.audio != nil {
+            throw APIRequestValidationError.invalidField("audio", "audio output is not supported by /v1/chat/completions")
+        }
+        if request.prediction != nil {
+            throw APIRequestValidationError.invalidField("prediction", "predicted outputs are not supported")
+        }
+        if let stop = request.stop, !stop.values.isEmpty, !capabilities.supportsStopSequences {
+            throw APIRequestValidationError.invalidField("stop", "stop sequences are not supported by this engine")
+        }
+        if request.seed != nil, !capabilities.supportsSeed {
+            throw APIRequestValidationError.invalidField("seed", "deterministic seeds are not supported by this engine")
+        }
+        if let penalty = request.presence_penalty, penalty != 0, !capabilities.supportsPenalties {
+            throw APIRequestValidationError.invalidField("presence_penalty", "presence penalties are not supported by this engine")
+        }
+        if let penalty = request.frequency_penalty, penalty != 0, !capabilities.supportsPenalties {
+            throw APIRequestValidationError.invalidField("frequency_penalty", "frequency penalties are not supported by this engine")
+        }
+        if request.logprobs == true, !capabilities.supportsLogprobs {
+            throw APIRequestValidationError.invalidField("logprobs", "token log probabilities are not supported by this engine")
+        }
+        if request.top_logprobs != nil, !capabilities.supportsLogprobs {
+            throw APIRequestValidationError.invalidField("top_logprobs", "token log probabilities are not supported by this engine")
+        }
+        if request.reasoning_effort != nil, !capabilities.supportsReasoningEffort {
+            throw APIRequestValidationError.invalidField("reasoning_effort", "reasoning effort is not supported by this engine")
+        }
+        if request.think != nil || request.thinking != nil {
+            guard capabilities.supportsProviderThinkingControls else {
+                throw APIRequestValidationError.invalidField(
+                    "thinking",
+                    "provider thinking controls are not supported by this engine"
+                )
+            }
+        }
+    }
+
+    private static func toolDefinitions(
+        from request: OpenAIChatRequest,
+        capabilities: APIEngineCapabilities
+    ) throws -> [ToolDefinition]? {
+        guard let tools = request.tools, !tools.isEmpty else {
+            return nil
+        }
+        guard capabilities.supportsTools else {
+            throw APIRequestValidationError.invalidField("tools", "tools are not supported by this engine")
+        }
+
+        switch request.tool_choice {
+        case nil, .mode("auto")?, .mode("required")?:
+            break
+        case .mode("none")?:
+            return nil
+        case .function?, .custom?:
+            throw APIRequestValidationError.invalidField(
+                "tool_choice",
+                "specific tool forcing is not supported by this engine"
+            )
+        case .mode(let value)?:
+            throw APIRequestValidationError.invalidField("tool_choice", "unsupported mode '\(value)'")
+        }
+
+        return try tools.map { try toolDefinition(from: $0) }
+    }
+
+    private static func toolDefinition(from tool: OpenAIChatTool) throws -> ToolDefinition {
+        guard tool.type == "function", let function = tool.function else {
+            throw APIRequestValidationError.invalidField("tools", "only function tools are supported")
+        }
+
+        let schema = function.parameters?.objectValue ?? [:]
+        let properties = schema["properties"]?.objectValue ?? [:]
+        var converted: [String: ToolParameterProperty] = [:]
+        for (name, rawProperty) in properties {
+            guard let property = rawProperty.objectValue else { continue }
+            let type = property["type"]?.stringValue ?? "string"
+            let description = property["description"]?.stringValue ?? ""
+            converted[name] = ToolParameterProperty(type: type, description: description)
+        }
+        let required = schema["required"]?.arrayValue?.compactMap(\.stringValue) ?? []
+
+        return ToolDefinition(
+            name: function.name,
+            description: function.description ?? "",
+            parameters: converted,
+            required: required
+        )
+    }
+
+    private static func requiresJSONResponseFormat(
+        _ responseFormat: OpenAIResponseFormat?,
+        capabilities: APIEngineCapabilities
+    ) throws -> Bool {
+        guard let responseFormat else { return false }
+        switch responseFormat.type {
+        case "text":
+            return false
+        case "json_object":
+            guard capabilities.supportsStructuredOutputs else {
+                throw APIRequestValidationError.invalidField(
+                    "response_format",
+                    "JSON mode is not supported by this engine"
+                )
+            }
+            return true
+        case "json_schema":
+            guard capabilities.supportsStrictMode else {
+                throw APIRequestValidationError.invalidField(
+                    "response_format",
+                    "strict JSON schema outputs are not supported by this engine"
+                )
+            }
+            return true
+        default:
+            throw APIRequestValidationError.invalidField(
+                "response_format",
+                "unsupported response format '\(responseFormat.type)'"
+            )
+        }
+    }
+
+    private static func validateMaxTokens(
+        maxTokens: Int?,
+        maxCompletionTokens: Int?,
+        contextSize: Int,
+        capabilities: APIEngineCapabilities
+    ) throws -> Int {
+        if maxCompletionTokens != nil, !capabilities.supportsMaxCompletionTokens {
+            throw APIRequestValidationError.invalidField(
+                "max_completion_tokens",
+                "this engine does not support max_completion_tokens"
+            )
+        }
+        if let maxTokens, let maxCompletionTokens, maxTokens != maxCompletionTokens {
+            throw APIRequestValidationError.invalidField(
+                "max_completion_tokens",
+                "must match max_tokens when both are provided"
+            )
+        }
+        return try validateMaxTokens(maxCompletionTokens ?? maxTokens, contextSize: contextSize)
     }
 
     static func acceptsJSONContentType(_ rawValue: String?) -> Bool {
@@ -268,6 +605,15 @@ enum APIServerContract {
             return false
         }
         return mediaType == "application/json" || mediaType.hasSuffix("+json")
+    }
+
+    static func isStreamingStatusMessage(_ message: String) -> Bool {
+        switch message {
+        case "Generating...", "Generating response", "Retrying generation", "DS4 chat completion":
+            return true
+        default:
+            return false
+        }
     }
 
     private static func validateMaxTokens(_ rawValue: Int?, contextSize: Int) throws -> Int {
@@ -322,6 +668,7 @@ actor CodeGenServer {
     private let mlxGenerator: Flux2KleinGenerator?
     private let gemma4Generator: Gemma4Generator?
     private let q35Generator: Q35Generator?
+    private let deepseekV4FlashGenerator: DeepseekV4FlashGenerator?
     private let modelPath: String?
     private let fallbackLoraPath: String?
     private let modelId: String
@@ -355,6 +702,8 @@ actor CodeGenServer {
                     return ModelResolver.ModelID.q35.rawValue
                 case .textCode:
                     return CodeGenResources.defaultModelId
+                case .textChatDeepseekV4Flash:
+                    return DeepseekV4FlashResources.defaultModelId
                 }
             }()
 
@@ -365,6 +714,7 @@ actor CodeGenServer {
             self.mlxGenerator = nil
             self.gemma4Generator = nil
             self.q35Generator = nil
+            self.deepseekV4FlashGenerator = nil
             self.useStandaloneModel = false
 
             // Pre-load model
@@ -376,6 +726,7 @@ actor CodeGenServer {
             self.mlxGenerator = Flux2KleinGenerator()
             self.gemma4Generator = nil
             self.q35Generator = nil
+            self.deepseekV4FlashGenerator = nil
             // Check if the resolved path is a standalone MeBot Instruct model
             self.useStandaloneModel = MeBotModelCatalog.resolveModelPath() != nil
                 && modelPath == MeBotModelCatalog.resolveModelPath()
@@ -388,6 +739,7 @@ actor CodeGenServer {
             self.mlxGenerator = nil
             self.gemma4Generator = generator
             self.q35Generator = nil
+            self.deepseekV4FlashGenerator = nil
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
@@ -399,6 +751,19 @@ actor CodeGenServer {
             self.mlxGenerator = nil
             self.gemma4Generator = nil
             self.q35Generator = generator
+            self.deepseekV4FlashGenerator = nil
+            self.useStandaloneModel = false
+
+            try await generator.prepare(modelPath: modelPath) { progress in
+                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+            }
+        case .textChatDeepseekV4Flash:
+            let generator = DeepseekV4FlashGenerator()
+            self.llamaGenerator = nil
+            self.mlxGenerator = nil
+            self.gemma4Generator = nil
+            self.q35Generator = nil
+            self.deepseekV4FlashGenerator = generator
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
@@ -488,6 +853,14 @@ actor CodeGenServer {
             return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
         }
 
+        if engine == .textChatDeepseekV4Flash {
+            do {
+                return try await proxyDeepseekV4FlashChatCompletions(body: body, contentType: request.headers[.contentType])
+            } catch {
+                return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
+            }
+        }
+
         let openaiRequest: OpenAIChatRequest
         do {
             openaiRequest = try JSONDecoder().decode(OpenAIChatRequest.self, from: body)
@@ -500,7 +873,8 @@ actor CodeGenServer {
             chatRequest = try APIServerContract.chatRequest(
                 from: openaiRequest,
                 fallbackLoraPath: fallbackLoraPath,
-                contextSize: contextSize
+                contextSize: contextSize,
+                capabilities: engine.openAICompatibility
             )
         } catch {
             return makeErrorResponse(
@@ -512,10 +886,20 @@ actor CodeGenServer {
 
         do {
             if openaiRequest.stream == true {
-                return try await handleStreamingChat(chatRequest)
+                let includeUsage = try APIServerContract.includeUsageInStreaming(
+                    openaiRequest,
+                    capabilities: engine.openAICompatibility
+                )
+                return try await handleStreamingChat(chatRequest, includeUsage: includeUsage)
             } else {
                 return try await handleNonStreamingChat(chatRequest)
             }
+        } catch let error as APIRequestValidationError {
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
         } catch {
             return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
         }
@@ -532,8 +916,12 @@ actor CodeGenServer {
             choices: [
                 OpenAIChatChoice(
                     index: 0,
-                    message: OpenAIChatMessage(role: "assistant", content: result.response),
-                    finish_reason: "stop"
+                    message: OpenAIChatMessage(
+                        role: "assistant",
+                        content: result.response,
+                        tool_calls: openAIToolCalls(from: result.toolCalls)
+                    ),
+                    finish_reason: result.toolCalls?.isEmpty == false ? "tool_calls" : "stop"
                 )
             ],
             usage: OpenAIUsage(
@@ -551,7 +939,57 @@ actor CodeGenServer {
         )
     }
 
-    private func handleStreamingChat(_ request: ChatRequest) async throws -> Response {
+    private func proxyDeepseekV4FlashChatCompletions(body: ByteBuffer, contentType: String?) async throws -> Response {
+        guard let generator = deepseekV4FlashGenerator else {
+            throw DeepseekV4FlashError.serverFailedToStart("generator not initialized")
+        }
+        let upstreamURL = try await generator.chatCompletionsURL(modelPath: modelPath, progressHandler: nil)
+        var requestBody = body
+        let data = requestBody.readData(length: requestBody.readableBytes) ?? Data()
+
+        var upstreamRequest = URLRequest(url: upstreamURL)
+        upstreamRequest.httpMethod = "POST"
+        upstreamRequest.setValue(contentType ?? "application/json", forHTTPHeaderField: "Content-Type")
+        upstreamRequest.httpBody = data
+        upstreamRequest.timeoutInterval = 600
+
+        let (upstreamBytes, response) = try await URLSession.shared.bytes(for: upstreamRequest)
+        let http = response as? HTTPURLResponse
+        var headers: HTTPFields = [:]
+        headers[.contentType] = http?.value(forHTTPHeaderField: "Content-Type") ?? "application/json"
+        if headers[.contentType]?.lowercased().hasPrefix("text/event-stream") == true {
+            headers[.init("Cache-Control")!] = "no-cache"
+            headers[.connection] = "keep-alive"
+        }
+        let stream = AsyncStream<ByteBuffer> { continuation in
+            Task {
+                var buffer = Data()
+                buffer.reserveCapacity(4_096)
+                do {
+                    for try await byte in upstreamBytes {
+                        buffer.append(byte)
+                        if byte == 10 || buffer.count >= 4_096 {
+                            continuation.yield(ByteBuffer(data: buffer))
+                            buffer.removeAll(keepingCapacity: true)
+                        }
+                    }
+                    if !buffer.isEmpty {
+                        continuation.yield(ByteBuffer(data: buffer))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish()
+                }
+            }
+        }
+        return Response(
+            status: .init(code: http?.statusCode ?? 502),
+            headers: headers,
+            body: .init(asyncSequence: stream)
+        )
+    }
+
+    private func handleStreamingChat(_ request: ChatRequest, includeUsage: Bool) async throws -> Response {
         let id = "chatcmpl-\(UUID().uuidString.prefix(8))"
         let encoder = JSONEncoder()
 
@@ -561,8 +999,15 @@ actor CodeGenServer {
         // Start generation in a detached task
         Task { [self, modelId] in
             do {
-                _ = try await self.generateChat(request) { progress in
-                    if progress.stage == .generating, let token = progress.message {
+                let streamedContent = StreamingContentTracker()
+                let shouldBufferForToolCalls = request.tools?.isEmpty == false
+                let result = try await self.generateChat(request) { progress in
+                    guard !shouldBufferForToolCalls else { return }
+                    if progress.stage == .generating,
+                       let token = progress.message,
+                       !token.isEmpty,
+                       !APIServerContract.isStreamingStatusMessage(token) {
+                        streamedContent.markStreamed()
                         let chunk = OpenAIChatResponse(
                             id: id,
                             object: "chat.completion.chunk",
@@ -583,6 +1028,46 @@ actor CodeGenServer {
                         }
                     }
                 }
+                if let toolCalls = openAIToolCalls(from: result.toolCalls), !toolCalls.isEmpty {
+                    let chunk = OpenAIChatResponse(
+                        id: id,
+                        object: "chat.completion.chunk",
+                        created: Int(Date().timeIntervalSince1970),
+                        model: modelId,
+                        choices: [
+                            OpenAIChatChoice(
+                                index: 0,
+                                delta: OpenAIChatDelta(
+                                    role: "assistant",
+                                    tool_calls: toolCalls.enumerated().map(OpenAIChatToolCallDelta.init(indexAndToolCall:))
+                                ),
+                                finish_reason: nil
+                            )
+                        ]
+                    )
+                    if let data = try? encoder.encode(chunk),
+                       let json = String(data: data, encoding: .utf8) {
+                        continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                    }
+                } else if !streamedContent.didStream, !result.response.isEmpty {
+                    let chunk = OpenAIChatResponse(
+                        id: id,
+                        object: "chat.completion.chunk",
+                        created: Int(Date().timeIntervalSince1970),
+                        model: modelId,
+                        choices: [
+                            OpenAIChatChoice(
+                                index: 0,
+                                delta: OpenAIChatDelta(content: result.response),
+                                finish_reason: nil
+                            )
+                        ]
+                    )
+                    if let data = try? encoder.encode(chunk),
+                       let json = String(data: data, encoding: .utf8) {
+                        continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                    }
+                }
 
                 // Final chunk with finish_reason
                 let finalChunk = OpenAIChatResponse(
@@ -594,13 +1079,32 @@ actor CodeGenServer {
                         OpenAIChatChoice(
                             index: 0,
                             delta: OpenAIChatDelta(),
-                            finish_reason: "stop"
+                            finish_reason: result.toolCalls?.isEmpty == false ? "tool_calls" : "stop"
                         )
                     ]
                 )
                 if let data = try? encoder.encode(finalChunk),
                    let json = String(data: data, encoding: .utf8) {
                     continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                }
+
+                if includeUsage {
+                    let usageChunk = OpenAIChatResponse(
+                        id: id,
+                        object: "chat.completion.chunk",
+                        created: Int(Date().timeIntervalSince1970),
+                        model: modelId,
+                        choices: [],
+                        usage: OpenAIUsage(
+                            prompt_tokens: 0,
+                            completion_tokens: result.tokensGenerated,
+                            total_tokens: result.tokensGenerated
+                        )
+                    )
+                    if let data = try? encoder.encode(usageChunk),
+                       let json = String(data: data, encoding: .utf8) {
+                        continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                    }
                 }
 
                 continuation.yield(ByteBuffer(string: "data: [DONE]\n\n"))
@@ -627,6 +1131,24 @@ actor CodeGenServer {
             ],
             body: .init(asyncSequence: stream)
         )
+    }
+
+    private nonisolated func openAIToolCalls(from toolCalls: [ToolCall]?) -> [OpenAIChatToolCall]? {
+        guard let toolCalls, !toolCalls.isEmpty else { return nil }
+        return toolCalls.enumerated().map { index, call in
+            OpenAIChatToolCall(
+                id: "call_\(index)_\(UUID().uuidString.prefix(8))",
+                function: OpenAIChatToolCallFunction(
+                    name: call.name,
+                    arguments: jsonString(from: call.arguments)
+                )
+            )
+        }
+    }
+
+    private nonisolated func jsonString(from arguments: [String: String]) -> String {
+        let data = (try? JSONEncoder().encode(arguments)) ?? Data("{}".utf8)
+        return String(data: data, encoding: .utf8) ?? "{}"
     }
 
     private func generateChat(
@@ -658,6 +1180,11 @@ actor CodeGenServer {
         case .textChatQ35:
             guard let generator = q35Generator else {
                 throw Q35Error.modelNotLoaded
+            }
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatDeepseekV4Flash:
+            guard let generator = deepseekV4FlashGenerator else {
+                throw DeepseekV4FlashError.serverFailedToStart("generator not initialized")
             }
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }
@@ -712,5 +1239,22 @@ actor APIRateLimiter {
         }
         requestTimes.append(now)
         return true
+    }
+}
+
+final class StreamingContentTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var streamed = false
+
+    var didStream: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return streamed
+    }
+
+    func markStreamed() {
+        lock.lock()
+        streamed = true
+        lock.unlock()
     }
 }

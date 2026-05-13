@@ -164,7 +164,7 @@ public actor Q35Generator: ChatGenerator {
 
         var promptTokens = tokenizerAndTemplate.encodeForGeneration(
             messages: messages,
-            tools: nil,
+            tools: request.tools,
             addGenerationPrompt: true,
             includeThinking: request.showThinking,
             maxLength: effectiveContext
@@ -261,6 +261,10 @@ public actor Q35Generator: ChatGenerator {
 
         let decoded = tokenizerAndTemplate.decode(tokens: generated)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
+            let parsed = Gemma4ToolParser.parseToolCalls(decoded)
+            return parsed.isEmpty ? nil : parsed
+        }() : nil
 
         return ChatResponse(
             response: decoded,
@@ -269,7 +273,8 @@ public actor Q35Generator: ChatGenerator {
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
                 decodeSeconds: decodeSeconds
-            )
+            ),
+            toolCalls: toolCalls
         )
     }
 

@@ -396,7 +396,6 @@ final class MereRunController: ObservableObject {
     private var activeRunPreview = ""
     private var outputWatchTask: Task<Void, Never>?
     private var queuedRuns: [StudioRunRequest] = []
-    private var didAttemptAutomaticCLIInstall = false
 
     private static let stdoutBufferByteLimit = 32 * 1024
     private static let stderrBufferByteLimit = 32 * 1024
@@ -448,13 +447,19 @@ final class MereRunController: ObservableObject {
     }
 
     func refreshResolvedCLI() {
-        if cliPath.isBlank, !didAttemptAutomaticCLIInstall {
-            didAttemptAutomaticCLIInstall = true
-            handleAutomaticCLIInstall(CLIBootstrapInstaller.installBundledCLIIfNeeded())
-        }
-
         let launch = CLIResolver.resolve(customPath: cliPath)
         resolvedCLI = displayDescription(for: launch)
+    }
+
+    func installTerminalCLI() {
+        let outcome = CLIBootstrapInstaller.installBundledCLIIfNeeded()
+        handleCLIInstall(outcome)
+        refreshResolvedCLI()
+    }
+
+    func installCodexSkills() {
+        let outcome = CodexSkillInstaller.installBundledSkillsIfAvailable()
+        handleSkillInstall(outcome)
     }
 
     func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
@@ -884,15 +889,38 @@ final class MereRunController: ObservableObject {
         status = "Generated: \(detectedOutput.lastPathComponent)"
     }
 
-    private func handleAutomaticCLIInstall(_ outcome: CLIBootstrapInstallOutcome) {
+    private func handleCLIInstall(_ outcome: CLIBootstrapInstallOutcome) {
         switch outcome {
         case .installed(let url):
             status = "CLI installed"
             append("Installed Terminal CLI at \(url.abbreviatedForDisplay).", stream: .system)
         case .failed(let message):
-            append("Terminal CLI install skipped: \(message)", stream: .stderr)
-        case .alreadyInstalled, .skippedNoBundledCLI:
-            break
+            status = "CLI install failed"
+            append("Terminal CLI install failed: \(message)", stream: .stderr)
+        case .alreadyInstalled(let url):
+            status = "CLI already installed"
+            append("Terminal CLI already installed at \(url.abbreviatedForDisplay).", stream: .system)
+        case .skippedNoBundledCLI:
+            status = "No bundled CLI"
+            append("Terminal CLI install skipped: bundled CLI payload was not found.", stream: .stderr)
+        }
+    }
+
+    private func handleSkillInstall(_ outcome: CodexSkillInstallOutcome) {
+        switch outcome {
+        case .installed(let names, let destination):
+            status = "Skills installed"
+            let noun = names.count == 1 ? "skill" : "skills"
+            append(
+                "Installed Codex \(noun) \(names.joined(separator: ", ")) at \(destination.abbreviatedForDisplay).",
+                stream: .system
+            )
+        case .skippedNoBundledSkills:
+            status = "No bundled skills"
+            append("Codex skill install skipped: bundled skills were not found.", stream: .stderr)
+        case .failed(let message):
+            status = "Skill install failed"
+            append("Codex skill install failed: \(message)", stream: .stderr)
         }
     }
 

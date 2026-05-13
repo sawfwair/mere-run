@@ -6,7 +6,7 @@ Choose a guided, bring-your-own-agent, or manual setup path for a new mere.run i
 
 ## Required Models
 
-No model is required to view the plan. Agent setup may install or serve `text-code-qwen3` or `text-agent-qwen35-9b` depending on hardware recommendations.
+No model is required to view the plan. Agent setup selects this Mac's supported tier; on 96 GB+ Apple Silicon Macs that is `text-agent-deepseek-v4-flash`. Qwen/Q35 agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash.
 
 ## Install And Check
 
@@ -32,7 +32,7 @@ mere.run model capabilities --recommended
 
 - Use interactive `mere.run setup` for humans.
 - Use `--mode manual --dry-run` for docs or scripts.
-- Use agent mode only on Apple Silicon macOS with a supported model.
+- Use agent mode only on Apple Silicon macOS with a supported model. Prefer `--agent-model tier` unless the user asks for a smaller comparison model.
 
 ## Examples
 
@@ -47,7 +47,7 @@ mere.run setup --mode agent --agent-model small --install --start
 ## Iteration Tips
 
 - Run capabilities first when the user is unsure what their Mac can run.
-- Start with the small agent model on lower-memory machines.
+- Start with the small agent model on lower-memory machines; keep DeepSeek V4 Flash as the preferred tier/premier agent on 96 GB+ Macs.
 - Use BYOA when the user already prefers Claude, Codex, or another local tool.
 
 ## Troubleshooting

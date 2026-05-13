@@ -38,7 +38,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-nano`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`
@@ -61,9 +61,9 @@ Shows the canonical managed model table and installed status.
 
 ### `mere.run model capabilities`
 
-Summarizes the current Mac, the managed models it can run, what each model
-does, and the recommended first setup package. Pass `--all` to include models
-that are blocked by Apple Silicon or unified-memory requirements.
+Summarizes the current Mac, the managed models it can run, the preferred
+setup-agent tier, and cross-modality starter coverage. Pass `--all` to include
+models that are blocked by Apple Silicon or unified-memory requirements.
 
 ### `mere.run model info`
 
@@ -81,8 +81,9 @@ when you intentionally accept that risk or are using external hardware.
 Guided onboarding for the shared model store and first local agent. The command
 offers a Pi-powered Mere agent, a BYOA prompt for Claude/Codex, or manual
 commands. The small local agent model is `text-agent-qwen35-9b`; hardware-tier
-setup can select Q35 nano, Qwen3-Coder Next, or Hugging Face-backed premier
-Qwen3.5-122B-A10B tiers on large-memory Macs.
+setup can select Q35 nano, Qwen3-Coder Next, or DeepSeek V4 Flash. On 96 GB+
+Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed
+setup-agent tier; Q35/Qwen agent models are alternatives, not upgrades.
 
 ### `mere.run model remove`
 

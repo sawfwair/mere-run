@@ -45,6 +45,7 @@ let package = Package(
         "ACEStep/Model/README.md",
         "ACEStep/VAE/README.md",
         "CodeGen/README.md",
+        "DeepseekV4Flash/README.md",
         "FalconPerception/README.md",
         "Flux2Klein/README.md",
         "Flux2Klein/Model/Transformer/README.md",

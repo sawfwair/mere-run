@@ -17,6 +17,7 @@ embeddings, and PII anonymization.
 - `text-chat-gemma4`
 - `text-chat-q35`
 - `text-chat-q35-nano`
+- `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot`
 - `text-chat-psi-agent`
 

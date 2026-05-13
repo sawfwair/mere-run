@@ -1068,6 +1068,26 @@ struct MereRunSettingsView: View {
             Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+            EditorSection("Install") {
+                HStack(spacing: 10) {
+                    Button {
+                        controller.installTerminalCLI()
+                    } label: {
+                        Label("Install CLI", systemImage: "terminal")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button {
+                        controller.installCodexSkills()
+                    } label: {
+                        Label("Install Skill", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                Text("CLI installs from the app bundle without sudo. Skill install copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
             Spacer()
         }
         .padding(22)
