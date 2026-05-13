@@ -8,6 +8,17 @@ The format is based on Keep a Changelog.
 
 No notable changes yet.
 
+## 0.4.14 - 2026-05-13
+
+### Added
+
+- added Studio run queuing so new runs can be queued behind an active process instead of replacing the stop action.
+- added live output publishing for running Studio jobs so generated files can appear in the library before the process exits.
+
+### Changed
+
+- refreshed public README and docs coverage for release installs, command guides, HiDream O1, anonymization, grounding, live camera tracking, and managed model install paths.
+
 ## 0.4.13 - 2026-05-12
 
 ### Fixed
