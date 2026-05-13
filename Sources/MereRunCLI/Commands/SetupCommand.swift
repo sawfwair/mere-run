@@ -270,7 +270,7 @@ struct Setup: AsyncParsableCommand {
             }
         }
         CLIStderr.write("[setup] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
-        try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: 60)
+        try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
         CLIStderr.write("[setup] Local API is ready. Opening Pi in Terminal.app.\n")
         try runPi(
             piURL: piURL,
@@ -428,6 +428,15 @@ struct SetupAgentRuntime {
     let engine: APIEngine
     let providerModel: PiProviderModel
 
+    var healthTimeoutSeconds: TimeInterval {
+        switch engine {
+        case .textChatDeepseekV4Flash:
+            return DeepseekV4FlashResources.serverStartupTimeoutSeconds + 30
+        default:
+            return 60
+        }
+    }
+
     static func recommendation(forManagedModelID modelID: String) -> MereRunAgentModelRecommendation? {
         let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return MereRunAgentModelCatalog.allTierRecommendations(
@@ -490,7 +499,7 @@ struct SetupAgentRuntime {
         case .textChatQ35:
             return Q35Resources.defaultContextLength
         case .deepseekV4Flash:
-            return 65536
+            return DeepseekV4FlashResources.defaultContextLength
         case .textCode, .sourceConfigured:
             return 32768
         }

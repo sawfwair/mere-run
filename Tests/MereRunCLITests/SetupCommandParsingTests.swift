@@ -53,6 +53,29 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertNotEqual(providerModel.id, CodeGenResources.defaultModelId)
     }
 
+    func testDeepseekProviderMatchesServedContextAndStartupTimeout() throws {
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog.recommendation(
+                for: .premier,
+                on: MereRunMachineProfile(
+                    physicalMemoryBytes: 128 * 1_073_741_824,
+                    processorName: "M3 Ultra",
+                    isAppleSiliconMac: true
+                )
+            )
+        )
+
+        let runtime = try SetupAgentRuntime.runtime(for: recommendation)
+        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+
+        XCTAssertEqual(providerModel.contextWindow, DeepseekV4FlashResources.defaultContextLength)
+        XCTAssertEqual(providerModel.maxTokens, DeepseekV4FlashResources.defaultContextLength)
+        XCTAssertEqual(
+            runtime.healthTimeoutSeconds,
+            DeepseekV4FlashResources.serverStartupTimeoutSeconds + 30
+        )
+    }
+
     func testPiProviderCanBeWrittenToIsolatedHome() throws {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-pi-home-\(UUID().uuidString)", isDirectory: true)

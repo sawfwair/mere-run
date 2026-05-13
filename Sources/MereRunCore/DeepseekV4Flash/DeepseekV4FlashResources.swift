@@ -12,6 +12,8 @@ public struct DeepseekV4FlashResources: Sendable, Hashable {
     public static let defaultModelId = "text-agent-deepseek-v4-flash"
     public static let defaultRepoId = "antirez/deepseek-v4-gguf"
     public static let defaultRevision = "main"
+    public static let defaultContextLength = 65_536
+    public static let serverStartupTimeoutSeconds: TimeInterval = 300
 
     /// Imatrix-tuned q2 GGUF: ~81 GB. **The upstream README marks this as the
     /// preferred quant for 96/128 GB Macs ("USE THE IMATRIX VERSIONS BELOW")**,

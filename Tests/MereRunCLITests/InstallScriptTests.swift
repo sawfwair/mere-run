@@ -144,6 +144,43 @@ final class InstallScriptTests: XCTestCase {
         )
     }
 
+    func testInstallerCopiesDS4RuntimeWhenPresent() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let ds4URL = fixture.sourceDirURL
+            .appendingPathComponent("vendor", isDirectory: true)
+            .appendingPathComponent("ds4", isDirectory: true)
+        let metalURL = ds4URL.appendingPathComponent("metal", isDirectory: true)
+        try FileManager.default.createDirectory(at: metalURL, withIntermediateDirectories: true)
+        let serverURL = ds4URL.appendingPathComponent("ds4-server", isDirectory: false)
+        try "fake ds4-server".write(to: serverURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: serverURL.path)
+        try "fake shader".write(
+            to: metalURL.appendingPathComponent("dense.metal", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try runInstaller(
+            scriptURL: fixture.installScriptURL,
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false)
+        )
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(result.combinedOutput.contains("installing DS4 inference binaries"))
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("vendor/ds4/ds4-server").path
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("vendor/ds4/metal/dense.metal").path
+            )
+        )
+    }
+
     private func makeInstallerFixture() throws -> InstallerFixture {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory

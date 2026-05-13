@@ -199,7 +199,7 @@ public enum MereRunAgentModelCatalog {
             displayName: "DeepSeek V4 Flash IQ2 imatrix",
             summary: "Premier 284B MoE agent tier (~81 GB imatrix-tuned GGUF, the upstream "
                 + "README's preferred quant) for 96 GB and larger Macs. Runs on the bundled "
-                + "ds4-server engine with 1M-token context.",
+                + "ds4-server engine with a 65,536-token configured context.",
             minimumUnifiedMemoryGB: 96,
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .deepseekV4Flash,

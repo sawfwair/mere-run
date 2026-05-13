@@ -165,7 +165,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             "-m", ggufURL.path,
             "--host", "127.0.0.1",
             "--port", String(chosenPort),
-            "--ctx", "65536",
+            "--ctx", String(DeepseekV4FlashResources.defaultContextLength),
             "--kv-disk-dir", kvDir.path,
             "--kv-disk-space-mb", "8192",
         ]
@@ -219,7 +219,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
     }
 
     private func waitUntilReady(port: Int, process: Process) async throws {
-        let deadline = Date().addingTimeInterval(300) // 5 minutes to map 81 GB
+        let deadline = Date().addingTimeInterval(DeepseekV4FlashResources.serverStartupTimeoutSeconds)
         let url = URL(string: "http://127.0.0.1:\(port)/v1/models")!
         var request = URLRequest(url: url)
         request.timeoutInterval = 5

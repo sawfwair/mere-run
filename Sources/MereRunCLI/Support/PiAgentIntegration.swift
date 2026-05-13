@@ -83,8 +83,8 @@ struct PiProviderModel {
     static let deepseekV4Flash = PiProviderModel(
         id: DeepseekV4FlashResources.defaultModelId,
         name: "DeepSeek V4 Flash (mere.run)",
-        contextWindow: 100_000,
-        maxTokens: 384_000,
+        contextWindow: DeepseekV4FlashResources.defaultContextLength,
+        maxTokens: DeepseekV4FlashResources.defaultContextLength,
         reasoning: true,
         supportsStore: false,
         supportsDeveloperRole: false,

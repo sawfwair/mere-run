@@ -277,7 +277,7 @@ struct AgentStart: AsyncParsableCommand {
             let startedServer = try startAPIServer(modelURL: modelURL, engine: runtime.engine)
             serverProcess = startedServer.process
             CLIStderr.write("[agent] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
-            try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: 60)
+            try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
             CLIStderr.write("[agent] Local API is ready. Opening Pi in Terminal.app.\n")
         }
         defer {
