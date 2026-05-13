@@ -358,12 +358,17 @@ struct AgentStart: AsyncParsableCommand {
         if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return model
         }
+        // Prefer the highest-tier model that's actually installed — that
+        // reflects what the user has chosen to pull onto this machine. The
+        // persisted provider.json is only used as a tiebreaker / hint when no
+        // installed model is found, because it can go stale across upgrades
+        // and pin you to a lower tier than your current hardware supports.
+        if let installed = Self.bestInstalledStartableAgentModel(on: MereRunMachineProfile.current) {
+            return installed.id
+        }
         if let configured = PiAgentIntegration.readProviderConfiguration()?.modelID,
            Self.isInstalledStartableAgentModel(configured, on: MereRunMachineProfile.current) {
             return configured
-        }
-        if let installed = Self.bestInstalledStartableAgentModel(on: MereRunMachineProfile.current) {
-            return installed.id
         }
         guard let recommendation = MereRunAgentModelCatalog.fallbackStartableRecommendation(
             on: MereRunMachineProfile.current
