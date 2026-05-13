@@ -414,7 +414,7 @@ struct AgentStart: AsyncParsableCommand {
     private func startAPIServer(modelURL: URL, engine: APIEngine) throws -> (process: Process, logURL: URL) {
         let log = try AgentServerLog.makeLogHandle(prefix: "api-server")
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+        process.executableURL = Self.currentExecutableURL()
         process.arguments = [
             "api",
             "serve",
@@ -433,6 +433,40 @@ struct AgentStart: AsyncParsableCommand {
         try process.run()
         CLIStderr.write("[agent] Started mere.run API server on \(host):\(port)\n")
         return (process, log.url)
+    }
+
+    /// Resolve the current `mere.run` executable's absolute path so we can
+    /// re-spawn it as the API server. `CommandLine.arguments[0]` is just the
+    /// basename when invoked from $PATH, which makes `Process` try a relative
+    /// lookup and fail. `Bundle.main.executablePath` is reliable on macOS.
+    private static func currentExecutableURL() -> URL {
+        if let path = Bundle.main.executablePath {
+            return URL(fileURLWithPath: path)
+        }
+        // Fallbacks: $PATH search, then argv[0] as-is.
+        let argv0 = CommandLine.arguments.first ?? "mere.run"
+        if !argv0.hasPrefix("/"),
+           let resolved = which(argv0) {
+            return resolved
+        }
+        return URL(fileURLWithPath: argv0)
+    }
+
+    private static func which(_ name: String) -> URL? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = [name]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        try? process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let raw = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !raw.isEmpty else { return nil }
+        return URL(fileURLWithPath: raw)
     }
 
     private func runPi(piURL: URL, modelID: String) throws {
