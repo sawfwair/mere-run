@@ -36,8 +36,8 @@ struct AgentOnboard: AsyncParsableCommand {
     @Option(name: [.long], help: "Local API port used in the Pi provider extension.")
     var port: Int = 8080
 
-    @Option(name: [.long], help: "Model id to expose in the Pi provider extension.")
-    var model: String = CodeGenResources.defaultModelId
+    @Option(name: [.long], help: "Model id to expose in the Pi provider extension. Defaults to this machine's recommended tier (DS4 on 96 GB+).")
+    var model: String?
 
     @Flag(name: [.short, .long], help: "Suppress progress output for installs.")
     var quiet: Bool = false
@@ -104,13 +104,14 @@ struct AgentOnboard: AsyncParsableCommand {
         }
 
         if configurePi {
-            let providerModel = try providerModel(for: model)
-        let extensionURL = try PiAgentIntegration.writeLocalProviderExtension(
-            host: host,
-            port: port,
-            model: providerModel,
-            homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory()
-        )
+            let resolvedModelID = model ?? selectedAgentID
+            let providerModel = try providerModel(for: resolvedModelID)
+            let extensionURL = try PiAgentIntegration.writeLocalProviderExtension(
+                host: host,
+                port: port,
+                model: providerModel,
+                homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory()
+            )
             print("\nPi provider configured")
             print("  extension: \(extensionURL.path)")
             print("  provider: mere-run")
@@ -215,6 +216,12 @@ struct AgentStart: AsyncParsableCommand {
     @Flag(name: [.long], help: "Start even if the local hardware support catalog marks the selected model unsupported.")
     var allowUnsupported: Bool = false
 
+    @Flag(name: [.long], help: "Refuse to download a missing GGUF or install Pi. By default, agent start auto-fetches both.")
+    var noBootstrap: Bool = false
+
+    @Flag(name: [.short, .long], help: "Suppress bootstrap (model pull / Pi install) progress output.")
+    var quiet: Bool = false
+
     func run() async throws {
         let modelID = try resolvedModelID()
         let runtime = try SetupAgentRuntime.runtime(forManagedModelID: modelID)
@@ -229,14 +236,25 @@ struct AgentStart: AsyncParsableCommand {
             )
         }
 
-        guard let modelURL = spec.managedRuntimeURL() else {
+        let modelURL: URL
+        if let existing = spec.managedRuntimeURL() {
+            modelURL = existing
+        } else if noBootstrap {
             throw ValidationError(
-                "Model \(spec.id) is not installed. Run `mere.run model pull \(spec.id)` first."
+                "Model \(spec.id) is not installed. Run `mere.run model pull \(spec.id)` "
+                + "or drop --no-bootstrap to auto-pull."
             )
+        } else {
+            modelURL = try await autoPullManagedModel(spec: spec)
         }
 
-        guard let piURL = PiAgentIntegration.findPiExecutable(explicitPath: piPath) else {
+        let piURL: URL
+        if let existing = PiAgentIntegration.findPiExecutable(explicitPath: piPath) {
+            piURL = existing
+        } else if noBootstrap {
             throw PiAgentIntegration.IntegrationError.piBinaryNotFound
+        } else {
+            piURL = try await autoInstallPi()
         }
 
         let extensionURL = try PiAgentIntegration.writeLocalProviderExtension(
@@ -268,6 +286,72 @@ struct AgentStart: AsyncParsableCommand {
             CLIStderr.write("[agent] Pi is running in Terminal.app. Keep this command running; press Ctrl+C here to stop the API server.\n")
             waitForServerProcess()
         }
+    }
+
+    private func autoPullManagedModel(spec: ManagedModelSpec) async throws -> URL {
+        guard spec.hasAnyManagedDownloadSource() else {
+            throw ValidationError(
+                "Model \(spec.id) is not installed and has no managed Hugging Face source."
+            )
+        }
+        if !quiet {
+            CLIStderr.write(
+                "[agent] \(spec.id) not installed. Downloading from Hugging Face "
+                + "(this is a one-time fetch — Ctrl+C to cancel).\n"
+            )
+        }
+        _ = try await ManagedModelResolver.installManagedModel(
+            id: spec.id,
+            force: false,
+            progress: { progress in
+                guard !self.quiet else { return }
+                switch progress {
+                case .downloadingBytes(let completed, let total):
+                    let done = ByteCountFormatter.string(fromByteCount: completed, countStyle: .file)
+                    if let total, total > 0 {
+                        let totalText = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+                        CLIStderr.write("\r[\(spec.id)] \(done) / \(totalText)          ")
+                    } else {
+                        CLIStderr.write("\r[\(spec.id)] \(done)          ")
+                    }
+                case .downloadingPercent(let percent, let speed):
+                    if let speed, speed > 0 {
+                        let speedText = ByteCountFormatter.string(
+                            fromByteCount: Int64(speed),
+                            countStyle: .file
+                        )
+                        CLIStderr.write("\r[\(spec.id)] \(percent)% (\(speedText)/s)          ")
+                    } else {
+                        CLIStderr.write("\r[\(spec.id)] \(percent)%          ")
+                    }
+                case .extracting:
+                    CLIStderr.write("\r[\(spec.id)] extracting          ")
+                }
+            }
+        )
+        if !quiet {
+            CLIStderr.write("\n")
+        }
+        guard let url = spec.managedRuntimeURL() else {
+            throw ValidationError(
+                "Model \(spec.id) appears installed but the runtime resolver could not locate it."
+            )
+        }
+        return url
+    }
+
+    private func autoInstallPi() async throws -> URL {
+        if !quiet {
+            CLIStderr.write("[agent] Pi is not installed. Installing the latest release.\n")
+        }
+        let result = try await PiAgentIntegration.installLatest(force: false) { message in
+            guard !self.quiet else { return }
+            CLIStderr.write("[pi] \(message)\n")
+        }
+        if !quiet {
+            CLIStderr.write("[agent] Installed Pi \(result.version) at \(result.binaryURL.path)\n")
+        }
+        return result.binaryURL
     }
 
     private func resolvedModelID() throws -> String {

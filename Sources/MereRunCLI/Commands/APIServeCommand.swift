@@ -133,6 +133,10 @@ struct APIServe: AsyncParsableCommand {
             }
             // Allow Q35Generator to auto-download from Hugging Face when model path is omitted.
             return nil
+        case .textChatDeepseekV4Flash:
+            // DeepseekV4FlashGenerator resolves and (if needed) downloads its own GGUF.
+            // Honor an explicit --model path if provided.
+            return model
         }
     }
 
@@ -185,6 +189,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
     case textChatQ35 = "text-chat-q35"
+    case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
 }
 
 struct APIHealthStatus: Codable, Equatable, Sendable {
@@ -322,6 +327,7 @@ actor CodeGenServer {
     private let mlxGenerator: Flux2KleinGenerator?
     private let gemma4Generator: Gemma4Generator?
     private let q35Generator: Q35Generator?
+    private let deepseekV4FlashGenerator: DeepseekV4FlashGenerator?
     private let modelPath: String?
     private let fallbackLoraPath: String?
     private let modelId: String
@@ -355,6 +361,8 @@ actor CodeGenServer {
                     return ModelResolver.ModelID.q35.rawValue
                 case .textCode:
                     return CodeGenResources.defaultModelId
+                case .textChatDeepseekV4Flash:
+                    return DeepseekV4FlashResources.defaultModelId
                 }
             }()
 
@@ -365,6 +373,7 @@ actor CodeGenServer {
             self.mlxGenerator = nil
             self.gemma4Generator = nil
             self.q35Generator = nil
+            self.deepseekV4FlashGenerator = nil
             self.useStandaloneModel = false
 
             // Pre-load model
@@ -376,6 +385,7 @@ actor CodeGenServer {
             self.mlxGenerator = Flux2KleinGenerator()
             self.gemma4Generator = nil
             self.q35Generator = nil
+            self.deepseekV4FlashGenerator = nil
             // Check if the resolved path is a standalone MeBot Instruct model
             self.useStandaloneModel = MeBotModelCatalog.resolveModelPath() != nil
                 && modelPath == MeBotModelCatalog.resolveModelPath()
@@ -388,6 +398,7 @@ actor CodeGenServer {
             self.mlxGenerator = nil
             self.gemma4Generator = generator
             self.q35Generator = nil
+            self.deepseekV4FlashGenerator = nil
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
@@ -399,6 +410,19 @@ actor CodeGenServer {
             self.mlxGenerator = nil
             self.gemma4Generator = nil
             self.q35Generator = generator
+            self.deepseekV4FlashGenerator = nil
+            self.useStandaloneModel = false
+
+            try await generator.prepare(modelPath: modelPath) { progress in
+                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+            }
+        case .textChatDeepseekV4Flash:
+            let generator = DeepseekV4FlashGenerator()
+            self.llamaGenerator = nil
+            self.mlxGenerator = nil
+            self.gemma4Generator = nil
+            self.q35Generator = nil
+            self.deepseekV4FlashGenerator = generator
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
@@ -658,6 +682,11 @@ actor CodeGenServer {
         case .textChatQ35:
             guard let generator = q35Generator else {
                 throw Q35Error.modelNotLoaded
+            }
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatDeepseekV4Flash:
+            guard let generator = deepseekV4FlashGenerator else {
+                throw DeepseekV4FlashError.serverFailedToStart("generator not initialized")
             }
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }

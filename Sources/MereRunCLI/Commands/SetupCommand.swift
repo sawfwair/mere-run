@@ -449,6 +449,8 @@ struct SetupAgentRuntime {
             engine = .textCode
         case .textChatQ35:
             engine = .textChatQ35
+        case .deepseekV4Flash:
+            engine = .textChatDeepseekV4Flash
         case .sourceConfigured:
             throw ValidationError("\(recommendation.displayName) requires an external local model before it can be started.")
         }
@@ -468,7 +470,12 @@ struct SetupAgentRuntime {
     }
 
     static func providerModel(for recommendation: MereRunAgentModelRecommendation) -> PiProviderModel {
-        PiProviderModel(
+        // DeepSeek V4 Flash has a specific Pi compat profile (DSML thinking
+        // format, reasoning effort, etc.) documented in the ds4 README.
+        if recommendation.servingEngine == .deepseekV4Flash {
+            return .deepseekV4Flash
+        }
+        return PiProviderModel(
             id: recommendation.id,
             name: "\(recommendation.displayName) (mere.run)",
             contextWindow: contextWindow(for: recommendation),
@@ -480,6 +487,8 @@ struct SetupAgentRuntime {
         switch recommendation.servingEngine {
         case .textChatQ35:
             return Q35Resources.defaultContextLength
+        case .deepseekV4Flash:
+            return 65536
         case .textCode, .sourceConfigured:
             return 32768
         }

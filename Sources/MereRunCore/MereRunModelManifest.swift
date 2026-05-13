@@ -48,6 +48,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case ltxVideo = "ltx-video"
         /// Psi agent chat family.
         case psiChat = "psi-chat"
+        /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
+        case deepseekV4Flash = "deepseek-v4-flash"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -67,6 +69,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case music
         case video
         case psi
+        case deepseek
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
@@ -605,6 +608,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration],
                 components: nil,
                 upstreamRepoId: "\(AgentModelResources.qwen35NineBRepoId)@\(AgentModelResources.qwen35NineBRevision)",
+                createdAt: createdAt
+            )
+        case .deepseekV4Flash:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .deepseekV4Flash,
+                family: .deepseek,
+                tier: .max,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 2, groupSize: 32, scheme: "iq2-xxs-imatrix"),
+                defaults: nil,
+                supports: [.chat],
+                components: nil,
+                upstreamRepoId: "\(DeepseekV4FlashResources.defaultRepoId)@\(DeepseekV4FlashResources.defaultRevision)",
                 createdAt: createdAt
             )
         case .kleinBase:

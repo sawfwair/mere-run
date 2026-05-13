@@ -26,6 +26,7 @@ public struct ModelResolver {
         case q35 = "text-chat-q35"
         case q35Nano = "text-chat-q35-nano"
         case qwen35Agent9B = "text-agent-qwen35-9b"
+        case deepseekV4Flash = "text-agent-deepseek-v4-flash"
         case qwen3TTSNano = "speech-tts-qwen3-nano"
         case qwen3TTSCustomVoice = "speech-tts-qwen3-customvoice"
         case qwen3ASR = "speech-asr-qwen3"

@@ -96,6 +96,27 @@ if (( ${#support_items[@]} > 0 )); then
   fi
 fi
 
+# Install the bundled DeepSeek V4 Flash inference binaries.
+# The premier agent tier (96 GB+ Macs) spawns vendor/ds4/ds4-server as a
+# subprocess. The CLI looks for it next to itself at runtime.
+DS4_SRC="$SOURCE_DIR/vendor/ds4"
+if [[ ! -d "$DS4_SRC" ]]; then
+  DS4_SRC="$SCRIPT_DIR/vendor/ds4"
+fi
+if [[ -d "$DS4_SRC" ]]; then
+  echo "[mere.run] installing DS4 inference binaries..."
+  DS4_DEST="$BIN_DEST_DIR/vendor/ds4"
+  if [[ "$can_install_without_sudo" == true ]]; then
+    mkdir -p "$DS4_DEST"
+    rm -rf "$DS4_DEST"
+    ditto "$DS4_SRC" "$DS4_DEST"
+  else
+    sudo mkdir -p "$DS4_DEST"
+    sudo rm -rf "$DS4_DEST"
+    sudo ditto "$DS4_SRC" "$DS4_DEST"
+  fi
+fi
+
 # Install MLX Metal shader resources alongside the binary.
 # mlx-swift looks for metallib files in a Resources/ directory next to the executable.
 MLX_BUNDLE="$BIN_DEST_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"

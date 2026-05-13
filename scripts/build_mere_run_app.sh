@@ -53,6 +53,11 @@ mkdir -p "$macos" "$resources" "$cli_payload"
 cp "$executable" "${macos}/mere.run.app"
 cp "$cli_executable" "${cli_payload}/mere.run"
 
+if [[ -d "${repo_root}/skills/use-mere-run" ]]; then
+  mkdir -p "${resources}/skills"
+  cp -R "${repo_root}/skills/use-mere-run" "${resources}/skills/use-mere-run"
+fi
+
 for asset in \
   "${build_dir}/llama.framework" \
   "${build_dir}/mlx-swift_Cmlx.bundle" \
@@ -62,6 +67,13 @@ do
     cp -R "$asset" "$cli_payload/"
   fi
 done
+
+# Bundle the vendored DeepSeek V4 Flash inference binaries + Metal shaders.
+# The premier agent tier spawns vendor/ds4/ds4-server as a subprocess.
+if [[ -d "${repo_root}/vendor/ds4" ]]; then
+  mkdir -p "${cli_payload}/vendor"
+  cp -R "${repo_root}/vendor/ds4" "${cli_payload}/vendor/ds4"
+fi
 
 plutil -create xml1 "${contents}/Info.plist"
 plutil -insert CFBundleExecutable -string "mere.run.app" "${contents}/Info.plist"

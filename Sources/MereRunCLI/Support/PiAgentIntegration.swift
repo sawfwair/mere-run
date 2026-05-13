@@ -18,12 +18,90 @@ struct PiProviderModel {
     let name: String
     let contextWindow: Int
     let maxTokens: Int
+    /// Whether the model supports a separate "thinking" / reasoning channel.
+    let reasoning: Bool
+    /// Provider-level OpenAI-compat flags. Matches the shape pi-coding-agent's
+    /// provider catalog expects (see the ds4 README "For Pi" section).
+    let supportsStore: Bool
+    let supportsDeveloperRole: Bool
+    let supportsReasoningEffort: Bool
+    let supportsUsageInStreaming: Bool
+    let supportsStrictMode: Bool
+    /// "max_tokens" for legacy OpenAI servers, "max_completion_tokens" for newer.
+    let maxTokensField: String
+    /// e.g. "deepseek" for the DSML thinking block format. nil → omit field.
+    let thinkingFormat: String?
+    /// DSML servers require the original `reasoning_content` to be sent back on
+    /// follow-up assistant messages so the transcript matches what was sampled.
+    let requiresReasoningContentOnAssistantMessages: Bool
+    /// Optional map from Pi thinking-level keys (off/minimal/low/medium/high/xhigh)
+    /// to the provider's native effort label. `nil` value in JS means the model
+    /// should be invoked without a reasoning_effort argument.
+    let thinkingLevelMap: [(key: String, value: String?)]?
+
+    init(
+        id: String,
+        name: String,
+        contextWindow: Int,
+        maxTokens: Int,
+        reasoning: Bool = false,
+        supportsStore: Bool = false,
+        supportsDeveloperRole: Bool = false,
+        supportsReasoningEffort: Bool = false,
+        supportsUsageInStreaming: Bool = false,
+        supportsStrictMode: Bool = false,
+        maxTokensField: String = "max_tokens",
+        thinkingFormat: String? = nil,
+        requiresReasoningContentOnAssistantMessages: Bool = false,
+        thinkingLevelMap: [(key: String, value: String?)]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.contextWindow = contextWindow
+        self.maxTokens = maxTokens
+        self.reasoning = reasoning
+        self.supportsStore = supportsStore
+        self.supportsDeveloperRole = supportsDeveloperRole
+        self.supportsReasoningEffort = supportsReasoningEffort
+        self.supportsUsageInStreaming = supportsUsageInStreaming
+        self.supportsStrictMode = supportsStrictMode
+        self.maxTokensField = maxTokensField
+        self.thinkingFormat = thinkingFormat
+        self.requiresReasoningContentOnAssistantMessages = requiresReasoningContentOnAssistantMessages
+        self.thinkingLevelMap = thinkingLevelMap
+    }
 
     static let qwen3CoderNext = PiProviderModel(
         id: CodeGenResources.defaultModelId,
         name: "Qwen3-Coder Next (mere.run)",
         contextWindow: 32768,
         maxTokens: 4096
+    )
+
+    /// DeepSeek V4 Flash compat profile from the upstream ds4 README's
+    /// "For Pi, add a provider to ~/.pi/agent/models.json" section.
+    static let deepseekV4Flash = PiProviderModel(
+        id: DeepseekV4FlashResources.defaultModelId,
+        name: "DeepSeek V4 Flash (mere.run)",
+        contextWindow: 100_000,
+        maxTokens: 384_000,
+        reasoning: true,
+        supportsStore: false,
+        supportsDeveloperRole: false,
+        supportsReasoningEffort: true,
+        supportsUsageInStreaming: true,
+        supportsStrictMode: false,
+        maxTokensField: "max_tokens",
+        thinkingFormat: "deepseek",
+        requiresReasoningContentOnAssistantMessages: true,
+        thinkingLevelMap: [
+            ("off", nil),
+            ("minimal", "low"),
+            ("low", "low"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("xhigh", "xhigh"),
+        ]
     )
 }
 
@@ -148,42 +226,7 @@ enum PiAgentIntegration {
 
         let extensionURL = extensionDir.appendingPathComponent("mere-run-local-provider.ts", isDirectory: false)
         let baseURL = "http://\(host):\(port)/v1"
-        let content = """
-        import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-
-        export default function(pi: ExtensionAPI) {
-          pi.registerProvider("mere-run", {
-            name: "mere.run Local",
-            baseUrl: "\(baseURL)",
-            api: "openai-completions",
-            apiKey: "\(apiKey)",
-            compat: {
-              supportsDeveloperRole: false,
-              supportsReasoningEffort: false
-            },
-            models: [
-              {
-                id: "\(model.id)",
-                name: "\(model.name)",
-                reasoning: false,
-                input: ["text"],
-                contextWindow: \(model.contextWindow),
-                maxTokens: \(model.maxTokens),
-                cost: {
-                  input: 0,
-                  output: 0,
-                  cacheRead: 0,
-                  cacheWrite: 0
-                },
-                compat: {
-                  supportsDeveloperRole: false,
-                  supportsReasoningEffort: false
-                }
-              }
-            ]
-          });
-        }
-        """
+        let content = renderPiProviderExtension(model: model, baseURL: baseURL, apiKey: apiKey)
         try content.write(to: extensionURL, atomically: true, encoding: .utf8)
         if persistConfiguration {
             try writeProviderConfiguration(
@@ -197,6 +240,81 @@ enum PiAgentIntegration {
             )
         }
         return extensionURL
+    }
+
+    /// Render the pi-coding-agent extension TS for a single mere.run provider.
+    /// Mirrors the JSON provider catalog shape documented in the ds4 README
+    /// ("For Pi, add a provider to ~/.pi/agent/models.json").
+    static func renderPiProviderExtension(
+        model: PiProviderModel,
+        baseURL: String,
+        apiKey: String
+    ) -> String {
+        var providerCompat: [String] = []
+        providerCompat.append("supportsStore: \(model.supportsStore)")
+        providerCompat.append("supportsDeveloperRole: \(model.supportsDeveloperRole)")
+        providerCompat.append("supportsReasoningEffort: \(model.supportsReasoningEffort)")
+        providerCompat.append("supportsUsageInStreaming: \(model.supportsUsageInStreaming)")
+        providerCompat.append("maxTokensField: \"\(model.maxTokensField)\"")
+        providerCompat.append("supportsStrictMode: \(model.supportsStrictMode)")
+        if let format = model.thinkingFormat {
+            providerCompat.append("thinkingFormat: \"\(format)\"")
+        }
+        if model.requiresReasoningContentOnAssistantMessages {
+            providerCompat.append("requiresReasoningContentOnAssistantMessages: true")
+        }
+        let compatBlock = providerCompat
+            .map { "      \($0)" }
+            .joined(separator: ",\n")
+
+        var modelLines: [String] = []
+        modelLines.append("id: \"\(model.id)\"")
+        modelLines.append("name: \"\(model.name)\"")
+        modelLines.append("reasoning: \(model.reasoning)")
+        if let map = model.thinkingLevelMap, !map.isEmpty {
+            let entries = map.map { entry -> String in
+                if let value = entry.value {
+                    return "          \(entry.key): \"\(value)\""
+                }
+                return "          \(entry.key): null"
+            }.joined(separator: ",\n")
+            modelLines.append("thinkingLevelMap: {\n\(entries)\n        }")
+        }
+        modelLines.append("input: [\"text\"]")
+        modelLines.append("contextWindow: \(model.contextWindow)")
+        modelLines.append("maxTokens: \(model.maxTokens)")
+        modelLines.append("""
+        cost: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0
+                }
+        """)
+        let modelBody = modelLines
+            .map { "        \($0)" }
+            .joined(separator: ",\n")
+
+        return """
+        import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+        export default function(pi: ExtensionAPI) {
+          pi.registerProvider("mere-run", {
+            name: "mere.run Local",
+            baseUrl: "\(baseURL)",
+            api: "openai-completions",
+            apiKey: "\(apiKey)",
+            compat: {
+        \(compatBlock)
+            },
+            models: [
+              {
+        \(modelBody)
+              }
+            ]
+          });
+        }
+        """
     }
 
     static func mereRunPiHomeDirectory() -> URL {

@@ -106,7 +106,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
-    func testAgentPremierSelects122BMXFP4OnNinetySixGB() throws {
+    func testAgentPremierSelectsDeepseekV4FlashOnNinetySixGB() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 96 * 1_073_741_824,
             processorName: "M3 Ultra",
@@ -115,11 +115,12 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .premier, on: machine))
 
-        XCTAssertEqual(recommendation.id, "text-agent-qwen35-122b-a10b-mxfp4")
-        XCTAssertTrue(recommendation.sourceConfigurationRequired)
+        XCTAssertEqual(recommendation.id, DeepseekV4FlashResources.defaultModelId)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .deepseekV4Flash)
     }
 
-    func testAgentPremierSelects122B8BitOnOneTwentyEightGB() throws {
+    func testAgentPremierSelectsDeepseekV4FlashOnOneTwentyEightGB() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 128 * 1_073_741_824,
             processorName: "M3 Ultra",
@@ -128,8 +129,22 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .premier, on: machine))
 
-        XCTAssertEqual(recommendation.id, "text-agent-qwen35-122b-a10b-8bit")
-        XCTAssertTrue(recommendation.sourceConfigurationRequired)
+        XCTAssertEqual(recommendation.id, DeepseekV4FlashResources.defaultModelId)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .deepseekV4Flash)
+    }
+
+    func testAgentTierSelectsDeepseekV4FlashOnNinetySixGB() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 96 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
+
+        XCTAssertEqual(recommendation.id, DeepseekV4FlashResources.defaultModelId)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
     func testAgentRecommendationRejectsNonAppleSilicon() {
