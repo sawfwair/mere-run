@@ -2,8 +2,8 @@
 set -euo pipefail
 
 configuration="${1:-debug}"
-app_version="${MERERUN_APP_VERSION:-0.4.13}"
-app_build="${MERERUN_APP_BUILD:-13}"
+app_version="${MERERUN_APP_VERSION:-0.5.0}"
+app_build="${MERERUN_APP_BUILD:-14}"
 case "$configuration" in
   debug|release) ;;
   *)
