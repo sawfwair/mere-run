@@ -123,6 +123,16 @@ public actor HubSnapshot {
         cachedSnapshotURL = nil
     }
 
+    public static func resolvedDownloadBase(
+        requested: URL? = nil,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        try resolveDownloadBase(
+            requested: requested,
+            fileManager: fileManager
+        )
+    }
+
     private static func resolveDownloadBase(
         requested: URL?,
         fileManager: FileManager

@@ -87,6 +87,10 @@ struct ModelPull: AsyncParsableCommand {
             if !quiet { stderr("[\(spec.id)] already installed, skipping (use --force to re-download)") }
             return
         }
+        try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir) { warning in
+            guard !quiet else { return }
+            stderr("  warning: \(warning)")
+        }
 
         let result = try await ManagedModelResolver.installManagedModel(
             id: spec.id,
@@ -129,6 +133,18 @@ struct ModelPull: AsyncParsableCommand {
                     stderr("  error: \(error)")
                 }
             }
+            var errors = report.errors
+            if spec.managedRuntimeURL() == nil {
+                errors.append("Model was pulled but is not discoverable by `mere.run model list`.")
+            }
+            if !errors.isEmpty {
+                throw ValidationError(
+                    """
+                    Model \(spec.id) was not installed cleanly.
+                    \(errors.map { "- \($0)" }.joined(separator: "\n"))
+                    """
+                )
+            }
         }
 
         print(modelDir.path)
@@ -140,5 +156,124 @@ struct ModelPull: AsyncParsableCommand {
 
     private func stderrRaw(_ message: String) {
         CLIStderr.write(message)
+    }
+}
+
+struct ModelPullDiskPreflight {
+    static let bytesPerGiB: Int64 = 1_073_741_824
+    static let safetyMarginBytes: Int64 = 2 * bytesPerGiB
+    static let lowHeadroomWarningBytes: Int64 = 10 * bytesPerGiB
+    static let minimumModelStoreBytes: Int64 = 64 * 1_048_576
+
+    static func check(
+        spec: ManagedModelSpec,
+        modelDir: URL,
+        fileManager: FileManager = .default,
+        warn: (String) -> Void
+    ) throws {
+        let hubCache = try HubSnapshot.resolvedDownloadBase(fileManager: fileManager)
+        let modelStoreParent = modelDir.deletingLastPathComponent()
+        try? fileManager.createDirectory(at: modelStoreParent, withIntermediateDirectories: true)
+
+        let warnings = try evaluate(
+            modelID: spec.id,
+            estimatedDownloadBytes: spec.estimatedDownloadBytes,
+            hubCacheURL: hubCache,
+            hubCacheAvailableBytes: availableBytes(onFileSystemContaining: hubCache, fileManager: fileManager),
+            modelStoreURL: modelStoreParent,
+            modelStoreAvailableBytes: availableBytes(onFileSystemContaining: modelStoreParent, fileManager: fileManager)
+        )
+        warnings.forEach(warn)
+    }
+
+    static func evaluate(
+        modelID: String,
+        estimatedDownloadBytes: Int64?,
+        hubCacheURL: URL,
+        hubCacheAvailableBytes: Int64?,
+        modelStoreURL: URL,
+        modelStoreAvailableBytes: Int64?
+    ) throws -> [String] {
+        var warnings: [String] = []
+
+        if let modelStoreAvailableBytes, modelStoreAvailableBytes < minimumModelStoreBytes {
+            throw ValidationError(
+                """
+                Not enough free disk space to link \(modelID) into the mere.run model store.
+                Model store: \(modelStoreURL.path)
+                Available: \(formatBytes(modelStoreAvailableBytes))
+                Free space or set MERERUN_MODELS_DIR=/Volumes/Models/mere.run before retrying.
+                """
+            )
+        }
+
+        guard let hubCacheAvailableBytes else {
+            warnings.append("Could not read free disk space for Hugging Face cache at \(hubCacheURL.path).")
+            return warnings
+        }
+
+        guard let estimatedDownloadBytes else {
+            if hubCacheAvailableBytes < lowHeadroomWarningBytes {
+                warnings.append(
+                    "Hugging Face cache has only \(formatBytes(hubCacheAvailableBytes)) free at \(hubCacheURL.path); this model does not publish a size estimate yet."
+                )
+            }
+            return warnings
+        }
+
+        let requiredBytes = estimatedDownloadBytes + max(safetyMarginBytes, estimatedDownloadBytes / 5)
+        if hubCacheAvailableBytes < requiredBytes {
+            throw ValidationError(
+                """
+                Not enough free disk space to pull \(modelID).
+                Hugging Face cache: \(hubCacheURL.path)
+                Available: \(formatBytes(hubCacheAvailableBytes))
+                Estimated required: \(formatBytes(requiredBytes)) (\(formatBytes(estimatedDownloadBytes)) model plus safety margin)
+
+                Free space, remove old models with `mere.run model remove`, or move the cache/model store before retrying:
+                  export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
+                  export MERERUN_MODELS_DIR=/Volumes/Models/mere.run
+                """
+            )
+        }
+
+        let remaining = hubCacheAvailableBytes - estimatedDownloadBytes
+        if remaining < lowHeadroomWarningBytes {
+            warnings.append(
+                "After pulling \(modelID), the Hugging Face cache volume may have only about \(formatBytes(remaining)) free. Cache: \(hubCacheURL.path)"
+            )
+        }
+
+        return warnings
+    }
+
+    static func availableBytes(
+        onFileSystemContaining url: URL,
+        fileManager: FileManager = .default
+    ) -> Int64? {
+        guard let existing = existingPath(for: url, fileManager: fileManager),
+              let attrs = try? fileManager.attributesOfFileSystem(forPath: existing.path),
+              let free = attrs[.systemFreeSize] as? NSNumber else {
+            return nil
+        }
+        return free.int64Value
+    }
+
+    private static func existingPath(for url: URL, fileManager: FileManager) -> URL? {
+        var candidate = url.standardizedFileURL
+        while true {
+            if fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            let parent = candidate.deletingLastPathComponent()
+            if parent.path == candidate.path {
+                return nil
+            }
+            candidate = parent
+        }
+    }
+
+    static func formatBytes(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }

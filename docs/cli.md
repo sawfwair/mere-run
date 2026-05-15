@@ -641,8 +641,8 @@ swift run mere.run model list
 ### `mere.run model pull`
 
 Download a managed Hugging Face snapshot into the local model store. The command checks
-the model capability catalog before downloading so unsupported Macs do not pull
-models they cannot run.
+the model capability catalog and available disk space before downloading so unsupported
+Macs do not pull models they cannot run and tight disks fail with a useful cache path.
 
 ```bash
 swift run mere.run model pull image-zimage-nano

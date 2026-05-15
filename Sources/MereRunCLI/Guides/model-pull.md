@@ -47,12 +47,15 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
 - Pull the runtime model before opening a creative loop.
 - Verify with `model info <id>` after a forced re-download.
 - Keep hub cache and model store on the same large disk when possible.
+- If disk is tight, set both `MERERUN_HUB_CACHE` and `MERERUN_MODELS_DIR`.
 
 ## Troubleshooting
 
 - Unknown id: run `mere.run model list`.
 - No Hugging Face source: use a local path or choose a pullable model.
 - Unsupported machine: pick a smaller recommended model or pass `--allow-unsupported` only when the user accepts the risk.
+- Not enough free disk space: free the reported cache volume, run `mere.run model remove <id>`, or move both the Hugging Face cache and model store:
+  `MERERUN_HUB_CACHE=/Volumes/Models/huggingface MERERUN_MODELS_DIR=/Volumes/Models/mere.run mere.run model pull <id>`.
 
 ## Sources
 

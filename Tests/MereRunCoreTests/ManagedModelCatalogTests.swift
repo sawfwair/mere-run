@@ -36,6 +36,17 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testMediaOnboardingModelsHaveDiskEstimates() throws {
+        for id in ["speech-asr-parakeet", "text-embed-qwen3-0.6b"] {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+            XCTAssertGreaterThanOrEqual(
+                spec.estimatedDownloadBytes ?? 0,
+                1_073_741_824,
+                "Model \(id) should have enough of a size estimate for disk-space preflight."
+            )
+        }
+    }
+
     func testImageModelsHaveManagedDownloadSources() {
         let expectedPullableImageIDs = [
             "image-klein-nano",

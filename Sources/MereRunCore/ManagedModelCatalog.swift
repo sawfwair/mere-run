@@ -66,6 +66,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let aliasKind: ManagedModelAliasKind
     public let runtimeAutoDownloadAllowed: Bool
     public let resolutionFallbackIDs: [String]
+    public let estimatedDownloadBytes: Int64?
     public let defaultCLICommands: [String]
 
     public init(
@@ -80,6 +81,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
         aliasKind: ManagedModelAliasKind = .none,
         runtimeAutoDownloadAllowed: Bool = true,
         resolutionFallbackIDs: [String] = [],
+        estimatedDownloadBytes: Int64? = nil,
         defaultCLICommands: [String] = []
     ) {
         self.id = id
@@ -93,6 +95,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
         self.aliasKind = aliasKind
         self.runtimeAutoDownloadAllowed = runtimeAutoDownloadAllowed
         self.resolutionFallbackIDs = resolutionFallbackIDs
+        self.estimatedDownloadBytes = estimatedDownloadBytes
         self.defaultCLICommands = defaultCLICommands
     }
 }
@@ -465,6 +468,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .parakeet,
             normalizationKind: .parakeetNested,
+            estimatedDownloadBytes: 2 * 1_073_741_824,
             defaultCLICommands: ["speech transcribe"]
         ),
         ManagedModelSpec(
@@ -501,6 +505,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "Qwen/Qwen3-Embedding-0.6B",
             upstreamRevision: "main",
             validationKind: .qwen3Embedding,
+            estimatedDownloadBytes: 2 * 1_073_741_824,
             defaultCLICommands: ["text embed"]
         ),
         ManagedModelSpec(

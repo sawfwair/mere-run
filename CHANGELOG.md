@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.5.2 - 2026-05-15
+
+### Fixed
+
+- fixed `mere.run model pull` so a zero-exit pull is rejected when the model is
+  still not discoverable by `mere.run model list`.
+- added disk-space preflight checks for managed Hugging Face pulls, including
+  actionable cache/model-store relocation guidance for low-space volumes.
+
 ## 0.5.1 - 2026-05-15
 
 ### Fixed
