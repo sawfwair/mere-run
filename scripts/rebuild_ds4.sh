@@ -17,7 +17,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR_DIR="${ROOT_DIR}/vendor/ds4"
-DS4_COMMIT="${DS4_COMMIT:-f8b4ed635d559b3a5b44bf2df6a77e21b3e9178f}"
+DS4_COMMIT="${DS4_COMMIT:-be434773fe1c0335d76896ea07f62a376cd629e5}"
 DS4_URL="${DS4_URL:-https://github.com/antirez/ds4.git}"
 DS4_LOCAL_SOURCE="${DS4_LOCAL_SOURCE:-}"
 

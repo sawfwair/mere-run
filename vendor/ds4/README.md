@@ -1,7 +1,7 @@
 # vendor/ds4
 
 Prebuilt DeepSeek V4 Flash inference binaries vendored from
-[ds4](https://github.com/antirez/ds4.git) at commit `f8b4ed635d559b3a5b44bf2df6a77e21b3e9178f`.
+[ds4](https://github.com/antirez/ds4.git) at commit `be434773fe1c0335d76896ea07f62a376cd629e5`.
 
 Rebuild with:
 

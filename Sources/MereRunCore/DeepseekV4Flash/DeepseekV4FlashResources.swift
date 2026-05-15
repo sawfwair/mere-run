@@ -10,16 +10,17 @@ import Foundation
 /// and proxies OpenAI-compatible chat requests over loopback HTTP.
 public struct DeepseekV4FlashResources: Sendable, Hashable {
     public static let defaultModelId = "text-agent-deepseek-v4-flash"
-    public static let defaultRepoId = "antirez/deepseek-v4-gguf"
+    public static let defaultRepoId = "jedisct1/DeepSeek-V4-Flash-imatrix-aligned"
     public static let defaultRevision = "main"
     public static let defaultContextLength = 65_536
     public static let serverStartupTimeoutSeconds: TimeInterval = 300
 
-    /// Imatrix-tuned q2 GGUF: ~81 GB. **The upstream README marks this as the
-    /// preferred quant for 96/128 GB Macs ("USE THE IMATRIX VERSIONS BELOW")**,
-    /// so mere.run pulls only this variant — never the legacy non-imatrix q2.
+    /// Imatrix-tuned q2 GGUF with page-aligned tensor offsets: ~81 GB.
+    /// Drop-in replacement for the original `antirez/deepseek-v4-gguf` imatrix
+    /// file, with alignment that enables efficient mmap on Apple Silicon and a
+    /// refreshed calibration corpus.
     public static let imatrixGGUFFile =
-        "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf"
+        "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-aligned.gguf"
 
     /// Legacy non-imatrix q2 GGUF. Not downloaded by mere.run, but recognized
     /// on disk if a user installed it manually — the resolver still prefers
