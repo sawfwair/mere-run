@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.5.1 - 2026-05-15
+
+### Fixed
+
+- fixed the DS4 premier agent tier to pull the page-aligned DeepSeek V4 Flash
+  imatrix GGUF and ship the matching refreshed `ds4` runtime binaries.
+
 ## 0.5.0 - 2026-05-13
 
 ### Added
