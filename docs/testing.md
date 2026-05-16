@@ -34,6 +34,7 @@ This script is the main gate for contributors. It runs:
 - `swift test`
 - help smoke for the public command tree
 - `mere.run model list` output sanity checks
+- `mere.run status` output sanity checks
 - docs and source hygiene sweeps
 
 Use this for almost every change before you stop.
@@ -124,9 +125,13 @@ swift test
 Check:
 
 ```bash
+swift run mere.run status
 swift run mere.run model list
 swift run mere.run model info image-klein-max
 ```
+
+`status` shows the active model store first; `model info` is better when you
+need manifest and component details for one model.
 
 ### `mere.run model pull` fails immediately
 

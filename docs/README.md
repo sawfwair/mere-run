@@ -73,7 +73,7 @@ If you are new to the repo, read these in order:
 ### Fundamentals
 
 - [Getting Started](./getting-started.md): clone, build, first commands, first
-  model pulls, and local setup
+  status checks, model pulls, and local setup
 - [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
   prompting, parameters, examples, and troubleshooting
 - [Configuration](./configuration.md): supported environment variables and

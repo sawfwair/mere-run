@@ -45,6 +45,7 @@ mere.run agent onboard --install-pi --configure-pi --model text-agent-deepseek-v
 
 - Copy the printed recommended setup-agent id into later `model pull` or `agent start` commands.
 - Keep host and port aligned with `api serve`.
+- Use `mere.run status --host <host> --port <port>` after starting a server.
 - Re-run after changing hardware, model store, or setup model choice.
 
 ## Troubleshooting

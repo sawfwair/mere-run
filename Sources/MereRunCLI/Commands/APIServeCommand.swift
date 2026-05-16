@@ -39,6 +39,9 @@ struct APIServe: AsyncParsableCommand {
           export MERERUN_API_KEY=change-me
           mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY"
 
+          # Check server health and the served model from another terminal
+          mere.run status --port 11434
+
           # Test with curl (request.json contains an OpenAI chat payload)
           curl http://localhost:8080/v1/chat/completions \\
             -H "Content-Type: application/json" \\

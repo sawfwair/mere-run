@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added `mere.run status` for a quick local snapshot of API health, the served
+  model, the active model store, and installed managed models.
+
 ### Fixed
 
 - fixed DeepSeek V4 Flash model resolution so existing imatrix GGUF symlinks

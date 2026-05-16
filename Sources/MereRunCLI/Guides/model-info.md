@@ -11,6 +11,7 @@ The target must be either an installed managed id or an existing local model pat
 ## Install And Check
 
 ```bash
+mere.run status
 mere.run model list
 mere.run model info image-zimage-nano
 mere.run model info image-zimage-nano --components
@@ -25,6 +26,7 @@ mere.run model info image-zimage-nano --components
 ## Usage Patterns
 
 - Use before debugging a failed generation command.
+- Start with `status` when you are unsure which model store is active.
 - Use `--components` for structured roots with tokenizer, transformer, VAE, scheduler, or text encoder folders.
 - Use `--json` when scripts need the manifest.
 

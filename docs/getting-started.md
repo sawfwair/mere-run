@@ -75,6 +75,7 @@ The public CLI is modality-first:
 - `mere.run music ...`
 - `mere.run video ...`
 - `mere.run model ...`
+- `mere.run status`
 - `mere.run api ...`
 - `mere.run setup ...`
 - `mere.run agent ...`
@@ -99,6 +100,23 @@ or:
 
 ```bash
 swift run mere.run --models-root /path/to/models model list
+```
+
+## Check local status
+
+Use `status` whenever you want a quick snapshot of this machine's mere.run
+state:
+
+```bash
+swift run mere.run status
+```
+
+It reports whether the local API server is reachable, which model the server
+currently exposes through `/v1/models`, the active model store, and the managed
+models installed there. Use JSON output when scripting:
+
+```bash
+swift run mere.run status --json
 ```
 
 ## Pull a model

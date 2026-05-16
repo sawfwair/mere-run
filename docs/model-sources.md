@@ -154,6 +154,7 @@ swift run mere.run model pull image-zimage-nano
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q35
 
 # Inspect what is currently installed
+swift run mere.run status
 swift run mere.run model list
 swift run mere.run model info image-klein-max
 ```

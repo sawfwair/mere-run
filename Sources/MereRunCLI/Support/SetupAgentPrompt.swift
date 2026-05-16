@@ -49,6 +49,7 @@ enum SetupAgentPrompt {
         - Treat the recommended setup-agent line as authoritative for agent/chat setup recommendations; the broader supported managed-model list is cross-modality coverage, not a ranked upgrade list.
         - Do not explore the repository to discover setup facts unless a listed command fails.
         - Do not run demo scripts, sample scripts, `demo.sh`, `scripts/check.sh`, `swift build`, or `swift test` for onboarding.
+        - Use `mere.run status` for a quick server, served-model, and installed-model snapshot.
         - First use `mere.run model capabilities --recommended` for the concise supported setup list.
         - Use `mere.run model list` to check what is already installed before suggesting downloads.
         - Use `mere.run model capabilities --all` only when explaining why a model is hidden or unsupported.

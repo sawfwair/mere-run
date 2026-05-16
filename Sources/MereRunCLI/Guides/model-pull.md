@@ -13,6 +13,7 @@ No model is required before running pull, but the target id must exist in the ma
 ```bash
 mere.run model capabilities
 mere.run model pull image-zimage-nano
+mere.run status
 mere.run model list
 ```
 
@@ -45,6 +46,7 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
 ## Iteration Tips
 
 - Pull the runtime model before opening a creative loop.
+- Use `status` to confirm the model landed in the active store.
 - Verify with `model info <id>` after a forced re-download.
 - Keep hub cache and model store on the same large disk when possible.
 - If disk is tight, set both `MERERUN_HUB_CACHE` and `MERERUN_MODELS_DIR`.
