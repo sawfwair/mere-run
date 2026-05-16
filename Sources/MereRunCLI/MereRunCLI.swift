@@ -24,6 +24,7 @@ struct MereRunCLI: AsyncParsableCommand {
             Music.self,
             Video.self,
             Model.self,
+            Status.self,
             API.self,
             Setup.self,
             Agent.self,

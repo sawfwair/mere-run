@@ -5,6 +5,7 @@ This page covers `mere.run api serve`, the local API surface exposed by the pack
 ## Public surface
 
 - `mere.run api serve`
+- `mere.run status`
 
 ## What it is for
 
@@ -36,6 +37,13 @@ package-scoped.
 swift run mere.run api serve --engine text-chat-gemma4
 ```
 
+In another terminal, confirm that the server is reachable and which model it
+reports:
+
+```bash
+swift run mere.run status
+```
+
 Network-exposed example:
 
 ```bash
@@ -52,6 +60,8 @@ swift run mere.run api serve \
 
 - the API server follows the same model-resolution and model-store rules as the
   rest of the CLI
+- `mere.run status` is the preferred quick check before wiring an editor or
+  agent to a local server
 - it is intentionally local-first
 - it should not reintroduce relay, billing, or hosted-infrastructure concerns
 - non-loopback binds require an API key, and the OpenAI-compatible chat route
@@ -106,3 +116,17 @@ stay in logs/stderr, and `stream_options.include_usage` adds the final usage
 chunk before `[DONE]`.
 
 If you are working on this area, read [CLI and Runtime Internals](../internals/cli-and-runtime.md) after the command source.
+
+## Troubleshooting
+
+Start with:
+
+```bash
+swift run mere.run status
+```
+
+- `server: down` means nothing answered the configured `/health` URL.
+- `loaded models: unavailable (requires API key)` means `/health` worked but
+  `/v1/models` needs `--api-key` or `MERERUN_API_KEY`.
+- A wrong loaded model usually means another server is already bound to that
+  host and port.

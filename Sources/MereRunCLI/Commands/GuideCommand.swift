@@ -323,6 +323,13 @@ enum GuideRegistry {
             resourceName: "api-serve.md"
         ),
         GuideTopic(
+            topic: "status",
+            title: "Status",
+            commandPaths: [["status"]],
+            models: [],
+            resourceName: "status.md"
+        ),
+        GuideTopic(
             topic: "model-list",
             title: "Model List",
             commandPaths: [["model", "list"]],

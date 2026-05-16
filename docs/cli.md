@@ -1,6 +1,9 @@
 # mere.run CLI
 
-`mere.run` is the public command-line interface for the OSS `mere.run` package. It exposes a modality-first command tree for image, text, speech, vision, music, video, model management, and local API serving.
+`mere.run` is the public command-line interface for the OSS `mere.run`
+package. It exposes a modality-first command tree for image, text, speech,
+vision, music, video, model management, local status snapshots, and local API
+serving.
 
 If you are looking for the broader docs set, start at [mere.run Documentation](/).
 
@@ -33,6 +36,7 @@ Public tree:
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, capabilities, info, pull, remove, repair-manifests }`
+- `mere.run status`
 - `mere.run api serve`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`
@@ -87,6 +91,7 @@ For subsystem-specific implementation guides, see:
 
 ```bash
 swift run mere.run model list
+swift run mere.run status
 swift run mere.run model capabilities
 swift run mere.run model pull image-zimage-nano
 swift run mere.run model info image-zimage-nano
@@ -638,6 +643,26 @@ List all managed model IDs and whether they are installed.
 swift run mere.run model list
 ```
 
+### `mere.run status`
+
+Show a quick local snapshot: whether the API server answers, which model it
+reports as loaded through `/v1/models`, the active model-store path/source, and
+which managed models are installed in that store.
+
+```bash
+swift run mere.run status
+swift run mere.run status --host 127.0.0.1 --port 11434
+swift run mere.run status --json
+```
+
+Useful options:
+
+- `--host`: local API host to check, default `127.0.0.1`
+- `--port`: local API port to check, default `8080`
+- `--api-key`: bearer token for `/v1/models`, also read from `MERERUN_API_KEY`
+- `--timeout-seconds`: network probe timeout
+- `--json`: emit a structured snapshot for scripts and agents
+
 ### `mere.run model pull`
 
 Download a managed Hugging Face snapshot into the local model store. The command checks
@@ -737,6 +762,9 @@ swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
 swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120
 ```
+
+After starting a server, run `swift run mere.run status` from another terminal
+to confirm `/health`, `/v1/models`, and the served model.
 
 ### `mere.run setup`
 

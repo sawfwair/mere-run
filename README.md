@@ -27,6 +27,7 @@ The public OSS repo currently supports:
 - Hugging Face-backed model pulls that resolve into a shared local model store
 - offline command cookbooks through `mere.run guide`
 - a local OpenAI-compatible API surface for supported text engines
+- a quick status snapshot for the local server, loaded API model, and installed model store
 - an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
 
 ## What’s included in this repo
@@ -110,6 +111,9 @@ open "$app_path"
 # List known model IDs and local install status
 swift run mere.run model list
 
+# See the local server, served model, model-store path, and installed models
+swift run mere.run status
+
 # See what this Mac can run before pulling large models
 swift run mere.run model capabilities
 swift run mere.run model capabilities --recommended
@@ -143,6 +147,9 @@ swift run mere.run text anonymize \
 
 # Serve the OpenAI-compatible local API on loopback
 swift run mere.run api serve --engine text-chat-gemma4
+
+# In another terminal, confirm the server and served model
+swift run mere.run status
 
 # Expose the API beyond loopback only with an explicit key
 export MERERUN_API_KEY=change-me
@@ -212,6 +219,7 @@ The public CLI is modality-first:
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, capabilities, info, pull, remove, repair-manifests }`
+- `mere.run status`
 - `mere.run api serve`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`

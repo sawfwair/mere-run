@@ -38,7 +38,7 @@ The public command-line surface.
 
 - `MereRunCLI.swift`: top-level command tree
 - `Commands/`: modality-scoped subcommands
-- `Support/`: shared CLI bootstrap, model registry, output helpers, and local
+- `Support/`: shared CLI bootstrap, model inventory, output helpers, and local
   API support
 
 If you want to understand the CLI end to end, start here.

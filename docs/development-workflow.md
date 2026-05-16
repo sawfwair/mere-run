@@ -63,12 +63,14 @@ The public runtime is hard-cut to the canonical OSS model IDs. That means:
 
 - runtime code should use canonical public IDs only
 - examples should use canonical public IDs only
-- model-store troubleshooting should point readers at `mere.run model list`,
-  `mere.run model info`, and `mere.run model repair-manifests`
+- model-store and server troubleshooting should point readers at
+  `mere.run status`, `mere.run model list`, `mere.run model info`, and
+  `mere.run model repair-manifests`
 
 When testing locally, inspect your current state with:
 
 ```bash
+swift run mere.run status
 swift run mere.run model list
 swift run mere.run model info image-klein-max
 ```
@@ -80,6 +82,8 @@ swift run mere.run model info image-klein-max
 - keep the modality-first structure intact
 - preserve stdout and stderr discipline
 - update `docs/cli.md` if the user-facing behavior changes
+- update quickstarts, cookbooks, and runtime docs when the command becomes part
+  of setup or troubleshooting
 - add or update `Tests/MereRunCLITests`
 
 ### If you touch runtime code

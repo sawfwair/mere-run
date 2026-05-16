@@ -10,7 +10,7 @@ Overrides the shared local model store.
 
 ```bash
 export MERERUN_MODELS_DIR=/Volumes/Models/mere.run
-swift run mere.run model list
+swift run mere.run status
 ```
 
 Default:
@@ -51,6 +51,7 @@ Provides the bearer token accepted by `mere.run api serve` for `/v1/models` and
 `/v1/chat/completions`.
 
 This is optional for loopback-only usage and required for non-loopback binds.
+`mere.run status` also reads it when probing `/v1/models`.
 
 ## Debug toggles
 

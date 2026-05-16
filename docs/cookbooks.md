@@ -39,6 +39,7 @@ Creative and runtime workflows:
 - `video generate`
 - `video export-latents`
 - `api serve`
+- `status`
 
 Operational workflows:
 

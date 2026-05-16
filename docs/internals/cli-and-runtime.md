@@ -41,6 +41,7 @@ Commands are grouped by user intent:
 - music
 - video
 - model
+- status
 - api
 
 ### 2. Canonical public model IDs

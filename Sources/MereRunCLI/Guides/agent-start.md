@@ -15,6 +15,7 @@ mere.run agent onboard
 mere.run model pull text-agent-deepseek-v4-flash
 mere.run agent install-pi
 mere.run agent start --model text-agent-deepseek-v4-flash
+mere.run status
 ```
 
 ## Parameters
@@ -32,6 +33,7 @@ mere.run agent start --model text-agent-deepseek-v4-flash
 - Run `model capabilities --recommended` or `agent onboard` first and use the recommended setup-agent id.
 - Pull the selected model before `agent start`.
 - Use `--skip-server` only when you already started a compatible local API server.
+- Run `status` when you need to confirm the local server and served model.
 - Keep the default prompt unless the user has a specific setup goal.
 
 ## Examples
@@ -58,6 +60,7 @@ mere.run agent start \
 - Model missing: run `mere.run model pull <id>`.
 - Pi missing: run `mere.run agent install-pi` or pass `--pi-path`.
 - Health check times out: verify host/port and local API logs.
+- Unsure what is already running: run `mere.run status --host <host> --port <port>`.
 
 ## Sources
 

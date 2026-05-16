@@ -3,6 +3,8 @@
 ## Purpose
 
 Show all known managed model ids, categories, install status, and local size. Use this before pulling or running models.
+Use `mere.run status` when you also need the active API server and currently
+served model.
 
 ## Required Models
 
@@ -12,6 +14,7 @@ No model is required.
 
 ```bash
 mere.run model list
+mere.run status
 mere.run guide model list
 ```
 
@@ -22,6 +25,8 @@ This command has no flags. It reads the configured model store.
 ## Usage Patterns
 
 - Run before telling a user to pull something; it shows what is already installed.
+- Prefer `status` for a first support snapshot because it includes the model
+  store and server state.
 - Pair with `model capabilities` when choosing a first model.
 - Use `MERERUN_MODELS_DIR` or `--models-root` before the command when inspecting a non-default store.
 

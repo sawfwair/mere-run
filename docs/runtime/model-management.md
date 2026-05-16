@@ -11,6 +11,7 @@ the model-management commands.
 - `mere.run model pull`
 - `mere.run model remove`
 - `mere.run model repair-manifests`
+- `mere.run status`
 - `mere.run setup`
 
 ## Default model store
@@ -58,6 +59,12 @@ the canonical names shown by `mere.run model list`.
 ### `mere.run model list`
 
 Shows the canonical managed model table and installed status.
+
+### `mere.run status`
+
+Combines the model inventory with a local API probe. It reports the active
+model-store path/source, installed managed models, whether the configured API
+server answers `/health`, and the model IDs returned by `/v1/models`.
 
 ### `mere.run model capabilities`
 

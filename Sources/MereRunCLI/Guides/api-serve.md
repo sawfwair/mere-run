@@ -20,6 +20,7 @@ Supported engines:
 mere.run model capabilities
 mere.run model pull text-agent-deepseek-v4-flash
 mere.run api serve --help
+mere.run status
 ```
 
 ## Parameters
@@ -39,7 +40,8 @@ mere.run api serve --help
 - Keep loopback binds for local-only tools.
 - For non-loopback hosts, always set `MERERUN_API_KEY` or pass `--api-key`.
 - Choose the engine first, then the model path/id.
-- Test `/health`, then `/v1/models`, then `/v1/chat/completions`.
+- Use `mere.run status` as the quick `/health` plus `/v1/models` check.
+- Test `/v1/chat/completions` after status shows the expected served model.
 - DS4 raw-proxies the complete OpenAI chat request to `ds4-server`.
 - Native engines reject unsupported OpenAI fields explicitly instead of silently dropping them.
 - Use `stream_options.include_usage` when a client expects the OpenAI streaming usage chunk.
@@ -62,14 +64,14 @@ mere.run api serve --host 0.0.0.0 --api-key "$MERERUN_API_KEY"
 
 ## Iteration Tips
 
-- Use `curl http://127.0.0.1:8080/health` before connecting an editor.
+- Use `mere.run status` before connecting an editor.
 - Start with one client and default rate limit.
 - For Gemma memory pressure, test KV quantization on a local prompt before long sessions.
 
 ## Troubleshooting
 
 - Non-loopback bind rejected: set `--api-key` or `MERERUN_API_KEY`.
-- Client cannot connect: confirm host, port, and firewall settings.
+- Client cannot connect: run `mere.run status --host <host> --port <port>`, then confirm firewall settings.
 - Wrong model family: match `--engine` to the model path.
 - Unsupported OpenAI field: choose a compatible engine or remove the field named in the `invalid_request_error`.
 
