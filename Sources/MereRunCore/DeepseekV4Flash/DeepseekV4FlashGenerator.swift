@@ -330,11 +330,15 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         if FileManager.default.fileExists(atPath: imatrixURL.path) {
             return imatrixURL
         }
+        let previousImatrixURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.previousImatrixGGUFFile)
+        if FileManager.default.fileExists(atPath: previousImatrixURL.path) {
+            return previousImatrixURL
+        }
         let legacyURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.legacyGGUFFile)
         if FileManager.default.fileExists(atPath: legacyURL.path) {
             return legacyURL
         }
-        if let preferred = preferredGGUF(in: modelDir) {
+        if let preferred = Self.preferredGGUF(in: modelDir) {
             return preferred
         }
 
@@ -372,8 +376,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
     /// Returns the most preferred .gguf in `directory` — files whose name
     /// contains "imatrix" win over those that do not, matching the upstream
     /// README's recommendation to prefer the imatrix variant.
-    private func preferredGGUF(in directory: URL) -> URL? {
-        let fileManager = FileManager.default
+    static func preferredGGUF(in directory: URL, fileManager: FileManager = .default) -> URL? {
         guard let enumerator = fileManager.enumerator(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -385,8 +388,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         var fallback: URL?
         for case let url as URL in enumerator {
             guard url.pathExtension.lowercased() == "gguf",
-                  let values = try? url.resourceValues(forKeys: [.isRegularFileKey]),
-                  values.isRegularFile == true else {
+                  Self.isRegularFileOrSymlinkTarget(url, fileManager: fileManager) else {
                 continue
             }
             if url.lastPathComponent.lowercased().contains("imatrix") {
@@ -398,6 +400,12 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             }
         }
         return imatrix ?? fallback
+    }
+
+    private static func isRegularFileOrSymlinkTarget(_ url: URL, fileManager: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
     }
 
     private func makeKVDiskDir() throws -> URL {

@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Fixed
+
+- fixed DeepSeek V4 Flash model resolution so existing imatrix GGUF symlinks
+  are reused instead of triggering another 81 GB download.
+
 ## 0.5.2 - 2026-05-15
 
 ### Fixed
