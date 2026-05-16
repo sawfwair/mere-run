@@ -13,6 +13,7 @@ The format is based on Keep a Changelog.
 - routed DS4 chat completions through a shared client adapter that repairs
   non-stream JSON responses containing literal control characters before they
   reach OpenAI-compatible clients.
+- fixed the root CLI so `mere.run --version` reports the public release version.
 
 ## 0.5.2 - 2026-05-15
 

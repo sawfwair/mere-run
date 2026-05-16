@@ -15,6 +15,7 @@ struct MereRunCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "mere.run",
         abstract: "Run local inference workflows with MereRunCore.",
+        version: MereRunCLIVersion.current,
         subcommands: [
             GuideCommand.self,
             Image.self,

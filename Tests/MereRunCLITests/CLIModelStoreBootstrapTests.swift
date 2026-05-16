@@ -69,6 +69,11 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
         XCTAssertTrue(help.contains("--models-root <models-root>"))
     }
 
+    func testMereRunCLIExposesReleaseVersion() {
+        XCTAssertEqual(MereRunCLIVersion.current, "0.5.2")
+        XCTAssertEqual(MereRunCLI.configuration.version, MereRunCLIVersion.current)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suite = "CLIModelStoreBootstrapTests.\(UUID().uuidString)"
         defaultsSuites.append(suite)
