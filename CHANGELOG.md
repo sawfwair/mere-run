@@ -10,6 +10,8 @@ The format is based on Keep a Changelog.
 
 - fixed DeepSeek V4 Flash model resolution so existing imatrix GGUF symlinks
   are reused instead of triggering another 81 GB download.
+- repaired DS4 non-stream API responses that contain literal control characters
+  inside JSON strings before returning them to OpenAI-compatible clients.
 
 ## 0.5.2 - 2026-05-15
 

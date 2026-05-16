@@ -72,7 +72,8 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             throw DeepseekV4FlashError.requestFailed("HTTP \(httpStatus): \(body)")
         }
 
-        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+        let repairedData = DeepseekV4FlashJSONRepair.escapingControlCharactersInsideStrings(data)
+        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: repairedData)
         guard let choice = decoded.choices.first else {
             throw DeepseekV4FlashError.requestFailed("response has no choices")
         }
