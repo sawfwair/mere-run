@@ -58,22 +58,21 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             stream: false
         )
 
-        var urlRequest = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try JSONEncoder().encode(payload)
-        urlRequest.timeoutInterval = 600
+        let requestBody = try JSONEncoder().encode(payload)
+        let url = URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!
 
         let prefillStart = Date()
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
-        let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(httpStatus) else {
-            let body = String(data: data, encoding: .utf8) ?? "<binary>"
-            throw DeepseekV4FlashError.requestFailed("HTTP \(httpStatus): \(body)")
+        let upstreamResponse = try await DeepseekV4FlashClient.normalizedChatCompletionData(
+            url: url,
+            requestBody: requestBody,
+            contentType: "application/json"
+        )
+        guard (200..<300).contains(upstreamResponse.statusCode) else {
+            let body = String(data: upstreamResponse.body, encoding: .utf8) ?? "<binary>"
+            throw DeepseekV4FlashError.requestFailed("HTTP \(upstreamResponse.statusCode): \(body)")
         }
 
-        let repairedData = DeepseekV4FlashJSONRepair.escapingControlCharactersInsideStrings(data)
-        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: repairedData)
+        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: upstreamResponse.body)
         guard let choice = decoded.choices.first else {
             throw DeepseekV4FlashError.requestFailed("response has no choices")
         }
