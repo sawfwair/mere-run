@@ -77,7 +77,7 @@ SOFTWARE.
 
 - purpose: packaged DeepSeek V4 Flash runtime used by the premier setup-agent tier
 - upstream project: [`antirez/ds4`](https://github.com/antirez/ds4)
-- pinned upstream commit: `f8b4ed635d559b3a5b44bf2df6a77e21b3e9178f`
+- pinned upstream commit: `be434773fe1c0335d76896ea07f62a376cd629e5`
 - rebuild note: regenerated with [`scripts/rebuild_ds4.sh`](./scripts/rebuild_ds4.sh)
 - license: MIT
 

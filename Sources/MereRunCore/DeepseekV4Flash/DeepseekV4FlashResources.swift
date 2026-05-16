@@ -22,6 +22,11 @@ public struct DeepseekV4FlashResources: Sendable, Hashable {
     public static let imatrixGGUFFile =
         "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-aligned.gguf"
 
+    /// Previous imatrix filename from the original upstream GGUF. Existing
+    /// installs may still point at this file, often through a symlink.
+    public static let previousImatrixGGUFFile =
+        "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf"
+
     /// Legacy non-imatrix q2 GGUF. Not downloaded by mere.run, but recognized
     /// on disk if a user installed it manually — the resolver still prefers
     /// imatrix when both are present.

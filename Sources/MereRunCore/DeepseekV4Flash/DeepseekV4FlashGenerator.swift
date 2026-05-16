@@ -58,21 +58,21 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             stream: false
         )
 
-        var urlRequest = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try JSONEncoder().encode(payload)
-        urlRequest.timeoutInterval = 600
+        let requestBody = try JSONEncoder().encode(payload)
+        let url = URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!
 
         let prefillStart = Date()
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
-        let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(httpStatus) else {
-            let body = String(data: data, encoding: .utf8) ?? "<binary>"
-            throw DeepseekV4FlashError.requestFailed("HTTP \(httpStatus): \(body)")
+        let upstreamResponse = try await DeepseekV4FlashClient.normalizedChatCompletionData(
+            url: url,
+            requestBody: requestBody,
+            contentType: "application/json"
+        )
+        guard (200..<300).contains(upstreamResponse.statusCode) else {
+            let body = String(data: upstreamResponse.body, encoding: .utf8) ?? "<binary>"
+            throw DeepseekV4FlashError.requestFailed("HTTP \(upstreamResponse.statusCode): \(body)")
         }
 
-        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: upstreamResponse.body)
         guard let choice = decoded.choices.first else {
             throw DeepseekV4FlashError.requestFailed("response has no choices")
         }
@@ -330,11 +330,15 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         if FileManager.default.fileExists(atPath: imatrixURL.path) {
             return imatrixURL
         }
+        let previousImatrixURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.previousImatrixGGUFFile)
+        if FileManager.default.fileExists(atPath: previousImatrixURL.path) {
+            return previousImatrixURL
+        }
         let legacyURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.legacyGGUFFile)
         if FileManager.default.fileExists(atPath: legacyURL.path) {
             return legacyURL
         }
-        if let preferred = preferredGGUF(in: modelDir) {
+        if let preferred = Self.preferredGGUF(in: modelDir) {
             return preferred
         }
 
@@ -372,8 +376,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
     /// Returns the most preferred .gguf in `directory` — files whose name
     /// contains "imatrix" win over those that do not, matching the upstream
     /// README's recommendation to prefer the imatrix variant.
-    private func preferredGGUF(in directory: URL) -> URL? {
-        let fileManager = FileManager.default
+    static func preferredGGUF(in directory: URL, fileManager: FileManager = .default) -> URL? {
         guard let enumerator = fileManager.enumerator(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -385,8 +388,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         var fallback: URL?
         for case let url as URL in enumerator {
             guard url.pathExtension.lowercased() == "gguf",
-                  let values = try? url.resourceValues(forKeys: [.isRegularFileKey]),
-                  values.isRegularFile == true else {
+                  Self.isRegularFileOrSymlinkTarget(url, fileManager: fileManager) else {
                 continue
             }
             if url.lastPathComponent.lowercased().contains("imatrix") {
@@ -398,6 +400,12 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             }
         }
         return imatrix ?? fallback
+    }
+
+    private static func isRegularFileOrSymlinkTarget(_ url: URL, fileManager: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
     }
 
     private func makeKVDiskDir() throws -> URL {

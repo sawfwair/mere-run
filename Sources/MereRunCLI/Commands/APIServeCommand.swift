@@ -947,45 +947,73 @@ actor CodeGenServer {
         var requestBody = body
         let data = requestBody.readData(length: requestBody.readableBytes) ?? Data()
 
-        var upstreamRequest = URLRequest(url: upstreamURL)
-        upstreamRequest.httpMethod = "POST"
-        upstreamRequest.setValue(contentType ?? "application/json", forHTTPHeaderField: "Content-Type")
-        upstreamRequest.httpBody = data
-        upstreamRequest.timeoutInterval = 600
+        if !DeepseekV4FlashClient.requestWantsStreamingResponse(data) {
+            let upstreamResponse = try await DeepseekV4FlashClient.normalizedChatCompletionData(
+                url: upstreamURL,
+                requestBody: data,
+                contentType: contentType
+            )
+            var headers: HTTPFields = [:]
+            headers[.contentType] = upstreamResponse.contentType
+            return Response(
+                status: .init(code: upstreamResponse.statusCode),
+                headers: headers,
+                body: .init(byteBuffer: ByteBuffer(data: upstreamResponse.body))
+            )
+        }
 
+        let upstreamRequest = DeepseekV4FlashClient.makeChatCompletionsRequest(
+            url: upstreamURL,
+            requestBody: data,
+            contentType: contentType
+        )
         let (upstreamBytes, response) = try await URLSession.shared.bytes(for: upstreamRequest)
         let http = response as? HTTPURLResponse
         var headers: HTTPFields = [:]
         headers[.contentType] = http?.value(forHTTPHeaderField: "Content-Type") ?? "application/json"
-        if headers[.contentType]?.lowercased().hasPrefix("text/event-stream") == true {
+        if DeepseekV4FlashClient.isEventStreamContentType(headers[.contentType]) {
             headers[.init("Cache-Control")!] = "no-cache"
             headers[.connection] = "keep-alive"
-        }
-        let stream = AsyncStream<ByteBuffer> { continuation in
-            Task {
-                var buffer = Data()
-                buffer.reserveCapacity(4_096)
-                do {
-                    for try await byte in upstreamBytes {
-                        buffer.append(byte)
-                        if byte == 10 || buffer.count >= 4_096 {
-                            continuation.yield(ByteBuffer(data: buffer))
-                            buffer.removeAll(keepingCapacity: true)
+            let stream = AsyncStream<ByteBuffer> { continuation in
+                Task {
+                    var buffer = Data()
+                    buffer.reserveCapacity(4_096)
+                    do {
+                        for try await byte in upstreamBytes {
+                            buffer.append(byte)
+                            if byte == 10 || buffer.count >= 4_096 {
+                                continuation.yield(ByteBuffer(data: buffer))
+                                buffer.removeAll(keepingCapacity: true)
+                            }
                         }
+                        if !buffer.isEmpty {
+                            continuation.yield(ByteBuffer(data: buffer))
+                        }
+                        continuation.finish()
+                    } catch {
+                        continuation.finish()
                     }
-                    if !buffer.isEmpty {
-                        continuation.yield(ByteBuffer(data: buffer))
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish()
                 }
             }
+            return Response(
+                status: .init(code: http?.statusCode ?? 502),
+                headers: headers,
+                body: .init(asyncSequence: stream)
+            )
         }
+
+        var upstreamData = Data()
+        for try await byte in upstreamBytes {
+            upstreamData.append(byte)
+        }
+        let repairedData = DeepseekV4FlashClient.normalizedChatCompletionBody(
+            upstreamData,
+            contentType: headers[.contentType]
+        )
         return Response(
             status: .init(code: http?.statusCode ?? 502),
             headers: headers,
-            body: .init(asyncSequence: stream)
+            body: .init(byteBuffer: ByteBuffer(data: repairedData))
         )
     }
 
