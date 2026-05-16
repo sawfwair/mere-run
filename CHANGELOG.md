@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.5.3 - 2026-05-16
+
 ### Added
 
 - added `mere.run status` for a quick local snapshot of API health, the served
