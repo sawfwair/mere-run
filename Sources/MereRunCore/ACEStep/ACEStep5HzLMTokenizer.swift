@@ -36,7 +36,8 @@ public final class ACEStep5HzLMTokenizer {
 
     public static func load(
         from directory: URL,
-        hubApi: HubApi = .shared
+        hubApi: HubApi = .shared,
+        requireAudioCodeTokens: Bool = true
     ) throws -> ACEStep5HzLMTokenizer {
         guard FileManager.default.fileExists(atPath: directory.path) else {
             throw ACEStep5HzLMTokenizerError.directoryNotFound(directory)
@@ -78,7 +79,15 @@ public final class ACEStep5HzLMTokenizer {
         }
 
         let addedTokensURL = directory.appending(path: "added_tokens.json")
-        let (audioCodeIds, audioCodeMap) = try loadAudioCodeTokens(from: addedTokensURL)
+        let (audioCodeIds, audioCodeMap): (Set<Int>, [Int: Int])
+        if FileManager.default.fileExists(atPath: addedTokensURL.path) {
+            (audioCodeIds, audioCodeMap) = try loadAudioCodeTokens(from: addedTokensURL)
+        } else if requireAudioCodeTokens {
+            throw ACEStep5HzLMTokenizerError.fileNotFound(addedTokensURL)
+        } else {
+            audioCodeIds = []
+            audioCodeMap = [:]
+        }
 
         return ACEStep5HzLMTokenizer(
             tokenizer: tokenizer,

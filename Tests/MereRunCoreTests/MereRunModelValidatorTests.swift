@@ -94,6 +94,25 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
     }
 
+    private func writeMinimalValidQwen3ASRModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .qwen3ASR, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent("config.json"),
+            contents: Data(#"{"quantization":{"bits":8,"group_size":64}}"#.utf8)
+        )
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+    }
+
+    private func writeMinimalValidQwen35AgentGGUFModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .qwen35Agent9B, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("Qwen3.5-9B-Q4_K_M.gguf"), contents: Data())
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -295,5 +314,30 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.isEmpty)
         XCTAssertEqual(report.manifest?.family, .privacy)
         XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.textAnonymization]))
+    }
+
+    func testQwen3ASRUsesHFQuantizationConfigWithoutManifestQuantization() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("speech-asr-qwen3", isDirectory: true)
+        try writeMinimalValidQwen3ASRModel(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "speech-asr-qwen3")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+    }
+
+    func testGGUFCodeModelDoesNotRequireManifestQuantization() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("text-agent-qwen35-9b", isDirectory: true)
+        try writeMinimalValidQwen35AgentGGUFModel(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-agent-qwen35-9b")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertFalse(report.warnings.contains("Missing model root marker (expected model_index.json)."))
     }
 }

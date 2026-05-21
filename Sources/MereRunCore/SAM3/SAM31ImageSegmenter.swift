@@ -153,7 +153,7 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
 
     private struct LoadedState {
         let config: SAM31ModelConfig
-        let tokenizer: SAM31Tokenizer
+        let tokenizer: SAM31Tokenizer?
         let model: SAM31Model
     }
 
@@ -280,7 +280,12 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             switch promptObject.promptKind {
             case .text:
                 guard let textPrompt = promptObject.textPrompt else { continue }
-                let tokens = state.tokenizer.encode(
+                guard let tokenizer = state.tokenizer else {
+                    throw SegmenterError.failedToEncodeMetadata(
+                        "Text prompts require tokenizer.json and tokenizer_config.json in the SAM 3.1 model root."
+                    )
+                }
+                let tokens = tokenizer.encode(
                     prompts: [textPrompt],
                     maxLength: state.config.detectorConfig.textConfig.maxPositionEmbeddings
                 )
@@ -401,7 +406,15 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
 
         let resources = SAM31Resources(modelRootURL: modelRootURL)
         let config = try SAM31ModelConfig.load(from: resources.configURL)
-        let tokenizer = try SAM31Tokenizer.load(from: resources.tokenizerRootURL)
+        let tokenizer: SAM31Tokenizer?
+        let tokenizerConfigURL = resources.tokenizerRootURL.appendingPathComponent("tokenizer_config.json")
+        let tokenizerDataURL = resources.tokenizerRootURL.appendingPathComponent("tokenizer.json")
+        if fileManager.fileExists(atPath: tokenizerConfigURL.path),
+           fileManager.fileExists(atPath: tokenizerDataURL.path) {
+            tokenizer = try SAM31Tokenizer.load(from: resources.tokenizerRootURL)
+        } else {
+            tokenizer = nil
+        }
         let model = SAM31Model(config: config)
         try Self.loadWeights(resources: resources, into: model)
 

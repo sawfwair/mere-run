@@ -23,7 +23,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Category | Hugging Face pull IDs |
 | --- | --- |
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
-| Text chat | `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash` |
+| Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Text anonymize | `text-anonymize-privacy-filter` |
@@ -54,10 +54,10 @@ Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
 96 GB+ Apple Silicon Macs. Q35/Qwen setup agents are lower-memory or comparison
 alternatives, not upgrades from DeepSeek V4 Flash.
 
-`text-chat-gemma4` is also the default chat model in the CLI. You can install it
-explicitly with `mere.run model pull text-chat-gemma4`, or let supported runtime
-paths resolve a Hugging Face snapshot on first use unless you point them at a
-local model root.
+`text-chat-gemma4` is the dense bf16 Gemma 4 31B alias and is gated for larger
+machines. On 32 GB Apple Silicon Macs, use `text-chat-gemma4-turbo`, which
+installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot and runs through the native
+Swift Gemma runtime.
 
 Useful environment variables for that path:
 
@@ -66,8 +66,11 @@ Useful environment variables for that path:
 `vision-segment-sam31` packages the native SAM 3.1 segmentation and tracking runtime used by `mere.run vision segment`, `mere.run vision track`, and `mere.run vision track-live`. Managed or local SAM roots are expected to contain:
 
 - `config.json`
-- `tokenizer/`
 - `model.safetensors` or `model.safetensors.index.json`
+
+Tokenizer files are optional for geometry prompts. Text prompts require
+`tokenizer.json` and `tokenizer_config.json` in the SAM root or tokenizer
+subdirectory.
 
 The manifest for this package advertises both `vision_segmentation` and
 `vision_tracking` capabilities.

@@ -77,6 +77,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case base
         case max
         case latest
+        case turbo
     }
 
     public enum Variant: String, Codable, CaseIterable, Hashable, Sendable {
@@ -564,6 +565,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: gemma4TextComponents,
                 upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
+                createdAt: createdAt
+            )
+        case .gemma4Turbo:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .turbo,
+                variant: .standard,
+                precision: .int4,
+                defaults: nil,
+                supports: [.chat],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.turboUpstreamModelId,
                 createdAt: createdAt
             )
         case .q35:

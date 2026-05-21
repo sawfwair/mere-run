@@ -21,9 +21,9 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.rateLimitPerMinute, 60)
         XCTAssertEqual(cmd.contextSize, 32_768)
         XCTAssertNil(cmd.kvBits)
-        XCTAssertEqual(cmd.kvQuantScheme, "uniform")
-        XCTAssertEqual(cmd.kvGroupSize, 64)
-        XCTAssertEqual(cmd.quantizedKVStart, 5_000)
+        XCTAssertNil(cmd.kvQuantScheme)
+        XCTAssertNil(cmd.kvGroupSize)
+        XCTAssertNil(cmd.quantizedKVStart)
     }
 
     func testAPIServeParsesOverrides() throws {
@@ -54,6 +54,37 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.kvQuantScheme, "turboquant")
         XCTAssertEqual(cmd.kvGroupSize, 32)
         XCTAssertEqual(cmd.quantizedKVStart, 2048)
+    }
+
+    func testAPIServeGemma4TurboModelDefaultsToTurboQuantKVCache() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-gemma4",
+            "--model-path", Gemma4Resources.turboModelId,
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization()
+
+        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
+        XCTAssertEqual(quantization.scheme, .turboquant)
+        XCTAssertEqual(quantization.groupSize, Gemma4Resources.defaultKVGroupSize)
+        XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.defaultTurboQuantizedKVStart)
+    }
+
+    func testAPIServeGemma4TurboKVFlagsOverrideIndependently() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-gemma4",
+            "--model-path", Gemma4Resources.turboModelId,
+            "--kv-quant-scheme", "uniform",
+            "--kv-group-size", "32",
+            "--quantized-kv-start", "128",
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization()
+
+        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
+        XCTAssertEqual(quantization.scheme, .uniform)
+        XCTAssertEqual(quantization.groupSize, 32)
+        XCTAssertEqual(quantization.quantizedStart, 128)
     }
 
     func testHealthContractUsesStablePayload() {

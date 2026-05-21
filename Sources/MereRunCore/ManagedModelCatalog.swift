@@ -291,6 +291,20 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
+            id: Gemma4Resources.turboModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Gemma4Resources.turboUpstreamModelId,
+                patterns: Gemma4Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Gemma4Resources.turboUpstreamModelId,
+            validationKind: .gemma4,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 31 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
             id: "text-chat-gemma4-nano",
             category: .textChat,
             installShape: .directoryRoot,

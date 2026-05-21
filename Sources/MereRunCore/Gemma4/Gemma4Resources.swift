@@ -4,13 +4,18 @@ public struct Gemma4Resources: Sendable, Hashable {
     public static let defaultModelId = "text-chat-gemma4"
     public static let nanoModelId = "text-chat-gemma4-nano"
     public static let maxModelId = "text-chat-gemma4-max"
+    public static let turboModelId = "text-chat-gemma4-turbo"
     public static let nanoUpstreamModelId = "google/gemma-4-E4B-it"
     public static let maxUpstreamModelId = "google/gemma-4-31B-it"
+    public static let turboUpstreamModelId = "mlx-community/gemma-4-26b-a4b-it-nvfp4"
     public static let defaultUpstreamModelId = maxUpstreamModelId
     public static let defaultContextLength = 32_768
     public static let defaultKVGroupSize = 64
     public static let defaultQuantizedKVStart = 5_000
     public static let defaultKVQuantizationScheme: Gemma4KVQuantizationScheme = .uniform
+    public static let defaultTurboKVBits = 4.0
+    public static let defaultTurboQuantizedKVStart = 0
+    public static let defaultTurboKVQuantizationScheme: Gemma4KVQuantizationScheme = .turboquant
     public static let snapshotPatterns = [
         "config.json",
         "generation_config.json",
@@ -81,6 +86,13 @@ public struct Gemma4Resources: Sendable, Hashable {
             return false
         }
         return trimmed.split(separator: "/").count == 2
+    }
+
+    public static func usesTurboDefaults(modelSpec raw: String) -> Bool {
+        let normalized = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return normalized == turboModelId || normalized == turboUpstreamModelId.lowercased()
     }
 }
 

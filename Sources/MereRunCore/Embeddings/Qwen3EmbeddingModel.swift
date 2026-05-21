@@ -68,7 +68,10 @@ public final class Qwen3EmbeddingModel {
             fileManager: fileManager
         )
 
-        self.tokenizer = try ACEStep5HzLMTokenizer.load(from: resources.rootURL)
+        self.tokenizer = try ACEStep5HzLMTokenizer.load(
+            from: resources.rootURL,
+            requireAudioCodeTokens: false
+        )
         self.encoder = qwen
     }
 
@@ -155,4 +158,3 @@ public final class Qwen3EmbeddingModel {
         return vector / norm
     }
 }
-

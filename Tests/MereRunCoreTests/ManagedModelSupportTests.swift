@@ -39,6 +39,34 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testDenseGemma4IsRejectedOnThirtyTwoGB() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.defaultModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M1 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertFalse(report.isSupported)
+        XCTAssertTrue(report.reasons.joined(separator: " ").contains("Requires at least 48 GB"))
+    }
+
+    func testGemma4TurboIsSupportedOnThirtyTwoGB() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.turboModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M1 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertEqual(report.reasons, [])
+    }
+
     func testNonAppleSiliconMacIsRejected() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
         let machine = MereRunMachineProfile(

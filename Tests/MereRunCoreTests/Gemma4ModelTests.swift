@@ -112,4 +112,17 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         XCTAssertNil(attention.vProj)
         XCTAssertEqual(output.shape, [1, 2, config.hiddenSize])
     }
+
+    func testMoEDecoderLayerInstallsRouterAndExperts() throws {
+        var configObject = makeBaseConfig()
+        configObject["enable_moe_block"] = true
+        configObject["num_experts"] = 4
+        configObject["top_k_experts"] = 2
+        configObject["moe_intermediate_size"] = 4
+        let config = try decodeTextConfig(configObject)
+        let layer = Gemma4DecoderLayer(config: config, layerIndex: 0)
+
+        XCTAssertNotNil(layer.router)
+        XCTAssertNotNil(layer.experts)
+    }
 }

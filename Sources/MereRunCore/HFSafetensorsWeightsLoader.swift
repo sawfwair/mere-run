@@ -56,6 +56,16 @@ public enum HFSafetensorsWeightsLoader {
         }
     }
 
+    public typealias QuantizedModuleResolver = (
+        _ path: String,
+        _ module: Module,
+        _ quantizedWeight: MLXArray,
+        _ scales: MLXArray,
+        _ biases: MLXArray?,
+        _ fallbackGroupSize: Int,
+        _ fallbackBits: Int
+    ) -> (groupSize: Int, bits: Int, mode: QuantizationMode)
+
     /// Applies weights from a Hugging Face sharded safetensors index (`*.safetensors.index.json`).
     ///
     /// This streams shards one-at-a-time to keep peak memory low.
@@ -250,6 +260,7 @@ public enum HFSafetensorsWeightsLoader {
         groupSize: Int = 64,
         bits: Int = 4,
         applySVDResiduals: Bool? = nil,
+        quantizedModuleResolver: QuantizedModuleResolver? = nil,
         keyMapper: ((String) -> String)? = nil,
         mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in [(key, value)] },
         progressHandler: (@Sendable (ShardProgress) -> Void)? = nil
@@ -312,6 +323,15 @@ public enum HFSafetensorsWeightsLoader {
                     fallbackGroupSize: groupSize,
                     fallbackBits: bits
                 )
+                let resolved = quantizedModuleResolver?(
+                    path,
+                    module,
+                    qWeight,
+                    scales,
+                    qBiases,
+                    qp.groupSize,
+                    qp.bits
+                ) ?? (groupSize: qp.groupSize, bits: qp.bits, mode: QuantizationMode.affine)
 
                 let quantized: Module
                 if useResiduals, let svdUp, let svdDown {
@@ -320,8 +340,9 @@ public enum HFSafetensorsWeightsLoader {
                         bias: linearBias,
                         scales: scales,
                         biases: qBiases,
-                        groupSize: qp.groupSize,
-                        bits: qp.bits,
+                        groupSize: resolved.groupSize,
+                        bits: resolved.bits,
+                        mode: resolved.mode,
                         residualDown: svdDown,
                         residualUp: svdUp
                     )
@@ -332,8 +353,9 @@ public enum HFSafetensorsWeightsLoader {
                         bias: linearBias,
                         scales: scales,
                         biases: qBiases,
-                        groupSize: qp.groupSize,
-                        bits: qp.bits
+                        groupSize: resolved.groupSize,
+                        bits: resolved.bits,
+                        mode: resolved.mode
                     )
                 }
                 quantizedReplacements[path] = quantized
@@ -348,12 +370,22 @@ public enum HFSafetensorsWeightsLoader {
                     fallbackGroupSize: groupSize,
                     fallbackBits: bits
                 )
+                let resolved = quantizedModuleResolver?(
+                    path,
+                    module,
+                    qWeight,
+                    scales,
+                    qBiases,
+                    qp.groupSize,
+                    qp.bits
+                ) ?? (groupSize: qp.groupSize, bits: qp.bits, mode: QuantizationMode.affine)
                 let quantized = PreQuantizedEmbedding(
                     weight: qWeight,
                     scales: scales,
                     biases: qBiases,
-                    groupSize: qp.groupSize,
-                    bits: qp.bits
+                    groupSize: resolved.groupSize,
+                    bits: resolved.bits,
+                    mode: resolved.mode
                 )
                 quantizedReplacements[path] = quantized
             } else {
@@ -442,6 +474,7 @@ public enum HFSafetensorsWeightsLoader {
         groupSize: Int = 64,
         bits: Int = 4,
         applySVDResiduals: Bool? = nil,
+        quantizedModuleResolver: QuantizedModuleResolver? = nil,
         keyMapper: ((String) -> String)? = nil,
         mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in [(key, value)] }
     ) throws {
@@ -500,6 +533,15 @@ public enum HFSafetensorsWeightsLoader {
                     fallbackGroupSize: groupSize,
                     fallbackBits: bits
                 )
+                let resolved = quantizedModuleResolver?(
+                    path,
+                    module,
+                    qWeight,
+                    scales,
+                    qBiases,
+                    qp.groupSize,
+                    qp.bits
+                ) ?? (groupSize: qp.groupSize, bits: qp.bits, mode: QuantizationMode.affine)
 
                 let quantized: Module
                 if useResiduals, let svdUp, let svdDown {
@@ -508,8 +550,9 @@ public enum HFSafetensorsWeightsLoader {
                         bias: linearBias,
                         scales: scales,
                         biases: qBiases,
-                        groupSize: qp.groupSize,
-                        bits: qp.bits,
+                        groupSize: resolved.groupSize,
+                        bits: resolved.bits,
+                        mode: resolved.mode,
                         residualDown: svdDown,
                         residualUp: svdUp
                     )
@@ -520,8 +563,9 @@ public enum HFSafetensorsWeightsLoader {
                         bias: linearBias,
                         scales: scales,
                         biases: qBiases,
-                        groupSize: qp.groupSize,
-                        bits: qp.bits
+                        groupSize: resolved.groupSize,
+                        bits: resolved.bits,
+                        mode: resolved.mode
                     )
                 }
                 quantizedReplacements[path] = quantized
@@ -535,12 +579,22 @@ public enum HFSafetensorsWeightsLoader {
                     fallbackGroupSize: groupSize,
                     fallbackBits: bits
                 )
+                let resolved = quantizedModuleResolver?(
+                    path,
+                    module,
+                    qWeight,
+                    scales,
+                    qBiases,
+                    qp.groupSize,
+                    qp.bits
+                ) ?? (groupSize: qp.groupSize, bits: qp.bits, mode: QuantizationMode.affine)
                 let quantized = PreQuantizedEmbedding(
                     weight: qWeight,
                     scales: scales,
                     biases: qBiases,
-                    groupSize: qp.groupSize,
-                    bits: qp.bits
+                    groupSize: resolved.groupSize,
+                    bits: resolved.bits,
+                    mode: resolved.mode
                 )
                 quantizedReplacements[path] = quantized
             } else {

@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
+import MLXRandom
 
 @inline(__always)
 private func gemma4RepeatAlongHeads(_ x: MLXArray, heads: Int) -> MLXArray {
@@ -181,6 +182,174 @@ final class Gemma4MLP: Module {
     }
 }
 
+final class Gemma4SwitchLinear: Module {
+    @ModuleInfo(key: "weight") var weight: MLXArray
+    @ModuleInfo(key: "scales") var scales: MLXArray?
+    @ModuleInfo(key: "biases") var biases: MLXArray?
+    @ModuleInfo(key: "bias") var bias: MLXArray?
+
+    private let groupSize: Int
+    private let bits: Int
+    private let mode: QuantizationMode
+
+    init(
+        inputDims: Int,
+        outputDims: Int,
+        numExperts: Int,
+        groupSize: Int = 16,
+        bits: Int = 4,
+        mode: QuantizationMode = .nvfp4,
+        bias: Bool = false
+    ) {
+        self.groupSize = groupSize
+        self.bits = bits
+        self.mode = mode
+        let scale = sqrt(1.0 / Float(max(1, inputDims)))
+        self._weight.wrappedValue = MLXRandom.uniform(
+            low: -scale,
+            high: scale,
+            [numExperts, outputDims, inputDims]
+        )
+        let groups = max(1, (inputDims + groupSize - 1) / groupSize)
+        self._scales.wrappedValue = MLXArray.zeros([numExperts, outputDims, groups])
+        self._biases.wrappedValue = nil
+        if bias {
+            self._bias.wrappedValue = MLXArray.zeros([numExperts, outputDims])
+        }
+        super.init()
+    }
+
+    func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let batch = x.dim(0)
+        let sequenceLength = x.dim(1)
+        let topK = indices.dim(2)
+        let inputDim = x.dim(x.ndim - 1)
+        let batchTokens = batch * sequenceLength
+
+        let flatX: MLXArray
+        if x.ndim == 4 && x.dim(2) == topK {
+            flatX = x.reshaped([batchTokens * topK, 1, inputDim])
+        } else {
+            var expanded = x.reshaped([batchTokens, 1, inputDim])
+            expanded = MLX.expandedDimensions(expanded, axis: 1)
+            expanded = MLX.repeated(expanded, count: topK, axis: 1)
+            flatX = expanded.reshaped([batchTokens * topK, 1, inputDim])
+        }
+
+        let flatIndices = indices.reshaped([batchTokens * topK])
+        let output: MLXArray
+        if let scales {
+            output = gatherQuantizedMM(
+                flatX,
+                weight,
+                scales: scales,
+                biases: biases,
+                rhsIndices: flatIndices,
+                transpose: true,
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode,
+                sortedIndices: false
+            )
+        } else {
+            output = gatherMM(
+                flatX,
+                weight.swappedAxes(-1, -2),
+                rhsIndices: flatIndices,
+                sortedIndices: false
+            )
+        }
+
+        let outputDim = output.dim(2)
+        var reshaped = output.reshaped([batchTokens, topK, outputDim])
+        reshaped = reshaped.reshaped([batch, sequenceLength, topK, outputDim])
+
+        if let bias {
+            let selectedBias = take(bias, flatIndices, axis: 0)
+                .reshaped([batch, sequenceLength, topK, outputDim])
+            return reshaped + selectedBias
+        }
+        return reshaped
+    }
+}
+
+final class Gemma4SwitchGLU: Module {
+    @ModuleInfo(key: "gate_proj") var gateProj: Gemma4SwitchLinear
+    @ModuleInfo(key: "up_proj") var upProj: Gemma4SwitchLinear
+    @ModuleInfo(key: "down_proj") var downProj: Gemma4SwitchLinear
+
+    init(config: Gemma4TextConfig) {
+        self._gateProj.wrappedValue = Gemma4SwitchLinear(
+            inputDims: config.hiddenSize,
+            outputDims: max(1, config.moeIntermediateSize),
+            numExperts: max(1, config.numExperts)
+        )
+        self._upProj.wrappedValue = Gemma4SwitchLinear(
+            inputDims: config.hiddenSize,
+            outputDims: max(1, config.moeIntermediateSize),
+            numExperts: max(1, config.numExperts)
+        )
+        self._downProj.wrappedValue = Gemma4SwitchLinear(
+            inputDims: max(1, config.moeIntermediateSize),
+            outputDims: config.hiddenSize,
+            numExperts: max(1, config.numExperts)
+        )
+        super.init()
+    }
+
+    func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let up = upProj(x, indices: indices)
+        let gate = gateProj(x, indices: indices)
+        return downProj(geluApproximate(gate) * up, indices: indices)
+    }
+}
+
+final class Gemma4Router: Module {
+    @ModuleInfo(key: "proj") var proj: Linear
+    @ParameterInfo(key: "scale") var scale: MLXArray
+    @ParameterInfo(key: "per_expert_scale") var perExpertScale: MLXArray
+
+    private let topK: Int
+    private let eps: Float
+    private let rootSize: Float
+
+    init(config: Gemma4TextConfig) {
+        self.topK = max(1, config.topKExperts)
+        self.eps = config.rmsNormEps
+        self.rootSize = pow(Float(max(1, config.hiddenSize)), -0.5)
+        self._proj.wrappedValue = Linear(config.hiddenSize, max(1, config.numExperts), bias: false)
+        self._scale.wrappedValue = MLXArray.ones([config.hiddenSize])
+        self._perExpertScale.wrappedValue = MLXArray.ones([max(1, config.numExperts)])
+        super.init()
+    }
+
+    func callAsFunction(_ x: MLXArray) -> (indices: MLXArray, weights: MLXArray) {
+        let normWeight = scale * MLXArray(rootSize).asType(scale.dtype)
+        let routedInput = MLXFast.rmsNorm(x, weight: normWeight, eps: eps)
+        let expertScores = proj(routedInput)
+        let k = min(topK, expertScores.dim(-1))
+        let indices = argPartition(-expertScores, kth: k - 1, axis: -1)[.ellipsis, 0..<k]
+        var weights = takeAlong(expertScores, indices, axis: -1)
+        weights = softmax(weights, axis: -1)
+        weights = weights * take(perExpertScale, indices, axis: 0)
+        return (indices, weights)
+    }
+}
+
+final class Gemma4Experts: Module {
+    @ModuleInfo(key: "switch_glu") var switchGLU: Gemma4SwitchGLU
+
+    init(config: Gemma4TextConfig) {
+        self._switchGLU.wrappedValue = Gemma4SwitchGLU(config: config)
+        super.init()
+    }
+
+    func callAsFunction(_ x: MLXArray, indices: MLXArray, weights: MLXArray) -> MLXArray {
+        let routed = switchGLU(x, indices: indices)
+        return (routed * MLX.expandedDimensions(weights, axis: weights.ndim)).sum(axis: -2)
+    }
+}
+
 final class Gemma4Attention: Module {
     @ModuleInfo(key: "q_proj") var qProj: Linear
     @ModuleInfo(key: "k_proj") var kProj: Linear
@@ -260,15 +429,33 @@ final class Gemma4Attention: Module {
 
         let keys: MLXArray
         let values: MLXArray
-        if isKVSharedLayer, let shared = cache?.currentState() {
+        if isKVSharedLayer, let cache {
             if sequenceLength == 1,
-               let cache,
                let attended = cache.specializedAttention(queries: queries, repeats: repeats, scale: scale) {
                 let reshaped = attended.transposed(0, 2, 1, 3).reshaped(batchSize, sequenceLength, numHeads * headDim)
                 return oProj(reshaped)
             }
-            keys = shared.0
-            values = shared.1
+            if let shared = cache.currentState() {
+                keys = shared.0
+                values = shared.1
+            } else {
+                var rawKeys = kProj(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
+                var rawValues = useKeyEqualsValue
+                    ? rawKeys
+                    : vProj!(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
+
+                rawKeys = kNorm(rawKeys)
+                rawValues = gemma4RMSNormNoScale(rawValues, eps: rmsNormEps)
+
+                var computedKeys = rawKeys.transposed(0, 2, 1, 3)
+                let computedValues = rawValues.transposed(0, 2, 1, 3)
+                computedKeys = rope(computedKeys, offset: offset)
+
+                cache.append(keys: computedKeys, values: computedValues)
+                let updated = cache.currentState()!
+                keys = updated.0
+                values = updated.1
+            }
         } else {
             var rawKeys = kProj(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
             var rawValues = useKeyEqualsValue
@@ -354,10 +541,15 @@ final class Gemma4Attention: Module {
 final class Gemma4DecoderLayer: Module {
     @ModuleInfo(key: "self_attn") var selfAttention: Gemma4Attention
     @ModuleInfo(key: "mlp") var mlp: Gemma4MLP
+    @ModuleInfo(key: "router") var router: Gemma4Router?
+    @ModuleInfo(key: "experts") var experts: Gemma4Experts?
     @ModuleInfo(key: "input_layernorm") var inputLayerNorm: RMSNorm
     @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: RMSNorm
     @ModuleInfo(key: "pre_feedforward_layernorm") var preFeedforwardLayerNorm: RMSNorm
     @ModuleInfo(key: "post_feedforward_layernorm") var postFeedforwardLayerNorm: RMSNorm
+    @ModuleInfo(key: "pre_feedforward_layernorm_2") var preFeedforwardLayerNorm2: RMSNorm?
+    @ModuleInfo(key: "post_feedforward_layernorm_1") var postFeedforwardLayerNorm1: RMSNorm?
+    @ModuleInfo(key: "post_feedforward_layernorm_2") var postFeedforwardLayerNorm2: RMSNorm?
     @ModuleInfo(key: "per_layer_input_gate") var perLayerInputGate: Linear
     @ModuleInfo(key: "per_layer_projection") var perLayerProjection: Linear
     @ModuleInfo(key: "post_per_layer_input_norm") var postPerLayerInputNorm: RMSNorm
@@ -368,6 +560,19 @@ final class Gemma4DecoderLayer: Module {
     init(config: Gemma4TextConfig, layerIndex: Int) {
         self._selfAttention.wrappedValue = Gemma4Attention(config: config, layerIndex: layerIndex)
         self._mlp.wrappedValue = Gemma4MLP(config: config, layerIndex: layerIndex)
+        if config.enableMoEBlock {
+            self._router.wrappedValue = Gemma4Router(config: config)
+            self._experts.wrappedValue = Gemma4Experts(config: config)
+            self._preFeedforwardLayerNorm2.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+            self._postFeedforwardLayerNorm1.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+            self._postFeedforwardLayerNorm2.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+        } else {
+            self._router.wrappedValue = nil
+            self._experts.wrappedValue = nil
+            self._preFeedforwardLayerNorm2.wrappedValue = nil
+            self._postFeedforwardLayerNorm1.wrappedValue = nil
+            self._postFeedforwardLayerNorm2.wrappedValue = nil
+        }
         self._inputLayerNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         self._postAttentionLayerNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         self._preFeedforwardLayerNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
@@ -392,8 +597,21 @@ final class Gemma4DecoderLayer: Module {
         hidden = attentionResidual + hidden
 
         let mlpResidual = hidden
-        hidden = preFeedforwardLayerNorm(hidden)
-        hidden = mlp(hidden)
+        if let router, let experts, let preFeedforwardLayerNorm2, let postFeedforwardLayerNorm1, let postFeedforwardLayerNorm2 {
+            var dense = preFeedforwardLayerNorm(hidden)
+            dense = mlp(dense)
+            dense = postFeedforwardLayerNorm1(dense)
+
+            let route = router(hidden)
+            var sparse = preFeedforwardLayerNorm2(hidden)
+            sparse = experts(sparse, indices: route.indices, weights: route.weights)
+            sparse = postFeedforwardLayerNorm2(sparse)
+
+            hidden = dense + sparse
+        } else {
+            hidden = preFeedforwardLayerNorm(hidden)
+            hidden = mlp(hidden)
+        }
         hidden = postFeedforwardLayerNorm(hidden)
         hidden = mlpResidual + hidden
 

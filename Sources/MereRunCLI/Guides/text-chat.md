@@ -6,13 +6,14 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported managed ids include `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, and `text-chat-psi-agent`.
+`text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
 
 ## Install And Check
 
 ```bash
 mere.run model capabilities
-mere.run model pull text-chat-gemma4
+mere.run model pull text-chat-gemma4-nano
 mere.run text chat --help
 ```
 
@@ -23,7 +24,7 @@ mere.run text chat --help
 - `--max-tokens`: maximum generated tokens.
 - `--temperature`: randomness. Lower for factual work, higher for brainstorming.
 - `--top-p`: nucleus sampling cutoff.
-- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache quantization controls.
+- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache quantization controls. `text-chat-gemma4-turbo` defaults to 4-bit TurboQuant KV cache from token 0; explicit flags override that.
 - `--model-root`, `-m`: explicit local model root.
 - `--model`: canonical model id.
 - `--thinking`, `--show-thinking`: include hidden reasoning output when supported.
