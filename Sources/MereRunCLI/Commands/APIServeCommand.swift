@@ -110,15 +110,10 @@ struct APIServe: AsyncParsableCommand {
             if let explicit = model {
                 return explicit
             }
-            // Prefer standalone MeBot Instruct model
             if let mebotPath = MeBotModelCatalog.resolveModelPath() {
                 return mebotPath
             }
-            // Fall back to Klein model
-            if let resolved = ModelResolver().resolveIfPresent(.mebot) {
-                return resolved.rootURL.path
-            }
-            throw ValidationError("Model 'text-chat-mebot' is not installed. Download image-klein-nano or image-klein-max first.")
+            throw ValidationError("Model 'text-chat-mebot' is not installed.")
         case .textChatGemma4:
             if let explicit = model {
                 return explicit
