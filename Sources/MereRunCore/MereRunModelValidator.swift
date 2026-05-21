@@ -92,7 +92,17 @@ public enum MereRunModelValidator {
         let rootConfig = rootURL.appendingPathComponent("config.json")
 
         let hasRootMarker = fileManager.fileExists(atPath: modelIndex.path) || fileManager.fileExists(atPath: rootConfig.path)
-        if !hasRootMarker && !usesMFluxZImage {
+        let requiresRootMarker: Bool = {
+            guard let spec else { return true }
+            switch spec.installShape {
+            case .singleFile:
+                return false
+            case .directoryRoot, .structuredRoot:
+                return spec.validationKind != .codegenGGUF
+                    && spec.validationKind != .deepseekV4FlashIMatrixGGUF
+            }
+        }()
+        if !hasRootMarker && !usesMFluxZImage && requiresRootMarker {
             warnings.append("Missing model root marker (expected model_index.json).")
         }
 
@@ -343,7 +353,9 @@ public enum MereRunModelValidator {
             switch precision {
             case .int4, .int8:
                 guard let q = manifest.quantization else {
-                    errors.append("Quantized precision (\(precision.rawValue)) requires quantization metadata.")
+                    if manifestRequiresInlineQuantization(manifest) {
+                        errors.append("Quantized precision (\(precision.rawValue)) requires quantization metadata.")
+                    }
                     break
                 }
                 if let bits = q.bits, !(2...8).contains(bits) {
@@ -427,6 +439,15 @@ public enum MereRunModelValidator {
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
     }
 
+    private static func manifestRequiresInlineQuantization(_ manifest: MereRunModelManifest) -> Bool {
+        switch manifest.engine {
+        case .flux2Klein?, .zimageTurbo?, .qwen35HybridMoE?:
+            return true
+        default:
+            return false
+        }
+    }
+
     private static func inferFamily(from modelId: String) -> MereRunModelManifest.Family? {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
@@ -444,7 +465,8 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("text-chat-psi-") { return .psi }
         if modelId == ModelResolver.ModelID.gemma4.rawValue
             || modelId == ModelResolver.ModelID.gemma4Nano.rawValue
-            || modelId == ModelResolver.ModelID.gemma4Max.rawValue {
+            || modelId == ModelResolver.ModelID.gemma4Max.rawValue
+            || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue {
             return .gemma
         }
         if modelId == ModelResolver.ModelID.q35.rawValue || modelId == ModelResolver.ModelID.q35Nano.rawValue {

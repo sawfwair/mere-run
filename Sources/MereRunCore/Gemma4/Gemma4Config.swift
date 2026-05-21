@@ -37,6 +37,9 @@ public struct Gemma4TextConfig: Decodable, Sendable, Hashable {
     public let finalLogitSoftcapping: Float?
     public let useDoubleWideMLP: Bool
     public let enableMoEBlock: Bool
+    public let numExperts: Int
+    public let topKExperts: Int
+    public let moeIntermediateSize: Int
     public let numKVSharedLayers: Int
     public let tieWordEmbeddings: Bool
 
@@ -65,6 +68,9 @@ public struct Gemma4TextConfig: Decodable, Sendable, Hashable {
         case finalLogitSoftcapping = "final_logit_softcapping"
         case useDoubleWideMLP = "use_double_wide_mlp"
         case enableMoEBlock = "enable_moe_block"
+        case numExperts = "num_experts"
+        case topKExperts = "top_k_experts"
+        case moeIntermediateSize = "moe_intermediate_size"
         case numKVSharedLayers = "num_kv_shared_layers"
         case tieWordEmbeddings = "tie_word_embeddings"
     }
@@ -99,6 +105,9 @@ public struct Gemma4TextConfig: Decodable, Sendable, Hashable {
         self.finalLogitSoftcapping = try container.decodeIfPresent(Float.self, forKey: .finalLogitSoftcapping)
         self.useDoubleWideMLP = try container.decodeIfPresent(Bool.self, forKey: .useDoubleWideMLP) ?? false
         self.enableMoEBlock = try container.decodeIfPresent(Bool.self, forKey: .enableMoEBlock) ?? false
+        self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
+        self.topKExperts = try container.decodeIfPresent(Int.self, forKey: .topKExperts) ?? 0
+        self.moeIntermediateSize = try container.decodeIfPresent(Int.self, forKey: .moeIntermediateSize) ?? 0
         self.numKVSharedLayers = try container.decodeIfPresent(Int.self, forKey: .numKVSharedLayers) ?? 0
         self.tieWordEmbeddings = try container.decodeIfPresent(Bool.self, forKey: .tieWordEmbeddings) ?? true
     }

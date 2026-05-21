@@ -71,6 +71,14 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRevision, "main")
     }
 
+    func testGemma4TurboUsesNVFP4HubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.turboModelId))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "mlx-community/gemma-4-26b-a4b-it-nvfp4")
+        XCTAssertEqual(spec.upstreamRepoId, "mlx-community/gemma-4-26b-a4b-it-nvfp4")
+        XCTAssertEqual(spec.validationKind, .gemma4)
+    }
+
     func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

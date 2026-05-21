@@ -200,10 +200,18 @@ public enum ManagedModelCapabilityCatalog {
             ),
             descriptor(
                 "text-chat-gemma4",
-                "Gemma 4 chat alias",
-                "Resolves to the best installed Gemma 4 chat model for native Swift text chat.",
-                minimum: 16,
-                recommended: 32
+                "Gemma 4 dense bf16 alias",
+                "Resolves to dense bf16 Gemma 4 chat models for native Swift text chat; use the TurboQuant tier on 32 GB Macs.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
+                Gemma4Resources.turboModelId,
+                "Gemma 4 NVFP4 MoE",
+                "Installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot for the native Swift 32 GB tier.",
+                minimum: 24,
+                recommended: 32,
+                setup: true
             ),
             descriptor(
                 "text-chat-gemma4-nano",

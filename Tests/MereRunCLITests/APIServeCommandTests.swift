@@ -56,6 +56,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.quantizedKVStart, 2048)
     }
 
+    func testAPIServeGemma4TurboModelDefaultsToTurboQuantKVCache() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-gemma4",
+            "--model-path", Gemma4Resources.turboModelId,
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization()
+
+        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
+        XCTAssertEqual(quantization.scheme, .turboquant)
+        XCTAssertEqual(quantization.groupSize, Gemma4Resources.defaultKVGroupSize)
+        XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.defaultTurboQuantizedKVStart)
+    }
+
     func testHealthContractUsesStablePayload() {
         XCTAssertEqual(APIServerContract.healthStatus(), APIHealthStatus(status: "ok"))
     }

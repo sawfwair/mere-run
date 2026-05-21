@@ -83,9 +83,6 @@ public actor Gemma4Generator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 config"))
         let configData = try Data(contentsOf: resources.configURL)
         let config = try JSONDecoder().decode(Gemma4Config.self, from: configData)
-        guard !config.textConfig.enableMoEBlock else {
-            throw Gemma4Error.unsupportedConfiguration("Gemma4 native runtime currently supports dense text checkpoints only.")
-        }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 tokenizer"))
         let tokenizer = try await Gemma4TokenizerAndTemplate.load(
@@ -95,7 +92,7 @@ public actor Gemma4Generator: ChatGenerator {
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 weights"))
         let textModel = Gemma4TextCausalLM(config: config.textConfig)
-        try loadWeights(into: textModel, from: resources)
+        try loadWeights(into: textModel, from: resources, config: config)
 
         model = textModel
         tokenizerAndTemplate = tokenizer
@@ -251,6 +248,30 @@ public actor Gemma4Generator: ChatGenerator {
         _ location: String,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> URL {
+        if let modelID = ModelResolver.ModelID(rawValue: location),
+           Gemma4Resources.handles(modelSpec: modelID.rawValue) {
+            if let resolved = ModelResolver().resolveIfPresent(modelID) {
+                return resolved.rootURL
+            }
+            do {
+                let resolution = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: modelID.rawValue,
+                    defaultModelID: modelID.rawValue,
+                    progress: { event in
+                        switch event {
+                        case .downloading(let percent):
+                            progressHandler?(ChatProgress(stage: .loadingModel, message: "Downloading Gemma4... \(percent)%"))
+                        case .extracting:
+                            progressHandler?(ChatProgress(stage: .loadingModel, message: "Extracting Gemma4..."))
+                        }
+                    }
+                )
+                return Gemma4Resources.normalizedRootURL(resolution.url)
+            } catch {
+                throw Gemma4Error.downloadFailed(error.localizedDescription)
+            }
+        }
+
         let fileURL = URL(fileURLWithPath: location).standardizedFileURL
         if FileManager.default.fileExists(atPath: fileURL.path) {
             return Gemma4Resources.normalizedRootURL(fileURL)
@@ -281,7 +302,8 @@ public actor Gemma4Generator: ChatGenerator {
 
     private func loadWeights(
         into model: Gemma4TextCausalLM,
-        from resources: Gemma4Resources
+        from resources: Gemma4Resources,
+        config: Gemma4Config
     ) throws {
         let include: (String) -> Bool = { key in
             key.hasPrefix("model.language_model.") || key.hasPrefix("language_model.")
@@ -290,20 +312,56 @@ public actor Gemma4Generator: ChatGenerator {
             if key.hasPrefix("model.language_model.") {
                 return [(String(key.dropFirst("model.".count)), value)]
             }
+            if key.hasPrefix("language_model.model.") {
+                return [("language_model.\(key.dropFirst("language_model.model.".count))", value)]
+            }
             if key.hasPrefix("language_model.") {
                 return [(key, value)]
             }
             return []
         }
+        let keyMapper: (String) -> String = { key in
+            if key.hasPrefix("model.language_model.") {
+                return String(key.dropFirst("model.".count))
+            }
+            if key.hasPrefix("language_model.model.") {
+                return "language_model.\(key.dropFirst("language_model.model.".count))"
+            }
+            if key.hasPrefix("language_model.") {
+                return key
+            }
+            return "__unused__.\(key)"
+        }
+        let quantizedMapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            key.hasPrefix("__unused__.") ? [] : [(key, value)]
+        }
+        let quantizedModuleResolver: HFSafetensorsWeightsLoader.QuantizedModuleResolver = { _, _, _, _, biases, fallbackGroupSize, fallbackBits in
+            if biases != nil || fallbackBits > 4 {
+                return (groupSize: fallbackGroupSize, bits: fallbackBits, mode: QuantizationMode.affine)
+            }
+            return (groupSize: fallbackGroupSize, bits: fallbackBits, mode: QuantizationMode.nvfp4)
+        }
 
         if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
-            try HFSafetensorsWeightsLoader.applyShardedWeights(
-                indexURL: resources.modelIndexURL,
-                to: model,
-                dtype: .bfloat16,
-                verify: .none,
-                mapper: mapper
-            )
+            if config.textConfig.enableMoEBlock {
+                try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+                    indexURL: resources.modelIndexURL,
+                    to: model,
+                    groupSize: 16,
+                    bits: 4,
+                    quantizedModuleResolver: quantizedModuleResolver,
+                    keyMapper: keyMapper,
+                    mapper: quantizedMapper
+                )
+            } else {
+                try HFSafetensorsWeightsLoader.applyShardedWeights(
+                    indexURL: resources.modelIndexURL,
+                    to: model,
+                    dtype: .bfloat16,
+                    verify: .none,
+                    mapper: mapper
+                )
+            }
         } else if FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) {
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: resources.modelWeightsURL,

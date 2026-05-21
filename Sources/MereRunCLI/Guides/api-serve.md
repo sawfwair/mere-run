@@ -33,7 +33,7 @@ mere.run status
 - `--api-key`: bearer token, also read from `MERERUN_API_KEY`.
 - `--rate-limit-per-minute`: global chat completions limit.
 - `--context-size`: context limit.
-- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache controls.
+- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache controls. Serving `text-chat-gemma4-turbo` defaults to 4-bit TurboQuant KV cache from token 0; explicit flags override that.
 
 ## Usage Patterns
 

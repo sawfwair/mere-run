@@ -15,6 +15,7 @@ embeddings, and PII anonymization.
 ### Chat
 
 - `text-chat-gemma4`
+- `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q35`
 - `text-chat-q35-nano`
 - `text-agent-deepseek-v4-flash` (API/agent serving)
@@ -43,6 +44,10 @@ swift run mere.run text chat \
   --model text-chat-gemma4 \
   --prompt "Summarize diffusion models in one paragraph."
 ```
+
+On 32 GB Apple Silicon Macs, avoid pulling the dense bf16
+`text-chat-gemma4`/31B path. Use `text-chat-gemma4-turbo` for the managed
+Gemma 4 26B-A4B-it NVFP4 snapshot, which uses the native Swift Gemma MoE runtime.
 
 ### Local code generation
 

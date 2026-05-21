@@ -40,7 +40,11 @@ public enum HiDreamO1SampleBuilder {
         }
         let ratio = Double(width) / Double(height)
         return predefinedResolutions.min { lhs, rhs in
-            abs(Double(lhs.width) / Double(lhs.height) - ratio) < abs(Double(rhs.width) / Double(rhs.height) - ratio)
+            let lhsRatio = Double(lhs.width) / Double(lhs.height)
+            let rhsRatio = Double(rhs.width) / Double(rhs.height)
+            let lhsDistance = Darwin.fabs(lhsRatio - ratio)
+            let rhsDistance = Darwin.fabs(rhsRatio - ratio)
+            return lhsDistance < rhsDistance
         } ?? predefinedResolutions[0]
     }
 

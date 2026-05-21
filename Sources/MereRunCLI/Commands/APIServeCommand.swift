@@ -146,18 +146,40 @@ struct APIServe: AsyncParsableCommand {
         }
     }
 
-    private func resolveGemma4KVCacheQuantization() throws -> Gemma4KVCacheQuantization {
+    func resolveGemma4KVCacheQuantization() throws -> Gemma4KVCacheQuantization {
         guard let scheme = Gemma4KVQuantizationScheme(
             rawValue: kvQuantScheme.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         ) else {
             throw ValidationError("Unsupported --kv-quant-scheme '\(kvQuantScheme)'. Expected 'uniform' or 'turboquant'.")
         }
         return Gemma4KVCacheQuantization(
-            bits: kvBits,
-            scheme: scheme,
+            bits: resolvedGemma4KVBits,
+            scheme: resolvedGemma4KVQuantizationScheme(fallback: scheme),
             groupSize: kvGroupSize,
-            quantizedStart: quantizedKVStart
+            quantizedStart: resolvedGemma4QuantizedKVStart
         )
+    }
+
+    private var requestedGemma4ModelSpec: String {
+        model?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? Gemma4Resources.defaultModelId
+    }
+
+    private var usesGemma4TurboKVDefaults: Bool {
+        kvBits == nil && Gemma4Resources.usesTurboDefaults(modelSpec: requestedGemma4ModelSpec)
+    }
+
+    private var resolvedGemma4KVBits: Double? {
+        usesGemma4TurboKVDefaults ? Gemma4Resources.defaultTurboKVBits : kvBits
+    }
+
+    private func resolvedGemma4KVQuantizationScheme(
+        fallback: Gemma4KVQuantizationScheme
+    ) -> Gemma4KVQuantizationScheme {
+        usesGemma4TurboKVDefaults ? Gemma4Resources.defaultTurboKVQuantizationScheme : fallback
+    }
+
+    private var resolvedGemma4QuantizedKVStart: Int {
+        usesGemma4TurboKVDefaults ? Gemma4Resources.defaultTurboQuantizedKVStart : quantizedKVStart
     }
 
     private func resolveAPIKey() -> String? {

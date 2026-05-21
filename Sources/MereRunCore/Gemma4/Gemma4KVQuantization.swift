@@ -549,6 +549,19 @@ private enum Gemma4AffineFastKernels {
     }
 }
 
+private func concatenatedOptional(_ lhs: MLXArray?, _ rhs: MLXArray?, axis: Int) -> MLXArray? {
+    switch (lhs, rhs) {
+    case (.some(let lhs), .some(let rhs)):
+        return concatenated([lhs, rhs], axis: axis)
+    case (.some(let lhs), .none):
+        return lhs
+    case (.none, .some(let rhs)):
+        return rhs
+    case (.none, .none):
+        return nil
+    }
+}
+
 final class Gemma4QuantizedTensorState {
     let weight: MLXArray
     let scales: MLXArray
@@ -582,6 +595,27 @@ final class Gemma4QuantizedTensorState {
         self.groupSize = groupSize
         self.bits = bits
         self.dtype = source.dtype
+    }
+
+    init(weight: MLXArray, scales: MLXArray, biases: MLXArray?, groupSize: Int, bits: Int, dtype: DType) {
+        self.weight = weight
+        self.scales = scales
+        self.biases = biases
+        self.groupSize = groupSize
+        self.bits = bits
+        self.dtype = dtype
+    }
+
+    func appending(_ source: MLXArray) -> Gemma4QuantizedTensorState {
+        let next = Gemma4QuantizedTensorState(source: source, groupSize: groupSize, bits: bits)
+        return Gemma4QuantizedTensorState(
+            weight: concatenated([weight, next.weight], axis: 2),
+            scales: concatenated([scales, next.scales], axis: 2),
+            biases: concatenatedOptional(biases, next.biases, axis: 2),
+            groupSize: groupSize,
+            bits: bits,
+            dtype: dtype
+        )
     }
 
     func dequantized() -> MLXArray {
@@ -635,6 +669,11 @@ final class Gemma4QuantizedKVCache: Gemma4AttentionCache {
     }
 
     func append(keys: MLXArray, values: MLXArray) {
+        guard maxSize != nil else {
+            appendUnbounded(keys: keys, values: values)
+            return
+        }
+
         let existing = reconstructState()
 
         let combinedKeys: MLXArray
@@ -660,6 +699,69 @@ final class Gemma4QuantizedKVCache: Gemma4AttentionCache {
         }
 
         repartition(keys: keptKeys, values: keptValues, newOffset: newOffset)
+    }
+
+    private func appendUnbounded(keys: MLXArray, values: MLXArray) {
+        let tokenCount = keys.dim(2)
+        let newOffset = offset + tokenCount
+        defer { offset = newOffset }
+
+        guard let keyBits = configuration.keyBits,
+              let valueBits = configuration.valueBits else {
+            appendLeading(keys: keys, values: values)
+            return
+        }
+
+        let plainCount = max(0, min(tokenCount, configuration.quantizedStart - offset))
+        if plainCount > 0 {
+            appendLeading(
+                keys: keys[0..., 0..., ..<plainCount, 0...],
+                values: values[0..., 0..., ..<plainCount, 0...]
+            )
+        }
+
+        guard plainCount < tokenCount else {
+            return
+        }
+
+        appendQuantized(
+            keys: keys[0..., 0..., plainCount..., 0...],
+            values: values[0..., 0..., plainCount..., 0...],
+            keyBits: keyBits,
+            valueBits: valueBits
+        )
+    }
+
+    private func appendLeading(keys: MLXArray, values: MLXArray) {
+        if let existingKeys = leadingKeys, let existingValues = leadingValues {
+            leadingKeys = concatenated([existingKeys, keys], axis: 2)
+            leadingValues = concatenated([existingValues, values], axis: 2)
+        } else {
+            leadingKeys = keys
+            leadingValues = values
+        }
+    }
+
+    private func appendQuantized(keys: MLXArray, values: MLXArray, keyBits: Int, valueBits: Int) {
+        if let quantizedKeys {
+            self.quantizedKeys = quantizedKeys.appending(keys)
+        } else {
+            quantizedKeys = Gemma4QuantizedTensorState(
+                source: keys,
+                groupSize: configuration.groupSize,
+                bits: keyBits
+            )
+        }
+
+        if let quantizedValues {
+            self.quantizedValues = quantizedValues.appending(values)
+        } else {
+            quantizedValues = Gemma4QuantizedTensorState(
+                source: values,
+                groupSize: configuration.groupSize,
+                bits: valueBits
+            )
+        }
     }
 
     func specializedAttention(queries: MLXArray, repeats: Int, scale: Float) -> MLXArray? {
