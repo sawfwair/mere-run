@@ -52,4 +52,21 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(quantization.groupSize, 32)
         XCTAssertEqual(quantization.quantizedStart, 128)
     }
+
+    func testGemma4TurboKVFlagsOverrideIndependently() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "Say hello",
+            "--model", Gemma4Resources.turboModelId,
+            "--kv-quant-scheme", "uniform",
+            "--kv-group-size", "32",
+            "--quantized-kv-start", "128",
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization(for: Gemma4Resources.turboModelId)
+
+        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
+        XCTAssertEqual(quantization.scheme, .uniform)
+        XCTAssertEqual(quantization.groupSize, 32)
+        XCTAssertEqual(quantization.quantizedStart, 128)
+    }
 }

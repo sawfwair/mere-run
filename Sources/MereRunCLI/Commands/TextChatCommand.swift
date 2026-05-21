@@ -48,13 +48,13 @@ struct TextChat: AsyncParsableCommand {
     var kvBits: Double?
 
     @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform or turboquant.")
-    var kvQuantScheme: String = Gemma4Resources.defaultKVQuantizationScheme.rawValue
+    var kvQuantScheme: String?
 
     @Option(name: [.long], help: "Gemma4 KV cache quantization group size.")
-    var kvGroupSize: Int = Gemma4Resources.defaultKVGroupSize
+    var kvGroupSize: Int?
 
     @Option(name: [.long], help: "Gemma4 token offset at which KV cache quantization begins.")
-    var quantizedKVStart: Int = Gemma4Resources.defaultQuantizedKVStart
+    var quantizedKVStart: Int?
 
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
@@ -271,22 +271,19 @@ struct TextChat: AsyncParsableCommand {
     }
 
     func resolveGemma4KVCacheQuantization(for modelId: String) throws -> Gemma4KVCacheQuantization {
-        let scheme = try parseGemma4KVQuantizationScheme(kvQuantScheme)
-
-        if kvBits == nil, Gemma4Resources.usesTurboDefaults(modelSpec: modelId) {
-            return Gemma4KVCacheQuantization(
-                bits: Gemma4Resources.defaultTurboKVBits,
-                scheme: Gemma4Resources.defaultTurboKVQuantizationScheme,
-                groupSize: kvGroupSize,
-                quantizedStart: Gemma4Resources.defaultTurboQuantizedKVStart
-            )
-        }
+        let usesTurboDefaults = Gemma4Resources.usesTurboDefaults(modelSpec: modelId)
+        let defaultScheme = usesTurboDefaults
+            ? Gemma4Resources.defaultTurboKVQuantizationScheme.rawValue
+            : Gemma4Resources.defaultKVQuantizationScheme.rawValue
+        let scheme = try parseGemma4KVQuantizationScheme(kvQuantScheme ?? defaultScheme)
 
         return Gemma4KVCacheQuantization(
-            bits: kvBits,
+            bits: kvBits ?? (usesTurboDefaults ? Gemma4Resources.defaultTurboKVBits : nil),
             scheme: scheme,
-            groupSize: kvGroupSize,
-            quantizedStart: quantizedKVStart
+            groupSize: kvGroupSize ?? Gemma4Resources.defaultKVGroupSize,
+            quantizedStart: quantizedKVStart ?? (usesTurboDefaults
+                ? Gemma4Resources.defaultTurboQuantizedKVStart
+                : Gemma4Resources.defaultQuantizedKVStart)
         )
     }
 
