@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.6.0 - 2026-05-20
+
+### Added
+
+- added `text-chat-gemma4-turbo`, a managed MLX NVFP4 Gemma 4 26B-A4B-it
+  MoE tier for 32 GB Apple Silicon Macs, including catalog, manifest,
+  validation, docs, and native Swift Gemma runtime wiring.
+- added Gemma4 Turbo KV-cache defaults so `text-chat-gemma4-turbo` runs with
+  4-bit TurboQuant KV cache from token 0 while preserving explicit KV override
+  flags.
+- added `demo-all-models.sh` for smoke-testing installed managed models.
+
+### Changed
+
+- bumped `github.com/huggingface/swift-transformers` from 1.3.2 to 1.3.3.
+
 ## 0.5.3 - 2026-05-16
 
 ### Added
