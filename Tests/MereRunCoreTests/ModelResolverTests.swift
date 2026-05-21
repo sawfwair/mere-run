@@ -103,7 +103,7 @@ final class ModelResolverTests: MereRunCoreTestCase {
         XCTAssertEqual(resolved.source, .localModelStore)
     }
 
-    func testMebotFallsBackToZeroNano() throws {
+    func testMebotDoesNotFallBackToKleinImageModel() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
         defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
@@ -116,9 +116,25 @@ final class ModelResolverTests: MereRunCoreTestCase {
         try writeMinimalImageModel(at: nanoRoot, id: .kleinNano)
 
         let resolver = ModelResolver()
+        XCTAssertThrowsError(try resolver.resolve(.mebot))
+    }
+
+    func testResolvesStandaloneMebotModel() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let mebotRoot = modelsRoot
+            .appendingPathComponent("text-chat-mebot", isDirectory: true)
+        try writeMinimalTextRoot(at: mebotRoot, id: .mebot)
+
+        let resolver = ModelResolver()
         let resolved = try resolver.resolve(.mebot)
 
-        XCTAssertEqual(resolved.rootURL.standardizedFileURL, nanoRoot.standardizedFileURL)
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, mebotRoot.standardizedFileURL)
         XCTAssertEqual(resolved.source, .localModelStore)
     }
 

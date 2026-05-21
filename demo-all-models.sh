@@ -448,6 +448,11 @@ if [[ ! -s "$installed_file" ]]; then
   exit 1
 fi
 
+if [[ -n "$ONLY_MODEL" ]] && ! awk -v model="$ONLY_MODEL" '$1 == model { found = 1 } END { exit(found ? 0 : 1) }' "$installed_file"; then
+  echo "Model is not installed or not supported on this machine: $ONLY_MODEL" >&2
+  exit 1
+fi
+
 log "Output: $OUT"
 log "mere.run: $($MERE_RUN --version 2>/dev/null || echo unknown)"
 

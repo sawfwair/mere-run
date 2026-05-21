@@ -267,7 +267,6 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             validationKind: .hfTextChat,
             runtimeAutoDownloadAllowed: false,
-            resolutionFallbackIDs: ["image-klein-nano", "image-klein-max"],
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
