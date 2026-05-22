@@ -218,18 +218,16 @@ if hasMediaIOTarget {
   mereRunCoreTestDependencies.append("MediaIO")
 }
 
-let audioRuntimeDependencies: [Target.Dependency] = [
+var audioRuntimeDependencies: [Target.Dependency] = [
   "MereRunCore",
   "AudioCore",
-  "AudioCodecs"
+  "AudioCodecs",
+  .product(name: "Transformers", package: "swift-transformers")
 ]
-  + mlxDependency("MLX")
-  + mlxDependency("MLXFast")
-  + mlxDependency("MLXNN")
-  + mlxDependency("MLXRandom")
-  + [
-    .product(name: "Transformers", package: "swift-transformers")
-  ]
+audioRuntimeDependencies.append(contentsOf: mlxDependency("MLX"))
+audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXFast"))
+audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
+audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 targets.append(contentsOf: [
   .target(
