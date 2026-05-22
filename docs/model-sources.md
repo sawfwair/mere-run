@@ -176,10 +176,13 @@ The top-level model root is:
 
 That root may contain:
 
-- `music-acestep-v15-turbo/`
-- `music-acestep-5hz-lm-1.7b/` or another supported LM subdirectory
+- `acestep-v15-turbo/`
+- `acestep-5Hz-lm-1.7B/` or another supported LM subdirectory
 - `Qwen3-Embedding-0.6B/`
 - `vae/`
+
+Older local installs that still use `music-acestep-v15-turbo/` remain
+supported.
 
 `mere.run music generate` auto-discovers that layout unless you override the root
 with `--checkpoints-root` or `MERERUN_MUSIC_ACESTEP_ROOT`.

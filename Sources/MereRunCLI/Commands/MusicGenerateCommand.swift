@@ -44,7 +44,7 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("vae-subdirectory")], help: "VAE subdirectory under checkpoints root.")
     var vaeSubdirectory: String = "vae"
 
-    @Option(name: [.customLong("lm-subdirectory")], help: "Optional 5Hz LM subdirectory under checkpoints root. Auto-detected as 'music-acestep-5hz-lm-1.7b' when omitted.")
+    @Option(name: [.customLong("lm-subdirectory")], help: "Optional 5Hz LM subdirectory under checkpoints root. Auto-detected as 'acestep-5Hz-lm-1.7B' when omitted.")
     var lmSubdirectory: String?
 
     @Option(name: [.customLong("text-subdirectory")], help: "Text encoder subdirectory under checkpoints root. Auto-detected as 'Qwen3-Embedding-0.6B' when omitted.")
@@ -161,7 +161,7 @@ struct MusicGenerate: AsyncParsableCommand {
             explicit: textSubdirectory
         )
         if useLM && resolvedLMSubdirectory == nil {
-            throw ValidationError("--use-lm requires --lm-subdirectory. Set --lm-subdirectory or keep a default layout like 'music-acestep-5hz-lm-1.7b'.")
+            throw ValidationError("--use-lm requires --lm-subdirectory. Set --lm-subdirectory or keep a default layout like 'acestep-5Hz-lm-1.7B'.")
         }
         if resolvedTextSubdirectory == nil {
             throw ValidationError("ACE-Step text encoder not found. Set --text-subdirectory or keep a default layout like 'Qwen3-Embedding-0.6B'.")
@@ -396,6 +396,10 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         let preferredCandidates = [
+            "acestep-5Hz-lm-1.7B",
+            "acestep-5hz-lm-1.7b",
+            "acestep-5Hz-lm",
+            "acestep-5hz-lm",
             "music-acestep-5hz-lm-1.7b",
             "music-acestep-5Hz-lm-1.7B",
             "music-acestep-5hz-lm",

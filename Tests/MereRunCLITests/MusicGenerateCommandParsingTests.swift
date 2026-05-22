@@ -15,6 +15,7 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.vaeSubdirectory, "vae")
         XCTAssertFalse(cmd.useLM)
         XCTAssertEqual(cmd.durationSeconds, 10.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.shift, 1.0, accuracy: 0.0001)
     }
 
     func testMusicGenerateParsesModelAndAdvancedOverrides() throws {

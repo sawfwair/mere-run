@@ -61,7 +61,7 @@ final class ACEStepModelContainerTests: MereRunCoreTestCase {
         let checkpointsRoot = try TestFileSystem.makeTempDir(prefix: "acestep-checkpoints")
         let turboSubdir = "acestep-v15-turbo"
         let vaeSubdir = "vae"
-        let lmSubdir = "music-acestep-5hz-lm-1.7b"
+        let lmSubdir = "acestep-5Hz-lm-1.7B"
         let textSubdir = "Qwen3-Embedding-0.6B"
 
         try writeDecoderStub(at: checkpointsRoot.appending(path: turboSubdir))
