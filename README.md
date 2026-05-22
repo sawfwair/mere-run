@@ -75,6 +75,23 @@ cd /Volumes/mere.run/.mere-run
 The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
+Linux release artifacts are headless CLI-only. The release workflow can publish
+both a portable tarball and a Debian package for Ubuntu-style hosts:
+
+```bash
+# Portable tarball
+curl -L https://mere.run/releases/mere-run-<version>-linux-x86_64.tar.gz -o mere-run-linux.tar.gz
+tar -xzf mere-run-linux.tar.gz
+cd mere-run-<version>-linux-x86_64
+./install.sh
+
+# Debian package
+sudo apt install ./mere-run_<version>_amd64.deb
+```
+
+Linux packages install the `mere.run` CLI plus colocated runtime assets; they do
+not include the macOS SwiftUI studio or DMG layout.
+
 ## Build from source
 
 Install SwiftLint and ripgrep once if you plan to run the contributor
@@ -111,8 +128,16 @@ export MERERUN_FFPROBE=/usr/bin/ffprobe
 swift run mere.run --help
 ```
 
+To build Linux release packages from a Linux Swift toolchain host:
+
+```bash
+scripts/package-linux.sh --version 0.7.1
+ls dist/linux/
+```
+
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio
-flows, and DMG packaging stay macOS-only.
+flows, and DMG packaging stay macOS-only. Linux release packaging is for the
+headless CLI tarball and `.deb` only.
 
 ## Quick start
 
