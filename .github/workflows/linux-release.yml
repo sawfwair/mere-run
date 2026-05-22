@@ -10,6 +10,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   linux-cli-packages:
     runs-on: ubuntu-22.04

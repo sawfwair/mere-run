@@ -79,14 +79,18 @@ Linux release artifacts are headless CLI-only. The release workflow can publish
 both a portable tarball and a Debian package for Ubuntu-style hosts:
 
 ```bash
+tag=v0.7.1
+version="${tag#v}"
+
 # Portable tarball
-curl -L https://mere.run/releases/mere-run-<version>-linux-x86_64.tar.gz -o mere-run-linux.tar.gz
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64.tar.gz" -o mere-run-linux.tar.gz
 tar -xzf mere-run-linux.tar.gz
-cd mere-run-<version>-linux-x86_64
+cd "mere-run-${tag}-linux-x86_64"
 ./install.sh
 
 # Debian package
-sudo apt install ./mere-run_<version>_amd64.deb
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_amd64.deb" -o mere-run.deb
+sudo apt install ./mere-run.deb
 ```
 
 Linux packages install the `mere.run` CLI plus colocated runtime assets; they do

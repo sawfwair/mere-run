@@ -4,8 +4,8 @@ set -euo pipefail
 # Build distributable Linux CLI artifacts for mere.run.
 #
 # Outputs:
-#   dist/linux/mere-run-<version>-linux-<arch>.tar.gz
-#   dist/linux/mere-run_<version>_<deb-arch>.deb   (when dpkg-deb is available)
+#   dist/linux/mere-run-<version>-linux-x86_64.tar.gz
+#   dist/linux/mere-run_<version>_amd64.deb   (when dpkg-deb is available)
 #
 # The tarball uses the same payload shape as the macOS DMG's terminal payload:
 # a top-level mere.run executable, install.sh, and colocated runtime assets.
@@ -107,8 +107,9 @@ case "$(uname -m)" in
     deb_arch="amd64"
     ;;
   aarch64|arm64)
-    platform_arch="arm64"
-    deb_arch="arm64"
+    echo "[package-linux] error: Linux release packaging currently supports x86_64/amd64 only." >&2
+    echo "[package-linux] arm64 package builds are blocked by upstream mlx-swift Linux bf16 support." >&2
+    exit 65
     ;;
   *)
     echo "[package-linux] error: unsupported Linux architecture: $(uname -m)" >&2
@@ -135,11 +136,87 @@ fi
 native_root="$repo_root/.build/native/linux-$platform_arch"
 llama_prefix="$native_root/llama"
 pkgconfig_dir="$native_root/pkgconfig"
+linux_accel="${MERERUN_LINUX_ACCEL:-cpu}"
+
+case "$linux_accel" in
+  cpu|cuda) ;;
+  *)
+    echo "[package-linux] error: unsupported MERERUN_LINUX_ACCEL=$linux_accel (expected cpu or cuda)." >&2
+    exit 64
+    ;;
+esac
+
+mlx_swift_cuda_link_flags() {
+  local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
+  local local_openblas_root="$native_root/deps/apt-root"
+  local flags=()
+
+  flags+=("-L" "$mlx_cmake_build/_deps/mlx-c-build")
+  flags+=("-L" "$mlx_cmake_build/_deps/mlx-build")
+  flags+=("-L" "$mlx_cmake_build/_deps/mlx-build/mlx/io")
+  flags+=("-L" "$mlx_cmake_build/lib")
+
+  if [[ -f "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so" ]]; then
+    flags+=("-L" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
+  fi
+  if [[ -n "${CUDNN_LIBRARY_PATH:-}" ]]; then
+    flags+=("-L" "$CUDNN_LIBRARY_PATH")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$CUDNN_LIBRARY_PATH")
+    for cudnn_lib in \
+      libcudnn.so.9 \
+      libcudnn_graph.so.9 \
+      libcudnn_engines_runtime_compiled.so.9 \
+      libcudnn_ops.so.9 \
+      libcudnn_cnn.so.9 \
+      libcudnn_adv.so.9 \
+      libcudnn_engines_precompiled.so.9 \
+      libcudnn_heuristic.so.9; do
+      if [[ -f "$CUDNN_LIBRARY_PATH/$cudnn_lib" ]]; then
+        flags+=("$CUDNN_LIBRARY_PATH/$cudnn_lib")
+      fi
+    done
+  fi
+  if [[ -d /usr/lib/x86_64-linux-gnu ]]; then
+    flags+=("-L" "/usr/lib/x86_64-linux-gnu")
+  fi
+
+  flags+=(
+    "-lcublasLt"
+    "-lnvrtc"
+    "-lcuda"
+    "-lcudart"
+    "-lnccl"
+    "-lrt"
+  )
+
+  printf '%q ' "${flags[@]}"
+}
+
+configure_swiftpm_cuda_bridge() {
+  if [[ "$linux_accel" != "cuda" ]]; then
+    return
+  fi
+
+  local mlx_linkage
+  mlx_linkage="$(printf '%s' "${MERERUN_MLX_SWIFT_LINKAGE:-}" | tr '[:upper:]' '[:lower:]')"
+  if [[ -n "$mlx_linkage" && "$mlx_linkage" != "cuda-prebuilt" ]]; then
+    echo "[package-linux] error: MERERUN_LINUX_ACCEL=cuda requires MERERUN_MLX_SWIFT_LINKAGE=cuda-prebuilt." >&2
+    exit 64
+  fi
+
+  export MERERUN_MLX_SWIFT_LINKAGE="${MERERUN_MLX_SWIFT_LINKAGE:-cuda-prebuilt}"
+  export MERERUN_MLX_SWIFT_BUILD_DIR="${MERERUN_MLX_SWIFT_BUILD_DIR:-$native_root/build/mlx-swift-cuda-smoke}"
+  export MERERUN_MLX_SWIFT_SOURCE_DIR="${MERERUN_MLX_SWIFT_SOURCE_DIR:-$repo_root/.build/native/src/mlx-swift}"
+  export MERERUN_MLX_SWIFT_LINK_FLAGS="${MERERUN_MLX_SWIFT_LINK_FLAGS:-$(mlx_swift_cuda_link_flags)}"
+}
 
 if (( do_native )); then
   echo "[package-linux] preparing Linux native runtime artifacts"
   bash scripts/prepare-linux-native.sh
 fi
+
+configure_swiftpm_cuda_bridge
 
 export MERERUN_PACKAGE_PLATFORM="linux"
 export PKG_CONFIG_PATH="$pkgconfig_dir:${PKG_CONFIG_PATH:-}"
