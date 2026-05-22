@@ -39,7 +39,7 @@ struct MusicGenerate: AsyncParsableCommand {
     var checkpointsRoot: String?
 
     @Option(name: [.customLong("turbo-subdirectory")], help: "Turbo decoder subdirectory under checkpoints root.")
-    var turboSubdirectory: String = "music-acestep-v15-turbo"
+    var turboSubdirectory: String = "acestep-v15-turbo"
 
     @Option(name: [.customLong("vae-subdirectory")], help: "VAE subdirectory under checkpoints root.")
     var vaeSubdirectory: String = "vae"
@@ -60,7 +60,7 @@ struct MusicGenerate: AsyncParsableCommand {
     var steps: Int = 8
 
     @Option(name: [.customLong("shift")], help: "Turbo scheduler shift.")
-    var shift: Float = 3.0
+    var shift: Float = 1.0
 
     @Option(name: [.long], help: "Seed for deterministic generation.")
     var seed: UInt64?
@@ -148,6 +148,10 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         let checkpointsRootURL = try await resolveACEStepCheckpointsRoot()
+        let resolvedTurboSubdirectory = try resolveACEStepTurboSubdirectory(
+            at: checkpointsRootURL,
+            explicit: turboSubdirectory
+        )
         let resolvedLMSubdirectory = try resolveACEStepLMSubdirectory(
             at: checkpointsRootURL,
             explicit: lmSubdirectory
@@ -190,7 +194,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
         let container = ACEStepModelContainer(
             checkpointsRootURL: checkpointsRootURL,
-            turboSubdirectory: turboSubdirectory,
+            turboSubdirectory: resolvedTurboSubdirectory,
             vaeSubdirectory: vaeSubdirectory,
             lmSubdirectory: useLM ? resolvedLMSubdirectory : nil,
             textEncoderSubdirectory: resolvedTextSubdirectory
@@ -500,6 +504,26 @@ struct MusicGenerate: AsyncParsableCommand {
         return candidates
     }
 
+    private func resolveACEStepTurboSubdirectory(at root: URL, explicit: String) throws -> String {
+        let fm = FileManager.default
+        func isDirectory(_ url: URL) -> Bool {
+            var isDir: ObjCBool = false
+            return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
+        }
+
+        let trimmed = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
+        let upstreamDefault = "acestep-v15-turbo"
+        let compatibilityDefault = "music-acestep-v15-turbo"
+        let candidates = trimmed == upstreamDefault
+            ? [upstreamDefault, compatibilityDefault]
+            : [trimmed]
+
+        for candidate in candidates where isDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
+            return candidate
+        }
+        throw ValidationError("--turbo-subdirectory not found: \(trimmed)")
+    }
+
     private func isUsableCheckpointsRoot(_ root: URL) -> Bool {
         let fm = FileManager.default
 
@@ -511,7 +535,10 @@ struct MusicGenerate: AsyncParsableCommand {
         guard isDirectory(root) else {
             return false
         }
-        guard isDirectory(root.appendingPathComponent(turboSubdirectory)) else {
+        let turboCandidates = turboSubdirectory == "acestep-v15-turbo"
+            ? ["acestep-v15-turbo", "music-acestep-v15-turbo"]
+            : [turboSubdirectory]
+        guard turboCandidates.contains(where: { isDirectory(root.appendingPathComponent($0, isDirectory: true)) }) else {
             return false
         }
         guard isDirectory(root.appendingPathComponent(vaeSubdirectory)) else {

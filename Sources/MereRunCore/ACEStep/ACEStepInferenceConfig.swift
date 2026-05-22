@@ -12,7 +12,7 @@ public struct ACEStepInferenceConfig: Sendable, Hashable {
     /// Turbo "fix_nfe" (default 8).
     public var fixNFE: Int
 
-    /// Turbo shift factor (rounded to {1,2,3} by the scheduler; default 3).
+    /// Turbo shift factor. Upstream ACE-Step defaults to 1.0.
     public var shift: Float
 
     /// Optional custom timesteps in `[0, 1]` (terminal zeros are ignored).
@@ -30,7 +30,7 @@ public struct ACEStepInferenceConfig: Sendable, Hashable {
     public init(
         durationSeconds: Float = 10.0,
         fixNFE: Int = 8,
-        shift: Float = 3.0,
+        shift: Float = 1.0,
         timesteps: [Float]? = nil,
         inferMethod: ACEStepInferenceMethod = .ode,
         useTiledVaeDecode: Bool = true,

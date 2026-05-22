@@ -11,7 +11,7 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.caption, "warm synthwave groove")
         XCTAssertEqual(cmd.model, ModelResolver.ModelID.aceStep.rawValue)
         XCTAssertNil(cmd.checkpointsRoot)
-        XCTAssertEqual(cmd.turboSubdirectory, "music-acestep-v15-turbo")
+        XCTAssertEqual(cmd.turboSubdirectory, "acestep-v15-turbo")
         XCTAssertEqual(cmd.vaeSubdirectory, "vae")
         XCTAssertFalse(cmd.useLM)
         XCTAssertEqual(cmd.durationSeconds, 10.0, accuracy: 0.0001)

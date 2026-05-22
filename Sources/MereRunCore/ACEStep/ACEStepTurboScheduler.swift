@@ -10,11 +10,17 @@ import Foundation
 /// are mapped to the nearest valid timestep.
 public struct ACEStepTurboScheduler: Sendable, Hashable {
     public static let validShifts: [Float] = [1.0, 2.0, 3.0]
+    public static let validReferenceTimesteps: [Float] = [
+        1.0, 0.95454545, 0.93333334, 0.9, 0.875,
+        0.85714287, 0.8333333, 0.7692308, 0.75,
+        0.6666667, 0.64285713, 0.625, 0.54545456,
+        0.5, 0.4, 0.375, 0.3, 0.25, 0.22222222, 0.125,
+    ]
 
     /// Descending timesteps in `[0, 1]` (does not include the terminal `0`).
     public let timesteps: [Float]
 
-    public init(fixNFE: Int = 8, shift: Float = 3.0, timesteps: [Float]? = nil) {
+    public init(fixNFE: Int = 8, shift: Float = 1.0, timesteps: [Float]? = nil) {
         self.timesteps = Self.makeTimesteps(fixNFE: fixNFE, shift: shift, custom: timesteps)
     }
 
@@ -34,7 +40,7 @@ public struct ACEStepTurboScheduler: Sendable, Hashable {
         }
         guard !custom.isEmpty else { return defaultSchedule }
 
-        let candidates = validTimesteps(fixNFE: fixNFE)
+        let candidates = validReferenceTimesteps
         let maxCount = candidates.count
         if custom.count > maxCount {
             custom = Array(custom.prefix(maxCount))
@@ -81,4 +87,3 @@ public struct ACEStepTurboScheduler: Sendable, Hashable {
         candidates.min { abs($0 - t) < abs($1 - t) } ?? t
     }
 }
-
