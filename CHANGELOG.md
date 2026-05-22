@@ -6,6 +6,25 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.7.0 - 2026-05-22
+
+### Changed
+
+- aligned ACE-Step music generation with the upstream `Ace-Step1.5` checkpoint
+  layout by defaulting to `acestep-v15-turbo`, `acestep-5Hz-lm-1.7B`, and
+  scheduler `shift=1.0` while preserving legacy turbo layout compatibility.
+- changed custom ACE-Step turbo timesteps to map against the full reference
+  timestep set instead of the current `fixNFE` slice.
+
+### Fixed
+
+- fixed managed ACE-Step pulls so upstream checkpoint directories are no longer
+  renamed into the legacy `music-*` layout.
+- fixed `text-chat-mebot` resolution so missing standalone MeBot installs fail
+  clearly instead of falling back to Klein image models.
+- fixed `demo-all-models.sh --only` so unsupported or missing model filters fail
+  before the demo loop starts.
+
 ## 0.6.0 - 2026-05-20
 
 ### Added
