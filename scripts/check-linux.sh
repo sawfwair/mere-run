@@ -125,10 +125,9 @@ export LIBRARY_PATH="$native_root/llama/lib:${LIBRARY_PATH:-}"
 export LD_LIBRARY_PATH="$native_root/llama/lib:${LD_LIBRARY_PATH:-}"
 
 check_linux_package_view
-mkdir -p ".build/${arch}-unknown-linux-gnu/debug/index/store"
 swift build --disable-index-store --product mere.run
-swift build --disable-index-store --build-tests
-timeout 120s swift run --disable-index-store MediaIOSmoke
+swift build --disable-index-store --product MediaIOSmoke
+timeout 120s swift run --disable-index-store --skip-build MediaIOSmoke
 
 run_installer_fixture() {
   local fixture_root
