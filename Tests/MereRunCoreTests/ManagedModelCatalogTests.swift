@@ -149,11 +149,34 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(parakeetSpec.normalizedRootURL(root, fileManager: .default), parakeetRoot)
     }
 
+    func testACEStepAcceptsUpstreamAndLegacyTurboLayouts() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "music-acestep"))
+
+        let upstreamRoot = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: upstreamRoot) }
+        try writeMinimalACEStepRoot(at: upstreamRoot, turboSubdirectory: "acestep-v15-turbo")
+        XCTAssertTrue(spec.isManagedRootComplete(upstreamRoot, fileManager: .default))
+
+        let legacyRoot = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: legacyRoot) }
+        try writeMinimalACEStepRoot(at: legacyRoot, turboSubdirectory: "music-acestep-v15-turbo")
+        XCTAssertTrue(spec.isManagedRootComplete(legacyRoot, fileManager: .default))
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func writeMinimalACEStepRoot(at root: URL, turboSubdirectory: String) throws {
+        for subdirectory in [turboSubdirectory, "vae", "Qwen3-Embedding-0.6B"] {
+            try FileManager.default.createDirectory(
+                at: root.appendingPathComponent(subdirectory, isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
     }
 
     private func writeMinimalMFluxZImageNano(at root: URL, upstreamRepoId: String) throws {

@@ -91,7 +91,7 @@ public actor ACEStepModelContainer {
 
     public init(
         checkpointsRootURL: URL,
-        turboSubdirectory: String = "music-acestep-v15-turbo",
+        turboSubdirectory: String = "acestep-v15-turbo",
         vaeSubdirectory: String = "vae",
         lmSubdirectory: String? = nil,
         textEncoderSubdirectory: String? = nil,

@@ -52,6 +52,11 @@ final class ACEStepTurboSchedulerTests: XCTestCase {
         XCTAssertEqual(sched.timesteps[1], 0.9545454545454546, accuracy: 1e-6)
     }
 
+    func testCustomTimestepsUseReferenceCandidateSetIndependentOfFixNFE() {
+        let sched = ACEStepTurboScheduler(fixNFE: 12, shift: 1.0, timesteps: [0.95])
+        XCTAssertEqual(sched.timesteps, [0.95454545])
+    }
+
     private func assertClose(_ got: [Float], _ expected: [Float], accuracy: Float = 1e-6) {
         XCTAssertEqual(got.count, expected.count)
         for (g, e) in zip(got, expected) {
@@ -59,4 +64,3 @@ final class ACEStepTurboSchedulerTests: XCTestCase {
         }
     }
 }
-

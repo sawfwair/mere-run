@@ -303,28 +303,8 @@ public enum ManagedModelResolver {
         fileManager: FileManager
     ) throws {
         switch spec.normalizationKind {
-        case .none, .qwen3ASRNested, .parakeetNested:
+        case .none, .qwen3ASRNested, .parakeetNested, .musicACEStep:
             return
-        case .musicACEStep:
-            try renameDirectoryIfPresent(
-                from: rootURL.appendingPathComponent("acestep-v15-turbo", isDirectory: true),
-                to: rootURL.appendingPathComponent("music-acestep-v15-turbo", isDirectory: true),
-                fileManager: fileManager
-            )
-            let renamePairs: [(String, String)] = [
-                ("acestep-5Hz-lm-1.7B", "music-acestep-5hz-lm-1.7b"),
-                ("acestep-5hz-lm-1.7b", "music-acestep-5hz-lm-1.7b"),
-                ("acestep-5Hz-lm", "music-acestep-5hz-lm"),
-                ("acestep-5hz-lm", "music-acestep-5hz-lm"),
-                ("acestep-lm", "music-acestep-lm"),
-            ]
-            for (fromName, toName) in renamePairs {
-                try renameDirectoryIfPresent(
-                    from: rootURL.appendingPathComponent(fromName, isDirectory: true),
-                    to: rootURL.appendingPathComponent(toName, isDirectory: true),
-                    fileManager: fileManager
-                )
-            }
         }
     }
 
@@ -357,18 +337,4 @@ public enum ManagedModelResolver {
         }
     }
 
-    private static func renameDirectoryIfPresent(
-        from source: URL,
-        to destination: URL,
-        fileManager: FileManager
-    ) throws {
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: source.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            return
-        }
-        guard !fileManager.fileExists(atPath: destination.path) else {
-            throw ResolverError.invalidInstalledModel("Destination already exists at \(destination.path)")
-        }
-        try fileManager.moveItem(at: source, to: destination)
-    }
 }

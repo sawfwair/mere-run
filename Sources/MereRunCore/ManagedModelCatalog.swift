@@ -972,10 +972,13 @@ public extension ManagedModelSpec {
 
     private static func missingACEStepPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
         var missing: [URL] = []
-        let turboDir = rootURL.appendingPathComponent("music-acestep-v15-turbo", isDirectory: true)
+        let upstreamTurboDir = rootURL.appendingPathComponent("acestep-v15-turbo", isDirectory: true)
+        let compatibilityTurboDir = rootURL.appendingPathComponent("music-acestep-v15-turbo", isDirectory: true)
         let vaeDir = rootURL.appendingPathComponent("vae", isDirectory: true)
         let textDir = rootURL.appendingPathComponent("Qwen3-Embedding-0.6B", isDirectory: true)
-        if !fileManager.fileExists(atPath: turboDir.path) { missing.append(turboDir) }
+        if !fileManager.fileExists(atPath: upstreamTurboDir.path) && !fileManager.fileExists(atPath: compatibilityTurboDir.path) {
+            missing.append(upstreamTurboDir)
+        }
         if !fileManager.fileExists(atPath: vaeDir.path) { missing.append(vaeDir) }
         if !fileManager.fileExists(atPath: textDir.path) { missing.append(textDir) }
         return missing
