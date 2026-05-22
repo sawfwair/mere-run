@@ -141,6 +141,7 @@ if [[ "$install_platform" == "Darwin" ]]; then
   done
 else
   for item in \
+    "$SOURCE_DIR"/mere.run-bin \
     "$SOURCE_DIR"/*.so \
     "$SOURCE_DIR"/*.so.* \
     "$SOURCE_DIR"/lib
