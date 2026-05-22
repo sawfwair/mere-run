@@ -112,6 +112,7 @@ llama_build="$native_root/build/llama.cpp"
 llama_commit="${LLAMA_CPP_COMMIT:-6d957078270f58d4ea14e8c205f5ef4e49be33f3}"
 llama_url="${LLAMA_CPP_URL:-https://github.com/ggml-org/llama.cpp.git}"
 mlx_swift_checkout="$repo_root/.build/checkouts/mlx-swift"
+swift_numerics_checkout="$repo_root/.build/checkouts/swift-numerics"
 linux_accel="${MERERUN_LINUX_ACCEL:-cpu}"
 case "$linux_accel" in
   cpu|cuda)
@@ -236,6 +237,15 @@ patch_mlx_swift_for_linux() {
   fi
   if grep -Fq '"MLXFast.swift",' "$package_file"; then
     sed -i '/"MLXFast.swift",/d;/"MLXFastKernel.swift",/d' "$package_file"
+  fi
+
+  local numerics_header="$swift_numerics_checkout/Sources/_NumericsShims/include/_NumericsShims.h"
+  local numerics_float16="$swift_numerics_checkout/Sources/RealModule/Float16+Real.swift"
+  if [[ -f "$numerics_header" ]] && grep -Fq '#if !defined __wasm__ // No _Float16 on wasm' "$numerics_header"; then
+    sed -i 's/#if !defined __wasm__ \/\/ No _Float16 on wasm/#if !defined __wasm__ \&\& defined(__FLT16_MANT_DIG__) \/\/ No _Float16 on wasm, or on targets whose C compiler lacks _Float16/' "$numerics_header"
+  fi
+  if [[ -f "$numerics_float16" ]] && grep -Fq '#if !arch(wasm32)' "$numerics_float16"; then
+    sed -i 's/#if !arch(wasm32)/#if !arch(wasm32) \&\& !(os(Linux) \&\& arch(x86_64))/' "$numerics_float16"
   fi
 
   echo "[prepare-linux-native] mlx-swift SwiftPM package fix applied."
