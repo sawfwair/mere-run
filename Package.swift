@@ -56,10 +56,68 @@ let isLinuxPackage = if packagePlatformOverride == "linux" {
 }
 
 let packagePlatforms: [SupportedPlatform]? = isLinuxPackage ? nil : [.macOS(.v15), .iOS(.v18)]
+let useLinuxPrebuiltMLX = isLinuxPackage
+  && ProcessInfo.processInfo.environment["MERERUN_MLX_SWIFT_LINKAGE"]?.lowercased() == "cuda-prebuilt"
+let prebuiltMLXBuildRoot = ProcessInfo.processInfo.environment["MERERUN_MLX_SWIFT_BUILD_DIR"]
+  ?? packagePath(".build/native/linux-\(hostArch)/build/mlx-swift-cuda-smoke").path
+let prebuiltMLXSourceRoot = ProcessInfo.processInfo.environment["MERERUN_MLX_SWIFT_SOURCE_DIR"]
+  ?? packagePath(".build/native/src/mlx-swift").path
+let prebuiltMLXSwiftSettings: [SwiftSetting] = useLinuxPrebuiltMLX
+  ? [
+      .unsafeFlags([
+        "-I", prebuiltMLXBuildRoot,
+        "-I", "\(prebuiltMLXBuildRoot)/swift",
+        "-I", "\(prebuiltMLXSourceRoot)/Source/Cmlx/include",
+        "-I", "\(prebuiltMLXBuildRoot)/_deps/mlx-c-src",
+        "-I", "\(prebuiltMLXBuildRoot)/_deps/swift-numerics-src/Sources/_NumericsShims/include"
+      ])
+    ]
+  : []
 let commonSwiftSettings: [SwiftSetting] = [
   .interoperabilityMode(.Cxx)
-]
+] + prebuiltMLXSwiftSettings
 let hasMediaIOTarget = packageDirectoryContainsSwiftSources("Sources/MediaIO")
+
+func mlxDependency(_ name: String) -> [Target.Dependency] {
+  useLinuxPrebuiltMLX ? [] : [.product(name: name, package: "mlx-swift")]
+}
+
+func shellSplit(_ value: String) -> [String] {
+  value.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" }).map(String.init)
+}
+
+let prebuiltMLXExtraLinkFlags = ProcessInfo.processInfo.environment["MERERUN_MLX_SWIFT_LINK_FLAGS"].map(shellSplit) ?? []
+let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
+  ? [
+      .unsafeFlags([
+        "-L", prebuiltMLXBuildRoot,
+        "-L", "\(prebuiltMLXBuildRoot)/_deps/mlx-c-build",
+        "-L", "\(prebuiltMLXBuildRoot)/_deps/mlx-build",
+        "-L", "\(prebuiltMLXBuildRoot)/_deps/mlx-build/mlx/io",
+        "-L", "\(prebuiltMLXBuildRoot)/lib",
+        "-lMLXOptimizers",
+        "-lMLXNN",
+        "-lMLXRandom",
+        "-lMLXFast",
+        "-lMLXFFT",
+        "-lMLXLinalg",
+        "-lMLX",
+        "-lmlxc",
+        "-lmlx",
+        "-lgguflib",
+        "-lNumerics",
+        "-lComplexModule",
+        "-lRealModule",
+        "-lpthread",
+        "-ldl",
+        "-lstdc++",
+        "-lm",
+        "-lblas",
+        "-llapack",
+        "-lopenblas"
+      ] + prebuiltMLXExtraLinkFlags)
+    ]
+  : []
 
 var products: [Product] = [
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
@@ -74,15 +132,15 @@ if !isLinuxPackage {
 }
 
 var targets: [Target] = []
-var mereRunCoreDependencies: [Target.Dependency] = [
-  .product(name: "MLX", package: "mlx-swift"),
-  .product(name: "MLXFast", package: "mlx-swift"),
-  .product(name: "MLXNN", package: "mlx-swift"),
-  .product(name: "MLXOptimizers", package: "mlx-swift"),
-  .product(name: "MLXRandom", package: "mlx-swift"),
-  .product(name: "Crypto", package: "swift-crypto"),
-  .product(name: "Transformers", package: "swift-transformers")
-]
+var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
+  + mlxDependency("MLXFast")
+  + mlxDependency("MLXNN")
+  + mlxDependency("MLXOptimizers")
+  + mlxDependency("MLXRandom")
+  + [
+      .product(name: "Crypto", package: "swift-crypto"),
+      .product(name: "Transformers", package: "swift-transformers")
+    ]
 
 if hasMediaIOTarget {
   products.append(.library(name: "MediaIO", targets: ["MediaIO"]))
@@ -135,6 +193,7 @@ if isLinuxPackage {
 
 let linuxNativeLinkerSettings: [LinkerSetting] = isLinuxPackage
   ? [.unsafeFlags(["-Xlinker", "-L\(packagePath(".build/native/linux-\(hostArch)/llama/lib").path)"])]
+    + prebuiltMLXLinkerSettings
   : []
 
 var mereRunCoreLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
@@ -142,9 +201,7 @@ if !isLinuxPackage {
   mereRunCoreLinkerSettings.append(.linkedFramework("Metal"))
 }
 
-var audioCodecsDependencies: [Target.Dependency] = [
-  .product(name: "MLX", package: "mlx-swift")
-]
+var audioCodecsDependencies: [Target.Dependency] = mlxDependency("MLX")
 if hasMediaIOTarget {
   audioCodecsDependencies.append("MediaIO")
 }
@@ -160,6 +217,19 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCoreTestDependencies.append("MediaIO")
 }
+
+let audioRuntimeDependencies: [Target.Dependency] = [
+  "MereRunCore",
+  "AudioCore",
+  "AudioCodecs"
+]
+  + mlxDependency("MLX")
+  + mlxDependency("MLXFast")
+  + mlxDependency("MLXNN")
+  + mlxDependency("MLXRandom")
+  + [
+    .product(name: "Transformers", package: "swift-transformers")
+  ]
 
 targets.append(contentsOf: [
   .target(
@@ -222,16 +292,7 @@ targets.append(contentsOf: [
   ),
   .target(
     name: "AudioSTT",
-    dependencies: [
-      "MereRunCore",
-      "AudioCore",
-      "AudioCodecs",
-      .product(name: "MLX", package: "mlx-swift"),
-      .product(name: "MLXFast", package: "mlx-swift"),
-      .product(name: "MLXNN", package: "mlx-swift"),
-      .product(name: "MLXRandom", package: "mlx-swift"),
-      .product(name: "Transformers", package: "swift-transformers")
-    ],
+    dependencies: audioRuntimeDependencies,
     path: "Sources/AudioSTT",
     exclude: [
       "Parakeet/README.md",
@@ -242,16 +303,7 @@ targets.append(contentsOf: [
   ),
   .target(
     name: "AudioTTS",
-    dependencies: [
-      "MereRunCore",
-      "AudioCore",
-      "AudioCodecs",
-      .product(name: "MLX", package: "mlx-swift"),
-      .product(name: "MLXFast", package: "mlx-swift"),
-      .product(name: "MLXNN", package: "mlx-swift"),
-      .product(name: "MLXRandom", package: "mlx-swift"),
-      .product(name: "Transformers", package: "swift-transformers")
-    ],
+    dependencies: audioRuntimeDependencies,
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"
@@ -316,19 +368,22 @@ if !isLinuxPackage {
   )
 }
 
+let packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
+  .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0")
+]) + [
+  .package(
+    url: "https://github.com/huggingface/swift-transformers",
+    from: "1.3.0"
+  ),
+  .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+  .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
+  .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0")
+]
+
 let package = Package(
   name: "MereRun",
   platforms: packagePlatforms,
   products: products,
-  dependencies: [
-    .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0"),
-    .package(
-      url: "https://github.com/huggingface/swift-transformers",
-      from: "1.3.0"
-    ),
-    .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
-    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
-    .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0")
-  ],
+  dependencies: packageDependencies,
   targets: targets
 )

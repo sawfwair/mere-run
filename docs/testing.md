@@ -66,7 +66,21 @@ export MERERUN_FFPROBE=/usr/bin/ffprobe
 
 The pull-request fixture should stay CPU MLX-compatible. CUDA machines can run
 additional local smoke tests, but CUDA installation, driver selection, and GPU
-availability are not assumptions in the shared CI contract.
+availability are not assumptions in the shared CI contract. To use the optional
+Linux CUDA bridge, prepare native artifacts and export the environment that the
+script prints:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
+# then export the printed PKG_CONFIG_PATH, LIBRARY_PATH, LD_LIBRARY_PATH,
+# MERERUN_MLX_SWIFT_LINKAGE, MERERUN_MLX_SWIFT_BUILD_DIR,
+# MERERUN_MLX_SWIFT_SOURCE_DIR, and MERERUN_MLX_SWIFT_LINK_FLAGS values.
+swift build --target mere.run
+```
+
+In this mode `Package.swift` imports the CMake-built `mlx-swift` Swift modules
+and static libraries instead of rebuilding `mlx-swift` through SwiftPM's
+CPU-oriented Linux manifest path.
 
 MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
 covers pure Swift image, WAV, and FFT behavior in the normal test suite.

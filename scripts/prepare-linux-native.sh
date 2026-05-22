@@ -13,8 +13,9 @@ The script builds a pinned llama.cpp shared-library install into:
 It also writes a pkg-config file at:
   .build/native/linux-<arch>/pkgconfig/llama.pc
 
-On Linux it also resolves SwiftPM dependencies and applies a small mlx-swift
-SwiftPM package fix needed for the MLXNN/MLXFast CPU build path.
+On Linux it also resolves SwiftPM dependencies for CPU builds. CUDA builds validate
+upstream mlx-swift's CMake lane and print a SwiftPM bridge environment that makes
+mere.run consume those prebuilt CUDA artifacts.
 
 Options:
   --check     Verify the current native layout without building.
@@ -42,6 +43,10 @@ Environment:
   MERERUN_SKIP_MLX_CUDA_SMOKE=1
                               Skip the mlx-swift CMake CUDA smoke when
                               MERERUN_LINUX_ACCEL=cuda.
+  MERERUN_MLX_SWIFT_LINKAGE=cuda-prebuilt
+                              Package.swift mode that consumes CMake-built
+                              mlx-swift CUDA artifacts instead of SwiftPM mlx.
+                              prepare-linux-native.sh prints the full export set.
   MERERUN_DS4_LINUX_BIN_DIR   Optional directory containing Linux ds4 binaries
                               to stage under vendor/ds4/linux-<arch>/.
 USAGE
@@ -211,8 +216,8 @@ build_llama() {
 }
 
 patch_mlx_swift_for_linux() {
-  if [[ "${MERERUN_SKIP_MLX_SWIFT_PATCH:-0}" == "1" ]]; then
-    echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix by request."
+  if [[ "${MERERUN_SKIP_MLX_SWIFT_PATCH:-0}" == "1" || "$linux_accel" == "cuda" ]]; then
+    echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix; CUDA builds use the CMake prebuilt bridge."
     return
   fi
 
@@ -370,16 +375,103 @@ smoke_mlx_swift_cuda() {
     echo "[prepare-linux-native] warning: mlx-swift CUDA build finished but example1 was not produced; CUDA is not wired into SwiftPM package consumption yet." >&2
   fi
 
-  cat <<'NOTICE'
+  cat <<NOTICE
 [prepare-linux-native] MLX CUDA CMake smoke completed.
-[prepare-linux-native] Note: this validates upstream mlx-swift's Linux/CMake CUDA lane only.
-[prepare-linux-native] The mere.run SwiftPM package still consumes mlx-swift through SwiftPM,
-[prepare-linux-native] whose Linux path remains CPU-oriented until a package bridge is added.
+[prepare-linux-native] The CMake-built MLX Swift artifacts are available for SwiftPM builds via:
+  export MERERUN_MLX_SWIFT_LINKAGE="cuda-prebuilt"
+  export MERERUN_MLX_SWIFT_BUILD_DIR="$mlx_cmake_build"
+  export MERERUN_MLX_SWIFT_SOURCE_DIR="$mlx_cmake_src"
 NOTICE
 }
 
+mlx_swift_cuda_link_flags() {
+  local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
+  local local_openblas_root="$native_root/deps/apt-root"
+  local flags=()
+
+  flags+=("-L" "$mlx_cmake_build/_deps/mlx-c-build")
+  flags+=("-L" "$mlx_cmake_build/_deps/mlx-build")
+  flags+=("-L" "$mlx_cmake_build/_deps/mlx-build/mlx/io")
+  flags+=("-L" "$mlx_cmake_build/lib")
+
+  if [[ -f "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so" ]]; then
+    flags+=("-L" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
+  fi
+  if [[ -n "${CUDNN_LIBRARY_PATH:-}" ]]; then
+    flags+=("-L" "$CUDNN_LIBRARY_PATH")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$CUDNN_LIBRARY_PATH")
+    for cudnn_lib in \
+      libcudnn.so.9 \
+      libcudnn_graph.so.9 \
+      libcudnn_engines_runtime_compiled.so.9 \
+      libcudnn_ops.so.9 \
+      libcudnn_cnn.so.9 \
+      libcudnn_adv.so.9 \
+      libcudnn_engines_precompiled.so.9 \
+      libcudnn_heuristic.so.9; do
+      if [[ -f "$CUDNN_LIBRARY_PATH/$cudnn_lib" ]]; then
+        flags+=("$CUDNN_LIBRARY_PATH/$cudnn_lib")
+      fi
+    done
+  fi
+  if [[ -d /usr/lib/x86_64-linux-gnu ]]; then
+    flags+=("-L" "/usr/lib/x86_64-linux-gnu")
+  fi
+
+  flags+=(
+    "-lcublasLt"
+    "-lnvrtc"
+    "-lcuda"
+    "-lcudart"
+    "-lnccl"
+    "-lrt"
+  )
+
+  printf '%q ' "${flags[@]}"
+}
+
+verify_mlx_swift_cuda_bridge() {
+  if [[ "$linux_accel" != "cuda" || "${MERERUN_SKIP_MLX_CUDA_SMOKE:-0}" == "1" ]]; then
+    return
+  fi
+
+  local mlx_cmake_src="$repo_root/.build/native/src/mlx-swift"
+  local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
+  local missing=0
+  local required_paths=(
+    "$mlx_cmake_src/Source/Cmlx/include/module.modulemap"
+    "$mlx_cmake_build/MLX.swiftmodule"
+    "$mlx_cmake_build/MLXFast.swiftmodule"
+    "$mlx_cmake_build/MLXNN.swiftmodule"
+    "$mlx_cmake_build/MLXRandom.swiftmodule"
+    "$mlx_cmake_build/MLXOptimizers.swiftmodule"
+    "$mlx_cmake_build/libMLX.a"
+    "$mlx_cmake_build/libMLXFast.a"
+    "$mlx_cmake_build/libMLXNN.a"
+    "$mlx_cmake_build/libMLXRandom.a"
+    "$mlx_cmake_build/libMLXOptimizers.a"
+    "$mlx_cmake_build/_deps/mlx-c-build/libmlxc.a"
+    "$mlx_cmake_build/_deps/mlx-build/libmlx.a"
+    "$mlx_cmake_build/_deps/mlx-build/mlx/io/libgguflib.a"
+    "$mlx_cmake_build/lib/libNumerics.a"
+    "$mlx_cmake_build/lib/libComplexModule.a"
+    "$mlx_cmake_build/lib/libRealModule.a"
+  )
+
+  for path in "${required_paths[@]}"; do
+    if [[ ! -e "$path" ]]; then
+      echo "[prepare-linux-native] error: missing MLX Swift CUDA bridge artifact: $path" >&2
+      missing=1
+    fi
+  done
+  if [[ "$missing" == "1" ]]; then
+    exit 69
+  fi
+}
+
 verify_mlx_swift_patch() {
-  if [[ "${MERERUN_SKIP_MLX_SWIFT_PATCH:-0}" == "1" ]]; then
+  if [[ "${MERERUN_SKIP_MLX_SWIFT_PATCH:-0}" == "1" || "$linux_accel" == "cuda" ]]; then
     return
   fi
 
@@ -421,6 +513,7 @@ fi
 
 verify_llama
 verify_mlx_swift_patch
+verify_mlx_swift_cuda_bridge
 
 cat <<EOF
 [prepare-linux-native] Linux-native layout ready for $platform_dir (accel: $linux_accel).
@@ -432,8 +525,13 @@ Export these before building/running the Linux CLI:
 EOF
 
 if [[ "$linux_accel" == "cuda" ]]; then
-  cat <<'EOF'
+  mlx_link_flags="$(mlx_swift_cuda_link_flags)"
+  cat <<EOF
   export MERERUN_LINUX_ACCEL="cuda"
+  export MERERUN_MLX_SWIFT_LINKAGE="cuda-prebuilt"
+  export MERERUN_MLX_SWIFT_BUILD_DIR="$native_root/build/mlx-swift-cuda-smoke"
+  export MERERUN_MLX_SWIFT_SOURCE_DIR="$repo_root/.build/native/src/mlx-swift"
+  export MERERUN_MLX_SWIFT_LINK_FLAGS="$mlx_link_flags"
   # Optional: cap llama.cpp GPU offload layers instead of the default all-layers setting.
   # export MERERUN_LLAMA_GPU_LAYERS="999"
 EOF
