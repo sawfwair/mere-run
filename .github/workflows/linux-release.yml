@@ -46,7 +46,7 @@ jobs:
       - name: Build Linux packages
         env:
           MERERUN_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
-        run: scripts/package-linux.sh --version "$MERERUN_RELEASE_VERSION"
+        run: bash scripts/package-linux.sh --version "$MERERUN_RELEASE_VERSION"
 
       - name: Verify package manifests
         run: |
