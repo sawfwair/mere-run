@@ -76,7 +76,8 @@ The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
 Linux release artifacts are headless CLI-only. The release workflow can publish
-both a portable tarball and a Debian package for Ubuntu-style hosts:
+both a portable tarball and a Debian package for x86_64/amd64 Ubuntu-style
+hosts:
 
 ```bash
 tag=v0.7.1
@@ -94,7 +95,8 @@ sudo apt install ./mere-run.deb
 ```
 
 Linux packages install the `mere.run` CLI plus colocated runtime assets; they do
-not include the macOS SwiftUI studio or DMG layout.
+not include the macOS SwiftUI studio or DMG layout. Linux arm64 release package
+builds are blocked for now by upstream `mlx-swift` Linux `bf16` support.
 
 ## Build from source
 
@@ -132,7 +134,7 @@ export MERERUN_FFPROBE=/usr/bin/ffprobe
 swift run mere.run --help
 ```
 
-To build Linux release packages from a Linux Swift toolchain host:
+To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
 scripts/package-linux.sh --version 0.7.1

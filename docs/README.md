@@ -73,7 +73,7 @@ If you are new to the repo, read these in order:
 ### Fundamentals
 
 - [Getting Started](./getting-started.md): clone, build, first commands, first
-  status checks, model pulls, and local setup
+  status checks, Linux release artifacts, model pulls, and local setup
 - [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
   prompting, parameters, examples, and troubleshooting
 - [Configuration](./configuration.md): supported environment variables and
@@ -86,7 +86,7 @@ If you are new to the repo, read these in order:
 - [Repository Tour](./repository-tour.md): top-level layout, SwiftPM targets,
   and where each subsystem lives
 - [Development Workflow](./development-workflow.md): day-to-day edit, build,
-  test, and smoke-test loop
+  test, Linux packaging, and smoke-test loop
 - [Testing Guide](./testing.md): what each validation command does and when to
   run it
 - [Architecture Reading Map](./architecture.md): code-reader-oriented entry

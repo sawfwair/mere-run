@@ -100,6 +100,29 @@ The studio is macOS-only. Linux users and Linux CI should exercise the CLI and
 local API surfaces directly rather than trying to build or launch
 `mere.run.app`.
 
+## Install Linux release artifacts
+
+Linux release artifacts are headless CLI-only. When a release publishes Linux
+packages, use the GitHub Release assets rather than the macOS DMG URL:
+
+```bash
+tag=v0.7.1
+version="${tag#v}"
+
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64.tar.gz" -o mere-run-linux.tar.gz
+tar -xzf mere-run-linux.tar.gz
+cd "mere-run-${tag}-linux-x86_64"
+./install.sh
+
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_amd64.deb" -o mere-run.deb
+sudo apt install ./mere-run.deb
+```
+
+The tarball and `.deb` install the `mere.run` CLI plus colocated runtime assets.
+They do not include `mere.run.app`, SwiftUI studio flows, or the macOS DMG
+layout. Linux release packages are x86_64/amd64-only for now; arm64 package
+builds are blocked by upstream `mlx-swift` Linux `bf16` support.
+
 ## Understand the command tree
 
 The public CLI is modality-first:

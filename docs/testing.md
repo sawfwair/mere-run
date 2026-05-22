@@ -82,6 +82,22 @@ In this mode `Package.swift` imports the CMake-built `mlx-swift` Swift modules
 and static libraries instead of rebuilding `mlx-swift` through SwiftPM's
 CPU-oriented Linux manifest path.
 
+Linux release packaging has its own artifact check:
+
+```bash
+scripts/package-linux.sh --version 0.7.1
+test -s dist/linux/SHA256SUMS
+tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
+tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
+dpkg-deb --info dist/linux/mere-run_*_*.deb
+dpkg-deb --contents dist/linux/mere-run_*_*.deb | grep 'usr/bin/mere.run'
+```
+
+The `linux-release` workflow runs the same package and manifest boundary on
+Ubuntu 22.04 in the Swift 6.0 container. Manual workflow runs upload Actions
+artifacts only; published GitHub Release events also upload the Linux assets to
+the release.
+
 MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
 covers pure Swift image, WAV, and FFT behavior in the normal test suite.
 `scripts/check-linux.sh` also runs the hidden `MediaIOSmoke` SwiftPM executable
@@ -177,6 +193,10 @@ swift run mere.run --help
 If the change only updates Linux documentation, the CI docs fixture is enough.
 If the change adds Linux-compatible code, include the focused unit test or stub
 fixture result that exercises the new behavior.
+
+If the change touches Linux release packaging or `.github/workflows/linux-release.yml`,
+run the package script on Linux or dispatch the `linux-release` workflow on
+`main` with a test version.
 
 ## Troubleshooting
 

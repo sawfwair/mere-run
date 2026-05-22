@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added headless Linux release packaging for the `mere.run` CLI, including an
+  x86_64 tarball, amd64 Debian package, GitHub Actions packaging workflow, and
+  package manifest verification.
+
 ## 0.7.0 - 2026-05-22
 
 ### Changed

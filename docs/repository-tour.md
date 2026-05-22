@@ -34,6 +34,9 @@ The Linux compatibility boundary is the headless `mere.run` CLI and reusable
 library code. `mere.run.app`, SwiftUI views, app bundling, installer behavior,
 and DMG packaging remain macOS-only.
 
+Linux release packaging follows the same boundary: release artifacts are
+headless x86_64/amd64 CLI tarballs and Debian packages, not app bundles.
+
 ## Source tree
 
 ### `Sources/MereRunCLI`
@@ -131,6 +134,18 @@ The main repo validation entrypoint. It runs:
 
 Sequential real-world smoke tests for installed models. Use this when you want
 to validate actual runtime paths instead of just build and parse coverage.
+
+### `scripts/package-linux.sh`
+
+Builds Linux release artifacts for the headless CLI on x86_64/amd64 Linux:
+
+- `dist/linux/mere-run-<version>-linux-x86_64.tar.gz`
+- `dist/linux/mere-run_<version>_amd64.deb`
+- `dist/linux/SHA256SUMS`
+
+The companion `.github/workflows/linux-release.yml` workflow runs this script in
+the Swift 6.0 Ubuntu container, verifies the tarball and `.deb` manifests, and
+uploads package artifacts.
 
 ## Vendor artifacts
 

@@ -90,6 +90,26 @@ inputs. The Linux gate runs the hidden `MediaIOSmoke` executable against
 covered without model checkpoints. CUDA setup belongs in local runtime
 documentation or manual smoke notes, not in the default pull-request gate.
 
+### Linux release packaging change
+
+Linux release packaging is a separate x86_64/amd64 path for distributable
+headless CLI artifacts:
+
+```bash
+scripts/package-linux.sh --version 0.7.1
+ls dist/linux/
+```
+
+The package script builds `dist/linux/mere-run-<version>-linux-x86_64.tar.gz`,
+`dist/linux/mere-run_<version>_amd64.deb`, and `dist/linux/SHA256SUMS`. It must
+run on Linux; arm64 package builds intentionally fail until upstream
+`mlx-swift` Linux `bf16` support is available.
+
+The GitHub `linux-release` workflow can be triggered manually with a version
+input to validate the package build and upload an Actions artifact. On published
+GitHub Release events, the workflow also uploads the Linux artifacts to the
+release.
+
 ## Model-store expectations
 
 The public runtime is hard-cut to the canonical OSS model IDs. That means:

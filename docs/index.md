@@ -21,6 +21,8 @@ features:
     details: The public surface is organized around image, text, speech, vision, music, video, model management, status snapshots, and local API serving.
   - title: Native macOS studio
     details: The optional SwiftUI app opens to a prompt-first canvas, local output library, guided readiness, and advanced CLI details.
+  - title: Headless Linux CLI packages
+    details: Linux releases can ship portable x86_64 tarballs and Debian packages for CLI-only installs on Ubuntu-style hosts.
   - title: Canonical model system
     details: Public model IDs, shared model-store rules, Hugging Face-backed pulls, and `mere.run status` make installs predictable and scriptable.
   - title: Readable runtime families
