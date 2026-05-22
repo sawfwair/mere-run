@@ -1,4 +1,12 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 
 /// Premier-tier agent runtime backed by the vendored DeepSeek V4 Flash engine.
 ///
@@ -416,7 +424,11 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
     }
 
     private func pickFreeLoopbackPort() throws -> Int {
+        #if os(Linux)
+        let sock = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+        #else
         let sock = socket(AF_INET, SOCK_STREAM, 0)
+        #endif
         guard sock >= 0 else {
             throw DeepseekV4FlashError.serverFailedToStart("socket() failed")
         }

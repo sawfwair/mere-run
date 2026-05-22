@@ -41,9 +41,55 @@ final class DeepseekV4FlashResolverTests: XCTestCase {
         XCTAssertEqual(resolved?.standardizedFileURL, symlink.standardizedFileURL)
     }
 
+    func testBinaryLocateAcceptsPlatformSubdirectoryUnderOverride() throws {
+        let root = try makeTemporaryDirectory()
+        let platformDir = root.appendingPathComponent("linux-arm64", isDirectory: true)
+        let server = platformDir.appendingPathComponent(DeepseekV4FlashBinary.Kind.server.rawValue)
+        try makeExecutable(at: server)
+
+        let resolved = try DeepseekV4FlashBinary.locate(
+            .server,
+            environment: [
+                "MERERUN_DS4_BIN_DIR": root.path,
+                "MERERUN_DS4_PLATFORM_DIR": "linux-arm64",
+            ]
+        )
+
+        XCTAssertEqual(resolved.standardizedFileURL, server.standardizedFileURL)
+    }
+
+    func testBinaryLocatePreservesFlatOverrideDirectory() throws {
+        let root = try makeTemporaryDirectory()
+        let flatServer = root.appendingPathComponent(DeepseekV4FlashBinary.Kind.server.rawValue)
+        let platformServer = root
+            .appendingPathComponent("linux-arm64", isDirectory: true)
+            .appendingPathComponent(DeepseekV4FlashBinary.Kind.server.rawValue)
+        try makeExecutable(at: flatServer)
+        try makeExecutable(at: platformServer)
+
+        let resolved = try DeepseekV4FlashBinary.locate(
+            .server,
+            environment: [
+                "MERERUN_DS4_BIN_DIR": root.path,
+                "MERERUN_DS4_PLATFORM_DIR": "linux-arm64",
+            ]
+        )
+
+        XCTAssertEqual(resolved.standardizedFileURL, flatServer.standardizedFileURL)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let root = try TestFileSystem.makeTempDir(prefix: "mererun-ds4-resolver-tests")
         temporaryRoots.append(root)
         return root
+    }
+
+    private func makeExecutable(at url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data("binary".utf8)))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 }

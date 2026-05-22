@@ -1,6 +1,6 @@
 import ArgumentParser
-import AVFoundation
 import Foundation
+import MediaIO
 import MLX
 import MereRunCore
 
@@ -15,8 +15,8 @@ struct Video: AsyncParsableCommand {
         abstract: "Generate videos with native Swift/MLX LTX pipelines.",
         subcommands: [
             VideoExportLatents.self,
-            VideoGenerate.self,
-        ],
+            VideoGenerate.self
+        ]
     )
 }
 
@@ -359,12 +359,7 @@ struct VideoGenerate: AsyncParsableCommand {
     }
 
     private func mediaHasAudioTrack(at url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url)
-        do {
-            return !(try await asset.loadTracks(withMediaType: .audio)).isEmpty
-        } catch {
-            return false
-        }
+        MediaVideoIO.hasAudioTrack(url)
     }
 }
 

@@ -667,7 +667,7 @@ Useful options:
 
 Download a managed Hugging Face snapshot into the local model store. The command checks
 the model capability catalog and available disk space before downloading so unsupported
-Macs do not pull models they cannot run and tight disks fail with a useful cache path.
+machines do not pull models they cannot run and tight disks fail with a useful cache path.
 
 ```bash
 swift run mere.run model pull image-zimage-nano
@@ -678,7 +678,7 @@ Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
 ### `mere.run model capabilities`
 
-Show this Mac's supported models, recommended setup package, and a short summary
+Show this machine's supported models, recommended setup package, and a short summary
 of what each model does.
 
 ```bash
@@ -782,17 +782,19 @@ swift run mere.run setup --mode manual
 
 Agent model choices:
 
-- `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB Macs
-- `tier`: the best supported local tier for this Mac, currently 9B, Q35 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ Macs
+- `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB machines
+- `tier`: the best supported local tier for this machine, currently 9B, Q35 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ machines
 - `premier`: `text-agent-deepseek-v4-flash`, the preferred managed 96 GB+ setup-agent tier served by the bundled DS4 engine
 
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.
+Pi auto-install uses the published macOS release assets; on Linux, put a `pi`
+binary on `PATH` or pass `--pi-path` and the agent runs in the current terminal.
 
 ### `mere.run agent onboard`
 
 Lower-level agent plumbing used by `mere.run setup`. Print a guided setup
-summary for the current Mac. Optional flags can pull the
+summary for the current machine. Optional flags can pull the
 recommended supported model package, install Pi, and write a Pi provider
 extension that points at `mere.run api serve`.
 

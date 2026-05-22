@@ -1,5 +1,8 @@
 import Foundation
 import XCTest
+#if os(Linux)
+import Glibc
+#endif
 
 final class InstallScriptTests: XCTestCase {
     private let modelSourceConfigFilename = "mererun-model-source-base-url.txt"
@@ -100,6 +103,9 @@ final class InstallScriptTests: XCTestCase {
     }
 
     func testInstallerCopiesMlxBundleAndCompatibilityMetallibsWhenPresent() throws {
+        #if os(Linux)
+        throw XCTSkip("MLX Metal bundle staging is macOS-only.")
+        #else
         let fixture = try makeInstallerFixture()
         defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
 
@@ -142,6 +148,28 @@ final class InstallScriptTests: XCTestCase {
                 atPath: fixture.destDirURL.appendingPathComponent("mlx.metallib").path
             )
         )
+        #endif
+    }
+
+    func testInstallerCopiesLinuxSharedLibrariesWhenPresent() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let sharedLibraryURL = fixture.sourceDirURL.appendingPathComponent("libmere_native.so", isDirectory: false)
+        try "fake shared library".write(to: sharedLibraryURL, atomically: true, encoding: .utf8)
+
+        let result = try runInstaller(
+            scriptURL: fixture.installScriptURL,
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false),
+            extraEnvironment: ["MERERUN_INSTALL_PLATFORM": "Linux"]
+        )
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("libmere_native.so").path
+            )
+        )
     }
 
     func testInstallerCopiesDS4RuntimeWhenPresent() throws {
@@ -164,7 +192,8 @@ final class InstallScriptTests: XCTestCase {
 
         let result = try runInstaller(
             scriptURL: fixture.installScriptURL,
-            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false)
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false),
+            extraEnvironment: ["MERERUN_INSTALL_DISABLE_DITTO": "1"]
         )
 
         XCTAssertEqual(result.status, 0, result.combinedOutput)
@@ -219,30 +248,113 @@ final class InstallScriptTests: XCTestCase {
     private func runInstaller(
         scriptURL: URL,
         binDestURL: URL,
-        arguments: [String] = []
+        arguments: [String] = [],
+        extraEnvironment: [String: String] = [:]
     ) throws -> InstallerRunResult {
+        #if os(Linux)
+        return try runInstallerWithSystem(
+            scriptURL: scriptURL,
+            binDestURL: binDestURL,
+            arguments: arguments,
+            extraEnvironment: extraEnvironment
+        )
+        #else
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [scriptURL.path] + arguments
         var environment = ProcessInfo.processInfo.environment
         environment["MERERUN_INSTALL_BIN_DEST"] = binDestURL.path
         environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        for (key, value) in extraEnvironment {
+            environment[key] = value
+        }
         process.environment = environment
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        let captureRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("InstallScriptTests-output-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: captureRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: captureRoot) }
+        let stdoutURL = captureRoot.appendingPathComponent("stdout.txt", isDirectory: false)
+        let stderrURL = captureRoot.appendingPathComponent("stderr.txt", isDirectory: false)
+        try Data().write(to: stdoutURL)
+        try Data().write(to: stderrURL)
+        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+        process.standardOutput = stdoutHandle
+        process.standardError = stderrHandle
 
         try process.run()
         process.waitUntilExit()
+        try stdoutHandle.close()
+        try stderrHandle.close()
 
         return InstallerRunResult(
             status: process.terminationStatus,
-            stdout: String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
-            stderr: String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            stdout: String(data: try Data(contentsOf: stdoutURL), encoding: .utf8) ?? "",
+            stderr: String(data: try Data(contentsOf: stderrURL), encoding: .utf8) ?? ""
+        )
+        #endif
+    }
+
+    #if os(Linux)
+    private func runInstallerWithSystem(
+        scriptURL: URL,
+        binDestURL: URL,
+        arguments: [String],
+        extraEnvironment: [String: String]
+    ) throws -> InstallerRunResult {
+        let captureRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("InstallScriptTests-output-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: captureRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: captureRoot) }
+
+        let stdoutURL = captureRoot.appendingPathComponent("stdout.txt", isDirectory: false)
+        let stderrURL = captureRoot.appendingPathComponent("stderr.txt", isDirectory: false)
+        let runnerURL = captureRoot.appendingPathComponent("run-installer.sh", isDirectory: false)
+
+        var lines = [
+            "set -e",
+            "export MERERUN_INSTALL_BIN_DEST=\(shellQuote(binDestURL.path))",
+            "export PATH='/usr/bin:/bin:/usr/sbin:/sbin'",
+        ]
+        for (key, value) in extraEnvironment.sorted(by: { $0.key < $1.key }) {
+            lines.append("export \(key)=\(shellQuote(value))")
+        }
+
+        let renderedArguments = ([scriptURL.path] + arguments)
+            .map(shellQuote)
+            .joined(separator: " ")
+        lines.append("exec /bin/bash \(renderedArguments)")
+        try (lines.joined(separator: "\n") + "\n").write(to: runnerURL, atomically: true, encoding: .utf8)
+
+        let command = [
+            "/bin/bash",
+            shellQuote(runnerURL.path),
+            ">",
+            shellQuote(stdoutURL.path),
+            "2>",
+            shellQuote(stderrURL.path),
+        ].joined(separator: " ")
+
+        let rawStatus = system(command)
+        let status: Int32
+        if rawStatus == -1 {
+            status = -1
+        } else {
+            status = Int32((rawStatus >> 8) & 0xff)
+        }
+
+        return InstallerRunResult(
+            status: status,
+            stdout: String(data: try Data(contentsOf: stdoutURL), encoding: .utf8) ?? "",
+            stderr: String(data: try Data(contentsOf: stderrURL), encoding: .utf8) ?? ""
         )
     }
+
+    private func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+    #endif
 }
 
 private struct InstallerFixture {

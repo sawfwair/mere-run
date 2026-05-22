@@ -91,8 +91,8 @@ struct Setup: AsyncParsableCommand {
 
     private func runAgentSetup() async throws {
         let machine = MereRunMachineProfile.current
-        guard machine.isAppleSiliconMac else {
-            throw ValidationError("The local Mere agent requires Apple Silicon macOS. Use `mere.run setup --mode byoa` or `--mode manual`.")
+        guard machine.isSupportedRuntime else {
+            throw ValidationError("The local Mere agent requires Apple Silicon macOS or Linux. Use `mere.run setup --mode byoa` or `--mode manual`.")
         }
         guard let recommendation = MereRunAgentModelCatalog.recommendation(
             for: agentModel.coreChoice,
@@ -131,7 +131,7 @@ struct Setup: AsyncParsableCommand {
     ) {
         printSetupTitle("Mere agent")
         print("")
-        print("This Mac")
+        print("This machine")
         print("  \(machine.processorName)")
         print("  \(machine.unifiedMemoryGB) GB unified memory")
         print("")
@@ -185,7 +185,7 @@ struct Setup: AsyncParsableCommand {
     private func printUnsupportedAgentPlan(machine: MereRunMachineProfile) {
         printSetupTitle("Mere agent")
         print("")
-        print("This Mac")
+        print("This machine")
         print("  \(machine.processorName)")
         print("  \(machine.unifiedMemoryGB) GB unified memory")
         print("")
@@ -202,7 +202,7 @@ struct Setup: AsyncParsableCommand {
             print("  No local agent tier is supported on this machine.")
         case .premier:
             print("  Unavailable on this machine.")
-            print("  DeepSeek V4 Flash requires at least 96 GB unified memory and Apple Silicon.")
+            print("  DeepSeek V4 Flash requires at least 96 GB unified memory and a supported runtime.")
             print("  It is the preferred managed setup-agent tier when available.")
         }
         print("")
@@ -236,15 +236,24 @@ struct Setup: AsyncParsableCommand {
                 }
             }
         )
-        if !quiet {
-            CLIStderr.write("\n[setup] installing Pi\n")
-        }
-        let piResult = try await PiAgentIntegration.installLatest(force: false) { message in
-            guard !quiet else { return }
-            CLIStderr.write("[pi] \(message)\n")
-        }
-        if !quiet {
-            CLIStderr.write("[setup] Pi installed at \(piResult.binaryURL.path)\n")
+        if PiAgentIntegration.canInstallLatestRelease {
+            if !quiet {
+                CLIStderr.write("\n[setup] installing Pi\n")
+            }
+            let piResult = try await PiAgentIntegration.installLatest(force: false) { message in
+                guard !quiet else { return }
+                CLIStderr.write("[pi] \(message)\n")
+            }
+            if !quiet {
+                CLIStderr.write("[setup] Pi installed at \(piResult.binaryURL.path)\n")
+            }
+        } else if let piURL = PiAgentIntegration.findPiExecutable(explicitPath: piPath) {
+            if !quiet {
+                CLIStderr.write("\n[setup] using Pi at \(piURL.path)\n")
+            }
+        } else if !quiet {
+            CLIStderr.write("\n[setup] Pi auto-install unavailable\n")
+            CLIStderr.write("[setup] Pi auto-install is not available on this platform. Install Pi separately and pass --pi-path or put pi on PATH.\n")
         }
         let extensionURL = try PiAgentIntegration.writeLocalProviderExtension(
             host: host,
@@ -271,15 +280,17 @@ struct Setup: AsyncParsableCommand {
         }
         CLIStderr.write("[setup] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
         try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
-        CLIStderr.write("[setup] Local API is ready. Opening Pi in Terminal.app.\n")
+        CLIStderr.write("[setup] Local API is ready. \(PiTerminalLauncher.launchProgressMessage)\n")
         try runPi(
             piURL: piURL,
             modelID: runtime.providerModel.id,
             engine: runtime.engine,
             modelURL: modelURL
         )
-        CLIStderr.write("[setup] Pi is running in Terminal.app. Keep this command running; press Ctrl+C here to stop the API server.\n")
-        waitForServerProcess()
+        CLIStderr.write("[setup] \(PiTerminalLauncher.runningProgressMessage)\n")
+        if PiTerminalLauncher.launchesDetached {
+            waitForServerProcess()
+        }
     }
 
     private func startAPIServer(modelURL: URL, engine: APIEngine) throws -> (process: Process, logURL: URL) {
@@ -339,8 +350,8 @@ struct Setup: AsyncParsableCommand {
         print("Copy this prompt into Claude, Codex, or another local/remote agent:")
         print("")
         print("""
-        You are helping me set up mere.run on this Mac.
-        Machine: \(machine.processorName), \(machine.unifiedMemoryGB) GB unified memory, Apple Silicon: \(machine.isAppleSiliconMac).
+        You are helping me set up mere.run on this machine.
+        Machine: \(machine.processorName), \(machine.unifiedMemoryGB) GB memory, Apple Silicon: \(machine.isAppleSiliconMac), Linux: \(machine.isLinux).
         Supported managed models: \(supported.isEmpty ? "none detected" : supported).
         First run `\(CLICommandDisplay.command("model capabilities --all"))`.
         Only pull models that mere.run reports as supported on this machine.
@@ -357,7 +368,7 @@ struct Setup: AsyncParsableCommand {
         print("Commands")
         printNumberedCommand(
             index: 1,
-            title: "Inspect this Mac",
+            title: "Inspect this machine",
             command: CLICommandDisplay.command("model capabilities --all"),
             trailingBlankLine: true
         )

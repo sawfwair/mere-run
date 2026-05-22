@@ -3,11 +3,6 @@ import MLX
 import MLXNN
 import MLXRandom
 
-#if canImport(CoreGraphics)
-import CoreGraphics
-import ImageIO
-#endif
-
 extension ZImageTurboLoRATrainer {
     // MARK: - Dataset Encoding
 
@@ -44,15 +39,9 @@ extension ZImageTurboLoRATrainer {
             throw ZImageTurboLoRATrainerError.imageNotFound(url)
         }
 
-    #if canImport(CoreGraphics)
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
-            throw ZImageTurboLoRATrainerError.imageDecodeFailed(url)
-        }
-
         // Use center crop (ai-toolkit style) to preserve aspect ratio
         let resizedArray = try QwenImageIO.resizedCenterCropPixelArray(
-            from: cgImage,
+            from: url,
             width: width,
             height: height,
             addBatchDimension: true,
@@ -67,9 +56,5 @@ extension ZImageTurboLoRATrainer {
         let cleanLatent = (mean - MLXArray(vae.configuration.shiftFactor)) * MLXArray(vae.configuration.scalingFactor)
 
         return cleanLatent.asType(.bfloat16)
-    #else
-        throw ZImageTurboLoRATrainerError.imageDecodeFailed(url)
-    #endif
     }
 }
-

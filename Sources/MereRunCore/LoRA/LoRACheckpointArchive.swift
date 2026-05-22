@@ -1,4 +1,7 @@
 import Foundation
+#if os(Linux)
+import Glibc
+#endif
 
 public enum LoRACheckpointArchive {
     public static func archiveURL(for checkpointURL: URL) -> URL {
@@ -10,7 +13,6 @@ public enum LoRACheckpointArchive {
         primaryFile: URL,
         additionalFiles: [URL] = []
     ) throws -> URL? {
-        #if os(macOS)
         let archiveURL = archiveURL(for: primaryFile)
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory.appendingPathComponent(
@@ -40,6 +42,7 @@ public enum LoRACheckpointArchive {
             try fm.removeItem(at: archiveURL)
         }
 
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", bundleDir.path, archiveURL.path]
@@ -52,10 +55,26 @@ public enum LoRACheckpointArchive {
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create checkpoint archive with ditto (status \(process.terminationStatus))."]
             )
         }
-
-        return archiveURL
+        #elseif os(Linux)
+        let command = [
+            "cd \(shellQuote(tempRoot.path))",
+            "zip -qry \(shellQuote(archiveURL.path)) \(shellQuote(bundleDir.lastPathComponent))"
+        ].joined(separator: " && ")
+        guard system(command) == 0 else {
+            throw NSError(
+                domain: "LoRACheckpointArchive",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to create checkpoint archive with zip."]
+            )
+        }
         #else
         return nil
         #endif
+
+        return archiveURL
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }

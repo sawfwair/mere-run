@@ -2,7 +2,6 @@ import Foundation
 import MLX
 import MLXNN
 import MLXFast
-import ImageIO
 
 /// Owns the public OCR entrypoint and runtime state for the LightOn stack.
 /// Model loading and generation helpers live in companion files so readers can

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$(uname -s)" == "Linux" ]]; then
+  exec bash "$repo_root/scripts/check-linux.sh" "$@"
+fi
+
 for homebrew_bin in /opt/homebrew/bin /usr/local/bin; do
   if [[ -d "$homebrew_bin" && ":$PATH:" != *":$homebrew_bin:"* ]]; then
     PATH="$homebrew_bin:$PATH"

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct DeepseekV4FlashClientResponse: Sendable {
     public let statusCode: Int

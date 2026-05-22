@@ -1,9 +1,6 @@
 import Foundation
+import MediaIO
 import MLX
-#if canImport(CoreGraphics)
-import CoreGraphics
-import ImageIO
-#endif
 
 public actor Q35Generator: ChatGenerator {
     private var model: Q35Model?
@@ -428,13 +425,12 @@ public actor Q35Generator: ChatGenerator {
         return MLX.concatenated(parts, axis: 1)
     }
 
-    #if canImport(CoreGraphics)
     private func loadImageTensor(
         from imageRef: String,
         patchSize: Int,
         spatialMergeSize: Int
     ) throws -> (tensor: MLXArray, gridTHW: (Int, Int, Int)) {
-        let image = try loadCGImage(from: imageRef)
+        let image = try loadImage(from: imageRef)
         let divisor = max(1, patchSize * max(1, spatialMergeSize))
 
         let targetWidth = max(divisor, (image.width / divisor) * divisor)
@@ -452,20 +448,20 @@ public actor Q35Generator: ChatGenerator {
         return (normalized, gridTHW)
     }
 
-    private func loadCGImage(from imageRef: String) throws -> CGImage {
+    private func loadImage(from imageRef: String) throws -> MediaImage {
         if let remoteURL = URL(string: imageRef),
            let scheme = remoteURL.scheme?.lowercased(),
            scheme == "http" || scheme == "https" {
             let data = try Data(contentsOf: remoteURL)
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            do {
+                return try MediaImageIO.decode(data: data)
+            } catch {
                 throw NSError(
                     domain: "Q35Generator",
                     code: 1002,
                     userInfo: [NSLocalizedDescriptionKey: "Failed to decode image URL: \(imageRef)"]
                 )
             }
-            return image
         }
 
         let localURL: URL
@@ -481,27 +477,14 @@ public actor Q35Generator: ChatGenerator {
                 userInfo: [NSLocalizedDescriptionKey: "Image file not found: \(imageRef)"]
             )
         }
-        guard let source = CGImageSourceCreateWithURL(localURL as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        do {
+            return try MediaImageIO.decode(localURL)
+        } catch {
             throw NSError(
                 domain: "Q35Generator",
                 code: 1004,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to decode image file: \(imageRef)"]
             )
         }
-        return image
     }
-    #else
-    private func loadImageTensor(
-        from _: String,
-        patchSize _: Int,
-        spatialMergeSize _: Int
-    ) throws -> (tensor: MLXArray, gridTHW: (Int, Int, Int)) {
-        throw NSError(
-            domain: "Q35Generator",
-            code: 1001,
-            userInfo: [NSLocalizedDescriptionKey: "Image input requires CoreGraphics support."]
-        )
-    }
-    #endif
 }

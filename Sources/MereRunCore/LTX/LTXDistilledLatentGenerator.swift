@@ -1,6 +1,5 @@
 import Foundation
-import CoreGraphics
-import ImageIO
+import MediaIO
 import MLX
 import MLXFast
 import MLXNN
@@ -1028,99 +1027,17 @@ private func loadImageForEncoding(
     height: Int,
     dtype: DType
 ) throws -> MLXArray {
-    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-          let cgImage = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+    let image: MediaImage
+    do {
+        image = try MediaImageIO.resized(try MediaImageIO.decode(url), width: width, height: height)
+    } catch {
         throw LTXDistilledLatentGeneratorError.imageDecodeFailed(url)
     }
 
-    let resized = resizeImageExact(cgImage, width: width, height: height)
-    guard let rgb = readRGB8(resized) else {
-        throw LTXDistilledLatentGeneratorError.imageDecodeFailed(url)
-    }
-    var channels = [Float](repeating: 0, count: 3 * width * height)
-
-    channels.withUnsafeMutableBufferPointer { dst in
-        rgb.withUnsafeBytes { src in
-            let bytes = src.bindMemory(to: UInt8.self)
-            for y in 0..<height {
-                for x in 0..<width {
-                    let pixel = y * width + x
-                    let r = Float(bytes[pixel * 3 + 0]) / 127.5 - 1.0
-                    let g = Float(bytes[pixel * 3 + 1]) / 127.5 - 1.0
-                    let b = Float(bytes[pixel * 3 + 2]) / 127.5 - 1.0
-                    dst[0 * width * height + pixel] = r
-                    dst[1 * width * height + pixel] = g
-                    dst[2 * width * height + pixel] = b
-                }
-            }
-        }
-    }
+    let channels = MediaImageIO.rgbCHWFloat(image, normalizedToMinusOneToOne: true)
 
     let chw = MLXArray(channels).reshaped(1, 3, height, width).asType(dtype)
     return chw.reshaped(1, 3, 1, height, width)
-}
-
-private func resizeImageExact(_ image: CGImage, width: Int, height: Int) -> CGImage {
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let bytesPerRow = width * 4
-    let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-
-    guard let context = CGContext(
-        data: nil,
-        width: width,
-        height: height,
-        bitsPerComponent: 8,
-        bytesPerRow: bytesPerRow,
-        space: colorSpace,
-        bitmapInfo: bitmapInfo
-    ) else {
-        return image
-    }
-
-    context.interpolationQuality = .high
-    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-    return context.makeImage() ?? image
-}
-
-private func readRGB8(_ image: CGImage) -> Data? {
-    let width = image.width
-    let height = image.height
-    let bytesPerRow = width * 4
-    var rgba = Data(count: bytesPerRow * height)
-
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-    let rendered = rgba.withUnsafeMutableBytes { ptr -> Bool in
-        guard let context = CGContext(
-            data: ptr.baseAddress,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else {
-            return false
-        }
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return true
-    }
-    guard rendered else { return nil }
-
-    var rgb = Data(count: width * height * 3)
-    rgb.withUnsafeMutableBytes { dstPtr in
-        rgba.withUnsafeBytes { srcPtr in
-            let dst = dstPtr.bindMemory(to: UInt8.self)
-            let src = srcPtr.bindMemory(to: UInt8.self)
-            for i in 0..<(width * height) {
-                dst[i * 3 + 0] = src[i * 4 + 0]
-                dst[i * 3 + 1] = src[i * 4 + 1]
-                dst[i * 3 + 2] = src[i * 4 + 2]
-            }
-        }
-    }
-    return rgb
 }
 
 private func toDenoised(

@@ -82,7 +82,7 @@ struct TextAnonymize: AsyncParsableCommand {
             return texts
         }
 
-        guard isatty(fileno(stdin)) == 0 else {
+        guard !CLIStdin.isInteractive() else {
             throw ValidationError("Provide text arguments or pipe UTF-8 text on stdin.")
         }
 

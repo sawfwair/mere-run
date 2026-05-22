@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 @preconcurrency import MLX
 import MLXNN
 
@@ -189,18 +190,31 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         maxNewTokens: Int = 512,
         segmentationThreshold: Float = 0.5
     ) throws -> FalconPerceptionGroundingRun {
-        #if !canImport(CoreGraphics)
-        throw GrounderError.unsupportedPlatform
-        #else
         let normalizedQueries = queries.map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
         }.filter { !$0.isEmpty }
         guard !normalizedQueries.isEmpty else {
             throw GrounderError.failedToEncodeMetadata("At least one non-empty query is required.")
         }
+
+        let imageWidth: Int
+        let imageHeight: Int
+        #if canImport(CoreGraphics)
         guard let baseImage = QwenVLImageLoader.loadCGImage(url: imageURL) else {
             throw GrounderError.invalidImage(imageURL)
         }
+        imageWidth = baseImage.width
+        imageHeight = baseImage.height
+        #else
+        let baseImage: MediaImage
+        do {
+            baseImage = try MediaImageIO.decode(imageURL)
+            imageWidth = baseImage.width
+            imageHeight = baseImage.height
+        } catch {
+            throw GrounderError.invalidImage(imageURL)
+        }
+        #endif
 
         let state = try ensureLoaded()
         var preparedDetections: [PreparedDetection] = []
@@ -211,7 +225,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                 contentsOf: try groundSingleQuery(
                     query: query,
                     imageURL: imageURL,
-                    baseImage: baseImage,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight,
                     state: state,
                     maxNewTokens: maxNewTokens,
                     segmentationThreshold: segmentationThreshold
@@ -231,12 +246,21 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
 
         let exportedDetections = try Self.writeMaskArtifacts(
             preparedDetections,
-            width: baseImage.width,
-            height: baseImage.height,
+            width: imageWidth,
+            height: imageHeight,
             outputDirectoryURL: maskOutputDirectoryURL
         )
+        #if canImport(CoreGraphics)
         let annotatedImage = try Self.renderAnnotatedImage(baseImage: baseImage, detections: exportedDetections)
         try Self.writeImage(annotatedImage, to: annotatedImageURL)
+        #else
+        let annotatedImage = try Self.renderAnnotatedImage(baseImage: baseImage, detections: exportedDetections)
+        do {
+            try MediaImageIO.writePNG(annotatedImage, to: annotatedImageURL)
+        } catch {
+            throw GrounderError.failedToWriteImage(annotatedImageURL)
+        }
+        #endif
 
         let detections = exportedDetections.map {
             FalconPerceptionDetection(
@@ -266,7 +290,6 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
             detections: detections,
             metadata: metadata
         )
-        #endif
     }
 
     private func createParentDirectoryIfNeeded(for url: URL) throws {
@@ -303,7 +326,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
     private func groundSingleQuery(
         query: String,
         imageURL: URL,
-        baseImage: CGImage,
+        imageWidth: Int,
+        imageHeight: Int,
         state: LoadedState,
         maxNewTokens: Int,
         segmentationThreshold: Float
@@ -488,8 +512,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                         let mask = model.decodeSegmentationMask(
                             segHidden: hiddenLast,
                             segmentationFeatures: segmentationFeatures,
-                            outputHeight: baseImage.height,
-                            outputWidth: baseImage.width,
+                            outputHeight: imageHeight,
+                            outputWidth: imageWidth,
                             threshold: segmentationThreshold
                         )
                         if let mask {
@@ -1101,6 +1125,138 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         CGImageDestinationAddImage(destination, image, nil)
         guard CGImageDestinationFinalize(destination) else {
             throw GrounderError.failedToWriteImage(url)
+        }
+    }
+    #else
+    private static func renderAnnotatedImage(
+        baseImage: MediaImage,
+        detections: [PreparedDetection]
+    ) throws -> MediaImage {
+        let width = baseImage.width
+        let height = baseImage.height
+        var bytes = baseImage.rgba8
+
+        for (index, detection) in detections.enumerated() {
+            let color = overlayColor(for: detection, index: index)
+            if let mask = detection.binaryMask {
+                for pixelIndex in 0..<(width * height) where mask[pixelIndex] != 0 {
+                    let base = pixelIndex * 4
+                    bytes[base] = UInt8(Float(bytes[base]) * 0.55 + Float(color.0) * 0.45)
+                    bytes[base + 1] = UInt8(Float(bytes[base + 1]) * 0.55 + Float(color.1) * 0.45)
+                    bytes[base + 2] = UInt8(Float(bytes[base + 2]) * 0.55 + Float(color.2) * 0.45)
+                    bytes[base + 3] = 255
+                }
+            }
+
+            drawBox(
+                into: &bytes,
+                width: width,
+                height: height,
+                box: detection.box,
+                color: color,
+                lineWidth: 2
+            )
+        }
+
+        return try MediaImage(width: width, height: height, rgba8: bytes)
+    }
+
+    private static func overlayColor(for detection: PreparedDetection, index: Int) -> (UInt8, UInt8, UInt8) {
+        let seed = detection.label
+        let hash = seed.isEmpty ? index : abs(seed.hashValue)
+        return overlayColors[hash % overlayColors.count]
+    }
+
+    private static func drawBox(
+        into bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        box: FalconPerceptionBoundingBox,
+        color: (UInt8, UInt8, UInt8),
+        lineWidth: Int
+    ) {
+        let x1 = max(0, min(width - 1, Int((box.x1 * Float(width)).rounded(.down))))
+        let y1 = max(0, min(height - 1, Int((box.y1 * Float(height)).rounded(.down))))
+        let x2 = max(0, min(width - 1, Int((box.x2 * Float(width)).rounded(.down))))
+        let y2 = max(0, min(height - 1, Int((box.y2 * Float(height)).rounded(.down))))
+        guard x2 > x1, y2 > y1 else { return }
+
+        for thickness in 0..<lineWidth {
+            let top = min(height - 1, y1 + thickness)
+            let bottom = max(0, y2 - thickness)
+            for x in x1...x2 {
+                writePixel(&bytes, width: width, height: height, x: x, y: top, color: color)
+                writePixel(&bytes, width: width, height: height, x: x, y: bottom, color: color)
+            }
+
+            let left = min(width - 1, x1 + thickness)
+            let right = max(0, x2 - thickness)
+            for y in y1...y2 {
+                writePixel(&bytes, width: width, height: height, x: left, y: y, color: color)
+                writePixel(&bytes, width: width, height: height, x: right, y: y, color: color)
+            }
+        }
+    }
+
+    private static func writePixel(
+        _ bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        x: Int,
+        y: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        guard (0..<width).contains(x), (0..<height).contains(y) else { return }
+        let offset = (y * width + x) * 4
+        bytes[offset] = color.0
+        bytes[offset + 1] = color.1
+        bytes[offset + 2] = color.2
+        bytes[offset + 3] = 255
+    }
+
+    private static func writeMaskArtifacts(
+        _ detections: [PreparedDetection],
+        width: Int,
+        height: Int,
+        outputDirectoryURL: URL?
+    ) throws -> [PreparedDetection] {
+        guard let outputDirectoryURL else { return detections }
+        return try detections.enumerated().map { index, detection in
+            guard let binaryMask = detection.binaryMask else { return detection }
+            let base = slugify(detection.label)
+            let url = outputDirectoryURL.appendingPathComponent("\(base)_mask_\(index)").appendingPathExtension("png")
+            try writeMaskImage(binaryMask: binaryMask, width: width, height: height, to: url)
+            return PreparedDetection(
+                label: detection.label,
+                xy: detection.xy,
+                hw: detection.hw,
+                box: detection.box,
+                score: detection.score,
+                binaryMask: binaryMask,
+                maskPath: url.path
+            )
+        }
+    }
+
+    private static func writeMaskImage(
+        binaryMask: [UInt8],
+        width: Int,
+        height: Int,
+        to url: URL
+    ) throws {
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        for pixelIndex in 0..<(width * height) where binaryMask[pixelIndex] != 0 {
+            let offset = pixelIndex * 4
+            rgba[offset] = 255
+            rgba[offset + 1] = 255
+            rgba[offset + 2] = 255
+            rgba[offset + 3] = 255
+        }
+
+        do {
+            try MediaImageIO.writePNG(MediaImage(width: width, height: height, rgba8: rgba), to: url)
+        } catch {
+            throw GrounderError.failedToWriteMask(url)
         }
     }
     #endif

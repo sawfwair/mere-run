@@ -1,6 +1,5 @@
-import AVFoundation
-import CoreVideo
 import Foundation
+import MediaIO
 import MLX
 
 public enum LTXVideoMP4Writer {
@@ -109,103 +108,17 @@ public enum LTXVideoMP4Writer {
         }
         try fm.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+        do {
+            try MediaVideoIO.writeMP4(
+                rgb24: rgbBytes,
+                width: width,
+                height: height,
+                frameCount: frameCount,
+                fps: fps,
+                to: outputURL
+            )
+        } catch {
             throw WriterError.writerCreationFailed(outputURL)
-        }
-
-        let settings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: width,
-            AVVideoHeightKey: height,
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: max(1_000_000, width * height * fps * 4),
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-            ],
-        ]
-
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
-        input.expectsMediaDataInRealTime = false
-        guard writer.canAdd(input) else {
-            throw WriterError.inputRejected
-        }
-        writer.add(input)
-
-        let attributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height,
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-        ]
-
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: input,
-            sourcePixelBufferAttributes: attributes
-        )
-
-        guard writer.startWriting() else {
-            let details = writer.error?.localizedDescription ?? "unknown error"
-            throw WriterError.finishFailed(details)
-        }
-        writer.startSession(atSourceTime: .zero)
-
-        guard let pool = adaptor.pixelBufferPool else {
-            throw WriterError.pixelBufferPoolUnavailable
-        }
-
-        let frameStride = height * width * 3
-        for frameIndex in 0..<frameCount {
-            while !input.isReadyForMoreMediaData {
-                Thread.sleep(forTimeInterval: 0.001)
-            }
-
-            var pixelBuffer: CVPixelBuffer?
-            let status = CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
-            guard status == kCVReturnSuccess, let pixelBuffer else {
-                throw WriterError.pixelBufferCreationFailed
-            }
-
-            CVPixelBufferLockBaseAddress(pixelBuffer, [])
-            guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-                CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-                throw WriterError.pixelBufferBaseAddressUnavailable
-            }
-
-            let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-            let dst = baseAddress.bindMemory(to: UInt8.self, capacity: bytesPerRow * height)
-            let srcOffset = frameIndex * frameStride
-
-            for y in 0..<height {
-                let dstRow = dst.advanced(by: y * bytesPerRow)
-                let srcRow = srcOffset + (y * width * 3)
-                for x in 0..<width {
-                    let s = srcRow + x * 3
-                    let d = x * 4
-                    dstRow[d] = rgbBytes[s + 2]     // B
-                    dstRow[d + 1] = rgbBytes[s + 1] // G
-                    dstRow[d + 2] = rgbBytes[s]     // R
-                    dstRow[d + 3] = 255             // A
-                }
-            }
-
-            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-
-            let time = CMTime(value: Int64(frameIndex), timescale: CMTimeScale(fps))
-            if !adaptor.append(pixelBuffer, withPresentationTime: time) {
-                throw WriterError.appendFailed(frameIndex)
-            }
-        }
-
-        input.markAsFinished()
-
-        let semaphore = DispatchSemaphore(value: 0)
-        writer.finishWriting {
-            semaphore.signal()
-        }
-        semaphore.wait()
-
-        guard writer.status == .completed else {
-            let details = writer.error?.localizedDescription ?? "unknown error"
-            throw WriterError.finishFailed(details)
         }
     }
 
@@ -287,104 +200,19 @@ public enum LTXVideoMP4Writer {
         }
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        let frameCount = interleaved.count / max(1, channels)
-        var pcm = [Int16](repeating: 0, count: interleaved.count)
-        for i in 0..<interleaved.count {
-            let clipped = max(-1.0, min(1.0, interleaved[i]))
-            pcm[i] = Int16((clipped * 32767.0).rounded())
-        }
-
-        var data = Data()
-        data.reserveCapacity(44 + pcm.count * MemoryLayout<Int16>.size)
-
-        let bitsPerSample = 16
-        let blockAlign = channels * bitsPerSample / 8
-        let byteRate = sampleRate * blockAlign
-        let dataSize = pcm.count * MemoryLayout<Int16>.size
-        let riffSize = 36 + dataSize
-
-        data.append(contentsOf: Array("RIFF".utf8))
-        data.appendLE(UInt32(riffSize))
-        data.append(contentsOf: Array("WAVE".utf8))
-        data.append(contentsOf: Array("fmt ".utf8))
-        data.appendLE(UInt32(16)) // PCM fmt chunk size
-        data.appendLE(UInt16(1)) // PCM
-        data.appendLE(UInt16(channels))
-        data.appendLE(UInt32(sampleRate))
-        data.appendLE(UInt32(byteRate))
-        data.appendLE(UInt16(blockAlign))
-        data.appendLE(UInt16(bitsPerSample))
-        data.append(contentsOf: Array("data".utf8))
-        data.appendLE(UInt32(dataSize))
-        pcm.withUnsafeBufferPointer { buffer in
-            data.append(contentsOf: UnsafeRawBufferPointer(buffer))
-        }
-
-        try data.write(to: url)
-        _ = frameCount
+        try MediaAudioIO.writeFloatWAV(
+            samples: interleaved,
+            sampleRate: sampleRate,
+            channels: channels,
+            to: url
+        )
     }
 
     private static func mux(videoURL: URL, audioURL: URL, outputURL: URL) throws {
-        let fm = FileManager.default
-        if fm.fileExists(atPath: outputURL.path) {
-            try fm.removeItem(at: outputURL)
-        }
-        try fm.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-
-        let videoAsset = AVURLAsset(url: videoURL)
-        let audioAsset = AVURLAsset(url: audioURL)
-
-        guard let videoTrack = videoAsset.tracks(withMediaType: .video).first else {
-            throw WriterError.videoTrackMissing
-        }
-        guard let audioTrack = audioAsset.tracks(withMediaType: .audio).first else {
-            throw WriterError.audioTrackMissing
-        }
-
-        let composition = AVMutableComposition()
-        guard let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            throw WriterError.videoTrackMissing
-        }
-        guard let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            throw WriterError.audioTrackMissing
-        }
-
-        let videoDuration = videoAsset.duration
-        let audioDuration = audioAsset.duration
-        let duration = CMTimeMinimum(videoDuration, audioDuration)
-
-        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: videoTrack, at: .zero)
-        try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: audioTrack, at: .zero)
-        compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
-
-        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+        do {
+            try MediaVideoIO.mux(videoURL: videoURL, audioURL: audioURL, outputURL: outputURL)
+        } catch {
             throw WriterError.exportSessionCreationFailed
         }
-        export.outputURL = outputURL
-        export.outputFileType = .mp4
-        export.shouldOptimizeForNetworkUse = true
-
-        let semaphore = DispatchSemaphore(value: 0)
-        export.exportAsynchronously {
-            semaphore.signal()
-        }
-        semaphore.wait()
-
-        guard export.status == .completed else {
-            let details = export.error?.localizedDescription ?? "unknown error"
-            throw WriterError.finishFailed(details)
-        }
-    }
-}
-
-private extension Data {
-    mutating func appendLE(_ value: UInt16) {
-        var little = value.littleEndian
-        Swift.withUnsafeBytes(of: &little) { append(contentsOf: $0) }
-    }
-
-    mutating func appendLE(_ value: UInt32) {
-        var little = value.littleEndian
-        Swift.withUnsafeBytes(of: &little) { append(contentsOf: $0) }
     }
 }

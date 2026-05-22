@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 import MLX
 import MLXNN
 import MLXRandom
@@ -379,162 +380,53 @@ public actor ZImageI2LGenerator {
     // MARK: - Image Processing
 
     private func loadImageForEncoders(from url: URL) throws -> (siglip: MLXArray, dino: MLXArray) {
-        #if os(macOS)
-        guard let nsImage = NSImage(contentsOf: url),
-              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(url)
+        } catch {
             throw ZImageI2LError.imageLoadFailed(url.path)
         }
 
         // 1) Crop+resize to 1024x1024 using DiffSynth's `ImageCropAndResize` logic.
-        let highRes = try cropAndResizeAspectFill(cgImage, targetSize: 1024)
+        let highRes = try MediaImageIO.centerCropped(image, width: 1024, height: 1024)
 
         // 2) Resize for each encoder.
-        let siglipImage = try resizeImage(highRes, targetSize: 384)
-        let dinoImage = try resizeImage(highRes, targetSize: 224)
+        let siglipImage = try MediaImageIO.resized(highRes, width: 384, height: 384)
+        let dinoImage = try MediaImageIO.resized(highRes, width: 224, height: 224)
 
         // 3) Convert to NCHW tensors with the correct per-encoder normalization.
-        let siglip = try cgImageToMLXArray(
+        let siglip = try imageToMLXArray(
             siglipImage,
             mean: [0.5, 0.5, 0.5],
             std: [0.5, 0.5, 0.5]
         )
-        let dino = try cgImageToMLXArray(
+        let dino = try imageToMLXArray(
             dinoImage,
             mean: [0.485, 0.456, 0.406],
             std: [0.229, 0.224, 0.225]
         )
         return (siglip: siglip, dino: dino)
-        #else
-        throw ZImageI2LError.unsupportedPlatform
-        #endif
     }
 
-    #if os(macOS)
-    private func cgImageToMLXArray(_ cgImage: CGImage, mean: [Float], std: [Float]) throws -> MLXArray {
-        let width = cgImage.width
-        let height = cgImage.height
-
+    private func imageToMLXArray(_ image: MediaImage, mean: [Float], std: [Float]) throws -> MLXArray {
         guard mean.count == 3, std.count == 3 else {
             throw ZImageI2LError.imageProcessingFailed
         }
 
-        guard let context = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-
-        // Make y=0 correspond to the top row (PIL-style).
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
-
-        context.interpolationQuality = .high
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        guard let data = context.data else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-
-        let ptr = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
-
+        let width = image.width
+        let height = image.height
         var rgbData: [Float] = []
         rgbData.reserveCapacity(width * height * 3)
 
-        for c in 0..<3 {  // R, G, B channels
-            for y in 0..<height {
-                for x in 0..<width {
-                    let idx = (y * width + x) * 4
-                    let value = Float(ptr[idx + c]) / 255.0
-                    let normalized = (value - mean[c]) / std[c]
-                    rgbData.append(normalized)
-                }
+        for channel in 0..<3 {
+            for pixel in 0..<(width * height) {
+                let value = Float(image.rgba8[pixel * 4 + channel]) / 255.0
+                rgbData.append((value - mean[channel]) / std[channel])
             }
         }
 
         return MLXArray(rgbData).reshaped(1, 3, height, width).asType(dtype)
     }
-
-    private func resizeImage(_ cgImage: CGImage, targetSize: Int) throws -> CGImage {
-        guard let context = CGContext(
-            data: nil,
-            width: targetSize,
-            height: targetSize,
-            bitsPerComponent: 8,
-            bytesPerRow: targetSize * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-
-        context.translateBy(x: 0, y: CGFloat(targetSize))
-        context.scaleBy(x: 1, y: -1)
-
-        context.interpolationQuality = .high
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
-
-        guard let out = context.makeImage() else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-        return out
-    }
-
-    private func cropAndResizeAspectFill(_ cgImage: CGImage, targetSize: Int) throws -> CGImage {
-        let srcW = cgImage.width
-        let srcH = cgImage.height
-
-        guard srcW > 0, srcH > 0 else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-
-        // Matches DiffSynth `ImageCropAndResize.crop_and_resize`:
-        //   scale = max(targetW/srcW, targetH/srcH)
-        //   resize to (round(srcH*scale), round(srcW*scale))
-        //   center crop (targetH, targetW)
-        let scale = max(Double(targetSize) / Double(srcW), Double(targetSize) / Double(srcH))
-        let scaledW = Int((Double(srcW) * scale).rounded())
-        let scaledH = Int((Double(srcH) * scale).rounded())
-
-        // torchvision center_crop uses integer top/left = floor((scaled - target)/2)
-        let left = max(0, (scaledW - targetSize) / 2)
-        let top = max(0, (scaledH - targetSize) / 2)
-
-        guard let context = CGContext(
-            data: nil,
-            width: targetSize,
-            height: targetSize,
-            bitsPerComponent: 8,
-            bytesPerRow: targetSize * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-
-        context.translateBy(x: 0, y: CGFloat(targetSize))
-        context.scaleBy(x: 1, y: -1)
-
-        context.interpolationQuality = .high
-        let drawRect = CGRect(
-            x: -CGFloat(left),
-            y: -CGFloat(top),
-            width: CGFloat(scaledW),
-            height: CGFloat(scaledH)
-        )
-        context.draw(cgImage, in: drawRect)
-
-        guard let out = context.makeImage() else {
-            throw ZImageI2LError.imageProcessingFailed
-        }
-        return out
-    }
-    #endif
 
     // MARK: - LoRA Saving
 
@@ -567,7 +459,3 @@ public enum ZImageI2LError: Error, LocalizedError {
         }
     }
 }
-
-#if os(macOS)
-import AppKit
-#endif

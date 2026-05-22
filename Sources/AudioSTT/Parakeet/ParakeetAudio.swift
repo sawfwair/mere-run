@@ -1,4 +1,4 @@
-import Accelerate
+import AudioCodecs
 import Foundation
 import MLX
 
@@ -19,22 +19,22 @@ public final class ParakeetAudioPreprocessor {
 
     public let config: ParakeetPreprocessorConfig
 
-    private let fftSetup: vDSP.FFT<DSPSplitComplex>
+    private let fftPlan: RealFFTPlan
     private let window: [Float]
     private let melFilters: [[Float]]
 
     public init(config: ParakeetPreprocessorConfig) throws {
         self.config = config
 
-        guard config.nFFT > 0, config.nFFT.nonzeroBitCount == 1 else {
+        guard config.nFFT > 0 else {
             throw PreprocessorError.invalidFFTSize(config.nFFT)
         }
 
-        let log2n = vDSP_Length(log2(Double(config.nFFT)))
-        guard let fftSetup = vDSP.FFT(log2n: log2n, radix: .radix2, ofType: DSPSplitComplex.self) else {
+        do {
+            self.fftPlan = try RealFFTPlan(size: config.nFFT)
+        } catch {
             throw PreprocessorError.fftSetupFailed(nFFT: config.nFFT)
         }
-        self.fftSetup = fftSetup
 
         self.window = Self.makeWindow(name: config.window, count: config.winLength)
         self.melFilters = Self.createMelFilterbank(
@@ -55,8 +55,6 @@ public final class ParakeetAudioPreprocessor {
             count: config.features
         )
 
-        var real = [Float](repeating: 0, count: config.nFFT / 2)
-        var imag = [Float](repeating: 0, count: config.nFFT / 2)
         var frameBuffer = [Float](repeating: 0, count: config.nFFT)
         var fftWindow = [Float](repeating: 0, count: config.nFFT)
         let copyCount = min(config.winLength, config.nFFT)
@@ -79,36 +77,7 @@ public final class ParakeetAudioPreprocessor {
                 }
             }
 
-            real = [Float](repeating: 0, count: config.nFFT / 2)
-            imag = [Float](repeating: 0, count: config.nFFT / 2)
-
-            frameBuffer.withUnsafeBufferPointer { inputPtr in
-                real.withUnsafeMutableBufferPointer { realPtr in
-                    imag.withUnsafeMutableBufferPointer { imagPtr in
-                        var split = DSPSplitComplex(
-                            realp: realPtr.baseAddress!,
-                            imagp: imagPtr.baseAddress!
-                        )
-
-                        vDSP_ctoz(
-                            UnsafePointer<DSPComplex>(OpaquePointer(inputPtr.baseAddress!)),
-                            2,
-                            &split,
-                            1,
-                            vDSP_Length(config.nFFT / 2)
-                        )
-
-                        fftSetup.forward(input: split, output: &split)
-                    }
-                }
-            }
-
-            magnitudes = [Float](repeating: 0, count: config.nFFT / 2 + 1)
-            magnitudes[0] = real[0] * real[0]
-            for i in 1..<(config.nFFT / 2) {
-                magnitudes[i] = real[i] * real[i] + imag[i] * imag[i]
-            }
-            magnitudes[config.nFFT / 2] = imag[0] * imag[0]
+            magnitudes = fftPlan.powerSpectrum(frameBuffer)
 
             for melIndex in 0..<config.features {
                 var energy: Float = 0

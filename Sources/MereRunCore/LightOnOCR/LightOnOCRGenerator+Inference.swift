@@ -1,8 +1,8 @@
 import Foundation
+import MediaIO
 import MLX
 import MLXNN
 import MLXFast
-import ImageIO
 
 /// Owns OCR image preprocessing and autoregressive decoding.
 /// Keeping these helpers together makes the vision -> prompt -> text path
@@ -13,13 +13,15 @@ extension LightOnOCRGenerator {
         patchSize: Int,
         spatialMergeSize: Int
     ) throws -> MLXArray {
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(url)
+        } catch {
             throw LightOnOCRError.imageLoadFailed(url)
         }
 
-        let originalWidth = cgImage.width
-        let originalHeight = cgImage.height
+        let originalWidth = image.width
+        let originalHeight = image.height
         let maxEdge = 1540
         let mergeUnit = max(1, patchSize * spatialMergeSize)
         let longestEdge = max(originalWidth, originalHeight)
@@ -36,7 +38,7 @@ extension LightOnOCRGenerator {
         targetHeight = min(maxEdge, max(mergeUnit, targetHeight))
 
         let pixelArray = try QwenImageIO.resizedPixelArray(
-            from: cgImage,
+            from: image,
             width: targetWidth,
             height: targetHeight,
             addBatchDimension: true,

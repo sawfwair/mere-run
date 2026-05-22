@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 @preconcurrency import MLX
 
 #if canImport(CoreGraphics)
@@ -27,7 +28,7 @@ public enum FalconPerceptionProcessorError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .unsupportedPlatform:
-            return "Falcon Perception preprocessing requires CoreGraphics/ImageIO."
+            return "Falcon Perception preprocessing requires a supported MediaIO image backend."
         case .invalidImage(let url):
             return "Failed to load image: \(url.path)"
         }
@@ -51,17 +52,16 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
     }
 
     public func process(imageURL: URL, query: String) throws -> FalconPerceptionProcessedInput {
-        #if canImport(CoreGraphics)
-        guard let image = Self.loadImageRGBA(url: imageURL) else {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(imageURL)
+        } catch {
             throw FalconPerceptionProcessorError.invalidImage(imageURL)
         }
         return process(imageRGBA: image, query: query)
-        #else
-        throw FalconPerceptionProcessorError.unsupportedPlatform
-        #endif
     }
 
-    public func process(imageRGBA: CGImage, query: String) -> FalconPerceptionProcessedInput {
+    public func process(imageRGBA: MediaImage, query: String) -> FalconPerceptionProcessedInput {
         let resized = Self.resizeIfNecessary(imageRGBA, shortest: 256, longest: 1024)
         let smartResized = Self.smartResize(resized, factor: config.visionConfig.spatialPatchSize)
         let pixels = Self.normalizedPixels(from: smartResized)
@@ -86,6 +86,33 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
         )
     }
 
+    #if canImport(CoreGraphics)
+    public func process(imageRGBA: CGImage, query: String) -> FalconPerceptionProcessedInput {
+        let resized = Self.resizeIfNecessary(imageRGBA, shortest: 256, longest: 1024)
+        let smartResized = Self.smartResize(resized, factor: config.visionConfig.spatialPatchSize)
+        let pixels = Self.normalizedPixels(from: smartResized)
+        let height = smartResized.height
+        let width = smartResized.width
+        let gridH = height / config.visionConfig.spatialPatchSize
+        let gridW = width / config.visionConfig.spatialPatchSize
+
+        let prompt = makePrompt(for: query)
+        let tokenIDs = tokenizer.encode(prompt, addSpecialTokens: false)
+        let expanded = expandImageTokens(tokenIDs, gridH: gridH, gridW: gridW)
+
+        let inputIDs = MLXArray(expanded.map(Int32.init), [1, expanded.count])
+        let pixelValues = MLXArray(pixels, [1, height, width, 3])
+        let imageGridHW = MLXArray([Int32(gridH), Int32(gridW)], [1, 2])
+
+        return FalconPerceptionProcessedInput(
+            inputIDs: inputIDs,
+            pixelValues: pixelValues,
+            imageGridHW: imageGridHW,
+            processedSize: (width, height)
+        )
+    }
+    #endif
+
     public func expandImageTokens(_ tokenIDs: [Int], gridH: Int, gridW: Int) -> [Int] {
         let imagePrefixIDs = [
             config.imageCLSTokenID,
@@ -109,6 +136,85 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
         return expanded
     }
 
+    public static func resizeIfNecessary(_ image: MediaImage, shortest: Int, longest: Int) -> MediaImage {
+        let width = image.width
+        let height = image.height
+        if shortest <= width && width <= longest && shortest <= height && height <= longest {
+            return image
+        }
+
+        let aspectRatio = Double(width) / Double(height)
+        let isVertical = width < height
+
+        var newWidth: Int
+        var newHeight: Int
+        if width < shortest || height < shortest {
+            if isVertical {
+                newWidth = shortest
+                newHeight = Int(Double(shortest) / aspectRatio)
+            } else {
+                newHeight = shortest
+                newWidth = Int(Double(shortest) * aspectRatio)
+            }
+        } else if isVertical {
+            newWidth = longest
+            newHeight = Int(Double(newWidth) / aspectRatio)
+        } else {
+            newHeight = longest
+            newWidth = Int(Double(newHeight) * aspectRatio)
+        }
+
+        if newWidth > longest {
+            newWidth = longest
+            newHeight = Int(Double(newWidth) / aspectRatio)
+        }
+        if newHeight > longest {
+            newHeight = longest
+            newWidth = Int(Double(newHeight) * aspectRatio)
+        }
+
+        return (try? MediaImageIO.resized(image, width: newWidth, height: newHeight)) ?? image
+    }
+
+    public static func smartResize(_ image: MediaImage, factor: Int, minPixels: Int = 56 * 56, maxPixels: Int = 28 * 28 * 1280) -> MediaImage {
+        let width = image.width
+        let height = image.height
+
+        var roundedHeight = max(factor, Int((Double(height) / Double(factor)).rounded()) * factor)
+        var roundedWidth = max(factor, Int((Double(width) / Double(factor)).rounded()) * factor)
+
+        if roundedHeight * roundedWidth > maxPixels {
+            let beta = sqrt(Double(height * width) / Double(maxPixels))
+            roundedHeight = max(factor, Int(floor(Double(height) / beta / Double(factor))) * factor)
+            roundedWidth = max(factor, Int(floor(Double(width) / beta / Double(factor))) * factor)
+        } else if roundedHeight * roundedWidth < minPixels {
+            let beta = sqrt(Double(minPixels) / Double(height * width))
+            roundedHeight = Int(ceil(Double(height) * beta / Double(factor))) * factor
+            roundedWidth = Int(ceil(Double(width) * beta / Double(factor))) * factor
+        }
+
+        if roundedWidth == width && roundedHeight == height {
+            return image
+        }
+        return (try? MediaImageIO.resized(image, width: roundedWidth, height: roundedHeight)) ?? image
+    }
+
+    private static func normalizedPixels(from image: MediaImage) -> [Float] {
+        let width = image.width
+        let height = image.height
+        var normalized: [Float] = []
+        normalized.reserveCapacity(width * height * 3)
+        for pixel in 0..<(width * height) {
+            let offset = pixel * 4
+            for channel in 0..<3 {
+                let value = Float(image.rgba8[offset + channel]) / 255.0
+                normalized.append((value - imageMean[channel]) / imageStd[channel])
+            }
+        }
+        return normalized
+    }
+
+    #if canImport(CoreGraphics)
     public static func resizeIfNecessary(_ image: CGImage, shortest: Int, longest: Int) -> CGImage {
         let width = image.width
         let height = image.height
@@ -172,7 +278,6 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
         return resize(image, width: roundedWidth, height: roundedHeight)
     }
 
-    #if canImport(CoreGraphics)
     private static func loadImageRGBA(url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateImageAtIndex(source, 0, nil)

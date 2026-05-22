@@ -1,9 +1,5 @@
 import Foundation
-
-#if canImport(CoreGraphics)
-import CoreGraphics
-import ImageIO
-#endif
+import MediaIO
 
 public struct LoRAResolvedResolution: Sendable, Hashable {
     public let width: Int
@@ -85,25 +81,15 @@ public enum LoRATrainingResolution {
     }
 
     public static func imageSize(at imageURL: URL) throws -> (width: Int, height: Int) {
-        #if canImport(CoreGraphics)
-        guard let imageSource = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
-              let height = properties[kCGImagePropertyPixelHeight] as? NSNumber else {
+        do {
+            return try MediaImageIO.size(of: imageURL)
+        } catch {
             throw NSError(
                 domain: "LoRATrainingResolution",
                 code: 5,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to read image dimensions: \(imageURL.path)"]
             )
         }
-        return (width: width.intValue, height: height.intValue)
-        #else
-        throw NSError(
-            domain: "LoRATrainingResolution",
-            code: 6,
-            userInfo: [NSLocalizedDescriptionKey: "Image size inference requires CoreGraphics support."]
-        )
-        #endif
     }
 
     public static func allocateSteps(totalSteps: Int, bucketSizes: [Int]) -> [Int] {

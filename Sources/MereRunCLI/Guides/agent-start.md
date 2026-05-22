@@ -6,7 +6,7 @@ Start Pi against a local mere.run setup-agent API server. This is the guided "he
 
 ## Required Models
 
-Use this Mac's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Qwen/Q35 agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash.
+Use this machine's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Qwen/Q35 agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash. On Linux, provide Pi with `--pi-path` or PATH; auto-install uses macOS release assets.
 
 ## Install And Check
 
@@ -33,6 +33,7 @@ mere.run status
 - Run `model capabilities --recommended` or `agent onboard` first and use the recommended setup-agent id.
 - Pull the selected model before `agent start`.
 - Use `--skip-server` only when you already started a compatible local API server.
+- On Linux, provide an existing Pi binary with `--pi-path` or PATH before starting.
 - Run `status` when you need to confirm the local server and served model.
 - Keep the default prompt unless the user has a specific setup goal.
 
@@ -58,7 +59,7 @@ mere.run agent start \
 
 - Model unsupported: choose a supported model from `agent onboard`.
 - Model missing: run `mere.run model pull <id>`.
-- Pi missing: run `mere.run agent install-pi` or pass `--pi-path`.
+- Pi missing: run `mere.run agent install-pi` on macOS, or pass `--pi-path` / put `pi` on PATH on Linux.
 - Health check times out: verify host/port and local API logs.
 - Unsure what is already running: run `mere.run status --host <host> --port <port>`.
 

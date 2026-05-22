@@ -25,6 +25,10 @@ Main areas:
 - `VLM/`: vision-language model support
 - `ZImageI2L/`, `ZImageTurbo/`: image-family support
 
+Linux CLI compatibility should enter through reusable core surfaces here, not
+through app bundle code. Media-tool discovery belongs behind typed APIs and
+should honor `MERERUN_FFMPEG`, `MERERUN_FFPROBE`, and then `PATH`.
+
 ### `AudioCore`
 
 Shared audio types and utilities.
@@ -32,6 +36,9 @@ Shared audio types and utilities.
 ### `AudioCodecs`
 
 Audio codecs and conversion helpers.
+
+Keep Linux audio/video probing fixture-sized: use `ffmpeg` and `ffprobe`
+stubs or tiny generated files in tests, not real model checkpoints.
 
 ### `AudioSTT`
 
@@ -53,6 +60,13 @@ The public executable target.
 
 - `Commands/`
 - `Support/`
+
+This is the product Linux compatibility work should exercise.
+
+### `MereRunApp`
+
+The optional SwiftUI studio target. It stays macOS-only and should not become a
+Linux compatibility dependency.
 
 ## Tests
 
@@ -78,3 +92,5 @@ Use this for:
 - `scripts/check.sh`: main validation gate
 - `scripts/e2e_smoke.sh`: installed-model smoke runner
 - `vendor/llama.xcframework`: vendored native dependency for code and API paths
+- `vendor/mlx-swift_Cmlx.bundle`: macOS MLX shader resources; Linux CI should
+  use CPU MLX-sized fixtures and leave CUDA to optional local runtime checks

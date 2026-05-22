@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 import MLX
 import MLXNN
 
@@ -255,12 +256,24 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             throw SegmenterError.failedToEncodeMetadata("At least one prompt is required.")
         }
 
-        #if !canImport(CoreGraphics)
-        throw SegmenterError.unsupportedPlatform
-        #else
+        #if canImport(CoreGraphics)
         guard let cgImage = QwenVLImageLoader.loadCGImage(url: imageURL) else {
             throw SegmenterError.invalidImage(imageURL)
         }
+        let imageWidth = cgImage.width
+        let imageHeight = cgImage.height
+        let pixelValues = try Self.preprocessImage(cgImage: cgImage, resolution: resolution)
+        #else
+        let mediaImage: MediaImage
+        do {
+            mediaImage = try MediaImageIO.decode(imageURL)
+        } catch {
+            throw SegmenterError.invalidImage(imageURL)
+        }
+        let imageWidth = mediaImage.width
+        let imageHeight = mediaImage.height
+        let pixelValues = try Self.preprocessImage(image: mediaImage, resolution: resolution)
+        #endif
 
         let state = try ensureLoaded()
         let maxObjects = min(state.config.trackerConfig?.multiplexCount ?? 16, state.config.maxNumObjects)
@@ -269,7 +282,6 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             throw SegmenterError.failedToEncodeMetadata("At least one non-empty prompt is required.")
         }
 
-        let pixelValues = try Self.preprocessImage(cgImage: cgImage, resolution: resolution)
         let visionContext = state.model.detectorModel.prepareVision(pixelValues)
         MLX.eval(visionContext.src, visionContext.posFlat)
 
@@ -303,8 +315,8 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                     contentsOf: Self.postprocess(
                         output: output,
                         prompt: textPrompt,
-                        imageWidth: cgImage.width,
-                        imageHeight: cgImage.height,
+                        imageWidth: imageWidth,
+                        imageHeight: imageHeight,
                         threshold: threshold,
                         nmsThreshold: state.config.detNMSThresh,
                         objectID: promptObject.objectID,
@@ -319,8 +331,8 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                     trackerModel: trackerModel,
                     featurePyramid: visionContext.featurePyramid,
                     promptObject: promptObject,
-                    imageWidth: cgImage.width,
-                    imageHeight: cgImage.height,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight,
                     threshold: threshold,
                     multimask: multimask
                 )
@@ -343,11 +355,12 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
 
         let exportedDetections = try Self.writeMaskArtifacts(
             preparedDetections,
-            width: cgImage.width,
-            height: cgImage.height,
+            width: imageWidth,
+            height: imageHeight,
             outputDirectoryURL: maskOutputDirectoryURL
         )
 
+        #if canImport(CoreGraphics)
         let annotatedImage = try Self.renderAnnotatedImage(
             baseImage: cgImage,
             detections: exportedDetections,
@@ -355,6 +368,15 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             showLabels: showLabels
         )
         try Self.writeImage(annotatedImage, to: annotatedImageURL)
+        #else
+        let annotatedImage = try Self.renderAnnotatedImage(
+            baseImage: mediaImage,
+            detections: exportedDetections,
+            showBoxes: showBoxes,
+            showLabels: showLabels
+        )
+        try MediaImageIO.writePNG(annotatedImage, to: annotatedImageURL)
+        #endif
 
         let detections = exportedDetections.map {
             SAM31SegmentationDetection(
@@ -387,7 +409,6 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             detections: detections,
             metadata: metadata
         )
-        #endif
     }
 
     private func createParentDirectoryIfNeeded(for url: URL) throws {
@@ -752,6 +773,8 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             let url = outputDirectoryURL.appendingPathComponent("\(base)\(suffix)_\(index)").appendingPathExtension("png")
             #if canImport(CoreGraphics)
             try writeMaskImage(binaryMask: detection.binaryMask, width: width, height: height, to: url)
+            #else
+            try writeMaskImagePortable(binaryMask: detection.binaryMask, width: width, height: height, to: url)
             #endif
             return PreparedDetection(
                 objectID: detection.objectID,
@@ -950,7 +973,6 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
         }
     }
 
-    #if canImport(CoreGraphics)
     private static let overlayColors: [(UInt8, UInt8, UInt8)] = [
         (31, 120, 181),
         (255, 128, 13),
@@ -960,6 +982,214 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
         (140, 87, 74),
     ]
 
+    private static func preprocessImage(image: MediaImage, resolution: Int) throws -> MLXArray {
+        let resized = try MediaImageIO.resized(image, width: resolution, height: resolution)
+        var floats = [Float](repeating: 0, count: resolution * resolution * 3)
+        for index in 0..<(resolution * resolution) {
+            let src = index * 4
+            let dst = index * 3
+            floats[dst] = Float(resized.rgba8[src]) / 127.5 - 1.0
+            floats[dst + 1] = Float(resized.rgba8[src + 1]) / 127.5 - 1.0
+            floats[dst + 2] = Float(resized.rgba8[src + 2]) / 127.5 - 1.0
+        }
+        return MLXArray(floats, [1, resolution, resolution, 3]).asType(.float32)
+    }
+
+    private static func renderAnnotatedImage(
+        baseImage: MediaImage,
+        detections: [PreparedDetection],
+        showBoxes: Bool,
+        showLabels: Bool
+    ) throws -> MediaImage {
+        var bytes = baseImage.rgba8
+        for (index, detection) in detections.enumerated() {
+            let color = overlayColors[index % overlayColors.count]
+            blendMask(
+                detection.binaryMask,
+                into: &bytes,
+                width: baseImage.width,
+                height: baseImage.height,
+                color: color
+            )
+            if showBoxes {
+                drawBox(
+                    detection.box,
+                    into: &bytes,
+                    width: baseImage.width,
+                    height: baseImage.height,
+                    color: color
+                )
+            }
+            if showLabels {
+                drawLabelMarker(
+                    detection.box,
+                    into: &bytes,
+                    width: baseImage.width,
+                    height: baseImage.height,
+                    color: color
+                )
+            }
+        }
+        return try MediaImage(width: baseImage.width, height: baseImage.height, rgba8: bytes)
+    }
+
+    private static func blendMask(
+        _ binaryMask: [UInt8],
+        into bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        let count = min(binaryMask.count, width * height)
+        for index in 0..<count where binaryMask[index] != 0 {
+            let offset = index * 4
+            bytes[offset] = UInt8((UInt16(bytes[offset]) + UInt16(color.0)) / 2)
+            bytes[offset + 1] = UInt8((UInt16(bytes[offset + 1]) + UInt16(color.1)) / 2)
+            bytes[offset + 2] = UInt8((UInt16(bytes[offset + 2]) + UInt16(color.2)) / 2)
+            bytes[offset + 3] = 255
+        }
+    }
+
+    private static func drawBox(
+        _ box: SAM31SegmentationBox,
+        into bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        let minX = max(0, min(width - 1, Int(box.x1.rounded(.down))))
+        let minY = max(0, min(height - 1, Int(box.y1.rounded(.down))))
+        let maxX = max(0, min(width - 1, Int(box.x2.rounded(.up))))
+        let maxY = max(0, min(height - 1, Int(box.y2.rounded(.up))))
+        for inset in 0..<2 {
+            drawHorizontalLine(
+                y: minY + inset,
+                x1: minX,
+                x2: maxX,
+                into: &bytes,
+                width: width,
+                height: height,
+                color: color
+            )
+            drawHorizontalLine(
+                y: maxY - inset,
+                x1: minX,
+                x2: maxX,
+                into: &bytes,
+                width: width,
+                height: height,
+                color: color
+            )
+            drawVerticalLine(
+                x: minX + inset,
+                y1: minY,
+                y2: maxY,
+                into: &bytes,
+                width: width,
+                height: height,
+                color: color
+            )
+            drawVerticalLine(
+                x: maxX - inset,
+                y1: minY,
+                y2: maxY,
+                into: &bytes,
+                width: width,
+                height: height,
+                color: color
+            )
+        }
+    }
+
+    private static func drawLabelMarker(
+        _ box: SAM31SegmentationBox,
+        into bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        let minX = max(0, min(width - 1, Int(box.x1.rounded(.down))))
+        let minY = max(0, min(height - 1, Int(box.y1.rounded(.down))))
+        let markerWidth = max(8, min(48, width - minX))
+        let markerHeight = max(4, min(12, height - minY))
+        for y in minY..<min(height, minY + markerHeight) {
+            for x in minX..<min(width, minX + markerWidth) {
+                setPixel(x: x, y: y, in: &bytes, width: width, height: height, color: color)
+            }
+        }
+    }
+
+    private static func drawHorizontalLine(
+        y: Int,
+        x1: Int,
+        x2: Int,
+        into bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        guard y >= 0, y < height else { return }
+        let lower = max(0, x1)
+        let upper = min(width - 1, x2)
+        guard lower <= upper else { return }
+        for x in lower...upper {
+            setPixel(x: x, y: y, in: &bytes, width: width, height: height, color: color)
+        }
+    }
+
+    private static func drawVerticalLine(
+        x: Int,
+        y1: Int,
+        y2: Int,
+        into bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        guard x >= 0, x < width else { return }
+        let lower = max(0, y1)
+        let upper = min(height - 1, y2)
+        guard lower <= upper else { return }
+        for y in lower...upper {
+            setPixel(x: x, y: y, in: &bytes, width: width, height: height, color: color)
+        }
+    }
+
+    private static func setPixel(
+        x: Int,
+        y: Int,
+        in bytes: inout [UInt8],
+        width: Int,
+        height: Int,
+        color: (UInt8, UInt8, UInt8)
+    ) {
+        guard x >= 0, y >= 0, x < width, y < height else { return }
+        let offset = ((y * width) + x) * 4
+        bytes[offset] = color.0
+        bytes[offset + 1] = color.1
+        bytes[offset + 2] = color.2
+        bytes[offset + 3] = 255
+    }
+
+    private static func writeMaskImagePortable(binaryMask: [UInt8], width: Int, height: Int, to url: URL) throws {
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        let count = min(binaryMask.count, width * height)
+        for index in 0..<count {
+            let value: UInt8 = binaryMask[index] == 0 ? 0 : 255
+            let offset = index * 4
+            rgba[offset] = value
+            rgba[offset + 1] = value
+            rgba[offset + 2] = value
+            rgba[offset + 3] = 255
+        }
+        do {
+            try MediaImageIO.writePNG(try MediaImage(width: width, height: height, rgba8: rgba), to: url)
+        } catch {
+            throw SegmenterError.failedToWriteMask(url)
+        }
+    }
+
+    #if canImport(CoreGraphics)
     private static func preprocessImage(cgImage: CGImage, resolution: Int) throws -> MLXArray {
         let resized = try QwenImageIO.resizedCGImage(from: cgImage, width: resolution, height: resolution)
         let width = resized.width

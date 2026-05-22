@@ -71,7 +71,7 @@ public enum MereRunAgentModelCatalog {
         for choice: MereRunAgentModelChoice,
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
-        guard machine.isAppleSiliconMac else {
+        guard machine.isSupportedRuntime else {
             return nil
         }
         switch choice {
@@ -94,7 +94,7 @@ public enum MereRunAgentModelCatalog {
     public static func tierRecommendation(
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
-        guard machine.isAppleSiliconMac else { return nil }
+        guard machine.isSupportedRuntime else { return nil }
         if machine.unifiedMemoryGB >= 96 {
             return deepseekV4Flash()
         }
@@ -110,7 +110,7 @@ public enum MereRunAgentModelCatalog {
     public static func premierRecommendation(
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
-        guard machine.isAppleSiliconMac, machine.unifiedMemoryGB >= 96 else {
+        guard machine.isSupportedRuntime, machine.unifiedMemoryGB >= 96 else {
             return nil
         }
         return deepseekV4Flash()
@@ -119,7 +119,7 @@ public enum MereRunAgentModelCatalog {
     public static func fallbackStartableRecommendation(
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
-        guard machine.isAppleSiliconMac else { return nil }
+        guard machine.isSupportedRuntime else { return nil }
         if machine.unifiedMemoryGB >= 96 {
             return deepseekV4Flash()
         }
@@ -141,7 +141,7 @@ public enum MereRunAgentModelCatalog {
             qwen3CoderNext(),
             qwen35122B4Bit(),
             deepseekV4Flash(),
-        ].filter { machine.isAppleSiliconMac && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
+        ].filter { machine.isSupportedRuntime && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
     }
 
     private static func qwen35NineB() -> MereRunAgentModelRecommendation {

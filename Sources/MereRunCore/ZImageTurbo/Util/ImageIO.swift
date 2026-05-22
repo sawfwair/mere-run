@@ -1,10 +1,12 @@
 import Foundation
+import MediaIO
 import MLX
 
 #if canImport(CoreGraphics)
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+#endif
 
 public enum QwenImageIOError: Error {
   case unsupportedPixelFormat
@@ -14,6 +16,7 @@ public enum QwenImageIOError: Error {
 }
 
 public enum QwenImageIO {
+#if canImport(CoreGraphics)
   static func resizedCGImage(
     from image: CGImage,
     width: Int,
@@ -113,7 +116,7 @@ public enum QwenImageIO {
     return try array(from: cropped, addBatchDimension: addBatchDimension, dtype: dtype)
   }
 
-  static func array(
+  public static func array(
     from image: CGImage,
     addBatchDimension: Bool = true,
     dtype: DType = .float32
@@ -174,7 +177,93 @@ public enum QwenImageIO {
     return MLXArray(floats, shape).asType(dtype)
   }
 
-  static func image(from array: MLXArray) throws -> CGImage {
+  public static func image(from array: MLXArray) throws -> CGImage {
+    let media = try mediaImage(from: array)
+    let providerData = Data(media.rgba8)
+    guard let provider = CGDataProvider(data: providerData as CFData) else {
+      throw QwenImageIOError.unsupportedPixelFormat
+    }
+
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+    guard let image = CGImage(
+      width: media.width,
+      height: media.height,
+      bitsPerComponent: 8,
+      bitsPerPixel: 32,
+      bytesPerRow: media.width * 4,
+      space: colorSpace,
+      bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
+      provider: provider,
+      decode: nil,
+      shouldInterpolate: false,
+      intent: .defaultIntent
+    ) else {
+      throw QwenImageIOError.unsupportedPixelFormat
+    }
+
+    return image
+  }
+
+  public static func resizedPixelArray(
+    from image: CGImage,
+    width: Int,
+    height: Int,
+    addBatchDimension: Bool = true,
+    dtype: DType = .float32,
+    interpolation: CGInterpolationQuality = .high
+  ) throws -> MLXArray {
+    guard width > 0, height > 0 else {
+      throw QwenImageIOError.resizeFailed
+    }
+
+    let resizedImage = try resizedCGImage(from: image, width: width, height: height, interpolation: interpolation)
+    return try array(from: resizedImage, addBatchDimension: addBatchDimension, dtype: dtype)
+  }
+#endif
+
+  public static func resizedCenterCropPixelArray(
+    from url: URL,
+    width: Int,
+    height: Int,
+    addBatchDimension: Bool = true,
+    dtype: DType = .float32
+  ) throws -> MLXArray {
+    let image = try MediaImageIO.decode(url)
+    return try resizedCenterCropPixelArray(
+      from: image,
+      width: width,
+      height: height,
+      addBatchDimension: addBatchDimension,
+      dtype: dtype
+    )
+  }
+
+  public static func resizedCenterCropPixelArray(
+    from image: MediaImage,
+    width: Int,
+    height: Int,
+    addBatchDimension: Bool = true,
+    dtype: DType = .float32
+  ) throws -> MLXArray {
+    let cropped = try MediaImageIO.centerCropped(image, width: width, height: height)
+    return try array(from: cropped, addBatchDimension: addBatchDimension, dtype: dtype)
+  }
+
+  public static func array(
+    from image: MediaImage,
+    addBatchDimension: Bool = true,
+    dtype: DType = .float32
+  ) throws -> MLXArray {
+    let floats = MediaImageIO.rgbCHWFloat(image, normalizedToMinusOneToOne: false)
+    var shape = [3, image.height, image.width]
+    if addBatchDimension {
+      shape.insert(1, at: 0)
+    }
+    return MLXArray(floats, shape).asType(dtype)
+  }
+
+  public static func mediaImage(from array: MLXArray) throws -> MediaImage {
     var tensor = array
     precondition(tensor.ndim == 3 || (tensor.ndim == 4 && tensor.dim(0) == 1))
     if tensor.ndim == 4 {
@@ -194,7 +283,6 @@ public enum QwenImageIO {
     let data = uint8Tensor.asData().data
 
     var bytes = [UInt8](repeating: 255, count: pixelCount * 4)
-
     data.withUnsafeBytes { (pointer: UnsafeRawBufferPointer) in
       let srcPointer = pointer.bindMemory(to: UInt8.self)
       for pixel in 0..<pixelCount {
@@ -205,30 +293,7 @@ public enum QwenImageIO {
       }
     }
 
-    let providerData = Data(bytes)
-    guard let provider = CGDataProvider(data: providerData as CFData) else {
-      throw QwenImageIOError.unsupportedPixelFormat
-    }
-
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-    guard let image = CGImage(
-      width: width,
-      height: height,
-      bitsPerComponent: 8,
-      bitsPerPixel: 32,
-      bytesPerRow: width * 4,
-      space: colorSpace,
-      bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
-      provider: provider,
-      decode: nil,
-      shouldInterpolate: false,
-      intent: .defaultIntent
-    ) else {
-      throw QwenImageIOError.unsupportedPixelFormat
-    }
-
-    return image
+    return try MediaImage(width: width, height: height, rgba8: bytes)
   }
 
   public static func normalizeForEncoder(_ image: MLXArray) -> MLXArray {
@@ -240,48 +305,51 @@ public enum QwenImageIO {
   }
 
   static func saveImage(array: MLXArray, to url: URL) throws {
-    let cg = try image(from: array)
-    guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-      throw QwenImageIOError.writeFailed
-    }
-    CGImageDestinationAddImage(destination, cg, nil)
-    guard CGImageDestinationFinalize(destination) else {
+    do {
+      try MediaImageIO.writePNG(try mediaImage(from: array), to: url)
+    } catch {
       throw QwenImageIOError.writeFailed
     }
   }
+
   public static func imageData(from array: MLXArray) throws -> Data {
-    let cg = try image(from: array)
-    let mutableData = NSMutableData()
-    guard let destination = CGImageDestinationCreateWithData(
-      mutableData as CFMutableData,
-      UTType.png.identifier as CFString,
-      1,
-      nil
-    ) else {
+    do {
+      return try MediaImageIO.pngData(from: try mediaImage(from: array))
+    } catch {
       throw QwenImageIOError.writeFailed
     }
-    CGImageDestinationAddImage(destination, cg, nil)
-    guard CGImageDestinationFinalize(destination) else {
-      throw QwenImageIOError.writeFailed
-    }
-    return mutableData as Data
   }
 
   public static func resizedPixelArray(
-    from image: CGImage,
+    from url: URL,
     width: Int,
     height: Int,
     addBatchDimension: Bool = true,
-    dtype: DType = .float32,
-    interpolation: CGInterpolationQuality = .high
+    dtype: DType = .float32
+  ) throws -> MLXArray {
+    let image = try MediaImageIO.decode(url)
+    return try resizedPixelArray(
+      from: image,
+      width: width,
+      height: height,
+      addBatchDimension: addBatchDimension,
+      dtype: dtype
+    )
+  }
+
+  public static func resizedPixelArray(
+    from image: MediaImage,
+    width: Int,
+    height: Int,
+    addBatchDimension: Bool = true,
+    dtype: DType = .float32
   ) throws -> MLXArray {
     guard width > 0, height > 0 else {
       throw QwenImageIOError.resizeFailed
     }
 
-    let resizedImage = try resizedCGImage(from: image, width: width, height: height, interpolation: interpolation)
-    let arr = try array(from: resizedImage, addBatchDimension: addBatchDimension, dtype: dtype)
-    return arr
+    let resizedImage = try MediaImageIO.resized(image, width: width, height: height)
+    return try array(from: resizedImage, addBatchDimension: addBatchDimension, dtype: dtype)
   }
 
   static func resize(
@@ -581,4 +649,3 @@ public enum QwenImageIO {
     return contributions
   }
 }
-#endif

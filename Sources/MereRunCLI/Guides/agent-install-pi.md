@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Install the latest Pi coding-agent release so mere.run can launch a guided local setup agent.
+Install the latest Pi coding-agent release so mere.run can launch a guided local setup agent. Auto-install uses the published macOS release assets; on Linux, install Pi separately and pass `--pi-path` or put `pi` on PATH.
 
 ## Required Models
 
@@ -21,7 +21,7 @@ mere.run agent install-pi --help
 
 ## Usage Patterns
 
-- Run before `agent start` when Pi is not on PATH or not managed by mere.run.
+- Run before `agent start` on macOS when Pi is not on PATH or not managed by mere.run.
 - Use `--force` when the installed Pi binary is corrupt or outdated.
 - Pair with `agent onboard --configure-pi` to register the local provider.
 
@@ -45,6 +45,7 @@ mere.run agent install-pi --force
 
 - Network failure: retry when GitHub release downloads are reachable.
 - Still not found: pass `--pi-path` to `agent start`.
+- Linux: provide an existing Pi binary with `--pi-path` or PATH.
 - Wrong version: use `--force`.
 
 ## Sources

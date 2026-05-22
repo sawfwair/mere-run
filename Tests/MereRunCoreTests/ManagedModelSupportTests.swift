@@ -67,7 +67,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
-    func testNonAppleSiliconMacIsRejected() throws {
+    func testUnsupportedRuntimeIsRejected() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 32 * 1_073_741_824,
@@ -78,7 +78,22 @@ final class ManagedModelSupportTests: XCTestCase {
         let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
 
         XCTAssertFalse(report.isSupported)
-        XCTAssertEqual(report.reasons, ["Apple Silicon macOS is required."])
+        XCTAssertEqual(report.reasons, ["Apple Silicon macOS or Linux is required."])
+    }
+
+    func testLinuxRuntimeIsSupportedWhenMemoryThresholdIsMet() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "Linux",
+            isAppleSiliconMac: false,
+            isLinux: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertEqual(report.reasons, [])
     }
 
     func testRecommendedSetupOnlyContainsSupportedModels() {
@@ -210,5 +225,19 @@ final class ManagedModelSupportTests: XCTestCase {
         )
 
         XCTAssertNil(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
+    }
+
+    func testAgentTierSelectsCoderOnLinuxWithEnoughMemory() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "Linux",
+            isAppleSiliconMac: false,
+            isLinux: true
+        )
+
+        let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
+
+        XCTAssertEqual(recommendation.id, CodeGenResources.defaultModelId)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 }

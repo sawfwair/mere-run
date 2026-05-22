@@ -23,6 +23,7 @@ Install the packaged mere.run CLI and colocated runtime assets.
 Environment:
   MERERUN_INSTALL_BIN_DEST     Override install path (default: /usr/local/bin/mere.run)
   MERERUN_INSTALL_SOURCE_DIR   Override packaged CLI directory (default: ./CLI if present)
+  MERERUN_INSTALL_SKIP_VERIFY  Skip running the installed binary when set to 1
 USAGE
 }
 
@@ -47,16 +48,68 @@ fi
 
 echo "[mere.run] installing mere.run..."
 echo "[mere.run] source: $SOURCE_DIR"
+install_platform="${MERERUN_INSTALL_PLATFORM:-$(uname -s)}"
 
 copy_path() {
   local src="$1"
   local dest_dir="$2"
   local base
   base="$(basename "$src")"
+  local dest="$dest_dir/$base"
 
   mkdir -p "$dest_dir"
-  rm -rf "$dest_dir/$base"
-  ditto "$src" "$dest_dir/$base"
+  rm -rf "$dest"
+  if [[ "${MERERUN_INSTALL_DISABLE_DITTO:-0}" != "1" ]] && command -v ditto >/dev/null 2>&1; then
+    ditto "$src" "$dest"
+  else
+    cp -a "$src" "$dest"
+  fi
+}
+
+copy_path_sudo() {
+  local src="$1"
+  local dest_dir="$2"
+  local base
+  base="$(basename "$src")"
+  local dest="$dest_dir/$base"
+
+  sudo mkdir -p "$dest_dir"
+  sudo rm -rf "$dest"
+  if [[ "${MERERUN_INSTALL_DISABLE_DITTO:-0}" != "1" ]] && command -v ditto >/dev/null 2>&1; then
+    sudo ditto "$src" "$dest"
+  else
+    sudo cp -a "$src" "$dest"
+  fi
+}
+
+copy_to_path() {
+  local src="$1"
+  local dest="$2"
+  local dest_dir
+  dest_dir="$(dirname "$dest")"
+
+  mkdir -p "$dest_dir"
+  rm -rf "$dest"
+  if [[ "${MERERUN_INSTALL_DISABLE_DITTO:-0}" != "1" ]] && command -v ditto >/dev/null 2>&1; then
+    ditto "$src" "$dest"
+  else
+    cp -a "$src" "$dest"
+  fi
+}
+
+copy_to_path_sudo() {
+  local src="$1"
+  local dest="$2"
+  local dest_dir
+  dest_dir="$(dirname "$dest")"
+
+  sudo mkdir -p "$dest_dir"
+  sudo rm -rf "$dest"
+  if [[ "${MERERUN_INSTALL_DISABLE_DITTO:-0}" != "1" ]] && command -v ditto >/dev/null 2>&1; then
+    sudo ditto "$src" "$dest"
+  else
+    sudo cp -a "$src" "$dest"
+  fi
 }
 
 can_install_without_sudo=false
@@ -66,20 +119,37 @@ fi
 
 # Install binary
 if [[ "$can_install_without_sudo" == true ]]; then
-  copy_path "$BIN_SRC" "$BIN_DEST_DIR"
+  copy_to_path "$BIN_SRC" "$BIN_DEST"
   chmod +x "$BIN_DEST"
 else
   echo "[mere.run] need sudo to write to $BIN_DEST_DIR"
-  sudo mkdir -p "$BIN_DEST_DIR"
-  sudo rm -f "$BIN_DEST"
-  sudo ditto "$BIN_SRC" "$BIN_DEST"
+  copy_to_path_sudo "$BIN_SRC" "$BIN_DEST"
   sudo chmod +x "$BIN_DEST"
 fi
 
 # Install colocated runtime assets needed by the CLI.
-shopt -s nullglob
-support_items=("$SOURCE_DIR"/*.framework "$SOURCE_DIR"/*.bundle)
-shopt -u nullglob
+support_items=()
+if [[ "$install_platform" == "Darwin" ]]; then
+  for item in \
+    "$SOURCE_DIR"/*.framework \
+    "$SOURCE_DIR"/*.bundle \
+    "$SOURCE_DIR"/*.dylib
+  do
+    if [[ -e "$item" ]]; then
+      support_items+=("$item")
+    fi
+  done
+else
+  for item in \
+    "$SOURCE_DIR"/*.so \
+    "$SOURCE_DIR"/*.so.* \
+    "$SOURCE_DIR"/lib
+  do
+    if [[ -e "$item" ]]; then
+      support_items+=("$item")
+    fi
+  done
+fi
 
 if (( ${#support_items[@]} > 0 )); then
   echo "[mere.run] installing runtime assets..."
@@ -89,9 +159,7 @@ if (( ${#support_items[@]} > 0 )); then
     done
   else
     for item in "${support_items[@]}"; do
-      base="$(basename "$item")"
-      sudo rm -rf "$BIN_DEST_DIR/$base"
-      sudo ditto "$item" "$BIN_DEST_DIR/$base"
+      copy_path_sudo "$item" "$BIN_DEST_DIR"
     done
   fi
 fi
@@ -105,22 +173,17 @@ if [[ ! -d "$DS4_SRC" ]]; then
 fi
 if [[ -d "$DS4_SRC" ]]; then
   echo "[mere.run] installing DS4 inference binaries..."
-  DS4_DEST="$BIN_DEST_DIR/vendor/ds4"
   if [[ "$can_install_without_sudo" == true ]]; then
-    mkdir -p "$DS4_DEST"
-    rm -rf "$DS4_DEST"
-    ditto "$DS4_SRC" "$DS4_DEST"
+    copy_path "$DS4_SRC" "$BIN_DEST_DIR/vendor"
   else
-    sudo mkdir -p "$DS4_DEST"
-    sudo rm -rf "$DS4_DEST"
-    sudo ditto "$DS4_SRC" "$DS4_DEST"
+    copy_path_sudo "$DS4_SRC" "$BIN_DEST_DIR/vendor"
   fi
 fi
 
 # Install MLX Metal shader resources alongside the binary.
 # mlx-swift looks for metallib files in a Resources/ directory next to the executable.
 MLX_BUNDLE="$BIN_DEST_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
-if [[ -f "$MLX_BUNDLE" ]]; then
+if [[ "$install_platform" == "Darwin" && -f "$MLX_BUNDLE" ]]; then
   echo "[mere.run] installing MLX Metal shaders..."
   RESOURCES_DIR="$BIN_DEST_DIR/Resources"
   if [[ "$can_install_without_sudo" == true ]]; then
@@ -148,7 +211,9 @@ fi
 echo ""
 
 # Verify
-if [[ -x "$BIN_DEST" ]]; then
+if [[ "${MERERUN_INSTALL_SKIP_VERIFY:-0}" == "1" ]]; then
+  echo "[mere.run] verification skipped."
+elif [[ -x "$BIN_DEST" ]]; then
   echo "[mere.run] verification:"
   "$BIN_DEST" --help | head -3
   echo ""

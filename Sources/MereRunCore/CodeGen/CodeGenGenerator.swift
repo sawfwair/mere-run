@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(llama)
 import Foundation
 
 /// Actor-based code generation using GGUF models via llama.cpp.

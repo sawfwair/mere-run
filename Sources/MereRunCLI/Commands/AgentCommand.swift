@@ -52,6 +52,7 @@ struct AgentOnboard: AsyncParsableCommand {
         print("mere.run onboarding")
         print("  machine: \(machine.processorName), \(machine.unifiedMemoryGB) GB unified memory")
         print("  appleSiliconMac: \(machine.isAppleSiliconMac)")
+        print("  linux: \(machine.isLinux)")
         print("  supportedModels: \(supported.count)")
         print("  unsupportedModels: \(unsupported.count)")
 
@@ -278,7 +279,7 @@ struct AgentStart: AsyncParsableCommand {
             serverProcess = startedServer.process
             CLIStderr.write("[agent] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
             try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
-            CLIStderr.write("[agent] Local API is ready. Opening Pi in Terminal.app.\n")
+            CLIStderr.write("[agent] Local API is ready. \(PiTerminalLauncher.launchProgressMessage)\n")
         }
         defer {
             if let serverProcess, serverProcess.isRunning {
@@ -293,8 +294,10 @@ struct AgentStart: AsyncParsableCommand {
             modelURL: modelURL
         )
         if serverProcess != nil {
-            CLIStderr.write("[agent] Pi is running in Terminal.app. Keep this command running; press Ctrl+C here to stop the API server.\n")
-            waitForServerProcess()
+            CLIStderr.write("[agent] \(PiTerminalLauncher.runningProgressMessage)\n")
+            if PiTerminalLauncher.launchesDetached {
+                waitForServerProcess()
+            }
         }
     }
 
@@ -351,6 +354,9 @@ struct AgentStart: AsyncParsableCommand {
     }
 
     private func autoInstallPi() async throws -> URL {
+        guard PiAgentIntegration.canInstallLatestRelease else {
+            throw PiAgentIntegration.IntegrationError.unsupportedPlatform
+        }
         if !quiet {
             CLIStderr.write("[agent] Pi is not installed. Installing the latest release.\n")
         }

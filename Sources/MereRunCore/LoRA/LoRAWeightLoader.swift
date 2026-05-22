@@ -1,4 +1,10 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if os(Linux)
+import Glibc
+#endif
 import MLX
 
 public enum LoRAWeightLoader {
@@ -297,7 +303,7 @@ public enum LoRAWeightLoader {
         }
 
         #if os(macOS)
-        fileManager.createFile(atPath: outURL.path, contents: nil)
+        _ = fileManager.createFile(atPath: outURL.path, contents: nil)
         let outputHandle = try FileHandle(forWritingTo: outURL)
         defer { try? outputHandle.close() }
 
@@ -312,8 +318,18 @@ public enum LoRAWeightLoader {
             throw LoRAError.invalidFormat("Failed to decompress gzip LoRA archive: \(url.lastPathComponent)")
         }
         return outURL
+        #elseif os(Linux)
+        let command = "gzip -dc \(shellQuote(url.path)) > \(shellQuote(outURL.path))"
+        guard system(command) == 0 else {
+            throw LoRAError.invalidFormat("Failed to decompress gzip LoRA archive: \(url.lastPathComponent)")
+        }
+        return outURL
         #else
         throw LoRAError.invalidFormat("Gzip LoRA archives are unsupported on this platform.")
         #endif
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }

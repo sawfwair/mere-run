@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(llama)
 import Foundation
 @preconcurrency import llama
 

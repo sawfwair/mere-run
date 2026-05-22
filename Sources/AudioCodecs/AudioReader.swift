@@ -1,45 +1,32 @@
 import Foundation
-import Accelerate
-import AVFoundation
+import MediaIO
 
-/// Audio reader supporting WAV, M4A, MP3, and other formats via AVFoundation
+/// Audio reader supporting WAV, M4A, MP3, and other formats via platform media backends.
 public enum AudioReader {
     /// Read audio file and return mono 16kHz audio samples
-    /// Supports WAV, M4A, MP3, CAF, AIFF, and other AVFoundation-supported formats
+    /// Supports WAV, M4A, MP3, CAF, AIFF, and other platform-supported formats.
     /// - Parameter url: URL to audio file
     /// - Returns: Audio samples in range [-1, 1] at 16kHz mono
     public static func readAudio(from url: URL) throws -> [Float] {
-        // Use AVFoundation for broad format support
-        let file: AVAudioFile
+        let buffer = try readAudioBuffer(from: url, sampleRate: 16_000, channels: 1)
+        return buffer.samples
+    }
+
+    /// Read audio and return a normalized floating-point buffer.
+    public static func readAudioBuffer(
+        from url: URL,
+        sampleRate: Int = 16_000,
+        channels: Int = 1
+    ) throws -> MediaAudioBuffer {
+        let decoded: MediaAudioBuffer
         do {
-            file = try AVAudioFile(forReading: url)
+            decoded = try MediaAudioIO.decode(url, targetSampleRate: sampleRate, channels: channels)
         } catch {
-            throw AudioReaderError.readFailed("Failed to open audio file: \(error.localizedDescription)")
+            throw AudioReaderError.readFailed(error.localizedDescription)
         }
-
-        let sourceFormat = file.processingFormat
-        let frameCount = AVAudioFrameCount(file.length)
-
-        guard frameCount > 0 else {
-            throw AudioReaderError.invalidFormat("Audio file is empty")
-        }
-
-        // Read into buffer
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
-            throw AudioReaderError.readFailed("Failed to create audio buffer")
-        }
-
-        do {
-            try file.read(into: buffer)
-        } catch {
-            throw AudioReaderError.readFailed("Failed to read audio data: \(error.localizedDescription)")
-        }
-
-        // Convert to mono 16kHz float using AVAudioConverter (more reliable than manual resample)
-        var samples = try convertToMono16kFloat(buffer: buffer, sourceFormat: sourceFormat)
 
         if Self.isDebugEnabled {
-            let stats = audioStats(samples)
+            let stats = audioStats(decoded.samples)
             let message = String(
                 format: "[ASR DEBUG] audio pre-norm rms=%.6f peak=%.6f\n",
                 stats.rms, stats.peak
@@ -48,7 +35,7 @@ public enum AudioReader {
         }
 
         // Auto-gain very quiet audio so ASR doesn't return empty output.
-        samples = normalizeIfNeeded(samples)
+        let samples = normalizeIfNeeded(decoded.samples)
 
         if Self.isDebugEnabled {
             let stats = audioStats(samples)
@@ -59,67 +46,17 @@ public enum AudioReader {
             FileHandle.standardError.write(Data(message.utf8))
         }
 
-        return samples
+        return MediaAudioBuffer(
+            samples: samples,
+            sampleRate: decoded.sampleRate,
+            channelCount: decoded.channelCount,
+            isInterleaved: decoded.isInterleaved
+        )
     }
 
     /// Legacy WAV-only reader (kept for compatibility)
     public static func readWAV(from url: URL) throws -> [Float] {
         try readAudio(from: url)
-    }
-
-    /// Convert input buffer to mono 16kHz Float32 using AVAudioConverter.
-    private static func convertToMono16kFloat(
-        buffer: AVAudioPCMBuffer,
-        sourceFormat: AVAudioFormat
-    ) throws -> [Float] {
-        let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: 16000,
-            channels: 1,
-            interleaved: false
-        )!
-
-        if sourceFormat.sampleRate == targetFormat.sampleRate,
-           sourceFormat.channelCount == targetFormat.channelCount,
-           sourceFormat.commonFormat == .pcmFormatFloat32 {
-            if let floatData = buffer.floatChannelData {
-                let frameLength = Int(buffer.frameLength)
-                return Array(UnsafeBufferPointer(start: floatData[0], count: frameLength))
-            }
-        }
-
-        guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
-            throw AudioReaderError.invalidFormat("Failed to create audio converter")
-        }
-
-        let ratio = targetFormat.sampleRate / sourceFormat.sampleRate
-        let outputCapacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1
-        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputCapacity) else {
-            throw AudioReaderError.readFailed("Failed to create output buffer")
-        }
-
-        var didConvert = false
-        var conversionError: NSError?
-        converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
-            if didConvert {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            didConvert = true
-            outStatus.pointee = .haveData
-            return buffer
-        }
-
-        if let conversionError {
-            throw AudioReaderError.readFailed("Audio conversion failed: \(conversionError.localizedDescription)")
-        }
-
-        guard let floatData = outputBuffer.floatChannelData else {
-            throw AudioReaderError.invalidFormat("Converted audio missing float data")
-        }
-
-        let frameLength = Int(outputBuffer.frameLength)
-        return Array(UnsafeBufferPointer(start: floatData[0], count: frameLength))
     }
 
     /// Normalize extremely quiet audio to a target RMS level.

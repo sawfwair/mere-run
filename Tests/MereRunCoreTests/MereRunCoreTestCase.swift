@@ -10,6 +10,20 @@ class MereRunCoreTestCase: XCTestCase {
             print("[MereRunCoreTestCase] invokeTest \(type(of: self)) \(name)")
         }
 
+        #if os(Linux)
+        let raw = (env["MERERUN_TEST_LINUX_MLX"] ?? "").lowercased()
+        let enabled = raw == "1" || raw == "true" || raw == "yes"
+        guard enabled else {
+            if debugEnabled {
+                print("[MereRunCoreTestCase] skipping Linux MLX test \(type(of: self)) \(name)")
+            }
+            return
+        }
+
+        Device.withDefaultDevice(Device(.cpu)) {
+            super.invokeTest()
+        }
+        #else
         // IMPORTANT: MLX will attempt to initialize Metal resources while creating
         // default CPU/GPU streams. Install the metallib/bundle first.
         MLXTestSupport.ensureMetalLibraryAvailable()
@@ -21,5 +35,6 @@ class MereRunCoreTestCase: XCTestCase {
         Device.withDefaultDevice(device) {
             super.invokeTest()
         }
+        #endif
     }
 }

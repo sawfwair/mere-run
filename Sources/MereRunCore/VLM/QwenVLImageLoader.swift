@@ -1,18 +1,62 @@
 import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
 import ImageIO
+#endif
+import MediaIO
 import MLX
 
 enum QwenVLImageLoader {
+#if canImport(CoreGraphics)
     static func loadCGImage(url: URL) -> CGImage? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateImageAtIndex(src, 0, nil)
     }
+#endif
 
     /// Default pixel constraints - nil means no constraint (matches mlx-community model configs)
     static let defaultMinPixels: Int? = nil
     static let defaultMaxPixels: Int? = nil
 
+    static func pixelValues(
+        imageURL: URL,
+        minPixels: Int? = defaultMinPixels,
+        maxPixels: Int? = defaultMaxPixels,
+        patchSize: Int,
+        spatialMergeSize: Int = 2
+    ) throws -> MLXArray {
+        let image = try MediaImageIO.decode(imageURL)
+        return try pixelValues(
+            image: image,
+            minPixels: minPixels,
+            maxPixels: maxPixels,
+            patchSize: patchSize,
+            spatialMergeSize: spatialMergeSize
+        )
+    }
+
+    static func pixelValues(
+        image: MediaImage,
+        minPixels: Int? = defaultMinPixels,
+        maxPixels: Int? = defaultMaxPixels,
+        patchSize: Int,
+        spatialMergeSize: Int = 2
+    ) throws -> MLXArray {
+        let (targetW, targetH) = Self.computeTargetSize(
+            originalWidth: image.width,
+            originalHeight: image.height,
+            minPixels: minPixels,
+            maxPixels: maxPixels,
+            patchSize: patchSize,
+            mergeSize: spatialMergeSize
+        )
+
+        let resized = try MediaImageIO.resized(image, width: targetW, height: targetH)
+        let floats = MediaImageIO.rgbCHWFloat(resized, normalizedToMinusOneToOne: true)
+        return MLXArray(floats, [1, 3, resized.height, resized.width])
+    }
+
+#if canImport(CoreGraphics)
     static func pixelValues(
         cgImage: CGImage,
         minPixels: Int? = defaultMinPixels,
@@ -61,6 +105,7 @@ enum QwenVLImageLoader {
 
         return MLXArray(floats, [1, 3, h, w])
     }
+#endif
 
     private static func saveDebugImage(floats: [Float32], width: Int, height: Int, to url: URL) {
         // Denormalize and save as PNG for visual inspection
@@ -79,6 +124,7 @@ enum QwenVLImageLoader {
             }
         }
 
+        #if canImport(CoreGraphics)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         pixels.withUnsafeBytes { ptr in
             guard let ctx = CGContext(
@@ -94,8 +140,17 @@ enum QwenVLImageLoader {
             CGImageDestinationFinalize(dest)
             print("[QwenVLImageLoader] Debug image saved to: \(url.path)")
         }
+        #else
+        do {
+            try MediaImageIO.writePNG(MediaImage(width: width, height: height, rgba8: pixels), to: url)
+            print("[QwenVLImageLoader] Debug image saved to: \(url.path)")
+        } catch {
+            // Debug image persistence should never affect inference.
+        }
+        #endif
     }
 
+#if canImport(CoreGraphics)
     private static func rgb8Pixels(cgImage: CGImage) -> Data? {
         let w = cgImage.width
         let h = cgImage.height
@@ -134,6 +189,7 @@ enum QwenVLImageLoader {
         }
         return rgb
     }
+#endif
 
     /// Computes target dimensions matching Qwen2VLImageProcessor's smart_resize
     /// Grid dimensions must be divisible by merge_size, visual dimensions divisible by patch_size
@@ -170,6 +226,7 @@ enum QwenVLImageLoader {
         return (targetW, targetH)
     }
 
+#if canImport(CoreGraphics)
     private static func resizeExact(cgImage: CGImage, width: Int, height: Int) -> CGImage {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bytesPerRow = width * 4
@@ -192,4 +249,5 @@ enum QwenVLImageLoader {
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
         return ctx.makeImage() ?? cgImage
     }
+#endif
 }

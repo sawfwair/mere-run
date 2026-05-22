@@ -1,5 +1,8 @@
 import ArgumentParser
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Hummingbird
 import NIOCore
 import MereRunCore
@@ -744,7 +747,7 @@ actor CodeGenServer {
 
             // Pre-load model
             try await generator.prepare(modelPath: modelPath) { progress in
-                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
         case .textChatKlein:
             self.llamaGenerator = nil
@@ -768,7 +771,7 @@ actor CodeGenServer {
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
-                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
         case .textChatQ35:
             let generator = Q35Generator(modelId: Q35Resources.defaultModelId)
@@ -780,7 +783,7 @@ actor CodeGenServer {
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
-                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
         case .textChatDeepseekV4Flash:
             let generator = DeepseekV4FlashGenerator()
@@ -792,7 +795,7 @@ actor CodeGenServer {
             self.useStandaloneModel = false
 
             try await generator.prepare(modelPath: modelPath) { progress in
-                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
         }
     }
@@ -820,7 +823,7 @@ actor CodeGenServer {
             return Response(
                 status: .ok,
                 headers: [.contentType: "application/json"],
-                body: .init(byteBuffer: ByteBuffer(data: data))
+                body: .init(byteBuffer: ByteBuffer(bytes: data))
             )
         }
 
@@ -847,7 +850,7 @@ actor CodeGenServer {
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],
-            body: .init(byteBuffer: ByteBuffer(data: data))
+            body: .init(byteBuffer: ByteBuffer(bytes: data))
         )
     }
 
@@ -888,7 +891,7 @@ actor CodeGenServer {
 
         let openaiRequest: OpenAIChatRequest
         do {
-            openaiRequest = try JSONDecoder().decode(OpenAIChatRequest.self, from: body)
+            openaiRequest = try JSONDecoder().decode(OpenAIChatRequest.self, from: Data(body.readableBytesView))
         } catch {
             return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
         }
@@ -960,7 +963,7 @@ actor CodeGenServer {
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],
-            body: .init(byteBuffer: ByteBuffer(data: data))
+            body: .init(byteBuffer: ByteBuffer(bytes: data))
         )
     }
 
@@ -969,8 +972,7 @@ actor CodeGenServer {
             throw DeepseekV4FlashError.serverFailedToStart("generator not initialized")
         }
         let upstreamURL = try await generator.chatCompletionsURL(modelPath: modelPath, progressHandler: nil)
-        var requestBody = body
-        let data = requestBody.readData(length: requestBody.readableBytes) ?? Data()
+        let data = Data(body.readableBytesView)
 
         if !DeepseekV4FlashClient.requestWantsStreamingResponse(data) {
             let upstreamResponse = try await DeepseekV4FlashClient.normalizedChatCompletionData(
@@ -983,7 +985,7 @@ actor CodeGenServer {
             return Response(
                 status: .init(code: upstreamResponse.statusCode),
                 headers: headers,
-                body: .init(byteBuffer: ByteBuffer(data: upstreamResponse.body))
+                body: .init(byteBuffer: ByteBuffer(bytes: upstreamResponse.body))
             )
         }
 
@@ -992,6 +994,36 @@ actor CodeGenServer {
             requestBody: data,
             contentType: contentType
         )
+#if os(Linux)
+        let (upstreamData, response) = try await URLSession.shared.data(for: upstreamRequest)
+        let http = response as? HTTPURLResponse
+        var headers: HTTPFields = [:]
+        headers[.contentType] = http?.value(forHTTPHeaderField: "Content-Type") ?? "application/json"
+        if DeepseekV4FlashClient.isEventStreamContentType(headers[.contentType]) {
+            headers[.init("Cache-Control")!] = "no-cache"
+            headers[.connection] = "keep-alive"
+            let stream = AsyncStream<ByteBuffer> { continuation in
+                if !upstreamData.isEmpty {
+                    continuation.yield(ByteBuffer(bytes: upstreamData))
+                }
+                continuation.finish()
+            }
+            return Response(
+                status: .init(code: http?.statusCode ?? 502),
+                headers: headers,
+                body: .init(asyncSequence: stream)
+            )
+        }
+        let repairedData = DeepseekV4FlashClient.normalizedChatCompletionBody(
+            upstreamData,
+            contentType: headers[.contentType]
+        )
+        return Response(
+            status: .init(code: http?.statusCode ?? 502),
+            headers: headers,
+            body: .init(byteBuffer: ByteBuffer(bytes: repairedData))
+        )
+#else
         let (upstreamBytes, response) = try await URLSession.shared.bytes(for: upstreamRequest)
         let http = response as? HTTPURLResponse
         var headers: HTTPFields = [:]
@@ -1007,12 +1039,12 @@ actor CodeGenServer {
                         for try await byte in upstreamBytes {
                             buffer.append(byte)
                             if byte == 10 || buffer.count >= 4_096 {
-                                continuation.yield(ByteBuffer(data: buffer))
+                                continuation.yield(ByteBuffer(bytes: buffer))
                                 buffer.removeAll(keepingCapacity: true)
                             }
                         }
                         if !buffer.isEmpty {
-                            continuation.yield(ByteBuffer(data: buffer))
+                            continuation.yield(ByteBuffer(bytes: buffer))
                         }
                         continuation.finish()
                     } catch {
@@ -1038,8 +1070,9 @@ actor CodeGenServer {
         return Response(
             status: .init(code: http?.statusCode ?? 502),
             headers: headers,
-            body: .init(byteBuffer: ByteBuffer(data: repairedData))
+            body: .init(byteBuffer: ByteBuffer(bytes: repairedData))
         )
+#endif
     }
 
     private func handleStreamingChat(_ request: ChatRequest, includeUsage: Bool) async throws -> Response {
@@ -1271,7 +1304,7 @@ actor CodeGenServer {
         return Response(
             status: status,
             headers: headers,
-            body: .init(byteBuffer: ByteBuffer(data: data))
+            body: .init(byteBuffer: ByteBuffer(bytes: data))
         )
     }
 }

@@ -96,7 +96,7 @@ public actor Qwen3TTSGenerator: TTSGenerator {
 
     nonisolated public func generateStream(
         _ request: TTSRequest,
-        options: TTSStreamingOptions,
+        options: TTSStreamingOptions
     ) -> AsyncThrowingStream<TTSStreamingEvent, Error> {
         generateStream(request, options: options, modelPath: nil)
     }
