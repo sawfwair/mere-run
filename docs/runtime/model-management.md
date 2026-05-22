@@ -68,9 +68,9 @@ server answers `/health`, and the model IDs returned by `/v1/models`.
 
 ### `mere.run model capabilities`
 
-Summarizes the current Mac, the managed models it can run, the preferred
+Summarizes the current machine, the managed models it can run, the preferred
 setup-agent tier, and cross-modality starter coverage. Pass `--all` to include
-models that are blocked by Apple Silicon or unified-memory requirements.
+models that are blocked by platform or memory requirements.
 
 ### `mere.run model info`
 

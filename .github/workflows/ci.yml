@@ -16,3 +16,48 @@ jobs:
         run: brew install swiftlint ripgrep
       - name: Run package checks
         run: ./scripts/check.sh
+
+  linux-cli-compatibility-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Linux CLI compatibility documentation
+        run: |
+          set -euo pipefail
+
+          grep -R "Linux CLI compatibility" README.md docs/getting-started.md docs/development-workflow.md docs/testing.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
+          grep -R "MERERUN_FFMPEG" README.md docs/getting-started.md docs/development-workflow.md docs/testing.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
+          grep -R "MERERUN_FFPROBE" README.md docs/getting-started.md docs/development-workflow.md docs/testing.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
+          grep -R "CPU MLX" README.md docs/development-workflow.md docs/testing.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
+          grep -R "CUDA" README.md docs/development-workflow.md docs/testing.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
+          grep -R "macOS-only" README.md docs/getting-started.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
+
+  linux-cli:
+    runs-on: ubuntu-22.04
+    container: swift:6.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux check dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            clang \
+            cmake \
+            curl \
+            ffmpeg \
+            gfortran \
+            git \
+            gzip \
+            libcurl4-openssl-dev \
+            liblapacke-dev \
+            libopenblas-dev \
+            ninja-build \
+            pkg-config \
+            ripgrep \
+            unzip \
+            zip \
+            zlib1g-dev
+      - name: Run Linux CLI compatibility gate
+        run: ./scripts/check-linux.sh

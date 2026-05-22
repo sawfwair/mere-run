@@ -1,4 +1,7 @@
 import Foundation
+#if os(Linux)
+import Glibc
+#endif
 
 public struct LoRAResolvedCheckpoint: Sendable {
     public let checkpointURL: URL
@@ -51,7 +54,6 @@ public enum LoRACheckpointResolver {
     }
 
     private static func resolveZip(_ zipURL: URL) throws -> LoRAResolvedCheckpoint {
-        #if os(macOS)
         let fm = FileManager.default
         let extractRoot = fm.temporaryDirectory.appendingPathComponent(
             "mererun-lora-resume-\(UUID().uuidString)",
@@ -59,6 +61,7 @@ public enum LoRACheckpointResolver {
         )
         try fm.createDirectory(at: extractRoot, withIntermediateDirectories: true)
         do {
+            #if os(macOS)
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
             process.arguments = ["-x", "-k", zipURL.path, extractRoot.path]
@@ -71,6 +74,22 @@ public enum LoRACheckpointResolver {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to extract checkpoint archive \(zipURL.lastPathComponent)."]
                 )
             }
+            #elseif os(Linux)
+            let command = "unzip -q \(shellQuote(zipURL.path)) -d \(shellQuote(extractRoot.path))"
+            guard system(command) == 0 else {
+                throw NSError(
+                    domain: "LoRACheckpointResolver",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to extract checkpoint archive \(zipURL.lastPathComponent)."]
+                )
+            }
+            #else
+            throw NSError(
+                domain: "LoRACheckpointResolver",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Zip checkpoint resume is unsupported on this platform."]
+            )
+            #endif
 
             guard let checkpointURL = findCheckpoint(
                 in: extractRoot,
@@ -102,13 +121,6 @@ public enum LoRACheckpointResolver {
             try? fm.removeItem(at: extractRoot)
             throw error
         }
-        #else
-        throw NSError(
-            domain: "LoRACheckpointResolver",
-            code: 3,
-            userInfo: [NSLocalizedDescriptionKey: "Zip checkpoint resume is supported only on macOS."]
-        )
-        #endif
     }
 
     private static func findCheckpoint(in root: URL, preferredName: String) -> URL? {
@@ -274,5 +286,9 @@ public enum LoRACheckpointResolver {
         }
 
         return nil
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }

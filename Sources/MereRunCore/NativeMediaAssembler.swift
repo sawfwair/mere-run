@@ -1,9 +1,17 @@
+import Foundation
+import MediaIO
+#if canImport(AVFoundation) && canImport(CoreGraphics)
 import AVFoundation
 import CoreGraphics
 import CoreText
-import Foundation
 import ImageIO
 import QuartzCore
+#elseif os(Linux)
+import Glibc
+public typealias CGFloat = Double
+#else
+public typealias CGFloat = Double
+#endif
 
 public struct NativeMediaSegment: Sendable {
     public enum Source: Sendable {
@@ -200,6 +208,7 @@ public enum NativeMediaAssemblerError: LocalizedError {
 public struct NativeMediaAssembler {
     public init() {}
 
+#if canImport(AVFoundation) && canImport(CoreGraphics)
     public func assemble(
         request: NativeMediaAssemblyRequest,
         onLog: @escaping (String) -> Void
@@ -822,4 +831,502 @@ public struct NativeMediaAssembler {
             throw NativeMediaAssemblerError.exportFailed(details)
         }
     }
+#else
+    public func assemble(
+        request: NativeMediaAssemblyRequest,
+        onLog: @escaping (String) -> Void
+    ) throws -> URL {
+        guard request.fps >= 1 else {
+            throw NativeMediaAssemblerError.invalidFPS(request.fps)
+        }
+
+        let orderedSegments = request.segments
+            .filter { $0.endSeconds > $0.startSeconds }
+            .sorted { $0.startSeconds < $1.startSeconds }
+
+        guard !orderedSegments.isEmpty else {
+            throw NativeMediaAssemblerError.emptySegments
+        }
+
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: request.outputURL.path) {
+            try fileManager.removeItem(at: request.outputURL)
+        }
+        try fileManager.createDirectory(
+            at: request.outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let segmentsDir = request.workDirectory.appendingPathComponent("segments", isDirectory: true)
+        if fileManager.fileExists(atPath: segmentsDir.path) {
+            try fileManager.removeItem(at: segmentsDir)
+        }
+        try fileManager.createDirectory(at: segmentsDir, withIntermediateDirectories: true)
+
+        onLog("  Native assembly: rendering \(orderedSegments.count) segment(s)")
+
+        var renderedSegmentURLs: [URL] = []
+        var totalDuration = 0.0
+        renderedSegmentURLs.reserveCapacity(orderedSegments.count)
+
+        for (index, segment) in orderedSegments.enumerated() {
+            let segmentDuration = max(0.1, segment.endSeconds - segment.startSeconds)
+            totalDuration += segmentDuration
+            let segmentURL = segmentsDir.appendingPathComponent(String(format: "segment-%03d.mp4", index))
+
+            switch segment.source {
+            case .image(let url, let motion):
+                onLog("  Native assembly: beat \(index + 1)/\(orderedSegments.count) image motion")
+                try renderImageSegmentPortable(
+                    imageURL: url,
+                    outputURL: segmentURL,
+                    durationSeconds: segmentDuration,
+                    motion: motion,
+                    renderWidth: request.renderWidth,
+                    renderHeight: request.renderHeight,
+                    fps: request.fps
+                )
+            case .video(let url):
+                onLog("  Native assembly: beat \(index + 1)/\(orderedSegments.count) video normalize")
+                try renderVideoSegmentPortable(
+                    videoURL: url,
+                    outputURL: segmentURL,
+                    durationSeconds: segmentDuration,
+                    renderWidth: request.renderWidth,
+                    renderHeight: request.renderHeight,
+                    fps: request.fps
+                )
+            }
+
+            renderedSegmentURLs.append(segmentURL)
+        }
+
+        onLog("  Native assembly: stitching timeline")
+        let timelineURL = request.workDirectory.appendingPathComponent("native-timeline.mp4")
+        try concatenateSegments(renderedSegmentURLs, outputURL: timelineURL)
+
+        let captionedURL: URL
+        if request.captions.contains(where: { $0.endSeconds > $0.startSeconds && !$0.text.isEmpty }) {
+            onLog("  Native assembly: burning captions")
+            captionedURL = request.workDirectory.appendingPathComponent("native-captioned.mp4")
+            try burnCaptions(
+                captions: request.captions,
+                style: request.captionStyle,
+                renderHeight: request.renderHeight,
+                inputURL: timelineURL,
+                outputURL: captionedURL,
+                workDirectory: request.workDirectory
+            )
+        } else {
+            captionedURL = timelineURL
+        }
+
+        let narrationLayers = request.narrationLayers.filter {
+            fileManager.fileExists(atPath: $0.url.path) && MediaVideoIO.hasAudioTrack($0.url)
+        }
+        let backgroundLayer = request.backgroundLayer.flatMap { layer -> NativeMediaAudioLayer? in
+            guard fileManager.fileExists(atPath: layer.url.path), MediaVideoIO.hasAudioTrack(layer.url) else {
+                return nil
+            }
+            return layer
+        }
+
+        if !narrationLayers.isEmpty || backgroundLayer != nil {
+            onLog("  Native assembly: mixing audio")
+            try mixAudio(
+                videoURL: captionedURL,
+                narrationLayers: narrationLayers,
+                backgroundLayer: backgroundLayer,
+                totalDuration: totalDuration,
+                outputURL: request.outputURL
+            )
+        } else {
+            try copyMedia(from: captionedURL, to: request.outputURL)
+        }
+
+        return request.outputURL
+    }
+
+    private func renderImageSegmentPortable(
+        imageURL: URL,
+        outputURL: URL,
+        durationSeconds: Double,
+        motion: NativeKenBurnsMotion,
+        renderWidth: Int,
+        renderHeight: Int,
+        fps: Int
+    ) throws {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(imageURL)
+        } catch {
+            throw NativeMediaAssemblerError.imageDecodeFailed(imageURL)
+        }
+
+        let frameCount = max(1, Int((durationSeconds * Double(fps)).rounded(.up)))
+        var rgb24: [UInt8] = []
+        rgb24.reserveCapacity(renderWidth * renderHeight * 3 * frameCount)
+
+        for frameIndex in 0..<frameCount {
+            rgb24.append(contentsOf: renderKenBurnsFrame(
+                image: image,
+                frameIndex: frameIndex,
+                frameCount: frameCount,
+                motion: motion,
+                renderWidth: renderWidth,
+                renderHeight: renderHeight
+            ))
+        }
+
+        try MediaVideoIO.writeMP4(
+            rgb24: rgb24,
+            width: renderWidth,
+            height: renderHeight,
+            frameCount: frameCount,
+            fps: fps,
+            to: outputURL
+        )
+    }
+
+    private func renderKenBurnsFrame(
+        image: MediaImage,
+        frameIndex: Int,
+        frameCount: Int,
+        motion: NativeKenBurnsMotion,
+        renderWidth: Int,
+        renderHeight: Int
+    ) -> [UInt8] {
+        let canvasWidth = Double(renderWidth)
+        let canvasHeight = Double(renderHeight)
+        let imageWidth = Double(image.width)
+        let imageHeight = Double(image.height)
+        let progress = frameCount > 1 ? Double(frameIndex) / Double(frameCount - 1) : 0
+        let zoom = motion.startZoom + (motion.endZoom - motion.startZoom) * progress
+        let baseScale = max(canvasWidth / imageWidth, canvasHeight / imageHeight)
+        let drawWidth = imageWidth * baseScale * zoom
+        let drawHeight = imageHeight * baseScale * zoom
+
+        let overflowX = max(0, drawWidth - canvasWidth)
+        let overflowY = max(0, drawHeight - canvasHeight)
+        let angleX = 2.0 * Double.pi * motion.driftXFrequency * progress
+        let angleY = 2.0 * Double.pi * motion.driftYFrequency * progress
+        let driftX = overflowX * motion.driftXFraction * sin(angleX)
+        let driftY = overflowY * motion.driftYFraction * cos(angleY)
+        let originX = -(overflowX / 2.0) + driftX
+        let originY = -(overflowY / 2.0) + driftY
+        let scaleX = drawWidth / imageWidth
+        let scaleY = drawHeight / imageHeight
+
+        var output = [UInt8](repeating: 0, count: renderWidth * renderHeight * 3)
+        for y in 0..<renderHeight {
+            for x in 0..<renderWidth {
+                let sourceX = Int(((Double(x) - originX) / scaleX).rounded(.down))
+                let sourceY = Int(((Double(y) - originY) / scaleY).rounded(.down))
+                guard sourceX >= 0, sourceX < image.width, sourceY >= 0, sourceY < image.height else {
+                    continue
+                }
+
+                let sourceOffset = ((sourceY * image.width) + sourceX) * 4
+                let outputOffset = ((y * renderWidth) + x) * 3
+                output[outputOffset] = image.rgba8[sourceOffset]
+                output[outputOffset + 1] = image.rgba8[sourceOffset + 1]
+                output[outputOffset + 2] = image.rgba8[sourceOffset + 2]
+            }
+        }
+        return output
+    }
+
+    private func renderVideoSegmentPortable(
+        videoURL: URL,
+        outputURL: URL,
+        durationSeconds: Double,
+        renderWidth: Int,
+        renderHeight: Int,
+        fps: Int
+    ) throws {
+        let duration = formatSeconds(max(0.1, durationSeconds))
+        let filter = [
+            "scale=\(renderWidth):\(renderHeight):force_original_aspect_ratio=increase",
+            "crop=\(renderWidth):\(renderHeight)",
+            "fps=\(fps)",
+            "tpad=stop_mode=clone:stop_duration=\(duration)",
+            "trim=duration=\(duration)",
+            "setpts=PTS-STARTPTS",
+            "format=yuv420p",
+        ].joined(separator: ",")
+
+        try runFFmpeg([
+            "-v", "error",
+            "-y",
+            "-i", videoURL.path,
+            "-an",
+            "-vf", filter,
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            outputURL.path,
+        ])
+    }
+
+    private func concatenateSegments(_ segmentURLs: [URL], outputURL: URL) throws {
+        guard let first = segmentURLs.first else {
+            throw NativeMediaAssemblerError.emptySegments
+        }
+        let listURL = first.deletingLastPathComponent()
+            .appendingPathComponent("native-segments-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: listURL) }
+
+        let list = segmentURLs
+            .map { "file '\(escapeFFConcatPath($0.path))'" }
+            .joined(separator: "\n")
+        try list.write(to: listURL, atomically: true, encoding: .utf8)
+
+        try runFFmpeg([
+            "-v", "error",
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", listURL.path,
+            "-an",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            outputURL.path,
+        ])
+    }
+
+    private func burnCaptions(
+        captions: [NativeMediaCaptionCue],
+        style: NativeMediaCaptionStyle,
+        renderHeight: Int,
+        inputURL: URL,
+        outputURL: URL,
+        workDirectory: URL
+    ) throws {
+        let assURL = workDirectory.appendingPathComponent("native-captions-\(UUID().uuidString).ass")
+        defer { try? FileManager.default.removeItem(at: assURL) }
+        try makeASS(captions: captions, style: style, renderHeight: renderHeight)
+            .write(to: assURL, atomically: true, encoding: .utf8)
+
+        try runFFmpeg([
+            "-v", "error",
+            "-y",
+            "-i", inputURL.path,
+            "-vf", "ass=\(escapeFFmpegFilterPath(assURL.path))",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-an",
+            outputURL.path,
+        ])
+    }
+
+    private func mixAudio(
+        videoURL: URL,
+        narrationLayers: [NativeMediaAudioLayer],
+        backgroundLayer: NativeMediaAudioLayer?,
+        totalDuration: Double,
+        outputURL: URL
+    ) throws {
+        var layers = narrationLayers
+        if let backgroundLayer {
+            layers.append(backgroundLayer)
+        }
+        guard !layers.isEmpty else {
+            try copyMedia(from: videoURL, to: outputURL)
+            return
+        }
+
+        var arguments = [
+            "-v", "error",
+            "-y",
+            "-i", videoURL.path,
+        ]
+        for layer in layers {
+            arguments += ["-i", layer.url.path]
+        }
+
+        var filters: [String] = []
+        var labels: [String] = []
+        for (index, layer) in layers.enumerated() {
+            let inputIndex = index + 1
+            let label = "a\(index)"
+            let delayMilliseconds = max(0, Int((layer.startSeconds * 1000.0).rounded()))
+            let remainingDuration = max(0.1, totalDuration - max(0, layer.startSeconds))
+            filters.append(
+                "[\(inputIndex):a]" +
+                    "adelay=\(delayMilliseconds):all=1," +
+                    "volume=\(formatSeconds(Double(layer.volume)))," +
+                    "atrim=duration=\(formatSeconds(remainingDuration))," +
+                    "asetpts=N/SR/TB[\(label)]"
+            )
+            labels.append("[\(label)]")
+        }
+
+        if labels.count == 1 {
+            filters.append("\(labels[0])atrim=duration=\(formatSeconds(totalDuration))[mix]")
+        } else {
+            filters.append(
+                labels.joined() +
+                    "amix=inputs=\(labels.count):duration=longest:dropout_transition=0," +
+                    "atrim=duration=\(formatSeconds(totalDuration))[mix]"
+            )
+        }
+
+        arguments += [
+            "-filter_complex", filters.joined(separator: ";"),
+            "-map", "0:v",
+            "-map", "[mix]",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-shortest",
+            outputURL.path,
+        ]
+
+        try runFFmpeg(arguments)
+    }
+
+    private func makeASS(
+        captions: [NativeMediaCaptionCue],
+        style: NativeMediaCaptionStyle,
+        renderHeight: Int
+    ) -> String {
+        let cleanedCues = captions
+            .filter { $0.endSeconds > $0.startSeconds && !$0.text.isEmpty }
+            .sorted { $0.startSeconds < $1.startSeconds }
+        let fontSize = Int(max(1, style.fontSize.rounded()))
+        let outline = Int(max(0, abs(style.outlineWidth).rounded()))
+        let marginH = Int(max(0, style.horizontalInset.rounded()))
+        let marginV = Int(max(0, style.bottomInset.rounded()))
+        let primary = assColor(style.textColor)
+        let outlineColor = assColor(style.outlineColor)
+
+        var lines = [
+            "[Script Info]",
+            "ScriptType: v4.00+",
+            "PlayResX: 1080",
+            "PlayResY: \(max(1, renderHeight))",
+            "",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+            "Style: Default,\(escapeASSStyle(style.fontName)),\(fontSize),\(primary),\(primary),\(outlineColor),&H00000000,-1,0,0,0,100,100,0,0,1,\(outline),0,2,\(marginH),\(marginH),\(marginV),1",
+            "",
+            "[Events]",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+        ]
+
+        for cue in cleanedCues {
+            lines.append(
+                "Dialogue: 0,\(formatASSTime(cue.startSeconds)),\(formatASSTime(cue.endSeconds)),Default,,0,0,0,,\(escapeASSText(cue.text))"
+            )
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func copyMedia(from sourceURL: URL, to outputURL: URL) throws {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: outputURL.path) {
+            try fileManager.removeItem(at: outputURL)
+        }
+        try fileManager.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try fileManager.copyItem(at: sourceURL, to: outputURL)
+    }
+
+    private func runFFmpeg(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = try resolveExecutable(MediaTool.ffmpegPath)
+        process.arguments = arguments
+
+        let stderrPipe = Pipe()
+        process.standardError = stderrPipe
+        process.standardOutput = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            throw NativeMediaAssemblerError.exportFailed(
+                "ffmpeg was not found. Install ffmpeg or set MERERUN_FFMPEG to the executable path."
+            )
+        }
+
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let details = String(decoding: stderrData, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NativeMediaAssemblerError.exportFailed(
+                details.isEmpty ? "ffmpeg exited with status \(process.terminationStatus)." : details
+            )
+        }
+    }
+
+    private func resolveExecutable(_ raw: String) throws -> URL {
+        if raw.contains("/") {
+            let url = URL(fileURLWithPath: raw)
+            if FileManager.default.isExecutableFile(atPath: url.path) {
+                return url
+            }
+            throw NativeMediaAssemblerError.exportFailed("Executable not found: \(raw)")
+        }
+
+        let pathEntries = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":") ?? []
+        for entry in pathEntries {
+            let candidate = URL(fileURLWithPath: String(entry), isDirectory: true)
+                .appendingPathComponent(raw)
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        throw NativeMediaAssemblerError.exportFailed("Executable not found: \(raw)")
+    }
+
+    private func escapeFFConcatPath(_ path: String) -> String {
+        path.replacingOccurrences(of: "'", with: "'\\''")
+    }
+
+    private func escapeFFmpegFilterPath(_ path: String) -> String {
+        var value = path
+        for character in ["\\", ":", "'", ",", "[", "]", " "] {
+            value = value.replacingOccurrences(of: character, with: "\\\(character)")
+        }
+        return value
+    }
+
+    private func escapeASSText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "{", with: "\\{")
+            .replacingOccurrences(of: "}", with: "\\}")
+            .replacingOccurrences(of: "\n", with: "\\N")
+    }
+
+    private func escapeASSStyle(_ text: String) -> String {
+        text.replacingOccurrences(of: ",", with: "")
+    }
+
+    private func assColor(_ rgba: (Double, Double, Double, Double)) -> String {
+        let red = colorByte(rgba.0)
+        let green = colorByte(rgba.1)
+        let blue = colorByte(rgba.2)
+        let alpha = UInt8(255 - Int(colorByte(rgba.3)))
+        return String(format: "&H%02X%02X%02X%02X", alpha, blue, green, red)
+    }
+
+    private func colorByte(_ value: Double) -> UInt8 {
+        UInt8(max(0, min(255, Int((value * 255.0).rounded()))))
+    }
+
+    private func formatASSTime(_ seconds: Double) -> String {
+        let centiseconds = max(0, Int((seconds * 100.0).rounded()))
+        let hours = centiseconds / 360_000
+        let minutes = (centiseconds / 6_000) % 60
+        let wholeSeconds = (centiseconds / 100) % 60
+        let fraction = centiseconds % 100
+        return String(format: "%d:%02d:%02d.%02d", hours, minutes, wholeSeconds, fraction)
+    }
+
+    private func formatSeconds(_ seconds: Double) -> String {
+        String(format: "%.3f", seconds)
+    }
+#endif
 }

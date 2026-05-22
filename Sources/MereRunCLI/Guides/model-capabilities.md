@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Report which managed models this Mac can run, including memory fit, recommendations, categories, and reasons unsupported models are hidden or rejected.
+Report which managed models this machine can run, including memory fit, recommendations, categories, and reasons unsupported models are hidden or rejected.
 
 ## Required Models
 

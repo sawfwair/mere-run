@@ -59,8 +59,7 @@ struct VisionCaption: AsyncParsableCommand {
             print("No model specified, downloading \(Qwen3VLAutoCaptioner.modelId)...")
             let autoCaptioner = Qwen3VLAutoCaptioner()
             modelURL = try await autoCaptioner.ensureReady { progress in
-                print("\r\(progress.status) (\(Int(progress.fraction * 100))%)", terminator: "")
-                fflush(stdout)
+                CLIStdout.write("\r\(progress.status) (\(Int(progress.fraction * 100))%)")
             }
             print()  // newline after progress
         }

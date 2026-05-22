@@ -1,16 +1,6 @@
 import Foundation
-@preconcurrency import AVFoundation
-import Accelerate
+import AudioCodecs
 import MLX
-
-private final class AudioConverterInputState: @unchecked Sendable {
-    var didProvideInput = false
-    let buffer: AVAudioPCMBuffer
-
-    init(buffer: AVAudioPCMBuffer) {
-        self.buffer = buffer
-    }
-}
 
 public enum Qwen3TTSAudioPreprocessor {
     public struct ProcessedReference: Sendable, Hashable {
@@ -52,37 +42,20 @@ public enum Qwen3TTSAudioPreprocessor {
         minDuration: Double = 2.0,
         maxDuration: Double = 12.0
     ) throws -> ProcessedReference {
-        let file: AVAudioFile
+        let samples: [Float]
         do {
-            file = try AVAudioFile(forReading: url)
+            samples = try AudioReader
+                .readAudioBuffer(from: url, sampleRate: targetSampleRate, channels: 1)
+                .samples
         } catch {
             throw Error.readFailed(error.localizedDescription)
         }
 
-        let sourceFormat = file.processingFormat
-        let frameCount = AVAudioFrameCount(file.length)
-        guard frameCount > 0 else { throw Error.emptyAudio }
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
-            throw Error.readFailed("Failed to allocate audio buffer")
-        }
-
-        do {
-            try file.read(into: buffer)
-        } catch {
-            throw Error.readFailed(error.localizedDescription)
-        }
-
-        let converted = try convertToMonoFloat(
-            buffer: buffer,
-            sourceFormat: sourceFormat,
-            sampleRate: Double(targetSampleRate)
-        )
-        if converted.isEmpty {
+        if samples.isEmpty {
             throw Error.emptyAudio
         }
 
-        let trimmed = trimSilence(normalize(converted), threshold: 0.01)
+        let trimmed = trimSilence(normalize(samples), threshold: 0.01)
         if trimmed.isEmpty {
             throw Error.emptyAudio
         }
@@ -149,15 +122,12 @@ public enum Qwen3TTSAudioPreprocessor {
             fMax: Double(sampleRate) / 2.0
         ) // [nMels, fftBins]
 
-        let log2n = vDSP_Length(log2(Double(nFFT)))
-        guard let fftSetup = vDSP.FFT(log2n: log2n, radix: .radix2, ofType: DSPSplitComplex.self) else {
+        guard let fftPlan = try? RealFFTPlan(size: nFFT) else {
             return MLXArray.zeros([1, frameCount, nMels], dtype: .float32)
         }
 
         var melOutput = [Float](repeating: 0, count: frameCount * nMels)
         var frameBuffer = [Float](repeating: 0, count: nFFT)
-        var realp = [Float](repeating: 0, count: nFFT / 2)
-        var imagp = [Float](repeating: 0, count: nFFT / 2)
         var magnitudes = [Float](repeating: 0, count: fftBins)
 
         for frameIdx in 0..<frameCount {
@@ -166,34 +136,7 @@ public enum Qwen3TTSAudioPreprocessor {
                 frameBuffer[i] = paddedSamples[start + i] * hann[i]
             }
 
-            realp = [Float](repeating: 0, count: nFFT / 2)
-            imagp = [Float](repeating: 0, count: nFFT / 2)
-
-            frameBuffer.withUnsafeBufferPointer { inputPtr in
-                realp.withUnsafeMutableBufferPointer { realPtr in
-                    imagp.withUnsafeMutableBufferPointer { imagPtr in
-                        var splitComplex = DSPSplitComplex(
-                            realp: realPtr.baseAddress!,
-                            imagp: imagPtr.baseAddress!
-                        )
-                        vDSP_ctoz(
-                            UnsafePointer<DSPComplex>(OpaquePointer(inputPtr.baseAddress!)),
-                            2,
-                            &splitComplex,
-                            1,
-                            vDSP_Length(nFFT / 2)
-                        )
-                        fftSetup.forward(input: splitComplex, output: &splitComplex)
-                    }
-                }
-            }
-
-            magnitudes = [Float](repeating: 0, count: fftBins)
-            magnitudes[0] = realp[0] * realp[0]
-            for i in 1..<(nFFT / 2) {
-                magnitudes[i] = realp[i] * realp[i] + imagp[i] * imagp[i]
-            }
-            magnitudes[nFFT / 2] = imagp[0] * imagp[0]
+            magnitudes = fftPlan.powerSpectrum(frameBuffer)
 
             for melIdx in 0..<nMels {
                 let rowOffset = melIdx * fftBins
@@ -207,58 +150,6 @@ public enum Qwen3TTSAudioPreprocessor {
         }
 
         return MLXArray(melOutput).reshaped(1, frameCount, nMels).asType(.float32)
-    }
-
-    private static func convertToMonoFloat(
-        buffer: AVAudioPCMBuffer,
-        sourceFormat: AVAudioFormat,
-        sampleRate: Double
-    ) throws -> [Float] {
-        let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 1,
-            interleaved: false
-        )!
-
-        if sourceFormat.sampleRate == targetFormat.sampleRate,
-           sourceFormat.channelCount == targetFormat.channelCount,
-           sourceFormat.commonFormat == .pcmFormatFloat32,
-           let floatData = buffer.floatChannelData {
-            return Array(UnsafeBufferPointer(start: floatData[0], count: Int(buffer.frameLength)))
-        }
-
-        guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
-            throw Error.readFailed("Failed to create converter")
-        }
-
-        let ratio = targetFormat.sampleRate / sourceFormat.sampleRate
-        let outputCapacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1
-        guard let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputCapacity) else {
-            throw Error.readFailed("Failed to create output buffer")
-        }
-
-        let inputState = AudioConverterInputState(buffer: buffer)
-        var conversionError: NSError?
-        converter.convert(to: output, error: &conversionError) { _, outStatus in
-            if inputState.didProvideInput {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            inputState.didProvideInput = true
-            outStatus.pointee = .haveData
-            return inputState.buffer
-        }
-
-        if let conversionError {
-            throw Error.readFailed(conversionError.localizedDescription)
-        }
-
-        guard let floatData = output.floatChannelData else {
-            throw Error.readFailed("Converted audio has no float channel data")
-        }
-
-        return Array(UnsafeBufferPointer(start: floatData[0], count: Int(output.frameLength)))
     }
 
     private static func normalize(_ samples: [Float]) -> [Float] {

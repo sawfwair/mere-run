@@ -1,3 +1,4 @@
+#if canImport(AVFoundation) && canImport(CoreGraphics)
 import AVFoundation
 import CoreGraphics
 import Foundation
@@ -233,3 +234,4 @@ final class NativeMediaAssemblerCaptionTests: XCTestCase {
         return changedPixels
     }
 }
+#endif

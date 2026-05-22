@@ -9,6 +9,11 @@ This repo has three layers of validation:
 Use the smallest layer that covers your change, then scale up before opening a
 PR.
 
+Linux CLI compatibility uses a narrower fixture boundary: headless CLI behavior,
+media-tool discovery, and CPU MLX-sized checks. CUDA should stay out of default
+CI and be documented as an optional local acceleration path when a runtime needs
+it.
+
 ## Fast validation
 
 ```bash
@@ -38,6 +43,50 @@ This script is the main gate for contributors. It runs:
 - docs and source hygiene sweeps
 
 Use this for almost every change before you stop.
+
+## Linux CLI compatibility fixture
+
+The Linux path is CLI-only. It must not require `mere.run.app`, SwiftUI, the
+macOS installer, or DMG packaging.
+
+Baseline runner packages:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+```
+
+Media probing and conversion should use `ffmpeg` and `ffprobe` from `PATH`.
+When tests or runners need explicit binaries, set:
+
+```bash
+export MERERUN_FFMPEG=/usr/bin/ffmpeg
+export MERERUN_FFPROBE=/usr/bin/ffprobe
+```
+
+The pull-request fixture should stay CPU MLX-compatible. CUDA machines can run
+additional local smoke tests, but CUDA installation, driver selection, and GPU
+availability are not assumptions in the shared CI contract. To use the optional
+Linux CUDA bridge, prepare native artifacts and export the environment that the
+script prints:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
+# then export the printed PKG_CONFIG_PATH, LIBRARY_PATH, LD_LIBRARY_PATH,
+# MERERUN_MLX_SWIFT_LINKAGE, MERERUN_MLX_SWIFT_BUILD_DIR,
+# MERERUN_MLX_SWIFT_SOURCE_DIR, and MERERUN_MLX_SWIFT_LINK_FLAGS values.
+swift build --target mere.run
+```
+
+In this mode `Package.swift` imports the CMake-built `mlx-swift` Swift modules
+and static libraries instead of rebuilding `mlx-swift` through SwiftPM's
+CPU-oriented Linux manifest path.
+
+MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
+covers pure Swift image, WAV, and FFT behavior in the normal test suite.
+`scripts/check-linux.sh` also runs the hidden `MediaIOSmoke` SwiftPM executable
+to exercise Linux `ffmpeg`/`ffprobe` image, audio, MP4, mux, and frame
+extraction paths without requiring host media files or model checkpoints.
 
 ## End-to-end smoke tests
 
@@ -79,6 +128,7 @@ when you changed:
 | `./scripts/check.sh` | public CLI regressions, docs hygiene issues, command-tree drift |
 | `./scripts/e2e_smoke.sh --core` | common runtime-path failures against real models |
 | `./scripts/e2e_smoke.sh --installed` | installed-model breakage across the full local matrix |
+| Linux CLI fixture | headless CLI/media compatibility without macOS app or CUDA assumptions |
 
 ## Recommended combinations
 
@@ -117,6 +167,16 @@ swift test
 ./scripts/check.sh
 ./scripts/e2e_smoke.sh --installed
 ```
+
+### Linux CLI compatibility docs or fixtures
+
+```bash
+swift run mere.run --help
+```
+
+If the change only updates Linux documentation, the CI docs fixture is enough.
+If the change adds Linux-compatible code, include the focused unit test or stub
+fixture result that exercises the new behavior.
 
 ## Troubleshooting
 

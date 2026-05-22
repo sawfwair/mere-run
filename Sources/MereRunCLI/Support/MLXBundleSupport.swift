@@ -5,6 +5,9 @@ import Darwin
 import Foundation
 
 enum MLXBundleSupport {
+#if os(Linux)
+    static func ensureAvailable(quiet _: Bool) throws {}
+#else
     static func ensureAvailable(quiet: Bool) throws {
         let bundleName = "mlx-swift_Cmlx.bundle"
         let fm = FileManager.default
@@ -287,4 +290,5 @@ enum MLXBundleSupport {
 
         return nil
     }
+#endif
 }

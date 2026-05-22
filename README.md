@@ -44,9 +44,13 @@ The public OSS repo currently supports:
 ## Platform expectations
 
 - the public CLI and local runtime are developed and validated on Apple Silicon macOS 15 or newer
+- the optional SwiftUI studio, app bundle, installer, and DMG are macOS-only; Linux compatibility work is for the headless `mere.run` CLI
 - `Package.swift` uses Swift tools 6.0 and declares macOS 15 / iOS 18 package platforms
-- `swift build` and `swift test` are the supported first-run validation path for contributors
-- some vendored binaries include additional Apple platform slices for package consumers, but the public quickstart is macOS-first
+- `swift build` and `swift test` are the supported first-run validation path for macOS contributors
+- Linux CLI compatibility work expects a Swift 6.x toolchain, `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK development headers, `ffmpeg`, `ffprobe`, `gzip`, `unzip`, and `zip`
+- media I/O should discover `ffmpeg` and `ffprobe` on `PATH`, with `MERERUN_FFMPEG` and `MERERUN_FFPROBE` reserved for absolute executable overrides
+- Linux CI should stay CPU MLX-oriented and fixture-sized; CUDA is an optional local acceleration path, not a baseline for pull-request checks
+- some vendored binaries include additional Apple platform slices for package consumers, but the public quickstart and release artifact remain macOS-first
 
 ## Install the latest release
 
@@ -94,6 +98,21 @@ swift run mere.run --help
 app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
+
+For Linux CLI compatibility work, install the platform packages first and keep
+the validation headless:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+export MERERUN_FFMPEG=/usr/bin/ffmpeg
+export MERERUN_FFPROBE=/usr/bin/ffprobe
+./scripts/check-linux.sh
+swift run mere.run --help
+```
+
+Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio
+flows, and DMG packaging stay macOS-only.
 
 ## Quick start
 

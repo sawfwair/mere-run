@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 import MLX
 
 #if canImport(CoreGraphics)
@@ -53,12 +54,8 @@ public enum HiDreamO1ImagePreprocessor {
         resolution: HiDreamO1SampleBuilder.Resolution,
         dtype: DType = .float32
     ) throws -> PatchTensor {
-        #if canImport(CoreGraphics)
-        let image = try loadCGImage(from: url)
+        let image = try loadImage(from: url)
         return try patchTensor(from: image, resolution: resolution, dtype: dtype)
-        #else
-        throw HiDreamO1ImagePreprocessorError.imageLoadFailed(url)
-        #endif
     }
 
     public static func visionConditionTensor(
@@ -67,24 +64,83 @@ public enum HiDreamO1ImagePreprocessor {
         config: HiDreamO1Config,
         dtype: DType = .bfloat16
     ) throws -> VisionConditionTensor {
-        #if canImport(CoreGraphics)
-        let image = try loadCGImage(from: url)
+        let image = try loadImage(from: url)
         return try visionConditionTensor(from: image, resolution: resolution, config: config, dtype: dtype)
-        #else
-        throw HiDreamO1ImagePreprocessorError.imageLoadFailed(url)
-        #endif
+    }
+
+    public static func imageSize(_ url: URL) throws -> HiDreamO1SampleBuilder.Resolution {
+        do {
+            let size = try MediaImageIO.size(of: url)
+            return .init(width: size.width, height: size.height)
+        } catch {
+            throw HiDreamO1ImagePreprocessorError.imageLoadFailed(url)
+        }
+    }
+
+    public static func patchTensor(
+        from image: MediaImage,
+        resolution: HiDreamO1SampleBuilder.Resolution,
+        dtype: DType = .float32
+    ) throws -> PatchTensor {
+        let imageCHW = try normalizedCHW(from: image, resolution: resolution, dtype: dtype)
+        let patches = HiDreamO1SampleBuilder.patchifyCHW(imageCHW)
+        return PatchTensor(resolution: resolution, imageCHW: imageCHW, patches: patches)
+    }
+
+    public static func normalizedCHW(
+        from image: MediaImage,
+        resolution: HiDreamO1SampleBuilder.Resolution,
+        dtype: DType = .float32
+    ) throws -> MLXArray {
+        try validate(resolution)
+        let resized = try MediaImageIO.resized(image, width: resolution.width, height: resolution.height)
+        let values = MediaImageIO.rgbCHWFloat(resized, normalizedToMinusOneToOne: true)
+        return MLXArray(values, [3, resized.height, resized.width]).asType(dtype)
+    }
+
+    public static func visionConditionTensor(
+        from image: MediaImage,
+        resolution: HiDreamO1SampleBuilder.Resolution,
+        config: HiDreamO1Config,
+        dtype: DType = .bfloat16
+    ) throws -> VisionConditionTensor {
+        let patchSize = config.visionConfig.patchSize
+        let mergeSize = config.visionConfig.spatialMergeSize
+        try validateVisionResolution(resolution, patchSize: patchSize, mergeSize: mergeSize)
+        let imageCHW = try normalizedCHW(from: image, resolution: resolution, dtype: dtype)
+        let patchInputs = prepareVisionPatchInputs(
+            imageCHW: imageCHW,
+            patchSize: patchSize,
+            temporalPatchSize: config.visionConfig.temporalPatchSize,
+            mergeSize: mergeSize
+        )
+        let gridHeight = resolution.height / patchSize
+        let gridWidth = resolution.width / patchSize
+        return VisionConditionTensor(
+            resolution: resolution,
+            grid: QwenVisionGrid(temporal: 1, height: gridHeight, width: gridWidth),
+            mergedGrid: .init(width: gridWidth / mergeSize, height: gridHeight / mergeSize),
+            pixelValues: patchInputs
+        )
+    }
+
+    public static func saveNormalizedCHW(_ image: MLXArray, to url: URL) throws {
+        do {
+            try QwenImageIO.saveImage(array: (image.asType(.float32) + 1.0) / 2.0, to: url)
+        } catch {
+            throw HiDreamO1ImagePreprocessorError.imageWriteFailed(url)
+        }
+    }
+
+    private static func loadImage(from url: URL) throws -> MediaImage {
+        do {
+            return try MediaImageIO.decode(url)
+        } catch {
+            throw HiDreamO1ImagePreprocessorError.imageLoadFailed(url)
+        }
     }
 
     #if canImport(CoreGraphics)
-    public static func imageSize(_ url: URL) throws -> HiDreamO1SampleBuilder.Resolution {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
-            throw HiDreamO1ImagePreprocessorError.imageLoadFailed(url)
-        }
-        return .init(width: width, height: height)
-    }
 
     public static func patchTensor(
         from image: CGImage,
@@ -130,22 +186,6 @@ public enum HiDreamO1ImagePreprocessor {
             mergedGrid: .init(width: gridWidth / mergeSize, height: gridHeight / mergeSize),
             pixelValues: patchInputs
         )
-    }
-
-    public static func saveNormalizedCHW(_ image: MLXArray, to url: URL) throws {
-        let rgbImage = try cgImage(fromNormalizedCHW: image)
-        guard let destination = CGImageDestinationCreateWithURL(
-            url as CFURL,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else {
-            throw HiDreamO1ImagePreprocessorError.imageWriteFailed(url)
-        }
-        CGImageDestinationAddImage(destination, rgbImage, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw HiDreamO1ImagePreprocessorError.imageWriteFailed(url)
-        }
     }
 
     private static func loadCGImage(from url: URL) throws -> CGImage {

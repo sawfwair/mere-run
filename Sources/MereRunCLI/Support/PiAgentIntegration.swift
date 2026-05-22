@@ -130,7 +130,7 @@ enum PiAgentIntegration {
             case .applicationSupportUnavailable:
                 return "Could not locate Application Support directory."
             case .unsupportedPlatform:
-                return "Pi agent install is currently supported for macOS arm64 and x64 release assets."
+                return "Pi auto-install is currently supported for macOS arm64 and x64 release assets. On Linux, install Pi separately and pass --pi-path or put pi on PATH."
             case .releaseAssetMissing(let name):
                 return "Latest Pi release does not include expected asset: \(name)"
             case .digestMismatch(let expected, let actual):
@@ -142,13 +142,21 @@ enum PiAgentIntegration {
             case .piBinaryMissing(let url):
                 return "No executable named pi was found under \(url.path)."
             case .piBinaryNotFound:
-                return "Pi is not installed. Run `mere.run agent install-pi` or pass --pi-path."
+                return "Pi is not installed. Run `mere.run agent install-pi` on macOS, or pass --pi-path / put pi on PATH on Linux."
             case .serverDidNotBecomeReady(let url):
                 return "mere.run API server did not become ready at \(url.absoluteString)."
             case .terminalLaunchFailed:
                 return "Could not open Pi in Terminal.app."
             }
         }
+    }
+
+    static var canInstallLatestRelease: Bool {
+        #if os(macOS) && (arch(arm64) || arch(x86_64))
+        return true
+        #else
+        return false
+        #endif
     }
 
     static func installLatest(force: Bool = false, progress: (String) -> Void) async throws -> PiAgentInstallResult {
@@ -400,7 +408,7 @@ enum PiAgentIntegration {
         #elseif os(macOS) && arch(x86_64)
         return "pi-darwin-x64.tar.gz"
         #else
-        throw IntegrationError.unsupportedPlatform
+            throw IntegrationError.unsupportedPlatform
         #endif
     }
 

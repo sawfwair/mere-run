@@ -1,4 +1,4 @@
-#if os(macOS)
+#if canImport(llama)
 import Foundation
 @preconcurrency import llama
 
@@ -41,6 +41,25 @@ public final class LlamaContext: @unchecked Sendable {
         self.vocab = llama_model_get_vocab(model)
     }
 
+    #if os(Linux)
+    private static func linuxGPULayerCount(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Int32 {
+        if let rawValue = environment["MERERUN_LLAMA_GPU_LAYERS"] {
+            let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let parsed = Int32(trimmed) {
+                return max(0, parsed)
+            }
+        }
+
+        if environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda" {
+            return 999
+        }
+
+        return 0
+    }
+    #endif
+
     deinit {
         if let s = sampling { llama_sampler_free(s) }
         if let m = model { llama_model_free(m) }
@@ -62,6 +81,8 @@ public final class LlamaContext: @unchecked Sendable {
         var modelParams = llama_model_default_params()
         #if targetEnvironment(simulator)
         modelParams.n_gpu_layers = 0
+        #elseif os(Linux)
+        modelParams.n_gpu_layers = linuxGPULayerCount()
         #endif
 
         guard let model = llama_model_load_from_file(path, modelParams) else {

@@ -100,26 +100,53 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cp "$cli_executable" "$staging/mere.run"
+cp -a "$cli_executable" "$staging/mere.run"
 chmod +x "$staging/mere.run"
 
 # Colocated runtime assets that mere.run looks for next to its binary.
 # Each is optional: skipped silently if not built or not present in vendor/.
-for asset in \
-  "${build_dir}/llama.framework" \
-  "${build_dir}/mlx-swift_Cmlx.bundle" \
-  "${build_dir}/Resources"
-do
+stage_asset() {
+  local asset="$1"
   if [[ -e "$asset" ]]; then
-    cp -R "$asset" "$staging/"
+    cp -a "$asset" "$staging/"
   fi
-done
+}
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  for asset in \
+    "${build_dir}/llama.framework" \
+    "${build_dir}/mlx-swift_Cmlx.bundle" \
+    "${build_dir}/Resources" \
+    "${build_dir}"/*.dylib
+  do
+    stage_asset "$asset"
+  done
+else
+  native_lib_dir="${repo_root}/.build/native/linux-$(uname -m)/llama/lib"
+  case "$(uname -m)" in
+    x86_64|amd64)
+      native_lib_dir="${repo_root}/.build/native/linux-x86_64/llama/lib"
+      ;;
+    aarch64|arm64)
+      native_lib_dir="${repo_root}/.build/native/linux-arm64/llama/lib"
+      ;;
+  esac
+  for asset in \
+    "${build_dir}"/*.so \
+    "${build_dir}"/*.so.*
+  do
+    stage_asset "$asset"
+  done
+  if [[ -d "$native_lib_dir" ]]; then
+    cp -a "$native_lib_dir" "$staging/lib"
+  fi
+fi
 
 # vendor/ds4 is the bundled DeepSeek V4 Flash inference engine spawned by the
 # premier agent tier. install.sh expects it at vendor/ds4 under SOURCE_DIR.
 if [[ -d "${repo_root}/vendor/ds4" ]]; then
   mkdir -p "$staging/vendor"
-  cp -R "${repo_root}/vendor/ds4" "$staging/vendor/ds4"
+  cp -a "${repo_root}/vendor/ds4" "$staging/vendor/ds4"
 fi
 
 echo "[install-local] staged $(du -sh "$staging" | cut -f1) of payload at $staging"

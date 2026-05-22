@@ -1,6 +1,30 @@
 import Foundation
 
 enum PiTerminalLauncher {
+    static var launchesDetached: Bool {
+        #if os(macOS)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var launchProgressMessage: String {
+        #if os(macOS)
+        return "Opening Pi in Terminal.app."
+        #else
+        return "Starting Pi in this terminal."
+        #endif
+    }
+
+    static var runningProgressMessage: String {
+        #if os(macOS)
+        return "Pi is running in Terminal.app. Keep this command running; press Ctrl+C here to stop the API server."
+        #else
+        return "Pi exited. Stopping the API server."
+        #endif
+    }
+
     static func launch(
         piURL: URL,
         modelID: String,
@@ -10,6 +34,7 @@ enum PiTerminalLauncher {
     ) throws {
         try FileManager.default.createDirectory(at: homeDirectory, withIntermediateDirectories: true)
 
+        #if os(macOS)
         let command = [
             "mkdir -p \(shellQuote(homeDirectory.path))",
             "export HOME=\(shellQuote(homeDirectory.path))",
@@ -44,6 +69,35 @@ enum PiTerminalLauncher {
         guard process.terminationStatus == 0 else {
             throw PiAgentIntegration.IntegrationError.terminalLaunchFailed
         }
+        #else
+        let process = Process()
+        process.executableURL = piURL
+        process.arguments = [
+            "--provider",
+            "mere-run",
+            "--model",
+            modelID,
+            prompt,
+        ]
+        process.currentDirectoryURL = workingDirectory
+        var environment = ProcessInfo.processInfo.environment
+        environment["HOME"] = homeDirectory.path
+        environment["XDG_CONFIG_HOME"] = homeDirectory
+            .appendingPathComponent(".config", isDirectory: true)
+            .path
+        environment["XDG_DATA_HOME"] = homeDirectory
+            .appendingPathComponent(".local/share", isDirectory: true)
+            .path
+        process.environment = environment
+        process.standardInput = FileHandle.standardInput
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw PiAgentIntegration.IntegrationError.terminalLaunchFailed
+        }
+        #endif
     }
 
     private static func shellQuote(_ value: String) -> String {

@@ -1,5 +1,4 @@
 import Foundation
-import Accelerate
 import MLX
 
 /// Mel spectrogram configuration.
@@ -31,7 +30,7 @@ public struct Qwen3ASRMelConfig: Sendable, Hashable {
     }
 }
 
-/// Mel spectrogram extractor using vDSP for FFT
+/// Mel spectrogram extractor using the shared real FFT backend.
 /// Matches Whisper/OpenAI preprocessing for ASR models
 public final class MelSpectrogram {
     let nMels: Int
@@ -40,10 +39,9 @@ public final class MelSpectrogram {
     let winLength: Int
     let sampleRate: Int
 
-    private let fftSetup: vDSP.FFT<DSPSplitComplex>
+    private let fftPlan: RealFFTPlan
     private let hannWindow: [Float]
     private let melFilters: [[Float]]
-    private let log2n: vDSP_Length
 
     public init(config: Qwen3ASRMelConfig = Qwen3ASRMelConfig()) {
         self.nMels = config.nMels
@@ -52,9 +50,11 @@ public final class MelSpectrogram {
         self.winLength = config.winLength
         self.sampleRate = config.sampleRate
 
-        // FFT setup
-        self.log2n = vDSP_Length(log2(Double(nFFT)))
-        self.fftSetup = vDSP.FFT(log2n: log2n, radix: .radix2, ofType: DSPSplitComplex.self)!
+        do {
+            self.fftPlan = try RealFFTPlan(size: nFFT)
+        } catch {
+            preconditionFailure("Invalid mel spectrogram FFT size: \(nFFT)")
+        }
 
         // Hann window (periodic, matches WhisperFeatureExtractor)
         var window = [Float](repeating: 0, count: winLength)
@@ -82,9 +82,6 @@ public final class MelSpectrogram {
         let numFrames = max(1, 1 + (paddedAudio.count - winLength) / hopLength)
         var melSpec = [[Float]](repeating: [Float](repeating: 0, count: numFrames), count: nMels)
 
-        // Buffers for FFT
-        var realp = [Float](repeating: 0, count: nFFT / 2)
-        var imagp = [Float](repeating: 0, count: nFFT / 2)
         var paddedFrame = [Float](repeating: 0, count: nFFT)
         var magnitudes = [Float](repeating: 0, count: nFFT / 2 + 1)
 
@@ -100,39 +97,7 @@ public final class MelSpectrogram {
                 }
             }
 
-            // Perform FFT
-            realp = [Float](repeating: 0, count: nFFT / 2)
-            imagp = [Float](repeating: 0, count: nFFT / 2)
-
-            paddedFrame.withUnsafeBufferPointer { inputPtr in
-                realp.withUnsafeMutableBufferPointer { realPtr in
-                    imagp.withUnsafeMutableBufferPointer { imagPtr in
-                        var splitComplex = DSPSplitComplex(
-                            realp: realPtr.baseAddress!,
-                            imagp: imagPtr.baseAddress!
-                        )
-                        vDSP_ctoz(
-                            UnsafePointer<DSPComplex>(OpaquePointer(inputPtr.baseAddress!)),
-                            2,
-                            &splitComplex,
-                            1,
-                            vDSP_Length(nFFT / 2)
-                        )
-                        fftSetup.forward(input: splitComplex, output: &splitComplex)
-                    }
-                }
-            }
-
-            // Compute magnitude spectrum
-            magnitudes = [Float](repeating: 0, count: nFFT / 2 + 1)
-            for i in 0..<(nFFT / 2) {
-                magnitudes[i] = realp[i] * realp[i] + imagp[i] * imagp[i]
-            }
-            // DC and Nyquist
-            magnitudes[0] = realp[0] * realp[0]
-            if nFFT / 2 < magnitudes.count {
-                magnitudes[nFFT / 2] = imagp[0] * imagp[0]
-            }
+            magnitudes = fftPlan.powerSpectrum(paddedFrame)
 
             // Apply mel filterbank
             for melIdx in 0..<nMels {

@@ -1,11 +1,7 @@
 import Foundation
+import MediaIO
 import MLX
 import MLXNN
-
-#if canImport(CoreGraphics)
-import CoreGraphics
-import ImageIO
-#endif
 
 /// Owns image preprocessing, semantic conditioning, and latent decoding.
 /// These helpers form the middle of the edit pipeline between model loading and
@@ -17,14 +13,13 @@ extension QwenImageEditGenerator {
         targetWidth: Int,
         targetHeight: Int
     ) async throws -> (latents: MLXArray, tensor: MLXArray) {
-        #if !canImport(CoreGraphics)
-        throw GeneratorError.unsupportedPlatform
-        #else
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw GeneratorError.inputImageNotFound(url)
         }
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(url)
+        } catch {
             throw GeneratorError.inputImageDecodeFailed(url)
         }
 
@@ -34,7 +29,7 @@ extension QwenImageEditGenerator {
         let vlHeight = (targetHeight / 14) * 14
 
         let vaeArray = try QwenImageIO.resizedPixelArray(
-            from: cgImage,
+            from: image,
             width: vaeWidth,
             height: vaeHeight,
             addBatchDimension: true,
@@ -44,14 +39,13 @@ extension QwenImageEditGenerator {
         let latents = vae.encode(normalized).asType(.bfloat16)
 
         let vlArray = try QwenImageIO.resizedPixelArray(
-            from: cgImage,
+            from: image,
             width: vlWidth,
             height: vlHeight,
             addBatchDimension: true,
             dtype: .float16
         )
         return (latents, vlArray)
-        #endif
     }
 
     func encodeSemanticEmbeddingsForRequest(

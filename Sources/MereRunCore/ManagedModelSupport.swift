@@ -7,31 +7,47 @@ public struct MereRunMachineProfile: Hashable, Sendable {
     public let physicalMemoryBytes: UInt64
     public let processorName: String
     public let isAppleSiliconMac: Bool
+    public let isLinux: Bool
 
     public init(
         physicalMemoryBytes: UInt64,
         processorName: String,
-        isAppleSiliconMac: Bool
+        isAppleSiliconMac: Bool,
+        isLinux: Bool = false
     ) {
         self.physicalMemoryBytes = physicalMemoryBytes
         self.processorName = processorName
         self.isAppleSiliconMac = isAppleSiliconMac
+        self.isLinux = isLinux
     }
 
     public var unifiedMemoryGB: Int {
         max(1, Int(physicalMemoryBytes / 1_073_741_824))
     }
 
+    public var isSupportedRuntime: Bool {
+        isAppleSiliconMac || isLinux
+    }
+
     public static var current: MereRunMachineProfile {
         MereRunMachineProfile(
             physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory,
             processorName: currentProcessorName(),
-            isAppleSiliconMac: currentIsAppleSiliconMac()
+            isAppleSiliconMac: currentIsAppleSiliconMac(),
+            isLinux: currentIsLinux()
         )
     }
 
     private static func currentIsAppleSiliconMac() -> Bool {
         #if os(macOS) && arch(arm64)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    private static func currentIsLinux() -> Bool {
+        #if os(Linux)
         return true
         #else
         return false
@@ -47,7 +63,11 @@ public struct MereRunMachineProfile: Hashable, Sendable {
             return brand
         }
         #endif
+        #if os(Linux)
+        return "Linux"
+        #else
         return currentIsAppleSiliconMac() ? "Apple Silicon" : "Unknown processor"
+        #endif
     }
 
     #if canImport(Darwin)
@@ -376,8 +396,8 @@ public enum ManagedModelCapabilityCatalog {
         let descriptor = descriptor(for: spec)
         var reasons: [String] = []
 
-        if !machine.isAppleSiliconMac {
-            reasons.append("Apple Silicon macOS is required.")
+        if !machine.isSupportedRuntime {
+            reasons.append("Apple Silicon macOS or Linux is required.")
         }
 
         if machine.unifiedMemoryGB < descriptor.minimumUnifiedMemoryGB {

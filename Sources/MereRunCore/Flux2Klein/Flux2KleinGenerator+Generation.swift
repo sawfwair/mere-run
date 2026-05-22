@@ -1,8 +1,8 @@
 import Foundation
+import MediaIO
 import MLX
 import MLXRandom
 import MLXNN
-import ImageIO
 
 extension Flux2KleinGenerator {
 
@@ -460,14 +460,16 @@ extension Flux2KleinGenerator {
             throw Flux2Error.referenceImageNotFound(url)
         }
 
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(url)
+        } catch {
             throw Flux2Error.referenceImageDecodeFailed(url)
         }
 
         // 1. Load and resize image to target dimensions
         let resizedArray = try QwenImageIO.resizedPixelArray(
-            from: cgImage,
+            from: image,
             width: width,
             height: height,
             addBatchDimension: true,

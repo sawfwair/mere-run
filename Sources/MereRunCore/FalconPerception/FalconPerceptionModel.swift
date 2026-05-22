@@ -2,6 +2,19 @@ import Foundation
 @preconcurrency import MLX
 import MLXFast
 import MLXNN
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
+
+#if os(Linux)
+private func mererunCos(_ value: Double) -> Double { Glibc.cos(value) }
+private func mererunSin(_ value: Double) -> Double { Glibc.sin(value) }
+#else
+private func mererunCos(_ value: Double) -> Double { Darwin.cos(value) }
+private func mererunSin(_ value: Double) -> Double { Darwin.sin(value) }
+#endif
 
 private func falconPerceptionRMSNorm(_ x: MLXArray, weight: MLXArray, eps: Float) -> MLXArray {
     let dtype = x.dtype
@@ -433,8 +446,8 @@ final class FalconPerceptionTransformerModel: Module {
         for position in 0..<text.maxPositionEmbeddings {
             for frequency in invFreqs {
                 let value = Double(position) * frequency
-                cos.append(Float(Darwin.cos(value)))
-                sin.append(Float(Darwin.sin(value)))
+                cos.append(Float(mererunCos(value)))
+                sin.append(Float(mererunSin(value)))
             }
         }
         self.cos1DTable = cos
@@ -1037,8 +1050,8 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
                     let base = ((head * freqCount) + frequencyIndex) * 2
                     let theta = (px * freqValues[base]) + (py * freqValues[base + 1])
                     let outIndex = ((tokenIndex * heads) + head) * freqCount + frequencyIndex
-                    cosValues[outIndex] = Float(Darwin.cos(Double(theta)))
-                    sinValues[outIndex] = Float(Darwin.sin(Double(theta)))
+                    cosValues[outIndex] = Float(mererunCos(Double(theta)))
+                    sinValues[outIndex] = Float(mererunSin(Double(theta)))
                 }
             }
         }

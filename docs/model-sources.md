@@ -125,8 +125,8 @@ the prepared snapshot when needed.
 ## Hardware Support Checks
 
 Managed pulls are gated by the local capability catalog before any download. The
-check uses Apple Silicon macOS plus unified-memory thresholds for each model
-family, then blocks models that are unlikely to run reliably on the current Mac.
+check uses supported local runtimes plus memory thresholds for each model
+family, then blocks models that are unlikely to run reliably on the current machine.
 
 Inspect the local recommendation first:
 

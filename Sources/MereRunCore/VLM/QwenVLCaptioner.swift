@@ -1,5 +1,4 @@
 import Foundation
-import ImageIO
 import MLX
 import MLXNN
 
@@ -174,10 +173,6 @@ public final class QwenVLCaptioner: @unchecked Sendable {
         prompt: String,
         config: ModelConfig = .init()
     ) throws -> String {
-        guard let image = QwenVLImageLoader.loadCGImage(url: imageURL) else {
-            throw Error.imageLoadFailed(imageURL)
-        }
-
         guard let imageTokenId = tokenizer.imageTokenId,
               let visionStartTokenId = tokenizer.visionStartTokenId
         else {
@@ -185,11 +180,16 @@ public final class QwenVLCaptioner: @unchecked Sendable {
         }
 
         // Load and resize image using Qwen3-VL's max_pixels constraint
-        let pixelValues = try QwenVLImageLoader.pixelValues(
-            cgImage: image,
-            patchSize: encoder.visionPatchSize,
-            spatialMergeSize: encoder.visionSpatialMergeSize
-        )
+        let pixelValues: MLXArray
+        do {
+            pixelValues = try QwenVLImageLoader.pixelValues(
+                imageURL: imageURL,
+                patchSize: encoder.visionPatchSize,
+                spatialMergeSize: encoder.visionSpatialMergeSize
+            )
+        } catch {
+            throw Error.imageLoadFailed(imageURL)
+        }
         let grid = [(1, pixelValues.dim(2) / encoder.visionPatchSize, pixelValues.dim(3) / encoder.visionPatchSize)]
         let imageTokenCount = max(
             1,

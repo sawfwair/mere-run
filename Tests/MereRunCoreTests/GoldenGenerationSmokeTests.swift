@@ -1,7 +1,11 @@
-import CryptoKit
 import Foundation
 import XCTest
 @testable import MereRunCore
+#if canImport(CryptoKit)
+import CryptoKit
+#else
+import Crypto
+#endif
 
 final class GoldenGenerationSmokeTests: XCTestCase {
 

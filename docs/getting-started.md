@@ -19,6 +19,8 @@ It does not include hosted-service, billing, or private-deployment surfaces.
 
 ## Prerequisites
 
+For the supported macOS developer path:
+
 - Apple Silicon Mac
 - macOS 15 or newer
 - Xcode command line tools
@@ -26,6 +28,28 @@ It does not include hosted-service, billing, or private-deployment surfaces.
   (`brew install swiftlint ripgrep`)
 - enough disk space for model installs in
   `~/Library/Application Support/MereRun/models`
+
+For Linux CLI compatibility work:
+
+- Swift 6.x toolchain
+- `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK development headers
+- `ffmpeg` and `ffprobe` for media probing and conversion
+- `gzip`, `unzip`, and `zip` for portable LoRA checkpoint archives
+- enough disk space for a headless model store
+
+On Ubuntu-style runners, the system package layer is:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+```
+
+If the media tools are not on `PATH`, point the CLI at explicit binaries:
+
+```bash
+export MERERUN_FFMPEG=/opt/ffmpeg/bin/ffmpeg
+export MERERUN_FFPROBE=/opt/ffmpeg/bin/ffprobe
+```
 
 ## Build the package
 
@@ -41,6 +65,15 @@ open "$app_path"
 
 That confirms the package graph, CLI product, optional app product, app bundle,
 and basic command parsing are all working.
+
+On Linux compatibility branches, keep the first pass headless and stop at the
+CLI surface:
+
+```bash
+swift run mere.run --help
+```
+
+The macOS app product is intentionally outside the Linux target.
 
 ## Launch the macOS studio
 
@@ -62,6 +95,10 @@ package checkout. It does not silently install the terminal command on launch;
 open Settings and choose `Install CLI` or `Install Skill` when you want the
 bundled command or `use-mere-run` Codex skill copied into user-visible
 locations.
+
+The studio is macOS-only. Linux users and Linux CI should exercise the CLI and
+local API surfaces directly rather than trying to build or launch
+`mere.run.app`.
 
 ## Understand the command tree
 
@@ -144,7 +181,8 @@ The setup command offers a local Mere agent powered by Pi, a bring-your-own-agen
 handoff prompt for Claude/Codex, or manual commands. Use
 `--mode agent --agent-model small` to select the Qwen3.5 9B GGUF setup agent
 explicitly. On 96 GB+ Apple Silicon Macs, the hardware-tier and premier agent
-path selects DeepSeek V4 Flash as the preferred setup agent.
+path selects DeepSeek V4 Flash as the preferred setup agent. On Linux, install
+or provide Pi separately with `--pi-path` or PATH before using `--start`.
 
 ## Run a first workflow
 

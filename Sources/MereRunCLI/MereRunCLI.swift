@@ -29,6 +29,6 @@ struct MereRunCLI: AsyncParsableCommand {
             API.self,
             Setup.self,
             Agent.self,
-        ],
+        ]
     )
 }

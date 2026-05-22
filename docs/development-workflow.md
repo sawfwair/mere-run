@@ -14,6 +14,23 @@ For local docs and security checks, install Node.js, pnpm, and Gitleaks:
 brew install node pnpm gitleaks
 ```
 
+For Linux CLI compatibility work, use a headless toolchain. On Ubuntu-style
+systems the baseline packages are:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+```
+
+`ffmpeg` packages normally include both `ffmpeg` and `ffprobe`. If a runner or
+developer machine installs them somewhere else, use absolute executable
+overrides:
+
+```bash
+export MERERUN_FFMPEG=/opt/ffmpeg/bin/ffmpeg
+export MERERUN_FFPROBE=/opt/ffmpeg/bin/ffprobe
+```
+
 ## The normal loop
 
 For most changes:
@@ -57,6 +74,22 @@ If the change affects installed-model behavior, also run:
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 
+### Linux CLI compatibility change
+
+Keep this scope to the headless CLI, local API, and test fixtures. Do not move
+SwiftUI, app bundle, installer, or DMG behavior into the Linux target.
+
+```bash
+./scripts/check-linux.sh
+swift run mere.run --help
+```
+
+Linux CI should use CPU MLX-compatible fixtures and mocked or tiny media I/O
+inputs. The Linux gate runs the hidden `MediaIOSmoke` executable against
+`ffmpeg`/`ffprobe` so image, audio, MP4, mux, and frame extraction paths stay
+covered without model checkpoints. CUDA setup belongs in local runtime
+documentation or manual smoke notes, not in the default pull-request gate.
+
 ## Model-store expectations
 
 The public runtime is hard-cut to the canonical OSS model IDs. That means:
@@ -92,6 +125,8 @@ swift run mere.run model info image-klein-max
 - avoid introducing new implicit hosted defaults
 - keep model resolution explicit and canonical
 - add or update the most local tests you can
+- for Linux media I/O, test executable discovery through `MERERUN_FFMPEG`,
+  `MERERUN_FFPROBE`, and `PATH` without requiring real model checkpoints
 
 ### If you touch docs
 

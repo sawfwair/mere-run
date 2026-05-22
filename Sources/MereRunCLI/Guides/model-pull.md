@@ -23,7 +23,7 @@ mere.run model list
 - `--all`: pull every model that has a Hugging Face source and passes support checks.
 - `--force`: re-download even if already installed.
 - `--quiet`, `-q`: suppress progress.
-- `--allow-unsupported`: bypass Apple Silicon/unified-memory support checks.
+- `--allow-unsupported`: bypass platform and memory support checks.
 
 ## Usage Patterns
 

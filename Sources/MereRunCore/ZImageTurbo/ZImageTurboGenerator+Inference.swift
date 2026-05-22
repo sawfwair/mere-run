@@ -1,11 +1,7 @@
 import Foundation
+import MediaIO
 import MLX
 import MLXNN
-
-#if canImport(CoreGraphics)
-import CoreGraphics
-import ImageIO
-#endif
 
 /// Owns prompt encoding, latent decoding, and image-to-image preparation.
 /// These helpers stay separate from model loading so the inference data flow is
@@ -68,20 +64,19 @@ extension ZImageTurboGenerator {
         height: Int,
         width: Int
     ) async throws -> MLXArray {
-        #if !canImport(CoreGraphics)
-        throw GeneratorError.inputImageUnsupportedPlatform
-        #else
         guard FileManager.default.fileExists(atPath: inputImageURL.path) else {
             throw GeneratorError.inputImageNotFound(inputImageURL)
         }
 
-        guard let imageSource = CGImageSourceCreateWithURL(inputImageURL as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+        let image: MediaImage
+        do {
+            image = try MediaImageIO.decode(inputImageURL)
+        } catch {
             throw GeneratorError.inputImageDecodeFailed(inputImageURL)
         }
 
         let resizedArray = try QwenImageIO.resizedPixelArray(
-            from: cgImage,
+            from: image,
             width: width,
             height: height,
             addBatchDimension: true,
@@ -100,6 +95,5 @@ extension ZImageTurboGenerator {
         let blended = (one - sigmaCast) * clean + sigmaCast * noise
         MLX.eval(blended)
         return blended
-        #endif
     }
 }

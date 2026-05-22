@@ -2,7 +2,6 @@ import Foundation
 import MLX
 import MLXRandom
 import MLXNN
-import ImageIO
 
 extension Flux2KleinGenerator {
 

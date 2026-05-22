@@ -1,0 +1,249 @@
+import Foundation
+
+#if canImport(AVFoundation) && canImport(CoreGraphics)
+import AVFoundation
+import CoreGraphics
+import CoreVideo
+import ImageIO
+import UniformTypeIdentifiers
+
+private typealias AppleVideoSettings = Dictionary<String, Any>
+
+enum AppleMediaVideoIO {
+    static func writeMP4(
+        rgb24: [UInt8],
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Int,
+        to outputURL: URL
+    ) throws {
+        guard fps >= 1, width > 0, height > 0, frameCount > 0 else {
+            throw MediaIOError.videoOperationFailed("Invalid MP4 dimensions or frame rate.")
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? FileManager.default.removeItem(at: outputURL)
+
+        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+            throw MediaIOError.videoOperationFailed("Could not create MP4 writer for \(outputURL.path).")
+        }
+        let settings: AppleVideoSettings = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: max(1_000_000, width * height * fps * 4),
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+            ],
+        ]
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+        input.expectsMediaDataInRealTime = false
+        guard writer.canAdd(input) else {
+            throw MediaIOError.videoOperationFailed("AVAssetWriter rejected video input settings.")
+        }
+        writer.add(input)
+
+        let attributes: AppleVideoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: attributes
+        )
+        guard writer.startWriting() else {
+            throw MediaIOError.videoOperationFailed(writer.error?.localizedDescription ?? "writer failed")
+        }
+        writer.startSession(atSourceTime: .zero)
+        guard let pool = adaptor.pixelBufferPool else {
+            throw MediaIOError.videoOperationFailed("AVAssetWriter did not provide a pixel buffer pool.")
+        }
+
+        let frameStride = width * height * 3
+        guard rgb24.count == frameStride * frameCount else {
+            throw MediaIOError.invalidBufferSize(expected: frameStride * frameCount, actual: rgb24.count)
+        }
+
+        for frameIndex in 0..<frameCount {
+            while !input.isReadyForMoreMediaData {
+                Thread.sleep(forTimeInterval: 0.001)
+            }
+            var pixelBuffer: CVPixelBuffer?
+            let status = CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
+            guard status == kCVReturnSuccess, let pixelBuffer else {
+                throw MediaIOError.videoOperationFailed("Failed to allocate pixel buffer.")
+            }
+            CVPixelBufferLockBaseAddress(pixelBuffer, [])
+            guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+                throw MediaIOError.videoOperationFailed("Pixel buffer base address unavailable.")
+            }
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+            let dst = base.bindMemory(to: UInt8.self, capacity: bytesPerRow * height)
+            let srcOffset = frameIndex * frameStride
+            for y in 0..<height {
+                let dstRow = dst.advanced(by: y * bytesPerRow)
+                let srcRow = srcOffset + (y * width * 3)
+                for x in 0..<width {
+                    let src = srcRow + (x * 3)
+                    let out = x * 4
+                    dstRow[out] = rgb24[src + 2]
+                    dstRow[out + 1] = rgb24[src + 1]
+                    dstRow[out + 2] = rgb24[src]
+                    dstRow[out + 3] = 255
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+            let time = CMTime(value: Int64(frameIndex), timescale: CMTimeScale(fps))
+            guard adaptor.append(pixelBuffer, withPresentationTime: time) else {
+                throw MediaIOError.videoOperationFailed("Failed to append frame \(frameIndex).")
+            }
+        }
+
+        input.markAsFinished()
+        let semaphore = DispatchSemaphore(value: 0)
+        writer.finishWriting { semaphore.signal() }
+        semaphore.wait()
+        guard writer.status == .completed else {
+            throw MediaIOError.videoOperationFailed(writer.error?.localizedDescription ?? "writer did not complete")
+        }
+    }
+
+    static func mux(videoURL: URL, audioURL: URL, outputURL: URL) throws {
+        let videoAsset = AVURLAsset(url: videoURL)
+        let audioAsset = AVURLAsset(url: audioURL)
+        guard let videoTrack = videoAsset.tracks(withMediaType: .video).first else {
+            throw MediaIOError.videoOperationFailed("Video track is missing from source asset.")
+        }
+        guard let audioTrack = audioAsset.tracks(withMediaType: .audio).first else {
+            throw MediaIOError.videoOperationFailed("Audio track is missing from source asset.")
+        }
+        let composition = AVMutableComposition()
+        guard let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw MediaIOError.videoOperationFailed("Could not create composition tracks.")
+        }
+        let duration = CMTimeMinimum(videoAsset.duration, audioAsset.duration)
+        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: videoTrack, at: .zero)
+        try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: audioTrack, at: .zero)
+        compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
+        try exportComposition(composition, outputURL: outputURL, videoComposition: nil, audioMix: nil)
+    }
+
+    static func extractFrames(
+        from videoURL: URL,
+        into outputDirectoryURL: URL,
+        endFrame: Int?
+    ) throws -> VideoFrameSequence {
+        try FileManager.default.createDirectory(at: outputDirectoryURL, withIntermediateDirectories: true)
+        let asset = AVURLAsset(url: videoURL)
+        guard let track = asset.tracks(withMediaType: .video).first else {
+            throw MediaIOError.videoOperationFailed("Video track missing in asset: \(videoURL.path)")
+        }
+        let fps = max(1.0, Double(track.nominalFrameRate > 0 ? track.nominalFrameRate : 30.0))
+        let durationSeconds = CMTimeGetSeconds(asset.duration)
+        let estimatedFrameCount = max(1, Int((durationSeconds * fps).rounded(.toNearestOrEven)))
+        let frameCount = min(endFrame.map { $0 + 1 } ?? estimatedFrameCount, estimatedFrameCount)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+
+        var frameURLs: [URL] = []
+        var frameWidth = 0
+        var frameHeight = 0
+        for frameIndex in 0..<frameCount {
+            let time = CMTime(value: CMTimeValue(frameIndex), timescale: CMTimeScale(max(1, Int32(fps.rounded()))))
+            let image = try generator.copyCGImage(at: time, actualTime: nil)
+            if frameWidth == 0 || frameHeight == 0 {
+                frameWidth = image.width
+                frameHeight = image.height
+            }
+            let frameURL = outputDirectoryURL
+                .appendingPathComponent(String(format: "frame_%05d", frameIndex))
+                .appendingPathExtension("png")
+            try writeImage(image, to: frameURL)
+            frameURLs.append(frameURL)
+        }
+        return VideoFrameSequence(frameURLs: frameURLs, fps: fps, frameWidth: frameWidth, frameHeight: frameHeight)
+    }
+
+    static func writeVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
+        guard let firstURL = frameURLs.first,
+              let firstImage = loadCGImage(firstURL) else {
+            throw MediaIOError.videoOperationFailed("No frames supplied for video writing.")
+        }
+        var rgb = [UInt8]()
+        rgb.reserveCapacity(frameURLs.count * firstImage.width * firstImage.height * 3)
+        for url in frameURLs {
+            let media = try MediaImageIO.decode(url)
+            guard media.width == firstImage.width, media.height == firstImage.height else {
+                throw MediaIOError.videoOperationFailed("Frame dimensions do not match.")
+            }
+            for pixel in 0..<(media.width * media.height) {
+                let src = pixel * 4
+                rgb.append(media.rgba8[src])
+                rgb.append(media.rgba8[src + 1])
+                rgb.append(media.rgba8[src + 2])
+            }
+        }
+        try writeMP4(
+            rgb24: rgb,
+            width: firstImage.width,
+            height: firstImage.height,
+            frameCount: frameURLs.count,
+            fps: max(1, Int(fps.rounded())),
+            to: outputURL
+        )
+    }
+
+    static func hasAudioTrack(_ url: URL) -> Bool {
+        let asset = AVURLAsset(url: url)
+        return !asset.tracks(withMediaType: .audio).isEmpty
+    }
+
+    private static func loadCGImage(_ url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    private static func writeImage(_ image: CGImage, to url: URL) throws {
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw MediaIOError.imageEncodeFailed(url)
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw MediaIOError.imageEncodeFailed(url)
+        }
+    }
+
+    private static func exportComposition(
+        _ composition: AVComposition,
+        outputURL: URL,
+        videoComposition: AVVideoComposition?,
+        audioMix: AVAudioMix?
+    ) throws {
+        try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: outputURL)
+        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw MediaIOError.videoOperationFailed("Could not create AVAssetExportSession.")
+        }
+        export.outputURL = outputURL
+        export.outputFileType = outputURL.pathExtension.lowercased() == "mov" ? .mov : .mp4
+        export.shouldOptimizeForNetworkUse = true
+        export.videoComposition = videoComposition
+        export.audioMix = audioMix
+        let semaphore = DispatchSemaphore(value: 0)
+        export.exportAsynchronously { semaphore.signal() }
+        semaphore.wait()
+        guard export.status == .completed else {
+            throw MediaIOError.videoOperationFailed(export.error?.localizedDescription ?? "export failed")
+        }
+    }
+}
+#endif

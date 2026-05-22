@@ -127,7 +127,7 @@ struct TextChat: AsyncParsableCommand {
                 if streamingOutput.write(progress: progress) {
                     return
                 }
-                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
         }
 
@@ -162,7 +162,7 @@ struct TextChat: AsyncParsableCommand {
                     .appendingPathComponent("mererun-tools-\(ProcessInfo.processInfo.processIdentifier)")
             }
             try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
-            if !quiet { fputs("[tool-loop] Sandbox: \(sandbox.path)\n", stderr) }
+            if !quiet { CLIStderr.write("[tool-loop] Sandbox: \(sandbox.path)\n") }
             let toolPolicy = BuiltinTools.ToolExecutionPolicy(
                 sandboxDir: sandbox,
                 allowShellExec: allowShellExec,
@@ -192,13 +192,13 @@ struct TextChat: AsyncParsableCommand {
                     .replacingOccurrences(of: "<\\|tool_call>.*?<tool_call\\|>", with: "", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !textBeforeTools.isEmpty {
-                    fputs(cleanResponse(textBeforeTools, showThinking: thinking) + "\n", stderr)
+                    CLIStderr.write(cleanResponse(textBeforeTools, showThinking: thinking) + "\n")
                 }
 
                 loopMessages.append(ChatMessage(role: .assistant, content: result.response))
 
                 for call in calls {
-                    if !quiet { fputs("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n", stderr) }
+                    if !quiet { CLIStderr.write("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n") }
                     let approved = BuiltinTools.canAutoApprove(call, autoApproveTools: autoApproveTools)
                         || confirmToolCall(
                             call,
@@ -215,14 +215,14 @@ struct TextChat: AsyncParsableCommand {
                     } else {
                         output = "Denied: tool execution was not approved."
                     }
-                    if !quiet { fputs("[tool] → \(output.prefix(200))\n", stderr) }
+                    if !quiet { CLIStderr.write("[tool] → \(output.prefix(200))\n") }
                     loopMessages.append(ChatMessage(role: .tool, content: output))
                 }
 
-                if !quiet { fputs("[tool-loop] Iteration \(iteration + 1)/\(maxIterations)\n", stderr) }
+                if !quiet { CLIStderr.write("[tool-loop] Iteration \(iteration + 1)/\(maxIterations)\n") }
             }
 
-            fputs("[tool-loop] Hit iteration limit (\(maxIterations))\n", stderr)
+            CLIStderr.write("[tool-loop] Hit iteration limit (\(maxIterations))\n")
         } else {
             let result = try await chatOnce(request)
 
@@ -243,10 +243,10 @@ struct TextChat: AsyncParsableCommand {
                         decodeTps,
                         e2eTps
                     )
-                    fputs("\(line)\n", stderr)
+                    CLIStderr.write("\(line)\n")
                 } else {
                     let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
-                    fputs("\(line)\n", stderr)
+                    CLIStderr.write("\(line)\n")
                 }
             }
 
@@ -303,9 +303,9 @@ struct TextChat: AsyncParsableCommand {
     ) -> Bool {
         guard Self.stdinIsInteractive() else {
             if autoApproveToolsRequested && call.name == "shell_exec" {
-                fputs("[tool] Denied shell_exec: this tool always requires interactive approval, even when --auto-approve-tools is set.\n", stderr)
+                CLIStderr.write("[tool] Denied shell_exec: this tool always requires interactive approval, even when --auto-approve-tools is set.\n")
             } else {
-                fputs("[tool] Denied \(call.name): stdin is not interactive. Re-run with --auto-approve-tools to allow non-interactive execution.\n", stderr)
+                CLIStderr.write("[tool] Denied \(call.name): stdin is not interactive. Re-run with --auto-approve-tools to allow non-interactive execution.\n")
             }
             return false
         }
@@ -314,8 +314,7 @@ struct TextChat: AsyncParsableCommand {
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: ", ")
-        fputs("[tool] Approve \(call.name)(\(args)) in \(sandbox.path)? [y/N] ", stderr)
-        fflush(stderr)
+        CLIStderr.write("[tool] Approve \(call.name)(\(args)) in \(sandbox.path)? [y/N] ")
 
         guard let line = readLine(strippingNewline: true)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -326,7 +325,7 @@ struct TextChat: AsyncParsableCommand {
     }
 
     private static func stdinIsInteractive() -> Bool {
-        isatty(fileno(stdin)) != 0
+        CLIStdin.isInteractive()
     }
 }
 
@@ -358,8 +357,7 @@ private final class StreamingChatOutput: @unchecked Sendable {
 
         lock.lock()
         defer { lock.unlock() }
-        fputs(text, stdout)
-        fflush(stdout)
+        CLIStdout.write(text)
         wroteOutput = true
         return true
     }
@@ -367,7 +365,6 @@ private final class StreamingChatOutput: @unchecked Sendable {
     func finishLine() {
         lock.lock()
         defer { lock.unlock() }
-        fputs("\n", stdout)
-        fflush(stdout)
+        CLIStdout.write("\n")
     }
 }

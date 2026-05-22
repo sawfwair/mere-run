@@ -1,6 +1,5 @@
 import Foundation
 
-#if canImport(AVFoundation) && canImport(CoreGraphics)
 public final class SAM31VideoTracker: @unchecked Sendable {
     public enum TrackingError: LocalizedError, Sendable {
         case unsupportedPlatform
@@ -9,7 +8,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         public var errorDescription: String? {
             switch self {
             case .unsupportedPlatform:
-                return "Native video tracking requires AVFoundation and CoreGraphics."
+                return "Video tracking requires a supported MediaIO video backend."
             case .initFrameOutOfRange(let frame):
                 return "Initial tracking frame \(frame) is outside the extracted video frame range."
             }
@@ -545,4 +544,3 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         return false
     }
 }
-#endif

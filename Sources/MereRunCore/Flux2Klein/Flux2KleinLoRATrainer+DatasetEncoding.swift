@@ -3,11 +3,6 @@ import MLX
 import MLXNN
 import MLXRandom
 
-#if canImport(CoreGraphics)
-import CoreGraphics
-import ImageIO
-#endif
-
 extension Flux2KleinLoRATrainer {
     // MARK: - Dataset Encoding
 
@@ -49,15 +44,9 @@ extension Flux2KleinLoRATrainer {
             throw Flux2KleinLoRATrainerError.imageNotFound(url)
         }
 
-    #if canImport(CoreGraphics)
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
-            throw Flux2KleinLoRATrainerError.imageDecodeFailed(url)
-        }
-
         // Use center crop (ai-toolkit style) to preserve aspect ratio
         let resizedArray = try QwenImageIO.resizedCenterCropPixelArray(
-            from: cgImage,
+            from: url,
             width: width,
             height: height,
             addBatchDimension: true,
@@ -82,9 +71,6 @@ extension Flux2KleinLoRATrainer {
             .transposed(0, 2, 3, 1)
             .reshaped([1, patchedHeight * patchedWidth, 128])
             .asType(.bfloat16)
-    #else
-        throw Flux2KleinLoRATrainerError.imageDecodeFailed(url)
-    #endif
     }
 
     private static func patchifyLatents(_ latents: MLXArray, height: Int, width: Int) -> MLXArray {
@@ -96,4 +82,3 @@ extension Flux2KleinLoRATrainer {
         return x.reshaped([batch, channels * 4, height / 2, width / 2])
     }
 }
-

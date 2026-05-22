@@ -30,6 +30,10 @@ mere-run/
 Those map cleanly to the main runtime families exposed by the CLI and the
 optional macOS studio.
 
+The Linux compatibility boundary is the headless `mere.run` CLI and reusable
+library code. `mere.run.app`, SwiftUI views, app bundling, installer behavior,
+and DMG packaging remain macOS-only.
+
 ## Source tree
 
 ### `Sources/MereRunCLI`
@@ -49,6 +53,9 @@ The optional macOS studio. It does not own runtime behavior; it turns
 user-facing studio requests into `mere.run` arguments, launches the CLI as a
 child process, streams stdout and stderr, saves local library metadata, and keeps
 the raw command surface available in Advanced details.
+
+Do not make this target part of Linux compatibility work. Linux contributors
+should validate the CLI and local API surfaces directly.
 
 ### `Sources/MereRunCore`
 
@@ -79,7 +86,9 @@ and transcription.
 ### `Sources/AudioCodecs`
 
 Audio conversion and low-level codec support used by speech runtimes and some
-tests.
+tests. Linux media compatibility should use `ffmpeg` and `ffprobe` discovery,
+including `MERERUN_FFMPEG` and `MERERUN_FFPROBE` overrides, instead of depending
+on Apple media frameworks.
 
 ### `Sources/AudioSTT`
 
@@ -136,6 +145,10 @@ monorepo payload structure.
 ### `vendor/mlx-swift_Cmlx.bundle`
 
 Vendored MLX shader resources used by the macOS runtime.
+
+Linux CI should stay CPU MLX-oriented and fixture-sized. CUDA-specific runtime
+smokes are optional local validation, not a requirement for the public pull
+request gate.
 
 ### `THIRD_PARTY_NOTICES.md`
 

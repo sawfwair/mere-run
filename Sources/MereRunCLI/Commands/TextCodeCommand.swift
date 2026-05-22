@@ -69,15 +69,14 @@ struct TextCode: AsyncParsableCommand {
         } else if stream {
             progressHandler = { progress in
                 if progress.stage == .generating, let token = progress.message {
-                    print(token, terminator: "")
-                    fflush(stdout)
+                    CLIStdout.write(token)
                 } else if progress.stage == .loadingModel {
-                    fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                    CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
                 }
             }
         } else {
             progressHandler = { progress in
-                fputs("[\(progress.stage.rawValue)] \(progress.message ?? "")\n", stderr)
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
         }
 
@@ -92,7 +91,7 @@ struct TextCode: AsyncParsableCommand {
         if stats {
             let tps = elapsed > 0 ? Double(result.tokensGenerated) / elapsed : 0
             let timing = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, tps)
-            fputs("\(timing)\n", stderr)
+            CLIStderr.write("\(timing)\n")
         }
 
         if !stream {

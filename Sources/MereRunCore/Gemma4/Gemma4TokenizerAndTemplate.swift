@@ -2,7 +2,7 @@ import Foundation
 @preconcurrency import Hub
 @preconcurrency import Tokenizers
 
-public final class Gemma4TokenizerAndTemplate {
+public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
     public let tokenizer: any Tokenizer
     public let maxLength: Int
     public let eosTokenId: Int?
