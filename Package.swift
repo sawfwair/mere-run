@@ -191,9 +191,13 @@ if isLinuxPackage {
   mereRunCoreDependencies.append("llama")
 }
 
+let linuxNativeLlamaLibraryPath = packagePath(".build/native/linux-\(hostArch)/llama/lib").path
 let linuxNativeLinkerSettings: [LinkerSetting] = isLinuxPackage
-  ? [.unsafeFlags(["-Xlinker", "-L\(packagePath(".build/native/linux-\(hostArch)/llama/lib").path)"])]
-    + prebuiltMLXLinkerSettings
+  ? [.unsafeFlags([
+      "-Xlinker", "-L\(linuxNativeLlamaLibraryPath)",
+      "-Xlinker", "-rpath", "-Xlinker", linuxNativeLlamaLibraryPath,
+      "-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/lib"
+    ])] + prebuiltMLXLinkerSettings
   : []
 
 var mereRunCoreLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings

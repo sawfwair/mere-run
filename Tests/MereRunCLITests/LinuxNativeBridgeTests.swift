@@ -14,6 +14,8 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(package.contains("useLinuxPrebuiltMLX ? [] : [.product(name: name, package: \"mlx-swift\")]"))
         XCTAssertTrue(package.contains("prebuiltMLXLinkerSettings"))
         XCTAssertTrue(package.contains("-lMLXFast"))
+        XCTAssertTrue(package.contains("$ORIGIN/lib"))
+        XCTAssertTrue(package.contains("linuxNativeLlamaLibraryPath"))
         XCTAssertFalse(
             package.contains(".product(name: \"MLXFast\", package: \"mlx-swift\")"),
             "Direct MLX product dependencies must go through mlxDependency so cuda-prebuilt mode can import CMake-built modules."
