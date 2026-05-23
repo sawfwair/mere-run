@@ -172,6 +172,28 @@ final class InstallScriptTests: XCTestCase {
         )
     }
 
+    func testInstallerCopiesLinuxRuntimeBinaryWhenPresent() throws {
+        let fixture = try makeInstallerFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+
+        let runtimeBinaryURL = fixture.sourceDirURL.appendingPathComponent("mere.run-bin", isDirectory: false)
+        try "fake runtime binary".write(to: runtimeBinaryURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: runtimeBinaryURL.path)
+
+        let result = try runInstaller(
+            scriptURL: fixture.installScriptURL,
+            binDestURL: fixture.destDirURL.appendingPathComponent("mere.run", isDirectory: false),
+            extraEnvironment: ["MERERUN_INSTALL_PLATFORM": "Linux"]
+        )
+
+        XCTAssertEqual(result.status, 0, result.combinedOutput)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.destDirURL.appendingPathComponent("mere.run-bin").path
+            )
+        )
+    }
+
     func testInstallerCopiesDS4RuntimeWhenPresent() throws {
         let fixture = try makeInstallerFixture()
         defer { try? FileManager.default.removeItem(at: fixture.rootURL) }

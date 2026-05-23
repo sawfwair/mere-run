@@ -258,7 +258,25 @@ payload_name="mere-run-${version}-linux-${platform_arch}"
 payload_dir="$staging/$payload_name"
 mkdir -p "$payload_dir"
 
-cp -a "$cli_executable" "$payload_dir/mere.run"
+cp -a "$cli_executable" "$payload_dir/mere.run-bin"
+chmod +x "$payload_dir/mere.run-bin"
+cat >"$payload_dir/mere.run" <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+source_path="${BASH_SOURCE[0]}"
+while [[ -L "$source_path" ]]; do
+  source_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
+  link_target="$(readlink "$source_path")"
+  if [[ "$link_target" == /* ]]; then
+    source_path="$link_target"
+  else
+    source_path="$source_dir/$link_target"
+  fi
+done
+payload_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
+export LD_LIBRARY_PATH="$payload_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$payload_dir/mere.run-bin" "$@"
+WRAPPER
 chmod +x "$payload_dir/mere.run"
 cp -a scripts/install.sh "$payload_dir/install.sh"
 chmod +x "$payload_dir/install.sh"
@@ -287,19 +305,23 @@ if [[ -d "$llama_prefix/lib" ]]; then
   cp -a "$llama_prefix/lib" "$payload_dir/lib"
 fi
 
-# Bundle Swift runtime shared libraries when the official Swift toolchain linked
-# them dynamically. This lets the tarball/deb run on clean Ubuntu hosts without
-# requiring users to install the Swift compiler toolchain first.
+# Bundle Swift/Foundation runtime shared libraries when the official Swift
+# toolchain linked them dynamically, plus OpenBLAS for tarball installs. This
+# lets the tarball/deb run on clean Ubuntu hosts without requiring users to
+# install the Swift compiler toolchain first.
 if [[ "${MERERUN_BUNDLE_SWIFT_LIBS:-1}" == "1" ]]; then
   mkdir -p "$payload_dir/lib"
   while IFS= read -r lib_path; do
     [[ -f "$lib_path" ]] || continue
     case "$(basename "$lib_path")" in
-      libswift*|libFoundation*|libdispatch*|libBlocksRuntime*)
-        cp -a "$lib_path" "$payload_dir/lib/"
+      libswift*|libFoundation*|lib_Foundation*|libdispatch*|libBlocksRuntime*|libopenblas*)
+        resolved_lib_path="$(readlink -f "$lib_path")"
+        if [[ -f "$resolved_lib_path" ]]; then
+          cp -aL "$resolved_lib_path" "$payload_dir/lib/$(basename "$lib_path")"
+        fi
         ;;
     esac
-  done < <(ldd "$payload_dir/mere.run" 2>/dev/null | awk '/=> \/|^\// { for (i=1; i<=NF; i++) if ($i ~ /^\//) print $i }' | sort -u)
+  done < <(ldd "$payload_dir/mere.run-bin" 2>/dev/null | awk '/=> \/|^\// { for (i=1; i<=NF; i++) if ($i ~ /^\//) print $i }' | sort -u)
 fi
 
 if [[ -d vendor/ds4 ]]; then
