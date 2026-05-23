@@ -370,5 +370,8 @@ CONTROL
   fi
 fi
 
-sha256sum "$output_dir"/* >"$output_dir/SHA256SUMS"
+(
+  cd "$output_dir"
+  sha256sum ./* | sed 's#  \./#  #' >SHA256SUMS
+)
 echo "[package-linux] wrote $output_dir/SHA256SUMS"

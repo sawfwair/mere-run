@@ -60,6 +60,13 @@ PATH="$fake_bin:$PATH" MERERUN_BUNDLE_SWIFT_LIBS=1 \
 
 tarball="$output_dir/mere-run-symlink-fixture-linux-x86_64.tar.gz"
 [[ -f "$tarball" ]]
+[[ -f "$output_dir/SHA256SUMS" ]]
+if grep -q '/' "$output_dir/SHA256SUMS"; then
+  echo "[test-package-linux] SHA256SUMS should contain artifact basenames, not output-dir paths:" >&2
+  cat "$output_dir/SHA256SUMS" >&2
+  exit 1
+fi
+(cd "$output_dir" && sha256sum -c SHA256SUMS >/dev/null)
 
 tar -xzf "$tarball" -C "$fixture_root"
 staged_lib="$fixture_root/mere-run-symlink-fixture-linux-x86_64/lib/libopenblas.so.0"
