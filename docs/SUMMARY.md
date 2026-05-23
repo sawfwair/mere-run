@@ -2,6 +2,7 @@
 
 - [mere.run Documentation](./README.md)
 - [Getting Started](./getting-started.md)
+- [Linux QuickStart](./linux-quickstart.md)
 - [CLI Reference](./cli.md)
 - [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)

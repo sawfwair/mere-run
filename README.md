@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://mere.run">mere.run</a> ·
   <a href="https://sawfwair.github.io/mere-run/">Docs</a> ·
+  <a href="https://sawfwair.github.io/mere-run/linux-quickstart">Linux QuickStart</a> ·
   <a href="https://mere.run/releases/mere-run.dmg">Download DMG</a> ·
   <code>swift build</code>
 </p>
@@ -50,7 +51,8 @@ The public OSS repo currently supports:
 - Linux CLI compatibility work expects a Swift 6.x toolchain, `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK development headers, `ffmpeg`, `ffprobe`, `gzip`, `unzip`, and `zip`
 - media I/O should discover `ffmpeg` and `ffprobe` on `PATH`, with `MERERUN_FFMPEG` and `MERERUN_FFPROBE` reserved for absolute executable overrides
 - Linux CI should stay CPU MLX-oriented and fixture-sized; CUDA is an optional local acceleration path, not a baseline for pull-request checks
-- some vendored binaries include additional Apple platform slices for package consumers, but the public quickstart and release artifact remain macOS-first
+- Linux CUDA validation is currently limited to available x86 CUDA hosts with up to 16 GB VRAM; larger x86 CUDA systems and DGX-class machines are not claimed as tested yet
+- some vendored binaries include additional Apple platform slices for package consumers, while Linux release artifacts stay headless CLI-only
 
 ## Install the latest release
 
@@ -77,7 +79,8 @@ The installer copies `mere.run` and its colocated runtime assets to
 
 Linux release artifacts are headless CLI-only. The release workflow can publish
 both a portable tarball and a Debian package for x86_64/amd64 Ubuntu-style
-hosts:
+hosts. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the
+current validation boundary, CUDA notes, and first commands:
 
 ```bash
 tag=v0.8.0
@@ -96,7 +99,9 @@ sudo apt install ./mere-run.deb
 
 Linux packages install the `mere.run` CLI plus colocated runtime assets; they do
 not include the macOS SwiftUI studio or DMG layout. Linux arm64 release package
-builds are blocked for now by upstream `mlx-swift` Linux `bf16` support.
+builds are blocked for now by upstream `mlx-swift` Linux `bf16` support. CUDA is
+optional local acceleration work; current x86 CUDA validation should be treated
+as limited to available hosts with up to 16 GB VRAM.
 
 ## Build from source
 
@@ -360,6 +365,7 @@ Start with the docs home:
 Core guides:
 
 - [`docs/getting-started.md`](./docs/getting-started.md): build, first commands, first models
+- [`docs/linux-quickstart.md`](./docs/linux-quickstart.md): Linux CLI package install, first commands, and validation boundaries
 - [`docs/cli.md`](./docs/cli.md): full CLI guide and command reference
 - [`docs/repository-tour.md`](./docs/repository-tour.md): top-level layout and module ownership
 - [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day

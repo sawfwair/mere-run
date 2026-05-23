@@ -33,17 +33,19 @@ CI job, and on `main` it deploys the VitePress output to Pages.
 If you are new to the repo, read these in order:
 
 1. [Getting Started](./getting-started.md)
-2. [CLI Reference](./cli.md)
-3. [Cookbooks](./cookbooks.md)
-4. [Configuration](./configuration.md)
-5. [Model Sources](./model-sources.md)
-6. [Repository Tour](./repository-tour.md)
+2. [Linux QuickStart](./linux-quickstart.md), if you are installing the headless CLI on Linux
+3. [CLI Reference](./cli.md)
+4. [Cookbooks](./cookbooks.md)
+5. [Configuration](./configuration.md)
+6. [Model Sources](./model-sources.md)
+7. [Repository Tour](./repository-tour.md)
 
 ## Choose your path
 
 ### I want to use `mere.run`
 
 - [Getting Started](./getting-started.md)
+- [Linux QuickStart](./linux-quickstart.md)
 - [CLI Reference](./cli.md)
 - [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)
@@ -74,6 +76,8 @@ If you are new to the repo, read these in order:
 
 - [Getting Started](./getting-started.md): clone, build, first commands, first
   status checks, Linux release artifacts, model pulls, and local setup
+- [Linux QuickStart](./linux-quickstart.md): Linux package install, first
+  commands, release asset verification, and CUDA validation boundaries
 - [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
   prompting, parameters, examples, and troubleshooting
 - [Configuration](./configuration.md): supported environment variables and

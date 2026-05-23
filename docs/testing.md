@@ -66,9 +66,11 @@ export MERERUN_FFPROBE=/usr/bin/ffprobe
 
 The pull-request fixture should stay CPU MLX-compatible. CUDA machines can run
 additional local smoke tests, but CUDA installation, driver selection, and GPU
-availability are not assumptions in the shared CI contract. To use the optional
-Linux CUDA bridge, prepare native artifacts and export the environment that the
-script prints:
+availability are not assumptions in the shared CI contract. Current x86 CUDA
+validation is limited to available hosts with up to 16 GB VRAM; larger x86 CUDA
+systems and DGX-class machines should not be described as tested until they are
+run directly. To use the optional Linux CUDA bridge, prepare native artifacts
+and export the environment that the script prints:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh

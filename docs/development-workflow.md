@@ -89,6 +89,9 @@ inputs. The Linux gate runs the hidden `MediaIOSmoke` executable against
 `ffmpeg`/`ffprobe` so image, audio, MP4, mux, and frame extraction paths stay
 covered without model checkpoints. CUDA setup belongs in local runtime
 documentation or manual smoke notes, not in the default pull-request gate.
+Current x86 CUDA validation is limited to available hosts with up to 16 GB VRAM;
+larger x86 CUDA systems and DGX-class machines are future validation targets,
+not current support claims.
 
 ### Linux release packaging change
 

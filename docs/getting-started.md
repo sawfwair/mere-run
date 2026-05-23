@@ -103,7 +103,9 @@ local API surfaces directly rather than trying to build or launch
 ## Install Linux release artifacts
 
 Linux release artifacts are headless CLI-only. When a release publishes Linux
-packages, use the GitHub Release assets rather than the macOS DMG URL:
+packages, use the GitHub Release assets rather than the macOS DMG URL. For a
+Linux-only setup path, first commands, release checks, and CUDA validation
+limits, see [Linux QuickStart](./linux-quickstart.md).
 
 ```bash
 tag=v0.8.0
@@ -121,7 +123,9 @@ sudo apt install ./mere-run.deb
 The tarball and `.deb` install the `mere.run` CLI plus colocated runtime assets.
 They do not include `mere.run.app`, SwiftUI studio flows, or the macOS DMG
 layout. Linux release packages are x86_64/amd64-only for now; arm64 package
-builds are blocked by upstream `mlx-swift` Linux `bf16` support.
+builds are blocked by upstream `mlx-swift` Linux `bf16` support. CUDA is
+optional local validation; current x86 CUDA coverage should be treated as
+limited to available hosts with up to 16 GB VRAM.
 
 ## Understand the command tree
 

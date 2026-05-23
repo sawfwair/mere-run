@@ -10,6 +10,9 @@ hero:
       text: Get Started
       link: /getting-started
     - theme: alt
+      text: Linux QuickStart
+      link: /linux-quickstart
+    - theme: alt
       text: CLI Reference
       link: /cli
     - theme: alt
@@ -22,7 +25,7 @@ features:
   - title: Native macOS studio
     details: The optional SwiftUI app opens to a prompt-first canvas, local output library, guided readiness, and advanced CLI details.
   - title: Headless Linux CLI packages
-    details: Linux releases can ship portable x86_64 tarballs and Debian packages for CLI-only installs on Ubuntu-style hosts.
+    details: Linux releases ship portable x86_64 tarballs and Debian packages for CLI-only installs on Ubuntu-style hosts, with CUDA kept as optional local validation.
   - title: Canonical model system
     details: Public model IDs, shared model-store rules, Hugging Face-backed pulls, and `mere.run status` make installs predictable and scriptable.
   - title: Readable runtime families
@@ -34,6 +37,7 @@ features:
 ### Use the CLI
 
 - [Getting Started](/getting-started)
+- [Linux QuickStart](/linux-quickstart)
 - [CLI Reference](/cli)
 - [Configuration](/configuration)
 - [Model Sources](/model-sources)
