@@ -96,7 +96,7 @@ Linux release packaging is a separate x86_64/amd64 path for distributable
 headless CLI artifacts:
 
 ```bash
-scripts/package-linux.sh --version 0.7.1
+scripts/package-linux.sh --version 0.8.0
 ls dist/linux/
 ```
 

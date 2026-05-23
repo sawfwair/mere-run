@@ -106,7 +106,7 @@ Linux release artifacts are headless CLI-only. When a release publishes Linux
 packages, use the GitHub Release assets rather than the macOS DMG URL:
 
 ```bash
-tag=v0.7.1
+tag=v0.8.0
 version="${tag#v}"
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64.tar.gz" -o mere-run-linux.tar.gz

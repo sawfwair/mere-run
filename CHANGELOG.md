@@ -6,11 +6,21 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.8.0 - 2026-05-23
+
 ### Added
 
 - added headless Linux release packaging for the `mere.run` CLI, including an
   x86_64 tarball, amd64 Debian package, GitHub Actions packaging workflow, and
   package manifest verification.
+
+### Fixed
+
+- fixed Linux tarball installs by wrapping `mere.run` with a launcher that
+  resolves symlinks, sets `LD_LIBRARY_PATH` to colocated runtime libraries, and
+  executes the real `mere.run-bin` payload.
+- fixed Linux package runtime bundling so resolved OpenBLAS and Swift runtime
+  libraries are copied as portable files instead of broken host symlinks.
 
 ## 0.7.0 - 2026-05-22
 

@@ -80,7 +80,7 @@ both a portable tarball and a Debian package for x86_64/amd64 Ubuntu-style
 hosts:
 
 ```bash
-tag=v0.7.1
+tag=v0.8.0
 version="${tag#v}"
 
 # Portable tarball
@@ -137,7 +137,7 @@ swift run mere.run --help
 To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
-scripts/package-linux.sh --version 0.7.1
+scripts/package-linux.sh --version 0.8.0
 ls dist/linux/
 ```
 

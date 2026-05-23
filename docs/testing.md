@@ -85,7 +85,7 @@ CPU-oriented Linux manifest path.
 Linux release packaging has its own artifact check:
 
 ```bash
-scripts/package-linux.sh --version 0.7.1
+scripts/package-linux.sh --version 0.8.0
 test -s dist/linux/SHA256SUMS
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
