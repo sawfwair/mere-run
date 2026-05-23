@@ -59,6 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s dist/linux/SHA256SUMS
+          (cd dist/linux && sha256sum -c SHA256SUMS)
           tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
           tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
           dpkg-deb --info dist/linux/mere-run_*_*.deb
