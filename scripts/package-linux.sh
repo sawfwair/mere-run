@@ -315,7 +315,10 @@ if [[ "${MERERUN_BUNDLE_SWIFT_LIBS:-1}" == "1" ]]; then
     [[ -f "$lib_path" ]] || continue
     case "$(basename "$lib_path")" in
       libswift*|libFoundation*|lib_Foundation*|libdispatch*|libBlocksRuntime*|libopenblas*)
-        cp -a "$lib_path" "$payload_dir/lib/"
+        resolved_lib_path="$(readlink -f "$lib_path")"
+        if [[ -f "$resolved_lib_path" ]]; then
+          cp -aL "$resolved_lib_path" "$payload_dir/lib/$(basename "$lib_path")"
+        fi
         ;;
     esac
   done < <(ldd "$payload_dir/mere.run-bin" 2>/dev/null | awk '/=> \/|^\// { for (i=1; i<=NF; i++) if ($i ~ /^\//) print $i }' | sort -u)

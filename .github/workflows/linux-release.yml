@@ -47,6 +47,9 @@ jobs:
             zip \
             zlib1g-dev
 
+      - name: Test packaging symlink handling
+        run: bash scripts/test-package-linux.sh
+
       - name: Build Linux packages
         env:
           MERERUN_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
