@@ -35,7 +35,9 @@ library code. `mere.run.app`, SwiftUI views, app bundling, installer behavior,
 and DMG packaging remain macOS-only.
 
 Linux release packaging follows the same boundary: release artifacts are
-headless x86_64/amd64 CLI tarballs and Debian packages, not app bundles.
+headless CLI tarballs and Debian packages, not app bundles. The hosted release
+workflow publishes x86_64/amd64 artifacts; arm64 package artifacts are CUDA-only
+and require the self-hosted arm64 CUDA lane.
 
 ## Source tree
 
@@ -137,15 +139,16 @@ to validate actual runtime paths instead of just build and parse coverage.
 
 ### `scripts/package-linux.sh`
 
-Builds Linux release artifacts for the headless CLI on x86_64/amd64 Linux:
+Builds Linux release artifacts for the headless CLI on Linux:
 
-- `dist/linux/mere-run-<version>-linux-x86_64.tar.gz`
-- `dist/linux/mere-run_<version>_amd64.deb`
+- `dist/linux/mere-run-<version>-linux-<arch>.tar.gz`
+- `dist/linux/mere-run_<version>_<deb-arch>.deb`
 - `dist/linux/SHA256SUMS`
 
-The companion `.github/workflows/linux-release.yml` workflow runs this script in
-the Swift 6.0 Ubuntu container, verifies the tarball and `.deb` manifests, and
-uploads package artifacts.
+The companion `.github/workflows/linux-release.yml` workflow runs the x86_64
+package path in the Swift 6.0 Ubuntu container, verifies the tarball and `.deb`
+manifests, and uploads package artifacts. Its arm64 package lane is CUDA-only
+and targets a self-hosted Linux runner with `arm64` and `cuda` labels.
 
 ## Vendor artifacts
 
@@ -161,9 +164,9 @@ monorepo payload structure.
 
 Vendored MLX shader resources used by the macOS runtime.
 
-Linux CI should stay CPU MLX-oriented and fixture-sized. CUDA-specific runtime
-smokes are optional local validation, not a requirement for the public pull
-request gate.
+Linux hosted CI should stay CPU MLX-oriented and fixture-sized. CUDA-specific
+runtime smokes are required for meaningful Linux arm64 packages, but they run on
+real CUDA hosts rather than the public pull-request gate.
 
 ### `THIRD_PARTY_NOTICES.md`
 

@@ -40,6 +40,9 @@ done
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# shellcheck source=scripts/linux-arm64-bf16-toolchain.sh
+source "$repo_root/scripts/linux-arm64-bf16-toolchain.sh"
+
 host_os="$(uname -s)"
 if [[ "$host_os" != "Linux" ]]; then
   if [[ "${MERERUN_CHECK_LINUX_ALLOW_NON_LINUX:-0}" != "1" ]]; then
@@ -117,6 +120,7 @@ case "$(uname -m)" in
     exit 65
     ;;
 esac
+configure_linux_arm64_bf16_toolchain "$arch" "check-linux"
 
 bash ./scripts/prepare-linux-native.sh
 native_root="$repo_root/.build/native/linux-$arch"

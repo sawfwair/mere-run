@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added a Linux arm64 CUDA package lane to the GitHub Actions `linux-release`
+  workflow for self-hosted arm64 CUDA runners, plus architecture-aware CUDA
+  linker paths and a combined checksum manifest for available Linux artifacts.
+
 ## 0.8.0 - 2026-05-23
 
 ### Added

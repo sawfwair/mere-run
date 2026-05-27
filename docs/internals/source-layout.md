@@ -92,5 +92,6 @@ Use this for:
 - `scripts/check.sh`: main validation gate
 - `scripts/e2e_smoke.sh`: installed-model smoke runner
 - `vendor/llama.xcframework`: vendored native dependency for code and API paths
-- `vendor/mlx-swift_Cmlx.bundle`: macOS MLX shader resources; Linux CI should
-  use CPU MLX-sized fixtures and leave CUDA to optional local runtime checks
+- `vendor/mlx-swift_Cmlx.bundle`: macOS MLX shader resources; hosted Linux CI
+  should use CPU MLX-sized fixtures, while Linux arm64 package validation needs
+  the CUDA path on real arm64 CUDA hardware

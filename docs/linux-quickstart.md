@@ -1,28 +1,28 @@
 # Linux QuickStart
 
 This page is for installing the released headless `mere.run` CLI on Linux.
-The current supported release path is x86_64/amd64 Linux packages published on
-GitHub Releases.
+The default published release path is x86_64/amd64 Linux packages on GitHub
+Releases. Linux arm64 packages are CUDA-only and must be built on a real arm64
+CUDA host or self-hosted runner.
 
 The macOS path remains the primary hands-on development and runtime validation
 environment for this repo. The Linux release path is real, but intentionally
-narrow: CLI-only packages, Ubuntu-style hosts, CPU-oriented CI fixtures, and
-optional local CUDA experiments.
+narrow: CLI-only packages, Ubuntu-style hosts, CPU-oriented x86 CI fixtures,
+and CUDA-gated arm64 package work.
 
 ## Current validation boundary
 
-- Linux release packages are built for x86_64/amd64 hosts.
+- Published default Linux release packages are built for x86_64/amd64 hosts.
 - The release workflow validates the portable tarball, Debian package, runtime
-  library bundling, and package manifests on Ubuntu in GitHub Actions.
+  library bundling, and package manifests on Ubuntu x86_64 in GitHub Actions.
 - Linux packages do not include `MereRun.app`, the SwiftUI studio, the macOS
   installer UI, or the DMG layout.
-- Linux arm64 release packages are blocked for now by upstream `mlx-swift`
-  Linux `bf16` support.
-- CUDA is optional local acceleration work, not part of the default pull-request
-  or release gate.
-- Current x86 CUDA validation should be treated as limited to available hosts
-  with up to 16 GB VRAM. Larger x86 CUDA systems and DGX-class machines are not
-  claimed as tested until they are available for direct validation.
+- Linux arm64 package builds must use `MERERUN_LINUX_ACCEL=cuda`; CPU arm64
+  packages are only local smoke-test artifacts.
+- The optional arm64 CUDA workflow lane targets self-hosted runners labeled
+  `self-hosted`, `linux`, `arm64`, and `cuda`.
+- Current CUDA validation should be treated as limited to the exact hosts that
+  have run the CUDA package and smoke path.
 
 ## Install with apt
 
@@ -31,8 +31,12 @@ Use this path on Debian or Ubuntu-style systems:
 ```bash
 tag=v0.8.0
 version="${tag#v}"
+case "$(uname -m)" in
+  x86_64|amd64) deb_arch=amd64 ;;
+  *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
+esac
 
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_amd64.deb" -o mere-run.deb
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_${deb_arch}.deb" -o mere-run.deb
 sudo apt install ./mere-run.deb
 mere.run --version
 mere.run status
@@ -47,10 +51,14 @@ Use this path when you do not want to install a Debian package:
 
 ```bash
 tag=v0.8.0
+case "$(uname -m)" in
+  x86_64|amd64) linux_arch=x86_64 ;;
+  *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
+esac
 
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64.tar.gz" -o mere-run-linux.tar.gz
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-${linux_arch}.tar.gz" -o mere-run-linux.tar.gz
 tar -xzf mere-run-linux.tar.gz
-cd "mere-run-${tag}-linux-x86_64"
+cd "mere-run-${tag}-linux-${linux_arch}"
 ./install.sh
 mere.run --version
 mere.run status
@@ -92,27 +100,33 @@ export MERERUN_FFMPEG=/usr/bin/ffmpeg
 export MERERUN_FFPROBE=/usr/bin/ffprobe
 ```
 
-## CUDA notes
+## Linux arm64 CUDA package path
 
-CUDA is not required for the Linux release package quickstart. The shared Linux
-CI path stays CPU-oriented and fixture-sized so package validation remains
-repeatable.
+Linux arm64 is only useful for this project when the CUDA lane works. Do not
+publish or recommend CPU-only arm64 packages as release artifacts.
 
-For source builds that intentionally exercise the optional Linux CUDA bridge,
-prepare the native artifacts and then export the environment printed by the
-script:
+Build arm64 packages on a native arm64 Linux host with an NVIDIA GPU, driver,
+CUDA Toolkit, `nvcc`, Swift, OpenBLAS/LAPACK headers, and `ffmpeg` available:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.8.0
+ls dist/linux/
+```
+
+For source-only CUDA checks, prepare native artifacts and then export the
+environment printed by the script before building:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
-# Export the printed PKG_CONFIG_PATH, LIBRARY_PATH, LD_LIBRARY_PATH,
-# MERERUN_MLX_SWIFT_LINKAGE, MERERUN_MLX_SWIFT_BUILD_DIR,
-# MERERUN_MLX_SWIFT_SOURCE_DIR, and MERERUN_MLX_SWIFT_LINK_FLAGS values.
-swift build --target mere.run
+swift build --product mere.run
 ```
 
-Do not describe a CUDA configuration as supported unless it has been run on a
-real matching host. Today that means x86 CUDA coverage is limited to available
-machines with up to 16 GB VRAM.
+The GitHub-hosted `ubuntu-22.04-arm` runner is CPU-only for this purpose. The
+arm64 CUDA workflow lane is intentionally self-hosted so the package build runs
+against a real CUDA-capable arm64 machine.
+
+Do not describe a CUDA configuration as supported unless it has been run on that
+matching host.
 
 ## Build from source on Linux
 
@@ -120,8 +134,14 @@ Install the package layer first:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+sudo apt-get install -y cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
 ```
+
+On Linux arm64, older distro Clang packages can shadow Swift's bundled Clang and
+fail MLX bf16 header compilation. The Linux scripts probe for this and select a
+bf16-capable C++ driver, including a local `clang++` shim backed by Swift's
+`clang-17` when needed; if not, set `CXX` to the Swift toolchain `clang++` path
+before building.
 
 Then run the headless Linux checks:
 

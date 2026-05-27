@@ -39,6 +39,53 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertFalse(script.contains("whose Linux path remains CPU-oriented until a package bridge is added"))
     }
 
+    func testLinuxArm64MLXBuildsSelectBF16CapableToolchain() throws {
+        let packageScript = try readRepositoryFile("scripts/package-linux.sh")
+        let checkScript = try readRepositoryFile("scripts/check-linux.sh")
+        let prepareScript = try readRepositoryFile("scripts/prepare-linux-native.sh")
+        let toolchainScript = try readRepositoryFile("scripts/linux-arm64-bf16-toolchain.sh")
+
+        XCTAssertTrue(packageScript.contains("platform_arch=\"arm64\""))
+        XCTAssertTrue(packageScript.contains("deb_arch=\"arm64\""))
+        XCTAssertTrue(packageScript.contains("deb_multiarch=\"aarch64-linux-gnu\""))
+        XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE"))
+        XCTAssertTrue(packageScript.contains("Linux arm64 release packages must use MERERUN_LINUX_ACCEL=cuda"))
+        XCTAssertTrue(
+            packageScript.contains("configure_linux_arm64_bf16_toolchain \"$platform_arch\" \"package-linux\"")
+        )
+        XCTAssertTrue(
+            checkScript.contains("configure_linux_arm64_bf16_toolchain \"$arch\" \"check-linux\"")
+        )
+        XCTAssertTrue(
+            prepareScript.contains("configure_linux_arm64_bf16_toolchain \"$arch\" \"prepare-linux-native\"")
+        )
+        XCTAssertTrue(toolchainScript.contains("#include <arm_bf16.h>"))
+        XCTAssertTrue(toolchainScript.contains("#include <string>"))
+        XCTAssertTrue(toolchainScript.contains(".build/toolchains/linux-arm64-bf16"))
+        XCTAssertTrue(toolchainScript.contains("clang++"))
+        XCTAssertTrue(toolchainScript.contains("clang-17"))
+    }
+
+    func testLinuxReleaseWorkflowKeepsArm64OnCudaRunner() throws {
+        let workflow = try readRepositoryFile(".github/workflows/linux-release.yml")
+        let packageTest = try readRepositoryFile("scripts/test-package-linux.sh")
+
+        XCTAssertTrue(workflow.contains("runs-on: ubuntu-22.04"))
+        XCTAssertFalse(workflow.contains("ubuntu-22.04-arm"))
+        XCTAssertTrue(workflow.contains("Build Linux x86_64"))
+        XCTAssertTrue(workflow.contains("Build Linux arm64 CUDA"))
+        XCTAssertTrue(workflow.contains("runs-on: [self-hosted, linux, arm64, cuda]"))
+        XCTAssertTrue(workflow.contains("MERERUN_LINUX_ACCEL: cuda"))
+        XCTAssertTrue(workflow.contains("MERERUN_RELEASE_ARM64_CUDA == '1'"))
+        XCTAssertTrue(workflow.contains("build_arm64_cuda"))
+        XCTAssertTrue(workflow.contains("pattern: mere-run-linux-*-packages"))
+        XCTAssertTrue(workflow.contains("Build combined checksum manifest"))
+        XCTAssertTrue(workflow.contains("files: dist/linux/*"))
+        XCTAssertTrue(packageTest.contains("platform_arch=\"arm64\""))
+        XCTAssertTrue(packageTest.contains("linux-${platform_arch}.tar.gz"))
+        XCTAssertTrue(packageTest.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1"))
+    }
+
     private func readRepositoryFile(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath, isDirectory: false)

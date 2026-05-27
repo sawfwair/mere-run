@@ -7,6 +7,11 @@ on:
         description: 'Release/package version, e.g. 0.7.1 or v0.7.1'
         required: true
         type: string
+      build_arm64_cuda:
+        description: 'Also build Linux arm64 CUDA packages on a self-hosted arm64 CUDA runner'
+        required: false
+        type: boolean
+        default: false
   release:
     types: [published]
 
@@ -19,6 +24,7 @@ defaults:
 
 jobs:
   linux-cli-packages:
+    name: Build Linux x86_64
     runs-on: ubuntu-22.04
     container: swift:6.0-jammy
     steps:
@@ -53,19 +59,133 @@ jobs:
       - name: Build Linux packages
         env:
           MERERUN_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
-        run: bash scripts/package-linux.sh --version "$MERERUN_RELEASE_VERSION"
+        run: bash scripts/package-linux.sh --version "$MERERUN_RELEASE_VERSION" --output-dir "dist/linux/x86_64"
 
       - name: Verify package manifests
         run: |
           set -euo pipefail
-          test -s dist/linux/SHA256SUMS
-          (cd dist/linux && sha256sum -c SHA256SUMS)
-          tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
-          tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
-          dpkg-deb --info dist/linux/mere-run_*_*.deb
-          dpkg-deb --contents dist/linux/mere-run_*_*.deb | grep 'usr/bin/mere.run'
+          artifact_dir="dist/linux/x86_64"
+          test -s "$artifact_dir/SHA256SUMS"
+          (cd "$artifact_dir" && sha256sum -c SHA256SUMS)
+          tar -tzf "$artifact_dir"/mere-run-*-linux-x86_64.tar.gz | grep '/mere.run$'
+          tar -tzf "$artifact_dir"/mere-run-*-linux-x86_64.tar.gz | grep '/install.sh$'
+          dpkg-deb --info "$artifact_dir"/mere-run_*_*.deb
+          dpkg-deb --contents "$artifact_dir"/mere-run_*_*.deb | grep 'usr/bin/mere.run'
 
-      - name: Upload Linux package artifacts
+      - name: Upload Linux x86_64 package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mere-run-linux-x86_64-packages
+          path: dist/linux/x86_64/*
+          if-no-files-found: error
+
+  linux-arm64-cuda-packages:
+    name: Build Linux arm64 CUDA
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' && inputs.build_arm64_cuda) ||
+        (github.event_name == 'release' && vars.MERERUN_RELEASE_ARM64_CUDA == '1')
+      }}
+    runs-on: [self-hosted, linux, arm64, cuda]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: |
+          set -euo pipefail
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo_cmd=()
+            if [[ "${EUID:-$(id -u)}" != "0" ]]; then
+              sudo_cmd=(sudo)
+            fi
+            "${sudo_cmd[@]}" apt-get update
+            "${sudo_cmd[@]}" apt-get install -y --no-install-recommends \
+              build-essential \
+              ca-certificates \
+              clang \
+              cmake \
+              curl \
+              dpkg-dev \
+              ffmpeg \
+              gfortran \
+              git \
+              gzip \
+              libcurl4-openssl-dev \
+              liblapacke-dev \
+              libopenblas-dev \
+              ninja-build \
+              pkg-config \
+              unzip \
+              zip \
+              zlib1g-dev
+          else
+            echo "apt-get not found; assuming the self-hosted CUDA runner is already provisioned."
+          fi
+          swift --version
+          nvcc --version
+          nvidia-smi
+
+      - name: Test packaging symlink handling
+        env:
+          MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE: 1
+        run: bash scripts/test-package-linux.sh
+
+      - name: Build Linux arm64 CUDA packages
+        env:
+          MERERUN_LINUX_ACCEL: cuda
+          MERERUN_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
+        run: bash scripts/package-linux.sh --version "$MERERUN_RELEASE_VERSION" --output-dir "dist/linux/arm64"
+
+      - name: Verify package manifests
+        run: |
+          set -euo pipefail
+          artifact_dir="dist/linux/arm64"
+          test -s "$artifact_dir/SHA256SUMS"
+          (cd "$artifact_dir" && sha256sum -c SHA256SUMS)
+          tar -tzf "$artifact_dir"/mere-run-*-linux-arm64.tar.gz | grep '/mere.run$'
+          tar -tzf "$artifact_dir"/mere-run-*-linux-arm64.tar.gz | grep '/install.sh$'
+          dpkg-deb --info "$artifact_dir"/mere-run_*_*.deb
+          dpkg-deb --contents "$artifact_dir"/mere-run_*_*.deb | grep 'usr/bin/mere.run'
+
+      - name: Upload Linux arm64 CUDA package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mere-run-linux-arm64-cuda-packages
+          path: dist/linux/arm64/*
+          if-no-files-found: error
+
+  linux-release-assets:
+    name: Collect Linux release assets
+    needs:
+      - linux-cli-packages
+      - linux-arm64-cuda-packages
+    if: >-
+      ${{
+        always() &&
+        needs.linux-cli-packages.result == 'success' &&
+        (
+          needs.linux-arm64-cuda-packages.result == 'success' ||
+          needs.linux-arm64-cuda-packages.result == 'skipped'
+        )
+      }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download Linux package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mere-run-linux-*-packages
+          path: dist/linux-by-arch
+
+      - name: Build combined checksum manifest
+        run: |
+          set -euo pipefail
+          mkdir -p dist/linux
+          find dist/linux-by-arch -type f ! -name SHA256SUMS -exec cp {} dist/linux/ \;
+          test -n "$(find dist/linux -type f -print -quit)"
+          (cd dist/linux && sha256sum ./* | sed 's#  \./#  #' > SHA256SUMS)
+          (cd dist/linux && sha256sum -c SHA256SUMS)
+
+      - name: Upload combined Linux package artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mere-run-linux-packages
