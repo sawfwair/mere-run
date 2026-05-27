@@ -798,9 +798,9 @@ Security defaults:
   services the earliest decode position first by batching compatible rows there
   or advancing one lower-offset row until it can join a compatible batch
 - Gemma4 can opt into experimental packed PolarKV with
-  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure testing,
-  not as a default speed path, until real model benchmarks beat dense or affine
-  KV decode
+  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
+  long-context synthetic decode testing. It is not the default until checkpoint
+  benchmarks prove the end-to-end model path.
 - `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,
   batched decode steps, completed chat requests, generated tokens, and average
   load/prefill/decode timings across loaded models under `cacheStats` and

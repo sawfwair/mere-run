@@ -110,9 +110,9 @@ swift run mere.run api serve \
   batching compatible rows there or advancing a single lower-offset row until it
   can join one
 - Gemma4 has an experimental packed PolarKV path behind
-  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure testing,
-  not as a default speed path, until real model benchmarks beat dense or affine
-  KV decode
+  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
+  long-context synthetic decode testing. It is not the default until checkpoint
+  benchmarks prove the end-to-end model path.
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
   steps across loaded models under `cacheStats`; it also reports completed chat
   request counts, generated tokens, and average load/prefill/decode timings

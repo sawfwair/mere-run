@@ -297,6 +297,7 @@ final class Gemma4KVQuantizationTests: MereRunCoreTestCase {
 
         XCTAssertLessThan(polarBytes, affineBytes)
         XCTAssertLessThan(polarBytes, denseBytes)
+        XCTAssertLessThan(polarMS, affineMS)
     }
 
     private func denseDecode(

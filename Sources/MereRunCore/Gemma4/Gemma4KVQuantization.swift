@@ -559,6 +559,8 @@ private struct Gemma4PolarFastKernelKey: Hashable {
     enum Kind: Hashable {
         case pack
         case unpack
+        case score
+        case weightedValue
         case fusedChunkDecode
     }
 
@@ -733,6 +735,118 @@ private enum Gemma4PolarFastKernels {
                 float norm = static_cast<float>(norms[((batch * norms_shape[1] + head_idx) * token_count + token)]);
                 out[((batch * packed_shape[1] + head_idx) * token_count + token) * Dim + dim_idx] =
                     static_cast<float>(centroids[packed_value]) * norm;
+                """
+        )
+    }
+
+    static func scoreKernel(bits: Int, dim: Int, packedWidth: Int, repeats: Int) -> MLXFast.MLXFastKernel {
+        let key = Gemma4PolarFastKernelKey(
+            kind: .score,
+            bits: bits,
+            dim: dim,
+            packedWidth: packedWidth,
+            repeats: repeats
+        )
+        return kernel(
+            key: key,
+            inputNames: ["queries", "packed", "norms", "centroids", "scale"],
+            source: """
+                auto lane = thread_position_in_grid.x;
+                auto head_idx = thread_position_in_grid.y;
+                auto n = thread_position_in_grid.z;
+
+                auto token_count = packed_shape[2];
+                auto head_count = queries_shape[1];
+                auto batch = n / token_count;
+                auto token = n % token_count;
+                if (batch >= queries_shape[0] || head_idx >= head_count) {
+                    return;
+                }
+
+                auto kv_head = head_idx / RepeatCount;
+                auto query_ptr = queries + ((batch * head_count + head_idx) * Dim);
+                auto packed_ptr = packed + (((batch * packed_shape[1] + kv_head) * token_count + token) * PackedWidth);
+                auto norms_ptr = norms + ((batch * norms_shape[1] + kv_head) * token_count);
+                float norm = static_cast<float>(norms_ptr[token]);
+
+                constexpr uint value_mask = (1u << Bits) - 1u;
+                float acc = 0.0f;
+                for (int d = lane; d < Dim; d += 32) {
+                    int bit_offset = d * Bits;
+                    int word_idx = bit_offset / 32;
+                    int offset = bit_offset % 32;
+                    uint packed_value = packed_ptr[word_idx] >> offset;
+                    int spill = offset + Bits - 32;
+                    if (spill > 0 && (word_idx + 1) < PackedWidth) {
+                        packed_value |= packed_ptr[word_idx + 1] << (Bits - spill);
+                    }
+                    packed_value &= value_mask;
+
+                    float decoded = static_cast<float>(centroids[packed_value]) * norm;
+                    acc += static_cast<float>(query_ptr[d]) * decoded;
+                }
+
+                acc = simd_sum(acc);
+                if (thread_index_in_simdgroup == 0) {
+                    out[((batch * head_count + head_idx) * token_count) + token] =
+                        acc * static_cast<float>(scale);
+                }
+                """
+        )
+    }
+
+    static func weightedValueKernel(bits: Int, dim: Int, packedWidth: Int, repeats: Int) -> MLXFast.MLXFastKernel {
+        let key = Gemma4PolarFastKernelKey(
+            kind: .weightedValue,
+            bits: bits,
+            dim: dim,
+            packedWidth: packedWidth,
+            repeats: repeats
+        )
+        return kernel(
+            key: key,
+            inputNames: ["weights", "packed", "norms", "centroids"],
+            source: """
+                auto lane = thread_position_in_grid.x;
+                auto head_idx = thread_position_in_grid.y;
+                auto n = thread_position_in_grid.z;
+
+                auto token_count = packed_shape[2];
+                auto head_count = weights_shape[1];
+                auto batch = n / Dim;
+                auto dim_idx = n % Dim;
+                if (batch >= weights_shape[0] || head_idx >= head_count) {
+                    return;
+                }
+
+                auto kv_head = head_idx / RepeatCount;
+                auto weights_ptr = weights + ((batch * head_count + head_idx) * token_count);
+                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_count * PackedWidth);
+                auto norms_ptr = norms + ((batch * norms_shape[1] + kv_head) * token_count);
+
+                int bit_offset = dim_idx * Bits;
+                int word_idx = bit_offset / 32;
+                int offset = bit_offset % 32;
+                constexpr uint value_mask = (1u << Bits) - 1u;
+
+                float acc = 0.0f;
+                for (int token = lane; token < token_count; token += 32) {
+                    auto token_packed = packed_ptr + token * PackedWidth;
+                    uint packed_value = token_packed[word_idx] >> offset;
+                    int spill = offset + Bits - 32;
+                    if (spill > 0 && (word_idx + 1) < PackedWidth) {
+                        packed_value |= token_packed[word_idx + 1] << (Bits - spill);
+                    }
+                    packed_value &= value_mask;
+
+                    float decoded = static_cast<float>(centroids[packed_value]) * static_cast<float>(norms_ptr[token]);
+                    acc += static_cast<float>(weights_ptr[token]) * decoded;
+                }
+
+                acc = simd_sum(acc);
+                if (thread_index_in_simdgroup == 0) {
+                    out[((batch * head_count + head_idx) * Dim) + dim_idx] = acc;
+                }
                 """
         )
     }
@@ -1262,6 +1376,16 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
             return nil
         }
 
+        if let scoreValueOutput = scoreValueSpecializedAttention(
+            queries: queries,
+            keyState: polarKeys,
+            valueState: polarValues,
+            repeats: repeats,
+            scale: scale
+        ) {
+            return scoreValueOutput
+        }
+
         let queries32 = queries.asType(.float32)
         let rotatedQueries = MLX.matmul(queries32, polarKeys.rotationTransposed)
         var runningWeighted: MLXArray?
@@ -1290,6 +1414,66 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
             return nil
         }
         return MLX.matmul(runningWeighted / runningNormalizer, polarValues.rotation).asType(queries.dtype)
+    }
+
+    private func scoreValueSpecializedAttention(
+        queries: MLXArray,
+        keyState: Gemma4PolarTensorState,
+        valueState: Gemma4PolarTensorState,
+        repeats: Int,
+        scale: Float
+    ) -> MLXArray? {
+        let totalTokens = keyState.tokenCount
+        guard totalTokens > 0 else {
+            return nil
+        }
+
+        let queries32 = queries.asType(.float32)
+        let rotatedQueries = MLX.matmul(queries32, keyState.rotationTransposed)
+        let scoreKernel = Gemma4PolarFastKernels.scoreKernel(
+            bits: keyState.bits,
+            dim: queries.dim(3),
+            packedWidth: keyState.packedWidth,
+            repeats: repeats
+        )
+        let scores = scoreKernel(
+            [rotatedQueries, keyState.packed, keyState.norms, keyState.centroids, scale],
+            template: [
+                ("Bits", keyState.bits),
+                ("Dim", queries.dim(3)),
+                ("PackedWidth", keyState.packedWidth),
+                ("RepeatCount", repeats),
+            ],
+            grid: (32, queries.dim(1), queries.dim(0) * totalTokens),
+            threadGroup: (32, 1, 1),
+            outputShapes: [[queries.dim(0), queries.dim(1), 1, totalTokens]],
+            outputDTypes: [.float32]
+        )[0]
+
+        let scoreMax = scores.max(axis: -1, keepDims: true)
+        let weights = exp(scores - scoreMax)
+        let normalizer = weights.sum(axis: -1, keepDims: true)
+        let weightedValueKernel = Gemma4PolarFastKernels.weightedValueKernel(
+            bits: valueState.bits,
+            dim: queries.dim(3),
+            packedWidth: valueState.packedWidth,
+            repeats: repeats
+        )
+        let weighted = weightedValueKernel(
+            [weights, valueState.packed, valueState.norms, valueState.centroids],
+            template: [
+                ("Bits", valueState.bits),
+                ("Dim", queries.dim(3)),
+                ("PackedWidth", valueState.packedWidth),
+                ("RepeatCount", repeats),
+            ],
+            grid: (32, queries.dim(1), queries.dim(0) * queries.dim(3)),
+            threadGroup: (32, 1, 1),
+            outputShapes: [[queries.dim(0), queries.dim(1), 1, queries.dim(3)]],
+            outputDTypes: [.float32]
+        )[0]
+
+        return MLX.matmul(weighted / normalizer, valueState.rotation).asType(queries.dtype)
     }
 
     private func chunkedSpecializedAttention(queries: MLXArray, repeats: Int, scale: Float) -> MLXArray? {
