@@ -16,9 +16,22 @@ trap cleanup EXIT
 fake_bin="$fixture_root/bin"
 fake_build="$fixture_root/build"
 fake_libs="$fixture_root/libs"
-output_dir=".build/package-linux-symlink-test-$$"
-rm -rf "$output_dir"
-mkdir -p "$fake_bin" "$fake_build" "$fake_libs/real" "$fake_libs/alternatives" "$output_dir"
+mkdir -p "$fake_bin" "$fake_build" "$fake_libs/real" "$fake_libs/alternatives"
+
+case "$(uname -m)" in
+  x86_64|amd64)
+    platform_arch="x86_64"
+    ;;
+  aarch64|arm64)
+    platform_arch="arm64"
+    ;;
+  *)
+    echo "[test-package-linux] unsupported Linux architecture: $(uname -m)" >&2
+    exit 65
+    ;;
+esac
+
+output_dir="$fixture_root/output"
 
 cat >"$fake_build/mere.run" <<'CLI'
 #!/usr/bin/env bash
@@ -27,8 +40,8 @@ CLI
 chmod +x "$fake_build/mere.run"
 
 printf 'openblas runtime fixture\n' >"$fake_libs/real/libopenblas.so.0.3.26"
-ln -s "$fake_libs/real/libopenblas.so.0.3.26" "$fake_libs/alternatives/libopenblas.so.0-x86_64-linux-gnu"
-ln -s "$fake_libs/alternatives/libopenblas.so.0-x86_64-linux-gnu" "$fake_libs/libopenblas.so.0"
+ln -s "$fake_libs/real/libopenblas.so.0.3.26" "$fake_libs/alternatives/libopenblas.so.0-${platform_arch}-linux-gnu"
+ln -s "$fake_libs/alternatives/libopenblas.so.0-${platform_arch}-linux-gnu" "$fake_libs/libopenblas.so.0"
 
 cat >"$fake_bin/swift" <<SWIFT
 #!/usr/bin/env bash
@@ -49,7 +62,9 @@ EOF
 LDD
 chmod +x "$fake_bin/ldd"
 
-PATH="$fake_bin:$PATH" MERERUN_BUNDLE_SWIFT_LIBS=1 \
+PATH="$fake_bin:$PATH" \
+  MERERUN_BUNDLE_SWIFT_LIBS=1 \
+  MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1 \
   bash scripts/package-linux.sh \
     --version symlink-fixture \
     --configuration release \
@@ -58,7 +73,7 @@ PATH="$fake_bin:$PATH" MERERUN_BUNDLE_SWIFT_LIBS=1 \
     --skip-deb \
     --output-dir "$output_dir" >/dev/null
 
-tarball="$output_dir/mere-run-symlink-fixture-linux-x86_64.tar.gz"
+tarball="$output_dir/mere-run-symlink-fixture-linux-${platform_arch}.tar.gz"
 [[ -f "$tarball" ]]
 [[ -f "$output_dir/SHA256SUMS" ]]
 if grep -q '/' "$output_dir/SHA256SUMS"; then
@@ -69,7 +84,7 @@ fi
 (cd "$output_dir" && sha256sum -c SHA256SUMS >/dev/null)
 
 tar -xzf "$tarball" -C "$fixture_root"
-staged_lib="$fixture_root/mere-run-symlink-fixture-linux-x86_64/lib/libopenblas.so.0"
+staged_lib="$fixture_root/mere-run-symlink-fixture-linux-${platform_arch}/lib/libopenblas.so.0"
 
 if [[ ! -f "$staged_lib" || -L "$staged_lib" ]]; then
   echo "[test-package-linux] expected libopenblas.so.0 to be bundled as a real file, got:" >&2

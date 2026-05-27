@@ -25,7 +25,7 @@ features:
   - title: Native macOS studio
     details: The optional SwiftUI app opens to a prompt-first canvas, local output library, guided readiness, and advanced CLI details.
   - title: Headless Linux CLI packages
-    details: Linux releases ship portable x86_64 tarballs and Debian packages for CLI-only installs on Ubuntu-style hosts, with CUDA kept as optional local validation.
+    details: Linux releases ship portable x86_64 tarballs plus Debian packages for CLI-only installs on Ubuntu-style hosts; arm64 Linux packages are CUDA-only and require a real arm64 CUDA host.
   - title: Canonical model system
     details: Public model IDs, shared model-store rules, Hugging Face-backed pulls, and `mere.run status` make installs predictable and scriptable.
   - title: Readable runtime families

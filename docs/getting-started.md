@@ -110,22 +110,26 @@ limits, see [Linux QuickStart](./linux-quickstart.md).
 ```bash
 tag=v0.8.0
 version="${tag#v}"
+case "$(uname -m)" in
+  x86_64|amd64) linux_arch=x86_64; deb_arch=amd64 ;;
+  *) echo "use the Linux arm64 CUDA package path on arm64" >&2; exit 1 ;;
+esac
 
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64.tar.gz" -o mere-run-linux.tar.gz
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-${linux_arch}.tar.gz" -o mere-run-linux.tar.gz
 tar -xzf mere-run-linux.tar.gz
-cd "mere-run-${tag}-linux-x86_64"
+cd "mere-run-${tag}-linux-${linux_arch}"
 ./install.sh
 
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_amd64.deb" -o mere-run.deb
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_${deb_arch}.deb" -o mere-run.deb
 sudo apt install ./mere-run.deb
 ```
 
 The tarball and `.deb` install the `mere.run` CLI plus colocated runtime assets.
 They do not include `mere.run.app`, SwiftUI studio flows, or the macOS DMG
-layout. Linux release packages are x86_64/amd64-only for now; arm64 package
-builds are blocked by upstream `mlx-swift` Linux `bf16` support. CUDA is
-optional local validation; current x86 CUDA coverage should be treated as
-limited to available hosts with up to 16 GB VRAM.
+layout. The default published Linux release packages are built for
+x86_64/amd64. Linux arm64 packages are CUDA-only and should be built on a real
+arm64 CUDA host with `MERERUN_LINUX_ACCEL=cuda`; CPU arm64 packages are local
+smoke artifacts, not useful release targets.
 
 ## Understand the command tree
 

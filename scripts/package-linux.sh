@@ -4,8 +4,8 @@ set -euo pipefail
 # Build distributable Linux CLI artifacts for mere.run.
 #
 # Outputs:
-#   dist/linux/mere-run-<version>-linux-x86_64.tar.gz
-#   dist/linux/mere-run_<version>_amd64.deb   (when dpkg-deb is available)
+#   dist/linux/mere-run-<version>-linux-<arch>.tar.gz
+#   dist/linux/mere-run_<version>_<deb-arch>.deb   (when dpkg-deb is available)
 #
 # The tarball uses the same payload shape as the macOS DMG's terminal payload:
 # a top-level mere.run executable, install.sh, and colocated runtime assets.
@@ -33,12 +33,17 @@ Environment:
                                 reported by ldd into payload lib/. Default: 1.
   MERERUN_PACKAGE_LINUX_DEPS    Override Debian Depends field.
   MERERUN_LINUX_ACCEL           Passed through to prepare-linux-native.sh (cpu/cuda).
+  MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1
+                                Allow an arm64 CPU package for local smoke tests.
   MERERUN_DS4_LINUX_BIN_DIR     Passed through to prepare-linux-native.sh for DS4 staging.
 USAGE
 }
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+
+# shellcheck source=scripts/linux-arm64-bf16-toolchain.sh
+source "$repo_root/scripts/linux-arm64-bf16-toolchain.sh"
 
 configuration="release"
 output_dir="dist/linux"
@@ -105,11 +110,12 @@ case "$(uname -m)" in
   x86_64|amd64)
     platform_arch="x86_64"
     deb_arch="amd64"
+    deb_multiarch="x86_64-linux-gnu"
     ;;
   aarch64|arm64)
-    echo "[package-linux] error: Linux release packaging currently supports x86_64/amd64 only." >&2
-    echo "[package-linux] arm64 package builds are blocked by upstream mlx-swift Linux bf16 support." >&2
-    exit 65
+    platform_arch="arm64"
+    deb_arch="arm64"
+    deb_multiarch="aarch64-linux-gnu"
     ;;
   *)
     echo "[package-linux] error: unsupported Linux architecture: $(uname -m)" >&2
@@ -145,6 +151,16 @@ case "$linux_accel" in
     exit 64
     ;;
 esac
+if [[ "$platform_arch" == "arm64" &&
+      "$linux_accel" != "cuda" &&
+      "${MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE:-0}" != "1" ]]; then
+  echo "[package-linux] error: Linux arm64 release packages must use MERERUN_LINUX_ACCEL=cuda." >&2
+  echo "[package-linux] CPU arm64 packages are for local smoke tests only; set MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1 to force one." >&2
+  exit 65
+fi
+if (( do_build || do_native )); then
+  configure_linux_arm64_bf16_toolchain "$platform_arch" "package-linux"
+fi
 
 mlx_swift_cuda_link_flags() {
   local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
@@ -156,9 +172,9 @@ mlx_swift_cuda_link_flags() {
   flags+=("-L" "$mlx_cmake_build/_deps/mlx-build/mlx/io")
   flags+=("-L" "$mlx_cmake_build/lib")
 
-  if [[ -f "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so" ]]; then
-    flags+=("-L" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
-    flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
+  if [[ -f "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so" ]]; then
+    flags+=("-L" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
   fi
   if [[ -n "${CUDNN_LIBRARY_PATH:-}" ]]; then
     flags+=("-L" "$CUDNN_LIBRARY_PATH")
@@ -177,8 +193,8 @@ mlx_swift_cuda_link_flags() {
       fi
     done
   fi
-  if [[ -d /usr/lib/x86_64-linux-gnu ]]; then
-    flags+=("-L" "/usr/lib/x86_64-linux-gnu")
+  if [[ -d /usr/lib/$deb_multiarch ]]; then
+    flags+=("-L" "/usr/lib/$deb_multiarch")
   fi
 
   flags+=(
@@ -246,8 +262,13 @@ if [[ ! -x "$cli_executable" ]]; then
   exit 66
 fi
 
-rm -rf "$output_dir"
-mkdir -p "$output_dir"
+if [[ "$output_dir" == /* ]]; then
+  output_root="$output_dir"
+else
+  output_root="$repo_root/$output_dir"
+fi
+rm -rf "$output_root"
+mkdir -p "$output_root"
 staging="$(mktemp -d "${TMPDIR:-/tmp}/mere-run-linux-package.XXXXXX")"
 cleanup() {
   rm -rf "$staging"
@@ -331,7 +352,7 @@ fi
 
 (
   cd "$staging"
-  tar -czf "$repo_root/$output_dir/${payload_name}.tar.gz" "$payload_name"
+  tar -czf "$output_root/${payload_name}.tar.gz" "$payload_name"
 )
 
 echo "[package-linux] wrote $output_dir/${payload_name}.tar.gz"
@@ -363,7 +384,7 @@ Description: Local-first inference CLI
 CONTROL
 
     chmod 0755 "$deb_root/DEBIAN"
-    dpkg-deb --root-owner-group --build "$deb_root" "$repo_root/$output_dir/mere-run_${deb_version}_${deb_arch}.deb"
+    dpkg-deb --root-owner-group --build "$deb_root" "$output_root/mere-run_${deb_version}_${deb_arch}.deb"
     echo "[package-linux] wrote $output_dir/mere-run_${deb_version}_${deb_arch}.deb"
   else
     echo "[package-linux] warning: dpkg-deb not found; skipping .deb package." >&2
@@ -371,7 +392,7 @@ CONTROL
 fi
 
 (
-  cd "$output_dir"
+  cd "$output_root"
   sha256sum ./* | sed 's#  \./#  #' >SHA256SUMS
 )
 echo "[package-linux] wrote $output_dir/SHA256SUMS"

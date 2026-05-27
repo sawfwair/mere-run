@@ -50,8 +50,8 @@ The public OSS repo currently supports:
 - `swift build` and `swift test` are the supported first-run validation path for macOS contributors
 - Linux CLI compatibility work expects a Swift 6.x toolchain, `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK development headers, `ffmpeg`, `ffprobe`, `gzip`, `unzip`, and `zip`
 - media I/O should discover `ffmpeg` and `ffprobe` on `PATH`, with `MERERUN_FFMPEG` and `MERERUN_FFPROBE` reserved for absolute executable overrides
-- Linux CI should stay CPU MLX-oriented and fixture-sized; CUDA is an optional local acceleration path, not a baseline for pull-request checks
-- Linux CUDA validation is currently limited to available x86 CUDA hosts with up to 16 GB VRAM; larger x86 CUDA systems and DGX-class machines are not claimed as tested yet
+- hosted Linux CI should stay CPU MLX-oriented and fixture-sized; Linux arm64 release packages must use a real CUDA lane
+- Linux CUDA validation is limited to the exact hosts that have run the CUDA package and smoke path
 - some vendored binaries include additional Apple platform slices for package consumers, while Linux release artifacts stay headless CLI-only
 
 ## Install the latest release
@@ -77,10 +77,12 @@ cd /Volumes/mere.run/.mere-run
 The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
-Linux release artifacts are headless CLI-only. The release workflow can publish
-both a portable tarball and a Debian package for x86_64/amd64 Ubuntu-style
-hosts. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the
-current validation boundary, CUDA notes, and first commands:
+Linux release artifacts are headless CLI-only. The default release workflow
+publishes portable tarballs and Debian packages for x86_64/amd64 Ubuntu-style
+hosts. Linux arm64 is CUDA-only for release packaging and requires a real arm64
+CUDA host or self-hosted runner; CPU arm64 packages are just local smoke-test
+artifacts. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for
+the current validation boundary, CUDA notes, and first commands:
 
 ```bash
 tag=v0.8.0
@@ -98,10 +100,17 @@ sudo apt install ./mere-run.deb
 ```
 
 Linux packages install the `mere.run` CLI plus colocated runtime assets; they do
-not include the macOS SwiftUI studio or DMG layout. Linux arm64 release package
-builds are blocked for now by upstream `mlx-swift` Linux `bf16` support. CUDA is
-optional local acceleration work; current x86 CUDA validation should be treated
-as limited to available hosts with up to 16 GB VRAM.
+not include the macOS SwiftUI studio or DMG layout. On Linux arm64, if a distro
+Clang shadows Swift's bundled Clang and cannot compile MLX bf16 headers, the
+Linux scripts select a bf16-capable C++ driver or report the `CXX` override to
+use. Linux arm64 release packages should be built with CUDA enabled:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.8.0
+```
+
+Current CUDA validation should be treated as limited to the exact hosts that
+have run the CUDA package/smoke path.
 
 ## Build from source
 
@@ -132,7 +141,7 @@ the validation headless:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+sudo apt-get install -y cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
 export MERERUN_FFMPEG=/usr/bin/ffmpeg
 export MERERUN_FFPROBE=/usr/bin/ffprobe
 ./scripts/check-linux.sh
@@ -144,6 +153,12 @@ To build Linux release packages from a Linux x86_64 Swift toolchain host:
 ```bash
 scripts/package-linux.sh --version 0.8.0
 ls dist/linux/
+```
+
+On Linux arm64, use a CUDA-provisioned host:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.8.0
 ```
 
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio

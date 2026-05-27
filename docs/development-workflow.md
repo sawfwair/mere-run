@@ -89,29 +89,33 @@ inputs. The Linux gate runs the hidden `MediaIOSmoke` executable against
 `ffmpeg`/`ffprobe` so image, audio, MP4, mux, and frame extraction paths stay
 covered without model checkpoints. CUDA setup belongs in local runtime
 documentation or manual smoke notes, not in the default pull-request gate.
-Current x86 CUDA validation is limited to available hosts with up to 16 GB VRAM;
-larger x86 CUDA systems and DGX-class machines are future validation targets,
-not current support claims.
+CUDA validation is limited to the exact hosts that have run the CUDA package and
+smoke path. Linux arm64 packages are only meaningful with CUDA; CPU-only arm64
+packages are local smoke artifacts, not support claims.
 
 ### Linux release packaging change
 
-Linux release packaging is a separate x86_64/amd64 path for distributable
-headless CLI artifacts:
+Linux release packaging is a separate path for distributable headless CLI
+artifacts. The default GitHub release workflow publishes x86_64/amd64 artifacts:
 
 ```bash
 scripts/package-linux.sh --version 0.8.0
 ls dist/linux/
 ```
 
-The package script builds `dist/linux/mere-run-<version>-linux-x86_64.tar.gz`,
-`dist/linux/mere-run_<version>_amd64.deb`, and `dist/linux/SHA256SUMS`. It must
-run on Linux; arm64 package builds intentionally fail until upstream
-`mlx-swift` Linux `bf16` support is available.
+The package script builds
+`dist/linux/mere-run-<version>-linux-<arch>.tar.gz`,
+`dist/linux/mere-run_<version>_<deb-arch>.deb`, and
+`dist/linux/SHA256SUMS`. It must run on Linux.
 
 The GitHub `linux-release` workflow can be triggered manually with a version
-input to validate the package build and upload an Actions artifact. On published
-GitHub Release events, the workflow also uploads the Linux artifacts to the
-release.
+input to validate the hosted x86_64 package build and upload an Actions
+artifact. The optional arm64 CUDA lane requires a self-hosted Linux runner
+labeled `self-hosted`, `linux`, `arm64`, and `cuda`; enable it manually with
+`build_arm64_cuda` or on release events with the
+`MERERUN_RELEASE_ARM64_CUDA=1` repository variable. On published GitHub Release
+events, the workflow uploads the available Linux artifacts and checksum manifest
+to the release.
 
 ## Model-store expectations
 

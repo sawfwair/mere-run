@@ -75,6 +75,9 @@ done
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# shellcheck source=scripts/linux-arm64-bf16-toolchain.sh
+source "$repo_root/scripts/linux-arm64-bf16-toolchain.sh"
+
 host_os="$(uname -s)"
 if [[ "$host_os" != "Linux" ]]; then
   echo "[prepare-linux-native] non-Linux host; skipping Linux-native asset preparation."
@@ -84,9 +87,11 @@ fi
 case "$(uname -m)" in
   x86_64|amd64)
     arch="x86_64"
+    deb_multiarch="x86_64-linux-gnu"
     ;;
   aarch64|arm64)
     arch="arm64"
+    deb_multiarch="aarch64-linux-gnu"
     ;;
   *)
     echo "[prepare-linux-native] error: unsupported Linux architecture: $(uname -m)" >&2
@@ -122,6 +127,9 @@ case "$linux_accel" in
     exit 64
     ;;
 esac
+if [[ "$check_only" != "1" ]]; then
+  configure_linux_arm64_bf16_toolchain "$arch" "prepare-linux-native"
+fi
 
 stage_ds4() {
   local ds4_root="$repo_root/vendor/ds4"
@@ -286,11 +294,11 @@ smoke_mlx_swift_cuda() {
   git -C "$mlx_cmake_src" checkout --detach FETCH_HEAD
 
   local local_openblas_root="$native_root/deps/apt-root"
-  local local_openblas_lib="$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so"
-  local local_openblas_include="$local_openblas_root/usr/include/x86_64-linux-gnu/openblas-pthread;$local_openblas_root/usr/include"
+  local local_openblas_lib="$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so"
+  local local_openblas_include="$local_openblas_root/usr/include/$deb_multiarch/openblas-pthread;$local_openblas_root/usr/include"
 
-  if [[ ! -f "$local_openblas_root/usr/include/x86_64-linux-gnu/openblas-pthread/cblas.h" &&
-        ! -f /usr/include/x86_64-linux-gnu/openblas-pthread/cblas.h &&
+  if [[ ! -f "$local_openblas_root/usr/include/$deb_multiarch/openblas-pthread/cblas.h" &&
+        ! -f /usr/include/$deb_multiarch/openblas-pthread/cblas.h &&
         ! -f /usr/include/cblas.h ]]; then
     if command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then
       echo "[prepare-linux-native] downloading local OpenBLAS/LAPACK headers for mlx-swift CUDA smoke"
@@ -335,40 +343,40 @@ smoke_mlx_swift_cuda() {
     mlx_cmake_args+=("-DCUDNN_LIBRARY_PATH=$CUDNN_LIBRARY_PATH")
   fi
   local local_openblas_root="$native_root/deps/apt-root"
-  local local_openblas_lib="$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so"
-  local local_openblas_include="$local_openblas_root/usr/include/x86_64-linux-gnu/openblas-pthread;$local_openblas_root/usr/include"
+  local local_openblas_lib="$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so"
+  local local_openblas_include="$local_openblas_root/usr/include/$deb_multiarch/openblas-pthread;$local_openblas_root/usr/include"
 
   if [[ -n "${BLAS_LIBRARIES:-}" ]]; then
     mlx_cmake_args+=("-DBLAS_LIBRARIES=$BLAS_LIBRARIES")
   elif [[ -f "$local_openblas_lib" ]]; then
     mlx_cmake_args+=("-DBLAS_LIBRARIES=$local_openblas_lib")
-  elif [[ -f /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so ]]; then
-    mlx_cmake_args+=("-DBLAS_LIBRARIES=/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so")
-  elif [[ -f /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.12.0 ]]; then
-    mlx_cmake_args+=("-DBLAS_LIBRARIES=/usr/lib/x86_64-linux-gnu/blas/libblas.so.3.12.0")
+  elif [[ -f /usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so ]]; then
+    mlx_cmake_args+=("-DBLAS_LIBRARIES=/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so")
+  elif [[ -f /usr/lib/$deb_multiarch/blas/libblas.so.3.12.0 ]]; then
+    mlx_cmake_args+=("-DBLAS_LIBRARIES=/usr/lib/$deb_multiarch/blas/libblas.so.3.12.0")
   fi
   if [[ -n "${BLAS_INCLUDE_DIRS:-}" ]]; then
     mlx_cmake_args+=("-DBLAS_INCLUDE_DIRS=$BLAS_INCLUDE_DIRS")
-  elif [[ -f "$local_openblas_root/usr/include/x86_64-linux-gnu/openblas-pthread/cblas.h" ]]; then
+  elif [[ -f "$local_openblas_root/usr/include/$deb_multiarch/openblas-pthread/cblas.h" ]]; then
     mlx_cmake_args+=("-DBLAS_INCLUDE_DIRS=$local_openblas_include")
-  elif [[ -d /usr/include/x86_64-linux-gnu/openblas-pthread ]]; then
-    mlx_cmake_args+=("-DBLAS_INCLUDE_DIRS=/usr/include/x86_64-linux-gnu/openblas-pthread")
+  elif [[ -d /usr/include/$deb_multiarch/openblas-pthread ]]; then
+    mlx_cmake_args+=("-DBLAS_INCLUDE_DIRS=/usr/include/$deb_multiarch/openblas-pthread")
   fi
   if [[ -n "${LAPACK_LIBRARIES:-}" ]]; then
     mlx_cmake_args+=("-DLAPACK_LIBRARIES=$LAPACK_LIBRARIES")
   elif [[ -f "$local_openblas_lib" ]]; then
     mlx_cmake_args+=("-DLAPACK_LIBRARIES=$local_openblas_lib")
-  elif [[ -f /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so ]]; then
-    mlx_cmake_args+=("-DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so")
-  elif [[ -f /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.12.0 ]]; then
-    mlx_cmake_args+=("-DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.12.0")
+  elif [[ -f /usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so ]]; then
+    mlx_cmake_args+=("-DLAPACK_LIBRARIES=/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so")
+  elif [[ -f /usr/lib/$deb_multiarch/lapack/liblapack.so.3.12.0 ]]; then
+    mlx_cmake_args+=("-DLAPACK_LIBRARIES=/usr/lib/$deb_multiarch/lapack/liblapack.so.3.12.0")
   fi
   if [[ -n "${LAPACK_INCLUDE_DIRS:-}" ]]; then
     mlx_cmake_args+=("-DLAPACK_INCLUDE_DIRS=$LAPACK_INCLUDE_DIRS")
   elif [[ -f "$local_openblas_root/usr/include/lapack.h" ]]; then
     mlx_cmake_args+=("-DLAPACK_INCLUDE_DIRS=$local_openblas_include")
-  elif [[ -d /usr/include/x86_64-linux-gnu/openblas-pthread ]]; then
-    mlx_cmake_args+=("-DLAPACK_INCLUDE_DIRS=/usr/include/x86_64-linux-gnu/openblas-pthread")
+  elif [[ -d /usr/include/$deb_multiarch/openblas-pthread ]]; then
+    mlx_cmake_args+=("-DLAPACK_INCLUDE_DIRS=/usr/include/$deb_multiarch/openblas-pthread")
   fi
 
   echo "[prepare-linux-native] configuring mlx-swift CUDA smoke via CMake"
@@ -404,9 +412,9 @@ mlx_swift_cuda_link_flags() {
   flags+=("-L" "$mlx_cmake_build/_deps/mlx-build/mlx/io")
   flags+=("-L" "$mlx_cmake_build/lib")
 
-  if [[ -f "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so" ]]; then
-    flags+=("-L" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
-    flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/x86_64-linux-gnu/openblas-pthread")
+  if [[ -f "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so" ]]; then
+    flags+=("-L" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
   fi
   if [[ -n "${CUDNN_LIBRARY_PATH:-}" ]]; then
     flags+=("-L" "$CUDNN_LIBRARY_PATH")
@@ -425,8 +433,8 @@ mlx_swift_cuda_link_flags() {
       fi
     done
   fi
-  if [[ -d /usr/lib/x86_64-linux-gnu ]]; then
-    flags+=("-L" "/usr/lib/x86_64-linux-gnu")
+  if [[ -d /usr/lib/$deb_multiarch ]]; then
+    flags+=("-L" "/usr/lib/$deb_multiarch")
   fi
 
   flags+=(

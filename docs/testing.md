@@ -10,9 +10,9 @@ Use the smallest layer that covers your change, then scale up before opening a
 PR.
 
 Linux CLI compatibility uses a narrower fixture boundary: headless CLI behavior,
-media-tool discovery, and CPU MLX-sized checks. CUDA should stay out of default
-CI and be documented as an optional local acceleration path when a runtime needs
-it.
+media-tool discovery, and CPU MLX-sized checks for hosted x86 CI. Linux arm64 is
+different: CPU-only packages are smoke artifacts, and release-worthy arm64
+packages must exercise the CUDA lane on real arm64 CUDA hardware.
 
 ## Fast validation
 
@@ -64,13 +64,12 @@ export MERERUN_FFMPEG=/usr/bin/ffmpeg
 export MERERUN_FFPROBE=/usr/bin/ffprobe
 ```
 
-The pull-request fixture should stay CPU MLX-compatible. CUDA machines can run
-additional local smoke tests, but CUDA installation, driver selection, and GPU
-availability are not assumptions in the shared CI contract. Current x86 CUDA
-validation is limited to available hosts with up to 16 GB VRAM; larger x86 CUDA
-systems and DGX-class machines should not be described as tested until they are
-run directly. To use the optional Linux CUDA bridge, prepare native artifacts
-and export the environment that the script prints:
+The pull-request fixture should stay CPU MLX-compatible on hosted x86 runners.
+CUDA machines can run additional package and smoke tests, but CUDA installation,
+driver selection, and GPU availability are not assumptions in the shared hosted
+CI contract. Do not describe a CUDA configuration as tested until that exact
+host has run the CUDA path. To use the Linux CUDA bridge, prepare native
+artifacts and export the environment that the script prints:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
@@ -95,10 +94,19 @@ dpkg-deb --info dist/linux/mere-run_*_*.deb
 dpkg-deb --contents dist/linux/mere-run_*_*.deb | grep 'usr/bin/mere.run'
 ```
 
-The `linux-release` workflow runs the same package and manifest boundary on
-Ubuntu 22.04 in the Swift 6.0 container. Manual workflow runs upload Actions
-artifacts only; published GitHub Release events also upload the Linux assets to
-the release.
+On Linux arm64, use CUDA for the package check:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.8.0
+```
+
+The `linux-release` workflow runs the hosted package and manifest boundary for
+x86_64 on Ubuntu 22.04 in the Swift 6.0 container. Its arm64 CUDA lane is
+optional and targets a self-hosted runner labeled `self-hosted`, `linux`,
+`arm64`, and `cuda`; enable it manually with `build_arm64_cuda` or on release
+events with the `MERERUN_RELEASE_ARM64_CUDA=1` repository variable. Manual
+workflow runs upload Actions artifacts only; published GitHub Release events
+also upload the available Linux assets and checksum manifest to the release.
 
 MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
 covers pure Swift image, WAV, and FFT behavior in the normal test suite.
@@ -197,8 +205,9 @@ If the change adds Linux-compatible code, include the focused unit test or stub
 fixture result that exercises the new behavior.
 
 If the change touches Linux release packaging or `.github/workflows/linux-release.yml`,
-run the package script on Linux or dispatch the `linux-release` workflow on
-`main` with a test version.
+run the package script on the affected Linux architecture or dispatch the
+`linux-release` workflow on `main` with a test version. For arm64 changes, that
+means a CUDA-provisioned arm64 runner, not the hosted CPU arm64 runner.
 
 ## Troubleshooting
 
