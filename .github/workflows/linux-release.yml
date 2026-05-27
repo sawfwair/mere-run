@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download Linux package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: mere-run-linux-*-packages
           path: dist/linux-by-arch
