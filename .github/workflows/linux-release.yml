@@ -73,7 +73,7 @@ jobs:
           dpkg-deb --contents "$artifact_dir"/mere-run_*_*.deb | grep 'usr/bin/mere.run'
 
       - name: Upload Linux x86_64 package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mere-run-linux-x86_64-packages
           path: dist/linux/x86_64/*
@@ -148,7 +148,7 @@ jobs:
           dpkg-deb --contents "$artifact_dir"/mere-run_*_*.deb | grep 'usr/bin/mere.run'
 
       - name: Upload Linux arm64 CUDA package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mere-run-linux-arm64-cuda-packages
           path: dist/linux/arm64/*
@@ -186,7 +186,7 @@ jobs:
           (cd dist/linux && sha256sum -c SHA256SUMS)
 
       - name: Upload combined Linux package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mere-run-linux-packages
           path: dist/linux/*
