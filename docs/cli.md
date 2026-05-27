@@ -714,6 +714,26 @@ swift run mere.run model pull --all
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
+### `mere.run model benchmark gemma4-kv`
+
+Run a fixed-token real-checkpoint Gemma4 KV cache comparison. The command runs
+the selected Gemma4 model twice in one process: default Gemma4 KV settings first,
+then packed `polar` 2-bit KV from token 0. It disables EOS stopping so both
+variants decode exactly `--decode-tokens`, and reports TTFT, prefill tok/s,
+decode tok/s, end-to-end tok/s, and process resident memory before and after
+each variant.
+
+```bash
+swift run mere.run model benchmark gemma4-kv \
+  --model text-chat-gemma4-turbo \
+  --decode-tokens 48 \
+  --json
+```
+
+Use `--prompt`, `--prompt-file`, or `--prompt-repeat` to control prompt length.
+The default fixture prompt is deterministic and intended for local A/B
+comparisons, not model-quality evaluation.
+
 ### `mere.run model capabilities`
 
 Show this machine's supported models, recommended setup package, and a short summary

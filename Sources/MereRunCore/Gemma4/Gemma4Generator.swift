@@ -20,6 +20,7 @@ private struct Gemma4PrefixKVCacheEntry {
 private struct Gemma4BatchedDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
+    let firstTokenSeconds: Double?
 }
 
 private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
@@ -35,6 +36,7 @@ private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
     var layerCaches: [Gemma4AttentionCache]
     var generatedTokens: [Int]
     var repetitionHistory: [Int]
+    var firstTokenSeconds: Double?
     var stopped = false
 
     init(
@@ -70,7 +72,8 @@ private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
         continuation.resume(
             returning: Gemma4BatchedDecodeResult(
                 generatedTokens: generatedTokens,
-                decodeSeconds: Date().timeIntervalSince(decodeStart)
+                decodeSeconds: Date().timeIntervalSince(decodeStart),
+                firstTokenSeconds: firstTokenSeconds
             )
         )
     }
@@ -259,7 +262,9 @@ public actor Gemma4Generator: ChatGenerator {
         }
 
         let hasTools = request.tools?.isEmpty == false
-        let eosSet = Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds(withTools: hasTools))
+        let eosSet = request.stopOnEOS
+            ? Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds(withTools: hasTools))
+            : []
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
@@ -328,9 +333,11 @@ public actor Gemma4Generator: ChatGenerator {
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
-                decodeSeconds: decodeResult.decodeSeconds
+                decodeSeconds: decodeResult.decodeSeconds,
+                firstTokenSeconds: decodeResult.firstTokenSeconds
             ),
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            promptTokens: promptTokens.count
         )
     }
 
@@ -346,7 +353,7 @@ public actor Gemma4Generator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         guard tokenBudget > 0 else {
-            return Gemma4BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
+            return Gemma4BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0, firstTokenSeconds: nil)
         }
         guard continuousBatchingEnabled else {
             return try await decodeTokensSerially(
@@ -401,6 +408,7 @@ public actor Gemma4Generator: ChatGenerator {
         var generated: [Int] = []
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
+        var firstTokenSeconds: Double?
         let decodeStart = Date()
 
         for _ in 0..<tokenBudget {
@@ -416,6 +424,9 @@ public actor Gemma4Generator: ChatGenerator {
             }
 
             generated.append(next)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(decodeStart)
+            }
             repetitionHistory.append(next)
             let piece = tokenizerAndTemplate.decode(token: next)
             if !piece.isEmpty {
@@ -432,7 +443,8 @@ public actor Gemma4Generator: ChatGenerator {
 
         return Gemma4BatchedDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            decodeSeconds: Date().timeIntervalSince(decodeStart),
+            firstTokenSeconds: firstTokenSeconds
         )
     }
 
@@ -552,6 +564,9 @@ public actor Gemma4Generator: ChatGenerator {
                 continue
             }
             row.generatedTokens.append(next)
+            if row.firstTokenSeconds == nil {
+                row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
+            }
             row.repetitionHistory.append(next)
             let piece = tokenizerAndTemplate.decode(token: next)
             if !piece.isEmpty {

@@ -353,6 +353,15 @@ enum GuideRegistry {
             resourceName: "model-runtime.md"
         ),
         GuideTopic(
+            topic: "model-benchmark",
+            title: "Model Benchmark",
+            commandPaths: [["model", "benchmark"], ["model", "benchmark", "gemma4-kv"]],
+            models: [
+                "text-chat-gemma4-turbo",
+            ],
+            resourceName: "model-benchmark.md"
+        ),
+        GuideTopic(
             topic: "model-capabilities",
             title: "Model Capabilities",
             commandPaths: [["model", "capabilities"]],

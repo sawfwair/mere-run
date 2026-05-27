@@ -248,6 +248,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var lora: LoRA?
     public var requiresJSON: Bool
     public var tools: [ToolDefinition]?
+    public var stopOnEOS: Bool
 
     public init(
         messages: [ChatMessage],
@@ -257,7 +258,8 @@ public struct ChatRequest: Sendable, Hashable {
         showThinking: Bool = true,
         lora: LoRA? = nil,
         requiresJSON: Bool = false,
-        tools: [ToolDefinition]? = nil
+        tools: [ToolDefinition]? = nil,
+        stopOnEOS: Bool = true
     ) {
         self.messages = messages
         self.maxTokens = maxTokens
@@ -267,6 +269,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.lora = lora
         self.requiresJSON = requiresJSON
         self.tools = tools
+        self.stopOnEOS = stopOnEOS
     }
 }
 
@@ -274,15 +277,18 @@ public struct ChatTiming: Sendable, Hashable {
     public var loadSeconds: Double
     public var prefillSeconds: Double
     public var decodeSeconds: Double
+    public var firstTokenSeconds: Double?
 
     public init(
         loadSeconds: Double = 0,
         prefillSeconds: Double = 0,
-        decodeSeconds: Double = 0
+        decodeSeconds: Double = 0,
+        firstTokenSeconds: Double? = nil
     ) {
         self.loadSeconds = loadSeconds
         self.prefillSeconds = prefillSeconds
         self.decodeSeconds = decodeSeconds
+        self.firstTokenSeconds = firstTokenSeconds
     }
 }
 
@@ -291,12 +297,20 @@ public struct ChatResponse: Sendable, Hashable {
     public var tokensGenerated: Int
     public var timing: ChatTiming?
     public var toolCalls: [ToolCall]?
+    public var promptTokens: Int?
 
-    public init(response: String, tokensGenerated: Int, timing: ChatTiming? = nil, toolCalls: [ToolCall]? = nil) {
+    public init(
+        response: String,
+        tokensGenerated: Int,
+        timing: ChatTiming? = nil,
+        toolCalls: [ToolCall]? = nil,
+        promptTokens: Int? = nil
+    ) {
         self.response = response
         self.tokensGenerated = tokensGenerated
         self.timing = timing
         self.toolCalls = toolCalls
+        self.promptTokens = promptTokens
     }
 }
 
