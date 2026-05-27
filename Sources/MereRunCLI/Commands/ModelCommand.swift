@@ -10,6 +10,7 @@ struct Model: ParsableCommand {
             ModelRemove.self,
             ModelInfo.self,
             ModelCapabilities.self,
+            ModelRuntime.self,
             ModelRepairManifests.self,
         ]
     )

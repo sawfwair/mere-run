@@ -18,7 +18,15 @@ final class Q35SwitchLinear: Module {
     let groupSize: Int
     let bits: Int
 
-    init(inputDims: Int, outputDims: Int, numExperts: Int, groupSize: Int, bits: Int, bias: Bool) {
+    init(
+        inputDims: Int,
+        outputDims: Int,
+        numExperts: Int,
+        groupSize: Int,
+        bits: Int,
+        quantized: Bool,
+        bias: Bool
+    ) {
         self.groupSize = groupSize
         self.bits = bits
 
@@ -29,8 +37,12 @@ final class Q35SwitchLinear: Module {
             [numExperts, outputDims, inputDims]
         )
         let groups = max(1, (inputDims + groupSize - 1) / groupSize)
-        self._scales.wrappedValue = MLXArray.zeros([numExperts, outputDims, groups])
-        self._biases.wrappedValue = MLXArray.zeros([numExperts, outputDims, groups])
+        self._scales.wrappedValue = quantized
+            ? MLXArray.zeros([numExperts, outputDims, groups])
+            : nil
+        self._biases.wrappedValue = quantized
+            ? MLXArray.zeros([numExperts, outputDims, groups])
+            : nil
         if bias {
             self._bias.wrappedValue = MLXArray.zeros([numExperts, outputDims])
         }
@@ -97,6 +109,7 @@ final class Q35SwitchGLU: Module {
         let text = config.textConfig
         let groupSize = config.quantization?.groupSize ?? 64
         let bits = config.quantization?.bits ?? 4
+        let quantized = config.quantization != nil
 
         self._gateProj.wrappedValue = Q35SwitchLinear(
             inputDims: text.hiddenSize,
@@ -104,6 +117,7 @@ final class Q35SwitchGLU: Module {
             numExperts: text.numExperts,
             groupSize: groupSize,
             bits: bits,
+            quantized: quantized,
             bias: false
         )
         self._upProj.wrappedValue = Q35SwitchLinear(
@@ -112,6 +126,7 @@ final class Q35SwitchGLU: Module {
             numExperts: text.numExperts,
             groupSize: groupSize,
             bits: bits,
+            quantized: quantized,
             bias: false
         )
         self._downProj.wrappedValue = Q35SwitchLinear(
@@ -120,6 +135,7 @@ final class Q35SwitchGLU: Module {
             numExperts: text.numExperts,
             groupSize: groupSize,
             bits: bits,
+            quantized: quantized,
             bias: false
         )
 

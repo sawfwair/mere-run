@@ -87,6 +87,8 @@ struct StatusServerSnapshot: Codable, Equatable {
     let detail: String?
     let loadedModels: [String]
     let modelsDetail: String?
+    let runtime: RuntimeModelPoolStatus?
+    let runtimeDetail: String?
 }
 
 struct StatusModelStoreSnapshot: Codable, Equatable {
@@ -144,17 +146,22 @@ struct StatusSnapshotBuilder {
                 health: "down",
                 detail: health.detail,
                 loadedModels: [],
-                modelsDetail: nil
+                modelsDetail: nil,
+                runtime: nil,
+                runtimeDetail: nil
             )
         }
 
         let models = await probeModels(baseURL: baseURL)
+        let runtime = await probeRuntimeStatus(baseURL: baseURL)
         return StatusServerSnapshot(
             url: baseURL,
             health: "up",
             detail: health.detail,
             loadedModels: models.loadedModels,
-            modelsDetail: models.detail
+            modelsDetail: models.detail,
+            runtime: runtime.snapshot,
+            runtimeDetail: runtime.detail
         )
     }
 
@@ -205,6 +212,31 @@ struct StatusSnapshotBuilder {
         }
     }
 
+    private func probeRuntimeStatus(baseURL: String) async -> (snapshot: RuntimeModelPoolStatus?, detail: String?) {
+        guard let url = URL(string: "\(baseURL)/runtime/status") else {
+            return (nil, "invalid runtime status URL")
+        }
+
+        do {
+            let (data, response) = try await data(from: url, authorize: true)
+            guard let http = response as? HTTPURLResponse else {
+                return (nil, "runtime status returned a non-HTTP response")
+            }
+            switch http.statusCode {
+            case 200:
+                return (try JSONDecoder().decode(RuntimeModelPoolStatus.self, from: data), nil)
+            case 401, 403:
+                return (nil, "requires API key")
+            case 404:
+                return (nil, "runtime status endpoint is unavailable")
+            default:
+                return (nil, "runtime status returned HTTP \(http.statusCode)")
+            }
+        } catch {
+            return (nil, StatusSnapshotBuilder.shortNetworkError(error))
+        }
+    }
+
     private func data(from url: URL, authorize: Bool) async throws -> (Data, URLResponse) {
         var request = URLRequest(url: url, timeoutInterval: max(0.1, timeoutSeconds))
         if authorize, let apiKey {
@@ -252,7 +284,35 @@ enum StatusFormatter {
         lines.append(serverLine)
 
         if snapshot.server.health == "up" {
-            if !snapshot.server.loadedModels.isEmpty {
+            if let runtime = snapshot.server.runtime {
+                let activeModels = runtime.models.filter(\.loaded).map(\.id)
+                if activeModels.isEmpty {
+                    lines.append("  loaded models: none reported")
+                } else {
+                    lines.append("  loaded models: \(activeModels.joined(separator: ", "))")
+                }
+                lines.append("  active requests: \(runtime.activeRequests)")
+                if let admission = runtime.admission {
+                    lines.append("  request admission: \(admission.activeRequests)/\(admission.maxActiveRequests) active, \(admission.queuedRequests) queued")
+                }
+                lines.append("  continuous batching: \(capabilityText(runtime.capabilities.continuousBatching))")
+                lines.append("  prefix KV reuse: \(capabilityText(runtime.capabilities.prefixKVReuse))")
+                if let cacheStats = cacheStatsText(runtime.cacheStats) {
+                    lines.append("  cache stats: \(cacheStats)")
+                }
+                if let benchmarkStats = runtime.benchmarkStats.flatMap(benchmarkStatsText) {
+                    lines.append("  benchmark stats: \(benchmarkStats)")
+                }
+                lines.append("  memory: \(memoryText(runtime.memory))")
+                for model in runtime.models {
+                    guard let prefixKVCache = model.prefixKVCache else { continue }
+                    lines.append("    \(model.id) prefix KV: \(prefixKVCache.entries)/\(prefixKVCache.maxEntries) entries, \(prefixKVCache.hits) hits, \(prefixKVCache.reusedTokens) reused tokens")
+                }
+                for model in runtime.models {
+                    guard let batching = model.continuousBatching else { continue }
+                    lines.append("    \(model.id) batching: \(decodeBatchingText(batching))")
+                }
+            } else if !snapshot.server.loadedModels.isEmpty {
                 lines.append("  loaded models: \(snapshot.server.loadedModels.joined(separator: ", "))")
             } else if let modelsDetail = snapshot.server.modelsDetail {
                 lines.append("  loaded models: unavailable (\(modelsDetail))")
@@ -264,6 +324,11 @@ enum StatusFormatter {
         }
 
         lines.append("  model store: \(modelStoreText(snapshot.modelStore))")
+        if let runtime = snapshot.server.runtime {
+            lines.append("  runtime settings: \(runtime.settingsPath)")
+        } else if let detail = snapshot.server.runtimeDetail, snapshot.server.health == "up" {
+            lines.append("  runtime settings: unavailable (\(detail))")
+        }
         lines.append("  installed models: \(snapshot.installedModels.count)/\(snapshot.knownModelCount)")
 
         if snapshot.installedModels.isEmpty {
@@ -283,5 +348,70 @@ enum StatusFormatter {
             return "\(modelStore.path) (source: \(source))"
         }
         return "\(modelStore.path) (source: \(source), fallback from unreadable \(configuredPath))"
+    }
+
+    private static func memoryText(_ memory: RuntimeMemorySnapshot) -> String {
+        let physical = ByteCountFormatter.string(fromByteCount: Int64(memory.physicalBytes), countStyle: .memory)
+        return "\(memory.pressure) pressure, \(memory.activeModelCount) active model(s), \(physical) physical"
+    }
+
+    private static func capabilityText(_ capability: RuntimeCapabilityStatus) -> String {
+        if capability.enabled {
+            return "enabled"
+        }
+        return capability.available ? "available but disabled" : "unavailable"
+    }
+
+    private static func cacheStatsText(_ stats: RuntimeCacheStatsSummary) -> String? {
+        let prefix = stats.prefixKVReuse
+        let batching = stats.decodeBatching
+        guard prefix.reportedModelCount > 0 || batching.reportedModelCount > 0 else {
+            return nil
+        }
+
+        var parts: [String] = []
+        if prefix.reportedModelCount > 0 {
+            parts.append(
+                "prefix \(prefix.entries)/\(prefix.maxEntries) entries, "
+                    + "\(prefix.hits) hits, \(prefix.reusedTokens) reused tokens"
+            )
+        }
+        if batching.reportedModelCount > 0 {
+            parts.append(
+                "decode batching \(batching.batchedDecodeSteps) batched steps, "
+                    + "\(batching.variablePositionBatchedSteps) variable-position, "
+                    + "max batch \(batching.maxBatchSize)"
+            )
+        }
+        return parts.joined(separator: "; ")
+    }
+
+    private static func decodeBatchingText(_ stats: RuntimeDecodeBatchingStats) -> String {
+        "\(stats.batchedDecodeSteps) batched steps, "
+            + "\(stats.samePositionBatchedSteps) same-position, "
+            + "\(stats.variablePositionBatchedSteps) variable-position, "
+            + "max batch \(stats.maxBatchSize), \(stats.queuedRows) queued rows"
+    }
+
+    private static func benchmarkStatsText(_ stats: RuntimeBenchmarkStatsSummary) -> String? {
+        guard stats.completedRequests > 0 || stats.failedRequests > 0 else {
+            return nil
+        }
+
+        var parts = [
+            "\(stats.completedRequests) completed",
+            "\(stats.failedRequests) failed",
+            "\(stats.generatedTokens) tokens",
+        ]
+        if let averagePrefillSeconds = stats.averagePrefillSeconds {
+            parts.append(String(format: "prefill avg %.2fs", averagePrefillSeconds))
+        }
+        if let averageDecodeSeconds = stats.averageDecodeSeconds {
+            parts.append(String(format: "decode avg %.2fs", averageDecodeSeconds))
+        }
+        if let decodeTokensPerSecond = stats.decodeTokensPerSecond {
+            parts.append(String(format: "decode %.2f tok/s", decodeTokensPerSecond))
+        }
+        return parts.joined(separator: ", ")
     }
 }

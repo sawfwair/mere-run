@@ -90,10 +90,21 @@ protocol Gemma4AttentionCache: AnyObject {
     var offset: Int { get }
     func currentState() -> (MLXArray, MLXArray)?
     func append(keys: MLXArray, values: MLXArray)
+    func fork() -> Gemma4AttentionCache
+    func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache?
+    func unbatchedRows(count: Int) -> [Gemma4AttentionCache]?
     func specializedAttention(queries: MLXArray, repeats: Int, scale: Float) -> MLXArray?
 }
 
 extension Gemma4AttentionCache {
+    func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
+        nil
+    }
+
+    func unbatchedRows(count: Int) -> [Gemma4AttentionCache]? {
+        nil
+    }
+
     func specializedAttention(queries: MLXArray, repeats: Int, scale: Float) -> MLXArray? {
         nil
     }
@@ -118,6 +129,46 @@ final class Gemma4FullKVCache: Gemma4AttentionCache {
             self.values = values
         }
         self.offset += keys.dim(2)
+    }
+
+    func fork() -> Gemma4AttentionCache {
+        let copy = Gemma4FullKVCache()
+        copy.keys = keys
+        copy.values = values
+        copy.offset = offset
+        return copy
+    }
+
+    func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
+        guard let typed = caches as? [Gemma4FullKVCache],
+              !typed.isEmpty,
+              typed.allSatisfy({ $0.offset == offset }) else {
+            return nil
+        }
+
+        let states = typed.compactMap { $0.currentState() }
+        guard states.count == typed.count else {
+            return nil
+        }
+
+        let copy = Gemma4FullKVCache()
+        copy.keys = concatenated(states.map(\.0), axis: 0)
+        copy.values = concatenated(states.map(\.1), axis: 0)
+        copy.offset = offset
+        return copy
+    }
+
+    func unbatchedRows(count: Int) -> [Gemma4AttentionCache]? {
+        guard count > 0, let keys, let values, keys.dim(0) == count, values.dim(0) == count else {
+            return nil
+        }
+        return (0..<count).map { index in
+            let copy = Gemma4FullKVCache()
+            copy.keys = keys[index..<(index + 1), 0..., 0..., 0...]
+            copy.values = values[index..<(index + 1), 0..., 0..., 0...]
+            copy.offset = offset
+            return copy
+        }
     }
 }
 
@@ -157,6 +208,46 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
             self.values = combinedValues
         }
         self.offset += keys.dim(2)
+    }
+
+    func fork() -> Gemma4AttentionCache {
+        let copy = Gemma4SlidingKVCache(maxSize: maxSize)
+        copy.keys = keys
+        copy.values = values
+        copy.offset = offset
+        return copy
+    }
+
+    func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
+        guard let typed = caches as? [Gemma4SlidingKVCache],
+              !typed.isEmpty,
+              typed.allSatisfy({ $0.offset == offset && $0.maxSize == maxSize }) else {
+            return nil
+        }
+
+        let states = typed.compactMap { $0.currentState() }
+        guard states.count == typed.count else {
+            return nil
+        }
+
+        let copy = Gemma4SlidingKVCache(maxSize: maxSize)
+        copy.keys = concatenated(states.map(\.0), axis: 0)
+        copy.values = concatenated(states.map(\.1), axis: 0)
+        copy.offset = offset
+        return copy
+    }
+
+    func unbatchedRows(count: Int) -> [Gemma4AttentionCache]? {
+        guard count > 0, let keys, let values, keys.dim(0) == count, values.dim(0) == count else {
+            return nil
+        }
+        return (0..<count).map { index in
+            let copy = Gemma4SlidingKVCache(maxSize: maxSize)
+            copy.keys = keys[index..<(index + 1), 0..., 0..., 0...]
+            copy.values = values[index..<(index + 1), 0..., 0..., 0...]
+            copy.offset = offset
+            return copy
+        }
     }
 }
 

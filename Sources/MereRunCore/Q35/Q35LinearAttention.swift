@@ -115,6 +115,78 @@ public final class Q35LinearCache: @unchecked Sendable {
         convState = nil
         recurrentState = nil
     }
+
+    public func fork() -> Q35LinearCache {
+        let copy = Q35LinearCache()
+        copy.convState = convState
+        copy.recurrentState = recurrentState
+        return copy
+    }
+
+    public func batched(with caches: [Q35LinearCache]) -> Q35LinearCache? {
+        guard !caches.isEmpty else { return nil }
+
+        let batchedConvState = Self.batchedState(caches.map(\.convState))
+        let batchedRecurrentState = Self.batchedState(caches.map(\.recurrentState))
+        guard batchedConvState.isValid, batchedRecurrentState.isValid else {
+            return nil
+        }
+
+        let copy = Q35LinearCache()
+        copy.convState = batchedConvState.value
+        copy.recurrentState = batchedRecurrentState.value
+        return copy
+    }
+
+    public func unbatchedRows(count: Int) -> [Q35LinearCache]? {
+        guard count > 0 else { return nil }
+        let convRows = Self.unbatchedRows(convState, count: count)
+        let recurrentRows = Self.unbatchedRows(recurrentState, count: count)
+        guard convRows.isValid, recurrentRows.isValid else {
+            return nil
+        }
+        return (0..<count).map { index in
+            let copy = Q35LinearCache()
+            copy.convState = convRows.values?[index]
+            copy.recurrentState = recurrentRows.values?[index]
+            return copy
+        }
+    }
+
+    private static func batchedState(_ states: [MLXArray?]) -> (isValid: Bool, value: MLXArray?) {
+        let present = states.compactMap { $0 }
+        if present.isEmpty {
+            return (true, nil)
+        }
+        guard present.count == states.count else {
+            return (false, nil)
+        }
+        let expectedShape = Array(present[0].shape.dropFirst())
+        guard present.allSatisfy({ Array($0.shape.dropFirst()) == expectedShape }) else {
+            return (false, nil)
+        }
+        return (true, concatenated(present, axis: 0))
+    }
+
+    private static func unbatchedRows(_ state: MLXArray?, count: Int) -> (isValid: Bool, values: [MLXArray]?) {
+        guard let state else {
+            return (true, nil)
+        }
+        guard state.dim(0) == count else {
+            return (false, nil)
+        }
+        let rows = (0..<count).map { index in
+            switch state.ndim {
+            case 3:
+                return state[index..<(index + 1), 0..., 0...]
+            case 4:
+                return state[index..<(index + 1), 0..., 0..., 0...]
+            default:
+                return state[index..<(index + 1)]
+            }
+        }
+        return (true, rows)
+    }
 }
 
 final class Q35LinearAttention: Module {

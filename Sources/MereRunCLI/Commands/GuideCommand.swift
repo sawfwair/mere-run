@@ -339,6 +339,20 @@ enum GuideRegistry {
             resourceName: "model-list.md"
         ),
         GuideTopic(
+            topic: "model-runtime",
+            title: "Model Runtime",
+            commandPaths: [["model", "runtime"], ["model", "runtime", "get"], ["model", "runtime", "set"]],
+            models: [
+                "text-code-qwen3",
+                "text-agent-qwen35-9b",
+                "text-chat-gemma4",
+                "text-chat-q35",
+                "text-agent-deepseek-v4-flash",
+                "text-chat-mebot",
+            ],
+            resourceName: "model-runtime.md"
+        ),
+        GuideTopic(
             topic: "model-capabilities",
             title: "Model Capabilities",
             commandPaths: [["model", "capabilities"]],

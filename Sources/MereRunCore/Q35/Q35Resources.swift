@@ -135,6 +135,7 @@ public enum Q35Error: LocalizedError {
     case missingFiles([String])
     case downloadFailed(String)
     case extractionFailed
+    case generationFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -148,6 +149,8 @@ public enum Q35Error: LocalizedError {
             return "Download failed: \(message)"
         case .extractionFailed:
             return "Failed to prepare Q35 model files"
+        case .generationFailed(let message):
+            return message
         }
     }
 }

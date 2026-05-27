@@ -159,6 +159,32 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(root.path, "/Users/example/Library/Application Support/MereRun/models/image-zimage-nano")
     }
 
+    func testStudioRuntimeSettingsDecodesCLIJSON() throws {
+        let data = """
+        {
+          "alias": "chat-default",
+          "pinned": true,
+          "ttlSeconds": 600,
+          "maxContextTokens": 8192,
+          "maxTokens": 512,
+          "temperature": 0.4,
+          "topP": 0.8,
+          "engineOverride": "text-chat-gemma4"
+        }
+        """.data(using: .utf8)!
+
+        let settings = try JSONDecoder().decode(StudioRuntimeSettings.self, from: data)
+
+        XCTAssertEqual(settings.alias, "chat-default")
+        XCTAssertTrue(settings.pinned)
+        XCTAssertEqual(settings.ttlSeconds, 600)
+        XCTAssertEqual(settings.maxContextTokens, 8192)
+        XCTAssertEqual(settings.maxTokens, 512)
+        XCTAssertEqual(settings.temperature, 0.4)
+        XCTAssertEqual(settings.topP, 0.8)
+        XCTAssertEqual(settings.engineOverride, "text-chat-gemma4")
+    }
+
     func testModelReadinessParserFindsInstalledMissingAndUnknown() {
         let output = """
         ID Category Status Size

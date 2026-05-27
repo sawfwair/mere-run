@@ -5,6 +5,10 @@
 Show one local snapshot of the mere.run runtime: API server reachability, the
 model currently reported by `/v1/models`, the active model-store path, and the
 managed models installed there.
+When `/runtime/status` is available, the snapshot also includes runtime pool
+entries, active request counts, request admission queue depth, memory pressure,
+runtime capability flags, aggregate cache stats, per-model prefix KV cache
+stats, per-model decode batching stats when enabled, and the settings file path.
 
 ## Required Models
 
@@ -33,6 +37,18 @@ mere.run guide status
 - Use it instead of separate `curl /health`, `curl /v1/models`, and `model list`
   checks when you only need the current local state.
 - Use `--json` in scripts, setup agents, or support tooling.
+- Use it after manual load/unload or runtime settings changes to confirm the
+  server sees the same control-plane state.
+- During overlapping API traffic, check `request admission` to see how many
+  requests are running and how many are queued behind `--max-active-requests`.
+  JSON status also includes admitted, completed, and cancelled admission totals.
+- Use `continuous batching` and `prefix KV reuse` to see which scheduler/cache
+  features are actually enabled instead of assuming they are active.
+- Use `cache stats` to check aggregate prefix hits, reused tokens, and batched
+  decode steps across loaded models, including same-position versus
+  variable-position decode batches when the selected engine can report them.
+- Use `benchmark stats` to compare completed request counts, generated tokens,
+  and average load/prefill/decode timings while cache and batching flags are on.
 
 ## Examples
 
@@ -57,6 +73,8 @@ MERERUN_API_KEY=change-me mere.run status --json
   RAM/process scan for every runtime family.
 - The installed model list follows the same shared inventory path as
   `mere.run model list`.
+- `runtime settings` points at
+  `<active model store>/.mere-run/runtime-model-settings.json`.
 
 ## Troubleshooting
 

@@ -764,6 +764,59 @@ final class Gemma4QuantizedKVCache: Gemma4AttentionCache {
         }
     }
 
+    func fork() -> Gemma4AttentionCache {
+        let copy = Gemma4QuantizedKVCache(configuration: configuration, maxSize: maxSize)
+        copy.leadingKeys = leadingKeys
+        copy.leadingValues = leadingValues
+        copy.quantizedKeys = quantizedKeys
+        copy.quantizedValues = quantizedValues
+        copy.offset = offset
+        return copy
+    }
+
+    func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
+        guard let typed = caches as? [Gemma4QuantizedKVCache],
+              !typed.isEmpty,
+              typed.allSatisfy({
+                  $0.offset == offset
+                      && $0.configuration == configuration
+                      && $0.maxSize == maxSize
+              }) else {
+            return nil
+        }
+
+        let states = typed.compactMap { $0.currentState() }
+        guard states.count == typed.count else {
+            return nil
+        }
+
+        let copy = Gemma4QuantizedKVCache(configuration: configuration, maxSize: maxSize)
+        copy.repartition(
+            keys: concatenated(states.map(\.0), axis: 0),
+            values: concatenated(states.map(\.1), axis: 0),
+            newOffset: offset
+        )
+        return copy
+    }
+
+    func unbatchedRows(count: Int) -> [Gemma4AttentionCache]? {
+        guard count > 0,
+              let state = currentState(),
+              state.0.dim(0) == count,
+              state.1.dim(0) == count else {
+            return nil
+        }
+        return (0..<count).map { index in
+            let copy = Gemma4QuantizedKVCache(configuration: configuration, maxSize: maxSize)
+            copy.repartition(
+                keys: state.0[index..<(index + 1), 0..., 0..., 0...],
+                values: state.1[index..<(index + 1), 0..., 0..., 0...],
+                newOffset: offset
+            )
+            return copy
+        }
+    }
+
     func specializedAttention(queries: MLXArray, repeats: Int, scale: Float) -> MLXArray? {
         guard queries.dim(2) == 1 else {
             return nil
