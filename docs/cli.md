@@ -35,7 +35,7 @@ Public tree:
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
-- `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
+- `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
 - `mere.run setup`
@@ -714,6 +714,26 @@ swift run mere.run model pull --all
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
+### `mere.run model benchmark gemma4-kv`
+
+Run a fixed-token real-checkpoint Gemma4 KV cache comparison. The command runs
+the selected Gemma4 model twice in one process: default Gemma4 KV settings first,
+then model-default prefill with packed `polar` 2-bit KV from token 0 for decode. It
+disables EOS stopping so both variants decode exactly `--decode-tokens`, and
+reports TTFT, prefill tok/s, KV conversion time, decode tok/s, end-to-end tok/s,
+and process resident memory before and after each variant.
+
+```bash
+swift run mere.run model benchmark gemma4-kv \
+  --model text-chat-gemma4-turbo \
+  --decode-tokens 48 \
+  --json
+```
+
+Use `--prompt`, `--prompt-file`, or `--prompt-repeat` to control prompt length.
+The default fixture prompt is deterministic and intended for local A/B
+comparisons, not model-quality evaluation.
+
 ### `mere.run model capabilities`
 
 Show this machine's supported models, recommended setup package, and a short summary
@@ -797,6 +817,10 @@ Security defaults:
   state so compatible Q35 rows can batch across decode positions; the scheduler
   services the earliest decode position first by batching compatible rows there
   or advancing one lower-offset row until it can join a compatible batch
+- Gemma4 can opt into experimental packed PolarKV with
+  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
+  long-context synthetic decode testing. It is not the default until checkpoint
+  benchmarks prove the end-to-end model path.
 - `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,
   batched decode steps, completed chat requests, generated tokens, and average
   load/prefill/decode timings across loaded models under `cacheStats` and

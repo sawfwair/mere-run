@@ -20,6 +20,7 @@ private struct Gemma4PrefixKVCacheEntry {
 private struct Gemma4BatchedDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
+    let firstTokenSeconds: Double?
 }
 
 private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
@@ -35,6 +36,7 @@ private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
     var layerCaches: [Gemma4AttentionCache]
     var generatedTokens: [Int]
     var repetitionHistory: [Int]
+    var firstTokenSeconds: Double?
     var stopped = false
 
     init(
@@ -70,7 +72,8 @@ private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
         continuation.resume(
             returning: Gemma4BatchedDecodeResult(
                 generatedTokens: generatedTokens,
-                decodeSeconds: Date().timeIntervalSince(decodeStart)
+                decodeSeconds: Date().timeIntervalSince(decodeStart),
+                firstTokenSeconds: firstTokenSeconds
             )
         )
     }
@@ -243,6 +246,7 @@ public actor Gemma4Generator: ChatGenerator {
             throw Gemma4Error.modelNotLoaded
         }
         let kvCacheQuantization = try self.kvCacheQuantization.validated()
+        let prefillKVCacheQuantization = prefillQuantization(for: kvCacheQuantization)
 
         let effectiveContext = min(maxContextLength, loadedConfig.textConfig.maxPositionEmbeddings)
         let prefillStart = Date()
@@ -259,7 +263,9 @@ public actor Gemma4Generator: ChatGenerator {
         }
 
         let hasTools = request.tools?.isEmpty == false
-        let eosSet = Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds(withTools: hasTools))
+        let eosSet = request.stopOnEOS
+            ? Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds(withTools: hasTools))
+            : []
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
@@ -283,7 +289,7 @@ public actor Gemma4Generator: ChatGenerator {
         )
         let layerCaches = try prefixSeed?.caches ?? makeLayerCaches(
             model: model,
-            quantization: kvCacheQuantization
+            quantization: prefillKVCacheQuantization
         )
         let logits = try await chunkedPrefill(
             model: model,
@@ -298,6 +304,11 @@ public actor Gemma4Generator: ChatGenerator {
         )
 
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
+        let preparedCaches = try prepareLayerCachesForDecode(
+            layerCaches,
+            quantization: kvCacheQuantization,
+            progressHandler: progressHandler
+        )
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
@@ -306,7 +317,7 @@ public actor Gemma4Generator: ChatGenerator {
             model: model,
             tokenizerAndTemplate: tokenizerAndTemplate,
             initialLogits: logits,
-            layerCaches: layerCaches,
+            layerCaches: preparedCaches.caches,
             eosSet: eosSet,
             generationConfig: generationConfig,
             tokenBudget: tokenBudget,
@@ -328,10 +339,55 @@ public actor Gemma4Generator: ChatGenerator {
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
-                decodeSeconds: decodeResult.decodeSeconds
+                cacheConversionSeconds: preparedCaches.conversionSeconds,
+                decodeSeconds: decodeResult.decodeSeconds,
+                firstTokenSeconds: decodeResult.firstTokenSeconds
             ),
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            promptTokens: promptTokens.count
         )
+    }
+
+    private func prefillQuantization(for quantization: Gemma4KVCacheQuantization) -> Gemma4KVCacheQuantization {
+        guard shouldDeferQuantizationUntilDecode(quantization) else {
+            return quantization
+        }
+
+        if Gemma4Resources.usesTurboDefaults(modelSpec: modelId) {
+            return Gemma4KVCacheQuantization(
+                bits: Gemma4Resources.defaultTurboKVBits,
+                scheme: Gemma4Resources.defaultTurboKVQuantizationScheme,
+                groupSize: quantization.groupSize,
+                quantizedStart: Gemma4Resources.defaultTurboQuantizedKVStart
+            )
+        }
+
+        return Gemma4KVCacheQuantization()
+    }
+
+    private func shouldDeferQuantizationUntilDecode(_ quantization: Gemma4KVCacheQuantization) -> Bool {
+        quantization.isEnabled && quantization.scheme == .polar
+    }
+
+    private func prepareLayerCachesForDecode(
+        _ layerCaches: [Gemma4AttentionCache],
+        quantization: Gemma4KVCacheQuantization,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) throws -> (caches: [Gemma4AttentionCache], conversionSeconds: Double?) {
+        guard shouldDeferQuantizationUntilDecode(quantization) else {
+            return (layerCaches, nil)
+        }
+
+        progressHandler?(ChatProgress(stage: .encoding, message: "Packing KV cache for decode"))
+        let start = Date()
+        let converted = try layerCaches.map { cache -> Gemma4AttentionCache in
+            guard let reencoded = cache.reencoded(quantization: quantization) else {
+                throw Gemma4Error.unsupportedConfiguration("Gemma4 could not reencode the prefill KV cache for decode.")
+            }
+            reencoded.evaluateStorage()
+            return reencoded
+        }
+        return (converted, Date().timeIntervalSince(start))
     }
 
     private func decodeTokens(
@@ -346,7 +402,7 @@ public actor Gemma4Generator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         guard tokenBudget > 0 else {
-            return Gemma4BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
+            return Gemma4BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0, firstTokenSeconds: nil)
         }
         guard continuousBatchingEnabled else {
             return try await decodeTokensSerially(
@@ -401,6 +457,7 @@ public actor Gemma4Generator: ChatGenerator {
         var generated: [Int] = []
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
+        var firstTokenSeconds: Double?
         let decodeStart = Date()
 
         for _ in 0..<tokenBudget {
@@ -416,6 +473,9 @@ public actor Gemma4Generator: ChatGenerator {
             }
 
             generated.append(next)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(decodeStart)
+            }
             repetitionHistory.append(next)
             let piece = tokenizerAndTemplate.decode(token: next)
             if !piece.isEmpty {
@@ -432,7 +492,8 @@ public actor Gemma4Generator: ChatGenerator {
 
         return Gemma4BatchedDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            decodeSeconds: Date().timeIntervalSince(decodeStart),
+            firstTokenSeconds: firstTokenSeconds
         )
     }
 
@@ -552,6 +613,9 @@ public actor Gemma4Generator: ChatGenerator {
                 continue
             }
             row.generatedTokens.append(next)
+            if row.firstTokenSeconds == nil {
+                row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
+            }
             row.repetitionHistory.append(next)
             let piece = tokenizerAndTemplate.decode(token: next)
             if !piece.isEmpty {

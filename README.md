@@ -249,6 +249,18 @@ MERERUN_Q35_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
   --engine text-chat-q35 \
   --max-active-requests 2
 
+# Experimental Gemma4 packed PolarKV for memory-pressure and long-context decode testing
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --kv-quant-scheme polar \
+  --kv-bits 2
+
+# Fixed-token real-checkpoint Gemma4 KV benchmark: default TurboQuant vs decode-deferred PolarKV
+swift run mere.run model benchmark gemma4-kv \
+  --model text-chat-gemma4-turbo \
+  --decode-tokens 48 \
+  --json
+
 # Expose the API beyond loopback only with an explicit key
 export MERERUN_API_KEY=change-me
 swift run mere.run api serve \

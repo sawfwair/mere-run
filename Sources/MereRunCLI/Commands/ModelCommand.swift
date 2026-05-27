@@ -11,6 +11,7 @@ struct Model: ParsableCommand {
             ModelInfo.self,
             ModelCapabilities.self,
             ModelRuntime.self,
+            ModelBenchmark.self,
             ModelRepairManifests.self,
         ]
     )

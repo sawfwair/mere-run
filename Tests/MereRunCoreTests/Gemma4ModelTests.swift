@@ -88,6 +88,18 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         XCTAssertEqual(projected.shape, [1, 1, config.numHiddenLayers * config.hiddenSizePerLayerInput])
     }
 
+    func testMakeCacheUsesPolarKVCacheWhenRequested() throws {
+        let config = try decodeTextConfig(makeBaseConfig())
+        let model = Gemma4LanguageModel(config: config)
+        let quantization = try Gemma4KVCacheQuantization(bits: 2, scheme: .polar, groupSize: 64, quantizedStart: 0)
+            .validated()
+
+        let caches = model.makeCache(quantization: quantization)
+
+        XCTAssertEqual(caches.count, 2)
+        XCTAssertTrue(caches.allSatisfy { $0 is Gemma4PolarKVCache })
+    }
+
     func testAttentionKEqVDisablesValueProjectionForFullAttentionLayers() throws {
         var configObject = makeBaseConfig()
         configObject["attention_k_eq_v"] = true

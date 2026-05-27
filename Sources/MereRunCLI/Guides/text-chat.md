@@ -24,7 +24,7 @@ mere.run text chat --help
 - `--max-tokens`: maximum generated tokens.
 - `--temperature`: randomness. Lower for factual work, higher for brainstorming.
 - `--top-p`: nucleus sampling cutoff.
-- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache quantization controls. `text-chat-gemma4-turbo` defaults to 4-bit TurboQuant KV cache from token 0; explicit flags override that.
+- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache quantization controls. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
 - `--model-root`, `-m`: explicit local model root.
 - `--model`: canonical model id.
 - `--thinking`, `--show-thinking`: include hidden reasoning output when supported.
