@@ -110,7 +110,8 @@ struct ImageValidate: AsyncParsableCommand {
             let variant = manifest.variant?.rawValue ?? "unknown"
             let steps = manifest.defaults?.steps.map(String.init) ?? "?"
             let cfg = manifest.defaults?.cfg.map { String(format: "%.2f", $0) } ?? "?"
-            print("  Manifest: engine=\(engine) variant=\(variant) defaults=(steps=\(steps) cfg=\(cfg))")
+            let sigmaShift = manifest.defaults?.sigmaShift.map { String(format: "%.2f", $0) } ?? "?"
+            print("  Manifest: engine=\(engine) variant=\(variant) defaults=(steps=\(steps) cfg=\(cfg) sigma_shift=\(sigmaShift))")
         }
 
         if !report.warnings.isEmpty {

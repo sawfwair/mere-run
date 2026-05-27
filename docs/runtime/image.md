@@ -13,6 +13,8 @@ model families are supported, and how the code is organized.
 The public image families are:
 
 - `image-klein-*`: Klein image family
+- `image-bonsai-binary`: PrismML Bonsai binary FLUX.2 Klein deployment
+- `image-bonsai-ternary`: PrismML Bonsai ternary FLUX.2 Klein deployment
 - `image-zimage-*`: ZImage image family
 - `image-hidream-o1*`: HiDream O1 unified pixel-transformer family
 
@@ -21,6 +23,8 @@ Common managed IDs:
 - `image-klein-nano`
 - `image-klein-base`
 - `image-klein-max`
+- `image-bonsai-binary`
+- `image-bonsai-ternary`
 - `image-zimage-nano`
 - `image-zimage-base`
 - `image-zimage-max`
@@ -36,6 +40,26 @@ swift run mere.run image generate \
   --model image-zimage-nano \
   --prompt "a ceramic mug in soft morning light" \
   --output ./mug.png
+```
+
+### Bonsai binary and ternary
+
+`image-bonsai-binary` and `image-bonsai-ternary` map to PrismML's Apple Silicon
+Bonsai Image snapshots. They run through the native Swift FLUX.2 Klein runtime
+using the upstream packed transformer layout (`transformer-packed-mflux`) and
+the 4-bit MLX text encoder layout (`text_encoder-mlx-4bit`). Binary is the
+smallest 1-bit g128 deployment; ternary is the larger 2-bit quality-oriented
+variant. The binary path uses a native Swift/Metal packed 1-bit affine matmul
+kernel, with a dequantized MLX fallback for non-GPU or unsupported shapes while
+upstream `mlx-swift` does not expose a `bits=1` quantized matmul kernel.
+
+```bash
+swift run mere.run model pull image-bonsai-binary
+swift run mere.run image generate \
+  --model image-bonsai-binary \
+  --prompt "a tiny bonsai tree in a sunlit greenhouse, editorial product photo" \
+  --width 1024 --height 1024 \
+  --output ./bonsai.png
 ```
 
 ### Image-to-image

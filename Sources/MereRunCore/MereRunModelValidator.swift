@@ -90,8 +90,11 @@ public enum MereRunModelValidator {
         // Root marker checks: diffusers-style models should have model_index.json, but allow fallback markers.
         let modelIndex = rootURL.appendingPathComponent("model_index.json")
         let rootConfig = rootURL.appendingPathComponent("config.json")
+        let sourceManifest = rootURL.appendingPathComponent("manifest.json")
 
-        let hasRootMarker = fileManager.fileExists(atPath: modelIndex.path) || fileManager.fileExists(atPath: rootConfig.path)
+        let hasRootMarker = fileManager.fileExists(atPath: modelIndex.path)
+            || fileManager.fileExists(atPath: rootConfig.path)
+            || fileManager.fileExists(atPath: sourceManifest.path)
         let requiresRootMarker: Bool = {
             guard let spec else { return true }
             switch spec.installShape {
@@ -351,15 +354,15 @@ public enum MereRunModelValidator {
 
         if let precision = manifest.precision {
             switch precision {
-            case .int4, .int8:
+            case .int1, .int2, .int4, .int8:
                 guard let q = manifest.quantization else {
                     if manifestRequiresInlineQuantization(manifest) {
                         errors.append("Quantized precision (\(precision.rawValue)) requires quantization metadata.")
                     }
                     break
                 }
-                if let bits = q.bits, !(2...8).contains(bits) {
-                    errors.append("Invalid quantization.bits=\(bits) (expected 2–8).")
+                if let bits = q.bits, !(1...8).contains(bits) {
+                    errors.append("Invalid quantization.bits=\(bits) (expected 1–8).")
                 }
                 if q.bits == nil {
                     errors.append("Quantized precision (\(precision.rawValue)) requires quantization.bits.")

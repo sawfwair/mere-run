@@ -56,6 +56,42 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "filipstrand/Z-Image-Turbo-mflux-4bit@main")
     }
 
+    func testBonsaiTernaryTemplateHasExpectedNativeLayout() throws {
+        let manifest = MereRunModelManifest.template(for: .bonsaiTernary, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, "image-bonsai-ternary")
+        XCTAssertEqual(manifest.engine, .flux2Klein)
+        XCTAssertEqual(manifest.family, .klein)
+        XCTAssertEqual(manifest.variant, .distilled)
+        XCTAssertEqual(manifest.precision, .int2)
+        XCTAssertEqual(manifest.quantization?.bits, 2)
+        XCTAssertEqual(manifest.quantization?.groupSize, 128)
+        XCTAssertEqual(manifest.defaults?.steps, 4)
+        XCTAssertEqual(manifest.defaults?.cfg, 1.0)
+        XCTAssertEqual(manifest.defaults?.sigmaShift, 3.0)
+        XCTAssertEqual(manifest.components?.textEncoder, .local(path: "text_encoder-mlx-4bit"))
+        XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer-packed-mflux"))
+        XCTAssertEqual(manifest.upstreamRepoId, "prism-ml/bonsai-image-ternary-4B-mlx-2bit@main")
+    }
+
+    func testBonsaiBinaryTemplateHasExpectedNativeLayout() throws {
+        let manifest = MereRunModelManifest.template(for: .bonsaiBinary, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, "image-bonsai-binary")
+        XCTAssertEqual(manifest.engine, .flux2Klein)
+        XCTAssertEqual(manifest.family, .klein)
+        XCTAssertEqual(manifest.variant, .distilled)
+        XCTAssertEqual(manifest.precision, .int1)
+        XCTAssertEqual(manifest.quantization?.bits, 1)
+        XCTAssertEqual(manifest.quantization?.groupSize, 128)
+        XCTAssertEqual(manifest.defaults?.steps, 4)
+        XCTAssertEqual(manifest.defaults?.cfg, 1.0)
+        XCTAssertEqual(manifest.defaults?.sigmaShift, 3.0)
+        XCTAssertEqual(manifest.components?.textEncoder, .local(path: "text_encoder-mlx-4bit"))
+        XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer-packed-mflux"))
+        XCTAssertEqual(manifest.upstreamRepoId, "prism-ml/bonsai-image-binary-4B-mlx-1bit@main")
+    }
+
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
 

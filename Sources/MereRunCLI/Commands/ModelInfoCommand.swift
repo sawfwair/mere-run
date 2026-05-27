@@ -98,7 +98,11 @@ struct ModelInfo: ParsableCommand {
             if let defaults = manifest.defaults {
                 let steps = defaults.steps.map(String.init) ?? "?"
                 let cfg = defaults.cfg.map { String(format: "%.2f", $0) } ?? "?"
-                print("  defaults: steps=\(steps) cfg=\(cfg)")
+                if let sigmaShift = defaults.sigmaShift {
+                    print("  defaults: steps=\(steps) cfg=\(cfg) sigma_shift=\(String(format: "%.2f", sigmaShift))")
+                } else {
+                    print("  defaults: steps=\(steps) cfg=\(cfg)")
+                }
             }
 
             if let supports = manifest.supports, !supports.isEmpty {

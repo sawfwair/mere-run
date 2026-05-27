@@ -62,7 +62,7 @@ including which IDs are pullable from Hugging Face. The most common managed IDs
 are:
 
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
-  `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
+  `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
   `image-hidream-o1`, `image-hidream-o1-dev`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
 - Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
@@ -188,6 +188,7 @@ Examples:
 ```bash
 swift run mere.run image generate --prompt "a black cat on a red sofa"
 swift run mere.run image generate --model image-zimage-nano --prompt "retro robot illustration" --output ./robot.png
+swift run mere.run image generate --model image-bonsai-binary --prompt "sunlit greenhouse bonsai" --output ./bonsai.png
 swift run mere.run image generate --prompt "turn this into a pencil sketch" --input ./photo.png --strength 0.6
 swift run mere.run image generate \
   --model image-hidream-o1-dev \

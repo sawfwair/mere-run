@@ -193,6 +193,8 @@ Example:
 ```bash
 swift run mere.run model capabilities
 swift run mere.run model pull image-zimage-nano
+# Optional compact FLUX.2 Klein path:
+swift run mere.run model pull image-bonsai-binary
 ```
 
 Set `MERERUN_HUB_CACHE` when you want the Hugging Face cache on another disk.
@@ -219,6 +221,11 @@ or provide Pi separately with `--pi-path` or PATH before using `--start`.
 swift run mere.run image generate \
   --prompt "a ceramic mug in soft morning light" \
   --output ./mug.png
+
+swift run mere.run image generate \
+  --model image-bonsai-binary \
+  --prompt "a tiny bonsai tree in a sunlit greenhouse" \
+  --output ./bonsai.png
 ```
 
 ### Text chat

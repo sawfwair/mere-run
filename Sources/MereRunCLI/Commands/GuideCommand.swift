@@ -152,6 +152,8 @@ enum GuideRegistry {
                 "image-klein-nano",
                 "image-klein-max",
                 "image-klein-base",
+                "image-bonsai-binary",
+                "image-bonsai-ternary",
             ],
             resourceName: "image-generate.md"
         ),

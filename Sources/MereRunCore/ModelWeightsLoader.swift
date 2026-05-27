@@ -27,7 +27,10 @@ public enum ModelWeightsLoader {
         public static func fromManifest(_ manifest: MereRunModelManifest?) throws -> QuantizationParams? {
             guard let manifest else { return nil }
 
-            let precisionImpliesQuant = (manifest.precision == .int4 || manifest.precision == .int8)
+            let precisionImpliesQuant = manifest.precision == .int1
+                || manifest.precision == .int2
+                || manifest.precision == .int4
+                || manifest.precision == .int8
             let hasQuant = manifest.quantization != nil
             guard precisionImpliesQuant || hasQuant else {
                 return nil

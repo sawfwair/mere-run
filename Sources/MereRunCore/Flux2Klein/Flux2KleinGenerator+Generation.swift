@@ -173,7 +173,8 @@ extension Flux2KleinGenerator {
             numInferenceSteps: request.steps,
             numTrainTimesteps: 1000,
             imageSeqLen: seqLen,
-            isDistilled: isDistilled
+            isDistilled: isDistilled,
+            sigmaShift: request.sigmaShift
         )
 
         // Note: FLUX.2 Klein does NOT scale initial latents (unlike SD3/etc)

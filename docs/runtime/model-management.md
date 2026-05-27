@@ -38,7 +38,7 @@ swift run mere.run --models-root /path/to/models model list
 
 Examples:
 
-- images: `image-klein-nano`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
+- images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
 - text: `text-chat-gemma4`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`

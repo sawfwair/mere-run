@@ -159,7 +159,17 @@ extension Flux2KleinGeneratoriOS {
     ) throws -> Flux2Transformer2DModel {
         // Helper to load a tensor from file
         func loadTensor(_ key: String) -> MLXArray? {
-            guard let metadata = tensorMetadata[key] else {
+            let resolvedKey: String
+            if tensorMetadata[key] != nil {
+                resolvedKey = key
+            } else {
+                let mfluxKey = key.replacingOccurrences(of: ".attn.to_out.0.", with: ".attn.to_out.")
+                guard tensorMetadata[mfluxKey] != nil else {
+                    return nil
+                }
+                resolvedKey = mfluxKey
+            }
+            guard let metadata = tensorMetadata[resolvedKey] else {
                 return nil
             }
             let tensorData = fileData.subdata(in: metadata.startOffset..<metadata.endOffset)
@@ -383,6 +393,26 @@ extension Flux2KleinGeneratoriOS {
         to encoder: QwenTextEncoder,
         quantization: ModelWeightsLoader.QuantizationParams?
     ) async throws {
+        let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            var mappedKey = key
+            if key.hasPrefix("model.") {
+                mappedKey = key.replacingOccurrences(of: "model.", with: "encoder.")
+            } else if !key.hasPrefix("encoder.") {
+                mappedKey = "encoder." + key
+            }
+            return [(mappedKey, value)]
+        }
+
+        let keyMapper: (String) -> String = { key in
+            if key.hasPrefix("model.") {
+                return "encoder." + String(key.dropFirst("model.".count))
+            }
+            if key.hasPrefix("encoder.") {
+                return key
+            }
+            return "encoder." + key
+        }
+
         let singleFileURL = url.appendingPathComponent("model.safetensors")
         if FileManager.default.fileExists(atPath: singleFileURL.path) {
             do {
@@ -397,17 +427,16 @@ extension Flux2KleinGeneratoriOS {
                         weights,
                         to: encoder,
                         groupSize: quantization.groupSize,
-                        bits: quantization.bits
+                        bits: quantization.bits,
+                        keyMapper: keyMapper,
+                        mapper: mapper
                     )
                 } else {
                     try HFSafetensorsWeightsLoader.applyWeights(
                         url: singleFileURL,
                         to: encoder,
                         verify: .noUnusedKeys,
-                        mapper: { key, value in
-                            let mappedKey = key.hasPrefix("model.") ? key.replacingOccurrences(of: "model.", with: "encoder.") : key
-                            return [(mappedKey, value)]
-                        }
+                        mapper: mapper
                     )
                 }
             }
@@ -426,16 +455,6 @@ extension Flux2KleinGeneratoriOS {
         do {
             let firstWeights = try MLX.loadArrays(url: files[0])
             let isQuantized = HFSafetensorsWeightsLoader.isQuantized(firstWeights)
-
-            let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
-                var mappedKey = key
-                if key.hasPrefix("model.") {
-                    mappedKey = key.replacingOccurrences(of: "model.", with: "encoder.")
-                } else if !key.hasPrefix("encoder.") {
-                    mappedKey = "encoder." + key
-                }
-                return [(mappedKey, value)]
-            }
 
             if isQuantized {
                 guard let quantization else {

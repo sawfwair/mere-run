@@ -68,6 +68,8 @@ public enum QuantizedModelManifestWriter {
 
         let precision: MereRunModelManifest.Precision = {
             switch bits {
+            case 1: return .int1
+            case 2: return .int2
             case 4: return .int4
             case 8: return .int8
             default: return .unknown

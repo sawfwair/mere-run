@@ -10,12 +10,15 @@ Use one installed image model:
 
 - `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
 - `image-klein-max`, `image-klein-base`, `image-klein-nano`
+- `image-bonsai-binary`, `image-bonsai-ternary`
 
 ## Install And Check
 
 ```bash
 mere.run model capabilities
 mere.run model pull image-zimage-nano
+mere.run model pull image-bonsai-binary
+mere.run model pull image-bonsai-ternary
 mere.run image generate --help
 mere.run guide image generate --model image-zimage-nano
 ```
@@ -44,6 +47,7 @@ mere.run guide image generate --model image-zimage-nano
 - For product or inspection images, prefer concrete nouns over mood words: size, surface, label text, angle, background.
 - For Z-Image, keep prompts compact and descriptive. Iterate seed, dimensions, and input strength before piling on adjectives.
 - For FLUX.2 Klein, use explicit visual composition and relationships: foreground, background, lens/framing, color palette, and what must be absent.
+- For Bonsai binary or ternary, start with four steps at 512 or 1024 square; the manifest applies its native FlowMatch sigma shift.
 - Use `--input` plus `--strength 0.25` to preserve layout; use `0.65` or higher for stronger reinterpretation.
 
 ## Examples
@@ -55,6 +59,15 @@ mere.run image generate \
   --width 1024 --height 1024 \
   --seed 41 \
   --output ./mug.png
+```
+
+```bash
+mere.run image generate \
+  --model image-bonsai-binary \
+  --prompt "editorial photo of a bonsai tree inside a glass greenhouse, rain on the windows, soft reflected light" \
+  --width 1024 --height 1024 \
+  --seed 17 \
+  --output ./bonsai.png
 ```
 
 ```bash

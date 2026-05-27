@@ -17,11 +17,13 @@ public struct Flux2EulerScheduler {
     ///   - imageSeqLen: Number of latent tokens (height * width after patchify)
     ///   - isDistilled: If true, uses terminal stretch + mu=1.0 (distilled models).
     ///                  If false, uses linear 1→0 schedule with dynamic mu (base models).
+    ///   - sigmaShift: Optional scalar FlowMatch shift override.
     public init(
         numInferenceSteps: Int = 4,
         numTrainTimesteps: Int = 1000,
         imageSeqLen: Int,
-        isDistilled: Bool = true
+        isDistilled: Bool = true,
+        sigmaShift: Float? = nil
     ) {
         self.numInferenceSteps = max(numInferenceSteps, 1)
         let steps = self.numInferenceSteps
@@ -62,11 +64,15 @@ public struct Flux2EulerScheduler {
             // NO terminal stretch for base model - schedule goes to 0
         }
 
+        let shiftedSigmas = sigmaShift.map {
+            Self.applyScalarSigmaShift(sigmas: sigmasFinal, shift: $0)
+        } ?? sigmasFinal
+
         // Convert to timesteps
-        let timestepsArr = sigmasFinal.map { $0 * numTrainTimestepsF }
+        let timestepsArr = shiftedSigmas.map { $0 * numTrainTimestepsF }
 
         // Append terminal 0.0 sigma
-        let sigmasWithZero = sigmasFinal + [0.0]
+        let sigmasWithZero = shiftedSigmas + [0.0]
 
         self.sigmas = MLXArray(sigmasWithZero).asType(.float32)
         self.timesteps = MLXArray(timestepsArr).asType(.float32)
@@ -99,6 +105,13 @@ public struct Flux2EulerScheduler {
         let one = MLXArray(Float(1.0))
         let expMuArr = MLXArray(expMu)
         return expMuArr / (expMuArr + (one / sigmas - one))
+    }
+
+    private static func applyScalarSigmaShift(sigmas: [Float], shift: Float) -> [Float] {
+        guard shift > 0 else { return sigmas }
+        return sigmas.map { sigma in
+            shift * sigma / (1.0 + (shift - 1.0) * sigma)
+        }
     }
 
     /// Perform one Euler step

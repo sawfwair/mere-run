@@ -56,6 +56,25 @@ final class Flux2EulerSchedulerTests: MereRunCoreTestCase {
         XCTAssertEqual(finalSigma, 0)
     }
 
+    func testScalarSigmaShiftRaisesIntermediateSigmas() {
+        let unshifted = Flux2EulerScheduler(
+            numInferenceSteps: 4,
+            numTrainTimesteps: 1000,
+            imageSeqLen: 64 * 64,
+            isDistilled: true
+        )
+        let shifted = Flux2EulerScheduler(
+            numInferenceSteps: 4,
+            numTrainTimesteps: 1000,
+            imageSeqLen: 64 * 64,
+            isDistilled: true,
+            sigmaShift: 3.0
+        )
+
+        XCTAssertGreaterThan(shifted.sigma(at: 1).item(Float.self), unshifted.sigma(at: 1).item(Float.self))
+        XCTAssertEqual(shifted.sigma(at: 4).item(Float.self), 0)
+    }
+
     func testSingleStepBase() {
         let scheduler = Flux2EulerScheduler(
             numInferenceSteps: 1,

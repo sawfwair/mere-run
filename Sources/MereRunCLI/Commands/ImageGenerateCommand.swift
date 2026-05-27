@@ -158,6 +158,8 @@ struct ImageGenerate: AsyncParsableCommand {
             ?? (manifest.family == .hidream ? (manifest.defaults?.steps ?? 4) : 4)
         let effectiveCFG = cfgScale
             ?? (manifest.family == .hidream ? (manifest.defaults?.cfg ?? 1.0) : 1.0)
+        let effectiveSigmaShift = sigmaShift.map { Float($0) }
+            ?? manifest.defaults?.sigmaShift.map { Float($0) }
 
         let request = GenerationRequest(
             prompt: prompt,
@@ -177,7 +179,7 @@ struct ImageGenerate: AsyncParsableCommand {
             strength: strength,
             keepOriginalAspect: keepOriginalAspect,
             useBetaSigmas: false,
-            sigmaShift: sigmaShift.map { Float($0) }
+            sigmaShift: effectiveSigmaShift
         )
 
         let progressHandler: (@Sendable (GenerationProgress) -> Void)? = quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
