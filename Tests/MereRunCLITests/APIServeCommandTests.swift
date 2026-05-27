@@ -90,6 +90,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(quantization.quantizedStart, 128)
     }
 
+    func testAPIServeGemma4PolarKVFlagsParse() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-gemma4",
+            "--model-path", Gemma4Resources.turboModelId,
+            "--kv-bits", "2",
+            "--kv-quant-scheme", "polar",
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization()
+
+        XCTAssertEqual(quantization.bits, 2)
+        XCTAssertEqual(quantization.scheme, .polar)
+    }
+
     func testHealthContractUsesStablePayload() {
         XCTAssertEqual(APIServerContract.healthStatus(), APIHealthStatus(status: "ok"))
     }

@@ -69,4 +69,18 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(quantization.groupSize, 32)
         XCTAssertEqual(quantization.quantizedStart, 128)
     }
+
+    func testGemma4PolarKVFlagsParse() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "Say hello",
+            "--model", Gemma4Resources.turboModelId,
+            "--kv-bits", "2",
+            "--kv-quant-scheme", "polar",
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization(for: Gemma4Resources.turboModelId)
+
+        XCTAssertEqual(quantization.bits, 2)
+        XCTAssertEqual(quantization.scheme, .polar)
+    }
 }

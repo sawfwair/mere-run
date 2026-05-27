@@ -820,6 +820,9 @@ final class Gemma4LanguageModel: Module {
         config.layerTypes.prefix(firstKVSharedLayerIndex).map { layerType in
             let maxSize: Int? = layerType == "full_attention" ? nil : config.slidingWindow
             if let quantization, quantization.isEnabled {
+                if quantization.scheme == .polar {
+                    return Gemma4PolarKVCache(configuration: quantization, maxSize: maxSize)
+                }
                 return Gemma4QuantizedKVCache(configuration: quantization, maxSize: maxSize)
             }
             if let maxSize {

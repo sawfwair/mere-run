@@ -79,10 +79,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Context size (default: 32768).")
     var contextSize: Int = 32768
 
-    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform and integer/.5 widths for turboquant.")
+    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform/polar and integer/.5 widths for turboquant.")
     var kvBits: Double?
 
-    @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform or turboquant.")
+    @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform, polar, or turboquant.")
     var kvQuantScheme: String?
 
     @Option(name: [.long], help: "Gemma4 KV cache quantization group size.")
@@ -202,7 +202,7 @@ struct APIServe: AsyncParsableCommand {
         guard let scheme = Gemma4KVQuantizationScheme(
             rawValue: raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         ) else {
-            throw ValidationError("Unsupported --kv-quant-scheme '\(raw)'. Expected 'uniform' or 'turboquant'.")
+            throw ValidationError("Unsupported --kv-quant-scheme '\(raw)'. Expected 'uniform', 'polar', or 'turboquant'.")
         }
         return scheme
     }

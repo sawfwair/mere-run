@@ -797,6 +797,10 @@ Security defaults:
   state so compatible Q35 rows can batch across decode positions; the scheduler
   services the earliest decode position first by batching compatible rows there
   or advancing one lower-offset row until it can join a compatible batch
+- Gemma4 can opt into experimental packed PolarKV with
+  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure testing,
+  not as a default speed path, until real model benchmarks beat dense or affine
+  KV decode
 - `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,
   batched decode steps, completed chat requests, generated tokens, and average
   load/prefill/decode timings across loaded models under `cacheStats` and

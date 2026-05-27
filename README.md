@@ -249,6 +249,12 @@ MERERUN_Q35_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
   --engine text-chat-q35 \
   --max-active-requests 2
 
+# Experimental Gemma4 packed PolarKV for memory-pressure testing
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --kv-quant-scheme polar \
+  --kv-bits 2
+
 # Expose the API beyond loopback only with an explicit key
 export MERERUN_API_KEY=change-me
 swift run mere.run api serve \
