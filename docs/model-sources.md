@@ -22,7 +22,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 | Category | Hugging Face pull IDs |
 | --- | --- |
-| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
+| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
 | Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
@@ -62,6 +62,35 @@ Swift Gemma runtime.
 Useful environment variables for that path:
 
 - `MERERUN_HUB_CACHE`: override the native Hugging Face snapshot cache path
+
+`image-bonsai-binary` and `image-bonsai-ternary` map to PrismML Apple Silicon
+Bonsai Image snapshots:
+
+- `prism-ml/bonsai-image-binary-4B-mlx-1bit`
+- `prism-ml/bonsai-image-ternary-4B-mlx-2bit`
+
+The snapshot uses a FLUX.2 Klein transformer, but its component names are
+upstream-specific. Managed or local roots are expected to contain:
+
+- `manifest.json`
+- `tokenizer/tokenizer_config.json`
+- `text_encoder-mlx-4bit/config.json`
+- `text_encoder-mlx-4bit/model.safetensors` or `model.safetensors.index.json`
+- `transformer-packed-mflux/config.json`
+- `transformer-packed-mflux/quantization_config.json`
+- `transformer-packed-mflux/diffusion_pytorch_model.safetensors`
+- `vae/config.json`
+- `vae/diffusion_pytorch_model.safetensors`
+- `scheduler/scheduler_config.json`
+
+The binary manifest records the transformer as 1-bit g128 Prism packed affine
+weights; the ternary manifest records 2-bit g128 MLX packed affine ternary
+weights. Both keep the text encoder in the upstream 4-bit MLX layout and run
+generation through the native Swift FLUX.2 Klein pipeline with four steps, CFG
+1.0, and sigma shift 3.0 by default. The binary runtime path uses a native
+Swift/Metal packed 1-bit affine matmul kernel, with a dequantized MLX fallback
+for non-GPU or unsupported shapes while upstream `mlx-swift` lacks `bits=1`
+quantized matmul.
 
 `vision-segment-sam31` packages the native SAM 3.1 segmentation and tracking runtime used by `mere.run vision segment`, `mere.run vision track`, and `mere.run vision track-live`. Managed or local SAM roots are expected to contain:
 

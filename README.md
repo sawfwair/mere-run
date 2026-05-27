@@ -184,6 +184,13 @@ swift run mere.run image generate \
   --prompt "a ceramic coffee mug in soft morning light" \
   --output ./mug.png
 
+# Pull and run the native Swift Bonsai binary or ternary image model
+swift run mere.run model pull image-bonsai-binary
+swift run mere.run image generate \
+  --model image-bonsai-binary \
+  --prompt "a tiny bonsai tree in a sunlit greenhouse" \
+  --output ./bonsai.png
+
 # HiDream O1 runs natively for text-only, edit, and multi-reference generation.
 swift run mere.run image generate \
   --model image-hidream-o1-dev \

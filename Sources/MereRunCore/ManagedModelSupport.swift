@@ -169,6 +169,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                "image-bonsai-binary",
+                "Image, binary Klein",
+                "Runs the Bonsai Image binary FLUX.2 Klein deployment through the native Swift MLX image runtime.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
+                "image-bonsai-ternary",
+                "Image, compact Klein",
+                "Runs the Bonsai Image ternary FLUX.2 Klein deployment through the native Swift MLX image runtime.",
+                minimum: 12,
+                recommended: 16
+            ),
+            descriptor(
                 "image-zimage-nano",
                 "Image Nano",
                 "Creates fast 4-bit Z-Image Turbo outputs for photorealistic and general image generation.",

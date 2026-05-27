@@ -93,6 +93,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case bf16
         case fp16
         case fp32
+        case int1
+        case int2
         case int8
         case int4
         case unknown
@@ -226,10 +228,18 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public struct Defaults: Codable, Hashable, Sendable {
         public var steps: Int?
         public var cfg: Double?
+        public var sigmaShift: Double?
 
-        public init(steps: Int? = nil, cfg: Double? = nil) {
+        public init(steps: Int? = nil, cfg: Double? = nil, sigmaShift: Double? = nil) {
             self.steps = steps
             self.cfg = cfg
+            self.sigmaShift = sigmaShift
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case steps
+            case cfg
+            case sigmaShift = "sigma_shift"
         }
     }
 
@@ -419,6 +429,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 .model(modelID: ModelResolver.ModelID.kleinShared.rawValue, path: "scheduler"),
             ])
         )
+        let bonsaiComponents = Components(
+            tokenizer: .local(path: "tokenizer"),
+            textEncoder: .local(path: "text_encoder-mlx-4bit"),
+            transformer: .local(path: "transformer-packed-mflux"),
+            vae: .local(path: "vae"),
+            scheduler: .local(path: "scheduler")
+        )
         let mebotTextComponents = Components(
             tokenizer: .anyOf([
                 .local(path: "tokenizer"),
@@ -511,6 +528,36 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 precision: .unknown,
                 supports: [.txt2img, .referenceEdit, .loraInference],
                 components: kleinSharedComponents,
+                createdAt: createdAt
+            )
+        case .bonsaiBinary:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .nano,
+                variant: .distilled,
+                precision: .int1,
+                quantization: Quantization(bits: 1, groupSize: 128, scheme: "prism-packed-affine-binary"),
+                defaults: Defaults(steps: 4, cfg: 1.0, sigmaShift: 3.0),
+                supports: [.txt2img],
+                components: bonsaiComponents,
+                upstreamRepoId: "prism-ml/bonsai-image-binary-4B-mlx-1bit@main",
+                createdAt: createdAt
+            )
+        case .bonsaiTernary:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .nano,
+                variant: .distilled,
+                precision: .int2,
+                quantization: Quantization(bits: 2, groupSize: 128, scheme: "mlx-packed-affine-ternary"),
+                defaults: Defaults(steps: 4, cfg: 1.0, sigmaShift: 3.0),
+                supports: [.txt2img],
+                components: bonsaiComponents,
+                upstreamRepoId: "prism-ml/bonsai-image-ternary-4B-mlx-2bit@main",
                 createdAt: createdAt
             )
         case .mebot:

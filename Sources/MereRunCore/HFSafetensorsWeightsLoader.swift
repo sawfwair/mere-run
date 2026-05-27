@@ -347,6 +347,16 @@ public enum HFSafetensorsWeightsLoader {
                         residualUp: svdUp
                     )
                     residualApplied += 1
+                } else if resolved.bits == 1 {
+                    quantized = PrismBinaryQuantizedLinear(
+                        weight: qWeight,
+                        bias: linearBias,
+                        scales: scales,
+                        biases: qBiases,
+                        groupSize: resolved.groupSize,
+                        bits: resolved.bits,
+                        mode: resolved.mode
+                    )
                 } else {
                     quantized = QuantizedLinear(
                         weight: qWeight,
@@ -557,6 +567,16 @@ public enum HFSafetensorsWeightsLoader {
                         residualUp: svdUp
                     )
                     residualApplied += 1
+                } else if resolved.bits == 1 {
+                    quantized = PrismBinaryQuantizedLinear(
+                        weight: qWeight,
+                        bias: linearBias,
+                        scales: scales,
+                        biases: qBiases,
+                        groupSize: resolved.groupSize,
+                        bits: resolved.bits,
+                        mode: resolved.mode
+                    )
                 } else {
                     quantized = QuantizedLinear(
                         weight: qWeight,

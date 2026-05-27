@@ -13,6 +13,8 @@ public struct ModelResolver {
         case kleinMax = "image-klein-max"
         case kleinBase = "image-klein-base"
         case kleinShared = "image-klein-shared"
+        case bonsaiBinary = "image-bonsai-binary"
+        case bonsaiTernary = "image-bonsai-ternary"
         case zetaNano = "image-zimage-nano"
         case zetaMax = "image-zimage-max"
         case zetaBase = "image-zimage-base"

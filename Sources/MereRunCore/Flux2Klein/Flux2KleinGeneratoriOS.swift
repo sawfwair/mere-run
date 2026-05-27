@@ -158,6 +158,7 @@ public actor Flux2KleinGeneratoriOS: ImageGenerator {
             transformerDirURL: transformerComponent.directoryURL,
             transformerQuantization: transformerQuantization,
             isDistilled: isDistilled,
+            sigmaShift: request.sigmaShift,
             outputURL: latentsURL,
             progressHandler: progressHandler
         )

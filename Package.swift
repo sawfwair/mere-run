@@ -256,6 +256,7 @@ targets.append(contentsOf: [
       "PrivacyFilter/README.md",
       "Psi/README.md",
       "Q35/README.md",
+      "Quantization/README.md",
       "QwenImageEdit/README.md",
       "QwenImageEdit/Model/Transformer/README.md",
       "QwenImageEdit/Model/VAE/README.md",

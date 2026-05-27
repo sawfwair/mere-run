@@ -445,6 +445,16 @@ extension Flux2KleinGenerator {
         to transformer: Flux2Transformer2DModel,
         quantization: ModelWeightsLoader.QuantizationParams?
     ) throws {
+        // Key mapper for mflux format -> our format.
+        // mflux uses to_out.X but we use to_out.0.X (array) for transformer_blocks only.
+        // single_transformer_blocks uses to_out as single Linear (no array).
+        let mfluxKeyMapper: (String) -> String = { key in
+            if key.hasPrefix("transformer_blocks.") && key.contains(".attn.to_out.") && !key.contains(".to_out.0.") {
+                return key.replacingOccurrences(of: ".attn.to_out.", with: ".attn.to_out.0.")
+            }
+            return key
+        }
+
         // Check for single file first (our format)
         let singleFileURL = url.appendingPathComponent("diffusion_pytorch_model.safetensors")
         let indexURL = url.appendingPathComponent("diffusion_pytorch_model.safetensors.index.json")
@@ -455,6 +465,8 @@ extension Flux2KleinGenerator {
                 to: transformer,
                 dtype: .bfloat16,
                 verify: .noUnusedKeys,
+                mapper: { key, value in [(mfluxKeyMapper(key), value)] },
+                keyMapper: mfluxKeyMapper,
                 quantization: quantization
             )
             return
@@ -463,18 +475,6 @@ extension Flux2KleinGenerator {
         let files = try ModelWeightsLoader.safetensorsShards(in: url)
         guard !files.isEmpty else {
             throw NSError(domain: "Flux2KleinGenerator", code: 1, userInfo: [NSLocalizedDescriptionKey: "No transformer weights found at \(url.path)"])
-        }
-
-        // Key mapper for mflux format -> our format
-        // mflux uses to_out.X but we use to_out.0.X (array) for transformer_blocks only
-        // single_transformer_blocks uses to_out as single Linear (no array)
-        let mfluxKeyMapper: (String) -> String = { key in
-            // Only for transformer_blocks (not single_transformer_blocks):
-            // transformer_blocks.X.attn.to_out.weight -> transformer_blocks.X.attn.to_out.0.weight
-            if key.hasPrefix("transformer_blocks.") && key.contains(".attn.to_out.") && !key.contains(".to_out.0.") {
-                return key.replacingOccurrences(of: ".attn.to_out.", with: ".attn.to_out.0.")
-            }
-            return key
         }
 
         try ModelWeightsLoader.applySafetensorsShards(

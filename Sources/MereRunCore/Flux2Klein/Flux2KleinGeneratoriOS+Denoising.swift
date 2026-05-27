@@ -21,6 +21,7 @@ extension Flux2KleinGeneratoriOS {
         transformerDirURL: URL,
         transformerQuantization: ModelWeightsLoader.QuantizationParams?,
         isDistilled: Bool,
+        sigmaShift: Float?,
         outputURL: URL,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws {
@@ -77,7 +78,8 @@ extension Flux2KleinGeneratoriOS {
             numInferenceSteps: steps,
             numTrainTimesteps: 1000,
             imageSeqLen: seqLen,
-            isDistilled: isDistilled
+            isDistilled: isDistilled,
+            sigmaShift: sigmaShift
         )
 
         let useCFG = guidanceScale > 1.0 && negativePromptEmbeds != nil

@@ -23,6 +23,7 @@ public enum ManagedModelInstallShape: Hashable, Sendable {
 
 public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case flux2Klein
+    case bonsaiImage
     case zimageTurbo
     case hidreamO1
     case gemma4
@@ -112,6 +113,8 @@ public enum ManagedModelCatalog {
 
     private static let zImageNanoUpstreamRepoId = "filipstrand/Z-Image-Turbo-mflux-4bit"
     private static let kleinNanoUpstreamRepoId = "stereovoid/flux2-klein-4b-4bit"
+    private static let bonsaiBinaryUpstreamRepoId = "prism-ml/bonsai-image-binary-4B-mlx-1bit"
+    private static let bonsaiTernaryUpstreamRepoId = "prism-ml/bonsai-image-ternary-4B-mlx-2bit"
 
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
@@ -159,6 +162,52 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false
+        ),
+        ManagedModelSpec(
+            id: "image-bonsai-binary",
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: bonsaiBinaryUpstreamRepoId,
+                revision: "main",
+                patterns: [
+                    "manifest.json",
+                    "scheduler/scheduler_config.json",
+                    "tokenizer/*",
+                    "text_encoder-mlx-4bit/*",
+                    "transformer-packed-mflux/*",
+                    "vae/*",
+                ]
+            ),
+            upstreamRepoId: bonsaiBinaryUpstreamRepoId,
+            upstreamRevision: "main",
+            validationKind: .bonsaiImage,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 3_428_210_775,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: "image-bonsai-ternary",
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: bonsaiTernaryUpstreamRepoId,
+                revision: "main",
+                patterns: [
+                    "manifest.json",
+                    "scheduler/scheduler_config.json",
+                    "tokenizer/*",
+                    "text_encoder-mlx-4bit/*",
+                    "transformer-packed-mflux/*",
+                    "vae/*",
+                ]
+            ),
+            upstreamRepoId: bonsaiTernaryUpstreamRepoId,
+            upstreamRevision: "main",
+            validationKind: .bonsaiImage,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 3_888_274_558,
+            defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
             id: "image-zimage-nano",
@@ -703,6 +752,8 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .flux2Klein:
             return Self.missingDiffusersImagePaths(in: rootURL, fileManager: fileManager)
+        case .bonsaiImage:
+            return Self.missingBonsaiImagePaths(in: rootURL, fileManager: fileManager)
         case .zimageTurbo:
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hidreamO1:
@@ -1030,6 +1081,46 @@ public extension ManagedModelSpec {
         let transformerWeightsIndex = transformerDir.appendingPathComponent("diffusion_pytorch_model.safetensors.index.json")
         if !fileManager.fileExists(atPath: transformerWeights.path) && !fileManager.fileExists(atPath: transformerWeightsIndex.path) {
             missing.append(transformerWeightsIndex)
+        }
+
+        let vaeWeights = vaeDir.appendingPathComponent("diffusion_pytorch_model.safetensors")
+        if !fileManager.fileExists(atPath: vaeWeights.path) {
+            missing.append(vaeWeights)
+        }
+
+        return missing
+    }
+
+    private static func missingBonsaiImagePaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
+        let tokenizerDir = rootURL.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoderDir = rootURL.appendingPathComponent("text_encoder-mlx-4bit", isDirectory: true)
+        let transformerDir = rootURL.appendingPathComponent("transformer-packed-mflux", isDirectory: true)
+        let vaeDir = rootURL.appendingPathComponent("vae", isDirectory: true)
+        let schedulerDir = rootURL.appendingPathComponent("scheduler", isDirectory: true)
+
+        var missing: [URL] = []
+        let required: [URL] = [
+            rootURL.appendingPathComponent("manifest.json"),
+            tokenizerDir.appendingPathComponent("tokenizer_config.json"),
+            textEncoderDir.appendingPathComponent("config.json"),
+            transformerDir.appendingPathComponent("config.json"),
+            transformerDir.appendingPathComponent("quantization_config.json"),
+            vaeDir.appendingPathComponent("config.json"),
+            schedulerDir.appendingPathComponent("scheduler_config.json"),
+        ]
+        for path in required where !fileManager.fileExists(atPath: path.path) {
+            missing.append(path)
+        }
+
+        let textWeights = textEncoderDir.appendingPathComponent("model.safetensors")
+        let textWeightsIndex = textEncoderDir.appendingPathComponent("model.safetensors.index.json")
+        if !fileManager.fileExists(atPath: textWeights.path) && !fileManager.fileExists(atPath: textWeightsIndex.path) {
+            missing.append(textWeightsIndex)
+        }
+
+        let transformerWeights = transformerDir.appendingPathComponent("diffusion_pytorch_model.safetensors")
+        if !fileManager.fileExists(atPath: transformerWeights.path) {
+            missing.append(transformerWeights)
         }
 
         let vaeWeights = vaeDir.appendingPathComponent("diffusion_pytorch_model.safetensors")
