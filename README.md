@@ -27,8 +27,8 @@ The public OSS repo currently supports:
 - native ACEStep music generation and LTX video generation
 - Hugging Face-backed model pulls that resolve into a shared local model store
 - offline command cookbooks through `mere.run guide`
-- a local OpenAI-compatible API surface for supported text engines
-- a quick status snapshot for the local server, loaded API model, and installed model store
+- a local OpenAI-compatible API surface with a native Swift runtime model pool
+- a quick status snapshot for the local server, loaded API models, active requests, runtime capabilities, and installed model store
 - an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
 
 ## What’s included in this repo
@@ -184,6 +184,13 @@ swift run mere.run model list
 # See the local server, served model, model-store path, and installed models
 swift run mere.run status
 
+# Set API runtime defaults beside the active model store
+swift run mere.run model runtime set text-chat-gemma4 \
+  --alias chat-default \
+  --pinned \
+  --ttl-seconds 3600 \
+  --max-tokens 1024
+
 # See what this Mac can run before pulling large models
 swift run mere.run model capabilities
 swift run mere.run model capabilities --recommended
@@ -228,13 +235,40 @@ swift run mere.run api serve --engine text-chat-gemma4
 # In another terminal, confirm the server and served model
 swift run mere.run status
 
+# Optional Gemma4 prefix KV reuse prototype; status reports cache and timing stats
+MERERUN_GEMMA4_PREFIX_KV_CACHE=1 swift run mere.run api serve --engine text-chat-gemma4
+
+# Optional Q35 text-only prefix KV reuse prototype; vision prompts are excluded
+MERERUN_Q35_PREFIX_KV_CACHE=1 swift run mere.run api serve --engine text-chat-q35
+
+# Optional decode batching; overlap requires max-active > 1
+MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --max-active-requests 2
+MERERUN_Q35_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
+  --engine text-chat-q35 \
+  --max-active-requests 2
+
+# Experimental Gemma4 packed PolarKV for memory-pressure and long-context decode testing
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --kv-quant-scheme polar \
+  --kv-bits 2
+
+# Fixed-token real-checkpoint Gemma4 KV benchmark: default TurboQuant vs decode-deferred PolarKV
+swift run mere.run model benchmark gemma4-kv \
+  --model text-chat-gemma4-turbo \
+  --decode-tokens 48 \
+  --json
+
 # Expose the API beyond loopback only with an explicit key
 export MERERUN_API_KEY=change-me
 swift run mere.run api serve \
   --host 0.0.0.0 \
   --port 11434 \
   --api-key "$MERERUN_API_KEY" \
-  --rate-limit-per-minute 120
+  --rate-limit-per-minute 120 \
+  --max-active-requests 1
 
 # Generate speech
 swift run mere.run speech synthesize \
@@ -295,7 +329,7 @@ The public CLI is modality-first:
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
-- `mere.run model { list, capabilities, info, pull, remove, repair-manifests }`
+- `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
 - `mere.run setup`

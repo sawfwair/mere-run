@@ -73,13 +73,16 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Global request limit for /v1/chat/completions per rolling minute.")
     var rateLimitPerMinute: Int = 60
 
+    @Option(name: [.long], help: "Maximum chat completions admitted at once. Defaults to 1 for serialized local inference.")
+    var maxActiveRequests: Int = 1
+
     @Option(name: [.long], help: "Context size (default: 32768).")
     var contextSize: Int = 32768
 
-    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform and integer/.5 widths for turboquant.")
+    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform/polar and integer/.5 widths for turboquant.")
     var kvBits: Double?
 
-    @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform or turboquant.")
+    @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform, polar, or turboquant.")
     var kvQuantScheme: String?
 
     @Option(name: [.long], help: "Gemma4 KV cache quantization group size.")
@@ -94,15 +97,40 @@ struct APIServe: AsyncParsableCommand {
         let resolvedModelPath = try resolveModelPath()
         let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
         let server = try await CodeGenServer(
+            defaultModelID: defaultRuntimeModelID(modelPath: resolvedModelPath),
             modelPath: resolvedModelPath,
             fallbackLoraPath: lora,
             apiKey: resolvedAPIKey,
             rateLimitPerMinute: rateLimitPerMinute,
+            maxActiveRequests: maxActiveRequests,
             engine: engine,
             contextSize: contextSize,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization
         )
         try await server.run(host: host, port: port)
+    }
+
+    private func defaultRuntimeModelID(modelPath: String?) -> String {
+        if let requested = model?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let spec = ManagedModelCatalog.spec(for: requested),
+           spec.defaultRuntimeServingEngine == engine.runtimeServingEngine {
+            return spec.id
+        }
+        if let modelPath, model != nil {
+            return URL(fileURLWithPath: modelPath).lastPathComponent
+        }
+        switch engine {
+        case .textChatKlein:
+            return ModelResolver.ModelID.mebot.rawValue
+        case .textChatGemma4:
+            return ModelResolver.ModelID.gemma4.rawValue
+        case .textChatQ35:
+            return ModelResolver.ModelID.q35.rawValue
+        case .textCode:
+            return CodeGenResources.defaultModelId
+        case .textChatDeepseekV4Flash:
+            return DeepseekV4FlashResources.defaultModelId
+        }
     }
 
     private func resolveModelPath() throws -> String? {
@@ -174,7 +202,7 @@ struct APIServe: AsyncParsableCommand {
         guard let scheme = Gemma4KVQuantizationScheme(
             rawValue: raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         ) else {
-            throw ValidationError("Unsupported --kv-quant-scheme '\(raw)'. Expected 'uniform' or 'turboquant'.")
+            throw ValidationError("Unsupported --kv-quant-scheme '\(raw)'. Expected 'uniform', 'polar', or 'turboquant'.")
         }
         return scheme
     }
@@ -201,6 +229,9 @@ struct APIServe: AsyncParsableCommand {
         guard rateLimitPerMinute > 0 else {
             throw ValidationError("--rate-limit-per-minute must be greater than zero.")
         }
+        guard maxActiveRequests > 0 else {
+            throw ValidationError("--max-active-requests must be greater than zero.")
+        }
         guard (1...Int(Int32.max)).contains(contextSize) else {
             throw ValidationError("--context-size must be between 1 and \(Int(Int32.max)).")
         }
@@ -222,19 +253,23 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatQ35 = "text-chat-q35"
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
 
-    var openAICompatibility: APIEngineCapabilities {
+    var runtimeServingEngine: RuntimeServingEngine {
         switch self {
         case .textCode:
-            return .localText
+            return .textCode
         case .textChatKlein:
-            return .localTextWithStructuredJSON
+            return .textChatKlein
         case .textChatGemma4:
-            return .localTextWithTools
+            return .textChatGemma4
         case .textChatQ35:
-            return .localTextWithToolsAndVision
+            return .textChatQ35
         case .textChatDeepseekV4Flash:
-            return .rawProxy
+            return .textChatDeepseekV4Flash
         }
+    }
+
+    var openAICompatibility: APIEngineCapabilities {
+        runtimeServingEngine.openAICompatibility
     }
 }
 
@@ -303,16 +338,20 @@ enum APIServerContract {
     }
 
     static func modelsResponse(modelId: String, createdAt: Date = Date()) -> OpenAIModelsResponse {
+        modelsResponse(modelIds: [modelId], createdAt: createdAt)
+    }
+
+    static func modelsResponse(modelIds: [String], createdAt: Date = Date()) -> OpenAIModelsResponse {
         OpenAIModelsResponse(
             object: "list",
-            data: [
+            data: modelIds.map {
                 OpenAIModel(
-                    id: modelId,
+                    id: $0,
                     object: "model",
                     created: Int(createdAt.timeIntervalSince1970),
                     owned_by: "mere.run"
                 )
-            ]
+            }
         )
     }
 
@@ -691,113 +730,37 @@ enum APIRequestValidationError: LocalizedError, Equatable {
 
 actor CodeGenServer {
     private let apiKey: String?
-    private let engine: APIEngine
-    private let llamaGenerator: CodeGenGenerator?
-    private let mlxGenerator: Flux2KleinGenerator?
-    private let gemma4Generator: Gemma4Generator?
-    private let q35Generator: Q35Generator?
-    private let deepseekV4FlashGenerator: DeepseekV4FlashGenerator?
-    private let modelPath: String?
     private let fallbackLoraPath: String?
-    private let modelId: String
+    private let defaultModelID: String
     private let contextSize: Int
-    private let useStandaloneModel: Bool
     private let requestLimiter: APIRateLimiter
+    private let requestAdmission: RuntimeRequestAdmission
+    private let pool: RuntimeModelPool
 
     init(
+        defaultModelID: String,
         modelPath: String?,
         fallbackLoraPath: String?,
         apiKey: String?,
         rateLimitPerMinute: Int,
+        maxActiveRequests: Int = 1,
         engine: APIEngine,
         contextSize: Int = 32768,
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization()
     ) async throws {
         self.apiKey = apiKey
         self.contextSize = contextSize
-        self.engine = engine
         self.fallbackLoraPath = fallbackLoraPath
-        self.modelPath = modelPath
+        self.defaultModelID = defaultModelID
         self.requestLimiter = APIRateLimiter(limitPerMinute: rateLimitPerMinute)
-        self.modelId = modelPath.map { URL(fileURLWithPath: $0).lastPathComponent }
-            ?? {
-                switch engine {
-                case .textChatKlein:
-                    return ModelResolver.ModelID.mebot.rawValue
-                case .textChatGemma4:
-                    return ModelResolver.ModelID.gemma4.rawValue
-                case .textChatQ35:
-                    return ModelResolver.ModelID.q35.rawValue
-                case .textCode:
-                    return CodeGenResources.defaultModelId
-                case .textChatDeepseekV4Flash:
-                    return DeepseekV4FlashResources.defaultModelId
-                }
-            }()
-
-        switch engine {
-        case .textCode:
-            let generator = CodeGenGenerator(modelId: modelPath ?? CodeGenResources.defaultModelId)
-            self.llamaGenerator = generator
-            self.mlxGenerator = nil
-            self.gemma4Generator = nil
-            self.q35Generator = nil
-            self.deepseekV4FlashGenerator = nil
-            self.useStandaloneModel = false
-
-            // Pre-load model
-            try await generator.prepare(modelPath: modelPath) { progress in
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-        case .textChatKlein:
-            self.llamaGenerator = nil
-            self.mlxGenerator = Flux2KleinGenerator()
-            self.gemma4Generator = nil
-            self.q35Generator = nil
-            self.deepseekV4FlashGenerator = nil
-            // Check if the resolved path is a standalone MeBot Instruct model
-            self.useStandaloneModel = MeBotModelCatalog.resolveModelPath() != nil
-                && modelPath == MeBotModelCatalog.resolveModelPath()
-        case .textChatGemma4:
-            let generator = Gemma4Generator(
-                modelId: Gemma4Resources.defaultModelId,
-                kvCacheQuantization: gemma4KVCacheQuantization
-            )
-            self.llamaGenerator = nil
-            self.mlxGenerator = nil
-            self.gemma4Generator = generator
-            self.q35Generator = nil
-            self.deepseekV4FlashGenerator = nil
-            self.useStandaloneModel = false
-
-            try await generator.prepare(modelPath: modelPath) { progress in
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-        case .textChatQ35:
-            let generator = Q35Generator(modelId: Q35Resources.defaultModelId)
-            self.llamaGenerator = nil
-            self.mlxGenerator = nil
-            self.gemma4Generator = nil
-            self.q35Generator = generator
-            self.deepseekV4FlashGenerator = nil
-            self.useStandaloneModel = false
-
-            try await generator.prepare(modelPath: modelPath) { progress in
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-        case .textChatDeepseekV4Flash:
-            let generator = DeepseekV4FlashGenerator()
-            self.llamaGenerator = nil
-            self.mlxGenerator = nil
-            self.gemma4Generator = nil
-            self.q35Generator = nil
-            self.deepseekV4FlashGenerator = generator
-            self.useStandaloneModel = false
-
-            try await generator.prepare(modelPath: modelPath) { progress in
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-        }
+        self.requestAdmission = RuntimeRequestAdmission(maxActiveRequests: maxActiveRequests)
+        self.pool = RuntimeModelPool(
+            defaultModelID: defaultModelID,
+            defaultEngine: engine.runtimeServingEngine,
+            startupModelPath: modelPath,
+            gemma4KVCacheQuantization: gemma4KVCacheQuantization
+        )
+        try await pool.preloadDefault()
     }
 
     func run(host: String, port: Int) async throws {
@@ -837,6 +800,54 @@ actor CodeGenServer {
             return try await self.handleChatCompletions(request)
         }
 
+        router.get("/runtime/status") { [self] request, _ in
+            return try await self.handleRuntimeStatus(request)
+        }
+
+        router.post("/runtime/models/:id/load") { [self] request, context in
+            guard let id = context.parameters.get("id", as: String.self) else {
+                return self.makeErrorResponse(
+                    status: .badRequest,
+                    message: "Missing model id.",
+                    type: "invalid_request_error"
+                )
+            }
+            return try await self.handleRuntimeLoad(request, id: id)
+        }
+
+        router.post("/runtime/models/:id/unload") { [self] request, context in
+            guard let id = context.parameters.get("id", as: String.self) else {
+                return self.makeErrorResponse(
+                    status: .badRequest,
+                    message: "Missing model id.",
+                    type: "invalid_request_error"
+                )
+            }
+            return try await self.handleRuntimeUnload(request, id: id)
+        }
+
+        router.get("/runtime/models/:id/settings") { [self] request, context in
+            guard let id = context.parameters.get("id", as: String.self) else {
+                return self.makeErrorResponse(
+                    status: .badRequest,
+                    message: "Missing model id.",
+                    type: "invalid_request_error"
+                )
+            }
+            return try await self.handleRuntimeSettings(request, id: id)
+        }
+
+        router.patch("/runtime/models/:id/settings") { [self] request, context in
+            guard let id = context.parameters.get("id", as: String.self) else {
+                return self.makeErrorResponse(
+                    status: .badRequest,
+                    message: "Missing model id.",
+                    type: "invalid_request_error"
+                )
+            }
+            return try await self.handleRuntimeSettingsPatch(request, id: id)
+        }
+
         return router
     }
 
@@ -844,7 +855,7 @@ actor CodeGenServer {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
         }
-        let models = APIServerContract.modelsResponse(modelId: modelId)
+        let models = try await pool.modelsResponse()
 
         let data = try JSONEncoder().encode(models)
         return Response(
@@ -881,14 +892,6 @@ actor CodeGenServer {
             return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
         }
 
-        if engine == .textChatDeepseekV4Flash {
-            do {
-                return try await proxyDeepseekV4FlashChatCompletions(body: body, contentType: request.headers[.contentType])
-            } catch {
-                return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
-            }
-        }
-
         let openaiRequest: OpenAIChatRequest
         do {
             openaiRequest = try JSONDecoder().decode(OpenAIChatRequest.self, from: Data(body.readableBytesView))
@@ -896,51 +899,85 @@ actor CodeGenServer {
             return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
         }
 
-        let chatRequest: ChatRequest
+        let admissionLease = try await requestAdmission.acquire()
+        let plan: RuntimeChatPlan
         do {
-            chatRequest = try APIServerContract.chatRequest(
-                from: openaiRequest,
+            plan = try await pool.makeChatPlan(
+                for: openaiRequest,
                 fallbackLoraPath: fallbackLoraPath,
-                contextSize: contextSize,
-                capabilities: engine.openAICompatibility
+                serverContextSize: contextSize
             )
         } catch {
-            return makeErrorResponse(
-                status: .badRequest,
-                message: error.localizedDescription,
-                type: "invalid_request_error"
-            )
+            await admissionLease.release()
+            return runtimeErrorResponse(error)
+        }
+
+        if plan.engine == .textChatDeepseekV4Flash {
+            do {
+                return try await proxyDeepseekV4FlashChatCompletions(
+                    body: body,
+                    contentType: request.headers[.contentType],
+                    lease: plan.lease,
+                    admissionLease: admissionLease
+                )
+            } catch {
+                await plan.lease.release()
+                await admissionLease.release()
+                return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
+            }
         }
 
         do {
             if openaiRequest.stream == true {
-                let includeUsage = try APIServerContract.includeUsageInStreaming(
-                    openaiRequest,
-                    capabilities: engine.openAICompatibility
+                return try await handleStreamingChat(
+                    plan.request,
+                    modelID: plan.modelID,
+                    includeUsage: plan.includeUsage,
+                    lease: plan.lease,
+                    admissionLease: admissionLease
                 )
-                return try await handleStreamingChat(chatRequest, includeUsage: includeUsage)
             } else {
-                return try await handleNonStreamingChat(chatRequest)
+                return try await handleNonStreamingChat(
+                    plan.request,
+                    modelID: plan.modelID,
+                    lease: plan.lease,
+                    admissionLease: admissionLease
+                )
             }
         } catch let error as APIRequestValidationError {
+            await plan.lease.release()
+            await admissionLease.release()
             return makeErrorResponse(
                 status: .badRequest,
                 message: error.localizedDescription,
                 type: "invalid_request_error"
             )
         } catch {
+            await plan.lease.release()
+            await admissionLease.release()
             return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
         }
     }
 
-    private func handleNonStreamingChat(_ request: ChatRequest) async throws -> Response {
-        let result = try await generateChat(request, progressHandler: nil)
+    private func handleNonStreamingChat(
+        _ request: ChatRequest,
+        modelID: String,
+        lease: RuntimeModelLease,
+        admissionLease: RuntimeRequestAdmissionLease
+    ) async throws -> Response {
+        defer {
+            Task {
+                await lease.release()
+                await admissionLease.release()
+            }
+        }
+        let result = try await lease.chat(request, progressHandler: nil)
 
         let response = OpenAIChatResponse(
             id: "chatcmpl-\(UUID().uuidString.prefix(8))",
             object: "chat.completion",
             created: Int(Date().timeIntervalSince1970),
-            model: modelId,
+            model: modelID,
             choices: [
                 OpenAIChatChoice(
                     index: 0,
@@ -967,19 +1004,105 @@ actor CodeGenServer {
         )
     }
 
-    private func proxyDeepseekV4FlashChatCompletions(body: ByteBuffer, contentType: String?) async throws -> Response {
-        guard let generator = deepseekV4FlashGenerator else {
-            throw DeepseekV4FlashError.serverFailedToStart("generator not initialized")
+    private func handleRuntimeStatus(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
         }
-        let upstreamURL = try await generator.chatCompletionsURL(modelPath: modelPath, progressHandler: nil)
+        let admission = await requestAdmission.snapshot()
+        let data = try JSONEncoder().encode(await pool.status(admission: admission))
+        return Response(
+            status: .ok,
+            headers: [.contentType: "application/json"],
+            body: .init(byteBuffer: ByteBuffer(bytes: data))
+        )
+    }
+
+    private func handleRuntimeLoad(_ request: Request, id: String) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        do {
+            let snapshot = try await pool.loadModel(idOrAlias: id)
+            return try jsonResponse(snapshot)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleRuntimeUnload(_ request: Request, id: String) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        do {
+            let snapshot = try await pool.unloadModel(idOrAlias: id)
+            return try jsonResponse(snapshot)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleRuntimeSettings(_ request: Request, id: String) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        do {
+            let settings = try await pool.settings(idOrAlias: id)
+            return try jsonResponse(settings)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleRuntimeSettingsPatch(_ request: Request, id: String) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
+        }
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+        do {
+            let settings = try JSONDecoder().decode(RuntimeModelSettings.self, from: Data(body.readableBytesView))
+            let updated = try await pool.updateSettings(idOrAlias: id, settings: settings)
+            return try jsonResponse(updated)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func proxyDeepseekV4FlashChatCompletions(
+        body: ByteBuffer,
+        contentType: String?,
+        lease: RuntimeModelLease,
+        admissionLease: RuntimeRequestAdmissionLease
+    ) async throws -> Response {
+        let upstreamURL = try await lease.deepseekChatCompletionsURL(progressHandler: nil)
         let data = Data(body.readableBytesView)
 
         if !DeepseekV4FlashClient.requestWantsStreamingResponse(data) {
-            let upstreamResponse = try await DeepseekV4FlashClient.normalizedChatCompletionData(
-                url: upstreamURL,
-                requestBody: data,
-                contentType: contentType
-            )
+            let upstreamResponse: DeepseekV4FlashClientResponse
+            do {
+                upstreamResponse = try await DeepseekV4FlashClient.normalizedChatCompletionData(
+                    url: upstreamURL,
+                    requestBody: data,
+                    contentType: contentType
+                )
+            } catch {
+                await lease.release()
+                await admissionLease.release()
+                throw error
+            }
+            await lease.release()
+            await admissionLease.release()
             var headers: HTTPFields = [:]
             headers[.contentType] = upstreamResponse.contentType
             return Response(
@@ -1006,6 +1129,10 @@ actor CodeGenServer {
                 if !upstreamData.isEmpty {
                     continuation.yield(ByteBuffer(bytes: upstreamData))
                 }
+                Task {
+                    await lease.release()
+                    await admissionLease.release()
+                }
                 continuation.finish()
             }
             return Response(
@@ -1018,6 +1145,8 @@ actor CodeGenServer {
             upstreamData,
             contentType: headers[.contentType]
         )
+        await lease.release()
+        await admissionLease.release()
         return Response(
             status: .init(code: http?.statusCode ?? 502),
             headers: headers,
@@ -1046,8 +1175,12 @@ actor CodeGenServer {
                         if !buffer.isEmpty {
                             continuation.yield(ByteBuffer(bytes: buffer))
                         }
+                        await lease.release()
+                        await admissionLease.release()
                         continuation.finish()
                     } catch {
+                        await lease.release()
+                        await admissionLease.release()
                         continuation.finish()
                     }
                 }
@@ -1060,9 +1193,17 @@ actor CodeGenServer {
         }
 
         var upstreamData = Data()
-        for try await byte in upstreamBytes {
-            upstreamData.append(byte)
+        do {
+            for try await byte in upstreamBytes {
+                upstreamData.append(byte)
+            }
+        } catch {
+            await lease.release()
+            await admissionLease.release()
+            throw error
         }
+        await lease.release()
+        await admissionLease.release()
         let repairedData = DeepseekV4FlashClient.normalizedChatCompletionBody(
             upstreamData,
             contentType: headers[.contentType]
@@ -1075,7 +1216,13 @@ actor CodeGenServer {
 #endif
     }
 
-    private func handleStreamingChat(_ request: ChatRequest, includeUsage: Bool) async throws -> Response {
+    private func handleStreamingChat(
+        _ request: ChatRequest,
+        modelID: String,
+        includeUsage: Bool,
+        lease: RuntimeModelLease,
+        admissionLease: RuntimeRequestAdmissionLease
+    ) async throws -> Response {
         let id = "chatcmpl-\(UUID().uuidString.prefix(8))"
         let encoder = JSONEncoder()
 
@@ -1083,11 +1230,11 @@ actor CodeGenServer {
         let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
 
         // Start generation in a detached task
-        Task { [self, modelId] in
+        Task {
             do {
                 let streamedContent = StreamingContentTracker()
                 let shouldBufferForToolCalls = request.tools?.isEmpty == false
-                let result = try await self.generateChat(request) { progress in
+                let result = try await lease.chat(request) { progress in
                     guard !shouldBufferForToolCalls else { return }
                     if progress.stage == .generating,
                        let token = progress.message,
@@ -1098,7 +1245,7 @@ actor CodeGenServer {
                             id: id,
                             object: "chat.completion.chunk",
                             created: Int(Date().timeIntervalSince1970),
-                            model: modelId,
+                            model: modelID,
                             choices: [
                                 OpenAIChatChoice(
                                     index: 0,
@@ -1119,7 +1266,7 @@ actor CodeGenServer {
                         id: id,
                         object: "chat.completion.chunk",
                         created: Int(Date().timeIntervalSince1970),
-                        model: modelId,
+                        model: modelID,
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
@@ -1140,7 +1287,7 @@ actor CodeGenServer {
                         id: id,
                         object: "chat.completion.chunk",
                         created: Int(Date().timeIntervalSince1970),
-                        model: modelId,
+                        model: modelID,
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
@@ -1160,7 +1307,7 @@ actor CodeGenServer {
                     id: id,
                     object: "chat.completion.chunk",
                     created: Int(Date().timeIntervalSince1970),
-                    model: modelId,
+                    model: modelID,
                     choices: [
                         OpenAIChatChoice(
                             index: 0,
@@ -1179,7 +1326,7 @@ actor CodeGenServer {
                         id: id,
                         object: "chat.completion.chunk",
                         created: Int(Date().timeIntervalSince1970),
-                        model: modelId,
+                        model: modelID,
                         choices: [],
                         usage: OpenAIUsage(
                             prompt_tokens: 0,
@@ -1194,6 +1341,8 @@ actor CodeGenServer {
                 }
 
                 continuation.yield(ByteBuffer(string: "data: [DONE]\n\n"))
+                await lease.release()
+                await admissionLease.release()
                 continuation.finish()
             } catch {
                 // Send error in SSE format
@@ -1204,6 +1353,8 @@ actor CodeGenServer {
                    let json = String(data: data, encoding: .utf8) {
                     continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
                 }
+                await lease.release()
+                await admissionLease.release()
                 continuation.finish()
             }
         }
@@ -1237,45 +1388,6 @@ actor CodeGenServer {
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
-    private func generateChat(
-        _ request: ChatRequest,
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> ChatResponse {
-        switch engine {
-        case .textCode:
-            guard let generator = llamaGenerator else {
-                throw CodeGenError.modelNotLoaded
-            }
-            return try await generator.chat(request, progressHandler: progressHandler)
-        case .textChatKlein:
-            guard let generator = mlxGenerator else {
-                throw Flux2Error.modelsNotLoaded
-            }
-            guard let modelPath else {
-                throw Flux2Error.modelNotFound(ModelResolver.ModelID.mebot.rawValue)
-            }
-            if useStandaloneModel {
-                return try await generator.chatStandalone(request, modelPath: modelPath, progressHandler: progressHandler)
-            }
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatGemma4:
-            guard let generator = gemma4Generator else {
-                throw Gemma4Error.modelNotLoaded
-            }
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatQ35:
-            guard let generator = q35Generator else {
-                throw Q35Error.modelNotLoaded
-            }
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDeepseekV4Flash:
-            guard let generator = deepseekV4FlashGenerator else {
-                throw DeepseekV4FlashError.serverFailedToStart("generator not initialized")
-            }
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        }
-    }
-
     private func unauthorizedResponseIfNeeded(for request: Request) -> Response? {
         guard let apiKey, !apiKey.isEmpty else { return nil }
         guard request.headers[.authorization] == "Bearer \(apiKey)" else {
@@ -1289,7 +1401,57 @@ actor CodeGenServer {
         return nil
     }
 
-    private func makeErrorResponse(
+    private nonisolated func jsonResponse<T: Encodable>(
+        _ payload: T,
+        status: HTTPResponse.Status = .ok
+    ) throws -> Response {
+        let data = try JSONEncoder().encode(payload)
+        return Response(
+            status: status,
+            headers: [.contentType: "application/json"],
+            body: .init(byteBuffer: ByteBuffer(bytes: data))
+        )
+    }
+
+    private nonisolated func runtimeErrorResponse(_ error: Error) -> Response {
+        switch error {
+        case let error as RuntimeModelPoolError:
+            switch error {
+            case .unknownModel, .unsupportedModel, .modelNotInstalled, .incompatibleEngine, .invalidSettings:
+                return makeErrorResponse(
+                    status: .badRequest,
+                    message: error.localizedDescription,
+                    type: "invalid_request_error"
+                )
+            case .unloadConflict:
+                return makeErrorResponse(
+                    status: .conflict,
+                    message: error.localizedDescription,
+                    type: "conflict_error"
+                )
+            case .rawProxyUnavailable:
+                return makeErrorResponse(
+                    status: .internalServerError,
+                    message: error.localizedDescription,
+                    type: "server_error"
+                )
+            }
+        case let error as APIRequestValidationError:
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
+        default:
+            return makeErrorResponse(
+                status: .internalServerError,
+                message: "Request failed.",
+                type: "server_error"
+            )
+        }
+    }
+
+    private nonisolated func makeErrorResponse(
         status: HTTPResponse.Status,
         message: String,
         type: String,

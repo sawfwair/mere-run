@@ -12,6 +12,49 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
     }
 }
 
+struct StudioRuntimeSettings: Codable, Equatable {
+    var alias: String?
+    var pinned: Bool
+    var ttlSeconds: Int?
+    var maxContextTokens: Int?
+    var maxTokens: Int?
+    var temperature: Double?
+    var topP: Double?
+    var engineOverride: String?
+
+    init(
+        alias: String? = nil,
+        pinned: Bool = false,
+        ttlSeconds: Int? = nil,
+        maxContextTokens: Int? = nil,
+        maxTokens: Int? = nil,
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        engineOverride: String? = nil
+    ) {
+        self.alias = alias
+        self.pinned = pinned
+        self.ttlSeconds = ttlSeconds
+        self.maxContextTokens = maxContextTokens
+        self.maxTokens = maxTokens
+        self.temperature = temperature
+        self.topP = topP
+        self.engineOverride = engineOverride
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        alias = try container.decodeIfPresent(String.self, forKey: .alias)
+        pinned = try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+        ttlSeconds = try container.decodeIfPresent(Int.self, forKey: .ttlSeconds)
+        maxContextTokens = try container.decodeIfPresent(Int.self, forKey: .maxContextTokens)
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
+        topP = try container.decodeIfPresent(Double.self, forKey: .topP)
+        engineOverride = try container.decodeIfPresent(String.self, forKey: .engineOverride)
+    }
+}
+
 enum StudioModelInventoryParser {
     static func rows(from output: String) -> [StudioModelInventoryRow] {
         output
@@ -61,8 +104,17 @@ struct StudioModelsSheet: View {
     @State private var showAll = false
     @State private var isRefreshing = false
     @State private var loadingInfoID: String?
+    @State private var loadingRuntimeID: String?
     @State private var removingID: String?
     @State private var pendingRemoval: StudioModelInventoryRow?
+    @State private var runtimeSettingsByID: [String: StudioRuntimeSettings] = [:]
+    @State private var runtimeAlias = ""
+    @State private var runtimeTTL = ""
+    @State private var runtimeMaxContext = ""
+    @State private var runtimeMaxTokens = ""
+    @State private var runtimeTemperature = ""
+    @State private var runtimeTopP = ""
+    @State private var runtimePinned = false
 
     private var installedRows: [StudioModelInventoryRow] {
         rows.filter(\.isInstalled)
@@ -227,6 +279,14 @@ struct StudioModelsSheet: View {
                         Text(row.category)
                         Text(row.status)
                         Text(row.size)
+                        if let runtime = runtimeSettingsByID[row.id] {
+                            if runtime.pinned {
+                                Text("pinned")
+                            }
+                            if let alias = runtime.alias {
+                                Text(alias)
+                            }
+                        }
                     }
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
@@ -294,6 +354,42 @@ struct StudioModelsSheet: View {
 
             HStack(spacing: 10) {
                 Button {
+                    Task { await runtimeLoad(row) }
+                } label: {
+                    Label("Load", systemImage: "play.fill")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!row.isInstalled || loadingRuntimeID != nil)
+
+                Button {
+                    Task { await runtimeUnload(row) }
+                } label: {
+                    Label("Unload", systemImage: "stop.fill")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!row.isInstalled || loadingRuntimeID != nil)
+
+                Button {
+                    Task { await saveRuntimeSettings(for: row, pinned: true) }
+                } label: {
+                    Label("Pin", systemImage: "pin")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!row.isInstalled || loadingRuntimeID != nil)
+
+                Button {
+                    Task { await saveRuntimeSettings(for: row, pinned: false) }
+                } label: {
+                    Label("Unpin", systemImage: "pin.slash")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!row.isInstalled || loadingRuntimeID != nil)
+            }
+
+            runtimeSettingsEditor(row)
+
+            HStack(spacing: 10) {
+                Button {
                     Task { await loadInfo(for: row) }
                 } label: {
                     Label("Inspect", systemImage: "info.circle")
@@ -318,6 +414,37 @@ struct StudioModelsSheet: View {
                 .buttonStyle(.bordered)
                 .disabled(!row.isInstalled || removingID != nil)
             }
+        }
+    }
+
+    private func runtimeSettingsEditor(_ row: StudioModelInventoryRow) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                TextField("Alias", text: $runtimeAlias)
+                TextField("TTL", text: $runtimeTTL)
+                    .frame(width: 72)
+                TextField("Context", text: $runtimeMaxContext)
+                    .frame(width: 88)
+                TextField("Max tokens", text: $runtimeMaxTokens)
+                    .frame(width: 88)
+                TextField("Temp", text: $runtimeTemperature)
+                    .frame(width: 72)
+                TextField("Top P", text: $runtimeTopP)
+                    .frame(width: 72)
+                Toggle("Pinned", isOn: $runtimePinned)
+                    .toggleStyle(.checkbox)
+
+                Button {
+                    Task { await saveRuntimeSettings(for: row, pinned: runtimePinned) }
+                } label: {
+                    Label("Save", systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+                .disabled(!row.isInstalled || loadingRuntimeID != nil)
+            }
+            .textFieldStyle(.roundedBorder)
+            .font(MereRunTheme.captionFont)
         }
     }
 
@@ -348,6 +475,7 @@ struct StudioModelsSheet: View {
         detailText = row.isInstalled ? "" : "\(row.id) is not downloaded."
         guard row.isInstalled else { return }
         Task { await loadInfo(for: row) }
+        Task { await loadRuntimeSettings(for: row) }
     }
 
     @MainActor
@@ -374,6 +502,126 @@ struct StudioModelsSheet: View {
             selectedID = nil
             detailText = ""
         }
+    }
+
+    @MainActor
+    private func loadRuntimeSettings(for row: StudioModelInventoryRow) async {
+        loadingRuntimeID = row.id
+        let result = await controller.utilityCommandResult(args: ["model", "runtime", "get", row.id, "--json"])
+        loadingRuntimeID = nil
+        guard result.exitCode == 0,
+              let data = result.stdout.data(using: .utf8),
+              let settings = try? JSONDecoder().decode(StudioRuntimeSettings.self, from: data) else {
+            return
+        }
+        runtimeSettingsByID[row.id] = settings
+        if selectedID == row.id {
+            applyRuntimeSettings(settings)
+        }
+    }
+
+    private func applyRuntimeSettings(_ settings: StudioRuntimeSettings) {
+        runtimeAlias = settings.alias ?? ""
+        runtimeTTL = settings.ttlSeconds.map(String.init) ?? ""
+        runtimeMaxContext = settings.maxContextTokens.map(String.init) ?? ""
+        runtimeMaxTokens = settings.maxTokens.map(String.init) ?? ""
+        runtimeTemperature = settings.temperature.map { String($0) } ?? ""
+        runtimeTopP = settings.topP.map { String($0) } ?? ""
+        runtimePinned = settings.pinned
+    }
+
+    @MainActor
+    private func saveRuntimeSettings(for row: StudioModelInventoryRow, pinned: Bool) async {
+        loadingRuntimeID = row.id
+        statusMessage = "Saving runtime settings for \(row.id)..."
+        var args = ["model", "runtime", "set", row.id, pinned ? "--pinned" : "--unpinned"]
+        appendRuntimeSettingArgs(to: &args)
+        let result = await controller.utilityCommandResult(args: args)
+        loadingRuntimeID = nil
+        if result.exitCode == 0 {
+            statusMessage = "Saved runtime settings for \(row.id)"
+            await loadRuntimeSettings(for: row)
+        } else {
+            statusMessage = "Could not save runtime settings for \(row.id)"
+            detailText = result.outputText
+        }
+    }
+
+    private func appendRuntimeSettingArgs(to args: inout [String]) {
+        appendStringSetting(runtimeAlias, setFlag: "--alias", clearFlag: "--clear-alias", to: &args)
+        appendStringSetting(runtimeTTL, setFlag: "--ttl-seconds", clearFlag: "--clear-ttl", to: &args)
+        appendStringSetting(
+            runtimeMaxContext,
+            setFlag: "--max-context-tokens",
+            clearFlag: "--clear-max-context-tokens",
+            to: &args
+        )
+        appendStringSetting(runtimeMaxTokens, setFlag: "--max-tokens", clearFlag: "--clear-max-tokens", to: &args)
+        appendStringSetting(
+            runtimeTemperature,
+            setFlag: "--temperature",
+            clearFlag: "--clear-temperature",
+            to: &args
+        )
+        appendStringSetting(runtimeTopP, setFlag: "--top-p", clearFlag: "--clear-top-p", to: &args)
+    }
+
+    private func appendStringSetting(
+        _ value: String,
+        setFlag: String,
+        clearFlag: String,
+        to args: inout [String]
+    ) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            args.append(clearFlag)
+        } else {
+            args += [setFlag, trimmed]
+        }
+    }
+
+    @MainActor
+    private func runtimeLoad(_ row: StudioModelInventoryRow) async {
+        await runtimeServerAction(row, action: "load")
+    }
+
+    @MainActor
+    private func runtimeUnload(_ row: StudioModelInventoryRow) async {
+        await runtimeServerAction(row, action: "unload")
+    }
+
+    @MainActor
+    private func runtimeServerAction(_ row: StudioModelInventoryRow, action: String) async {
+        loadingRuntimeID = row.id
+        statusMessage = "\(action.capitalized)ing \(row.id)..."
+        do {
+            var request = URLRequest(url: runtimeURL(for: row, action: action))
+            request.httpMethod = "POST"
+            if !controller.draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                request.setValue("Bearer \(controller.draft.apiKey)", forHTTPHeaderField: "Authorization")
+            }
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let http = response as? HTTPURLResponse
+            if (200..<300).contains(http?.statusCode ?? 500) {
+                statusMessage = "\(action.capitalized)ed \(row.id)"
+            } else {
+                statusMessage = "Runtime \(action) returned HTTP \(http?.statusCode ?? 0)"
+            }
+        } catch {
+            statusMessage = "Runtime server is not reachable"
+        }
+        loadingRuntimeID = nil
+    }
+
+    private func runtimeURL(for row: StudioModelInventoryRow, action: String) -> URL {
+        let host = controller.draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeHost = host.isEmpty ? "127.0.0.1" : host
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = safeHost
+        components.port = controller.draft.port
+        components.path = "/runtime/models/\(row.id)/\(action)"
+        return components.url ?? URL(string: "http://127.0.0.1:8080/runtime/models/\(row.id)/\(action)")!
     }
 
     @MainActor

@@ -35,7 +35,7 @@ Public tree:
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
-- `mere.run model { list, capabilities, info, pull, remove, repair-manifests }`
+- `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
 - `mere.run setup`
@@ -93,6 +93,7 @@ For subsystem-specific implementation guides, see:
 swift run mere.run model list
 swift run mere.run status
 swift run mere.run model capabilities
+swift run mere.run model runtime get text-chat-gemma4
 swift run mere.run model pull image-zimage-nano
 swift run mere.run model info image-zimage-nano
 ```
@@ -649,6 +650,11 @@ swift run mere.run model list
 Show a quick local snapshot: whether the API server answers, which model it
 reports as loaded through `/v1/models`, the active model-store path/source, and
 which managed models are installed in that store.
+When the server exposes the native runtime pool, JSON status also includes pool
+entries, active request counts, request admission queue depth, the memory
+snapshot, runtime capability flags, aggregate cache stats, per-model prefix KV
+cache stats, per-model decode batching stats when enabled, aggregate benchmark
+stats from completed native chat requests, and the runtime settings path.
 
 ```bash
 swift run mere.run status
@@ -664,6 +670,37 @@ Useful options:
 - `--timeout-seconds`: network probe timeout
 - `--json`: emit a structured snapshot for scripts and agents
 
+### `mere.run model runtime get`
+
+Read typed per-model API runtime settings from the active model store.
+
+```bash
+swift run mere.run model runtime get text-chat-gemma4
+swift run mere.run model runtime get text-chat-gemma4 --json
+```
+
+Settings are stored at
+`<active model store>/.mere-run/runtime-model-settings.json` and follow
+`--models-root` / `MERERUN_MODELS_DIR`.
+
+### `mere.run model runtime set`
+
+Update typed API serving defaults for a managed API-capable model.
+
+```bash
+swift run mere.run model runtime set text-chat-gemma4 \
+  --alias chat-default \
+  --pinned \
+  --ttl-seconds 3600 \
+  --max-context-tokens 8192 \
+  --max-tokens 1024 \
+  --temperature 0.6 \
+  --top-p 0.9
+```
+
+Use the matching `--clear-*` flags to remove optional values. Engine overrides
+are validated against the curated catalog.
+
 ### `mere.run model pull`
 
 Download a managed Hugging Face snapshot into the local model store. The command checks
@@ -676,6 +713,26 @@ swift run mere.run model pull --all
 ```
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
+
+### `mere.run model benchmark gemma4-kv`
+
+Run a fixed-token real-checkpoint Gemma4 KV cache comparison. The command runs
+the selected Gemma4 model twice in one process: default Gemma4 KV settings first,
+then model-default prefill with packed `polar` 2-bit KV from token 0 for decode. It
+disables EOS stopping so both variants decode exactly `--decode-tokens`, and
+reports TTFT, prefill tok/s, KV conversion time, decode tok/s, end-to-end tok/s,
+and process resident memory before and after each variant.
+
+```bash
+swift run mere.run model benchmark gemma4-kv \
+  --model text-chat-gemma4-turbo \
+  --decode-tokens 48 \
+  --json
+```
+
+Use `--prompt`, `--prompt-file`, or `--prompt-repeat` to control prompt length.
+The default fixture prompt is deterministic and intended for local A/B
+comparisons, not model-quality evaluation.
 
 ### `mere.run model capabilities`
 
@@ -728,6 +785,10 @@ Current endpoint surface:
 - `GET /health`
 - `GET /v1/models`
 - `POST /v1/chat/completions`
+- `GET /runtime/status`
+- `POST /runtime/models/{id}/load`
+- `POST /runtime/models/{id}/unload`
+- `GET/PATCH /runtime/models/{id}/settings`
 
 Security defaults:
 
@@ -735,6 +796,35 @@ Security defaults:
 - non-loopback binds require `--api-key` or `MERERUN_API_KEY`
 - `POST /v1/chat/completions` requires `Content-Type: application/json`
 - `--rate-limit-per-minute` applies basic request throttling to `POST /v1/chat/completions`
+- `--max-active-requests` controls fair FIFO chat admission; the default `1`
+  preserves serialized local inference while exposing queue depth in status;
+  queued client cancellations are removed from the FIFO instead of running later
+- Gemma4 and Q35 use chunked prefill checkpoints for long prompts.
+- Gemma4 can opt into an in-memory prefix KV reuse prototype with
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; runtime status reports entries, hits, and
+  reused tokens when a Gemma4 model is loaded, including semantic chat-prefix
+  checkpoints before the final message when token prefixes match exactly
+- Q35 can opt into text-only in-memory prefix KV reuse with
+  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
+  text-only requests use the same semantic chat-prefix checkpoints as Gemma4
+- Gemma4 and Q35 can opt into decode batching with
+  `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
+  `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to
+  allow overlap, and status reports actual batched decode steps and max observed
+  batch size; Gemma4 full-attention rows stay same-position because that path
+  still uses scalar RoPE/cache offsets, while Q35 full-attention rows use
+  row-offset-aware ragged KV caches and Q35 linear rows use typed recurrent
+  state so compatible Q35 rows can batch across decode positions; the scheduler
+  services the earliest decode position first by batching compatible rows there
+  or advancing one lower-offset row until it can join a compatible batch
+- Gemma4 can opt into experimental packed PolarKV with
+  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
+  long-context synthetic decode testing. It is not the default until checkpoint
+  benchmarks prove the end-to-end model path.
+- `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,
+  batched decode steps, completed chat requests, generated tokens, and average
+  load/prefill/decode timings across loaded models under `cacheStats` and
+  `benchmarkStats`
 - generation parameters are bounded before execution; for example, `max_tokens` must fit the configured context size
 - LoRA adapters for the API server are selected by the operator with `--lora`; request bodies cannot provide local LoRA paths
 
@@ -761,11 +851,11 @@ Examples:
 swift run mere.run api serve
 swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
-swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120
+swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120 --max-active-requests 1
 ```
 
 After starting a server, run `swift run mere.run status` from another terminal
-to confirm `/health`, `/v1/models`, and the served model.
+to confirm `/health`, `/v1/models`, the runtime pool, and the served model.
 
 ### `mere.run setup`
 

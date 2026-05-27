@@ -7,8 +7,31 @@ import MLXNN
 
 public protocol KVCache: AnyObject {
     var offset: Int { get }
+    var rowOffsets: [Int]? { get }
+    var supportsVariablePositionBatching: Bool { get }
     func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)
     func makeMask(n: Int) -> MLXFast.ScaledDotProductAttentionMaskMode
+    func fork() -> KVCache
+    func batched(with caches: [KVCache]) -> KVCache?
+    func unbatchedRows(count: Int) -> [KVCache]?
+}
+
+public extension KVCache {
+    var rowOffsets: [Int]? {
+        nil
+    }
+
+    var supportsVariablePositionBatching: Bool {
+        false
+    }
+
+    func batched(with caches: [KVCache]) -> KVCache? {
+        nil
+    }
+
+    func unbatchedRows(count: Int) -> [KVCache]? {
+        nil
+    }
 }
 
 public class KVCacheSimple: KVCache {
@@ -19,6 +42,10 @@ public class KVCacheSimple: KVCache {
 
     public init(step: Int = 256) {
         self.step = step
+    }
+
+    public var supportsVariablePositionBatching: Bool {
+        true
     }
 
     public func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray) {
@@ -67,6 +94,14 @@ public class KVCacheSimple: KVCache {
         return (returnedKeys, returnedValues)
     }
 
+    private func populatedState() -> (MLXArray, MLXArray)? {
+        guard let keys, let values else { return nil }
+        return (
+            keys[.ellipsis, ..<offset, 0...],
+            values[.ellipsis, ..<offset, 0...]
+        )
+    }
+
     public func makeMask(n: Int) -> MLXFast.ScaledDotProductAttentionMaskMode {
         if n == 1 {
             return .none
@@ -78,6 +113,216 @@ public class KVCacheSimple: KVCache {
         keys = nil
         values = nil
         offset = 0
+    }
+
+    public func fork() -> KVCache {
+        let copy = KVCacheSimple(step: step)
+        copy.keys = keys
+        copy.values = values
+        copy.offset = offset
+        return copy
+    }
+
+    public func batched(with caches: [KVCache]) -> KVCache? {
+        guard let typed = caches as? [KVCacheSimple],
+              !typed.isEmpty,
+              typed.allSatisfy({ $0.step == step }) else {
+            return nil
+        }
+
+        let states = typed.compactMap { $0.populatedState() }
+        guard states.count == typed.count else {
+            return nil
+        }
+
+        if !typed.allSatisfy({ $0.offset == offset }) {
+            return KVRaggedBatchCache(
+                states: zip(typed, states).map { cache, state in
+                    KVRaggedBatchCache.RowState(
+                        keys: state.0,
+                        values: state.1,
+                        offset: cache.offset
+                    )
+                },
+                step: step
+            )
+        }
+
+        let copy = KVCacheSimple(step: step)
+        copy.keys = concatenated(states.map(\.0), axis: 0)
+        copy.values = concatenated(states.map(\.1), axis: 0)
+        copy.offset = offset
+        return copy
+    }
+
+    public func unbatchedRows(count: Int) -> [KVCache]? {
+        guard count > 0,
+              let state = populatedState(),
+              state.0.dim(0) == count,
+              state.1.dim(0) == count else {
+            return nil
+        }
+        return (0..<count).map { index in
+            let copy = KVCacheSimple(step: step)
+            copy.keys = state.0[index..<(index + 1), 0..., 0..., 0...]
+            copy.values = state.1[index..<(index + 1), 0..., 0..., 0...]
+            copy.offset = offset
+            return copy
+        }
+    }
+}
+
+public final class KVRaggedBatchCache: KVCache {
+    struct RowState {
+        let keys: MLXArray
+        let values: MLXArray
+        let offset: Int
+    }
+
+    private let step: Int
+    private var keys: MLXArray
+    private var values: MLXArray
+    private var offsets: [Int]
+
+    public var offset: Int {
+        offsets.min() ?? 0
+    }
+
+    public var rowOffsets: [Int]? {
+        offsets
+    }
+
+    public var supportsVariablePositionBatching: Bool {
+        true
+    }
+
+    init?(states: [RowState], step: Int) {
+        guard !states.isEmpty else { return nil }
+        self.step = step
+        self.offsets = states.map(\.offset)
+
+        let maxOffset = offsets.max() ?? 0
+        guard let padded = Self.padded(states: states, maxOffset: maxOffset) else {
+            return nil
+        }
+        self.keys = padded.keys
+        self.values = padded.values
+    }
+
+    public func update(keys newKeys: MLXArray, values newValues: MLXArray) -> (MLXArray, MLXArray) {
+        let tokenCount = newKeys.dim(2)
+        let newOffsets = offsets.map { $0 + tokenCount }
+        let maxOffset = newOffsets.max() ?? tokenCount
+        let states = offsets.indices.map { index in
+            let existingKeys = keys[index..<(index + 1), 0..., ..<offsets[index], 0...]
+            let existingValues = values[index..<(index + 1), 0..., ..<offsets[index], 0...]
+            return RowState(
+                keys: concatenated([existingKeys, newKeys[index..<(index + 1), 0..., 0..., 0...]], axis: 2),
+                values: concatenated([existingValues, newValues[index..<(index + 1), 0..., 0..., 0...]], axis: 2),
+                offset: newOffsets[index]
+            )
+        }
+
+        if let padded = Self.padded(states: states, maxOffset: maxOffset) {
+            self.keys = padded.keys
+            self.values = padded.values
+            self.offsets = newOffsets
+        }
+        return (keys, values)
+    }
+
+    public func makeMask(n: Int) -> MLXFast.ScaledDotProductAttentionMaskMode {
+        guard n > 0 else { return .none }
+        let maxLength = (offsets.max() ?? 0) + n
+        guard maxLength > 0 else { return .none }
+
+        var mask: [Float] = []
+        mask.reserveCapacity(offsets.count * n * maxLength)
+        for rowOffset in offsets {
+            for queryOffset in rowOffset..<(rowOffset + n) {
+                for keyPosition in 0..<maxLength {
+                    mask.append(keyPosition <= queryOffset ? 0 : -1e9)
+                }
+            }
+        }
+        let array = MLXArray(mask).reshaped(offsets.count, 1, n, maxLength)
+        return .array(array)
+    }
+
+    public func fork() -> KVCache {
+        KVRaggedBatchCache(
+            states: offsets.indices.map { index in
+                RowState(
+                    keys: keys[index..<(index + 1), 0..., ..<offsets[index], 0...],
+                    values: values[index..<(index + 1), 0..., ..<offsets[index], 0...],
+                    offset: offsets[index]
+                )
+            },
+            step: step
+        )!
+    }
+
+    public func unbatchedRows(count: Int) -> [KVCache]? {
+        guard count == offsets.count else { return nil }
+        return offsets.indices.map { index in
+            let copy = KVCacheSimple(step: step)
+            let validKeys = keys[index..<(index + 1), 0..., ..<offsets[index], 0...]
+            let validValues = values[index..<(index + 1), 0..., ..<offsets[index], 0...]
+            _ = copy.update(keys: validKeys, values: validValues)
+            return copy
+        }
+    }
+
+    private static func padded(states: [RowState], maxOffset: Int) -> (keys: MLXArray, values: MLXArray)? {
+        guard let first = states.first else { return nil }
+        let keyPaddingShape = [
+            1,
+            first.keys.dim(1),
+            0,
+            first.keys.dim(3),
+        ]
+        let valuePaddingShape = [
+            1,
+            first.values.dim(1),
+            0,
+            first.values.dim(3),
+        ]
+
+        var paddedKeys: [MLXArray] = []
+        var paddedValues: [MLXArray] = []
+        paddedKeys.reserveCapacity(states.count)
+        paddedValues.reserveCapacity(states.count)
+        for state in states {
+            let keyPadCount = max(0, maxOffset - state.keys.dim(2))
+            let valuePadCount = max(0, maxOffset - state.values.dim(2))
+            let rowKeys = keyPadCount > 0
+                ? concatenated(
+                    [
+                        state.keys,
+                        MLXArray.zeros(
+                            [keyPaddingShape[0], keyPaddingShape[1], keyPadCount, keyPaddingShape[3]],
+                            dtype: state.keys.dtype
+                        ),
+                    ],
+                    axis: 2
+                )
+                : state.keys
+            let rowValues = valuePadCount > 0
+                ? concatenated(
+                    [
+                        state.values,
+                        MLXArray.zeros(
+                            [valuePaddingShape[0], valuePaddingShape[1], valuePadCount, valuePaddingShape[3]],
+                            dtype: state.values.dtype
+                        ),
+                    ],
+                    axis: 2
+                )
+                : state.values
+            paddedKeys.append(rowKeys)
+            paddedValues.append(rowValues)
+        }
+        return (concatenated(paddedKeys, axis: 0), concatenated(paddedValues, axis: 0))
     }
 }
 

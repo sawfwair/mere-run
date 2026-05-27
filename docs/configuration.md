@@ -53,6 +53,57 @@ Provides the bearer token accepted by `mere.run api serve` for `/v1/models` and
 This is optional for loopback-only usage and required for non-loopback binds.
 `mere.run status` also reads it when probing `/v1/models`.
 
+## Runtime experiments
+
+### `MERERUN_GEMMA4_PREFIX_KV_CACHE`
+
+Set to `1` to enable the in-memory Gemma4 prefix KV reuse prototype in
+`mere.run api serve`. This stores bounded, forked Gemma4 prompt-prefix cache
+state for matching token prefixes and reports entries, hits, and reused tokens
+through `/runtime/status`. When the final chat message changes but the earlier
+system/tool/chat prefix is identical, Gemma4 stores that semantic prefix as an
+extra checkpoint before continuing normal prefill chunks. The bounded cache
+keeps semantic checkpoints ahead of ordinary chunk checkpoints when pruning.
+
+Continuous batching and SSD KV cache are not enabled by this flag.
+
+### `MERERUN_Q35_PREFIX_KV_CACHE`
+
+Set to `1` to enable the in-memory Q35 text-only prefix KV reuse prototype in
+`mere.run api serve`. Q35 vision prompts are excluded because image embeddings
+change the effective prefix even when the token ids match. Runtime status uses
+the same prefix KV counters as Gemma4. Text-only Q35 requests also store the
+stable chat prefix before the final message as an extra checkpoint when it is an
+exact token prefix of the full prompt, and the bounded cache gives those
+semantic checkpoints the same pruning priority as Gemma4.
+
+### `MERERUN_GEMMA4_CONTINUOUS_BATCHING`
+
+Set to `1` to enable the Gemma4 same-offset decode batching prototype in
+`mere.run api serve`. It packs overlapping Gemma4 decode rows with equal KV
+offsets into typed batched KV caches, splits the cache rows back after each
+step, and reports same-position batched decode steps, queued rows, and max
+observed batch size through `/runtime/status`. Gemma4 variable-position decode
+batching is not enabled because its current attention path applies RoPE with
+scalar cache offsets.
+
+### `MERERUN_Q35_CONTINUOUS_BATCHING`
+
+Set to `1` to enable the Q35 decode batching prototype in `mere.run api serve`.
+It uses Q35's typed full-attention and linear-attention cache states. Full
+attention can batch different decode positions through row-offset-aware ragged
+KV caches, and linear attention can batch different decode positions through
+typed recurrent state when cache shapes are compatible. Runtime status reports
+same-position and variable-position batched decode steps.
+
+This is deliberately narrower than arbitrary continuous batching: prefill still
+runs as cancellable per-request chunks, and cache rows batch only when their
+typed state proves compatibility. Gemma4 full-attention rows remain
+same-position because that engine still uses scalar cache offsets. The scheduler
+services the earliest decode position first by batching compatible rows there or
+advancing one lower-offset row until it can join a compatible batch. The feature
+needs `--max-active-requests` above `1` before requests can overlap.
+
 ## Debug toggles
 
 These are quiet by default and are intended for troubleshooting deeper runtime paths.

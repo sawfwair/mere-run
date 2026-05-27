@@ -78,9 +78,14 @@ final class Q35FullAttention: Module {
         var k = kNorm(keys).transposed(0, 2, 1, 3)
         var v = values.transposed(0, 2, 1, 3)
 
-        let offset = cache?.offset ?? 0
-        q = rope(q, offset: offset)
-        k = rope(k, offset: offset)
+        if let rowOffsets = cache?.rowOffsets, rowOffsets.count == b {
+            q = applyRoPEByRow(q, rowOffsets: rowOffsets)
+            k = applyRoPEByRow(k, rowOffsets: rowOffsets)
+        } else {
+            let offset = cache?.offset ?? 0
+            q = rope(q, offset: offset)
+            k = rope(k, offset: offset)
+        }
 
         if let cache {
             let cached = cache.update(keys: k, values: v)
@@ -107,5 +112,15 @@ final class Q35FullAttention: Module {
             out = out * MLX.sigmoid(gate)
         }
         return oProj(out)
+    }
+
+    private func applyRoPEByRow(_ value: MLXArray, rowOffsets: [Int]) -> MLXArray {
+        guard !rowOffsets.isEmpty else {
+            return rope(value, offset: 0)
+        }
+        let rows = rowOffsets.enumerated().map { index, offset in
+            rope(value[index..<(index + 1), 0..., 0..., 0...], offset: offset)
+        }
+        return concatenated(rows, axis: 0)
     }
 }

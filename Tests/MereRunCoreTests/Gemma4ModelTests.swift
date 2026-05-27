@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import MLX
+import MLXRandom
 @testable import MereRunCore
 
 final class Gemma4ModelTests: MereRunCoreTestCase {
@@ -47,6 +48,35 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         ]
     }
 
+    private func mergeLayerCaches(_ rowCaches: [[Gemma4AttentionCache]]) -> [Gemma4AttentionCache]? {
+        guard let first = rowCaches.first, !first.isEmpty else { return nil }
+        guard rowCaches.allSatisfy({ $0.count == first.count }) else { return nil }
+        var mergedCaches: [Gemma4AttentionCache] = []
+        mergedCaches.reserveCapacity(first.count)
+        for index in first.indices {
+            let layerCaches = rowCaches.map { $0[index] }
+            guard let merged = layerCaches[0].batched(with: layerCaches) else { return nil }
+            mergedCaches.append(merged)
+        }
+        return mergedCaches
+    }
+
+    private func splitLayerCaches(
+        _ caches: [Gemma4AttentionCache],
+        rowCount: Int
+    ) -> [[Gemma4AttentionCache]]? {
+        var rows = Array(repeating: [Gemma4AttentionCache](), count: rowCount)
+        for cache in caches {
+            guard let split = cache.unbatchedRows(count: rowCount), split.count == rowCount else {
+                return nil
+            }
+            for index in 0..<rowCount {
+                rows[index].append(split[index])
+            }
+        }
+        return rows
+    }
+
     func testPerLayerModelProjectionIsUnscaledLinearWeightPath() throws {
         let config = try decodeTextConfig(makeBaseConfig())
         let model = Gemma4LanguageModel(config: config)
@@ -56,6 +86,18 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
 
         XCTAssertEqual(String(describing: type(of: model.perLayerModelProjection)), "Linear")
         XCTAssertEqual(projected.shape, [1, 1, config.numHiddenLayers * config.hiddenSizePerLayerInput])
+    }
+
+    func testMakeCacheUsesPolarKVCacheWhenRequested() throws {
+        let config = try decodeTextConfig(makeBaseConfig())
+        let model = Gemma4LanguageModel(config: config)
+        let quantization = try Gemma4KVCacheQuantization(bits: 2, scheme: .polar, groupSize: 64, quantizedStart: 0)
+            .validated()
+
+        let caches = model.makeCache(quantization: quantization)
+
+        XCTAssertEqual(caches.count, 2)
+        XCTAssertTrue(caches.allSatisfy { $0 is Gemma4PolarKVCache })
     }
 
     func testAttentionKEqVDisablesValueProjectionForFullAttentionLayers() throws {
@@ -124,5 +166,139 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
 
         XCTAssertNotNil(layer.router)
         XCTAssertNotNil(layer.experts)
+    }
+
+    func testPrefixCacheForkMatchesFullForwardForSuffixLogits() throws {
+        MLXRandom.seed(19)
+        let config = try decodeTextConfig(makeBaseConfig())
+        let model = Gemma4TextCausalLM(config: config)
+        let tokens = [1, 2, 3, 4, 5]
+        let prefixCount = 2
+
+        let fullCache = try XCTUnwrap(model.makeCache() as? [Gemma4AttentionCache])
+        let fullInput = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+        let fullLogits = model(fullInput, cache: fullCache as [AnyObject])
+        MLX.eval(fullLogits)
+
+        let prefixCache = try XCTUnwrap(model.makeCache() as? [Gemma4AttentionCache])
+        let prefixInput = MLXArray(tokens.prefix(prefixCount).map(Int32.init)).reshaped(1, prefixCount)
+        let prefixLogits = model(prefixInput, cache: prefixCache as [AnyObject])
+        MLX.eval(prefixLogits)
+
+        let forkedCache = prefixCache.map { $0.fork() }
+        let suffixTokens = Array(tokens.dropFirst(prefixCount))
+        let suffixInput = MLXArray(suffixTokens.map(Int32.init)).reshaped(1, suffixTokens.count)
+        let cachedSuffixLogits = model(suffixInput, cache: forkedCache as [AnyObject])
+        MLX.eval(cachedSuffixLogits)
+
+        let expectedSuffixLogits = fullLogits[0..., prefixCount..., 0...]
+        let maxDiff = MLX.max(MLX.abs(
+            expectedSuffixLogits.asType(.float32) - cachedSuffixLogits.asType(.float32)
+        )).item(Float.self)
+        XCTAssertLessThan(maxDiff, 0.0001)
+    }
+
+    func testEqualLengthBatchedForwardMatchesIndependentRows() throws {
+        MLXRandom.seed(23)
+        let config = try decodeTextConfig(makeBaseConfig())
+        let model = Gemma4TextCausalLM(config: config)
+        let rows = [
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+        ]
+
+        let batchInput = MLXArray(rows.flatMap { $0 }.map(Int32.init)).reshaped(rows.count, rows[0].count)
+        let batchLogits = model(batchInput)
+        MLX.eval(batchLogits)
+
+        for (rowIndex, tokens) in rows.enumerated() {
+            let rowInput = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+            let rowLogits = model(rowInput)
+            MLX.eval(rowLogits)
+            let maxDiff = MLX.max(MLX.abs(
+                batchLogits[rowIndex, 0..., 0...].asType(.float32) - rowLogits[0, 0..., 0...].asType(.float32)
+            )).item(Float.self)
+            XCTAssertLessThan(maxDiff, 0.0001)
+        }
+    }
+
+    func testEqualLengthBatchedCachedDecodeMatchesIndependentRows() throws {
+        MLXRandom.seed(29)
+        let config = try decodeTextConfig(makeBaseConfig())
+        let model = Gemma4TextCausalLM(config: config)
+        let prefixes = [
+            [1, 2, 3],
+            [4, 5, 6],
+        ]
+        let nextTokens = [7, 8]
+
+        let batchCache = try XCTUnwrap(model.makeCache() as? [Gemma4AttentionCache])
+        let prefixBatch = MLXArray(prefixes.flatMap { $0 }.map(Int32.init)).reshaped(prefixes.count, prefixes[0].count)
+        let prefillLogits = model(prefixBatch, cache: batchCache as [AnyObject])
+        MLX.eval(prefillLogits)
+        let nextBatch = MLXArray(nextTokens.map(Int32.init)).reshaped(nextTokens.count, 1)
+        let batchDecodeLogits = model(nextBatch, cache: batchCache as [AnyObject])
+        MLX.eval(batchDecodeLogits)
+
+        for (rowIndex, prefix) in prefixes.enumerated() {
+            let rowCache = try XCTUnwrap(model.makeCache() as? [Gemma4AttentionCache])
+            let rowPrefix = MLXArray(prefix.map(Int32.init)).reshaped(1, prefix.count)
+            let rowPrefillLogits = model(rowPrefix, cache: rowCache as [AnyObject])
+            MLX.eval(rowPrefillLogits)
+            let rowNext = MLXArray([Int32(nextTokens[rowIndex])]).reshaped(1, 1)
+            let rowDecodeLogits = model(rowNext, cache: rowCache as [AnyObject])
+            MLX.eval(rowDecodeLogits)
+
+            let maxDiff = MLX.max(MLX.abs(
+                batchDecodeLogits[rowIndex, 0..., 0...].asType(.float32) - rowDecodeLogits[0, 0..., 0...].asType(.float32)
+            )).item(Float.self)
+            XCTAssertLessThan(maxDiff, 0.0001)
+        }
+    }
+
+    func testMergedIndependentCachesBatchedDecodeMatchesIndependentRows() throws {
+        MLXRandom.seed(31)
+        let config = try decodeTextConfig(makeBaseConfig())
+        let model = Gemma4TextCausalLM(config: config)
+        let prefixes = [
+            [1, 2, 3],
+            [4, 5, 6],
+        ]
+        let nextTokens = [7, 8]
+        let secondTokens = [9, 10]
+
+        var rowCaches: [[Gemma4AttentionCache]] = []
+        for prefix in prefixes {
+            let cache = try XCTUnwrap(model.makeCache() as? [Gemma4AttentionCache])
+            let prefixInput = MLXArray(prefix.map(Int32.init)).reshaped(1, prefix.count)
+            let prefixLogits = model(prefixInput, cache: cache as [AnyObject])
+            MLX.eval(prefixLogits)
+            rowCaches.append(cache)
+        }
+
+        let batchedCaches = try XCTUnwrap(mergeLayerCaches(rowCaches))
+        let nextBatch = MLXArray(nextTokens.map(Int32.init)).reshaped(nextTokens.count, 1)
+        let batchedLogits = model(nextBatch, cache: batchedCaches as [AnyObject])
+        MLX.eval(batchedLogits)
+        let splitCaches = try XCTUnwrap(splitLayerCaches(batchedCaches, rowCount: nextTokens.count))
+
+        for rowIndex in prefixes.indices {
+            let rowNext = MLXArray([Int32(nextTokens[rowIndex])]).reshaped(1, 1)
+            let rowLogits = model(rowNext, cache: rowCaches[rowIndex] as [AnyObject])
+            MLX.eval(rowLogits)
+            var maxDiff = MLX.max(MLX.abs(
+                batchedLogits[rowIndex, 0..., 0...].asType(.float32) - rowLogits[0, 0..., 0...].asType(.float32)
+            )).item(Float.self)
+            XCTAssertLessThan(maxDiff, 0.0001)
+
+            let rowSecond = MLXArray([Int32(secondTokens[rowIndex])]).reshaped(1, 1)
+            let splitLogits = model(rowSecond, cache: splitCaches[rowIndex] as [AnyObject])
+            let independentLogits = model(rowSecond, cache: rowCaches[rowIndex] as [AnyObject])
+            MLX.eval(splitLogits, independentLogits)
+            maxDiff = MLX.max(MLX.abs(
+                splitLogits[0, 0..., 0...].asType(.float32) - independentLogits[0, 0..., 0...].asType(.float32)
+            )).item(Float.self)
+            XCTAssertLessThan(maxDiff, 0.0001)
+        }
     }
 }

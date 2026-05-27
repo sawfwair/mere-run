@@ -19,6 +19,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertNil(cmd.lora)
         XCTAssertNil(cmd.apiKey)
         XCTAssertEqual(cmd.rateLimitPerMinute, 60)
+        XCTAssertEqual(cmd.maxActiveRequests, 1)
         XCTAssertEqual(cmd.contextSize, 32_768)
         XCTAssertNil(cmd.kvBits)
         XCTAssertNil(cmd.kvQuantScheme)
@@ -35,6 +36,7 @@ final class APIServeCommandTests: XCTestCase {
             "--lora", "/tmp/adapter.safetensors",
             "--api-key", "secret",
             "--rate-limit-per-minute", "120",
+            "--max-active-requests", "2",
             "--context-size", "8192",
             "--kv-bits", "3.5",
             "--kv-quant-scheme", "turboquant",
@@ -49,6 +51,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.lora, "/tmp/adapter.safetensors")
         XCTAssertEqual(cmd.apiKey, "secret")
         XCTAssertEqual(cmd.rateLimitPerMinute, 120)
+        XCTAssertEqual(cmd.maxActiveRequests, 2)
         XCTAssertEqual(cmd.contextSize, 8192)
         XCTAssertEqual(cmd.kvBits, 3.5)
         XCTAssertEqual(cmd.kvQuantScheme, "turboquant")
@@ -87,6 +90,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(quantization.quantizedStart, 128)
     }
 
+    func testAPIServeGemma4PolarKVFlagsParse() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-gemma4",
+            "--model-path", Gemma4Resources.turboModelId,
+            "--kv-bits", "2",
+            "--kv-quant-scheme", "polar",
+        ])
+
+        let quantization = try cmd.resolveGemma4KVCacheQuantization()
+
+        XCTAssertEqual(quantization.bits, 2)
+        XCTAssertEqual(quantization.scheme, .polar)
+    }
+
     func testHealthContractUsesStablePayload() {
         XCTAssertEqual(APIServerContract.healthStatus(), APIHealthStatus(status: "ok"))
     }
@@ -103,6 +120,16 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(response.data.first?.object, "model")
         XCTAssertEqual(response.data.first?.owned_by, "mere.run")
         XCTAssertEqual(response.data.first?.created, 123)
+    }
+
+    func testModelsContractCanReturnAliases() {
+        let response = APIServerContract.modelsResponse(
+            modelIds: ["text-chat-gemma4", "chat-default"],
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(response.data.map(\.id), ["text-chat-gemma4", "chat-default"])
+        XCTAssertEqual(Set(response.data.map(\.owned_by)), Set(["mere.run"]))
     }
 
     func testChatRequestValidationAcceptsBoundedDefaults() throws {

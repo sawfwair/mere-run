@@ -5,6 +5,22 @@ extension Flux2KleinGenerator {
 
     // MARK: - Chat Generation
 
+    public func prepareChat(
+        modelPath: String,
+        standalone: Bool,
+        progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
+    ) async throws {
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
+        if loadedModelPath == modelPath, textEncoder != nil, tokenizer != nil {
+            return
+        }
+        if standalone {
+            try await loadStandaloneChatModel(from: modelPath, progressHandler: progressHandler)
+        } else {
+            try await loadTextEncoderOnly(from: modelPath, progressHandler: progressHandler)
+        }
+    }
+
 
     public func chat(
         _ request: ChatRequest,

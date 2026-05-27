@@ -5,6 +5,8 @@ This page covers `mere.run api serve`, the local API surface exposed by the pack
 ## Public surface
 
 - `mere.run api serve`
+- `mere.run model runtime get`
+- `mere.run model runtime set`
 - `mere.run status`
 
 ## What it is for
@@ -44,6 +46,19 @@ reports:
 swift run mere.run status
 ```
 
+Optional per-model defaults live with the active model store:
+
+```bash
+swift run mere.run model runtime set text-chat-gemma4 \
+  --alias chat-default \
+  --pinned \
+  --ttl-seconds 3600 \
+  --max-context-tokens 8192 \
+  --max-tokens 1024 \
+  --temperature 0.6 \
+  --top-p 0.9
+```
+
 Network-exposed example:
 
 ```bash
@@ -53,13 +68,58 @@ swift run mere.run api serve \
   --host 0.0.0.0 \
   --port 11434 \
   --api-key "$MERERUN_API_KEY" \
-  --rate-limit-per-minute 120
+  --rate-limit-per-minute 120 \
+  --max-active-requests 1
 ```
 
 ## Design notes
 
 - the API server follows the same model-resolution and model-store rules as the
   rest of the CLI
+- `ManagedModelCatalog` is the API model authority; the server does not scan
+  arbitrary model folders as request-addressable models
+- `--engine` and `--model` still define and preload the startup default, while
+  each chat request can select another installed API-capable catalog model with
+  the OpenAI `model` field
+- chat completions pass through a fair FIFO request admission actor; the default
+  `--max-active-requests 1` preserves serialized local inference and exposes
+  queue depth in status; queued client cancellations are removed from the FIFO
+  instead of being admitted later
+- Gemma4 and Q35 prefills are chunked with cancellation and progress checkpoints
+  before decode; this is cooperative single-request prefill, not continuous
+  batching
+- Gemma4 has an opt-in in-memory prefix KV reuse prototype behind
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; `/runtime/status` reports cache entries,
+  hits, and reused tokens when the Gemma4 model is loaded; the cache stores
+  chunk boundaries plus the stable chat prefix before the final message when it
+  is an exact token prefix, and pruning keeps that stable prefix ahead of
+  ordinary chunk boundaries
+- Q35 has an opt-in text-only prefix KV reuse prototype behind
+  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded because image
+  embeddings alter the effective prefix; text-only requests use the same stable
+  chat-prefix checkpoint and pruning rule as Gemma4
+- Gemma4 and Q35 have opt-in decode batching prototypes behind
+  `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` and
+  `MERERUN_Q35_CONTINUOUS_BATCHING=1`; set `--max-active-requests` above `1` to
+  allow overlapping rows, and `/runtime/status` reports actual batched decode
+  steps instead of assuming the scheduler is active; Gemma4 full-attention rows
+  remain same-position because that engine still uses scalar RoPE/cache offsets,
+  while Q35 full-attention rows use row-offset-aware ragged KV caches and Q35
+  linear rows use typed recurrent state so compatible Q35 rows may batch across
+  decode positions; the scheduler services the earliest decode position first,
+  batching compatible rows there or advancing a single lower-offset row until it
+  can join one
+- Gemma4 has an experimental packed PolarKV path behind
+  `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
+  long-context synthetic decode testing. It is not the default until checkpoint
+  benchmarks prove the end-to-end model path.
+- `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
+  steps across loaded models under `cacheStats`; it also reports completed chat
+  request counts, generated tokens, and average load/prefill/decode timings
+  under `benchmarkStats`; SSD KV persistence remains unavailable until the
+  in-memory counters justify it
+- runtime settings are stored at
+  `<active model store>/.mere-run/runtime-model-settings.json`
 - `mere.run status` is the preferred quick check before wiring an editor or
   agent to a local server
 - it is intentionally local-first
@@ -75,6 +135,27 @@ swift run mere.run api serve \
   cannot select local LoRA paths
 - streaming and JSON error paths are sanitized so the local server does not
   reflect raw internal runtime details back to clients
+
+## Runtime control endpoints
+
+The control endpoints use the same bearer-token behavior as `/v1/models` and
+`/v1/chat/completions`.
+
+- `GET /runtime/status`: server health, pool entries, active request counts,
+  request admission state, runtime capability flags, memory snapshot, settings
+  path, aggregate cache stats, per-model prefix KV cache stats, per-model decode
+  batching stats when enabled, and aggregate benchmark stats measured from
+  completed native chat requests.
+- `POST /runtime/models/{id}/load`: explicitly load an installed API-capable
+  catalog model.
+- `POST /runtime/models/{id}/unload`: unload a model; returns `409` while
+  active requests are using it.
+- `GET /runtime/models/{id}/settings`: read typed runtime defaults.
+- `PATCH /runtime/models/{id}/settings`: replace typed runtime defaults.
+
+`GET /v1/models` returns installed API-servable managed IDs plus configured
+aliases. Missing catalog models fail with an OpenAI-style error that tells the
+user to pull the model first.
 
 ## OpenAI chat compatibility
 
@@ -114,6 +195,20 @@ Engine compatibility:
 Streaming responses only emit assistant content tokens. Local progress labels
 stay in logs/stderr, and `stream_options.include_usage` adds the final usage
 chunk before `[DONE]`.
+
+Fair FIFO request admission is part of the runtime pool now, and Gemma4/Q35 use
+engine-specific chunked prefill checkpoints. Gemma4 and Q35 prefix KV reuse are
+available as opt-in in-memory prototypes; Q35 reuse is limited to text-only
+requests. Gemma4 and Q35 decode batching are also available as opt-in
+prototypes: they merge typed cache rows for actual batched decode calls, then
+split the rows back so each request keeps its own state. Gemma4 and Q35
+status reports same-position versus variable-position batched steps separately.
+Q35 full-attention rows can batch across different decode positions through
+row-offset-aware ragged KV caches, and Q35 linear rows can do the same when typed
+linear cache state is compatible. Gemma4 full-attention rows still require
+matching scalar offsets. SSD KV persistence remains later, measured work; use
+`cacheStats` plus `benchmarkStats` to decide whether that experiment is worth
+expanding on a real machine.
 
 If you are working on this area, read [CLI and Runtime Internals](../internals/cli-and-runtime.md) after the command source.
 

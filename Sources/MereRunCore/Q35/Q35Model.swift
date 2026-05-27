@@ -15,6 +15,54 @@ enum Q35AttentionLayerType: String {
 public enum Q35LayerCache: @unchecked Sendable {
     case linear(Q35LinearCache)
     case full(KVCache)
+
+    func fork() -> Q35LayerCache {
+        switch self {
+        case .linear(let cache):
+            return .linear(cache.fork())
+        case .full(let cache):
+            return .full(cache.fork())
+        }
+    }
+
+    func batched(with caches: [Q35LayerCache]) -> Q35LayerCache? {
+        guard !caches.isEmpty else { return nil }
+        switch self {
+        case .linear(let cache):
+            let typed = caches.compactMap { entry -> Q35LinearCache? in
+                if case .linear(let linear) = entry {
+                    return linear
+                }
+                return nil
+            }
+            guard typed.count == caches.count,
+                  let batched = cache.batched(with: typed) else {
+                return nil
+            }
+            return .linear(batched)
+        case .full(let cache):
+            let typed = caches.compactMap { entry -> KVCache? in
+                if case .full(let full) = entry {
+                    return full
+                }
+                return nil
+            }
+            guard typed.count == caches.count,
+                  let batched = cache.batched(with: typed) else {
+                return nil
+            }
+            return .full(batched)
+        }
+    }
+
+    func unbatchedRows(count: Int) -> [Q35LayerCache]? {
+        switch self {
+        case .linear(let cache):
+            return cache.unbatchedRows(count: count)?.map(Q35LayerCache.linear)
+        case .full(let cache):
+            return cache.unbatchedRows(count: count)?.map(Q35LayerCache.full)
+        }
+    }
 }
 
 final class Q35DecoderLayer: Module {
