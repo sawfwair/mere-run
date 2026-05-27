@@ -246,6 +246,7 @@ public actor Gemma4Generator: ChatGenerator {
             throw Gemma4Error.modelNotLoaded
         }
         let kvCacheQuantization = try self.kvCacheQuantization.validated()
+        let prefillKVCacheQuantization = prefillQuantization(for: kvCacheQuantization)
 
         let effectiveContext = min(maxContextLength, loadedConfig.textConfig.maxPositionEmbeddings)
         let prefillStart = Date()
@@ -288,7 +289,7 @@ public actor Gemma4Generator: ChatGenerator {
         )
         let layerCaches = try prefixSeed?.caches ?? makeLayerCaches(
             model: model,
-            quantization: kvCacheQuantization
+            quantization: prefillKVCacheQuantization
         )
         let logits = try await chunkedPrefill(
             model: model,
@@ -303,6 +304,11 @@ public actor Gemma4Generator: ChatGenerator {
         )
 
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
+        let preparedCaches = try prepareLayerCachesForDecode(
+            layerCaches,
+            quantization: kvCacheQuantization,
+            progressHandler: progressHandler
+        )
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
@@ -311,7 +317,7 @@ public actor Gemma4Generator: ChatGenerator {
             model: model,
             tokenizerAndTemplate: tokenizerAndTemplate,
             initialLogits: logits,
-            layerCaches: layerCaches,
+            layerCaches: preparedCaches.caches,
             eosSet: eosSet,
             generationConfig: generationConfig,
             tokenBudget: tokenBudget,
@@ -333,12 +339,55 @@ public actor Gemma4Generator: ChatGenerator {
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
+                cacheConversionSeconds: preparedCaches.conversionSeconds,
                 decodeSeconds: decodeResult.decodeSeconds,
                 firstTokenSeconds: decodeResult.firstTokenSeconds
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count
         )
+    }
+
+    private func prefillQuantization(for quantization: Gemma4KVCacheQuantization) -> Gemma4KVCacheQuantization {
+        guard shouldDeferQuantizationUntilDecode(quantization) else {
+            return quantization
+        }
+
+        if Gemma4Resources.usesTurboDefaults(modelSpec: modelId) {
+            return Gemma4KVCacheQuantization(
+                bits: Gemma4Resources.defaultTurboKVBits,
+                scheme: Gemma4Resources.defaultTurboKVQuantizationScheme,
+                groupSize: quantization.groupSize,
+                quantizedStart: Gemma4Resources.defaultTurboQuantizedKVStart
+            )
+        }
+
+        return Gemma4KVCacheQuantization()
+    }
+
+    private func shouldDeferQuantizationUntilDecode(_ quantization: Gemma4KVCacheQuantization) -> Bool {
+        quantization.isEnabled && quantization.scheme == .polar
+    }
+
+    private func prepareLayerCachesForDecode(
+        _ layerCaches: [Gemma4AttentionCache],
+        quantization: Gemma4KVCacheQuantization,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) throws -> (caches: [Gemma4AttentionCache], conversionSeconds: Double?) {
+        guard shouldDeferQuantizationUntilDecode(quantization) else {
+            return (layerCaches, nil)
+        }
+
+        progressHandler?(ChatProgress(stage: .encoding, message: "Packing KV cache for decode"))
+        let start = Date()
+        let converted = try layerCaches.map { cache -> Gemma4AttentionCache in
+            guard let reencoded = cache.reencoded(quantization: quantization) else {
+                throw Gemma4Error.unsupportedConfiguration("Gemma4 could not reencode the prefill KV cache for decode.")
+            }
+            reencoded.evaluateStorage()
+            return reencoded
+        }
+        return (converted, Date().timeIntervalSince(start))
     }
 
     private func decodeTokens(

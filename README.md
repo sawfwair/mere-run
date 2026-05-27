@@ -255,7 +255,7 @@ swift run mere.run api serve \
   --kv-quant-scheme polar \
   --kv-bits 2
 
-# Fixed-token real-checkpoint Gemma4 KV benchmark: default TurboQuant vs PolarKV
+# Fixed-token real-checkpoint Gemma4 KV benchmark: default TurboQuant vs decode-deferred PolarKV
 swift run mere.run model benchmark gemma4-kv \
   --model text-chat-gemma4-turbo \
   --decode-tokens 48 \

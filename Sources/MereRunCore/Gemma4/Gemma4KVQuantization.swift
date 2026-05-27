@@ -1312,6 +1312,56 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
         return copy
     }
 
+    static func reencoded(
+        keys: MLXArray,
+        values: MLXArray,
+        configuration: Gemma4KVCacheQuantization,
+        maxSize: Int?,
+        offset: Int
+    ) -> Gemma4PolarKVCache {
+        let cache = Gemma4PolarKVCache(configuration: configuration, maxSize: maxSize)
+        cache.repartition(keys: keys, values: values, newOffset: offset)
+        return cache
+    }
+
+    func reencoded(quantization: Gemma4KVCacheQuantization) -> Gemma4AttentionCache? {
+        if quantization == configuration {
+            return fork()
+        }
+        guard let state = currentState() else { return nil }
+        return makeGemma4AttentionCache(
+            keys: state.0,
+            values: state.1,
+            offset: offset,
+            maxSize: maxSize,
+            quantization: quantization
+        )
+    }
+
+    func evaluateStorage() {
+        if let leadingKeys, let leadingValues {
+            MLX.eval(leadingKeys, leadingValues)
+        }
+        if let polarKeys {
+            MLX.eval(
+                polarKeys.packed,
+                polarKeys.norms,
+                polarKeys.rotation,
+                polarKeys.rotationTransposed,
+                polarKeys.centroids
+            )
+        }
+        if let polarValues {
+            MLX.eval(
+                polarValues.packed,
+                polarValues.norms,
+                polarValues.rotation,
+                polarValues.rotationTransposed,
+                polarValues.centroids
+            )
+        }
+    }
+
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
         guard let typed = caches as? [Gemma4PolarKVCache],
               !typed.isEmpty,
@@ -1808,6 +1858,52 @@ final class Gemma4QuantizedKVCache: Gemma4AttentionCache {
         copy.quantizedValues = quantizedValues
         copy.offset = offset
         return copy
+    }
+
+    static func reencoded(
+        keys: MLXArray,
+        values: MLXArray,
+        configuration: Gemma4KVCacheQuantization,
+        maxSize: Int?,
+        offset: Int
+    ) -> Gemma4QuantizedKVCache {
+        let cache = Gemma4QuantizedKVCache(configuration: configuration, maxSize: maxSize)
+        cache.repartition(keys: keys, values: values, newOffset: offset)
+        return cache
+    }
+
+    func reencoded(quantization: Gemma4KVCacheQuantization) -> Gemma4AttentionCache? {
+        if quantization == configuration {
+            return fork()
+        }
+        guard let state = currentState() else { return nil }
+        return makeGemma4AttentionCache(
+            keys: state.0,
+            values: state.1,
+            offset: offset,
+            maxSize: maxSize,
+            quantization: quantization
+        )
+    }
+
+    func evaluateStorage() {
+        if let leadingKeys, let leadingValues {
+            MLX.eval(leadingKeys, leadingValues)
+        }
+        if let quantizedKeys {
+            if let biases = quantizedKeys.biases {
+                MLX.eval(quantizedKeys.weight, quantizedKeys.scales, biases)
+            } else {
+                MLX.eval(quantizedKeys.weight, quantizedKeys.scales)
+            }
+        }
+        if let quantizedValues {
+            if let biases = quantizedValues.biases {
+                MLX.eval(quantizedValues.weight, quantizedValues.scales, biases)
+            } else {
+                MLX.eval(quantizedValues.weight, quantizedValues.scales)
+            }
+        }
     }
 
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {

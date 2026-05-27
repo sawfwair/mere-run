@@ -35,7 +35,7 @@ Public tree:
 - `mere.run music generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
-- `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
+- `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
 - `mere.run setup`
@@ -718,10 +718,10 @@ Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
 Run a fixed-token real-checkpoint Gemma4 KV cache comparison. The command runs
 the selected Gemma4 model twice in one process: default Gemma4 KV settings first,
-then packed `polar` 2-bit KV from token 0. It disables EOS stopping so both
-variants decode exactly `--decode-tokens`, and reports TTFT, prefill tok/s,
-decode tok/s, end-to-end tok/s, and process resident memory before and after
-each variant.
+then model-default prefill with packed `polar` 2-bit KV from token 0 for decode. It
+disables EOS stopping so both variants decode exactly `--decode-tokens`, and
+reports TTFT, prefill tok/s, KV conversion time, decode tok/s, end-to-end tok/s,
+and process resident memory before and after each variant.
 
 ```bash
 swift run mere.run model benchmark gemma4-kv \

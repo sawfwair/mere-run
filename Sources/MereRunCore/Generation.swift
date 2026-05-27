@@ -276,17 +276,20 @@ public struct ChatRequest: Sendable, Hashable {
 public struct ChatTiming: Sendable, Hashable {
     public var loadSeconds: Double
     public var prefillSeconds: Double
+    public var cacheConversionSeconds: Double?
     public var decodeSeconds: Double
     public var firstTokenSeconds: Double?
 
     public init(
         loadSeconds: Double = 0,
         prefillSeconds: Double = 0,
+        cacheConversionSeconds: Double? = nil,
         decodeSeconds: Double = 0,
         firstTokenSeconds: Double? = nil
     ) {
         self.loadSeconds = loadSeconds
         self.prefillSeconds = prefillSeconds
+        self.cacheConversionSeconds = cacheConversionSeconds
         self.decodeSeconds = decodeSeconds
         self.firstTokenSeconds = firstTokenSeconds
     }

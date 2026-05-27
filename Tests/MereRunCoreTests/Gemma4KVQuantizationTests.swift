@@ -215,6 +215,51 @@ final class Gemma4KVQuantizationTests: MereRunCoreTestCase {
         }
     }
 
+    func testFullCacheReencodesToPolarPreservingOffset() throws {
+        try skipUnlessGPUForPolarKV()
+
+        MLXRandom.seed(36)
+        let config = try Gemma4KVCacheQuantization(bits: 2, scheme: .polar, groupSize: 32, quantizedStart: 0)
+            .validated()
+        let cache = Gemma4FullKVCache()
+        let keys = MLXRandom.normal([1, 1, 4, 32]).asType(.bfloat16)
+        let values = MLXRandom.normal([1, 1, 4, 32]).asType(.bfloat16)
+        cache.append(keys: keys, values: values)
+
+        let reencoded = try XCTUnwrap(cache.reencoded(quantization: config) as? Gemma4PolarKVCache)
+        reencoded.evaluateStorage()
+        let state = try XCTUnwrap(reencoded.currentState())
+
+        XCTAssertEqual(reencoded.offset, 4)
+        XCTAssertEqual(state.0.shape, [1, 1, 4, 32])
+        XCTAssertEqual(state.1.shape, [1, 1, 4, 32])
+    }
+
+    func testSlidingCacheReencodesToPolarPreservingTotalOffset() throws {
+        try skipUnlessGPUForPolarKV()
+
+        MLXRandom.seed(37)
+        let config = try Gemma4KVCacheQuantization(bits: 2, scheme: .polar, groupSize: 32, quantizedStart: 0)
+            .validated()
+        let cache = Gemma4SlidingKVCache(maxSize: 3)
+        cache.append(
+            keys: MLXRandom.normal([1, 1, 2, 32]).asType(.bfloat16),
+            values: MLXRandom.normal([1, 1, 2, 32]).asType(.bfloat16)
+        )
+        cache.append(
+            keys: MLXRandom.normal([1, 1, 3, 32]).asType(.bfloat16),
+            values: MLXRandom.normal([1, 1, 3, 32]).asType(.bfloat16)
+        )
+
+        let reencoded = try XCTUnwrap(cache.reencoded(quantization: config) as? Gemma4PolarKVCache)
+        reencoded.evaluateStorage()
+        let state = try XCTUnwrap(reencoded.currentState())
+
+        XCTAssertEqual(reencoded.offset, 5)
+        XCTAssertEqual(state.0.shape, [1, 1, 3, 32])
+        XCTAssertEqual(state.1.shape, [1, 1, 3, 32])
+    }
+
     func testPolarFusedSpecializedAttentionMatchesChunkedDecode() throws {
         try skipUnlessGPUForPolarKV()
 

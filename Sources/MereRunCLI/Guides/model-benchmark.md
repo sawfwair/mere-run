@@ -16,12 +16,12 @@ mere.run model benchmark gemma4-kv \
 Gemma4 checkpoint:
 
 - `default`: the model's normal Gemma4 KV cache settings.
-- `polar2`: packed 2-bit PolarKV from token 0.
+- `polar2`: model-default prefill, then packed 2-bit PolarKV from token 0 for decode.
 
 The command disables EOS stopping so both variants decode exactly
 `--decode-tokens`. Output includes prompt tokens, generated tokens, load time,
-prefill time, decode time, TTFT, prefill tok/s, decode tok/s, end-to-end tok/s,
-and process resident memory before and after each variant.
+prefill time, KV conversion time, decode time, TTFT, prefill tok/s, decode tok/s,
+end-to-end tok/s, and process resident memory before and after each variant.
 
 ## Prompt Control
 

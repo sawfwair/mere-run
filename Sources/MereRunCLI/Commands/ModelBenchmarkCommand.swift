@@ -149,6 +149,7 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
             elapsedSeconds: elapsed,
             loadSeconds: timing.loadSeconds,
             prefillSeconds: timing.prefillSeconds,
+            cacheConversionSeconds: timing.cacheConversionSeconds,
             decodeSeconds: timing.decodeSeconds,
             firstTokenSeconds: timing.firstTokenSeconds,
             prefillTokensPerSecond: promptTokens > 0 && timing.prefillSeconds > 0
@@ -234,6 +235,7 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
     let elapsedSeconds: Double
     let loadSeconds: Double
     let prefillSeconds: Double
+    let cacheConversionSeconds: Double?
     let decodeSeconds: Double
     let firstTokenSeconds: Double?
     let prefillTokensPerSecond: Double?
@@ -244,7 +246,7 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
 
     var ttftSeconds: Double? {
         guard let firstTokenSeconds else { return nil }
-        return loadSeconds + prefillSeconds + firstTokenSeconds
+        return loadSeconds + prefillSeconds + (cacheConversionSeconds ?? 0) + firstTokenSeconds
     }
 
     enum CodingKeys: String, CodingKey {
@@ -257,6 +259,7 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
         case elapsedSeconds
         case loadSeconds
         case prefillSeconds
+        case cacheConversionSeconds
         case decodeSeconds
         case firstTokenSeconds
         case ttftSeconds
@@ -278,6 +281,7 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
         try container.encode(elapsedSeconds, forKey: .elapsedSeconds)
         try container.encode(loadSeconds, forKey: .loadSeconds)
         try container.encode(prefillSeconds, forKey: .prefillSeconds)
+        try container.encodeIfPresent(cacheConversionSeconds, forKey: .cacheConversionSeconds)
         try container.encode(decodeSeconds, forKey: .decodeSeconds)
         try container.encodeIfPresent(firstTokenSeconds, forKey: .firstTokenSeconds)
         try container.encodeIfPresent(ttftSeconds, forKey: .ttftSeconds)
@@ -292,7 +296,7 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
         [
             "\(name): \(kvScheme)\(kvBits.map { String(format: " %.1f-bit", $0) } ?? "") start=\(quantizedKVStart)",
             "  prompt_tokens=\(promptTokens) generated_tokens=\(generatedTokens)",
-            "  time total=\(format(elapsedSeconds))s load=\(format(loadSeconds))s prefill=\(format(prefillSeconds))s decode=\(format(decodeSeconds))s ttft=\(formatOptional(ttftSeconds))s",
+            "  time total=\(format(elapsedSeconds))s load=\(format(loadSeconds))s prefill=\(format(prefillSeconds))s kv_convert=\(formatOptional(cacheConversionSeconds))s decode=\(format(decodeSeconds))s ttft=\(formatOptional(ttftSeconds))s",
             "  throughput prefill=\(formatOptional(prefillTokensPerSecond)) tok/s decode=\(formatOptional(decodeTokensPerSecond)) tok/s e2e=\(formatOptional(endToEndTokensPerSecond)) tok/s",
             "  resident_memory before=\(formatBytes(residentMemoryBeforeBytes)) after=\(formatBytes(residentMemoryAfterBytes))",
             "",
