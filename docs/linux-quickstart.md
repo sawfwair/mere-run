@@ -116,9 +116,9 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.9.0
 ls dist/linux/
 ```
 
-CUDA `.deb` packages declare the CUDA 13 runtime packages they link against:
-`cuda-cudart-13-0`, `cuda-nvrtc-13-0`, `libcublas-13-0`,
-`libcudnn9-cuda-13`, and `libnccl2`.
+CUDA `.deb` packages declare the CUDA 13 runtime/JIT packages they need:
+`cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
+`libcublas-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
 
 For source-only CUDA checks, prepare native artifacts and then export the
 environment printed by the script before building:

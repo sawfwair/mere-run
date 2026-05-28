@@ -446,6 +446,7 @@ smoke_mlx_swift_cuda() {
 
   echo "[prepare-linux-native] configuring mlx-swift CUDA smoke via CMake"
   cmake -S "$mlx_cmake_src" -B "$mlx_cmake_build" -G Ninja "${mlx_cmake_args[@]}"
+  patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
 
   echo "[prepare-linux-native] building mlx-swift CUDA smoke"
   cmake --build "$mlx_cmake_build" --parallel "$(nproc)"
