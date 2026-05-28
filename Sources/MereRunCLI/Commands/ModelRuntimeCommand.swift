@@ -3,6 +3,7 @@ import Foundation
 import MereRunCore
 
 extension RuntimeServingEngine: ExpressibleByArgument {}
+extension RuntimeKVCacheMode: ExpressibleByArgument {}
 
 struct ModelRuntime: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -54,6 +55,7 @@ struct ModelRuntimeGet: ParsableCommand {
         print("  temperature: \(settings.temperature.map { String($0) } ?? "none")")
         print("  topP: \(settings.topP.map { String($0) } ?? "none")")
         print("  engineOverride: \(settings.engineOverride?.rawValue ?? "none")")
+        print("  kvCacheMode: \(settings.kvCacheMode?.rawValue ?? "none")")
     }
 }
 
@@ -114,6 +116,12 @@ struct ModelRuntimeSet: ParsableCommand {
     @Flag(name: [.long], help: "Clear the engine override.")
     var clearEngine: Bool = false
 
+    @Option(name: [.long], help: "Set runtime KV cache mode: default, polar2, or auto. Gemma4 only.")
+    var kvCacheMode: RuntimeKVCacheMode?
+
+    @Flag(name: [.long], help: "Clear the runtime KV cache mode.")
+    var clearKVCacheMode: Bool = false
+
     @Flag(name: [.long], help: "Emit updated settings as JSON.")
     var json: Bool = false
 
@@ -144,6 +152,11 @@ struct ModelRuntimeSet: ParsableCommand {
         }
         if clearTopP { settings.topP = nil } else if let topP { settings.topP = topP }
         if clearEngine { settings.engineOverride = nil } else if let engine { settings.engineOverride = engine }
+        if clearKVCacheMode {
+            settings.kvCacheMode = nil
+        } else if let kvCacheMode {
+            settings.kvCacheMode = kvCacheMode
+        }
 
         try store.writeSettings(settings, for: modelID)
         let updated = try store.settings(for: modelID)
@@ -185,6 +198,9 @@ struct ModelRuntimeSet: ParsableCommand {
         }
         if engine != nil && clearEngine {
             throw ValidationError("Use either --engine or --clear-engine, not both.")
+        }
+        if kvCacheMode != nil && clearKVCacheMode {
+            throw ValidationError("Use either --kv-cache-mode or --clear-kv-cache-mode, not both.")
         }
     }
 }

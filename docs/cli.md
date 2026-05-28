@@ -695,11 +695,14 @@ swift run mere.run model runtime set text-chat-gemma4 \
   --max-context-tokens 8192 \
   --max-tokens 1024 \
   --temperature 0.6 \
-  --top-p 0.9
+  --top-p 0.9 \
+  --kv-cache-mode auto
 ```
 
 Use the matching `--clear-*` flags to remove optional values. Engine overrides
-are validated against the curated catalog.
+are validated against the curated catalog. Gemma4 accepts `--kv-cache-mode`
+values of `default`, `polar2`, and `auto`; non-Gemma4 models reject PolarKV
+runtime modes.
 
 ### `mere.run model pull`
 
@@ -718,7 +721,8 @@ Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
 Run a fixed-token real-checkpoint Gemma4 KV cache comparison. The command runs
 the selected Gemma4 model twice in one process: default Gemma4 KV settings first,
-then model-default prefill with packed `polar` 2-bit KV from token 0 for decode. It
+then the runtime `polar2` mode, which uses model-default prefill with packed
+`polar` 2-bit KV from token 0 for decode. It
 disables EOS stopping so both variants decode exactly `--decode-tokens`, and
 reports TTFT, prefill tok/s, KV conversion time, decode tok/s, end-to-end tok/s,
 and process resident memory before and after each variant.
@@ -731,6 +735,8 @@ swift run mere.run model benchmark gemma4-kv \
 ```
 
 Use `--prompt`, `--prompt-file`, or `--prompt-repeat` to control prompt length.
+Use `--prompt-repeat-values` and `--decode-token-values` with comma-separated
+values to run a prompt-size/decode-length matrix for promotion evidence.
 The default fixture prompt is deterministic and intended for local A/B
 comparisons, not model-quality evaluation.
 
@@ -821,6 +827,10 @@ Security defaults:
   `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
   long-context synthetic decode testing. It is not the default until checkpoint
   benchmarks prove the end-to-end model path.
+- Per-model runtime settings can also set `kvCacheMode` to `default`, `polar2`,
+  or `auto` for Gemma4. `auto` keeps the default KV path below 1024 prompt
+  tokens and switches to decode-deferred packed PolarKV at or above that
+  threshold.
 - `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,
   batched decode steps, completed chat requests, generated tokens, and average
   load/prefill/decode timings across loaded models under `cacheStats` and

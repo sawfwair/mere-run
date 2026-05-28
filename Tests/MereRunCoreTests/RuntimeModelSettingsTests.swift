@@ -15,7 +15,8 @@ final class RuntimeModelSettingsTests: XCTestCase {
             maxTokens: 512,
             temperature: 0.4,
             topP: 0.8,
-            engineOverride: .textChatGemma4
+            engineOverride: .textChatGemma4,
+            kvCacheMode: .auto
         )
 
         try store.writeSettings(settings, for: Gemma4Resources.defaultModelId)
@@ -29,6 +30,7 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertEqual(loaded.temperature, 0.4)
         XCTAssertEqual(loaded.topP, 0.8)
         XCTAssertEqual(loaded.engineOverride, .textChatGemma4)
+        XCTAssertEqual(loaded.kvCacheMode, .auto)
         XCTAssertEqual(
             try store.resolveModelID(aliasOrID: "chat-default", defaultModelID: "fallback"),
             Gemma4Resources.defaultModelId
@@ -54,6 +56,42 @@ final class RuntimeModelSettingsTests: XCTestCase {
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("not supported"))
         }
+    }
+
+    func testSettingsRejectGemmaKVModeForNonGemmaModel() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        XCTAssertThrowsError(
+            try store.writeSettings(RuntimeModelSettings(kvCacheMode: .polar2), for: Q35Resources.defaultModelId)
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("KV cache mode"))
+        }
+    }
+
+    func testGemmaAutoKVModeUsesPolarOnlyPastPromptThreshold() {
+        let fallback = Gemma4KVCacheQuantization(
+            bits: Gemma4Resources.defaultTurboKVBits,
+            scheme: Gemma4Resources.defaultTurboKVQuantizationScheme,
+            groupSize: Gemma4Resources.defaultKVGroupSize,
+            quantizedStart: Gemma4Resources.defaultTurboQuantizedKVStart
+        )
+
+        let short = RuntimeKVCacheMode.auto.gemma4Quantization(
+            fallback: fallback,
+            promptTokenCount: RuntimeKVCacheMode.gemma4AutoPolarPromptTokenThreshold - 1
+        )
+        XCTAssertEqual(short.scheme, .turboquant)
+        XCTAssertEqual(short.bits, Gemma4Resources.defaultTurboKVBits)
+
+        let long = RuntimeKVCacheMode.auto.gemma4Quantization(
+            fallback: fallback,
+            promptTokenCount: RuntimeKVCacheMode.gemma4AutoPolarPromptTokenThreshold
+        )
+        XCTAssertEqual(long.scheme, .polar)
+        XCTAssertEqual(long.bits, 2)
+        XCTAssertEqual(long.quantizedStart, 0)
     }
 
     private func makeTemporaryDirectory() throws -> URL {

@@ -36,8 +36,14 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
     @Option(name: [.long], help: "Repeat count for the built-in fixture prompt.")
     var promptRepeat: Int = 220
 
+    @Option(name: [.long], help: "Comma-separated repeat counts for a prompt-size benchmark matrix.")
+    var promptRepeatValues: String?
+
     @Option(name: [.long], help: "Exact number of decode tokens to force per variant.")
     var decodeTokens: Int = 48
+
+    @Option(name: [.long], help: "Comma-separated decode token counts for a decode-length benchmark matrix.")
+    var decodeTokenValues: String?
 
     @Option(name: [.long], help: "Temperature for benchmark sampling.")
     var temperature: Double = 0
@@ -58,6 +64,21 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
         guard decodeTokens > 0 else {
             throw ValidationError("--decode-tokens must be greater than zero.")
         }
+        let promptRepeats = try parsedPositiveIntegers(
+            promptRepeatValues,
+            fallback: [promptRepeat],
+            optionName: "--prompt-repeat-values"
+        )
+        _ = try parsedPositiveIntegers(
+            decodeTokenValues,
+            fallback: [decodeTokens],
+            optionName: "--decode-token-values"
+        )
+        if prompt != nil || promptFile != nil {
+            guard promptRepeats.count == 1 else {
+                throw ValidationError("--prompt-repeat-values can only contain one value when using --prompt or --prompt-file.")
+            }
+        }
         guard Gemma4Resources.handles(modelSpec: model) else {
             throw ValidationError("model benchmark gemma4-kv only supports Gemma4 model ids or repo ids.")
         }
@@ -65,38 +86,60 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
 
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: json)
-        let prompt = try resolvePrompt()
-        let request = ChatRequest(
-            messages: [ChatMessage(role: .user, content: prompt)],
-            maxTokens: decodeTokens,
-            temperature: temperature,
-            topP: topP,
-            showThinking: false,
-            stopOnEOS: false
+        let promptRepeats = try parsedPositiveIntegers(
+            promptRepeatValues,
+            fallback: [promptRepeat],
+            optionName: "--prompt-repeat-values"
+        )
+        let decodeTokenCounts = try parsedPositiveIntegers(
+            decodeTokenValues,
+            fallback: [decodeTokens],
+            optionName: "--decode-token-values"
         )
 
         let variants = [
             Gemma4KVBenchmarkVariant.defaultTurbo(model: model),
             Gemma4KVBenchmarkVariant.polar2(model: model),
         ]
-        var results: [Gemma4KVBenchmarkVariantResult] = []
-        results.reserveCapacity(variants.count)
 
-        for variant in variants {
-            let result = try await runVariant(variant, request: request)
-            guard result.generatedTokens == decodeTokens else {
-                throw ValidationError(
-                    "\(variant.name) generated \(result.generatedTokens) tokens, expected \(decodeTokens). Reduce prompt length or decode tokens."
+        var scenarios: [Gemma4KVBenchmarkScenarioResult] = []
+        scenarios.reserveCapacity(promptRepeats.count * decodeTokenCounts.count)
+        for repeatCount in promptRepeats {
+            let prompt = try resolvePrompt(repeatCount: repeatCount)
+            for decodeTokenCount in decodeTokenCounts {
+                let request = ChatRequest(
+                    messages: [ChatMessage(role: .user, content: prompt)],
+                    maxTokens: decodeTokenCount,
+                    temperature: temperature,
+                    topP: topP,
+                    showThinking: false,
+                    stopOnEOS: false
+                )
+                var results: [Gemma4KVBenchmarkVariantResult] = []
+                results.reserveCapacity(variants.count)
+                for variant in variants {
+                    let result = try await runVariant(variant, request: request)
+                    guard result.generatedTokens == decodeTokenCount else {
+                        throw ValidationError(
+                            "\(variant.name) generated \(result.generatedTokens) tokens, expected \(decodeTokenCount). Reduce prompt length or decode tokens."
+                        )
+                    }
+                    results.append(result)
+                }
+                scenarios.append(
+                    Gemma4KVBenchmarkScenarioResult(
+                        promptRepeat: self.prompt != nil || self.promptFile != nil ? nil : repeatCount,
+                        promptCharacters: prompt.count,
+                        requestedDecodeTokens: decodeTokenCount,
+                        variants: results
+                    )
                 )
             }
-            results.append(result)
         }
 
         let report = Gemma4KVBenchmarkReport(
             model: model,
-            promptCharacters: prompt.count,
-            requestedDecodeTokens: decodeTokens,
-            variants: results
+            scenarios: scenarios
         )
         if json {
             print(try report.jsonString())
@@ -105,7 +148,7 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
         }
     }
 
-    private func resolvePrompt() throws -> String {
+    private func resolvePrompt(repeatCount: Int) throws -> String {
         if let prompt {
             return prompt
         }
@@ -113,8 +156,8 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
             return try String(contentsOf: URL(fileURLWithPath: promptFile).standardizedFileURL, encoding: .utf8)
         }
         var lines: [String] = []
-        lines.reserveCapacity(promptRepeat + 1)
-        for index in 1...promptRepeat {
+        lines.reserveCapacity(repeatCount + 1)
+        for index in 1...repeatCount {
             lines.append(
                 "Record \(index): Gemma turbo benchmark passage about local inference, packed key value cache memory, decode timing, and repeatable measurements. The checksum word is polar."
             )
@@ -123,11 +166,35 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
         return lines.joined(separator: "\n")
     }
 
+    private func parsedPositiveIntegers(
+        _ rawValue: String?,
+        fallback: [Int],
+        optionName: String
+    ) throws -> [Int] {
+        guard let rawValue else {
+            return fallback
+        }
+        let values = rawValue
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        guard !values.isEmpty else {
+            throw ValidationError("\(optionName) must contain at least one value.")
+        }
+        return try values.map { value in
+            guard let parsed = Int(value), parsed > 0 else {
+                throw ValidationError("\(optionName) values must be positive integers.")
+            }
+            return parsed
+        }
+    }
+
     private func runVariant(
         _ variant: Gemma4KVBenchmarkVariant,
         request: ChatRequest
     ) async throws -> Gemma4KVBenchmarkVariantResult {
-        let generator = Gemma4Generator(modelId: model, kvCacheQuantization: variant.quantization)
+        var request = request
+        request.kvCacheMode = variant.requestKVCacheMode
+        let generator = Gemma4Generator(modelId: model, kvCacheQuantization: variant.generatorQuantization)
         let memoryBefore = ProcessMemorySnapshot.currentResidentBytes()
         let start = Date()
         let response = try await generator.chat(request, modelPath: modelRoot, progressHandler: nil)
@@ -141,9 +208,9 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
         let promptTokens = response.promptTokens ?? 0
         return Gemma4KVBenchmarkVariantResult(
             name: variant.name,
-            kvScheme: variant.quantization.scheme.rawValue,
-            kvBits: variant.quantization.bits,
-            quantizedKVStart: variant.quantization.quantizedStart,
+            kvScheme: variant.displayQuantization.scheme.rawValue,
+            kvBits: variant.displayQuantization.bits,
+            quantizedKVStart: variant.displayQuantization.quantizedStart,
             promptTokens: promptTokens,
             generatedTokens: response.tokensGenerated,
             elapsedSeconds: elapsed,
@@ -152,6 +219,9 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
             cacheConversionSeconds: timing.cacheConversionSeconds,
             decodeSeconds: timing.decodeSeconds,
             firstTokenSeconds: timing.firstTokenSeconds,
+            kvCacheMode: timing.kvCacheMode,
+            prefillKVCache: timing.prefillKVCache,
+            decodeKVCache: timing.decodeKVCache,
             prefillTokensPerSecond: promptTokens > 0 && timing.prefillSeconds > 0
                 ? Double(promptTokens) / timing.prefillSeconds
                 : nil,
@@ -167,41 +237,47 @@ struct ModelBenchmarkGemma4KV: AsyncParsableCommand {
 
 private struct Gemma4KVBenchmarkVariant {
     let name: String
-    let quantization: Gemma4KVCacheQuantization
+    let displayQuantization: Gemma4KVCacheQuantization
+    let generatorQuantization: Gemma4KVCacheQuantization
+    let requestKVCacheMode: RuntimeKVCacheMode
 
     static func defaultTurbo(model: String) -> Self {
         let usesTurboDefaults = Gemma4Resources.usesTurboDefaults(modelSpec: model)
+        let quantization = Gemma4KVCacheQuantization(
+            bits: usesTurboDefaults ? Gemma4Resources.defaultTurboKVBits : nil,
+            scheme: usesTurboDefaults ? Gemma4Resources.defaultTurboKVQuantizationScheme : .uniform,
+            groupSize: Gemma4Resources.defaultKVGroupSize,
+            quantizedStart: usesTurboDefaults
+                ? Gemma4Resources.defaultTurboQuantizedKVStart
+                : Gemma4Resources.defaultQuantizedKVStart
+        )
         return Self(
             name: "default",
-            quantization: Gemma4KVCacheQuantization(
-                bits: usesTurboDefaults ? Gemma4Resources.defaultTurboKVBits : nil,
-                scheme: usesTurboDefaults ? Gemma4Resources.defaultTurboKVQuantizationScheme : .uniform,
-                groupSize: Gemma4Resources.defaultKVGroupSize,
-                quantizedStart: usesTurboDefaults
-                    ? Gemma4Resources.defaultTurboQuantizedKVStart
-                    : Gemma4Resources.defaultQuantizedKVStart
-            )
+            displayQuantization: quantization,
+            generatorQuantization: quantization,
+            requestKVCacheMode: .default
         )
     }
 
     static func polar2(model: String) -> Self {
-        Self(
+        let fallback = defaultTurbo(model: model).generatorQuantization
+        return Self(
             name: "polar2",
-            quantization: Gemma4KVCacheQuantization(
+            displayQuantization: Gemma4KVCacheQuantization(
                 bits: 2,
                 scheme: .polar,
                 groupSize: Gemma4Resources.defaultKVGroupSize,
                 quantizedStart: 0
-            )
+            ),
+            generatorQuantization: fallback,
+            requestKVCacheMode: .polar2
         )
     }
 }
 
 private struct Gemma4KVBenchmarkReport: Encodable {
     let model: String
-    let promptCharacters: Int
-    let requestedDecodeTokens: Int
-    let variants: [Gemma4KVBenchmarkVariantResult]
+    let scenarios: [Gemma4KVBenchmarkScenarioResult]
 
     func jsonString() throws -> String {
         let encoder = JSONEncoder()
@@ -214,9 +290,24 @@ private struct Gemma4KVBenchmarkReport: Encodable {
         var lines = [
             "Gemma4 KV benchmark",
             "model: \(model)",
-            "prompt characters: \(promptCharacters)",
-            "decode tokens: \(requestedDecodeTokens)",
             "",
+        ]
+        for scenario in scenarios {
+            lines.append(scenario.renderText())
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
+private struct Gemma4KVBenchmarkScenarioResult: Encodable {
+    let promptRepeat: Int?
+    let promptCharacters: Int
+    let requestedDecodeTokens: Int
+    let variants: [Gemma4KVBenchmarkVariantResult]
+
+    func renderText() -> String {
+        var lines = [
+            "scenario: prompt_repeat=\(promptRepeat.map(String.init) ?? "custom") prompt_characters=\(promptCharacters) decode_tokens=\(requestedDecodeTokens)",
         ]
         for result in variants {
             lines.append(result.renderText())
@@ -238,6 +329,9 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
     let cacheConversionSeconds: Double?
     let decodeSeconds: Double
     let firstTokenSeconds: Double?
+    let kvCacheMode: RuntimeKVCacheMode?
+    let prefillKVCache: String?
+    let decodeKVCache: String?
     let prefillTokensPerSecond: Double?
     let decodeTokensPerSecond: Double?
     let endToEndTokensPerSecond: Double?
@@ -263,6 +357,9 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
         case decodeSeconds
         case firstTokenSeconds
         case ttftSeconds
+        case kvCacheMode
+        case prefillKVCache
+        case decodeKVCache
         case prefillTokensPerSecond
         case decodeTokensPerSecond
         case endToEndTokensPerSecond
@@ -285,6 +382,9 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
         try container.encode(decodeSeconds, forKey: .decodeSeconds)
         try container.encodeIfPresent(firstTokenSeconds, forKey: .firstTokenSeconds)
         try container.encodeIfPresent(ttftSeconds, forKey: .ttftSeconds)
+        try container.encodeIfPresent(kvCacheMode, forKey: .kvCacheMode)
+        try container.encodeIfPresent(prefillKVCache, forKey: .prefillKVCache)
+        try container.encodeIfPresent(decodeKVCache, forKey: .decodeKVCache)
         try container.encodeIfPresent(prefillTokensPerSecond, forKey: .prefillTokensPerSecond)
         try container.encodeIfPresent(decodeTokensPerSecond, forKey: .decodeTokensPerSecond)
         try container.encodeIfPresent(endToEndTokensPerSecond, forKey: .endToEndTokensPerSecond)
@@ -296,6 +396,7 @@ private struct Gemma4KVBenchmarkVariantResult: Encodable {
         [
             "\(name): \(kvScheme)\(kvBits.map { String(format: " %.1f-bit", $0) } ?? "") start=\(quantizedKVStart)",
             "  prompt_tokens=\(promptTokens) generated_tokens=\(generatedTokens)",
+            "  kv mode=\(kvCacheMode?.rawValue ?? "default") prefill=\(prefillKVCache ?? "n/a") decode=\(decodeKVCache ?? "n/a")",
             "  time total=\(format(elapsedSeconds))s load=\(format(loadSeconds))s prefill=\(format(prefillSeconds))s kv_convert=\(formatOptional(cacheConversionSeconds))s decode=\(format(decodeSeconds))s ttft=\(formatOptional(ttftSeconds))s",
             "  throughput prefill=\(formatOptional(prefillTokensPerSecond)) tok/s decode=\(formatOptional(decodeTokensPerSecond)) tok/s e2e=\(formatOptional(endToEndTokensPerSecond)) tok/s",
             "  resident_memory before=\(formatBytes(residentMemoryBeforeBytes)) after=\(formatBytes(residentMemoryAfterBytes))",

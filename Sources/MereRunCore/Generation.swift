@@ -249,6 +249,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var requiresJSON: Bool
     public var tools: [ToolDefinition]?
     public var stopOnEOS: Bool
+    public var kvCacheMode: RuntimeKVCacheMode?
 
     public init(
         messages: [ChatMessage],
@@ -259,7 +260,8 @@ public struct ChatRequest: Sendable, Hashable {
         lora: LoRA? = nil,
         requiresJSON: Bool = false,
         tools: [ToolDefinition]? = nil,
-        stopOnEOS: Bool = true
+        stopOnEOS: Bool = true,
+        kvCacheMode: RuntimeKVCacheMode? = nil
     ) {
         self.messages = messages
         self.maxTokens = maxTokens
@@ -270,6 +272,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.requiresJSON = requiresJSON
         self.tools = tools
         self.stopOnEOS = stopOnEOS
+        self.kvCacheMode = kvCacheMode
     }
 }
 
@@ -279,19 +282,28 @@ public struct ChatTiming: Sendable, Hashable {
     public var cacheConversionSeconds: Double?
     public var decodeSeconds: Double
     public var firstTokenSeconds: Double?
+    public var kvCacheMode: RuntimeKVCacheMode?
+    public var prefillKVCache: String?
+    public var decodeKVCache: String?
 
     public init(
         loadSeconds: Double = 0,
         prefillSeconds: Double = 0,
         cacheConversionSeconds: Double? = nil,
         decodeSeconds: Double = 0,
-        firstTokenSeconds: Double? = nil
+        firstTokenSeconds: Double? = nil,
+        kvCacheMode: RuntimeKVCacheMode? = nil,
+        prefillKVCache: String? = nil,
+        decodeKVCache: String? = nil
     ) {
         self.loadSeconds = loadSeconds
         self.prefillSeconds = prefillSeconds
         self.cacheConversionSeconds = cacheConversionSeconds
         self.decodeSeconds = decodeSeconds
         self.firstTokenSeconds = firstTokenSeconds
+        self.kvCacheMode = kvCacheMode
+        self.prefillKVCache = prefillKVCache
+        self.decodeKVCache = decodeKVCache
     }
 }
 

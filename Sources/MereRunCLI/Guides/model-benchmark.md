@@ -10,6 +10,16 @@ mere.run model benchmark gemma4-kv \
   --json
 ```
 
+Run a small promotion matrix by varying prompt fixture size and decode length:
+
+```bash
+mere.run model benchmark gemma4-kv \
+  --model text-chat-gemma4-turbo \
+  --prompt-repeat-values 32,128,220 \
+  --decode-token-values 32,128 \
+  --json
+```
+
 ## Gemma4 KV Benchmark
 
 `model benchmark gemma4-kv` runs a fixed-token comparison for the selected
@@ -30,6 +40,8 @@ Use one of:
 - `--prompt`: inline prompt text.
 - `--prompt-file`: UTF-8 prompt file.
 - `--prompt-repeat`: repeat count for the built-in deterministic fixture.
+- `--prompt-repeat-values`: comma-separated fixture sizes for a benchmark matrix.
+- `--decode-token-values`: comma-separated decode lengths for a benchmark matrix.
 
 The fixture prompt is for runtime comparison only; it is not a quality eval.
 
