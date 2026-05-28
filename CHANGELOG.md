@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.9.1 - 2026-05-28
+
+### Added
+
+- added typed Gemma4 runtime KV cache modes (`default`, `polar2`, and `auto`)
+  so runtime settings, API serving, status output, and benchmarking can promote
+  decode-deferred PolarKV for longer Gemma4 prompts while keeping short prompts
+  on the default cache path.
+
+### Fixed
+
+- fixed the Linux arm64 CUDA packaging source so CUDA `.deb` artifacts declare
+  `cuda-cccl-13-0` and the MLX CUDA JIT include patch is applied after CMake
+  materializes its `_deps/mlx-src` checkout.
+
 ## 0.9.0 - 2026-05-28
 
 ### Added
