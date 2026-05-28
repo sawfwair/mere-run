@@ -106,12 +106,19 @@ Linux arm64 is only useful for this project when the CUDA lane works. Do not
 publish or recommend CPU-only arm64 packages as release artifacts.
 
 Build arm64 packages on a native arm64 Linux host with an NVIDIA GPU, driver,
-CUDA Toolkit, `nvcc`, Swift, OpenBLAS/LAPACK headers, and `ffmpeg` available:
+CUDA Toolkit, `nvcc`, CUDA CCCL headers, cuDNN, NCCL, Swift,
+OpenBLAS/LAPACK headers, and `ffmpeg` available. On NVIDIA's Ubuntu 24.04 SBSA
+repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
+`libnccl-dev`:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.8.0
 ls dist/linux/
 ```
+
+CUDA `.deb` packages declare the CUDA 13 runtime packages they link against:
+`cuda-cudart-13-0`, `cuda-nvrtc-13-0`, `libcublas-13-0`,
+`libcudnn9-cuda-13`, and `libnccl2`.
 
 For source-only CUDA checks, prepare native artifacts and then export the
 environment printed by the script before building:

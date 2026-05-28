@@ -419,12 +419,14 @@ public actor Gemma4Generator: ChatGenerator {
         }
 
         let rowID = UUID()
+        let initialLogitsBox = RuntimeUncheckedSendable(initialLogits)
+        let layerCachesBox = RuntimeUncheckedSendable(layerCaches)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let row = Gemma4BatchedDecodeRow(
                     id: rowID,
-                    logits: initialLogits,
-                    layerCaches: layerCaches,
+                    logits: initialLogitsBox.value,
+                    layerCaches: layerCachesBox.value,
                     eosSet: eosSet,
                     generationConfig: generationConfig,
                     tokenBudget: tokenBudget,

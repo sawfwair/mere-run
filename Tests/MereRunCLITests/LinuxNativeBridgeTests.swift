@@ -16,6 +16,8 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(package.contains("-lMLXFast"))
         XCTAssertTrue(package.contains("$ORIGIN/lib"))
         XCTAssertTrue(package.contains("linuxNativeLlamaLibraryPath"))
+        XCTAssertTrue(package.contains("linuxPackageSwiftSettings"))
+        XCTAssertTrue(package.contains("-strict-concurrency=targeted"))
         XCTAssertFalse(
             package.contains(".product(name: \"MLXFast\", package: \"mlx-swift\")"),
             "Direct MLX product dependencies must go through mlxDependency so cuda-prebuilt mode can import CMake-built modules."
@@ -36,6 +38,14 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains("$mlx_cmake_build/_deps/mlx-c-build/libmlxc.a"))
         XCTAssertTrue(script.contains("$mlx_cmake_build/_deps/mlx-build/libmlx.a"))
         XCTAssertTrue(script.contains("$mlx_cmake_build/lib/libNumerics.a"))
+        XCTAssertTrue(script.contains("detect_cuda_dependency_defaults"))
+        XCTAssertTrue(script.contains("patch_mlx_cuda_jit_include_path"))
+        XCTAssertTrue(script.contains("MERERUN_CUDA_CCCL_INCLUDE"))
+        XCTAssertTrue(script.contains("Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"))
+        XCTAssertTrue(script.contains("/usr/include/$deb_multiarch"))
+        XCTAssertTrue(script.contains("/usr/lib/$deb_multiarch"))
+        XCTAssertTrue(script.contains("CUDA_LIBRARY_PATH"))
+        XCTAssertTrue(script.contains("/usr/local/cuda/targets/sbsa-linux/lib"))
         XCTAssertFalse(script.contains("whose Linux path remains CPU-oriented until a package bridge is added"))
     }
 
@@ -50,6 +60,13 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(packageScript.contains("deb_multiarch=\"aarch64-linux-gnu\""))
         XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE"))
         XCTAssertTrue(packageScript.contains("Linux arm64 release packages must use MERERUN_LINUX_ACCEL=cuda"))
+        XCTAssertTrue(packageScript.contains("CUDA_LIBRARY_PATH"))
+        XCTAssertTrue(packageScript.contains("/usr/local/cuda/targets/sbsa-linux/lib"))
+        XCTAssertTrue(packageScript.contains("cuda-cudart-13-0"))
+        XCTAssertTrue(packageScript.contains("cuda-nvrtc-13-0"))
+        XCTAssertTrue(packageScript.contains("libcublas-13-0"))
+        XCTAssertTrue(packageScript.contains("libcudnn9-cuda-13"))
+        XCTAssertTrue(packageScript.contains("libnccl2"))
         XCTAssertTrue(
             packageScript.contains("configure_linux_arm64_bf16_toolchain \"$platform_arch\" \"package-linux\"")
         )
@@ -76,6 +93,9 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(workflow.contains("Build Linux arm64 CUDA"))
         XCTAssertTrue(workflow.contains("runs-on: [self-hosted, linux, arm64, cuda]"))
         XCTAssertTrue(workflow.contains("MERERUN_LINUX_ACCEL: cuda"))
+        XCTAssertTrue(workflow.contains("cuda-cccl-13-0"))
+        XCTAssertTrue(workflow.contains("libcudnn9-dev-cuda-13"))
+        XCTAssertTrue(workflow.contains("libnccl-dev"))
         XCTAssertTrue(workflow.contains("MERERUN_RELEASE_ARM64_CUDA == '1'"))
         XCTAssertTrue(workflow.contains("build_arm64_cuda"))
         XCTAssertTrue(workflow.contains("pattern: mere-run-linux-*-packages"))

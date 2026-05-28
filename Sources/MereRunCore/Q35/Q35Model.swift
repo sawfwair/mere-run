@@ -182,7 +182,7 @@ final class Q35Transformer: Module {
     }
 }
 
-public final class Q35Model: Module {
+public final class Q35Model: Module, @unchecked Sendable {
     @ModuleInfo(key: "model") var model: Q35Transformer
     @ModuleInfo(key: "lm_head") var lmHead: Linear
 

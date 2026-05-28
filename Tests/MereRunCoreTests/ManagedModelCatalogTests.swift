@@ -71,6 +71,18 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.repoId, "filipstrand/Z-Image-Turbo-mflux-4bit")
         XCTAssertEqual(spec.upstreamRepoId, "filipstrand/Z-Image-Turbo-mflux-4bit")
         XCTAssertEqual(spec.upstreamRevision, "main")
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/added_tokens.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer/model.safetensors.index.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/*"), false)
+    }
+
+    func testKleinNanoUsesExplicitHubSourceFiles() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "stereovoid/flux2-klein-4b-4bit")
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/added_tokens.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer/diffusion_pytorch_model.safetensors"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/*"), false)
     }
 
     func testBonsaiTernaryUsesPrismMLHubSource() throws {

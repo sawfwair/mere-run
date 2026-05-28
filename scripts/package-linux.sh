@@ -33,6 +33,9 @@ Environment:
                                 reported by ldd into payload lib/. Default: 1.
   MERERUN_PACKAGE_LINUX_DEPS    Override Debian Depends field.
   MERERUN_LINUX_ACCEL           Passed through to prepare-linux-native.sh (cpu/cuda).
+  CUDA_LIBRARY_PATH             Optional CUDA toolkit library directory for
+                                SwiftPM MLX CUDA linking. Linux SBSA and lib64
+                                defaults are detected when unset.
   MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1
                                 Allow an arm64 CPU package for local smoke tests.
   MERERUN_DS4_LINUX_BIN_DIR     Passed through to prepare-linux-native.sh for DS4 staging.
@@ -165,6 +168,8 @@ fi
 mlx_swift_cuda_link_flags() {
   local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
   local local_openblas_root="$native_root/deps/apt-root"
+  local cudnn_library_path="${CUDNN_LIBRARY_PATH:-}"
+  local cuda_library_path="${CUDA_LIBRARY_PATH:-}"
   local flags=()
 
   flags+=("-L" "$mlx_cmake_build/_deps/mlx-c-build")
@@ -176,9 +181,20 @@ mlx_swift_cuda_link_flags() {
     flags+=("-L" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
     flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
   fi
-  if [[ -n "${CUDNN_LIBRARY_PATH:-}" ]]; then
-    flags+=("-L" "$CUDNN_LIBRARY_PATH")
-    flags+=("-Xlinker" "-rpath" "-Xlinker" "$CUDNN_LIBRARY_PATH")
+  if [[ -z "$cudnn_library_path" ]]; then
+    for candidate in \
+      "/usr/lib/$deb_multiarch" \
+      /usr/local/cuda/lib64 \
+      /usr/local/cuda/targets/sbsa-linux/lib; do
+      if [[ -f "$candidate/libcudnn.so" || -f "$candidate/libcudnn.so.9" ]]; then
+        cudnn_library_path="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$cudnn_library_path" ]]; then
+    flags+=("-L" "$cudnn_library_path")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$cudnn_library_path")
     for cudnn_lib in \
       libcudnn.so.9 \
       libcudnn_graph.so.9 \
@@ -188,10 +204,28 @@ mlx_swift_cuda_link_flags() {
       libcudnn_adv.so.9 \
       libcudnn_engines_precompiled.so.9 \
       libcudnn_heuristic.so.9; do
-      if [[ -f "$CUDNN_LIBRARY_PATH/$cudnn_lib" ]]; then
-        flags+=("$CUDNN_LIBRARY_PATH/$cudnn_lib")
+      if [[ -f "$cudnn_library_path/$cudnn_lib" ]]; then
+        flags+=("$cudnn_library_path/$cudnn_lib")
       fi
     done
+  fi
+  if [[ -z "$cuda_library_path" ]]; then
+    for candidate in \
+      "${CUDA_HOME:-}/lib64" \
+      "${CUDA_HOME:-}/targets/sbsa-linux/lib" \
+      "${CUDA_PATH:-}/lib64" \
+      "${CUDA_PATH:-}/targets/sbsa-linux/lib" \
+      /usr/local/cuda/lib64 \
+      /usr/local/cuda/targets/sbsa-linux/lib; do
+      if [[ -f "$candidate/libcublasLt.so" || -f "$candidate/libnvrtc.so" || -f "$candidate/libcudart.so" ]]; then
+        cuda_library_path="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$cuda_library_path" ]]; then
+    flags+=("-L" "$cuda_library_path")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
   fi
   if [[ -d /usr/lib/$deb_multiarch ]]; then
     flags+=("-L" "/usr/lib/$deb_multiarch")
@@ -365,7 +399,11 @@ if (( do_deb )); then
     cp -a "$payload_dir"/. "$install_root/"
     ln -s ../lib/mere-run/mere.run "$deb_root/usr/bin/mere.run"
 
-    depends="${MERERUN_PACKAGE_LINUX_DEPS:-ffmpeg, libcurl4, zlib1g, libopenblas0-pthread | libopenblas0, liblapacke}"
+    default_depends="ffmpeg, libcurl4, zlib1g, libopenblas0-pthread | libopenblas0, liblapacke"
+    if [[ "$linux_accel" == "cuda" ]]; then
+      default_depends="$default_depends, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcudnn9-cuda-13, libnccl2"
+    fi
+    depends="${MERERUN_PACKAGE_LINUX_DEPS:-$default_depends}"
     installed_size="$(du -sk "$deb_root/usr" | awk '{print $1}')"
     cat >"$deb_root/DEBIAN/control" <<CONTROL
 Package: mere-run

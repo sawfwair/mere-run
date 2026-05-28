@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @preconcurrency import Hub
 
 public struct HubSnapshotOptions: Sendable {
@@ -67,6 +70,7 @@ public actor HubSnapshot {
 
     private let options: HubSnapshotOptions
     private let hubApi: HubApi
+    private let downloadBase: URL
     private var cachedSnapshotURL: URL?
 
     public init(
@@ -79,6 +83,7 @@ public actor HubSnapshot {
             requested: options.cacheDirectory,
             fileManager: .default
         )
+        self.downloadBase = downloadBase
 
         self.hubApi = hubApi ?? HubApi(
             downloadBase: downloadBase,
@@ -91,6 +96,12 @@ public actor HubSnapshot {
     public func prepare(progressHandler: ProgressHandler? = nil) async throws -> URL {
         if let cachedSnapshotURL, FileManager.default.fileExists(atPath: cachedSnapshotURL.path) {
             return cachedSnapshotURL
+        }
+
+        if !options.offline, !options.patterns.isEmpty {
+            let snapshotURL = try await prepareMaterializedSnapshot(progressHandler: progressHandler)
+            cachedSnapshotURL = snapshotURL
+            return snapshotURL
         }
 
         let repo = Hub.Repo(id: options.repoId, type: options.repoType)
@@ -170,5 +181,377 @@ public actor HubSnapshot {
         let url = fileManager.temporaryDirectory.appending(path: "MereRun/hub")
         try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func prepareMaterializedSnapshot(progressHandler: ProgressHandler?) async throws -> URL {
+        let entries = try await remoteTreeEntries()
+            .filter { $0.type == "file" && Self.matchesPath($0.path, patterns: options.patterns) }
+            .sorted { $0.path < $1.path }
+        guard !entries.isEmpty else {
+            throw Hub.HubClientError.fileNotFound(options.patterns.joined(separator: ", "))
+        }
+
+        let snapshotURL = materializedSnapshotURL()
+        let metadataURL = snapshotURL
+            .appending(path: ".cache")
+            .appending(path: "huggingface")
+            .appending(path: "download")
+        try FileManager.default.createDirectory(at: snapshotURL, withIntermediateDirectories: true)
+
+        let totalBytes = max(entries.reduce(Int64(0)) { partial, entry in
+            partial + max(entry.size ?? 0, 0)
+        }, 1)
+        var completedBytes: Int64 = 0
+        progressHandler?(HubSnapshotProgress(completedUnitCount: completedBytes, totalUnitCount: totalBytes))
+
+        for entry in entries {
+            try Self.validateRelativePath(entry.path)
+            let expectedBytes = max(entry.size ?? 0, 0)
+            let destination = snapshotURL.appending(path: entry.path)
+            let metadataDestination = metadataURL.appending(path: entry.path + ".metadata")
+            if Self.fileExists(at: destination, expectedBytes: expectedBytes) {
+                completedBytes += max(expectedBytes, Self.fileSize(at: destination))
+                progressHandler?(HubSnapshotProgress(
+                    completedUnitCount: min(completedBytes, totalBytes),
+                    totalUnitCount: totalBytes
+                ))
+                continue
+            }
+
+            let source = resolveURL(for: entry.path)
+            let remote = try await resolveRemoteFile(source: source, relativePath: entry.path)
+            let startedAt = Date()
+            let completedBeforeDownload = completedBytes
+            let delegate = HubSnapshotDownloadDelegate { written, _, _ in
+                let elapsed = max(Date().timeIntervalSince(startedAt), 0.001)
+                let speed = Double(written) / elapsed
+                progressHandler?(HubSnapshotProgress(
+                    completedUnitCount: min(completedBeforeDownload + written, totalBytes),
+                    totalUnitCount: totalBytes,
+                    estimatedSpeedBytesPerSecond: speed
+                ))
+            }
+            let tempURL = try await download(remote.downloadURL, delegate: delegate, relativePath: entry.path)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: tempURL, to: destination)
+            try writeDownloadMetadata(remote, to: metadataDestination)
+            completedBytes += max(expectedBytes, Self.fileSize(at: destination))
+            progressHandler?(HubSnapshotProgress(
+                completedUnitCount: min(completedBytes, totalBytes),
+                totalUnitCount: totalBytes,
+                estimatedSpeedBytesPerSecond: delegate.lastSpeedBytesPerSecond
+            ))
+        }
+
+        progressHandler?(HubSnapshotProgress(completedUnitCount: totalBytes, totalUnitCount: totalBytes))
+        return snapshotURL
+    }
+
+    private func remoteTreeEntries() async throws -> [HubSnapshotTreeEntry] {
+        var url = hostURL()
+            .appending(path: "api")
+            .appending(path: options.repoType.rawValue)
+            .appending(path: options.repoId)
+            .appending(path: "tree")
+            .appending(component: options.revision)
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "recursive", value: "true")]
+        if let componentURL = components?.url {
+            url = componentURL
+        }
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "GET"
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.validateHTTPResponse(response, data: data, context: "\(options.repoId)@\(options.revision)")
+        return try JSONDecoder().decode([HubSnapshotTreeEntry].self, from: data)
+    }
+
+    private func resolveRemoteFile(source: URL, relativePath: String) async throws -> HubSnapshotRemoteFile {
+        var request = authorizedRequest(url: source)
+        request.httpMethod = "HEAD"
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        let delegate = HubSnapshotNoRedirectDelegate()
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        let (data, response) = try await session.data(for: request)
+        let http = try Self.validateHTTPResponse(response, data: data, context: "\(options.repoId)@\(options.revision)/\(relativePath)", allowsRedirect: true)
+
+        let downloadURL: URL
+        if (300..<400).contains(http.statusCode),
+           let location = http.value(forHTTPHeaderField: "Location"),
+           let resolved = Self.redirectURL(from: location, relativeTo: source) {
+            downloadURL = resolved
+        } else {
+            downloadURL = source
+        }
+
+        let commitHash = http.value(forHTTPHeaderField: "X-Repo-Commit") ?? options.revision
+        let etag = Self.normalizedETag(
+            http.value(forHTTPHeaderField: "X-Linked-ETag")
+                ?? http.value(forHTTPHeaderField: "ETag")
+        )
+        return HubSnapshotRemoteFile(commitHash: commitHash, etag: etag, downloadURL: downloadURL)
+    }
+
+    private func download(
+        _ url: URL,
+        delegate: HubSnapshotDownloadDelegate,
+        relativePath: String
+    ) async throws -> URL {
+        var currentURL = url
+        for _ in 0..<8 {
+            var request = authorizedRequest(url: currentURL)
+            request.httpMethod = "GET"
+            let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+            defer { session.invalidateAndCancel() }
+            let (tempURL, response) = try await session.download(for: request)
+            let http = try Self.validateDownloadedResponse(
+                response,
+                errorBodyURL: tempURL,
+                context: "\(options.repoId)@\(options.revision)/\(relativePath)"
+            )
+            if (200..<300).contains(http.statusCode) {
+                return tempURL
+            }
+            try? FileManager.default.removeItem(at: tempURL)
+            guard (300..<400).contains(http.statusCode),
+                  let location = http.value(forHTTPHeaderField: "Location"),
+                  let redirected = Self.redirectURL(from: location, relativeTo: currentURL) else {
+                throw Hub.HubClientError.httpStatusCode(http.statusCode)
+            }
+            currentURL = redirected
+        }
+        throw Hub.HubClientError.downloadError("Too many redirects while downloading \(options.repoId)/\(relativePath)")
+    }
+
+    private func writeDownloadMetadata(_ remote: HubSnapshotRemoteFile, to metadataURL: URL) throws {
+        guard let etag = remote.etag, !etag.isEmpty else { return }
+        try FileManager.default.createDirectory(
+            at: metadataURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let content = "\(remote.commitHash)\n\(etag)\n\(Date().timeIntervalSince1970)\n"
+        try content.write(to: metadataURL, atomically: true, encoding: .utf8)
+    }
+
+    private func materializedSnapshotURL() -> URL {
+        downloadBase
+            .appending(path: options.repoType.rawValue)
+            .appending(path: options.repoId)
+    }
+
+    private func resolveURL(for relativePath: String) -> URL {
+        var url = hostURL()
+        if options.repoType != .models {
+            url = url.appending(path: options.repoType.rawValue)
+        }
+        return url
+            .appending(path: options.repoId)
+            .appending(path: "resolve")
+            .appending(component: options.revision)
+            .appending(path: relativePath)
+    }
+
+    private func authorizedRequest(url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        if let token = accessToken(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
+    private func accessToken() -> String? {
+        if let token = options.accessToken {
+            return token
+        }
+        let env = ProcessInfo.processInfo.environment
+        return env["HF_TOKEN"] ?? env["HUGGING_FACE_HUB_TOKEN"]
+    }
+
+    private func hostURL() -> URL {
+        let endpoint = ProcessInfo.processInfo.environment["HF_ENDPOINT"]
+        if let endpoint, let url = URL(string: endpoint), url.scheme != nil, url.host != nil {
+            return url
+        }
+        return URL(string: "https://huggingface.co")!
+    }
+
+    static func matchesPath(_ path: String, patterns: [String]) -> Bool {
+        guard !patterns.isEmpty else { return true }
+        return patterns.contains { pattern in
+            guard let regex = globRegex(pattern) else {
+                return path == pattern
+            }
+            return path == pattern || regex.firstMatch(
+                in: path,
+                range: NSRange(path.startIndex..<path.endIndex, in: path)
+            ) != nil
+        }
+    }
+
+    static func redirectURL(from location: String, relativeTo source: URL) -> URL? {
+        URL(string: location, relativeTo: source)?.absoluteURL
+    }
+
+    private static func globRegex(_ pattern: String) -> NSRegularExpression? {
+        var regex = "^"
+        for scalar in pattern.unicodeScalars {
+            switch scalar {
+            case "*":
+                regex += ".*"
+            case "?":
+                regex += "."
+            case ".", "\\", "+", "(", ")", "{", "}", "[", "]", "^", "$", "|":
+                regex += "\\\(String(scalar))"
+            default:
+                regex += String(scalar)
+            }
+        }
+        regex += "$"
+        return try? NSRegularExpression(pattern: regex)
+    }
+
+    private static func validateRelativePath(_ path: String) throws {
+        guard !path.isEmpty,
+              !path.hasPrefix("/"),
+              !path.split(separator: "/").contains("..") else {
+            throw Hub.HubClientError.downloadError("Unsafe Hub path: \(path)")
+        }
+    }
+
+    private static func fileExists(at url: URL, expectedBytes: Int64) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return false
+        }
+        return expectedBytes <= 0 || fileSize(at: url) == expectedBytes
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?
+            .int64Value
+        return size ?? 0
+    }
+
+    private static func normalizedETag(_ etag: String?) -> String? {
+        guard var etag else { return nil }
+        if etag.hasPrefix("W/") {
+            etag = String(etag.dropFirst(2))
+        }
+        return etag.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }
+
+    @discardableResult
+    private static func validateDownloadedResponse(
+        _ response: URLResponse,
+        errorBodyURL: URL,
+        context: String
+    ) throws -> HTTPURLResponse {
+        guard let http = response as? HTTPURLResponse else {
+            throw Hub.HubClientError.unexpectedError
+        }
+        guard !(200..<300).contains(http.statusCode),
+              !(300..<400).contains(http.statusCode) else {
+            return http
+        }
+        return try validateHTTPResponse(
+            response,
+            data: try? Data(contentsOf: errorBodyURL),
+            context: context,
+            allowsRedirect: true
+        )
+    }
+
+    @discardableResult
+    private static func validateHTTPResponse(
+        _ response: URLResponse,
+        data: Data?,
+        context: String,
+        allowsRedirect: Bool = false
+    ) throws -> HTTPURLResponse {
+        guard let http = response as? HTTPURLResponse else {
+            throw Hub.HubClientError.unexpectedError
+        }
+        if (200..<300).contains(http.statusCode) || (allowsRedirect && (300..<400).contains(http.statusCode)) {
+            return http
+        }
+        if http.statusCode == 401 || http.statusCode == 403 {
+            throw Hub.HubClientError.authorizationRequired
+        }
+        if http.statusCode == 404 {
+            throw Hub.HubClientError.fileNotFound(context)
+        }
+        if let data,
+           let body = String(data: data, encoding: .utf8),
+           !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw Hub.HubClientError.downloadError("\(context): HTTP \(http.statusCode): \(body)")
+        }
+        throw Hub.HubClientError.httpStatusCode(http.statusCode)
+    }
+}
+
+private struct HubSnapshotTreeEntry: Decodable, Sendable {
+    let path: String
+    let type: String
+    let size: Int64?
+}
+
+private struct HubSnapshotRemoteFile: Sendable {
+    let commitHash: String
+    let etag: String?
+    let downloadURL: URL
+}
+
+private final class HubSnapshotNoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
+private final class HubSnapshotDownloadDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let startedAt = Date()
+    private let progressHandler: @Sendable (Int64, Int64, Double?) -> Void
+    private(set) var lastSpeedBytesPerSecond: Double?
+
+    init(progressHandler: @escaping @Sendable (Int64, Int64, Double?) -> Void) {
+        self.progressHandler = progressHandler
+    }
+
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+
+    func urlSession(
+        _: URLSession,
+        downloadTask _: URLSessionDownloadTask,
+        didFinishDownloadingTo _: URL
+    ) {}
+
+    func urlSession(
+        _: URLSession,
+        downloadTask _: URLSessionDownloadTask,
+        didWriteData _: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let elapsed = max(Date().timeIntervalSince(startedAt), 0.001)
+        let speed = Double(totalBytesWritten) / elapsed
+        lastSpeedBytesPerSecond = speed
+        progressHandler(totalBytesWritten, totalBytesExpectedToWrite, speed)
     }
 }

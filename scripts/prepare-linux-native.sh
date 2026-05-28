@@ -34,6 +34,12 @@ Environment:
                               CMake CUDA smoke.
   CUDNN_LIBRARY_PATH          Optional cuDNN library directory for mlx-swift
                               CMake CUDA smoke.
+                              When unset, Linux defaults are detected from
+                              /usr/include/<multiarch> and
+                              /usr/lib/<multiarch>.
+  CUDA_LIBRARY_PATH           Optional CUDA toolkit library directory for the
+                              SwiftPM MLX CUDA bridge. When unset, Linux SBSA
+                              and lib64 defaults are detected.
   BLAS_LIBRARIES              Optional BLAS library path for mlx-swift CUDA smoke.
   BLAS_INCLUDE_DIRS           Optional BLAS include directory for mlx-swift CUDA smoke.
   LAPACK_LIBRARIES            Optional LAPACK library path for mlx-swift CUDA smoke.
@@ -104,6 +110,61 @@ require_tool() {
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "[prepare-linux-native] error: required tool not found in PATH: $tool" >&2
     exit 127
+  fi
+}
+
+patch_mlx_cuda_jit_include_path() {
+  local mlx_jit_module="$1"
+  if [[ ! -f "$mlx_jit_module" ]] ||
+     grep -Fq "MERERUN_CUDA_CCCL_INCLUDE" "$mlx_jit_module"; then
+    return
+  fi
+
+  local mlx_jit_tmp
+  mlx_jit_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-jit.XXXXXX")"
+  awk '
+    {
+      print
+      if ($0 ~ /args\.push_back\(fmt::format\("--include-path=\{\}\/include", home\)\);/) {
+        print "        // MERERUN_CUDA_CCCL_INCLUDE: CUDA 13 SBSA installs cuda/std under include/cccl."
+        print "        auto cuda_cccl_path = std::filesystem::path(home) / \"include\" / \"cccl\";"
+        print "        if (std::filesystem::exists(cuda_cccl_path)) {"
+        print "          args.push_back(fmt::format(\"--include-path={}\", cuda_cccl_path.string()));"
+        print "        }"
+      }
+    }
+  ' "$mlx_jit_module" >"$mlx_jit_tmp"
+  mv "$mlx_jit_tmp" "$mlx_jit_module"
+  echo "[prepare-linux-native] patched mlx-swift CUDA JIT include path in ${mlx_jit_module#$repo_root/}."
+}
+
+detect_cuda_dependency_defaults() {
+  if [[ "$linux_accel" != "cuda" ]]; then
+    return
+  fi
+
+  if [[ -z "${CUDNN_INCLUDE_PATH:-}" ]]; then
+    for candidate in \
+      "/usr/include/$deb_multiarch" \
+      /usr/local/cuda/include \
+      /usr/local/cuda/targets/sbsa-linux/include; do
+      if [[ -f "$candidate/cudnn.h" ]]; then
+        export CUDNN_INCLUDE_PATH="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "${CUDNN_LIBRARY_PATH:-}" ]]; then
+    for candidate in \
+      "/usr/lib/$deb_multiarch" \
+      /usr/local/cuda/lib64 \
+      /usr/local/cuda/targets/sbsa-linux/lib; do
+      if [[ -f "$candidate/libcudnn.so" || -f "$candidate/libcudnn.so.9" ]]; then
+        export CUDNN_LIBRARY_PATH="$candidate"
+        break
+      fi
+    done
   fi
 }
 
@@ -293,6 +354,9 @@ smoke_mlx_swift_cuda() {
   git -C "$mlx_cmake_src" fetch --depth 1 origin main
   git -C "$mlx_cmake_src" checkout --detach FETCH_HEAD
 
+  patch_mlx_cuda_jit_include_path "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
+  patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
+
   local local_openblas_root="$native_root/deps/apt-root"
   local local_openblas_lib="$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so"
   local local_openblas_include="$local_openblas_root/usr/include/$deb_multiarch/openblas-pthread;$local_openblas_root/usr/include"
@@ -336,6 +400,7 @@ smoke_mlx_swift_cuda() {
     -DMLX_BUILD_CUDA=ON
     -DMLX_C_BUILD_EXAMPLES=OFF
   )
+  detect_cuda_dependency_defaults
   if [[ -n "${CUDNN_INCLUDE_PATH:-}" ]]; then
     mlx_cmake_args+=("-DCUDNN_INCLUDE_PATH=$CUDNN_INCLUDE_PATH")
   fi
@@ -405,6 +470,8 @@ NOTICE
 mlx_swift_cuda_link_flags() {
   local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
   local local_openblas_root="$native_root/deps/apt-root"
+  local cudnn_library_path="${CUDNN_LIBRARY_PATH:-}"
+  local cuda_library_path="${CUDA_LIBRARY_PATH:-}"
   local flags=()
 
   flags+=("-L" "$mlx_cmake_build/_deps/mlx-c-build")
@@ -416,9 +483,20 @@ mlx_swift_cuda_link_flags() {
     flags+=("-L" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
     flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
   fi
-  if [[ -n "${CUDNN_LIBRARY_PATH:-}" ]]; then
-    flags+=("-L" "$CUDNN_LIBRARY_PATH")
-    flags+=("-Xlinker" "-rpath" "-Xlinker" "$CUDNN_LIBRARY_PATH")
+  if [[ -z "$cudnn_library_path" ]]; then
+    for candidate in \
+      "/usr/lib/$deb_multiarch" \
+      /usr/local/cuda/lib64 \
+      /usr/local/cuda/targets/sbsa-linux/lib; do
+      if [[ -f "$candidate/libcudnn.so" || -f "$candidate/libcudnn.so.9" ]]; then
+        cudnn_library_path="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$cudnn_library_path" ]]; then
+    flags+=("-L" "$cudnn_library_path")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$cudnn_library_path")
     for cudnn_lib in \
       libcudnn.so.9 \
       libcudnn_graph.so.9 \
@@ -428,10 +506,28 @@ mlx_swift_cuda_link_flags() {
       libcudnn_adv.so.9 \
       libcudnn_engines_precompiled.so.9 \
       libcudnn_heuristic.so.9; do
-      if [[ -f "$CUDNN_LIBRARY_PATH/$cudnn_lib" ]]; then
-        flags+=("$CUDNN_LIBRARY_PATH/$cudnn_lib")
+      if [[ -f "$cudnn_library_path/$cudnn_lib" ]]; then
+        flags+=("$cudnn_library_path/$cudnn_lib")
       fi
     done
+  fi
+  if [[ -z "$cuda_library_path" ]]; then
+    for candidate in \
+      "${CUDA_HOME:-}/lib64" \
+      "${CUDA_HOME:-}/targets/sbsa-linux/lib" \
+      "${CUDA_PATH:-}/lib64" \
+      "${CUDA_PATH:-}/targets/sbsa-linux/lib" \
+      /usr/local/cuda/lib64 \
+      /usr/local/cuda/targets/sbsa-linux/lib; do
+      if [[ -f "$candidate/libcublasLt.so" || -f "$candidate/libnvrtc.so" || -f "$candidate/libcudart.so" ]]; then
+        cuda_library_path="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$cuda_library_path" ]]; then
+    flags+=("-L" "$cuda_library_path")
+    flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
   fi
   if [[ -d /usr/lib/$deb_multiarch ]]; then
     flags+=("-L" "/usr/lib/$deb_multiarch")
