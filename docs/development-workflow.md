@@ -99,7 +99,7 @@ Linux release packaging is a separate path for distributable headless CLI
 artifacts. The default GitHub release workflow publishes x86_64/amd64 artifacts:
 
 ```bash
-scripts/package-linux.sh --version 0.9.0
+scripts/package-linux.sh --version 0.9.1
 ls dist/linux/
 ```
 
