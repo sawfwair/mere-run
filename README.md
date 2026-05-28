@@ -104,10 +104,10 @@ not include the macOS SwiftUI studio or DMG layout. On Linux arm64, if a distro
 Clang shadows Swift's bundled Clang and cannot compile MLX bf16 headers, the
 Linux scripts select a bf16-capable C++ driver or report the `CXX` override to
 use. Linux arm64 release packages should be built with CUDA enabled on a host
-with the CUDA Toolkit headers, cuDNN, and NCCL installed. CUDA `.deb`
-artifacts declare the linked CUDA 13 runtime packages
-(`cuda-cudart-13-0`, `cuda-nvrtc-13-0`, `libcublas-13-0`,
-`libcudnn9-cuda-13`, and `libnccl2`) by default:
+with the CUDA Toolkit headers, CUDA CCCL headers, cuDNN, and NCCL installed.
+CUDA `.deb` artifacts declare the linked CUDA 13 runtime/JIT packages
+(`cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
+`libcublas-13-0`, `libcudnn9-cuda-13`, and `libnccl2`) by default:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.9.0

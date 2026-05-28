@@ -13,8 +13,8 @@ The format is based on Keep a Changelog.
 - added a Linux arm64 CUDA package lane to the GitHub Actions `linux-release`
   workflow for self-hosted arm64 CUDA runners, plus architecture-aware CUDA
   linker paths, cuDNN/NCCL provisioning, CUDA 13 CCCL runtime JIT include
-  handling, CUDA runtime `.deb` dependencies, and a combined checksum manifest
-  for available Linux artifacts.
+  handling, CUDA CCCL/runtime `.deb` dependencies, and a combined checksum
+  manifest for available Linux artifacts.
 
 ### Fixed
 
