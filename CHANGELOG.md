@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.9.0 - 2026-05-28
+
 ### Added
 
 - added a Linux arm64 CUDA package lane to the GitHub Actions `linux-release`
@@ -13,6 +15,12 @@ The format is based on Keep a Changelog.
   linker paths, cuDNN/NCCL provisioning, CUDA 13 CCCL runtime JIT include
   handling, CUDA runtime `.deb` dependencies, and a combined checksum manifest
   for available Linux artifacts.
+
+### Fixed
+
+- fixed Linux patterned Hugging Face model pulls so nested files like
+  `tokenizer/added_tokens.json` resolve through redirect URLs without double
+  encoding and image nano models can install on Linux CUDA hosts.
 
 ## 0.8.0 - 2026-05-23
 

@@ -108,7 +108,7 @@ Linux-only setup path, first commands, release checks, and CUDA validation
 limits, see [Linux QuickStart](./linux-quickstart.md).
 
 ```bash
-tag=v0.8.0
+tag=v0.9.0
 version="${tag#v}"
 case "$(uname -m)" in
   x86_64|amd64) linux_arch=x86_64; deb_arch=amd64 ;;
