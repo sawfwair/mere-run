@@ -958,7 +958,7 @@ final class Gemma4LanguageModel: Module {
     }
 }
 
-public final class Gemma4TextCausalLM: Module {
+public final class Gemma4TextCausalLM: Module, @unchecked Sendable {
     @ModuleInfo(key: "language_model") var languageModel: Gemma4LanguageModel
 
     public let config: Gemma4TextConfig

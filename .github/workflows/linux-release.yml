@@ -110,7 +110,12 @@ jobs:
               gfortran \
               git \
               gzip \
+              cuda-cccl-13-0 \
               libcurl4-openssl-dev \
+              libcudnn9-cuda-13 \
+              libcudnn9-dev-cuda-13 \
+              libnccl2 \
+              libnccl-dev \
               liblapacke-dev \
               libopenblas-dev \
               ninja-build \

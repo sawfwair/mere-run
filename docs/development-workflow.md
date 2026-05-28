@@ -113,7 +113,11 @@ input to validate the hosted x86_64 package build and upload an Actions
 artifact. The optional arm64 CUDA lane requires a self-hosted Linux runner
 labeled `self-hosted`, `linux`, `arm64`, and `cuda`; enable it manually with
 `build_arm64_cuda` or on release events with the
-`MERERUN_RELEASE_ARM64_CUDA=1` repository variable. On published GitHub Release
+`MERERUN_RELEASE_ARM64_CUDA=1` repository variable. That runner must provide
+the CUDA Toolkit headers, CUDA CCCL headers, cuDNN, NCCL, Swift, and the normal
+Linux packaging dependencies. CUDA `.deb` artifacts add default runtime
+dependencies on `cuda-cudart-13-0`, `cuda-nvrtc-13-0`, `libcublas-13-0`,
+`libcudnn9-cuda-13`, and `libnccl2`. On published GitHub Release
 events, the workflow uploads the available Linux artifacts and checksum manifest
 to the release.
 

@@ -464,11 +464,12 @@ public actor Q35Generator: ChatGenerator {
         }
 
         let rowID = UUID()
+        let initialLogitsBox = RuntimeUncheckedSendable(initialLogits)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let row = Q35BatchedDecodeRow(
                     id: rowID,
-                    logits: initialLogits,
+                    logits: initialLogitsBox.value,
                     layerCaches: layerCaches,
                     eosSet: eosSet,
                     generationConfig: generationConfig,

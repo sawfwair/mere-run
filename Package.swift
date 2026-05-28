@@ -73,9 +73,16 @@ let prebuiltMLXSwiftSettings: [SwiftSetting] = useLinuxPrebuiltMLX
       ])
     ]
   : []
+let linuxPackageSwiftSettings: [SwiftSetting] = isLinuxPackage
+  ? [
+      .unsafeFlags([
+        "-strict-concurrency=targeted"
+      ])
+    ]
+  : []
 let commonSwiftSettings: [SwiftSetting] = [
   .interoperabilityMode(.Cxx)
-] + prebuiltMLXSwiftSettings
+] + prebuiltMLXSwiftSettings + linuxPackageSwiftSettings
 let hasMediaIOTarget = packageDirectoryContainsSwiftSources("Sources/MediaIO")
 
 func mlxDependency(_ name: String) -> [Target.Dependency] {

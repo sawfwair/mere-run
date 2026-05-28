@@ -4,7 +4,7 @@ import Foundation
 import MLX
 import MLXRandom
 
-public struct GenerationConfig {
+public struct GenerationConfig: Sendable {
     public var maxTokens: Int
     public var temperature: Float
     public var topK: Int

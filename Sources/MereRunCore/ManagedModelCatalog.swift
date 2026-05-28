@@ -110,6 +110,40 @@ public enum ManagedModelCatalog {
         "vae/*",
         "scheduler/*",
     ]
+    private static let kleinNanoSnapshotPatterns = [
+        "model_index.json",
+        "scheduler/scheduler_config.json",
+        "text_encoder/config.json",
+        "text_encoder/model.safetensors",
+        "tokenizer/added_tokens.json",
+        "tokenizer/chat_template.jinja",
+        "tokenizer/merges.txt",
+        "tokenizer/special_tokens_map.json",
+        "tokenizer/tokenizer.json",
+        "tokenizer/tokenizer_config.json",
+        "tokenizer/vocab.json",
+        "transformer/config.json",
+        "transformer/diffusion_pytorch_model.safetensors",
+        "vae/config.json",
+        "vae/diffusion_pytorch_model.safetensors",
+    ]
+    private static let zImageNanoSnapshotPatterns = [
+        "text_encoder/0.safetensors",
+        "text_encoder/1.safetensors",
+        "text_encoder/model.safetensors.index.json",
+        "tokenizer/added_tokens.json",
+        "tokenizer/chat_template.jinja",
+        "tokenizer/merges.txt",
+        "tokenizer/special_tokens_map.json",
+        "tokenizer/tokenizer.json",
+        "tokenizer/tokenizer_config.json",
+        "tokenizer/vocab.json",
+        "transformer/0.safetensors",
+        "transformer/1.safetensors",
+        "transformer/model.safetensors.index.json",
+        "vae/0.safetensors",
+        "vae/model.safetensors.index.json",
+    ]
 
     private static let zImageNanoUpstreamRepoId = "filipstrand/Z-Image-Turbo-mflux-4bit"
     private static let kleinNanoUpstreamRepoId = "stereovoid/flux2-klein-4b-4bit"
@@ -123,7 +157,7 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: kleinNanoUpstreamRepoId,
-                patterns: diffusersImageSnapshotPatterns
+                patterns: kleinNanoSnapshotPatterns
             ),
             upstreamRepoId: kleinNanoUpstreamRepoId,
             validationKind: .flux2Klein,
@@ -216,7 +250,7 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: zImageNanoUpstreamRepoId,
                 revision: "main",
-                patterns: diffusersImageSnapshotPatterns
+                patterns: zImageNanoSnapshotPatterns
             ),
             upstreamRepoId: zImageNanoUpstreamRepoId,
             upstreamRevision: "main",
