@@ -30,6 +30,13 @@ public struct Gemma4KVCacheQuantization: Sendable, Hashable {
         bits != nil
     }
 
+    var statusDescription: String {
+        guard let bits else {
+            return "default"
+        }
+        return "\(scheme.rawValue):\(bits)-bit:start-\(quantizedStart)"
+    }
+
     func validated() throws -> Gemma4KVCacheQuantization {
         guard let bits else {
             return self

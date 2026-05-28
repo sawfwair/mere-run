@@ -113,6 +113,9 @@ swift run mere.run api serve \
   `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
   long-context synthetic decode testing. It is not the default until checkpoint
   benchmarks prove the end-to-end model path.
+- Gemma4 runtime settings can set `kvCacheMode` to `default`, `polar2`, or
+  `auto`. `auto` keeps the default KV path below 1024 prompt tokens and switches
+  to decode-deferred packed PolarKV at or above that threshold.
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
   steps across loaded models under `cacheStats`; it also reports completed chat
   request counts, generated tokens, and average load/prefill/decode timings

@@ -281,6 +281,7 @@ struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
     let temperature: Double?
     let topP: Double?
     let engineOverride: RuntimeServingEngine?
+    let kvCacheMode: RuntimeKVCacheMode?
     let prefixKVCache: PrefixKVCacheStats?
     let continuousBatching: RuntimeDecodeBatchingStats?
     let benchmarkStats: RuntimeModelBenchmarkStats?
@@ -509,12 +510,13 @@ actor RuntimeModelPool {
         applyDefaults(from: resolved.settings, to: &effectiveRequest)
         let contextSize = resolved.settings.maxContextTokens ?? serverContextSize
         let capabilities = resolved.engine.openAICompatibility
-        let chatRequest = try APIServerContract.chatRequest(
+        var chatRequest = try APIServerContract.chatRequest(
             from: effectiveRequest,
             fallbackLoraPath: fallbackLoraPath,
             contextSize: contextSize,
             capabilities: capabilities
         )
+        chatRequest.kvCacheMode = resolved.settings.kvCacheMode
         let includeUsage = try APIServerContract.includeUsageInStreaming(
             effectiveRequest,
             capabilities: capabilities
@@ -786,6 +788,7 @@ actor RuntimeModelPool {
             temperature: modelSettings.temperature,
             topP: modelSettings.topP,
             engineOverride: modelSettings.engineOverride,
+            kvCacheMode: modelSettings.kvCacheMode,
             prefixKVCache: prefixKVCache,
             continuousBatching: continuousBatching,
             benchmarkStats: state.benchmarkStats

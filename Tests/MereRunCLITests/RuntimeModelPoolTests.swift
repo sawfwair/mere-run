@@ -94,6 +94,27 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertTrue(status.capabilities.continuousBatching.enabled)
     }
 
+    func testStatusIncludesRuntimeKVCacheMode() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+        try store.writeSettings(
+            RuntimeModelSettings(kvCacheMode: .auto),
+            for: Gemma4Resources.defaultModelId
+        )
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: store
+        )
+
+        let status = await pool.status()
+
+        let gemma = try XCTUnwrap(status.models.first { $0.id == Gemma4Resources.defaultModelId })
+        XCTAssertEqual(gemma.kvCacheMode, .auto)
+    }
+
     func testRequestAdmissionSerializesByDefaultAndReportsQueue() async throws {
         let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
         let first = try await admission.acquire()

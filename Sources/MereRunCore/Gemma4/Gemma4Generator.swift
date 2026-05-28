@@ -245,8 +245,7 @@ public actor Gemma4Generator: ChatGenerator {
         guard let model, let tokenizerAndTemplate, let loadedConfig else {
             throw Gemma4Error.modelNotLoaded
         }
-        let kvCacheQuantization = try self.kvCacheQuantization.validated()
-        let prefillKVCacheQuantization = prefillQuantization(for: kvCacheQuantization)
+        let fallbackKVCacheQuantization = try self.kvCacheQuantization.validated()
 
         let effectiveContext = min(maxContextLength, loadedConfig.textConfig.maxPositionEmbeddings)
         let prefillStart = Date()
@@ -261,6 +260,12 @@ public actor Gemma4Generator: ChatGenerator {
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
+        let effectiveKVCacheMode = request.kvCacheMode ?? .default
+        let kvCacheQuantization = try effectiveKVCacheMode.gemma4Quantization(
+            fallback: fallbackKVCacheQuantization,
+            promptTokenCount: promptTokens.count
+        ).validated()
+        let prefillKVCacheQuantization = prefillQuantization(for: kvCacheQuantization)
 
         let hasTools = request.tools?.isEmpty == false
         let eosSet = request.stopOnEOS
@@ -341,7 +346,10 @@ public actor Gemma4Generator: ChatGenerator {
                 prefillSeconds: prefillSeconds,
                 cacheConversionSeconds: preparedCaches.conversionSeconds,
                 decodeSeconds: decodeResult.decodeSeconds,
-                firstTokenSeconds: decodeResult.firstTokenSeconds
+                firstTokenSeconds: decodeResult.firstTokenSeconds,
+                kvCacheMode: effectiveKVCacheMode,
+                prefillKVCache: prefillKVCacheQuantization.statusDescription,
+                decodeKVCache: kvCacheQuantization.statusDescription
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count

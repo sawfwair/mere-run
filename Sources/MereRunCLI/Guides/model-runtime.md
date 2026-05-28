@@ -35,6 +35,7 @@ mere.run status --json
 - `--temperature` / `--clear-temperature`
 - `--top-p` / `--clear-top-p`
 - `--engine` / `--clear-engine`
+- `--kv-cache-mode` / `--clear-kv-cache-mode`
 - `--json`
 
 ## Usage Patterns
@@ -45,6 +46,10 @@ mere.run status --json
   `MERERUN_MODELS_DIR` when you use a custom store.
 - Use engine overrides only for catalog-compatible engines. Incompatible
   overrides are rejected immediately.
+- Use `--kv-cache-mode auto` on Gemma4 to keep the default KV path for shorter
+  prompts and switch to packed 2-bit PolarKV for prompts at or above 1024
+  tokens. `polar2` forces that path for every request, and non-Gemma4 models
+  reject the setting.
 - Treat TTL/LRU as forward-compatible settings. The first runtime-pool
   milestone records them and exposes them in status; later schedulers can act
   on them.
@@ -59,7 +64,8 @@ mere.run model runtime set text-chat-gemma4 \
   --max-context-tokens 8192 \
   --max-tokens 1024 \
   --temperature 0.6 \
-  --top-p 0.9
+  --top-p 0.9 \
+  --kv-cache-mode auto
 ```
 
 ```bash

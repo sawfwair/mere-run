@@ -8,6 +8,42 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
 }
 
+public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendable {
+    case `default`
+    case polar2
+    case auto
+
+    public static let gemma4AutoPolarPromptTokenThreshold = 1_024
+
+    public func gemma4Quantization(
+        fallback: Gemma4KVCacheQuantization,
+        promptTokenCount: Int
+    ) -> Gemma4KVCacheQuantization {
+        switch self {
+        case .default:
+            return fallback
+        case .polar2:
+            return Self.gemma4Polar2Quantization(fallback: fallback)
+        case .auto:
+            guard promptTokenCount >= Self.gemma4AutoPolarPromptTokenThreshold else {
+                return fallback
+            }
+            return Self.gemma4Polar2Quantization(fallback: fallback)
+        }
+    }
+
+    private static func gemma4Polar2Quantization(
+        fallback: Gemma4KVCacheQuantization
+    ) -> Gemma4KVCacheQuantization {
+        Gemma4KVCacheQuantization(
+            bits: 2,
+            scheme: .polar,
+            groupSize: fallback.groupSize,
+            quantizedStart: 0
+        )
+    }
+}
+
 public struct RuntimeModelSettings: Codable, Hashable, Sendable {
     public var alias: String?
     public var pinned: Bool
@@ -17,6 +53,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
     public var temperature: Double?
     public var topP: Double?
     public var engineOverride: RuntimeServingEngine?
+    public var kvCacheMode: RuntimeKVCacheMode?
 
     public init(
         alias: String? = nil,
@@ -26,7 +63,8 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         maxTokens: Int? = nil,
         temperature: Double? = nil,
         topP: Double? = nil,
-        engineOverride: RuntimeServingEngine? = nil
+        engineOverride: RuntimeServingEngine? = nil,
+        kvCacheMode: RuntimeKVCacheMode? = nil
     ) {
         self.alias = alias
         self.pinned = pinned
@@ -36,6 +74,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         self.temperature = temperature
         self.topP = topP
         self.engineOverride = engineOverride
+        self.kvCacheMode = kvCacheMode
     }
 
     public var normalized: RuntimeModelSettings {
@@ -77,6 +116,15 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
                 expected: spec.defaultRuntimeServingEngine
             )
         }
+        if let kvCacheMode = settings.kvCacheMode,
+           kvCacheMode != .default,
+           spec.defaultRuntimeServingEngine != .textChatGemma4 {
+            throw RuntimeModelSettingsError.incompatibleKVCacheMode(
+                modelID: spec.id,
+                requested: kvCacheMode,
+                expectedEngine: .textChatGemma4
+            )
+        }
         guard spec.isAPIServableRuntimeModel else {
             throw RuntimeModelSettingsError.unsupportedModel(spec.id)
         }
@@ -108,6 +156,7 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
     case invalidAlias(String)
     case invalidValue(String)
     case incompatibleEngine(modelID: String, requested: RuntimeServingEngine, expected: RuntimeServingEngine?)
+    case incompatibleKVCacheMode(modelID: String, requested: RuntimeKVCacheMode, expectedEngine: RuntimeServingEngine)
 
     public var errorDescription: String? {
         switch self {
@@ -122,6 +171,8 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
         case .incompatibleEngine(let modelID, let requested, let expected):
             let expectedText = expected?.rawValue ?? "none"
             return "Engine override '\(requested.rawValue)' is not compatible with model '\(modelID)' (expected \(expectedText))."
+        case .incompatibleKVCacheMode(let modelID, let requested, let expectedEngine):
+            return "KV cache mode '\(requested.rawValue)' is not compatible with model '\(modelID)' (expected \(expectedEngine.rawValue))."
         }
     }
 }

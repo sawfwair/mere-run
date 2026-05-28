@@ -141,6 +141,7 @@ final class StatusCommandTests: XCTestCase {
                     temperature: 0.4,
                     topP: 0.8,
                     engineOverride: nil,
+                    kvCacheMode: .auto,
                     prefixKVCache: Gemma4PrefixKVCacheStats(
                         enabled: true,
                         entries: 1,
