@@ -453,6 +453,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["chat", "api serve"]
         ),
         ManagedModelSpec(
+            id: Q35Resources.q36NanoModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.q36NanoModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.q36NanoUpstreamRepoId,
+            upstreamRevision: Q35Resources.q36NanoUpstreamRevision,
+            validationKind: .q35,
+            estimatedDownloadBytes: 24 * 1_073_741_824,
+            defaultCLICommands: ["chat", "api serve"]
+        ),
+        ManagedModelSpec(
             id: AgentModelResources.qwen35NineBModelId,
             category: .textCode,
             installShape: .singleFile(relativePath: AgentModelResources.qwen35NineBRelativePath),

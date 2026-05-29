@@ -8,8 +8,8 @@ Read or update typed per-model API serving settings. These settings feed
 ## Required Models
 
 Use a managed API-capable model id such as `text-chat-gemma4`,
-`text-chat-q35`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, or
-`text-chat-mebot`.
+`text-chat-q35`, `text-chat-q36-nano`, `text-agent-deepseek-v4-flash`,
+`text-agent-qwen35-9b`, or `text-chat-mebot`.
 
 ## Install And Check
 

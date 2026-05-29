@@ -115,6 +115,16 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .gemma4)
     }
 
+    func testQ36NanoUsesOptiQHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.q36NanoModelId))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit")
+        XCTAssertEqual(spec.hubFallback?.revision, "63d520640ca7461f31ba66104612135770090340")
+        XCTAssertEqual(spec.upstreamRepoId, "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit")
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
+    }
+
     func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

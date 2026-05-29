@@ -1,6 +1,6 @@
 # Q35
 
-Qwen 3.5 text and vision-language runtime.
+Qwen 3.5/3.6 hybrid MoE text and vision-language runtime.
 
 - `Q35Config.swift`: typed text/vision configuration.
 - `Q35TokenizerAndTemplate.swift`: prompt rendering and tokenization.

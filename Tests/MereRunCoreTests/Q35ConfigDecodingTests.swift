@@ -12,7 +12,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             includeThinking: false
         )
 
-        XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"))
+        XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
     }
 
     func testQ35TemplateLeavesThinkingOpenWhenRequested() {
@@ -22,8 +22,8 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             includeThinking: true
         )
 
-        XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\\n<think>\\n"))
-        XCTAssertFalse(rendered.hasSuffix("</think>\\n\\n"))
+        XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\n<think>\n"))
+        XCTAssertFalse(rendered.hasSuffix("</think>\n\n"))
     }
 
     private func decodeConfig(_ object: [String: Any]) throws -> Q35Config {
@@ -130,6 +130,66 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             }
             return .linear(Q35LinearCache())
         }
+    }
+
+    func testSamplingProbabilitiesGreedyReturnsOneHotDistribution() {
+        let logits = MLXArray([0.1, 2.0, -1.0, 0.7])
+        let config = GenerationConfig(
+            maxTokens: 1,
+            temperature: 0,
+            topK: 0,
+            topP: 1,
+            repetitionPenalty: nil
+        )
+
+        let probs = samplingProbabilities(logits: logits, config: config, previousTokens: [])
+        MLX.eval(probs)
+
+        XCTAssertEqual(probs[1].item(Float.self), 1, accuracy: 0.0001)
+        XCTAssertEqual(probs.sum().item(Float.self), 1, accuracy: 0.0001)
+    }
+
+    func testQ35MTPDraftLogitsSupportsDenseExpertWeightLayout() throws {
+        MLXRandom.seed(39)
+        let config = try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"]))
+        let model = Q35Model(config: config)
+        let mtp = Q35MTPModel(config: config)
+        let tokens = [1, 2, 3]
+        let cache = makeLayerCaches(config: config)
+        let input = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+        let output = model.forward(input, cache: cache)
+        MLX.eval(output.hidden)
+
+        let lastIndex = output.hidden.dim(1) - 1
+        let previousHidden = output.hidden[0..., lastIndex..<(lastIndex + 1), 0...]
+        let draftLogits = mtp.draftLogits(
+            token: 4,
+            previousHidden: previousHidden,
+            positionOffset: tokens.count,
+            baseModel: model
+        )
+        MLX.eval(draftLogits)
+
+        XCTAssertEqual(draftLogits.shape, [1, 1, config.textConfig.vocabSize])
+        XCTAssertTrue(MLX.max(MLX.abs(draftLogits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testQ35ConfigAllowsTextOnlyQwen36Layout() throws {
+        var configObject = makeBaseConfig()
+        configObject["model_type"] = "qwen3_5_moe"
+        configObject["architectures"] = ["Qwen3_5MoeForConditionalGeneration"]
+        if var textConfig = configObject["text_config"] as? [String: Any] {
+            textConfig.removeValue(forKey: "mlp_only_layers")
+            configObject["text_config"] = textConfig
+        }
+        configObject.removeValue(forKey: "vision_config")
+
+        let config = try decodeConfig(configObject)
+
+        XCTAssertEqual(config.modelType, "qwen3_5_moe")
+        XCTAssertNil(config.visionConfig)
+        XCTAssertEqual(config.textConfig.mlpOnlyLayers, [])
+        XCTAssertEqual(config.textConfig.numExperts, 256)
     }
 
     private func mergeLayerCaches(_ rowCaches: [[Q35LayerCache?]]) -> [Q35LayerCache?]? {

@@ -116,7 +116,7 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         self.numExperts = try container.decode(Int.self, forKey: .numExperts)
         self.numExpertsPerTok = try container.decode(Int.self, forKey: .numExpertsPerTok)
         self.layerTypes = try container.decode([String].self, forKey: .layerTypes)
-        self.mlpOnlyLayers = try container.decode([Int].self, forKey: .mlpOnlyLayers)
+        self.mlpOnlyLayers = try container.decodeIfPresent([Int].self, forKey: .mlpOnlyLayers) ?? []
         self.linearNumValueHeads = try container.decode(Int.self, forKey: .linearNumValueHeads)
         self.linearNumKeyHeads = try container.decode(Int.self, forKey: .linearNumKeyHeads)
         self.linearKeyHeadDim = try container.decode(Int.self, forKey: .linearKeyHeadDim)
@@ -212,7 +212,7 @@ public struct Q35Config: Codable, Sendable, Hashable {
     public let visionEndTokenId: Int?
     public let quantization: Q35QuantizationConfig?
     public let textConfig: Q35TextConfig
-    public let visionConfig: Q35VisionConfig
+    public let visionConfig: Q35VisionConfig?
 
     private enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
@@ -239,7 +239,7 @@ public struct Q35Config: Codable, Sendable, Hashable {
         self.visionStartTokenId = try container.decodeIfPresent(Int.self, forKey: .visionStartTokenId)
         self.visionEndTokenId = try container.decodeIfPresent(Int.self, forKey: .visionEndTokenId)
         self.textConfig = try container.decode(Q35TextConfig.self, forKey: .textConfig)
-        self.visionConfig = try container.decode(Q35VisionConfig.self, forKey: .visionConfig)
+        self.visionConfig = try container.decodeIfPresent(Q35VisionConfig.self, forKey: .visionConfig)
 
         if let direct = try container.decodeIfPresent([Int].self, forKey: .eosTokenId) {
             self.eosTokenIds = direct
@@ -270,6 +270,6 @@ public struct Q35Config: Codable, Sendable, Hashable {
         try container.encodeIfPresent(visionEndTokenId, forKey: .visionEndTokenId)
         try container.encodeIfPresent(quantization, forKey: .quantization)
         try container.encode(textConfig, forKey: .textConfig)
-        try container.encode(visionConfig, forKey: .visionConfig)
+        try container.encodeIfPresent(visionConfig, forKey: .visionConfig)
     }
 }

@@ -27,12 +27,16 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static let defaultModelId = "text-chat-q35"
     public static let nanoModelId = "text-chat-q35-nano"
+    public static let q36NanoModelId = "text-chat-q36-nano"
 
     public static let upstreamRepoId = "mlx-community/Qwen3.5-122B-A10B-4bit"
     public static let upstreamRevision = "e9c67b08899964be5fdd069bb1b4bc8907fe68f5"
 
     public static let nanoUpstreamRepoId = "mlx-community/Qwen3.5-35B-A3B-4bit"
     public static let nanoUpstreamRevision = "1e20fd8d42056f870933bf98ca6211024744f7ec"
+
+    public static let q36NanoUpstreamRepoId = "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"
+    public static let q36NanoUpstreamRevision = "63d520640ca7461f31ba66104612135770090340"
 
     private static let profilesByModelId: [String: Profile] = [
         defaultModelId: Profile(
@@ -44,6 +48,11 @@ public struct Q35Resources: Sendable, Hashable {
             modelId: nanoModelId,
             upstreamRepoId: nanoUpstreamRepoId,
             upstreamRevision: nanoUpstreamRevision
+        ),
+        q36NanoModelId: Profile(
+            modelId: q36NanoModelId,
+            upstreamRepoId: q36NanoUpstreamRepoId,
+            upstreamRevision: q36NanoUpstreamRevision
         ),
     ]
 

@@ -189,6 +189,8 @@ Engine compatibility:
   responses when the model generates a tool call.
 - `text-chat-q35`: accepts function tools and one image content part per
   message.
+- `text-chat-q36-nano`: uses the Q35-family serving engine with Qwen3.6
+  35B-A3B OptiQ chat weights.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
 - `text-code`: accepts plain text chat requests and rejects tools, images,

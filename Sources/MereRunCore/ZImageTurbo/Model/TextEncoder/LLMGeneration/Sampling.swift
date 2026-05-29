@@ -134,3 +134,54 @@ public func sampleToken(
         return categoricalSample(logits: logits, temperature: config.temperature)
     }
 }
+
+public func samplingProbabilities(
+    logits: MLXArray,
+    config: GenerationConfig,
+    previousTokens: [Int]
+) -> MLXArray {
+    var logits = logits
+
+    if let penalty = config.repetitionPenalty, !previousTokens.isEmpty {
+        let contextTokens = Array(previousTokens.suffix(config.repetitionContextSize))
+        logits = applyRepetitionPenalty(logits: logits, tokens: contextTokens, penalty: penalty)
+    }
+
+    if logits.dtype == .bfloat16 {
+        logits = logits.asType(.float32)
+    }
+
+    if config.topK > 0 && config.topK < logits.dim(-1) {
+        let sortedIndices = argSort(logits, axis: -1)
+        let sortedLogits = logits.take(sortedIndices, axis: -1)
+        let threshold = sortedLogits[sortedLogits.dim(-1) - config.topK]
+        logits = MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
+    }
+
+    if config.temperature == 0 {
+        let token = argMaxSample(logits: logits)
+        let result = MLXArray.zeros(like: logits)
+        result[token] = MLXArray(1.0)
+        return result
+    }
+
+    var probs = softmax(logits / config.temperature, axis: -1)
+    if config.topP > 0 && config.topP < 1 {
+        let sortedIndices = argSort(probs, axis: -1)
+        let sortedProbs = probs.take(sortedIndices, axis: -1)
+        let cumulativeProbs = cumsum(sortedProbs, axis: -1)
+        let kept = MLX.where(
+            cumulativeProbs .> (1 - config.topP),
+            sortedProbs,
+            MLXArray(Float.infinity)
+        )
+        let threshold = kept.min(axis: -1, keepDims: true)
+        probs = MLX.where(probs .>= threshold, probs, MLXArray.zeros(like: probs))
+        probs = probs / probs.sum(axis: -1, keepDims: true)
+    }
+    return probs
+}
+
+public func sampleToken(probabilities: MLXArray) -> Int {
+    categorical(MLX.log(probabilities + 1e-10)).item(Int.self)
+}

@@ -12,7 +12,9 @@ public final class Q35VisionTower: Module {
     public private(set) var isLoaded: Bool = false
 
     public init(config: Q35Config) {
-        let vision = config.visionConfig
+        guard let vision = config.visionConfig else {
+            preconditionFailure("Q35VisionTower requires a Q35 vision config.")
+        }
         let activation: QwenVisionConfiguration.Activation
         switch vision.hiddenAct?.lowercased() {
         case "gelu_pytorch_tanh", "gelu_tanh", "gelu":

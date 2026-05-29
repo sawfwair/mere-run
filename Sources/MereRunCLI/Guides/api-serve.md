@@ -11,6 +11,7 @@ Supported engines:
 - `text-code`: default GGUF code model, usually `text-code-qwen3`.
 - `text-chat-gemma4`: Gemma text chat models.
 - `text-chat-q35`: Qwen3.5 text chat models.
+- `text-chat-q36-nano`: Qwen3.6 35B-A3B OptiQ chat weights served through the Q35-family engine.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
 

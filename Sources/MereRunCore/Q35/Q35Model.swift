@@ -182,6 +182,11 @@ final class Q35Transformer: Module {
     }
 }
 
+struct Q35ForwardOutput {
+    let hidden: MLXArray
+    let logits: MLXArray
+}
+
 public final class Q35Model: Module, @unchecked Sendable {
     @ModuleInfo(key: "model") var model: Q35Transformer
     @ModuleInfo(key: "lm_head") var lmHead: Linear
@@ -203,12 +208,24 @@ public final class Q35Model: Module, @unchecked Sendable {
         model.embeddings(for: inputIds)
     }
 
+    func logits(from hidden: MLXArray) -> MLXArray {
+        lmHead(hidden)
+    }
+
+    func forward(
+        _ inputIds: MLXArray,
+        cache: [Q35LayerCache?]?,
+        inputEmbeddings: MLXArray? = nil
+    ) -> Q35ForwardOutput {
+        let hidden = model(inputIds, cache: cache, inputEmbeddings: inputEmbeddings)
+        return Q35ForwardOutput(hidden: hidden, logits: lmHead(hidden))
+    }
+
     public func callAsFunction(
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil
     ) -> MLXArray {
-        let hidden = model(inputIds, cache: cache, inputEmbeddings: inputEmbeddings)
-        return lmHead(hidden)
+        forward(inputIds, cache: cache, inputEmbeddings: inputEmbeddings).logits
     }
 }

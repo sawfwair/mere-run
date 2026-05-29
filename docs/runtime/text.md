@@ -18,6 +18,7 @@ embeddings, and PII anonymization.
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q35`
 - `text-chat-q35-nano`
+- `text-chat-q36-nano`
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot`
 - `text-chat-psi-agent`
