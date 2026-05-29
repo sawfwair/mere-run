@@ -24,6 +24,17 @@ public actor CodeGenGenerator: ChatGenerator {
         let modelURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
             .resolvingSymlinksInPath()
 
+        #if os(Linux)
+        if let llamaCLI = LlamaCLIProcess.discover() {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Starting isolated llama.cpp runtime..."))
+            return try await llamaCLI.chat(
+                request: request,
+                modelPath: modelURL.path,
+                progressHandler: progressHandler
+            )
+        }
+        #endif
+
         if loadedModelPath != modelURL.path {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
             llamaContext = try await LlamaContext.createContext(
@@ -77,6 +88,17 @@ public actor CodeGenGenerator: ChatGenerator {
         let modelURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             .resolvingSymlinksInPath()
 
+        #if os(Linux)
+        if let llamaCLI = LlamaCLIProcess.discover() {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Starting isolated llama.cpp runtime..."))
+            return try await llamaCLI.chat(
+                request: request,
+                modelPath: modelURL.path,
+                progressHandler: progressHandler
+            )
+        }
+        #endif
+
         if loadedModelPath != modelURL.path {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
             llamaContext = try await LlamaContext.createContext(
@@ -128,6 +150,13 @@ public actor CodeGenGenerator: ChatGenerator {
     ) async throws {
         let modelURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             .resolvingSymlinksInPath()
+        #if os(Linux)
+        if LlamaCLIProcess.discover() != nil {
+            loadedModelPath = modelURL.path
+            llamaContext = nil
+            return
+        }
+        #endif
         if loadedModelPath != modelURL.path {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
             llamaContext = try await LlamaContext.createContext(path: modelURL.path)

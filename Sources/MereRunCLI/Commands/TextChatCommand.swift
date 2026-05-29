@@ -272,6 +272,7 @@ struct TextChat: AsyncParsableCommand {
 
     func resolveGemma4KVCacheQuantization(for modelId: String) throws -> Gemma4KVCacheQuantization {
         let usesTurboDefaults = Gemma4Resources.usesTurboDefaults(modelSpec: modelId)
+            && Gemma4Resources.supportsDefaultTurboKVQuantization
         let defaultScheme = usesTurboDefaults
             ? Gemma4Resources.defaultTurboKVQuantizationScheme.rawValue
             : Gemma4Resources.defaultKVQuantizationScheme.rawValue

@@ -358,7 +358,7 @@ public enum HFSafetensorsWeightsLoader {
                         mode: resolved.mode
                     )
                 } else {
-                    quantized = QuantizedLinear(
+                    quantized = PortableQuantizedLinear(
                         weight: qWeight,
                         bias: linearBias,
                         scales: scales,
@@ -578,7 +578,7 @@ public enum HFSafetensorsWeightsLoader {
                         mode: resolved.mode
                     )
                 } else {
-                    quantized = QuantizedLinear(
+                    quantized = PortableQuantizedLinear(
                         weight: qWeight,
                         bias: linearBias,
                         scales: scales,

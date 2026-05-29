@@ -16,6 +16,13 @@ public struct Gemma4Resources: Sendable, Hashable {
     public static let defaultTurboKVBits = 4.0
     public static let defaultTurboQuantizedKVStart = 0
     public static let defaultTurboKVQuantizationScheme: Gemma4KVQuantizationScheme = .turboquant
+    public static var supportsDefaultTurboKVQuantization: Bool {
+        #if os(Linux)
+        false
+        #else
+        true
+        #endif
+    }
     public static let snapshotPatterns = [
         "config.json",
         "generation_config.json",

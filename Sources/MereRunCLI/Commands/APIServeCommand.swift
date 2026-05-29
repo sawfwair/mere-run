@@ -188,6 +188,7 @@ struct APIServe: AsyncParsableCommand {
 
     private var usesGemma4TurboKVDefaults: Bool {
         Gemma4Resources.usesTurboDefaults(modelSpec: requestedGemma4ModelSpec)
+            && Gemma4Resources.supportsDefaultTurboKVQuantization
     }
 
     private var resolvedGemma4KVBits: Double? {

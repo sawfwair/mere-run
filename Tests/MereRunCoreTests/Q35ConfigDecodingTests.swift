@@ -5,6 +5,26 @@ import MLXRandom
 @testable import MereRunCore
 
 final class Q35ConfigDecodingTests: MereRunCoreTestCase {
+    func testQ35TemplatePrefillsClosedThinkBlockWhenThinkingIsHidden() {
+        let rendered = Q35TokenizerAndTemplate.renderPrompt(
+            messages: [ChatMessage(role: .user, content: "Reply with READY only.")],
+            addGenerationPrompt: true,
+            includeThinking: false
+        )
+
+        XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"))
+    }
+
+    func testQ35TemplateLeavesThinkingOpenWhenRequested() {
+        let rendered = Q35TokenizerAndTemplate.renderPrompt(
+            messages: [ChatMessage(role: .user, content: "Explain.")],
+            addGenerationPrompt: true,
+            includeThinking: true
+        )
+
+        XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\\n<think>\\n"))
+        XCTAssertFalse(rendered.hasSuffix("</think>\\n\\n"))
+    }
 
     private func decodeConfig(_ object: [String: Any]) throws -> Q35Config {
         let data = try JSONSerialization.data(withJSONObject: object, options: [])

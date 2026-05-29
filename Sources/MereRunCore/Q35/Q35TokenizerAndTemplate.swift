@@ -50,6 +50,20 @@ public struct Q35TokenizerAndTemplate {
         addGenerationPrompt: Bool = true,
         includeThinking: Bool = true
     ) -> String {
+        Self.renderPrompt(
+            messages: messages,
+            tools: tools,
+            addGenerationPrompt: addGenerationPrompt,
+            includeThinking: includeThinking
+        )
+    }
+
+    static func renderPrompt(
+        messages: [ChatMessage],
+        tools: [ToolDefinition]? = nil,
+        addGenerationPrompt: Bool = true,
+        includeThinking: Bool = true
+    ) -> String {
         var prompt = ""
 
         if let tools, !tools.isEmpty {
@@ -84,7 +98,7 @@ public struct Q35TokenizerAndTemplate {
             if includeThinking {
                 prompt += "<|im_start|>assistant\\n<think>\\n"
             } else {
-                prompt += "<|im_start|>assistant\\n"
+                prompt += "<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"
             }
         }
 

@@ -432,7 +432,7 @@ final class Gemma4SwitchLinear: Module {
         let flatIndices = indices.reshaped([batchTokens * topK])
         let output: MLXArray
         if let scales {
-            output = gatherQuantizedMM(
+            output = portableGatherQuantizedMM(
                 flatX,
                 weight,
                 scales: scales,

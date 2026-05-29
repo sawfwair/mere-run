@@ -83,7 +83,7 @@ struct ModelPull: AsyncParsableCommand {
 
     private func pull(_ spec: ManagedModelSpec) async throws {
         let modelDir = spec.managedInstallRootURL()
-        if !force, spec.isManagedRootComplete(modelDir) {
+        if !force, ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir) {
             if !quiet { stderr("[\(spec.id)] already installed, skipping (use --force to re-download)") }
             return
         }

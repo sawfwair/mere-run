@@ -361,7 +361,8 @@ public actor Gemma4Generator: ChatGenerator {
             return quantization
         }
 
-        if Gemma4Resources.usesTurboDefaults(modelSpec: modelId) {
+        if Gemma4Resources.usesTurboDefaults(modelSpec: modelId)
+            && Gemma4Resources.supportsDefaultTurboKVQuantization {
             return Gemma4KVCacheQuantization(
                 bits: Gemma4Resources.defaultTurboKVBits,
                 scheme: Gemma4Resources.defaultTurboKVQuantizationScheme,

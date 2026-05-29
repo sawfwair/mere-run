@@ -329,10 +329,33 @@ while [[ -L "$source_path" ]]; do
   fi
 done
 payload_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
+if [[ -f "$payload_dir/.mererun-linux-cuda" ]]; then
+  export MERERUN_LINUX_ACCEL="${MERERUN_LINUX_ACCEL:-cuda}"
+fi
+if [[ -x "$payload_dir/llama-cli" && -z "${MERERUN_LLAMA_CLI:-}" ]]; then
+  export MERERUN_LLAMA_CLI="$payload_dir/llama-cli"
+fi
+for cuda_cccl_include in \
+  "${CUDA_HOME:-}/include/cccl" \
+  "${CUDA_PATH:-}/include/cccl" \
+  /usr/local/cuda/include/cccl \
+  /usr/local/cuda/targets/sbsa-linux/include/cccl
+do
+  if [[ -d "$cuda_cccl_include/cuda/std" ]]; then
+    case ":${CPATH:-}:" in
+      *":$cuda_cccl_include:"*) ;;
+      *) export CPATH="$cuda_cccl_include${CPATH:+:$CPATH}" ;;
+    esac
+    break
+  fi
+done
 export LD_LIBRARY_PATH="$payload_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$payload_dir/mere.run-bin" "$@"
 WRAPPER
 chmod +x "$payload_dir/mere.run"
+if [[ "$linux_accel" == "cuda" ]]; then
+  touch "$payload_dir/.mererun-linux-cuda"
+fi
 cp -a scripts/install.sh "$payload_dir/install.sh"
 chmod +x "$payload_dir/install.sh"
 
@@ -358,6 +381,10 @@ done
 
 if [[ -d "$llama_prefix/lib" ]]; then
   cp -a "$llama_prefix/lib" "$payload_dir/lib"
+fi
+if [[ -x "$llama_prefix/bin/llama-cli" ]]; then
+  cp -a "$llama_prefix/bin/llama-cli" "$payload_dir/llama-cli"
+  chmod +x "$payload_dir/llama-cli"
 fi
 
 # Bundle Swift/Foundation runtime shared libraries when the official Swift

@@ -183,7 +183,7 @@ extension Flux2KleinGeneratoriOS {
                 return nil
             }
             let biases = loadTensor("\(basePath).biases")
-            return QuantizedLinear(
+            return PortableQuantizedLinear(
                 weight: weight,
                 bias: nil,
                 scales: scales,

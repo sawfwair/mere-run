@@ -243,6 +243,7 @@ private struct Gemma4KVBenchmarkVariant {
 
     static func defaultTurbo(model: String) -> Self {
         let usesTurboDefaults = Gemma4Resources.usesTurboDefaults(modelSpec: model)
+            && Gemma4Resources.supportsDefaultTurboKVQuantization
         let quantization = Gemma4KVCacheQuantization(
             bits: usesTurboDefaults ? Gemma4Resources.defaultTurboKVBits : nil,
             scheme: usesTurboDefaults ? Gemma4Resources.defaultTurboKVQuantizationScheme : .uniform,
