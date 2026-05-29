@@ -90,7 +90,9 @@ swift run mere.run text anonymize \
 ### Code generation
 
 `mere.run text code` uses the vendored `llama.cpp` runtime via
-`vendor/llama.xcframework` and the matching support code in `MereRunCore`.
+`vendor/llama.xcframework` and the matching support code in `MereRunCore`. On
+packaged Linux installs, the command uses the colocated `llama-cli` subprocess
+so CUDA GGUF loads stay isolated from the MLX runtime in the Swift process.
 
 ### Embeddings
 
@@ -111,7 +113,8 @@ model families.
 ### `mere.run text code`
 
 Use this when you want a GGUF-backed coding path through the vendored
-`llama.cpp` runtime.
+`llama.cpp` runtime. Linux packages run the same model family through the
+bundled `llama-cli` subprocess when it is present.
 
 ### `mere.run text embed`
 

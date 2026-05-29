@@ -189,7 +189,7 @@ public enum ManagedModelResolver {
         let spec = try requiredSpec(id: id)
         let modelDir = spec.managedInstallRootURL()
 
-        if !force, spec.isManagedRootComplete(modelDir, fileManager: fileManager) {
+        if !force, isManagedInstallComplete(spec: spec, at: modelDir, fileManager: fileManager) {
             let manifest = try? MereRunModelManifest.loadIfPresent(from: modelDir, fileManager: fileManager)
             return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: true)
         }
@@ -209,10 +209,14 @@ public enum ManagedModelResolver {
             progress: progress
         )
         try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
-        let manifest = try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: snapshotURL)
-        try installManagedAliasesIfNeeded(for: spec, rootURL: snapshotURL, fileManager: fileManager)
         try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try fileManager.createSymbolicLink(at: modelDir, withDestinationURL: snapshotURL)
+        let manifest = try materializeManagedInstallRoot(
+            for: spec,
+            snapshotURL: snapshotURL,
+            modelDir: modelDir,
+            fileManager: fileManager
+        )
+        try installManagedAliasesIfNeeded(for: spec, rootURL: modelDir, fileManager: fileManager)
 
         let normalized = spec.normalizedRootURL(modelDir, fileManager: fileManager)
         let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
@@ -222,6 +226,21 @@ public enum ManagedModelResolver {
             )
         }
         return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: false)
+    }
+
+    public static func isManagedInstallComplete(
+        spec: ManagedModelSpec,
+        at rootURL: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard spec.isManagedRootComplete(rootURL, fileManager: fileManager) else {
+            return false
+        }
+        guard let manifest = try? MereRunModelManifest.loadIfPresent(from: rootURL, fileManager: fileManager),
+              manifest.id == spec.id else {
+            return false
+        }
+        return true
     }
 
     private static func normalizedRequestedID(_ requestedModel: String?) -> String? {
@@ -306,6 +325,25 @@ public enum ManagedModelResolver {
         case .none, .qwen3ASRNested, .parakeetNested, .musicACEStep:
             return
         }
+    }
+
+    static func materializeManagedInstallRoot(
+        for spec: ManagedModelSpec,
+        snapshotURL: URL,
+        modelDir: URL,
+        fileManager: FileManager
+    ) throws -> MereRunModelManifest? {
+        try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        let entries = try fileManager.contentsOfDirectory(
+            at: snapshotURL,
+            includingPropertiesForKeys: nil,
+            options: []
+        )
+        for entry in entries where entry.lastPathComponent != MereRunModelManifest.filename {
+            let linkURL = modelDir.appendingPathComponent(entry.lastPathComponent)
+            try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: entry)
+        }
+        return try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
     }
 
     private static func installManagedAliasesIfNeeded(

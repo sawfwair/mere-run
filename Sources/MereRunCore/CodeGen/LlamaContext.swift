@@ -58,6 +58,19 @@ public final class LlamaContext: @unchecked Sendable {
 
         return 0
     }
+
+    private static func loadLinuxModel(path: String, params: llama_model_params) -> OpaquePointer? {
+        guard params.n_gpu_layers == 0 else {
+            return llama_model_load_from_file(path, params)
+        }
+
+        var cpuParams = params
+        var noDevices: [ggml_backend_dev_t?] = [nil]
+        return noDevices.withUnsafeMutableBufferPointer { buffer in
+            cpuParams.devices = buffer.baseAddress
+            return llama_model_load_from_file(path, cpuParams)
+        }
+    }
     #endif
 
     deinit {
@@ -85,7 +98,13 @@ public final class LlamaContext: @unchecked Sendable {
         modelParams.n_gpu_layers = linuxGPULayerCount()
         #endif
 
-        guard let model = llama_model_load_from_file(path, modelParams) else {
+        #if os(Linux)
+        let loadedModel = loadLinuxModel(path: path, params: modelParams)
+        #else
+        let loadedModel = llama_model_load_from_file(path, modelParams)
+        #endif
+
+        guard let model = loadedModel else {
             throw LlamaError.couldNotInitializeContext
         }
 

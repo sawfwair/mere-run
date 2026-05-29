@@ -50,6 +50,9 @@ public final class PrismBinaryQuantizedLinear: QuantizedLinear {
     }
 
     private func packedBinaryMatmul(_ x: MLXArray) -> MLXArray? {
+        #if os(Linux)
+        return nil
+        #else
         guard Device.defaultDevice().deviceType == .gpu,
               let biases else {
             return nil
@@ -100,6 +103,7 @@ public final class PrismBinaryQuantizedLinear: QuantizedLinear {
             output = output + bias
         }
         return output
+        #endif
     }
 }
 

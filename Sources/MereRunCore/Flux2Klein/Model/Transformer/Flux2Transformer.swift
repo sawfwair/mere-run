@@ -72,7 +72,7 @@ public enum Flux2LinearFactory {
         groupSize: Int = 64,
         bits: Int = 4
     ) -> QuantizedLinear {
-        QuantizedLinear(
+        PortableQuantizedLinear(
             weight: weight,
             bias: bias,
             scales: scales,

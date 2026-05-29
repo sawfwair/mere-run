@@ -29,7 +29,7 @@ and CUDA-gated arm64 package work.
 Use this path on Debian or Ubuntu-style systems:
 
 ```bash
-tag=v0.9.1
+tag=v0.10.0
 version="${tag#v}"
 case "$(uname -m)" in
   x86_64|amd64) deb_arch=amd64 ;;
@@ -50,7 +50,7 @@ assets that the CLI needs at runtime.
 Use this path when you do not want to install a Debian package:
 
 ```bash
-tag=v0.9.1
+tag=v0.10.0
 case "$(uname -m)" in
   x86_64|amd64) linux_arch=x86_64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
@@ -67,6 +67,9 @@ mere.run status
 The tarball installer copies the CLI and its runtime assets together. The
 packaged launcher resolves its own install location and sets `LD_LIBRARY_PATH`
 for the bundled runtime libraries before it starts the real `mere.run` binary.
+On CUDA 13 SBSA hosts it also adds the CUDA CCCL `cuda/std` include directory to
+`CPATH` when present, so MLX CUDA kernels can be JIT-compiled by the installed
+package without extra shell setup.
 
 ## First commands
 
@@ -112,7 +115,7 @@ repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.9.1
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.10.0
 ls dist/linux/
 ```
 
@@ -134,6 +137,18 @@ against a real CUDA-capable arm64 machine.
 
 Do not describe a CUDA configuration as supported unless it has been run on that
 matching host.
+
+### Spark CUDA smoke status
+
+The current arm64 CUDA smoke pass has been validated on an NVIDIA GB10 Spark
+host after installing the package and pulling public managed models. MLX-backed
+image, speech, vision, music, video, embedding, anonymization, and dense Gemma
+chat paths are expected to run there with the packaged CUDA setup. The packaged
+Linux CUDA build also carries the matching `llama-cli`; `mere.run text code`
+uses that subprocess on Linux so GGUF coding models do not share a process with
+MLX CUDA. If a future CUDA run fails inside an upstream MLX or llama.cpp kernel,
+keep that failure in the release notes or PR description until the exact package
+has been rebuilt and rerun on matching hardware.
 
 ## Build from source on Linux
 
@@ -167,7 +182,7 @@ studio, and DMG packaging are macOS-only.
 Each Linux release includes `SHA256SUMS` beside the tarball and `.deb`:
 
 ```bash
-tag=v0.9.1
+tag=v0.10.0
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
 sha256sum -c SHA256SUMS

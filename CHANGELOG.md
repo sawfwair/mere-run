@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-29
+
+### Fixed
+
+- fixed managed pulls for canonical model IDs that share a Hugging Face repo by
+  linking snapshot contents into per-model install roots and writing manifests
+  there instead of mutating the shared Hub snapshot manifest.
+- fixed Linux CUDA execution for several MLX quantized model paths by using
+  dequantized matmul fallbacks when MLX CUDA lacks `quantized_matmul`,
+  `GatherQMM`, or Metal-only packed binary kernels.
+- fixed Linux CUDA `text code` runs by bundling the matching `llama-cli` and
+  using it as an isolated subprocess on packaged Linux installs, avoiding the
+  in-process llama.cpp/MLX CUDA loader collision seen on GB10 hosts.
+- fixed Q35 hidden-thinking chat prompts so the runtime pre-fills an empty
+  `<think>` block when `--thinking` is omitted, preventing short responses from
+  spending their token budget on hidden reasoning.
+
 ## 0.9.1 - 2026-05-28
 
 ### Added

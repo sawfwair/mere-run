@@ -68,7 +68,7 @@ final class Q35SwitchLinear: Module {
 
         let output: MLXArray
         if let scales {
-            output = gatherQuantizedMM(
+            output = portableGatherQuantizedMM(
                 flatX,
                 weight,
                 scales: scales,
