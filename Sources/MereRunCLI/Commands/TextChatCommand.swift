@@ -22,6 +22,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-q35-nano (Qwen3.5-35B-A3B 4-bit)
           - text-chat-q35
+          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
@@ -59,7 +60,7 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default alias), text-chat-gemma4-turbo, text-chat-gemma4-max, text-chat-gemma4-nano, text-chat-q35, text-chat-q35-nano, or text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default alias), text-chat-gemma4-turbo, text-chat-gemma4-max, text-chat-gemma4-nano, text-chat-q35, text-chat-q35-nano, text-chat-q36-nano, or text-chat-psi-agent.")
     var model: String = Gemma4Resources.defaultModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")

@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added `text-chat-q36-nano`, a managed Qwen3.6 35B-A3B OptiQ 4-bit MLX
+  snapshot that pulls from Hugging Face and runs through the native Q35-family
+  chat runtime.
+
 ## 0.10.0 - 2026-05-29
 
 ### Fixed

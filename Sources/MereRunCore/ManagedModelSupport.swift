@@ -279,6 +279,14 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                Q35Resources.q36NanoModelId,
+                "Qwen3.6 A3B chat nano",
+                "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Q35-family runtime.",
+                minimum: 24,
+                recommended: 32,
+                setup: true
+            ),
+            descriptor(
                 AgentModelResources.qwen35NineBModelId,
                 "Qwen3.5 9B agent",
                 "Runs the Qwen3.5 9B Q4 GGUF setup agent for lower-memory Macs.",

@@ -68,6 +68,7 @@ final class Q35SwitchLinear: Module {
 
         let output: MLXArray
         if let scales {
+            let resolved = resolvedQuantization(inputDim: inputDim, scales: scales)
             output = portableGatherQuantizedMM(
                 flatX,
                 weight,
@@ -75,8 +76,8 @@ final class Q35SwitchLinear: Module {
                 biases: biases,
                 rhsIndices: flatIndices,
                 transpose: true,
-                groupSize: groupSize,
-                bits: bits,
+                groupSize: resolved.groupSize,
+                bits: resolved.bits,
                 mode: .affine,
                 sortedIndices: false
             )
@@ -97,6 +98,26 @@ final class Q35SwitchLinear: Module {
             return reshaped + bias.reshaped([1, 1, 1, outDim])
         }
         return reshaped
+    }
+
+    private func resolvedQuantization(inputDim: Int, scales: MLXArray) -> (groupSize: Int, bits: Int) {
+        var resolvedBits = bits
+        let packedInputDim = weight.dim(weight.ndim - 1)
+        let numerator = packedInputDim * 32
+        if inputDim > 0, numerator % inputDim == 0 {
+            let inferredBits = numerator / inputDim
+            if (2...8).contains(inferredBits) {
+                resolvedBits = inferredBits
+            }
+        }
+
+        var resolvedGroupSize = groupSize
+        let scaleGroups = scales.dim(scales.ndim - 1)
+        if inputDim > 0, scaleGroups > 0, inputDim % scaleGroups == 0 {
+            resolvedGroupSize = inputDim / scaleGroups
+        }
+
+        return (resolvedGroupSize, resolvedBits)
     }
 }
 

@@ -658,6 +658,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(Q35Resources.nanoUpstreamRepoId)@\(Q35Resources.nanoUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .q36Nano:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .nano,
+                variant: .base,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-optiq-mixed-affine"),
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .qwen35Agent9B:
             return MereRunModelManifest(
                 id: modelID.rawValue,

@@ -23,7 +23,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Category | Hugging Face pull IDs |
 | --- | --- |
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
-| Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-agent-deepseek-v4-flash` |
+| Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-chat-q36-nano`, `text-agent-deepseek-v4-flash` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Text anonymize | `text-anonymize-privacy-filter` |
@@ -53,6 +53,14 @@ Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
 `text-agent-deepseek-v4-flash` is the preferred managed setup-agent tier on
 96 GB+ Apple Silicon Macs. Q35/Qwen setup agents are lower-memory or comparison
 alternatives, not upgrades from DeepSeek V4 Flash.
+
+`text-chat-q36-nano` uses the public `mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit`
+snapshot. That Hugging Face repo includes an MTP head (`mtp.safetensors`) for
+OptiQ serving; mere.run currently loads the main MLX chat weights through its
+native Q35-family runtime and does not consume the MTP head for speculative
+decode yet. The dense `mlx-community/Qwen3.6-27B-OptiQ-4bit` MTP quant also
+exists on Hugging Face, but is not a managed native target until the dense
+Qwen3.6 layer path is implemented.
 
 `text-chat-gemma4` is the dense bf16 Gemma 4 31B alias and is gated for larger
 machines. On 32 GB Apple Silicon Macs, use `text-chat-gemma4-turbo`, which

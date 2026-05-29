@@ -29,9 +29,9 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(schedulerDir.appendingPathComponent("scheduler_config.json"), contents: Data("{}".utf8))
     }
 
-    private func writeMinimalValidQ35Model(at root: URL) throws {
+    private func writeMinimalValidQ35Model(at root: URL, id: ModelResolver.ModelID = .q35) throws {
         try TestFileSystem.createDirectory(root)
-        try MereRunModelManifest.template(for: .q35, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
 
         try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
@@ -162,6 +162,21 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-q35")
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
+    }
+
+    func testQ36NanoChatOnlyRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("text-chat-q36-nano", isDirectory: true)
+        try writeMinimalValidQ35Model(at: root, id: .q36Nano)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-q36-nano")
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.tier, .nano)
+        XCTAssertEqual(report.manifest?.family, .qwen)
+        XCTAssertEqual(report.manifest?.upstreamRepoId, "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)")
     }
 
     func testGemma4ChatOnlyRootLayoutPassesValidation() throws {

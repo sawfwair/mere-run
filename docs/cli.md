@@ -64,7 +64,7 @@ are:
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
   `image-hidream-o1`, `image-hidream-o1-dev`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`, `text-chat-q36-nano`
 - Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
@@ -244,7 +244,7 @@ Examples:
 
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
-swift run mere.run text chat --model text-chat-q35-nano --prompt "Explain speculative decoding."
+swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
 ```

@@ -178,6 +178,7 @@ enum GuideRegistry {
                 "text-chat-gemma4-max",
                 "text-chat-q35",
                 "text-chat-q35-nano",
+                "text-chat-q36-nano",
                 "text-chat-psi-agent",
             ],
             resourceName: "text-chat.md"
@@ -320,6 +321,7 @@ enum GuideRegistry {
                 "text-chat-gemma4-max",
                 "text-chat-q35",
                 "text-chat-q35-nano",
+                "text-chat-q36-nano",
                 "text-chat-mebot",
             ],
             resourceName: "api-serve.md"
@@ -347,6 +349,7 @@ enum GuideRegistry {
                 "text-agent-qwen35-9b",
                 "text-chat-gemma4",
                 "text-chat-q35",
+                "text-chat-q36-nano",
                 "text-agent-deepseek-v4-flash",
                 "text-chat-mebot",
             ],

@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import Tokenizers
 
 public struct Q35TokenizerAndTemplate {
     public let tokenizer: QwenTokenizer
@@ -18,18 +19,15 @@ public struct Q35TokenizerAndTemplate {
         addGenerationPrompt: Bool = true,
         includeThinking: Bool = true,
         maxLength: Int
-    ) -> [Int] {
-        let rendered = render(
-            messages: messages,
-            tools: tools,
+    ) throws -> [Int] {
+        let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
+        return try tokenizer.encodeChatTemplate(
+            messages: Self.renderMessages(messages),
+            tools: toolSpecs,
             addGenerationPrompt: addGenerationPrompt,
-            includeThinking: includeThinking
+            includeThinking: includeThinking,
+            maxLength: maxLength
         )
-        let encoded = tokenizer.encodeText(rendered)
-        if encoded.count <= maxLength {
-            return encoded
-        }
-        return Array(encoded.suffix(maxLength))
     }
 
     public func decode(tokens: [Int]) -> String {
@@ -58,6 +56,28 @@ public struct Q35TokenizerAndTemplate {
         )
     }
 
+    static func renderMessages(_ messages: [ChatMessage]) -> [Message] {
+        messages.map(renderMessage)
+    }
+
+    private static func renderMessage(_ message: ChatMessage) -> Message {
+        var rendered: Message = [
+            "role": message.role.rawValue,
+        ]
+
+        if message.role != .system, let imageURL = message.imageUrl, !imageURL.isEmpty {
+            let content: [[String: String]] = [
+                ["type": "image", "image_url": imageURL],
+                ["type": "text", "text": message.content],
+            ]
+            rendered["content"] = content
+        } else {
+            rendered["content"] = message.content
+        }
+
+        return rendered
+    }
+
     static func renderPrompt(
         messages: [ChatMessage],
         tools: [ToolDefinition]? = nil,
@@ -68,37 +88,37 @@ public struct Q35TokenizerAndTemplate {
 
         if let tools, !tools.isEmpty {
             prompt += "<|im_start|>system\n"
-            prompt += "# Tools\\n\\nYou have access to the following functions:\\n\\n<tools>"
+            prompt += "# Tools\n\nYou have access to the following functions:\n\n<tools>"
             for tool in tools {
                 if let json = try? tool.promptSchemaJSONString() {
-                    prompt += "\\n\(json)"
+                    prompt += "\n\(json)"
                 }
             }
-            prompt += "\\n</tools>"
-            prompt += "\\n\\nIf you choose to call a function ONLY reply in the XML tool_call format."
-            prompt += "<|im_end|>\\n"
+            prompt += "\n</tools>"
+            prompt += "\n\nIf you choose to call a function ONLY reply in the XML tool_call format."
+            prompt += "<|im_end|>\n"
         }
 
         for message in messages {
             let role = message.role.rawValue
-            prompt += "<|im_start|>\(role)\\n"
+            prompt += "<|im_start|>\(role)\n"
 
             if message.role != .system, let imageURL = message.imageUrl, !imageURL.isEmpty {
-                prompt += "<|vision_start|><|image_pad|><|vision_end|>\\n"
+                prompt += "<|vision_start|><|image_pad|><|vision_end|>\n"
             }
 
             if !message.content.isEmpty {
                 prompt += message.content
             }
 
-            prompt += "<|im_end|>\\n"
+            prompt += "<|im_end|>\n"
         }
 
         if addGenerationPrompt {
             if includeThinking {
-                prompt += "<|im_start|>assistant\\n<think>\\n"
+                prompt += "<|im_start|>assistant\n<think>\n"
             } else {
-                prompt += "<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"
+                prompt += "<|im_start|>assistant\n<think>\n\n</think>\n\n"
             }
         }
 

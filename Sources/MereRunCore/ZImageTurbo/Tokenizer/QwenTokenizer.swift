@@ -41,6 +41,30 @@ public final class QwenTokenizer {
     encodeFunction(text)
   }
 
+  /// Apply the tokenizer's configured chat template and return raw token IDs.
+  public func encodeChatTemplate(
+    messages: [Message],
+    tools: [ToolSpec]? = nil,
+    addGenerationPrompt: Bool = true,
+    includeThinking: Bool = true,
+    maxLength: Int? = nil
+  ) throws -> [Int] {
+    var encoded = try tokenizer.applyChatTemplate(
+      messages: messages,
+      chatTemplate: nil,
+      addGenerationPrompt: addGenerationPrompt,
+      truncation: false,
+      maxLength: nil,
+      tools: tools,
+      additionalContext: ["enable_thinking": includeThinking]
+    )
+    let targetLength = min(maxLength ?? self.maxLength, self.maxLength)
+    if encoded.count > targetLength {
+      encoded = Array(encoded.suffix(targetLength))
+    }
+    return encoded
+  }
+
   public init(
     padTokenId: Int,
     maxLength: Int,
