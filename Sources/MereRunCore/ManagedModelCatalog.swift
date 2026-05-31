@@ -417,14 +417,11 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: Q35Resources.upstreamRepoId,
                 revision: Q35Resources.upstreamRevision,
-                patterns: [
-                    "config.json",
-                    "tokenizer.json",
-                    "tokenizer_config.json",
-                    "model.safetensors",
-                    "model.safetensors.index.json",
-                    "*.safetensors",
-                ]
+                // Use the shared Q35 snapshot patterns so chat_template.jinja —
+                // which the Q35 runtime requires (Q35Resources.validate) — is
+                // actually fetched. A bespoke list here previously omitted it,
+                // so installs validated but failed at chat time.
+                patterns: Q35Resources.snapshotPatterns
             ),
             upstreamRepoId: Q35Resources.upstreamRepoId,
             upstreamRevision: Q35Resources.upstreamRevision,
@@ -438,14 +435,9 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: Q35Resources.nanoUpstreamRepoId,
                 revision: Q35Resources.nanoUpstreamRevision,
-                patterns: [
-                    "config.json",
-                    "tokenizer.json",
-                    "tokenizer_config.json",
-                    "model.safetensors",
-                    "model.safetensors.index.json",
-                    "*.safetensors",
-                ]
+                // Shared snapshot patterns include the required chat_template.jinja
+                // (see text-chat-q35 above); the previous bespoke list omitted it.
+                patterns: Q35Resources.snapshotPatterns
             ),
             upstreamRepoId: Q35Resources.nanoUpstreamRepoId,
             upstreamRevision: Q35Resources.nanoUpstreamRevision,
