@@ -61,8 +61,8 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Q35 text chat model root. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-code (default), text-chat-klein, text-chat-gemma4, text-chat-q35, or text-chat-deepseek-v4-flash.")
-    var engine: APIEngine = .textCode
+    @Option(name: [.long], help: "Serving engine: text-chat-q35 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, or text-chat-deepseek-v4-flash.")
+    var engine: APIEngine = .textChatQ35
 
     @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
     var lora: String?
@@ -125,7 +125,7 @@ struct APIServe: AsyncParsableCommand {
         case .textChatGemma4:
             return ModelResolver.ModelID.gemma4.rawValue
         case .textChatQ35:
-            return ModelResolver.ModelID.q35.rawValue
+            return ModelResolver.ModelID.q36Nano.rawValue
         case .textCode:
             return CodeGenResources.defaultModelId
         case .textChatDeepseekV4Flash:
@@ -157,10 +157,14 @@ struct APIServe: AsyncParsableCommand {
             if let explicit = model {
                 return explicit
             }
-            if let resolved = ModelResolver().resolveIfPresent(.q35) {
+            // Default to the q36-nano chat model; fall back to q35 variants if present.
+            if let resolved = ModelResolver().resolveIfPresent(.q36Nano) {
                 return resolved.rootURL.path
             }
             if let resolved = ModelResolver().resolveIfPresent(.q35Nano) {
+                return resolved.rootURL.path
+            }
+            if let resolved = ModelResolver().resolveIfPresent(.q35) {
                 return resolved.rootURL.path
             }
             // Allow Q35Generator to auto-download from Hugging Face when model path is omitted.

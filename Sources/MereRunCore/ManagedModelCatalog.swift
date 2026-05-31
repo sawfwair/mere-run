@@ -466,9 +466,26 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve", "text code"]
         ),
         ManagedModelSpec(
-            // GGUF A3B chat model: routes through llama.cpp (validationKind
-            // .codegenGGUF), so it uses the GB10-optimized quantized-MoE kernels
-            // — far faster on CUDA than the MLX Q35 path for the same model class.
+            // GGUF Qwen3.6-35B-A3B: the CUDA default chat model. Routes through
+            // llama.cpp (.codegenGGUF) for the GB10-optimized quantized-MoE
+            // kernels (~68 tok/s on GB10 vs ~13 for the MLX path). Same model
+            // family as the Apple-Silicon default (text-chat-q36-nano, MLX).
+            id: "text-chat-q36-nano-gguf",
+            category: .textChat,
+            installShape: .singleFile(relativePath: "text-chat-q36-nano-gguf.gguf"),
+            hubFallback: HubFallbackConfig(
+                repoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
+                revision: "main",
+                patterns: ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"]
+            ),
+            upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
+            upstreamRevision: "main",
+            validationKind: .codegenGGUF,
+            estimatedDownloadBytes: 22 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
+            // GGUF Qwen3.5-35B-A3B (kept; q36 GGUF above supersedes it as default).
             id: "text-chat-q35-nano-gguf",
             category: .textChat,
             installShape: .singleFile(relativePath: "text-chat-q35-nano-gguf.gguf"),
