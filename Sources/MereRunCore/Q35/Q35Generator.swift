@@ -281,21 +281,18 @@ public actor Q35Generator: ChatGenerator {
 
         let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
         let mtpURL = normalizedRoot.appendingPathComponent("mtp.safetensors")
-        let mtpDisabled = {
-            if let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() {
-                return raw == "0" || raw == "false" || raw == "no"
-            }
-            // Default MTP speculative decode OFF on Linux CUDA: measured on GB10 it
-            // regresses single-stream decode (~12.8 -> ~7.9 tok/s) because the draft
-            // head pays the dequantized-matmul fallback cost and acceptance is low.
-            // It stays ON elsewhere (e.g. Metal) and remains overridable via the env.
-            if ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda" {
-                return true
-            }
-            return false
+        // Load the MTP draft head whenever it ships with the model and isn't
+        // explicitly disabled. Whether speculation is actually USED is decided
+        // per request by prompt length (see Self.shouldSpeculate): MTP speculative
+        // decode regresses at short context (measured ~-20-30%) but is a large win
+        // at long context (~+1.5-2.5x past ~6-8K tokens) on both Metal and CUDA.
+        let mtpExplicitlyDisabled = {
+            guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased()
+            else { return false }
+            return raw == "0" || raw == "false" || raw == "no"
         }()
         let loadedMTP: Q35MTPModel?
-        if !mtpDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
+        if !mtpExplicitlyDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 MTP weights"))
             let mtp = Q35MTPModel(config: config)
             let arrays = try MLX.loadArrays(url: mtpURL)
@@ -483,6 +480,25 @@ public actor Q35Generator: ChatGenerator {
         )
     }
 
+    /// Decide whether to use MTP speculative decode for a request.
+    ///
+    /// Speculative decode only pays off at long context: each main-model pass gets
+    /// more expensive as the KV cache grows, so verifying several drafted tokens per
+    /// pass amortizes — but at short prompts the draft-head overhead dominates.
+    /// Measured (Qwen3.6-35B-A3B OptiQ-4bit, M4 Max): ~20-tok ctx -31%, ~4K -22%,
+    /// ~12K +1.5-2.5x. Default to speculating only when the prompt is long; the env
+    /// forces it on/off, and MERERUN_Q35_MTP_MIN_PROMPT_TOKENS tunes the threshold.
+    static func shouldSpeculate(promptTokenCount: Int) -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        if let raw = env["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() {
+            if raw == "0" || raw == "false" || raw == "no" { return false }
+            if raw == "1" || raw == "true" || raw == "yes" || raw == "on" { return true }
+            // any other value (e.g. "auto") falls through to the adaptive threshold
+        }
+        let threshold = env["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"].flatMap { Int($0) } ?? 6144
+        return promptTokenCount >= threshold
+    }
+
     private func decodeTokens(
         model: Q35Model,
         tokenizerAndTemplate: Q35TokenizerAndTemplate,
@@ -500,12 +516,15 @@ public actor Q35Generator: ChatGenerator {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
         guard continuousBatchingEnabled else {
+            // Use the loaded MTP head only when the prompt is long enough for
+            // speculation to pay off; otherwise decode without it (nil).
+            let speculationMTP = Self.shouldSpeculate(promptTokenCount: promptTokens.count) ? mtpModel : nil
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 initialLogits: initialLogits,
                 initialHidden: initialHidden,
-                mtpModel: mtpModel,
+                mtpModel: speculationMTP,
                 layerCaches: layerCaches,
                 eosSet: eosSet,
                 generationConfig: generationConfig,
