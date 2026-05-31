@@ -6,7 +6,7 @@ Start Pi against a local mere.run setup-agent API server. This is the guided "he
 
 ## Required Models
 
-Use this machine's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Qwen/Q35 agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash. On Linux, provide Pi with `--pi-path` or PATH; auto-install uses macOS release assets.
+Use this machine's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Smaller Qwen agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash. On Linux, provide Pi with `--pi-path` or PATH; auto-install uses macOS release assets.
 
 ## Install And Check
 
@@ -51,7 +51,7 @@ mere.run agent start \
 
 ## Iteration Tips
 
-- Use DeepSeek V4 Flash on 96 GB+ Macs; start with a smaller Qwen/Q35 agent only on lower-memory machines or when comparing behavior.
+- Use DeepSeek V4 Flash on 96 GB+ Macs; start with a smaller Qwen agent only on lower-memory machines or when comparing behavior.
 - Check the server log path printed to stderr when startup hangs.
 - Re-run onboarding after model pulls or provider changes.
 

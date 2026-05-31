@@ -50,7 +50,6 @@ The runtime uses explicit public IDs such as:
 
 - `image-klein-max`
 - `text-chat-gemma4`
-- `text-chat-q35`
 - `text-chat-q36-nano`
 - `text-agent-deepseek-v4-flash`
 - `speech-tts-qwen3-nano`

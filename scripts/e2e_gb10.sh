@@ -142,7 +142,7 @@ SPEECH_WAV="$ASSETS/tts.wav"
 OCR_IMG="$ASSETS/ocr.png"
 
 # ---- text ----
-want text-chat && for m in text-chat-q35-nano text-chat-q36-nano text-chat-q35 \
+want text-chat && for m in text-chat-q36-nano \
                            text-chat-gemma4-turbo text-chat-gemma4-nano \
                            text-chat-gemma4 text-chat-gemma4-max; do
   run_case text-chat "$m" text "" 900 \

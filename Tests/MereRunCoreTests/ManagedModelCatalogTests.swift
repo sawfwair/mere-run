@@ -21,6 +21,14 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testRemovedQ35ChatModelIDsAreNotCataloged() {
+        XCTAssertNil(ManagedModelCatalog.spec(for: "text-chat-q35"))
+        XCTAssertNil(ManagedModelCatalog.spec(for: "text-chat-q35-nano"))
+        XCTAssertNil(ManagedModelCatalog.spec(for: "text-chat-q35-nano-gguf"))
+        XCTAssertNil(ModelResolver.ModelID(rawValue: "text-chat-q35"))
+        XCTAssertNil(ModelResolver.ModelID(rawValue: "text-chat-q35-nano"))
+    }
+
     func testAllRuntimeAutoDownloadSpecsHaveManagedSource() {
         for spec in ManagedModelCatalog.allSpecs where spec.runtimeAutoDownloadAllowed {
             XCTAssertTrue(

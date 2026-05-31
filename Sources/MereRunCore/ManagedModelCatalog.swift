@@ -411,40 +411,6 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
-            id: "text-chat-q35",
-            category: .textChat,
-            installShape: .directoryRoot,
-            hubFallback: HubFallbackConfig(
-                repoId: Q35Resources.upstreamRepoId,
-                revision: Q35Resources.upstreamRevision,
-                // Use the shared Q35 snapshot patterns so chat_template.jinja —
-                // which the Q35 runtime requires (Q35Resources.validate) — is
-                // actually fetched. A bespoke list here previously omitted it,
-                // so installs validated but failed at chat time.
-                patterns: Q35Resources.snapshotPatterns
-            ),
-            upstreamRepoId: Q35Resources.upstreamRepoId,
-            upstreamRevision: Q35Resources.upstreamRevision,
-            validationKind: .q35,
-            defaultCLICommands: ["chat", "api serve"]
-        ),
-        ManagedModelSpec(
-            id: "text-chat-q35-nano",
-            category: .textChat,
-            installShape: .directoryRoot,
-            hubFallback: HubFallbackConfig(
-                repoId: Q35Resources.nanoUpstreamRepoId,
-                revision: Q35Resources.nanoUpstreamRevision,
-                // Shared snapshot patterns include the required chat_template.jinja
-                // (see text-chat-q35 above); the previous bespoke list omitted it.
-                patterns: Q35Resources.snapshotPatterns
-            ),
-            upstreamRepoId: Q35Resources.nanoUpstreamRepoId,
-            upstreamRevision: Q35Resources.nanoUpstreamRevision,
-            validationKind: .q35,
-            defaultCLICommands: ["chat", "api serve"]
-        ),
-        ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
             category: .textChat,
             installShape: .directoryRoot,
@@ -479,22 +445,6 @@ public enum ManagedModelCatalog {
                 patterns: ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"]
             ),
             upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
-            upstreamRevision: "main",
-            validationKind: .codegenGGUF,
-            estimatedDownloadBytes: 22 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"]
-        ),
-        ManagedModelSpec(
-            // GGUF Qwen3.5-35B-A3B (kept; q36 GGUF above supersedes it as default).
-            id: "text-chat-q35-nano-gguf",
-            category: .textChat,
-            installShape: .singleFile(relativePath: "text-chat-q35-nano-gguf.gguf"),
-            hubFallback: HubFallbackConfig(
-                repoId: "unsloth/Qwen3.5-35B-A3B-GGUF",
-                revision: "main",
-                patterns: ["Qwen3.5-35B-A3B-Q4_K_M.gguf"]
-            ),
-            upstreamRepoId: "unsloth/Qwen3.5-35B-A3B-GGUF",
             upstreamRevision: "main",
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: 22 * 1_073_741_824,

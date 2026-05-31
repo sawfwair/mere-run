@@ -242,15 +242,14 @@ swift run mere.run status
 # Optional Gemma4 prefix KV reuse prototype; status reports cache and timing stats
 MERERUN_GEMMA4_PREFIX_KV_CACHE=1 swift run mere.run api serve --engine text-chat-gemma4
 
-# Optional Q35 text-only prefix KV reuse prototype; vision prompts are excluded
-MERERUN_Q35_PREFIX_KV_CACHE=1 swift run mere.run api serve --engine text-chat-q35
+# Optional Qwen3.6 text-only prefix KV reuse prototype; vision prompts are excluded
+MERERUN_Q35_PREFIX_KV_CACHE=1 swift run mere.run api serve
 
 # Optional decode batching; overlap requires max-active > 1
 MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
   --engine text-chat-gemma4 \
   --max-active-requests 2
 MERERUN_Q35_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
-  --engine text-chat-q35 \
   --max-active-requests 2
 
 # Experimental Gemma4 packed PolarKV for memory-pressure and long-context decode testing

@@ -102,7 +102,7 @@ public enum MereRunAgentModelCatalog {
             return qwen3CoderNext()
         }
         if machine.unifiedMemoryGB >= 24 {
-            return q35Nano()
+            return q36Nano()
         }
         return smallRecommendation(on: machine)
     }
@@ -127,7 +127,7 @@ public enum MereRunAgentModelCatalog {
             return qwen3CoderNext()
         }
         if machine.unifiedMemoryGB >= 24 {
-            return q35Nano()
+            return q36Nano()
         }
         return smallRecommendation(on: machine)
     }
@@ -137,9 +137,8 @@ public enum MereRunAgentModelCatalog {
     ) -> [MereRunAgentModelRecommendation] {
         [
             qwen35NineB(),
-            q35Nano(),
+            q36Nano(),
             qwen3CoderNext(),
-            qwen35122B4Bit(),
             deepseekV4Flash(),
         ].filter { machine.isSupportedRuntime && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
     }
@@ -156,15 +155,15 @@ public enum MereRunAgentModelCatalog {
         )
     }
 
-    private static func q35Nano() -> MereRunAgentModelRecommendation {
+    private static func q36Nano() -> MereRunAgentModelRecommendation {
         MereRunAgentModelRecommendation(
-            id: Q35Resources.nanoModelId,
-            displayName: "Qwen3.5 35B-A3B 4-bit",
-            summary: "Higher-quality Q35 MLX agent tier for Macs with enough memory.",
+            id: Q35Resources.q36NanoModelId,
+            displayName: "Qwen3.6 35B-A3B OptiQ 4-bit",
+            summary: "Higher-quality Qwen3.6 MLX agent tier for Macs with enough memory.",
             minimumUnifiedMemoryGB: 24,
             recommendedUnifiedMemoryGB: 32,
             servingEngine: .textChatQ35,
-            managedModelID: Q35Resources.nanoModelId
+            managedModelID: Q35Resources.q36NanoModelId
         )
     }
 
@@ -180,19 +179,6 @@ public enum MereRunAgentModelCatalog {
         )
     }
 
-    private static func qwen35122B4Bit() -> MereRunAgentModelRecommendation {
-        MereRunAgentModelRecommendation(
-            id: Q35Resources.defaultModelId,
-            displayName: "Qwen3.5-122B-A10B 4-bit",
-            summary: "Large Qwen-family 122B MoE 4-bit chat/agent alternative for 96 GB and larger Macs; "
-                + "DeepSeek V4 Flash remains the preferred setup-agent tier when available.",
-            minimumUnifiedMemoryGB: 96,
-            recommendedUnifiedMemoryGB: 128,
-            servingEngine: .textChatQ35,
-            managedModelID: Q35Resources.defaultModelId
-        )
-    }
-
     private static func deepseekV4Flash() -> MereRunAgentModelRecommendation {
         MereRunAgentModelRecommendation(
             id: DeepseekV4FlashResources.defaultModelId,
@@ -204,34 +190,6 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .deepseekV4Flash,
             managedModelID: DeepseekV4FlashResources.defaultModelId
-        )
-    }
-
-    private static func qwen35122BMXFP4() -> MereRunAgentModelRecommendation {
-        MereRunAgentModelRecommendation(
-            id: "text-agent-qwen35-122b-a10b-mxfp4",
-            displayName: "Qwen3.5-122B-A10B mxfp4",
-            summary: "External Qwen-family 122B MoE agent alternative for 96 GB and larger Macs.",
-            minimumUnifiedMemoryGB: 96,
-            recommendedUnifiedMemoryGB: 128,
-            servingEngine: .sourceConfigured,
-            managedModelID: nil,
-            sourceConfigurationRequired: true,
-            reason: "Premier external model setup is not managed by mere.run yet."
-        )
-    }
-
-    private static func qwen35122B8Bit() -> MereRunAgentModelRecommendation {
-        MereRunAgentModelRecommendation(
-            id: "text-agent-qwen35-122b-a10b-8bit",
-            displayName: "Qwen3.5-122B-A10B 8-bit",
-            summary: "External Qwen-family 122B 8-bit agent alternative for 128 GB and larger Macs.",
-            minimumUnifiedMemoryGB: 128,
-            recommendedUnifiedMemoryGB: 160,
-            servingEngine: .sourceConfigured,
-            managedModelID: nil,
-            sourceConfigurationRequired: true,
-            reason: "Premier external model setup is not managed by mere.run yet."
         )
     }
 }

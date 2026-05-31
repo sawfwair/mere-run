@@ -29,7 +29,7 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(schedulerDir.appendingPathComponent("scheduler_config.json"), contents: Data("{}".utf8))
     }
 
-    private func writeMinimalValidQ35Model(at root: URL, id: ModelResolver.ModelID = .q35) throws {
+    private func writeMinimalValidQ35FamilyModel(at root: URL, id: ModelResolver.ModelID = .q36Nano) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
 
@@ -152,24 +152,12 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.contains("Manifest id mismatch: expected=image-klein-max found=image-klein-nano"))
     }
 
-    func testQ35ChatOnlyRootLayoutPassesValidation() throws {
-        let temp = try TestFileSystem.makeTempDir()
-        defer { try? FileManager.default.removeItem(at: temp) }
-
-        let root = temp.appendingPathComponent("text-chat-q35", isDirectory: true)
-        try writeMinimalValidQ35Model(at: root)
-
-        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-q35")
-        XCTAssertTrue(report.isValid)
-        XCTAssertTrue(report.errors.isEmpty)
-    }
-
     func testQ36NanoChatOnlyRootLayoutPassesValidation() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let root = temp.appendingPathComponent("text-chat-q36-nano", isDirectory: true)
-        try writeMinimalValidQ35Model(at: root, id: .q36Nano)
+        try writeMinimalValidQ35FamilyModel(at: root, id: .q36Nano)
 
         let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "text-chat-q36-nano")
         XCTAssertTrue(report.isValid)

@@ -14,7 +14,7 @@ final class APIServeCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.port, 8080)
         XCTAssertEqual(cmd.host, "127.0.0.1")
-        XCTAssertEqual(cmd.engine, .textCode)
+        XCTAssertEqual(cmd.engine, .textChatQ35)
         XCTAssertNil(cmd.model)
         XCTAssertNil(cmd.lora)
         XCTAssertNil(cmd.apiKey)

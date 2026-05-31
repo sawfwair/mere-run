@@ -82,7 +82,7 @@ struct AgentOnboard: AsyncParsableCommand {
             print("  Recommended setup agent: \(startable.id) (\(startable.displayName)).")
             print("  Start a guided session with: \(CLICommandDisplay.command("agent start --model \(selectedAgentID)"))")
             if startable.id == DeepseekV4FlashResources.defaultModelId {
-                print("  DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; Q35/Qwen agents are alternatives, not upgrades.")
+                print("  DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; smaller Qwen agents are alternatives, not upgrades.")
             }
         }
         if let codeReport = reports.first(where: { $0.spec.id == CodeGenResources.defaultModelId }) {

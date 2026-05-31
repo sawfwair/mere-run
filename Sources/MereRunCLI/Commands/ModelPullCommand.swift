@@ -8,7 +8,7 @@ struct ModelPull: AsyncParsableCommand {
         abstract: "Download a managed model into the local model store."
     )
 
-    @Argument(help: "Canonical model id (for example: image-zimage-nano, text-chat-gemma4-max, or text-chat-q35). Omit when using --all.")
+    @Argument(help: "Canonical model id (for example: image-zimage-nano, text-chat-gemma4-max, or text-chat-q36-nano). Omit when using --all.")
     var target: String?
 
     @Flag(name: [.long], help: "Pull every model that has a Hugging Face source.")

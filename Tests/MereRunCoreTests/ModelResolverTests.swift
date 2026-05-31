@@ -158,24 +158,6 @@ final class ModelResolverTests: MereRunCoreTestCase {
         XCTAssertThrowsError(try resolver.resolve(.zetaBase))
     }
 
-    func testResolvesQ35FromProcessModelStoreOverride() throws {
-        let temp = try TestFileSystem.makeTempDir()
-        defer { try? FileManager.default.removeItem(at: temp) }
-        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
-
-        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
-        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
-
-        let modelRoot = modelsRoot.appendingPathComponent("text-chat-q35", isDirectory: true)
-        try writeMinimalTextRoot(at: modelRoot, id: .q35)
-
-        let resolver = ModelResolver()
-        let resolved = try resolver.resolve(.q35)
-
-        XCTAssertEqual(resolved.rootURL.standardizedFileURL, modelRoot.standardizedFileURL)
-        XCTAssertEqual(resolved.source, .localModelStore)
-    }
-
     func testResolvesHiDreamFromProcessModelStoreOverride() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

@@ -32,8 +32,8 @@ struct APIServe: AsyncParsableCommand {
           # Start a Gemma 4 text-chat server
           mere.run api serve --engine text-chat-gemma4
 
-          # Start a Q35 text-chat server with an explicit nano model root
-          mere.run api serve --engine text-chat-q35 -m ~/Models/text-chat-q35-nano
+          # Start a Qwen3.6 text-chat server with an explicit model root
+          mere.run api serve --engine text-chat-q35 -m ~/Models/text-chat-q36-nano
 
           # Start the DeepSeek V4 Flash OpenAI-compatible server
           mere.run api serve --engine text-chat-deepseek-v4-flash
@@ -58,7 +58,7 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Q35 text chat model root. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Qwen3.6 text chat model root. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
     var model: String?
 
     @Option(name: [.long], help: "Serving engine: text-chat-q35 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, or text-chat-deepseek-v4-flash.")
@@ -157,14 +157,7 @@ struct APIServe: AsyncParsableCommand {
             if let explicit = model {
                 return explicit
             }
-            // Default to the q36-nano chat model; fall back to q35 variants if present.
             if let resolved = ModelResolver().resolveIfPresent(.q36Nano) {
-                return resolved.rootURL.path
-            }
-            if let resolved = ModelResolver().resolveIfPresent(.q35Nano) {
-                return resolved.rootURL.path
-            }
-            if let resolved = ModelResolver().resolveIfPresent(.q35) {
                 return resolved.rootURL.path
             }
             // Allow Q35Generator to auto-download from Hugging Face when model path is omitted.

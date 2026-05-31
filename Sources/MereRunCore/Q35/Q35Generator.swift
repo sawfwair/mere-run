@@ -235,17 +235,17 @@ public actor Q35Generator: ChatGenerator {
         }
         resetPrefixKVCache()
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 config"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 tokenizer"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family tokenizer"))
         let tokenizer = try Q35TokenizerAndTemplate.load(
             from: normalizedRoot,
             maxLengthOverride: min(Q35Resources.defaultContextLength, config.textConfig.maxPositionEmbeddings)
         )
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 weights"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family weights"))
         let q35Model = Q35Model(config: config)
         let resources = Q35Resources(rootURL: normalizedRoot)
 
@@ -293,7 +293,7 @@ public actor Q35Generator: ChatGenerator {
         }()
         let loadedMTP: Q35MTPModel?
         if !mtpExplicitlyDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
-            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 MTP weights"))
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family MTP weights"))
             let mtp = Q35MTPModel(config: config)
             let arrays = try MLX.loadArrays(url: mtpURL)
             try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
@@ -856,7 +856,7 @@ public actor Q35Generator: ChatGenerator {
             let batchedLogits = model(nextInput, cache: batchedCaches)
             MLX.eval(batchedLogits)
             guard let splitCaches = splitBatchedLayerCaches(batchedCaches, rowCount: continuingRows.count) else {
-                throw Q35Error.generationFailed("Q35 batched decode could not split merged cache rows.")
+                throw Q35Error.generationFailed("Qwen-family batched decode could not split merged cache rows.")
             }
             for (index, row) in continuingRows.enumerated() {
                 row.layerCaches = splitCaches[index]
@@ -1248,7 +1248,7 @@ public actor Q35Generator: ChatGenerator {
         guard !visionTower.isLoaded else { return }
         guard let loadedResources else { throw Q35Error.modelNotLoaded }
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 vision tower"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family vision tower"))
         try visionTower.loadWeights(from: loadedResources)
     }
 

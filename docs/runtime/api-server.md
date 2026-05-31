@@ -85,7 +85,7 @@ swift run mere.run api serve \
   `--max-active-requests 1` preserves serialized local inference and exposes
   queue depth in status; queued client cancellations are removed from the FIFO
   instead of being admitted later
-- Gemma4 and Q35 prefills are chunked with cancellation and progress checkpoints
+- Gemma4 and Qwen-family prefills are chunked with cancellation and progress checkpoints
   before decode; this is cooperative single-request prefill, not continuous
   batching
 - Gemma4 has an opt-in in-memory prefix KV reuse prototype behind
@@ -94,18 +94,18 @@ swift run mere.run api serve \
   chunk boundaries plus the stable chat prefix before the final message when it
   is an exact token prefix, and pruning keeps that stable prefix ahead of
   ordinary chunk boundaries
-- Q35 has an opt-in text-only prefix KV reuse prototype behind
+- Qwen-family chat has an opt-in text-only prefix KV reuse prototype behind
   `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded because image
   embeddings alter the effective prefix; text-only requests use the same stable
   chat-prefix checkpoint and pruning rule as Gemma4
-- Gemma4 and Q35 have opt-in decode batching prototypes behind
+- Gemma4 and Qwen-family chat have opt-in decode batching prototypes behind
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` and
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; set `--max-active-requests` above `1` to
   allow overlapping rows, and `/runtime/status` reports actual batched decode
   steps instead of assuming the scheduler is active; Gemma4 full-attention rows
   remain same-position because that engine still uses scalar RoPE/cache offsets,
-  while Q35 full-attention rows use row-offset-aware ragged KV caches and Q35
-  linear rows use typed recurrent state so compatible Q35 rows may batch across
+  while Qwen-family full-attention rows use row-offset-aware ragged KV caches and Qwen-family
+  linear rows use typed recurrent state so compatible Qwen-family rows may batch across
   decode positions; the scheduler services the earliest decode position first,
   batching compatible rows there or advancing a single lower-offset row until it
   can join one
@@ -187,10 +187,9 @@ Engine compatibility:
   `ds4-server`, preserving DS4's OpenAI-compatible behavior.
 - `text-chat-gemma4`: accepts function tools and emits OpenAI tool-call
   responses when the model generates a tool call.
-- `text-chat-q35`: accepts function tools and one image content part per
-  message.
-- `text-chat-q36-nano`: uses the Q35-family serving engine with Qwen3.6
-  35B-A3B OptiQ chat weights.
+- `text-chat-q36-nano`: uses the Qwen-family serving engine with Qwen3.6
+  35B-A3B OptiQ chat weights, accepts function tools, and accepts one image
+  content part per message.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
 - `text-code`: accepts plain text chat requests and rejects tools, images,
@@ -201,15 +200,15 @@ Streaming responses only emit assistant content tokens. Local progress labels
 stay in logs/stderr, and `stream_options.include_usage` adds the final usage
 chunk before `[DONE]`.
 
-Fair FIFO request admission is part of the runtime pool now, and Gemma4/Q35 use
-engine-specific chunked prefill checkpoints. Gemma4 and Q35 prefix KV reuse are
-available as opt-in in-memory prototypes; Q35 reuse is limited to text-only
-requests. Gemma4 and Q35 decode batching are also available as opt-in
+Fair FIFO request admission is part of the runtime pool now, and Gemma4/Qwen-family chat use
+engine-specific chunked prefill checkpoints. Gemma4 and Qwen-family prefix KV reuse are
+available as opt-in in-memory prototypes; Qwen-family reuse is limited to text-only
+requests. Gemma4 and Qwen-family decode batching are also available as opt-in
 prototypes: they merge typed cache rows for actual batched decode calls, then
-split the rows back so each request keeps its own state. Gemma4 and Q35
+split the rows back so each request keeps its own state. Gemma4 and Qwen-family
 status reports same-position versus variable-position batched steps separately.
-Q35 full-attention rows can batch across different decode positions through
-row-offset-aware ragged KV caches, and Q35 linear rows can do the same when typed
+Qwen-family full-attention rows can batch across different decode positions through
+row-offset-aware ragged KV caches, and Qwen-family linear rows can do the same when typed
 linear cache state is compatible. Gemma4 full-attention rows still require
 matching scalar offsets. SSD KV persistence remains later, measured work; use
 `cacheStats` plus `benchmarkStats` to decide whether that experiment is worth
