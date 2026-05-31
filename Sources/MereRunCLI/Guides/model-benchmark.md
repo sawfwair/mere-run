@@ -1,7 +1,8 @@
 # Model Benchmark
 
-Run focused local model benchmarks that measure implementation tradeoffs without
-changing serving defaults.
+## Purpose
+
+Run focused local model benchmarks that measure implementation tradeoffs without changing serving defaults.
 
 ```bash
 mere.run model benchmark gemma4-kv \
