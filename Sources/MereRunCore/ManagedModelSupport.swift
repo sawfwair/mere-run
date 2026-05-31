@@ -287,6 +287,22 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                "text-chat-q36-nano-gguf",
+                "Qwen3.6 A3B chat nano (GGUF)",
+                "Runs Qwen3.6 35B-A3B GGUF through llama.cpp; the default chat model on Linux CUDA hosts.",
+                minimum: 24,
+                recommended: 32,
+                setup: false
+            ),
+            descriptor(
+                "text-chat-q35-nano-gguf",
+                "Qwen3.5 A3B chat nano (GGUF)",
+                "Runs Qwen3.5 35B-A3B GGUF through llama.cpp for Linux CUDA hosts.",
+                minimum: 24,
+                recommended: 32,
+                setup: false
+            ),
+            descriptor(
                 AgentModelResources.qwen35NineBModelId,
                 "Qwen3.5 9B agent",
                 "Runs the Qwen3.5 9B Q4 GGUF setup agent for lower-memory Macs.",

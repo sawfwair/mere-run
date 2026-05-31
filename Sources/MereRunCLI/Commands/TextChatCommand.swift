@@ -63,18 +63,31 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    /// Platform-aware default chat model. On Apple Silicon/Metal, MLX
-    /// Qwen3.6-35B-A3B (q36-nano) is the fastest strong chat model (~64 tok/s on
-    /// M4 Max, ~10x the old gemma4-31B default, a third of its download). On
-    /// Linux CUDA (e.g. GB10) MLX quantized-MoE decode is ~5x slower than
-    /// llama.cpp's tuned kernels, so default to the GGUF A3B variant there.
+    /// Hardware-aware default chat model. Picks the strongest chat model whose
+    /// minimum unified memory fits the machine (via MereRunMachineProfile +
+    /// the capability catalog), and the right engine per platform: Qwen3.6-35B-A3B
+    /// as MLX on Apple Silicon (~64 tok/s on M4 Max) or GGUF/llama.cpp on Linux
+    /// CUDA (~68 tok/s on GB10, vs ~13 for MLX there). Below the A3B memory tier
+    /// it steps down to the 4B gemma4-nano so low-memory machines still get a
+    /// working default instead of a 21GB+ model they can't load.
     static var defaultChatModelId: String {
-        #if os(Linux)
-        if ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda" {
-            return "text-chat-q36-nano-gguf"
+        let machine = MereRunMachineProfile.current
+        func fits(_ id: String) -> Bool {
+            guard let descriptor = ManagedModelCapabilityCatalog.descriptor(for: id) else { return false }
+            return machine.unifiedMemoryGB >= descriptor.minimumUnifiedMemoryGB
         }
+
+        let isCUDA: Bool
+        #if os(Linux)
+        isCUDA = ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda"
+        #else
+        isCUDA = false
         #endif
-        return Q35Resources.q36NanoModelId
+
+        let a3b = isCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId
+        if fits(a3b) { return a3b }
+        if fits(Gemma4Resources.turboModelId) { return Gemma4Resources.turboModelId }
+        return Gemma4Resources.nanoModelId
     }
 
     @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-turbo|-max|-nano], text-chat-q35[-nano], text-chat-psi-agent.")
