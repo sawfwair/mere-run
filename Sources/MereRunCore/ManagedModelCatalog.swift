@@ -466,6 +466,24 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve", "text code"]
         ),
         ManagedModelSpec(
+            // GGUF A3B chat model: routes through llama.cpp (validationKind
+            // .codegenGGUF), so it uses the GB10-optimized quantized-MoE kernels
+            // — far faster on CUDA than the MLX Q35 path for the same model class.
+            id: "text-chat-q35-nano-gguf",
+            category: .textChat,
+            installShape: .singleFile(relativePath: "text-chat-q35-nano-gguf.gguf"),
+            hubFallback: HubFallbackConfig(
+                repoId: "unsloth/Qwen3.5-35B-A3B-GGUF",
+                revision: "main",
+                patterns: ["Qwen3.5-35B-A3B-Q4_K_M.gguf"]
+            ),
+            upstreamRepoId: "unsloth/Qwen3.5-35B-A3B-GGUF",
+            upstreamRevision: "main",
+            validationKind: .codegenGGUF,
+            estimatedDownloadBytes: 22 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
             id: DeepseekV4FlashResources.defaultModelId,
             category: .textChat,
             installShape: .singleFile(relativePath: DeepseekV4FlashResources.managedRelativePath),

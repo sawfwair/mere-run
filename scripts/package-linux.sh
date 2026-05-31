@@ -236,6 +236,7 @@ mlx_swift_cuda_link_flags() {
     "-lnvrtc"
     "-lcuda"
     "-lcudart"
+    "-lcufft"
     "-lnccl"
     "-lrt"
   )
@@ -385,6 +386,14 @@ fi
 if [[ -x "$llama_prefix/bin/llama-cli" ]]; then
   cp -a "$llama_prefix/bin/llama-cli" "$payload_dir/llama-cli"
   chmod +x "$payload_dir/llama-cli"
+fi
+# Bundle the persistent llama.cpp HTTP server too. `api serve` can spawn it once
+# (isolated subprocess, so no in-process llama/MLX CUDA collision on GB10) and
+# proxy to it, keeping the GGUF model resident across requests instead of the
+# one-shot llama-cli reload-per-call.
+if [[ -x "$llama_prefix/bin/llama-server" ]]; then
+  cp -a "$llama_prefix/bin/llama-server" "$payload_dir/llama-server"
+  chmod +x "$payload_dir/llama-server"
 fi
 
 # Bundle Swift/Foundation runtime shared libraries when the official Swift
