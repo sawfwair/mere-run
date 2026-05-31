@@ -6,7 +6,7 @@ Summarize this Mac's model capabilities and optionally prepare the Pi coding-age
 
 ## Required Models
 
-No model is required to print readiness. Optional model pulls/configuration should use the recommended setup-agent tier; on 96 GB+ Apple Silicon Macs that is `text-agent-deepseek-v4-flash`. Qwen/Q35 agent models are lower-memory or comparison alternatives.
+No model is required to print readiness. Optional model pulls/configuration should use the recommended setup-agent tier; on 96 GB+ Apple Silicon Macs that is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory or comparison alternatives.
 
 ## Install And Check
 

@@ -183,10 +183,10 @@ core_suite() {
     assert_contains "speech_transcribe_qwen3_output" "$OUT_DIR/speech_transcribe_qwen3.stdout" "mere.run smoke test"
   fi
 
-  if require_model "text-chat-q35-nano"; then
-    run_step "text_chat_q35_nano" 300 \
-      "$MERERUN_BIN" text chat --prompt "Reply with exactly READY." --model text-chat-q35-nano --max-tokens 8 --temperature 0 --top-p 1 --quiet
-    assert_contains "text_chat_q35_nano_output" "$OUT_DIR/text_chat_q35_nano.stdout" "^READY$"
+  if require_model "text-chat-q36-nano"; then
+    run_step "text_chat_q36_nano" 300 \
+      "$MERERUN_BIN" text chat --prompt "Reply with exactly READY." --model text-chat-q36-nano --max-tokens 8 --temperature 0 --top-p 1 --quiet
+    assert_contains "text_chat_q36_nano_output" "$OUT_DIR/text_chat_q36_nano.stdout" "^READY$"
   fi
 
   if require_model "image-zimage-max"; then
@@ -203,13 +203,13 @@ core_suite() {
 }
 
 installed_suite() {
-  if require_model "text-chat-q35"; then
-    run_step "text_chat_q35" 600 \
-      "$MERERUN_BIN" text chat --prompt "Reply with exactly READY and nothing else." --model text-chat-q35 --max-tokens 64 --temperature 0 --top-p 1 --quiet
-    if [[ -s "$OUT_DIR/text_chat_q35.stdout" ]]; then
-      record_pass "text_chat_q35_output"
+  if require_model "text-chat-q36-nano"; then
+    run_step "text_chat_q36_nano_installed" 600 \
+      "$MERERUN_BIN" text chat --prompt "Reply with exactly READY and nothing else." --model text-chat-q36-nano --max-tokens 64 --temperature 0 --top-p 1 --quiet
+    if [[ -s "$OUT_DIR/text_chat_q36_nano_installed.stdout" ]]; then
+      record_pass "text_chat_q36_nano_installed_output"
     else
-      record_fail "text_chat_q35_output"
+      record_fail "text_chat_q36_nano_installed_output"
     fi
   fi
 

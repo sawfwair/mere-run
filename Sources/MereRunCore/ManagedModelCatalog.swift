@@ -411,48 +411,6 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
-            id: "text-chat-q35",
-            category: .textChat,
-            installShape: .directoryRoot,
-            hubFallback: HubFallbackConfig(
-                repoId: Q35Resources.upstreamRepoId,
-                revision: Q35Resources.upstreamRevision,
-                patterns: [
-                    "config.json",
-                    "tokenizer.json",
-                    "tokenizer_config.json",
-                    "model.safetensors",
-                    "model.safetensors.index.json",
-                    "*.safetensors",
-                ]
-            ),
-            upstreamRepoId: Q35Resources.upstreamRepoId,
-            upstreamRevision: Q35Resources.upstreamRevision,
-            validationKind: .q35,
-            defaultCLICommands: ["chat", "api serve"]
-        ),
-        ManagedModelSpec(
-            id: "text-chat-q35-nano",
-            category: .textChat,
-            installShape: .directoryRoot,
-            hubFallback: HubFallbackConfig(
-                repoId: Q35Resources.nanoUpstreamRepoId,
-                revision: Q35Resources.nanoUpstreamRevision,
-                patterns: [
-                    "config.json",
-                    "tokenizer.json",
-                    "tokenizer_config.json",
-                    "model.safetensors",
-                    "model.safetensors.index.json",
-                    "*.safetensors",
-                ]
-            ),
-            upstreamRepoId: Q35Resources.nanoUpstreamRepoId,
-            upstreamRevision: Q35Resources.nanoUpstreamRevision,
-            validationKind: .q35,
-            defaultCLICommands: ["chat", "api serve"]
-        ),
-        ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
             category: .textChat,
             installShape: .directoryRoot,
@@ -472,6 +430,25 @@ public enum ManagedModelCatalog {
             upstreamRevision: AgentModelResources.qwen35NineBRevision,
             validationKind: .codegenGGUF,
             defaultCLICommands: ["api serve", "text code"]
+        ),
+        ManagedModelSpec(
+            // GGUF Qwen3.6-35B-A3B: the CUDA default chat model. Routes through
+            // llama.cpp (.codegenGGUF) for the GB10-optimized quantized-MoE
+            // kernels (~68 tok/s on GB10 vs ~13 for the MLX path). Same model
+            // family as the Apple-Silicon default (text-chat-q36-nano, MLX).
+            id: "text-chat-q36-nano-gguf",
+            category: .textChat,
+            installShape: .singleFile(relativePath: "text-chat-q36-nano-gguf.gguf"),
+            hubFallback: HubFallbackConfig(
+                repoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
+                revision: "main",
+                patterns: ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"]
+            ),
+            upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
+            upstreamRevision: "main",
+            validationKind: .codegenGGUF,
+            estimatedDownloadBytes: 22 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"]
         ),
         ManagedModelSpec(
             id: DeepseekV4FlashResources.defaultModelId,

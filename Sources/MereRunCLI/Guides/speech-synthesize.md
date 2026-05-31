@@ -33,6 +33,34 @@ mere.run speech synthesize --help
 - `--stream-chunk-tokens`: token interval for streaming chunks.
 - `--quiet`, `-q`: suppress progress.
 
+## Languages
+
+The set of supported languages is defined by the TTS model, not by mere.run, and can change as models are added or updated. Pass `--language auto` (the default) to let the model detect the language, or set an explicit hint when text mixes scripts. For the authoritative, up-to-date language list, see the model card for the model you are running:
+
+- `speech-tts-qwen3-nano`: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+- `speech-tts-qwen3-customvoice`: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+
+Run `mere.run model list` to see which TTS models are installed locally.
+
+## Reference Audio For Cloning
+
+Clone mode needs a short, clean recording (one speaker, little background noise, ~10-20 seconds). If you need a passage to read aloud, a phonetically balanced one captures more sounds than casual speech. For example:
+
+> The quick brown fox jumps over the lazy dog. She sells seashells by the seashore. Please call Stella and ask her to bring these things with her from the store: six spoons of fresh snow peas, five thick slabs of blue cheese, and a snack for her brother Bob.
+
+Record yourself reading it, then pass the same text via `--ref-text` so the model aligns the transcript to your audio:
+
+```bash
+mere.run speech synthesize \
+  "Now my cloned voice can say anything." \
+  --mode clone \
+  --ref-audio ./my-reference.wav \
+  --ref-text "The quick brown fox jumps over the lazy dog. She sells seashells by the seashore. Please call Stella and ask her to bring these things with her from the store: six spoons of fresh snow peas, five thick slabs of blue cheese, and a snack for her brother Bob." \
+  --model speech-tts-qwen3-customvoice \
+  --save-profile myvoice \
+  --output ./cloned.wav
+```
+
 ## Prompting Patterns
 
 - Put delivery style in `--voice`: age range, accent, energy, pace, emotion, microphone feel.

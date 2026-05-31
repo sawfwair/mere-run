@@ -18,7 +18,7 @@ mere.run guide vision inspect
 ## Parameters
 
 - positional image: image file path.
-- positional prompt words: optional question. Defaults to "Describe this image."
+- `--prompt`: question/instruction about the image. Defaults to "Describe this image." (Positional prompt words still work as a fallback for backward compatibility, but `--prompt` is preferred and matches the other commands.)
 - `--model`, `-m`: local model root. Omit for default auto-download.
 - `--max-tokens`: maximum generated tokens.
 - `--temperature`: sampling temperature.
@@ -34,12 +34,12 @@ mere.run guide vision inspect
 ## Examples
 
 ```bash
-mere.run vision inspect ./receipt.jpg "Extract merchant, date, total, and line items as JSON-like text."
+mere.run vision inspect ./receipt.jpg --prompt "Extract merchant, date, total, and line items as JSON-like text."
 ```
 
 ```bash
 mere.run vision inspect ./dashboard.png \
-  "Summarize the chart trend and call out any visible labels."
+  --prompt "Summarize the chart trend and call out any visible labels."
 ```
 
 ## Iteration Tips

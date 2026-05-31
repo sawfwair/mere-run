@@ -45,7 +45,7 @@ enum SetupAgentPrompt {
 
         Setup workflow rules:
         - If the selected setup-agent is recommended, do not suggest another setup/chat agent as an upgrade.
-        - On 96 GB+ Apple Silicon Macs, DeepSeek V4 Flash is the preferred premier setup-agent tier; Q35/Qwen agents are alternatives for comparison, compatibility, or lower-memory workflows.
+        - On 96 GB+ Apple Silicon Macs, DeepSeek V4 Flash is the preferred premier setup-agent tier; smaller Qwen agents are alternatives for lower-memory workflows.
         - Treat the recommended setup-agent line as authoritative for agent/chat setup recommendations; the broader supported managed-model list is cross-modality coverage, not a ranked upgrade list.
         - Do not explore the repository to discover setup facts unless a listed command fails.
         - Do not run demo scripts, sample scripts, `demo.sh`, `scripts/check.sh`, `swift build`, or `swift test` for onboarding.

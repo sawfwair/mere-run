@@ -69,10 +69,10 @@ Continuous batching and SSD KV cache are not enabled by this flag.
 
 ### `MERERUN_Q35_PREFIX_KV_CACHE`
 
-Set to `1` to enable the in-memory Q35 text-only prefix KV reuse prototype in
-`mere.run api serve`. Q35 vision prompts are excluded because image embeddings
+Set to `1` to enable the in-memory Qwen-family text-only prefix KV reuse prototype in
+`mere.run api serve`. Vision prompts are excluded because image embeddings
 change the effective prefix even when the token ids match. Runtime status uses
-the same prefix KV counters as Gemma4. Text-only Q35 requests also store the
+the same prefix KV counters as Gemma4. Text-only Qwen-family requests also store the
 stable chat prefix before the final message as an extra checkpoint when it is an
 exact token prefix of the full prompt, and the bounded cache gives those
 semantic checkpoints the same pruning priority as Gemma4.
@@ -89,8 +89,8 @@ scalar cache offsets.
 
 ### `MERERUN_Q35_CONTINUOUS_BATCHING`
 
-Set to `1` to enable the Q35 decode batching prototype in `mere.run api serve`.
-It uses Q35's typed full-attention and linear-attention cache states. Full
+Set to `1` to enable the Qwen-family decode batching prototype in `mere.run api serve`.
+It uses the runtime's typed full-attention and linear-attention cache states. Full
 attention can batch different decode positions through row-offset-aware ragged
 KV caches, and linear attention can batch different decode positions through
 typed recurrent state when cache shapes are compatible. Runtime status reports

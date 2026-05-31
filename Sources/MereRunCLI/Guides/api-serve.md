@@ -10,8 +10,7 @@ Supported engines:
 
 - `text-code`: default GGUF code model, usually `text-code-qwen3`.
 - `text-chat-gemma4`: Gemma text chat models.
-- `text-chat-q35`: Qwen3.5 text chat models.
-- `text-chat-q36-nano`: Qwen3.6 35B-A3B OptiQ chat weights served through the Q35-family engine.
+- `text-chat-q35`: Qwen-family serving engine; defaults to `text-chat-q36-nano`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
 
@@ -60,24 +59,24 @@ mere.run status
   `--max-active-requests 1` preserves serialized local inference while making
   queue depth visible in `/runtime/status`. Queued client cancellations are
   removed from the FIFO instead of running later.
-- Gemma4 and Q35 use chunked prefill with cancellation/progress checkpoints.
+- Gemma4 and Qwen-family chat use chunked prefill with cancellation/progress checkpoints.
   This improves long-prompt observability without arbitrary batching.
 - Gemma4 can opt into in-memory prefix KV reuse with
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; `/runtime/status` reports entries, hits,
   and reused tokens when a Gemma4 model is loaded. The cache records chunk
   boundaries plus the stable chat prefix before the final message when token
   prefixes match exactly.
-- Q35 can opt into text-only in-memory prefix KV reuse with
+- Qwen-family chat can opt into text-only in-memory prefix KV reuse with
   `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
   text-only requests use the same stable chat-prefix checkpoint rule as Gemma4.
-- Gemma4 and Q35 can opt into decode batching with
+- Gemma4 and Qwen-family chat can opt into decode batching with
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to
   allow overlapping rows, and `/runtime/status` reports actual batched decode
   steps. Gemma4 full-attention rows stay same-position because that engine still
-  uses scalar RoPE/cache offsets; Q35 full-attention rows use row-offset-aware
-  ragged KV caches, and Q35 linear rows use typed recurrent state, so compatible
-  Q35 rows can batch across decode positions. The scheduler services the
+  uses scalar RoPE/cache offsets; Qwen-family full-attention rows use row-offset-aware
+  ragged KV caches, and Qwen-family linear rows use typed recurrent state, so compatible
+  Qwen-family rows can batch across decode positions. The scheduler services the
   earliest decode position first, batching compatible rows there or advancing a
   single lower-offset row until it can join a compatible batch.
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
@@ -125,4 +124,4 @@ mere.run api serve --host 0.0.0.0 --api-key "$MERERUN_API_KEY"
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/APIServeCommand.swift
 - https://platform.openai.com/docs/api-reference/chat
 - https://ai.google.dev/gemma/docs/core/prompt-structure
-- https://huggingface.co/Qwen/Qwen3.5-35B-A3B
+- https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit

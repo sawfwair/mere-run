@@ -14,15 +14,16 @@ struct TextChat: AsyncParsableCommand {
         commandName: "chat",
         abstract: "Run local chat with text chat models.",
         discussion: """
-        Auto-downloads the selected model on first use.
+        Auto-downloads the selected model on first use. The default is
+        text-chat-q36-nano on Apple Silicon (MLX) and text-chat-q36-nano-gguf on
+        Linux CUDA (llama.cpp) — the fastest strong chat model on each platform.
         Known model IDs:
-          - text-chat-gemma4 (Gemma 4 default alias, currently 31B)
+          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit, default on Apple Silicon)
+          - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-chat-gemma4-turbo (Gemma 4 26B-A4B NVFP4 native Swift runtime)
+          - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
-          - text-chat-q35-nano (Qwen3.5-35B-A3B 4-bit)
-          - text-chat-q35
-          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
@@ -60,8 +61,35 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default alias), text-chat-gemma4-turbo, text-chat-gemma4-max, text-chat-gemma4-nano, text-chat-q35, text-chat-q35-nano, text-chat-q36-nano, or text-chat-psi-agent.")
-    var model: String = Gemma4Resources.defaultModelId
+    /// Hardware-aware default chat model. Picks the strongest chat model whose
+    /// minimum unified memory fits the machine (via MereRunMachineProfile +
+    /// the capability catalog), and the right engine per platform: Qwen3.6-35B-A3B
+    /// as MLX on Apple Silicon (~64 tok/s on M4 Max) or GGUF/llama.cpp on Linux
+    /// CUDA (~68 tok/s on GB10, vs ~13 for MLX there). Below the A3B memory tier
+    /// it steps down to the 4B gemma4-nano so low-memory machines still get a
+    /// working default instead of a 21GB+ model they can't load.
+    static var defaultChatModelId: String {
+        let machine = MereRunMachineProfile.current
+        func fits(_ id: String) -> Bool {
+            guard let descriptor = ManagedModelCapabilityCatalog.descriptor(for: id) else { return false }
+            return machine.unifiedMemoryGB >= descriptor.minimumUnifiedMemoryGB
+        }
+
+        let isCUDA: Bool
+        #if os(Linux)
+        isCUDA = ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda"
+        #else
+        isCUDA = false
+        #endif
+
+        let a3b = isCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId
+        if fits(a3b) { return a3b }
+        if fits(Gemma4Resources.turboModelId) { return Gemma4Resources.turboModelId }
+        return Gemma4Resources.nanoModelId
+    }
+
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-turbo|-max|-nano], text-chat-psi-agent.")
+    var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
     var thinking: Bool = false
@@ -146,6 +174,12 @@ struct TextChat: AsyncParsableCommand {
                     modelId: effectiveModelId,
                     kvCacheQuantization: kvQuantization
                 )
+                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+            } else if ManagedModelCatalog.spec(for: normalizedModelId)?.validationKind == .codegenGGUF {
+                // GGUF chat models run through the llama.cpp engine (the same path
+                // `text code` uses). On Linux CUDA this is the GB10-optimized
+                // llama.cpp runtime, which has fast quantized-MoE kernels MLX lacks.
+                let generator = CodeGenGenerator(modelId: normalizedModelId)
                 return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
             } else {
                 let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId

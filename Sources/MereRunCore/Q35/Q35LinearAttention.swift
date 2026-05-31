@@ -224,7 +224,7 @@ final class Q35LinearAttention: Module {
 
         precondition(
             self.numValueHeads % max(1, self.numKeyHeads) == 0,
-            "Q35 linear attention requires num_value_heads divisible by num_key_heads"
+            "Qwen-family linear attention requires num_value_heads divisible by num_key_heads"
         )
 
         self._inProjQKV.wrappedValue = Linear(text.hiddenSize, self.keyDim * 2 + self.valueDim, bias: false)

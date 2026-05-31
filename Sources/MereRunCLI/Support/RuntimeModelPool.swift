@@ -38,20 +38,20 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
             chunkedPrefill: RuntimeCapabilityStatus(
                 available: true,
                 enabled: true,
-                detail: "Gemma4 and Q35 prefill long prompts in cancellable chunks."
+                detail: "Gemma4 and Qwen-family models prefill long prompts in cancellable chunks."
             ),
             continuousBatching: RuntimeCapabilityStatus(
                 available: true,
                 enabled: continuousBatchingEnabled,
                 detail: continuousBatchingEnabled
-                    ? "Gemma4 and Q35 decode rows are packed when typed cache state is compatible; Q35 linear-only rows may batch across decode positions."
+                    ? "Gemma4 and Qwen-family decode rows are packed when typed cache state is compatible; Qwen linear-only rows may batch across decode positions."
                     : "Decode batching is available behind MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 and MERERUN_Q35_CONTINUOUS_BATCHING=1; set --max-active-requests above 1 to allow overlap."
             ),
             prefixKVReuse: RuntimeCapabilityStatus(
                 available: true,
                 enabled: prefixKVCacheEnabled,
                 detail: prefixKVCacheEnabled
-                    ? "In-memory prefix KV reuse is enabled for matching Gemma4 or Q35 text token prefixes."
+                    ? "In-memory prefix KV reuse is enabled for matching Gemma4 or Qwen-family text token prefixes."
                     : "In-memory prefix KV reuse is available behind MERERUN_GEMMA4_PREFIX_KV_CACHE=1 and MERERUN_Q35_PREFIX_KV_CACHE=1."
             ),
             ssdKVCache: RuntimeCapabilityStatus(

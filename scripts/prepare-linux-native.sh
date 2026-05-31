@@ -539,6 +539,7 @@ mlx_swift_cuda_link_flags() {
     "-lnvrtc"
     "-lcuda"
     "-lcudart"
+    "-lcufft"
     "-lnccl"
     "-lrt"
   )

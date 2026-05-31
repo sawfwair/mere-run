@@ -472,9 +472,8 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue {
             return .gemma
         }
-        if modelId == ModelResolver.ModelID.q35.rawValue
-            || modelId == ModelResolver.ModelID.q35Nano.rawValue
-            || modelId == ModelResolver.ModelID.q36Nano.rawValue {
+        if modelId == ModelResolver.ModelID.q36Nano.rawValue
+            || modelId == ModelResolver.ModelID.q36NanoGGUF.rawValue {
             return .qwen
         }
         return nil

@@ -39,7 +39,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-q35`, `text-chat-q35-nano`, `text-chat-q36-nano`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-q36-nano`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`
@@ -88,9 +88,9 @@ when you intentionally accept that risk or are using external hardware.
 Guided onboarding for the shared model store and first local agent. The command
 offers a Pi-powered Mere agent, a BYOA prompt for Claude/Codex, or manual
 commands. The small local agent model is `text-agent-qwen35-9b`; hardware-tier
-setup can select Q35 nano, Qwen3-Coder Next, or DeepSeek V4 Flash. On 96 GB+
+setup can select Qwen3.6 nano, Qwen3-Coder Next, or DeepSeek V4 Flash. On 96 GB+
 Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed
-setup-agent tier; Q35/Qwen agent models are alternatives, not upgrades.
+setup-agent tier; smaller Qwen agent models are alternatives, not upgrades.
 
 ### `mere.run model remove`
 

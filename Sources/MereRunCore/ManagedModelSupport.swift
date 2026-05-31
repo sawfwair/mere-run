@@ -263,28 +263,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
-                "text-chat-q35",
-                "Qwen3.5-122B-A10B chat",
-                "Runs the large Qwen3.5 122B MoE chat tier as a Qwen-family alternative; "
-                + "DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier when available.",
-                minimum: 96,
-                recommended: 128
-            ),
-            descriptor(
-                "text-chat-q35-nano",
-                "Q35 chat nano",
-                "Runs the smaller Q35 chat profile for local chat and API serving on more Macs.",
-                minimum: 24,
-                recommended: 32,
-                setup: true
-            ),
-            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
-                "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Q35-family runtime.",
+                "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",
                 minimum: 24,
                 recommended: 32,
                 setup: true
+            ),
+            descriptor(
+                "text-chat-q36-nano-gguf",
+                "Qwen3.6 A3B chat nano (GGUF)",
+                "Runs Qwen3.6 35B-A3B GGUF through llama.cpp; the default chat model on Linux CUDA hosts.",
+                minimum: 24,
+                recommended: 32,
+                setup: false
             ),
             descriptor(
                 AgentModelResources.qwen35NineBModelId,

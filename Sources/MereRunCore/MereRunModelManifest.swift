@@ -628,36 +628,6 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: Gemma4Resources.turboUpstreamModelId,
                 createdAt: createdAt
             )
-        case .q35:
-            return MereRunModelManifest(
-                id: modelID.rawValue,
-                engine: .qwen35HybridMoE,
-                family: .qwen,
-                tier: .max,
-                variant: .base,
-                precision: .int4,
-                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
-                defaults: nil,
-                supports: [.chat],
-                components: q35TextComponents,
-                upstreamRepoId: "\(Q35Resources.upstreamRepoId)@\(Q35Resources.upstreamRevision)",
-                createdAt: createdAt
-            )
-        case .q35Nano:
-            return MereRunModelManifest(
-                id: modelID.rawValue,
-                engine: .qwen35HybridMoE,
-                family: .qwen,
-                tier: .nano,
-                variant: .base,
-                precision: .int4,
-                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
-                defaults: nil,
-                supports: [.chat],
-                components: q35TextComponents,
-                upstreamRepoId: "\(Q35Resources.nanoUpstreamRepoId)@\(Q35Resources.nanoUpstreamRevision)",
-                createdAt: createdAt
-            )
         case .q36Nano:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -685,6 +655,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration],
                 components: nil,
                 upstreamRepoId: "\(AgentModelResources.qwen35NineBRepoId)@\(AgentModelResources.qwen35NineBRevision)",
+                createdAt: createdAt
+            )
+        case .q36NanoGGUF:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .nano,
+                variant: .base,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "gguf-q4-k-m"),
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF@main",
                 createdAt: createdAt
             )
         case .deepseekV4Flash:

@@ -10,6 +10,7 @@ struct GuideCommand: ParsableCommand {
 
         Examples:
           mere.run guide --list
+          mere.run guide --list --markdown > guides.md
           mere.run guide music generate
           mere.run guide image generate --model image-zimage-nano
           mere.run guide music generate --json
@@ -25,12 +26,19 @@ struct GuideCommand: ParsableCommand {
     @Flag(name: [.long], help: "Emit JSON instead of Markdown.")
     var json: Bool = false
 
+    @Flag(name: [.long], help: "Render the topic list as a Markdown table (redirect to a .md file).")
+    var markdown: Bool = false
+
     @Argument(help: "Command path to read, for example: music generate.")
     var commandPath: [String] = []
 
     func run() throws {
         if list || commandPath.isEmpty {
-            print(try Self.renderList(json: json))
+            if markdown {
+                print(try Self.renderListMarkdown())
+            } else {
+                print(try Self.renderList(json: json))
+            }
             return
         }
 
@@ -125,6 +133,32 @@ struct GuideCommand: ParsableCommand {
         lines.append("Read one with: mere.run guide <command path>")
         return lines.joined(separator: "\n")
     }
+
+    static func renderListMarkdown() throws -> String {
+        let topics = GuideRegistry.all
+        var lines = [
+            "| Topic | Command | Models | Title | Description |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for topic in topics {
+            let command = topic.commands.first ?? ""
+            // Use <br> so long model lists wrap inside the table cell instead of widening it.
+            let models = topic.models.isEmpty ? "-" : topic.models.joined(separator: "<br>")
+            let description = GuideRegistry.purposeSummary(for: topic)
+            lines.append(
+                "| \(escapeCell(topic.topic)) | `\(escapeCell(command))` "
+                    + "| \(escapeCell(models)) | \(escapeCell(topic.title)) | \(escapeCell(description)) |"
+            )
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Escape characters that would break a Markdown table cell.
+    private static func escapeCell(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "|", with: "\\|")
+            .replacingOccurrences(of: "\n", with: " ")
+    }
 }
 
 struct GuideTopic: Equatable {
@@ -176,8 +210,6 @@ enum GuideRegistry {
                 "text-chat-gemma4",
                 "text-chat-gemma4-nano",
                 "text-chat-gemma4-max",
-                "text-chat-q35",
-                "text-chat-q35-nano",
                 "text-chat-q36-nano",
                 "text-chat-psi-agent",
             ],
@@ -319,8 +351,6 @@ enum GuideRegistry {
                 "text-chat-gemma4",
                 "text-chat-gemma4-nano",
                 "text-chat-gemma4-max",
-                "text-chat-q35",
-                "text-chat-q35-nano",
                 "text-chat-q36-nano",
                 "text-chat-mebot",
             ],
@@ -348,7 +378,6 @@ enum GuideRegistry {
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
                 "text-chat-gemma4",
-                "text-chat-q35",
                 "text-chat-q36-nano",
                 "text-agent-deepseek-v4-flash",
                 "text-chat-mebot",
@@ -477,6 +506,24 @@ enum GuideRegistry {
             throw ValidationError("Guide resource missing: \(topic.resourceName)")
         }
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// First non-empty line of the guide's `## Purpose` section, used as a one-line description.
+    static func purposeSummary(for topic: GuideTopic) -> String {
+        guard let content = try? content(for: topic) else { return "" }
+        var inPurpose = false
+        for rawLine in content.components(separatedBy: "\n") {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.lowercased().hasPrefix("## purpose") {
+                inPurpose = true
+                continue
+            }
+            guard inPurpose else { continue }
+            if line.hasPrefix("#") { break } // reached the next section
+            if line.isEmpty { continue }
+            return line
+        }
+        return ""
     }
 }
 

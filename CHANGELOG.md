@@ -6,11 +6,54 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.11.0 - 2026-05-31
+
+### Changed
+
+- the default `text chat` model is now Qwen3.6-35B-A3B, chosen hardware-aware
+  via the machine's unified memory: `text-chat-q36-nano` (MLX) on Apple
+  Silicon and `text-chat-q36-nano-gguf` (llama.cpp) on Linux CUDA, stepping
+  down to `text-chat-gemma4-turbo` then the 4B `text-chat-gemma4-nano` on
+  lower-memory machines. It replaces the gemma4-31B default, which was both the
+  slowest (~1 tok/s on GB10, ~6 on M4 Max) and the largest download (62 GB);
+  q36-nano is ~10x faster at comparable quality and a third of the size.
+- `api serve` now defaults to a chat engine (serving `text-chat-q36-nano`)
+  instead of `text-code`, so `mere.run api serve` is an OpenAI-compatible chat
+  server out of the box.
+- Q35 MTP speculative decode is now gated by prompt length instead of a blanket
+  off-on-CUDA: it is used only above `MERERUN_Q35_MTP_MIN_PROMPT_TOKENS`
+  (default 6144), where it is a ~1.5-2.5x decode win, and skipped at short
+  prompts where it regresses. The env still forces it on/off.
+
 ### Added
 
-- added `text-chat-q36-nano`, a managed Qwen3.6 35B-A3B OptiQ 4-bit MLX
-  snapshot that pulls from Hugging Face and runs through the native Q35-family
-  chat runtime.
+- `text-chat-q36-nano` (Qwen3.6 35B-A3B OptiQ 4-bit MLX, with the MTP draft
+  head), plus `text-chat-q36-nano-gguf` and `text-chat-q35-nano-gguf` GGUF
+  variants for the llama.cpp engine.
+- `text chat` now routes GGUF (`.codegenGGUF`) chat models through the
+  llama.cpp engine — on Linux CUDA this uses the GB10-tuned quantized-MoE
+  kernels MLX lacks (~68 tok/s on a GB10 vs ~13 for the MLX path).
+- bundled `llama-server` in the Linux package for persistent GGUF serving.
+- `scripts/e2e_gb10.sh`, a real per-category CUDA inference sweep that flags
+  missing-kernel crashes smoke tests miss.
+- `vision inspect --prompt`; `guide --list --markdown` (table with a
+  Description column); model-card/voice-clone reference passage in the speech
+  synthesize guide.
+
+### Fixed
+
+- `text-chat-q35`/`-nano` failed at chat time with "tokenizer does not have a
+  chat template"; their catalog download patterns omitted `chat_template.jinja`.
+- `vision caption`/`inspect` no longer claim to be "downloading" a model that
+  is already cached.
+
+### Removed
+
+- the `text-chat-q35`, `text-chat-q35-nano`, and `text-chat-q35-nano-gguf`
+  models. Qwen3.6-35B-A3B (q36-nano) supersedes the A3B tier at the same speed,
+  and DeepSeek V4 Flash covers the 96-128 GB max-quality tier, so the
+  Qwen3.5-122B flagship had no remaining niche. The Q35 *runtime* and the
+  `text-chat-q35` serving-engine alias remain (they now serve q36-nano).
 
 ## 0.10.0 - 2026-05-29
 

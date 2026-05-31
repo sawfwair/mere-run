@@ -6,7 +6,7 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`, `text-chat-q36-nano`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, and `text-chat-psi-agent`.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
 `text-chat-q36-nano` is the managed Qwen3.6 35B-A3B OptiQ 4-bit MLX snapshot; its upstream repo includes an MTP head, but this command currently uses the main chat weights only.
 
@@ -57,7 +57,7 @@ mere.run text chat \
 
 ```bash
 mere.run text chat \
-  --model text-chat-q35-nano \
+  --model text-chat-q36-nano \
   --system "Answer with bullet points and cite uncertainty." \
   --prompt "Compare speech transcription backends for meeting notes."
 ```
@@ -78,5 +78,5 @@ mere.run text chat \
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/TextChatCommand.swift
 - https://ai.google.dev/gemma/docs/core/prompt-structure
-- https://huggingface.co/Qwen/Qwen3.5-35B-A3B
+- https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit
 - https://huggingface.co/google/gemma-4-31B

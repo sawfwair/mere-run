@@ -6,7 +6,7 @@ Choose a guided, bring-your-own-agent, or manual setup path for a new mere.run i
 
 ## Required Models
 
-No model is required to view the plan. Agent setup selects this machine's supported tier; on 96 GB+ machines that is `text-agent-deepseek-v4-flash`. Qwen/Q35 agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash.
+No model is required to view the plan. Agent setup selects this machine's supported tier; on 96 GB+ machines that is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash.
 
 ## Install And Check
 

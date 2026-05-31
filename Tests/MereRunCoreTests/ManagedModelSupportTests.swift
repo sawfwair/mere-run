@@ -149,7 +149,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
-    func testAgentTierSelectsQ35NanoOnThirtyTwoGB() throws {
+    func testAgentTierSelectsQ36NanoOnThirtyTwoGB() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 32 * 1_073_741_824,
             processorName: "M2 Max",
@@ -158,7 +158,7 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
 
-        XCTAssertEqual(recommendation.id, Q35Resources.nanoModelId)
+        XCTAssertEqual(recommendation.id, Q35Resources.q36NanoModelId)
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
@@ -216,19 +216,18 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
-    func testQ35IsDescribedAsAlternativeWhenDeepseekIsAvailable() throws {
-        let q35 = try XCTUnwrap(
-            MereRunAgentModelCatalog.allTierRecommendations(
-                on: MereRunMachineProfile(
-                    physicalMemoryBytes: 128 * 1_073_741_824,
-                    processorName: "M4 Max",
-                    isAppleSiliconMac: true
-                )
-            ).first { $0.id == Q35Resources.defaultModelId }
+    func testTierRecommendationsExcludeRemovedQ35Models() {
+        let recommendations = MereRunAgentModelCatalog.allTierRecommendations(
+            on: MereRunMachineProfile(
+                physicalMemoryBytes: 128 * 1_073_741_824,
+                processorName: "M4 Max",
+                isAppleSiliconMac: true
+            )
         )
 
-        XCTAssertTrue(q35.summary.contains("alternative"))
-        XCTAssertTrue(q35.summary.contains("DeepSeek V4 Flash remains the preferred setup-agent tier"))
+        XCTAssertFalse(recommendations.contains { $0.id == "text-chat-q35" })
+        XCTAssertFalse(recommendations.contains { $0.id == "text-chat-q35-nano" })
+        XCTAssertTrue(recommendations.contains { $0.id == Q35Resources.q36NanoModelId })
     }
 
     func testAgentRecommendationRejectsNonAppleSilicon() {

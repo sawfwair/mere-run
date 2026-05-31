@@ -56,8 +56,12 @@ struct VisionCaption: AsyncParsableCommand {
                 throw ValidationError("Model path not found: \(modelURL.path)")
             }
         } else {
-            print("No model specified, downloading \(Qwen3VLAutoCaptioner.modelId)...")
             let autoCaptioner = Qwen3VLAutoCaptioner()
+            if await autoCaptioner.isModelCached() {
+                print("No model specified, using cached \(Qwen3VLAutoCaptioner.modelId)...")
+            } else {
+                print("No model specified, downloading \(Qwen3VLAutoCaptioner.modelId)...")
+            }
             modelURL = try await autoCaptioner.ensureReady { progress in
                 CLIStdout.write("\r\(progress.status) (\(Int(progress.fraction * 100))%)")
             }

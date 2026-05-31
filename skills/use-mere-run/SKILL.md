@@ -50,7 +50,7 @@ swift run mere.run setup
 Use `model capabilities` as the recommendation source before large downloads. Common public pullable IDs include:
 
 - Image: `image-klein-base`, `image-klein-max`, `image-zimage-max`
-- Text chat: `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q35`, `text-chat-q35-nano`
+- Text chat: `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`
 - Code/agent: `text-code-qwen3`, `text-agent-qwen35-9b`
 - Embeddings: `text-embed-qwen3-0.6b`
 - Speech: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`, `speech-asr-qwen3`, `speech-asr-parakeet`

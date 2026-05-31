@@ -76,6 +76,25 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertTrue(rendered.contains("Read one with: mere.run guide <command path>"))
     }
 
+    func testGuideListRendersMarkdownTableWithDescriptions() throws {
+        let rendered = try GuideCommand.renderListMarkdown()
+
+        XCTAssertTrue(rendered.contains("| Topic | Command | Models | Title | Description |"))
+        XCTAssertTrue(rendered.contains("| --- | --- | --- | --- | --- |"))
+        XCTAssertTrue(rendered.contains("| image-validate |"))
+        // Description column is sourced from each guide's Purpose section.
+        XCTAssertTrue(rendered.contains("Run deterministic checks against local image model layouts"))
+    }
+
+    func testGuidePurposeSummaryNonEmptyForEveryGuide() {
+        for entry in GuideRegistry.all {
+            XCTAssertFalse(
+                GuideRegistry.purposeSummary(for: entry).isEmpty,
+                "Guide \(entry.topic) has no Purpose summary for the markdown description column."
+            )
+        }
+    }
+
     func testGuideRegistryIntegrity() throws {
         XCTAssertFalse(GuideRegistry.all.isEmpty)
 

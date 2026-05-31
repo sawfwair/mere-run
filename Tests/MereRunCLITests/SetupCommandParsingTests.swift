@@ -141,7 +141,7 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Recommended setup-agent tier for this Mac"))
         XCTAssertTrue(prompt.contains("Selected setup-agent is recommended: true"))
         XCTAssertTrue(prompt.contains("DeepSeek V4 Flash is the preferred premier setup-agent tier"))
-        XCTAssertTrue(prompt.contains("Q35/Qwen agents are alternatives"))
+        XCTAssertTrue(prompt.contains("smaller Qwen agents are alternatives"))
         XCTAssertTrue(prompt.contains("mere.run model capabilities --recommended"))
         XCTAssertTrue(prompt.contains("mere.run model list"))
         XCTAssertTrue(prompt.contains("Do not run demo scripts"))

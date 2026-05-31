@@ -55,8 +55,6 @@ top_level_map = {
     **{f"{legacy_klein_prefix}-{tier}": f"image-klein-{tier}" for tier in ("nano", "base", "max")},
     **{f"{legacy_zimage_prefix}-{tier}": f"image-zimage-{tier}" for tier in ("nano", "base", "max")},
     "shared-klein": "image-klein-shared",
-    "q35": "text-chat-q35",
-    "q35-nano": "text-chat-q35-nano",
     "mebot": "text-chat-mebot",
     "psi-agent": "text-chat-psi-agent",
     "qwen3-coder": "text-code-qwen3",
@@ -241,8 +239,6 @@ expected_files = {
     "image-zimage-max": [current_manifest_name],
     "image-klein-max": [current_manifest_name],
     "image-klein-nano": [current_manifest_name],
-    "text-chat-q35": [current_manifest_name],
-    "text-chat-q35-nano": [current_manifest_name],
 }
 
 for model_id, required in expected_files.items():

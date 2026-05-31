@@ -16,8 +16,11 @@ struct VisionInspect: AsyncParsableCommand {
     @Argument(help: "Image file path.")
     var image: String
 
-    @Argument(help: "Prompt / question about the image (default: \"Describe this image.\").")
-    var prompt: [String] = []
+    @Option(name: [.long], help: "Prompt / question about the image (default: \"Describe this image.\").")
+    var prompt: String?
+
+    @Argument(help: "Prompt words (positional fallback; prefer --prompt).")
+    var promptWords: [String] = []
 
     @Option(name: [.customShort("m"), .long], help: "Local model root directory path (optional, auto-downloads if omitted).")
     var model: String?
@@ -39,7 +42,11 @@ struct VisionInspect: AsyncParsableCommand {
             throw ValidationError("Image not found: \(imageURL.path)")
         }
 
-        let userPrompt = prompt.isEmpty ? "Describe this image." : prompt.joined(separator: " ")
+        let userPrompt: String = {
+            if let prompt, !prompt.isEmpty { return prompt }
+            if !promptWords.isEmpty { return promptWords.joined(separator: " ") }
+            return "Describe this image."
+        }()
 
         let modelURL: URL
         if let model {
@@ -48,8 +55,9 @@ struct VisionInspect: AsyncParsableCommand {
                 throw ValidationError("Model path not found: \(modelURL.path)")
             }
         } else {
-            FileHandle.standardError.write(Data("Downloading \(Qwen3VLAutoCaptioner.modelId)...\n".utf8))
             let autoCaptioner = Qwen3VLAutoCaptioner()
+            let verb = await autoCaptioner.isModelCached() ? "Loading cached" : "Downloading"
+            FileHandle.standardError.write(Data("\(verb) \(Qwen3VLAutoCaptioner.modelId)...\n".utf8))
             modelURL = try await autoCaptioner.ensureReady { progress in
                 let msg = "\r\(progress.status) (\(Int(progress.fraction * 100))%)"
                 FileHandle.standardError.write(Data(msg.utf8))

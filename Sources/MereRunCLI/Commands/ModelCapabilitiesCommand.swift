@@ -36,7 +36,7 @@ struct ModelCapabilities: ParsableCommand {
             print("  \(CLICommandDisplay.command("agent start --model \(agent.id)"))")
             print("  \(agent.displayName): \(agent.summary)")
             if agent.id == DeepseekV4FlashResources.defaultModelId {
-                print("  note: DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; Q35/Qwen agents are alternatives, not upgrades.")
+                print("  note: DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; smaller Qwen agents are lower-memory alternatives, not upgrades.")
             }
         }
 

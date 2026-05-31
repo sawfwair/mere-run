@@ -64,7 +64,7 @@ are:
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
   `image-hidream-o1`, `image-hidream-o1-dev`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q35`, `text-chat-q35-nano`, `text-chat-q36-nano`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`
 - Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
@@ -220,7 +220,7 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Gemma 4, Q35, or Psi family.
+Run local text chat with the Gemma 4, Qwen3.6, or Psi family.
 
 ```bash
 swift run mere.run text chat --prompt "<text>" [options]
@@ -805,22 +805,22 @@ Security defaults:
 - `--max-active-requests` controls fair FIFO chat admission; the default `1`
   preserves serialized local inference while exposing queue depth in status;
   queued client cancellations are removed from the FIFO instead of running later
-- Gemma4 and Q35 use chunked prefill checkpoints for long prompts.
+- Gemma4 and Qwen-family chat use chunked prefill checkpoints for long prompts.
 - Gemma4 can opt into an in-memory prefix KV reuse prototype with
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; runtime status reports entries, hits, and
   reused tokens when a Gemma4 model is loaded, including semantic chat-prefix
   checkpoints before the final message when token prefixes match exactly
-- Q35 can opt into text-only in-memory prefix KV reuse with
+- Qwen-family chat can opt into text-only in-memory prefix KV reuse with
   `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
   text-only requests use the same semantic chat-prefix checkpoints as Gemma4
-- Gemma4 and Q35 can opt into decode batching with
+- Gemma4 and Qwen-family chat can opt into decode batching with
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to
   allow overlap, and status reports actual batched decode steps and max observed
   batch size; Gemma4 full-attention rows stay same-position because that path
-  still uses scalar RoPE/cache offsets, while Q35 full-attention rows use
-  row-offset-aware ragged KV caches and Q35 linear rows use typed recurrent
-  state so compatible Q35 rows can batch across decode positions; the scheduler
+  still uses scalar RoPE/cache offsets, while Qwen-family full-attention rows use
+  row-offset-aware ragged KV caches and Qwen-family linear rows use typed recurrent
+  state so compatible Qwen-family rows can batch across decode positions; the scheduler
   services the earliest decode position first by batching compatible rows there
   or advancing one lower-offset row until it can join a compatible batch
 - Gemma4 can opt into experimental packed PolarKV with
@@ -884,7 +884,7 @@ swift run mere.run setup --mode manual
 Agent model choices:
 
 - `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB machines
-- `tier`: the best supported local tier for this machine, currently 9B, Q35 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ machines
+- `tier`: the best supported local tier for this machine, currently 9B, Qwen3.6 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ machines
 - `premier`: `text-agent-deepseek-v4-flash`, the preferred managed 96 GB+ setup-agent tier served by the bundled DS4 engine
 
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
@@ -918,12 +918,12 @@ swift run mere.run agent install-pi
 ### `mere.run agent start`
 
 Start a local API server for a selected managed agent model and launch Pi
-against the `mere-run` provider. GGUF code models use `--engine text-code`, Q35
-uses `--engine text-chat-q35`, and DeepSeek V4 Flash uses the DS4-backed
+against the `mere-run` provider. GGUF code models use `--engine text-code`,
+Qwen3.6 uses `--engine text-chat-q35`, and DeepSeek V4 Flash uses the DS4-backed
 `--engine text-chat-deepseek-v4-flash`. If `--model` is omitted, `agent start`
 uses the best installed startable setup agent first, then a valid persisted Pi
 provider model, then the current machine's startable hardware tier. On 96 GB+
-Apple Silicon Macs, DeepSeek V4 Flash is the preferred setup-agent tier; Q35 and
+Apple Silicon Macs, DeepSeek V4 Flash is the preferred setup-agent tier; smaller
 Qwen models are alternatives, not upgrades.
 
 ```bash

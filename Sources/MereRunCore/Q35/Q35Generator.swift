@@ -235,17 +235,17 @@ public actor Q35Generator: ChatGenerator {
         }
         resetPrefixKVCache()
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 config"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 tokenizer"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family tokenizer"))
         let tokenizer = try Q35TokenizerAndTemplate.load(
             from: normalizedRoot,
             maxLengthOverride: min(Q35Resources.defaultContextLength, config.textConfig.maxPositionEmbeddings)
         )
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 weights"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family weights"))
         let q35Model = Q35Model(config: config)
         let resources = Q35Resources(rootURL: normalizedRoot)
 
@@ -281,15 +281,19 @@ public actor Q35Generator: ChatGenerator {
 
         let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
         let mtpURL = normalizedRoot.appendingPathComponent("mtp.safetensors")
-        let mtpDisabled = {
-            guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() else {
-                return false
-            }
+        // Load the MTP draft head whenever it ships with the model and isn't
+        // explicitly disabled. Whether speculation is actually USED is decided
+        // per request by prompt length (see Self.shouldSpeculate): MTP speculative
+        // decode regresses at short context (measured ~-20-30%) but is a large win
+        // at long context (~+1.5-2.5x past ~6-8K tokens) on both Metal and CUDA.
+        let mtpExplicitlyDisabled = {
+            guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased()
+            else { return false }
             return raw == "0" || raw == "false" || raw == "no"
         }()
         let loadedMTP: Q35MTPModel?
-        if !mtpDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
-            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 MTP weights"))
+        if !mtpExplicitlyDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family MTP weights"))
             let mtp = Q35MTPModel(config: config)
             let arrays = try MLX.loadArrays(url: mtpURL)
             try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
@@ -476,6 +480,25 @@ public actor Q35Generator: ChatGenerator {
         )
     }
 
+    /// Decide whether to use MTP speculative decode for a request.
+    ///
+    /// Speculative decode only pays off at long context: each main-model pass gets
+    /// more expensive as the KV cache grows, so verifying several drafted tokens per
+    /// pass amortizes — but at short prompts the draft-head overhead dominates.
+    /// Measured (Qwen3.6-35B-A3B OptiQ-4bit, M4 Max): ~20-tok ctx -31%, ~4K -22%,
+    /// ~12K +1.5-2.5x. Default to speculating only when the prompt is long; the env
+    /// forces it on/off, and MERERUN_Q35_MTP_MIN_PROMPT_TOKENS tunes the threshold.
+    static func shouldSpeculate(promptTokenCount: Int) -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        if let raw = env["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() {
+            if raw == "0" || raw == "false" || raw == "no" { return false }
+            if raw == "1" || raw == "true" || raw == "yes" || raw == "on" { return true }
+            // any other value (e.g. "auto") falls through to the adaptive threshold
+        }
+        let threshold = env["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"].flatMap { Int($0) } ?? 6144
+        return promptTokenCount >= threshold
+    }
+
     private func decodeTokens(
         model: Q35Model,
         tokenizerAndTemplate: Q35TokenizerAndTemplate,
@@ -493,12 +516,15 @@ public actor Q35Generator: ChatGenerator {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
         guard continuousBatchingEnabled else {
+            // Use the loaded MTP head only when the prompt is long enough for
+            // speculation to pay off; otherwise decode without it (nil).
+            let speculationMTP = Self.shouldSpeculate(promptTokenCount: promptTokens.count) ? mtpModel : nil
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 initialLogits: initialLogits,
                 initialHidden: initialHidden,
-                mtpModel: mtpModel,
+                mtpModel: speculationMTP,
                 layerCaches: layerCaches,
                 eosSet: eosSet,
                 generationConfig: generationConfig,
@@ -830,7 +856,7 @@ public actor Q35Generator: ChatGenerator {
             let batchedLogits = model(nextInput, cache: batchedCaches)
             MLX.eval(batchedLogits)
             guard let splitCaches = splitBatchedLayerCaches(batchedCaches, rowCount: continuingRows.count) else {
-                throw Q35Error.generationFailed("Q35 batched decode could not split merged cache rows.")
+                throw Q35Error.generationFailed("Qwen-family batched decode could not split merged cache rows.")
             }
             for (index, row) in continuingRows.enumerated() {
                 row.layerCaches = splitCaches[index]
@@ -1222,7 +1248,7 @@ public actor Q35Generator: ChatGenerator {
         guard !visionTower.isLoaded else { return }
         guard let loadedResources else { throw Q35Error.modelNotLoaded }
 
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Q35 vision tower"))
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family vision tower"))
         try visionTower.loadWeights(from: loadedResources)
     }
 

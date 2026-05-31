@@ -6,7 +6,7 @@ engines that reuse the same primitives.
 - `KVCache.swift` owns the reusable full-attention cache protocol and
   implementations. `KVCacheSimple` stores one scalar-offset row or equal-offset
   batches; `KVRaggedBatchCache` stores padded multi-row batches with per-row
-  valid lengths so engines such as Q35 can prove variable-position decode
+  valid lengths so Qwen-family engines can prove variable-position decode
   batching without treating padding as real KV state.
 - `QwenGeneration.swift` and `Sampling.swift` keep the legacy Qwen-compatible
   decode helpers and token sampling utilities.
