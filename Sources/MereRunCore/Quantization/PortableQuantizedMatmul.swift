@@ -71,6 +71,10 @@ func portableGatherQuantizedMM(
     forceDequantizedFallback: Bool = false
 ) -> MLXArray {
     #if os(Linux)
+    // MLX gained the CUDA `GatherQMM` kernel in mlx 0.31.2 (PR #3417). When the
+    // build links mlx >= 0.31.2 and MERERUN_MLX_CUDA_NATIVE_QUANT is set, use the
+    // native gather; otherwise dequantize to dense (older mlx has no CUDA kernel
+    // and calling it throws "GatherQMM has no CUDA implementation").
     let shouldUseFallback =
         (Device.defaultDevice().deviceType == .gpu && !MLXCUDAQuant.preferNativeQuant)
         || forceDequantizedFallback
