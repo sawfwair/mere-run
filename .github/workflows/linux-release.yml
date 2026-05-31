@@ -87,6 +87,9 @@ jobs:
         (github.event_name == 'release' && vars.MERERUN_RELEASE_ARM64_CUDA == '1')
       }}
     runs-on: [self-hosted, linux, arm64, cuda]
+    # Fail fast instead of hanging for hours when no self-hosted arm64 CUDA
+    # runner is online — the x86_64 release proceeds independently.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -159,20 +162,26 @@ jobs:
           path: dist/linux/arm64/*
           if-no-files-found: error
 
+      # Attach the arm64 CUDA artifacts to the release directly, since the
+      # collect-assets job no longer waits for this lane.
+      - name: Upload arm64 CUDA release assets
+        if: github.event_name == 'release'
+        # softprops/action-gh-release v3 pinned to an immutable commit.
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
+        with:
+          files: dist/linux/arm64/*
+
   linux-release-assets:
     name: Collect Linux release assets
+    # Depend only on the x86_64 build so x86_64 artifacts always ship, even when
+    # the self-hosted arm64 CUDA lane is offline/hung/failed. The arm64 CUDA .deb
+    # is attached separately by the arm64 job when it succeeds (or built and
+    # uploaded out-of-band). This avoids the whole release stalling on a missing
+    # arm64 runner, which previously cancelled the run and shipped nothing.
     needs:
       - linux-cli-packages
-      - linux-arm64-cuda-packages
     if: >-
-      ${{
-        always() &&
-        needs.linux-cli-packages.result == 'success' &&
-        (
-          needs.linux-arm64-cuda-packages.result == 'success' ||
-          needs.linux-arm64-cuda-packages.result == 'skipped'
-        )
-      }}
+      ${{ always() && needs.linux-cli-packages.result == 'success' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Download Linux package artifacts
