@@ -282,10 +282,17 @@ public actor Q35Generator: ChatGenerator {
         let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
         let mtpURL = normalizedRoot.appendingPathComponent("mtp.safetensors")
         let mtpDisabled = {
-            guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() else {
-                return false
+            if let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() {
+                return raw == "0" || raw == "false" || raw == "no"
             }
-            return raw == "0" || raw == "false" || raw == "no"
+            // Default MTP speculative decode OFF on Linux CUDA: measured on GB10 it
+            // regresses single-stream decode (~12.8 -> ~7.9 tok/s) because the draft
+            // head pays the dequantized-matmul fallback cost and acceptance is low.
+            // It stays ON elsewhere (e.g. Metal) and remains overridable via the env.
+            if ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda" {
+                return true
+            }
+            return false
         }()
         let loadedMTP: Q35MTPModel?
         if !mtpDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
