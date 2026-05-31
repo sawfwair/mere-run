@@ -14,15 +14,18 @@ struct TextChat: AsyncParsableCommand {
         commandName: "chat",
         abstract: "Run local chat with text chat models.",
         discussion: """
-        Auto-downloads the selected model on first use.
+        Auto-downloads the selected model on first use. The default is
+        text-chat-q36-nano on Apple Silicon (MLX) and text-chat-q35-nano-gguf on
+        Linux CUDA (llama.cpp) — the fastest strong chat model on each platform.
         Known model IDs:
-          - text-chat-gemma4 (Gemma 4 default alias, currently 31B)
+          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit, default on Apple Silicon)
+          - text-chat-q35-nano-gguf (Qwen3.5-35B-A3B GGUF, default on Linux CUDA)
           - text-chat-gemma4-turbo (Gemma 4 26B-A4B NVFP4 native Swift runtime)
+          - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-q35-nano (Qwen3.5-35B-A3B 4-bit)
           - text-chat-q35
-          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
@@ -60,8 +63,22 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Canonical model id: text-chat-gemma4 (default alias), text-chat-gemma4-turbo, text-chat-gemma4-max, text-chat-gemma4-nano, text-chat-q35, text-chat-q35-nano, text-chat-q36-nano, or text-chat-psi-agent.")
-    var model: String = Gemma4Resources.defaultModelId
+    /// Platform-aware default chat model. On Apple Silicon/Metal, MLX
+    /// Qwen3.6-35B-A3B (q36-nano) is the fastest strong chat model (~64 tok/s on
+    /// M4 Max, ~10x the old gemma4-31B default, a third of its download). On
+    /// Linux CUDA (e.g. GB10) MLX quantized-MoE decode is ~5x slower than
+    /// llama.cpp's tuned kernels, so default to the GGUF A3B variant there.
+    static var defaultChatModelId: String {
+        #if os(Linux)
+        if ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda" {
+            return "text-chat-q35-nano-gguf"
+        }
+        #endif
+        return Q35Resources.q36NanoModelId
+    }
+
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q35-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-turbo|-max|-nano], text-chat-q35[-nano], text-chat-psi-agent.")
+    var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
     var thinking: Bool = false
