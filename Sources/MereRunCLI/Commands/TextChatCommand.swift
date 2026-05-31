@@ -147,6 +147,12 @@ struct TextChat: AsyncParsableCommand {
                     kvCacheQuantization: kvQuantization
                 )
                 return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+            } else if ManagedModelCatalog.spec(for: normalizedModelId)?.validationKind == .codegenGGUF {
+                // GGUF chat models run through the llama.cpp engine (the same path
+                // `text code` uses). On Linux CUDA this is the GB10-optimized
+                // llama.cpp runtime, which has fast quantized-MoE kernels MLX lacks.
+                let generator = CodeGenGenerator(modelId: normalizedModelId)
+                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
             } else {
                 let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
                 let generator = Q35Generator(modelId: effectiveModelId)
