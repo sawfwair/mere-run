@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mere-run-docs",
+  "main": "docs-worker/index.js",
+  "account_id": "d49787aa3908b52ac1bf58ba6d6375f1",
+  "compatibility_date": "2026-04-09",
+  "assets": {
+    "directory": "docs/.vitepress/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "routes": [
+    {
+      "pattern": "docs.mere.run",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "secrets_store_secrets": [
+    {
+      "binding": "AUTH_INTERNAL_TOKEN",
+      "store_id": "ec7fe4891f36489db029bd6fa02ff681",
+      "secret_name": "AUTH_INTERNAL_TOKEN"
+    }
+  ],
+  "vars": {
+    "AUTH_BROKER_ORIGIN": "https://mere.world",
+    "AUTH_CLIENT_ID": "docs",
+    "AUTH_COOKIE_NAME": "mere_docs_session",
+    "APP_LABEL": "mere-run-docs"
+  }
+}
