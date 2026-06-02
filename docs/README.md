@@ -26,7 +26,8 @@ pnpm docs:build
 
 The repo also includes a dedicated GitHub Pages workflow at
 `.github/workflows/docs.yml`. On pull requests it builds the site as a docs-only
-CI job, and on `main` it deploys the VitePress output to Pages.
+CI job, and on `main` it deploys the VitePress output to Pages at
+`https://docs.mere.run/`.
 
 ## Start here
 

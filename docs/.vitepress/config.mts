@@ -1,9 +1,14 @@
 import { defineConfig } from 'vitepress'
+import { existsSync } from 'node:fs'
 
 function resolveBase(): string {
   const explicit = process.env.DOCS_BASE?.trim()
   if (explicit) {
     return explicit.startsWith('/') ? explicit : `/${explicit}`
+  }
+
+  if (existsSync(new URL('../public/CNAME', import.meta.url))) {
+    return '/'
   }
 
   const repository = process.env.GITHUB_REPOSITORY?.split('/')[1]
