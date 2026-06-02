@@ -99,9 +99,17 @@ function normalizeRedirectPath(value, fallback = '/') {
 	const raw = value?.trim();
 	if (!raw) return fallback;
 
+	const hasControlCharacter = (path) => {
+		for (let index = 0; index < path.length; index += 1) {
+			const code = path.charCodeAt(index);
+			if (code <= 0x1f || code === 0x7f) return true;
+		}
+		return false;
+	};
+
 	const safePath = (path) => {
 		if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) return null;
-		return /[\u0000-\u001f\u007f]/.test(path) ? null : path;
+		return hasControlCharacter(path) ? null : path;
 	};
 
 	const directPath = safePath(raw);
