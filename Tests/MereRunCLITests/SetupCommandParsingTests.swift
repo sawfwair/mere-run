@@ -246,6 +246,26 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(FileSystemHelper.directorySize(at: link), 4)
     }
 
+    func testDirectorySizeFollowsSymlinkedFilesInsideModelRoots() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-size-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let target = root.appendingPathComponent("target", isDirectory: true)
+        let modelRoot = root.appendingPathComponent("text-chat-q36-nano", isDirectory: true)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        let weights = target.appendingPathComponent("model.safetensors")
+        try Data(repeating: 1, count: 7).write(to: weights)
+        try FileManager.default.createSymbolicLink(
+            at: modelRoot.appendingPathComponent("model.safetensors"),
+            withDestinationURL: weights
+        )
+
+        XCTAssertEqual(FileSystemHelper.directorySize(at: modelRoot), 7)
+    }
+
     func testPiBinaryFinderSkipsDirectoryNamedPi() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-pi-finder-\(UUID().uuidString)", isDirectory: true)

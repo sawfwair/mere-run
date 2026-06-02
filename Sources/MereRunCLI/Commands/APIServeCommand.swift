@@ -406,7 +406,8 @@ enum APIServerContract {
             topP: topP,
             lora: lora,
             requiresJSON: requiresJSON,
-            tools: tools
+            tools: tools,
+            maxContextTokens: contextSize
         )
     }
 

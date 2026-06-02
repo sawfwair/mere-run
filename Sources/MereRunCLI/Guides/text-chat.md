@@ -8,7 +8,7 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, and `text-chat-psi-agent`.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
-`text-chat-q36-nano` is the managed Qwen3.6 35B-A3B OptiQ 4-bit MLX snapshot; its upstream repo includes an MTP head, but this command currently uses the main chat weights only.
+`text-chat-q36-nano` is the managed Qwen3.6 35B-A3B OptiQ 4-bit MLX snapshot; its upstream repo includes an MTP head that is used only by the adaptive long-context speculative decode path.
 
 ## Install And Check
 

@@ -250,6 +250,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var tools: [ToolDefinition]?
     public var stopOnEOS: Bool
     public var kvCacheMode: RuntimeKVCacheMode?
+    public var maxContextTokens: Int?
 
     public init(
         messages: [ChatMessage],
@@ -261,7 +262,8 @@ public struct ChatRequest: Sendable, Hashable {
         requiresJSON: Bool = false,
         tools: [ToolDefinition]? = nil,
         stopOnEOS: Bool = true,
-        kvCacheMode: RuntimeKVCacheMode? = nil
+        kvCacheMode: RuntimeKVCacheMode? = nil,
+        maxContextTokens: Int? = nil
     ) {
         self.messages = messages
         self.maxTokens = maxTokens
@@ -273,6 +275,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.tools = tools
         self.stopOnEOS = stopOnEOS
         self.kvCacheMode = kvCacheMode
+        self.maxContextTokens = maxContextTokens
     }
 }
 

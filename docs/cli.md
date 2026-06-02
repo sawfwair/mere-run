@@ -835,7 +835,7 @@ Security defaults:
   batched decode steps, completed chat requests, generated tokens, and average
   load/prefill/decode timings across loaded models under `cacheStats` and
   `benchmarkStats`
-- generation parameters are bounded before execution; for example, `max_tokens` must fit the configured context size
+- generation parameters are bounded before execution; for example, `max_tokens` must fit the configured context size, and native chat engines receive that same context cap for prompt truncation
 - LoRA adapters for the API server are selected by the operator with `--lora`; request bodies cannot provide local LoRA paths
 
 Engine values:

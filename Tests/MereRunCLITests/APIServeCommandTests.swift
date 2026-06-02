@@ -147,6 +147,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.maxTokens, APIServerContract.defaultMaxTokens)
         XCTAssertEqual(chatRequest.temperature, 1.0)
         XCTAssertEqual(chatRequest.topP, 0.95)
+        XCTAssertEqual(chatRequest.maxContextTokens, 4_096)
         XCTAssertEqual(chatRequest.messages, [ChatMessage(role: .user, content: "hello")])
         guard case .local(let path, let scale) = chatRequest.lora else {
             return XCTFail("Expected server-configured LoRA to be applied")

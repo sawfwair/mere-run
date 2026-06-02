@@ -247,7 +247,15 @@ public actor Gemma4Generator: ChatGenerator {
         }
         let fallbackKVCacheQuantization = try self.kvCacheQuantization.validated()
 
-        let effectiveContext = min(maxContextLength, loadedConfig.textConfig.maxPositionEmbeddings)
+        let requestedContextLength = request.maxContextTokens ?? maxContextLength
+        guard requestedContextLength > 0 else {
+            throw Gemma4Error.unsupportedConfiguration("maxContextTokens must be greater than zero.")
+        }
+        let effectiveContext = min(
+            maxContextLength,
+            requestedContextLength,
+            loadedConfig.textConfig.maxPositionEmbeddings
+        )
         let prefillStart = Date()
         let messages = request.messages
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
