@@ -323,6 +323,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=hidream expects hidream-o1.")
             case .gemma where engine != .gemma4:
                 warnings.append("Manifest engine mismatch: family=gemma expects gemma-4.")
+            case .liquid where engine != .lfm2:
+                warnings.append("Manifest engine mismatch: family=liquid expects lfm2.")
             case .qwen where engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
             case .sam where engine != .samSegmentation:
@@ -471,6 +473,9 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.gemma4Max.rawValue
             || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue {
             return .gemma
+        }
+        if modelId == ModelResolver.ModelID.lfm25A1B8Bit.rawValue {
+            return .liquid
         }
         if modelId == ModelResolver.ModelID.q36Nano.rawValue
             || modelId == ModelResolver.ModelID.q36NanoGGUF.rawValue {

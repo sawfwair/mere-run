@@ -142,7 +142,7 @@ public actor Q35Generator: ChatGenerator {
         var response = try await generate(
             request,
             progressHandler: progressHandler,
-            maxContextLength: Q35Resources.defaultContextLength
+            maxContextLength: request.maxContextTokens ?? Q35Resources.defaultContextLength
         )
         if var timing = response.timing {
             timing.loadSeconds = loadSeconds
@@ -166,7 +166,7 @@ public actor Q35Generator: ChatGenerator {
         var response = try await generate(
             request,
             progressHandler: progressHandler,
-            maxContextLength: Q35Resources.defaultContextLength
+            maxContextLength: request.maxContextTokens ?? Q35Resources.defaultContextLength
         )
         if var timing = response.timing {
             timing.loadSeconds = loadSeconds

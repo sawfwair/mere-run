@@ -4,8 +4,23 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textCode = "text-code"
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
+    case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
+    case textChatLFM2 = "text-chat-lfm2"
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
+
+    public var canonical: RuntimeServingEngine {
+        switch self {
+        case .textChatQ35:
+            return .textChatQ36
+        default:
+            return self
+        }
+    }
+
+    public func isCompatible(with expected: RuntimeServingEngine) -> Bool {
+        canonical == expected.canonical
+    }
 }
 
 public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendable {
@@ -109,11 +124,12 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
             throw RuntimeModelSettingsError.invalidValue("topP must be between 0 and 1")
         }
         if let override = settings.engineOverride,
-           override != spec.defaultRuntimeServingEngine {
+           let expected = spec.defaultRuntimeServingEngine,
+           !override.isCompatible(with: expected) {
             throw RuntimeModelSettingsError.incompatibleEngine(
                 modelID: spec.id,
                 requested: override,
-                expected: spec.defaultRuntimeServingEngine
+                expected: expected
             )
         }
         if let kvCacheMode = settings.kvCacheMode,
@@ -270,7 +286,9 @@ public extension ManagedModelSpec {
         case .gemma4:
             return .textChatGemma4
         case .q35:
-            return .textChatQ35
+            return .textChatQ36
+        case .lfm2:
+            return .textChatLFM2
         case .deepseekV4FlashIMatrixGGUF:
             return .textChatDeepseekV4Flash
         case .hfTextChat where id == ModelResolver.ModelID.mebot.rawValue:

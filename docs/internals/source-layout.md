@@ -18,7 +18,7 @@ Main areas:
 - `LightOnOCR/`: OCR
 - `LoRA/`: LoRA support
 - `MLX/`: MLX utilities
-- `Gemma4/`, `MeBot/`, `Psi/`, `Q35/`: text model families
+- `Gemma4/`, `LFM2/`, `MeBot/`, `Psi/`, `Q35/`: text model families
 - `QwenImageEdit/`: image editing
 - `Support/`: model paths, manifests, resolver, config helpers
 - `Training/`: training-specific support retained in the package

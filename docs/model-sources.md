@@ -23,7 +23,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Category | Hugging Face pull IDs |
 | --- | --- |
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
-| Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-agent-deepseek-v4-flash` |
+| Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Text anonymize | `text-anonymize-privacy-filter` |
@@ -67,6 +67,12 @@ implemented.
 machines. On 32 GB Apple Silicon Macs, use `text-chat-gemma4-turbo`, which
 installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot and runs through the native
 Swift Gemma runtime.
+
+`text-chat-lfm25-a1b-8bit` uses the public
+`LiquidAI/LFM2.5-8B-A1B-MLX-8bit` snapshot at the pinned catalog revision. It is
+a text-only MLX 8-bit directory-root model with `config.json`,
+`tokenizer.json`, `tokenizer_config.json`, and sharded `*.safetensors` weights.
+mere.run runs it through the native Swift LFM2 runtime; no Python bridge is used.
 
 Useful environment variables for that path:
 
@@ -193,6 +199,7 @@ swift run mere.run model pull image-zimage-nano
 
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-nano
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit
 
 # Inspect what is currently installed
 swift run mere.run status

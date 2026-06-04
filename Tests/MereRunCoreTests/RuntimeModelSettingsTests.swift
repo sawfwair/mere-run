@@ -44,7 +44,7 @@ final class RuntimeModelSettingsTests: XCTestCase {
 
         XCTAssertThrowsError(
             try store.writeSettings(
-                RuntimeModelSettings(engineOverride: .textChatQ35),
+                RuntimeModelSettings(engineOverride: .textChatQ36),
                 for: Gemma4Resources.defaultModelId
             )
         ) { error in
@@ -68,6 +68,24 @@ final class RuntimeModelSettingsTests: XCTestCase {
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("KV cache mode"))
         }
+    }
+
+    func testQ36DefaultRuntimeEngineAcceptsLegacyQ35Alias() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.defaultModelId))
+
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+
+        try store.writeSettings(
+            RuntimeModelSettings(engineOverride: .textChatQ35),
+            for: Q35Resources.defaultModelId
+        )
+        let settings = try store.settings(for: Q35Resources.defaultModelId)
+
+        XCTAssertEqual(settings.engineOverride, .textChatQ35)
+        XCTAssertTrue(settings.engineOverride?.isCompatible(with: .textChatQ36) == true)
     }
 
     func testGemmaAutoKVModeUsesPolarOnlyPastPromptThreshold() {

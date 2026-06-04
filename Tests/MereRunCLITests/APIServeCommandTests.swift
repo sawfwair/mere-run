@@ -14,7 +14,7 @@ final class APIServeCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.port, 8080)
         XCTAssertEqual(cmd.host, "127.0.0.1")
-        XCTAssertEqual(cmd.engine, .textChatQ35)
+        XCTAssertEqual(cmd.engine, .textChatQ36)
         XCTAssertNil(cmd.model)
         XCTAssertNil(cmd.lora)
         XCTAssertNil(cmd.apiKey)
@@ -71,6 +71,25 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(quantization.scheme, .turboquant)
         XCTAssertEqual(quantization.groupSize, Gemma4Resources.defaultKVGroupSize)
         XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.defaultTurboQuantizedKVStart)
+    }
+
+    func testAPIServeParsesLFM2Engine() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-lfm2",
+            "--model-path", LFM2Resources.defaultModelId,
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatLFM2)
+        XCTAssertEqual(cmd.model, LFM2Resources.defaultModelId)
+    }
+
+    func testAPIServeParsesLegacyQ35EngineAlias() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-q35",
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatQ35)
+        XCTAssertEqual(cmd.engine.runtimeServingEngine, .textChatQ36)
     }
 
     func testAPIServeGemma4TurboKVFlagsOverrideIndependently() throws {
@@ -145,6 +164,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(chatRequest.maxTokens, APIServerContract.defaultMaxTokens)
+        XCTAssertEqual(chatRequest.maxContextTokens, 4_096)
         XCTAssertEqual(chatRequest.temperature, 1.0)
         XCTAssertEqual(chatRequest.topP, 0.95)
         XCTAssertEqual(chatRequest.maxContextTokens, 4_096)

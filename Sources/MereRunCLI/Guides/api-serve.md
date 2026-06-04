@@ -10,7 +10,8 @@ Supported engines:
 
 - `text-code`: default GGUF code model, usually `text-code-qwen3`.
 - `text-chat-gemma4`: Gemma text chat models.
-- `text-chat-q35`: Qwen-family serving engine; defaults to `text-chat-q36-nano`.
+- `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`.
+- `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
 
@@ -29,7 +30,7 @@ mere.run status
 - `--port`, `-p`: listen port, default `8080`.
 - `--host`: bind host, default `127.0.0.1`.
 - `--model`, `-m`, `--model-path`: model path or engine-specific model root.
-- `--engine`: `text-code`, `text-chat-klein`, `text-chat-gemma4`, `text-chat-q35`, or `text-chat-deepseek-v4-flash`.
+- `--engine`: `text-code`, `text-chat-klein`, `text-chat-gemma4`, `text-chat-q36`, `text-chat-lfm2`, or `text-chat-deepseek-v4-flash`.
 - `--lora`: default LoRA adapter path for all requests.
 - `--api-key`: bearer token, also read from `MERERUN_API_KEY`.
 - `--rate-limit-per-minute`: global chat completions limit.
@@ -97,6 +98,11 @@ mere.run api serve --engine text-code --port 8080
 mere.run model pull text-chat-gemma4
 mere.run model runtime set text-chat-gemma4 --alias chat-default --max-tokens 1024
 mere.run api serve --engine text-chat-gemma4 --port 11434
+```
+
+```bash
+mere.run model pull text-chat-lfm25-a1b-8bit
+mere.run api serve --engine text-chat-lfm2 --port 11434
 ```
 
 ```bash

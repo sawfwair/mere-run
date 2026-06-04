@@ -39,6 +39,13 @@ package-scoped.
 swift run mere.run api serve --engine text-chat-gemma4
 ```
 
+For the LiquidAI LFM2.5 MLX 8-bit model:
+
+```bash
+swift run mere.run model pull text-chat-lfm25-a1b-8bit
+swift run mere.run api serve --engine text-chat-lfm2
+```
+
 In another terminal, confirm that the server is reachable and which model it
 reports:
 
@@ -190,6 +197,9 @@ Engine compatibility:
 - `text-chat-q36-nano`: uses the Qwen-family serving engine with Qwen3.6
   35B-A3B OptiQ chat weights, accepts function tools, and accepts one image
   content part per message.
+- `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
+  LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
+  image content parts.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
 - `text-code`: accepts plain text chat requests and rejects tools, images,

@@ -36,6 +36,7 @@ mere.run model list
 
 ```bash
 mere.run model pull text-chat-gemma4-nano
+mere.run model pull text-chat-lfm25-a1b-8bit
 ```
 
 ```bash

@@ -83,4 +83,24 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(quantization.bits, 2)
         XCTAssertEqual(quantization.scheme, .polar)
     }
+
+    func testCleanResponseRemovesCompletedThinkingBlock() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "Say hello",
+        ])
+
+        let cleaned = cmd.cleanResponse("<think>\nworking\n</think>\n4", showThinking: false)
+
+        XCTAssertEqual(cleaned, "4")
+    }
+
+    func testCleanResponseRemovesDanglingThinkingBlock() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "Say hello",
+        ])
+
+        let cleaned = cmd.cleanResponse("<think>\nThe user asks for a short answer.", showThinking: false)
+
+        XCTAssertEqual(cleaned, "")
+    }
 }

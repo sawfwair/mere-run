@@ -204,6 +204,7 @@ swift run mere.run setup
 
 # Pull a Hugging Face-backed model into the local model store
 swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull text-chat-lfm25-a1b-8bit
 
 # Generate an image
 swift run mere.run image generate \
@@ -229,12 +230,18 @@ swift run mere.run text chat \
   --stream \
   --prompt "Summarize diffusion models in one paragraph."
 
+# Run LiquidAI LFM2.5 through the native Swift MLX runtime
+swift run mere.run text chat \
+  --model text-chat-lfm25-a1b-8bit \
+  --prompt "Summarize mixture-of-experts routing in one paragraph."
+
 # Redact PII locally
 swift run mere.run text anonymize \
   "My name is Alice Smith and my email is alice@example.com"
 
 # Serve the OpenAI-compatible local API on loopback
 swift run mere.run api serve --engine text-chat-gemma4
+swift run mere.run api serve --engine text-chat-lfm2
 
 # In another terminal, confirm the server and served model
 swift run mere.run status

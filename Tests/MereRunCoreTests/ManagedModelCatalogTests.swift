@@ -133,6 +133,21 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
     }
 
+    func testLFM2UsesLiquidAIHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId))
+
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, LFM2Resources.upstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, LFM2Resources.upstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, LFM2Resources.upstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, LFM2Resources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .lfm2)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatLFM2)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("model.safetensors.index.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
+    }
+
     func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
