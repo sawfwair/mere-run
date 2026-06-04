@@ -42,6 +42,8 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains("patch_mlx_cuda_jit_include_path"))
         XCTAssertTrue(script.contains("MERERUN_CUDA_CCCL_INCLUDE"))
         XCTAssertTrue(script.contains("MERERUN_CUDA_CCCL_INCLUDE_PATH"))
+        XCTAssertTrue(script.contains(#"return std::filesystem::path(\"/usr/local/cuda\");"#))
+        XCTAssertFalse(script.contains("return default_cuda_toolkit_path();"))
         XCTAssertTrue(script.contains("detect_cuda_cccl_include_path"))
         XCTAssertTrue(script.contains("cuda_toolkit_root_candidates"))
         XCTAssertTrue(script.contains("Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"))
