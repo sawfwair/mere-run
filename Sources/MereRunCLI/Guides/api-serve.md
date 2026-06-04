@@ -9,7 +9,8 @@ Start a local OpenAI-compatible HTTP server for chat completions. Use this when 
 Supported engines:
 
 - `text-code`: default GGUF code model, usually `text-code-qwen3`.
-- `text-chat-gemma4`: Gemma text chat models.
+- `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
+- `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`.
 - `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
@@ -86,6 +87,7 @@ mere.run status
   `benchmarkStats` so these experiments stay measured.
 - DS4 raw-proxies the complete OpenAI chat request to `ds4-server`.
 - Native engines reject unsupported OpenAI fields explicitly instead of silently dropping them.
+- `vision-chat-gemma4-12b` accepts one OpenAI image content part per message through `/v1/chat/completions`; use a file path, `file://` URL, or base64 data URL because the local runtime does not fetch remote images.
 - Use `stream_options.include_usage` when a client expects the OpenAI streaming usage chunk.
 
 ## Examples
@@ -98,6 +100,11 @@ mere.run api serve --engine text-code --port 8080
 mere.run model pull text-chat-gemma4
 mere.run model runtime set text-chat-gemma4 --alias chat-default --max-tokens 1024
 mere.run api serve --engine text-chat-gemma4 --port 11434
+```
+
+```bash
+mere.run model pull vision-chat-gemma4-12b
+mere.run api serve --engine text-chat-gemma4 --model vision-chat-gemma4-12b --port 11434
 ```
 
 ```bash

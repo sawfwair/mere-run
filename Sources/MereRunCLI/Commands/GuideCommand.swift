@@ -208,6 +208,7 @@ enum GuideRegistry {
             commandPaths: [["text", "chat"]],
             models: [
                 "text-chat-gemma4",
+                "text-chat-gemma4-12b",
                 "text-chat-gemma4-nano",
                 "text-chat-gemma4-max",
                 "text-chat-q36-nano",
@@ -350,6 +351,8 @@ enum GuideRegistry {
             models: [
                 "text-code-qwen3",
                 "text-chat-gemma4",
+                "text-chat-gemma4-12b",
+                "vision-chat-gemma4-12b",
                 "text-chat-gemma4-nano",
                 "text-chat-gemma4-max",
                 "text-chat-q36-nano",
@@ -380,6 +383,8 @@ enum GuideRegistry {
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
                 "text-chat-gemma4",
+                "text-chat-gemma4-12b",
+                "vision-chat-gemma4-12b",
                 "text-chat-q36-nano",
                 "text-chat-lfm25-a1b-8bit",
                 "text-agent-deepseek-v4-flash",

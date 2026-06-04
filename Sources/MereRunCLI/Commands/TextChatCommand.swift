@@ -20,6 +20,7 @@ struct TextChat: AsyncParsableCommand {
         Known model IDs:
           - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit, default on Apple Silicon)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
+          - text-chat-gemma4-12b (Gemma 4 12B dense native Swift runtime)
           - text-chat-gemma4-turbo (Gemma 4 26B-A4B NVFP4 native Swift runtime)
           - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
@@ -89,7 +90,7 @@ struct TextChat: AsyncParsableCommand {
         return Gemma4Resources.nanoModelId
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-12b|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")

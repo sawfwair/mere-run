@@ -410,6 +410,7 @@ public enum MereRunModelValidator {
                 || supports.contains(.visionDetection)
                 || supports.contains(.visionSegmentation)
                 || supports.contains(.visionTracking)
+                || supports.contains(.visionChat)
                 || manifest.family == .sam
                 || manifest.family == .falcon
         }()
@@ -471,7 +472,9 @@ public enum MereRunModelValidator {
         if modelId == ModelResolver.ModelID.gemma4.rawValue
             || modelId == ModelResolver.ModelID.gemma4Nano.rawValue
             || modelId == ModelResolver.ModelID.gemma4Max.rawValue
-            || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue {
+            || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue
+            || modelId == ModelResolver.ModelID.gemma4TwelveB.rawValue
+            || modelId == ModelResolver.ModelID.gemma4VisionTwelveB.rawValue {
             return .gemma
         }
         if modelId == ModelResolver.ModelID.lfm25A1B8Bit.rawValue {

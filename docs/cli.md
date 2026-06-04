@@ -741,6 +741,45 @@ values to run a prompt-size/decode-length matrix for promotion evidence.
 The default fixture prompt is deterministic and intended for local A/B
 comparisons, not model-quality evaluation.
 
+### `mere.run model benchmark vlm`
+
+Run a tiny synthetic VLM smoke, or use `lmms-eval` to compare an installed
+vision-chat model against existing multimodal datasets.
+
+```bash
+swift run mere.run model benchmark vlm --json
+```
+
+The default synthetic suite compares `vision-chat-gemma4-12b` with the existing
+`vision-inspect-qwen3-vl-2b` backend on deterministic color, location, and
+counting fixtures.
+
+For existing datasets, install or check out `lmms-eval`, then start with a
+dry-run:
+
+```bash
+swift run mere.run model benchmark vlm \
+  --dataset mathvista-testmini \
+  --limit 16 \
+  --lmms-eval-root ~/src/lmms-eval \
+  --dry-run \
+  --json
+```
+
+Preset dataset flags map to upstream task names:
+
+| Dataset flag | lmms-eval task |
+| --- | --- |
+| `mathvista-testmini` | `mathvista_testmini` |
+| `mmmu-val` | `mmmu_val` |
+| `chartqa` | `chartqa` |
+| `docvqa-val` | `docvqa_val` |
+| `mme` | `mme` |
+
+Use `--lmms-tasks` for raw upstream task names, `--external-endpoint --base-url`
+for an already-running OpenAI-compatible server, and omit `--dry-run` to let the
+command start a local `mere.run api serve` process per requested model.
+
 ### `mere.run model capabilities`
 
 Show this machine's supported models, recommended setup package, and a short summary

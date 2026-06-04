@@ -424,6 +424,7 @@ enum APIServerContract {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
+            showThinking: false,
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,

@@ -9,6 +9,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case speechTTS = "speech-tts"
     case speechASR = "speech-asr"
     case visionOCR = "vision-ocr"
+    case visionChat = "vision-chat"
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
     case music = "music"
@@ -27,6 +28,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case zimageTurbo
     case hidreamO1
     case gemma4
+    case gemma4Unified
     case q35
     case lfm2
     case qwen3TTS
@@ -386,6 +388,32 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 31 * 1_073_741_824,
             defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
+            id: Gemma4Resources.twelveBModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Gemma4Resources.twelveBUpstreamModelId,
+                patterns: Gemma4Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
+            validationKind: .gemma4,
+            estimatedDownloadBytes: 25 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
+            id: Gemma4Resources.visionTwelveBModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Gemma4Resources.twelveBUpstreamModelId,
+                patterns: Gemma4Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
+            validationKind: .gemma4Unified,
+            estimatedDownloadBytes: 25 * 1_073_741_824,
+            defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-nano",
@@ -798,6 +826,11 @@ public extension ManagedModelSpec {
             return HiDreamO1Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .gemma4Unified:
+            return Gemma4Resources(rootURL: rootURL).validate(
+                fileManager: fileManager,
+                requireUnifiedProcessor: true
+            )
         case .q35:
             return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .lfm2:

@@ -283,7 +283,7 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .codegenGGUF:
             return .textCode
-        case .gemma4:
+        case .gemma4, .gemma4Unified:
             return .textChatGemma4
         case .q35:
             return .textChatQ36

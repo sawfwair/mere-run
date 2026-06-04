@@ -114,6 +114,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case textAnonymization = "text_anonymization"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
+        case visionChat = "vision_chat"
         case visionOCR = "vision_ocr"
         case musicGeneration = "music_generation"
         case videoGeneration = "video_generation"
@@ -629,6 +630,34 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: gemma4TextComponents,
                 upstreamRepoId: Gemma4Resources.turboUpstreamModelId,
+                createdAt: createdAt
+            )
+        case .gemma4TwelveB:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
+                createdAt: createdAt
+            )
+        case .gemma4VisionTwelveB:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
                 createdAt: createdAt
             )
         case .q36Nano:

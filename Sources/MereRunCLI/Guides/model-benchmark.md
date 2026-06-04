@@ -21,6 +21,33 @@ mere.run model benchmark gemma4-kv \
   --json
 ```
 
+Compare Gemma4 12B vision chat against the existing Qwen3-VL inspect backend:
+
+```bash
+mere.run model benchmark vlm --json
+```
+
+Prepare an external VLM quality run against an existing `lmms-eval` dataset:
+
+```bash
+git clone https://github.com/EvolvingLMMs-Lab/lmms-eval.git ~/src/lmms-eval
+mere.run model benchmark vlm \
+  --dataset mathvista-testmini \
+  --limit 16 \
+  --lmms-eval-root ~/src/lmms-eval \
+  --dry-run \
+  --json
+```
+
+Probe another installed chat model to confirm whether its package can accept
+image prompts:
+
+```bash
+mere.run model benchmark vlm \
+  --models vision-chat-gemma4-12b,vision-inspect-qwen3-vl-2b,text-chat-q36-nano \
+  --json
+```
+
 ## Gemma4 KV Benchmark
 
 `model benchmark gemma4-kv` runs a fixed-token comparison for the selected
@@ -46,14 +73,96 @@ Use one of:
 
 The fixture prompt is for runtime comparison only; it is not a quality eval.
 
+## VLM Benchmark
+
+`model benchmark vlm` writes a tiny deterministic image-question suite to a
+fixture directory, runs each requested vision-language backend, and grades
+answers with simple regex checks. The default suite covers:
+
+- dominant color recognition
+- corner/location recognition
+- simple object counting
+
+The default comparison is:
+
+- `vision-chat-gemma4-12b`: the managed Gemma4 12B unified vision-chat runtime.
+- `vision-inspect-qwen3-vl-2b`: the existing `vision inspect` Qwen3-VL 2B backend.
+
+Pass `--models` with comma-separated ids or aliases to compare a different set.
+Managed API-runtime models must already be installed. If a chat model does not
+include a usable vision tower, the benchmark records that as a case failure
+instead of treating it as a VLM peer. The Qwen3-VL inspect backend follows
+`vision inspect` behavior and downloads its small model on first use if needed.
+
+Output includes pass/fail, model response, elapsed time, prompt/generated token
+counts when the runtime exposes them, timing when available, and process
+resident memory before and after each case. This is an onboarding and regression
+benchmark, not a public leaderboard.
+
+### Existing VLM Datasets
+
+`model benchmark vlm` can also prepare and run `lmms-eval` tasks through
+mere.run's OpenAI-compatible API server. Presets map to upstream task names:
+
+| Dataset flag | lmms-eval task |
+| --- | --- |
+| `mathvista-testmini` | `mathvista_testmini` |
+| `mmmu-val` | `mmmu_val` |
+| `chartqa` | `chartqa` |
+| `docvqa-val` | `docvqa_val` |
+| `mme` | `mme` |
+
+Use `--dry-run --json` first to print the exact command without starting a
+server or running downloads. A non-dry run starts one local `mere.run api serve`
+process per requested model, waits for `/health`, then launches:
+
+```bash
+python3 -m lmms_eval \
+  --model openai \
+  --model_args model_version=vision-chat-gemma4-12b,base_url=http://127.0.0.1:11934/v1,api_key=mere-run-local-eval \
+  --tasks mathvista_testmini
+```
+
+Use `--lmms-tasks` to pass raw upstream task names instead of a preset:
+
+```bash
+mere.run model benchmark vlm \
+  --lmms-tasks mathvista_testmini,chartqa \
+  --limit 32 \
+  --lmms-eval-root ~/src/lmms-eval \
+  --json
+```
+
+Use `--external-endpoint --base-url` when the API server is already running:
+
+```bash
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model vision-chat-gemma4-12b \
+  --port 11934 \
+  --api-key mere-run-local-eval
+
+mere.run model benchmark vlm \
+  --dataset mathvista-testmini \
+  --external-endpoint \
+  --base-url http://127.0.0.1:11934/v1 \
+  --limit 16 \
+  --json
+```
+
 ## Notes
 
 - Pull `text-chat-gemma4-turbo` before running the benchmark.
+- Pull `vision-chat-gemma4-12b` before using it in the VLM benchmark.
+- Install `lmms-eval` dependencies in the selected Python environment before
+  running external datasets; dataset downloads and licenses are handled by the
+  upstream task definitions.
 - Prefer release builds for final numbers.
 - Treat memory values as process resident snapshots, not peak memory.
 
 ## Sources
 
 - `Sources/MereRunCLI/Commands/ModelBenchmarkCommand.swift`
+- `Sources/MereRunCLI/Commands/ModelBenchmarkVLMCommand.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4Generator.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4KVQuantization.swift`

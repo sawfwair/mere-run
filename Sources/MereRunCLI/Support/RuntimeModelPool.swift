@@ -357,6 +357,14 @@ actor RuntimeModelPool {
         let installPath: String?
         let settings: RuntimeModelSettings
         let spec: ManagedModelSpec?
+
+        var openAICompatibility: APIEngineCapabilities {
+            var capabilities = engine.openAICompatibility
+            if spec?.category == .visionChat {
+                capabilities.supportsVisionContentParts = true
+            }
+            return capabilities
+        }
     }
 
     private let defaultModelID: String
@@ -509,7 +517,7 @@ actor RuntimeModelPool {
         var effectiveRequest = openAIRequest
         applyDefaults(from: resolved.settings, to: &effectiveRequest)
         let contextSize = resolved.settings.maxContextTokens ?? serverContextSize
-        let capabilities = resolved.engine.openAICompatibility
+        let capabilities = resolved.openAICompatibility
         var chatRequest = try APIServerContract.chatRequest(
             from: effectiveRequest,
             fallbackLoraPath: fallbackLoraPath,

@@ -10,6 +10,11 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         return try JSONDecoder().decode(Gemma4TextConfig.self, from: data)
     }
 
+    private func decodeConfig(_ object: [String: Any]) throws -> Gemma4Config {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [])
+        return try JSONDecoder().decode(Gemma4Config.self, from: data)
+    }
+
     private func makeBaseConfig() -> [String: Any] {
         [
             "model_type": "gemma4_text",
@@ -98,6 +103,56 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
 
         XCTAssertEqual(caches.count, 2)
         XCTAssertTrue(caches.allSatisfy { $0 is Gemma4PolarKVCache })
+    }
+
+    func testUnifiedModelReplacesImageTokenEmbeddings() throws {
+        var textConfig = makeBaseConfig()
+        textConfig["num_hidden_layers"] = 1
+        textConfig["layer_types"] = ["full_attention"]
+        textConfig["hidden_size_per_layer_input"] = 0
+        textConfig["num_kv_shared_layers"] = 0
+        textConfig["vocab_size"] = 64
+        let config = try decodeConfig([
+            "model_type": "gemma4_unified",
+            "architectures": ["Gemma4UnifiedForConditionalGeneration"],
+            "tie_word_embeddings": true,
+            "eos_token_id": [1, 2],
+            "image_token_id": 5,
+            "boi_token_id": 6,
+            "eoi_token_id": 7,
+            "text_config": textConfig,
+            "vision_config": [
+                "model_type": "gemma4_unified_vision",
+                "patch_size": 1,
+                "pooling_kernel_size": 2,
+                "model_patch_size": 2,
+                "mm_embed_dim": 8,
+                "mm_posemb_size": 4,
+                "num_soft_tokens": 2,
+                "rms_norm_eps": 0.000001,
+                "output_proj_dims": 8,
+            ],
+        ])
+        let model = try Gemma4UnifiedCausalLM(config: config)
+        let inputIds = MLXArray([Int32(6), Int32(5), Int32(5), Int32(7)])
+            .reshaped(1, 4)
+        let pixelValues = MLXRandom.uniform(0.0 ..< 1.0, [1, 2, 12])
+        let imagePositionIds = MLXArray([
+            Int32(0), Int32(0),
+            Int32(1), Int32(0),
+        ], [1, 2, 2])
+        let mmTokenTypeIds = MLXArray([Int32(0), Int32(1), Int32(1), Int32(0)])
+            .reshaped(1, 4)
+
+        let logits = try model.forward(
+            inputIds: inputIds,
+            pixelValues: pixelValues,
+            imagePositionIds: imagePositionIds,
+            mmTokenTypeIds: mmTokenTypeIds
+        )
+
+        MLX.eval(logits)
+        XCTAssertEqual(logits.shape, [1, 4, 64])
     }
 
     func testAttentionKEqVDisablesValueProjectionForFullAttentionLayers() throws {

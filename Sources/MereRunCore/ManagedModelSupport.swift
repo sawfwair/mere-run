@@ -248,6 +248,20 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                Gemma4Resources.twelveBModelId,
+                "Gemma 4 12B chat",
+                "Runs the dense Gemma 4 12B instruction model through the native Swift text runtime.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
+                Gemma4Resources.visionTwelveBModelId,
+                "Gemma 4 12B vision chat",
+                "Runs the dense Gemma 4 12B unified model for single-image chat through the native Swift runtime.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
                 "text-chat-gemma4-nano",
                 "Gemma 4 chat nano",
                 "Runs the smaller Gemma 4 native Swift chat model for lower-memory machines.",

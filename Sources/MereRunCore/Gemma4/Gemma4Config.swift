@@ -136,12 +136,54 @@ public struct Gemma4TextConfig: Decodable, Sendable, Hashable {
     }
 }
 
+public struct Gemma4UnifiedVisionConfig: Decodable, Sendable, Hashable {
+    public let modelType: String
+    public let patchSize: Int
+    public let poolingKernelSize: Int
+    public let modelPatchSize: Int
+    public let mmEmbedDim: Int
+    public let mmPosembSize: Int
+    public let numSoftTokens: Int
+    public let rmsNormEps: Float
+    public let outputProjDims: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case modelType = "model_type"
+        case patchSize = "patch_size"
+        case poolingKernelSize = "pooling_kernel_size"
+        case modelPatchSize = "model_patch_size"
+        case mmEmbedDim = "mm_embed_dim"
+        case mmPosembSize = "mm_posemb_size"
+        case numSoftTokens = "num_soft_tokens"
+        case rmsNormEps = "rms_norm_eps"
+        case outputProjDims = "output_proj_dims"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.modelType = try container.decodeIfPresent(String.self, forKey: .modelType) ?? "gemma4_unified_vision"
+        self.patchSize = try container.decodeIfPresent(Int.self, forKey: .patchSize) ?? 16
+        self.poolingKernelSize = try container.decodeIfPresent(Int.self, forKey: .poolingKernelSize) ?? 3
+        self.modelPatchSize = try container.decodeIfPresent(Int.self, forKey: .modelPatchSize)
+            ?? (self.patchSize * self.poolingKernelSize)
+        self.mmEmbedDim = try container.decodeIfPresent(Int.self, forKey: .mmEmbedDim) ?? 3_840
+        self.mmPosembSize = try container.decodeIfPresent(Int.self, forKey: .mmPosembSize) ?? 1_120
+        self.numSoftTokens = try container.decodeIfPresent(Int.self, forKey: .numSoftTokens) ?? 280
+        self.rmsNormEps = try container.decodeIfPresent(Float.self, forKey: .rmsNormEps) ?? 1e-6
+        self.outputProjDims = try container.decodeIfPresent(Int.self, forKey: .outputProjDims) ?? self.mmEmbedDim
+    }
+}
+
 public struct Gemma4Config: Decodable, Sendable, Hashable {
     public let modelType: String
     public let architectures: [String]
     public let tieWordEmbeddings: Bool
     public let eosTokenIds: [Int]
     public let textConfig: Gemma4TextConfig
+    public let visionConfig: Gemma4UnifiedVisionConfig?
+    public let imageTokenId: Int?
+    public let boiTokenId: Int?
+    public let eoiTokenId: Int?
 
     private enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
@@ -149,6 +191,10 @@ public struct Gemma4Config: Decodable, Sendable, Hashable {
         case tieWordEmbeddings = "tie_word_embeddings"
         case eosTokenId = "eos_token_id"
         case textConfig = "text_config"
+        case visionConfig = "vision_config"
+        case imageTokenId = "image_token_id"
+        case boiTokenId = "boi_token_id"
+        case eoiTokenId = "eoi_token_id"
     }
 
     public init(from decoder: Decoder) throws {
@@ -157,6 +203,10 @@ public struct Gemma4Config: Decodable, Sendable, Hashable {
         self.architectures = try container.decodeIfPresent([String].self, forKey: .architectures) ?? []
         self.tieWordEmbeddings = try container.decodeIfPresent(Bool.self, forKey: .tieWordEmbeddings) ?? true
         self.textConfig = try container.decode(Gemma4TextConfig.self, forKey: .textConfig)
+        self.visionConfig = try container.decodeIfPresent(Gemma4UnifiedVisionConfig.self, forKey: .visionConfig)
+        self.imageTokenId = try container.decodeIfPresent(Int.self, forKey: .imageTokenId)
+        self.boiTokenId = try container.decodeIfPresent(Int.self, forKey: .boiTokenId)
+        self.eoiTokenId = try container.decodeIfPresent(Int.self, forKey: .eoiTokenId)
 
         if let direct = try container.decodeIfPresent([Int].self, forKey: .eosTokenId) {
             self.eosTokenIds = direct
