@@ -18,7 +18,7 @@ private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
     return normalized.asType(dtype)
 }
 
-protocol Gemma4CausalModel: AnyObject {
+protocol Gemma4CausalModel: AnyObject, Sendable {
     func forward(inputIds: MLXArray, cache: [AnyObject]?) -> MLXArray
     func makeCache(quantization: Gemma4KVCacheQuantization?) -> [AnyObject]
 }
