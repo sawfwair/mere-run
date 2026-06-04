@@ -107,7 +107,10 @@ use. Linux arm64 release packages should be built with CUDA enabled on a host
 with the CUDA Toolkit headers, CUDA CCCL headers, cuDNN, and NCCL installed.
 CUDA `.deb` artifacts declare the linked CUDA 13 runtime/JIT packages
 (`cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
-`libcublas-13-0`, `libcudnn9-cuda-13`, and `libnccl2`) by default:
+`libcublas-13-0`, `libcudnn9-cuda-13`, and `libnccl2`) by default. The
+installed launcher also exports the resolved CUDA CCCL include root through
+`MERERUN_CUDA_CCCL_INCLUDE_PATH` so MLX CUDA kernels can find `cuda/std/*`
+during NVRTC JIT compilation:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.10.0

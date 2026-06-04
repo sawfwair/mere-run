@@ -113,27 +113,119 @@ require_tool() {
   fi
 }
 
+cuda_target_names=(sbsa-linux aarch64-linux x86_64-linux)
+
+cuda_toolkit_root_candidates() {
+  local seen=":"
+  local candidate
+  for candidate in \
+    "${CUDA_HOME:-}" \
+    "${CUDA_PATH:-}" \
+    /usr/local/cuda \
+    /usr/local/cuda-* \
+    /usr; do
+    [[ -n "$candidate" && -d "$candidate" ]] || continue
+    local resolved
+    resolved="$(cd "$candidate" && pwd -P)"
+    case "$seen" in
+      *":$resolved:"*) continue ;;
+    esac
+    seen="$seen$resolved:"
+    printf '%s\n' "$resolved"
+  done
+}
+
+cuda_cccl_include_candidates() {
+  local cuda_root
+  while IFS= read -r cuda_root; do
+    printf '%s\n' "$cuda_root/include/cccl"
+    local cuda_target
+    for cuda_target in "${cuda_target_names[@]}"; do
+      printf '%s\n' "$cuda_root/targets/$cuda_target/include/cccl"
+    done
+  done < <(cuda_toolkit_root_candidates)
+  printf '%s\n' /usr/include/cccl
+}
+
+detect_cuda_cccl_include_path() {
+  local candidate
+  while IFS= read -r candidate; do
+    if [[ -d "$candidate/cuda/std" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done < <(cuda_cccl_include_candidates)
+}
+
+detect_cuda_toolkit_defaults() {
+  if [[ -z "${CUDA_HOME:-}" && -z "${CUDA_PATH:-}" ]]; then
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      if [[ -x "$cuda_root/bin/nvcc" || -f "$cuda_root/include/cuda.h" ]]; then
+        export CUDA_HOME="$cuda_root"
+        break
+      fi
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        if [[ -f "$cuda_root/targets/$cuda_target/include/cuda.h" ]]; then
+          export CUDA_HOME="$cuda_root"
+          break 2
+        fi
+      done
+    done < <(cuda_toolkit_root_candidates)
+  fi
+  if [[ -z "${CUDA_PATH:-}" && -n "${CUDA_HOME:-}" ]]; then
+    export CUDA_PATH="$CUDA_HOME"
+  fi
+}
+
 patch_mlx_cuda_jit_include_path() {
   local mlx_jit_module="$1"
-  if [[ ! -f "$mlx_jit_module" ]] ||
-     grep -Fq "MERERUN_CUDA_CCCL_INCLUDE" "$mlx_jit_module"; then
+  if [[ ! -f "$mlx_jit_module" ]]; then
+    return
+  fi
+  if grep -Fq "MERERUN_CUDA_CCCL_INCLUDE_PATH" "$mlx_jit_module"; then
     return
   fi
 
   local mlx_jit_tmp
   mlx_jit_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-jit.XXXXXX")"
-  awk '
-    {
-      print
-      if ($0 ~ /args\.push_back\(fmt::format\("--include-path=\{\}\/include", home\)\);/) {
-        print "        // MERERUN_CUDA_CCCL_INCLUDE: CUDA 13 SBSA installs cuda/std under include/cccl."
-        print "        auto cuda_cccl_path = std::filesystem::path(home) / \"include\" / \"cccl\";"
-        print "        if (std::filesystem::exists(cuda_cccl_path)) {"
-        print "          args.push_back(fmt::format(\"--include-path={}\", cuda_cccl_path.string()));"
-        print "        }"
-      }
+  if ! awk '
+    /return args;/ && !inserted {
+      print "      // MERERUN_CUDA_CCCL_INCLUDE: CUDA 13 installs cuda/std under include/cccl."
+      print "      // Keep this explicit because NVRTC does not inherit the package launcher CPATH."
+      print "      auto add_mererun_cuda_cccl_include = [&](const std::filesystem::path& cuda_cccl_path) {"
+      print "        if (!cuda_cccl_path.empty() &&"
+      print "            std::filesystem::exists(cuda_cccl_path / \"cuda\" / \"std\")) {"
+      print "          args.push_back(fmt::format(\"--include-path={}\", cuda_cccl_path.string()));"
+      print "        }"
+      print "      };"
+      print "      if (auto mererun_cuda_cccl = std::getenv(\"MERERUN_CUDA_CCCL_INCLUDE_PATH\")) {"
+      print "        add_mererun_cuda_cccl_include(std::filesystem::path(mererun_cuda_cccl));"
+      print "      }"
+      print "      auto mererun_cuda_home = []() -> std::filesystem::path {"
+      print "        if (auto home = std::getenv(\"CUDA_HOME\")) { return home; }"
+      print "        if (auto path = std::getenv(\"CUDA_PATH\")) { return path; }"
+      print "        return default_cuda_toolkit_path();"
+      print "      }();"
+      print "      add_mererun_cuda_cccl_include(mererun_cuda_home / \"include\" / \"cccl\");"
+      print "      add_mererun_cuda_cccl_include(mererun_cuda_home / \"targets\" / \"sbsa-linux\" / \"include\" / \"cccl\");"
+      print "      add_mererun_cuda_cccl_include(mererun_cuda_home / \"targets\" / \"aarch64-linux\" / \"include\" / \"cccl\");"
+      print "      add_mererun_cuda_cccl_include(mererun_cuda_home / \"targets\" / \"x86_64-linux\" / \"include\" / \"cccl\");"
+      print "      add_mererun_cuda_cccl_include(std::filesystem::path(\"/usr/include/cccl\"));"
+      print "      add_mererun_cuda_cccl_include(std::filesystem::path(\"/usr/local/cuda/include/cccl\"));"
+      print "      add_mererun_cuda_cccl_include(std::filesystem::path(\"/usr/local/cuda/targets/sbsa-linux/include/cccl\"));"
+      print "      add_mererun_cuda_cccl_include(std::filesystem::path(\"/usr/local/cuda/targets/aarch64-linux/include/cccl\"));"
+      print "      add_mererun_cuda_cccl_include(std::filesystem::path(\"/usr/local/cuda/targets/x86_64-linux/include/cccl\"));"
+      inserted=1
     }
-  ' "$mlx_jit_module" >"$mlx_jit_tmp"
+    { print }
+    END { if (!inserted) exit 42 }
+  ' "$mlx_jit_module" >"$mlx_jit_tmp"; then
+    rm -f "$mlx_jit_tmp"
+    echo "[prepare-linux-native] error: could not patch MLX CUDA JIT include path in ${mlx_jit_module#$repo_root/}." >&2
+    exit 69
+  fi
   mv "$mlx_jit_tmp" "$mlx_jit_module"
   echo "[prepare-linux-native] patched mlx-swift CUDA JIT include path in ${mlx_jit_module#$repo_root/}."
 }
@@ -144,10 +236,16 @@ detect_cuda_dependency_defaults() {
   fi
 
   if [[ -z "${CUDNN_INCLUDE_PATH:-}" ]]; then
-    for candidate in \
-      "/usr/include/$deb_multiarch" \
-      /usr/local/cuda/include \
-      /usr/local/cuda/targets/sbsa-linux/include; do
+    local cudnn_include_candidates=("/usr/include/$deb_multiarch")
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cudnn_include_candidates+=("$cuda_root/include")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cudnn_include_candidates+=("$cuda_root/targets/$cuda_target/include")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cudnn_include_candidates[@]}"; do
       if [[ -f "$candidate/cudnn.h" ]]; then
         export CUDNN_INCLUDE_PATH="$candidate"
         break
@@ -156,15 +254,29 @@ detect_cuda_dependency_defaults() {
   fi
 
   if [[ -z "${CUDNN_LIBRARY_PATH:-}" ]]; then
-    for candidate in \
-      "/usr/lib/$deb_multiarch" \
-      /usr/local/cuda/lib64 \
-      /usr/local/cuda/targets/sbsa-linux/lib; do
+    local cudnn_library_candidates=("/usr/lib/$deb_multiarch")
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cudnn_library_candidates+=("$cuda_root/lib64")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cudnn_library_candidates+=("$cuda_root/targets/$cuda_target/lib")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cudnn_library_candidates[@]}"; do
       if [[ -f "$candidate/libcudnn.so" || -f "$candidate/libcudnn.so.9" ]]; then
         export CUDNN_LIBRARY_PATH="$candidate"
         break
       fi
     done
+  fi
+
+  if [[ -z "${MERERUN_CUDA_CCCL_INCLUDE_PATH:-}" ]]; then
+    local cuda_cccl_include_path
+    cuda_cccl_include_path="$(detect_cuda_cccl_include_path || true)"
+    if [[ -n "$cuda_cccl_include_path" ]]; then
+      export MERERUN_CUDA_CCCL_INCLUDE_PATH="$cuda_cccl_include_path"
+    fi
   fi
 }
 
@@ -335,12 +447,7 @@ smoke_mlx_swift_cuda() {
   require_tool nvcc
   require_tool swift
 
-  if [[ -z "${CUDA_HOME:-}" && -f /usr/include/cuda.h ]]; then
-    export CUDA_HOME=/usr
-  fi
-  if [[ -z "${CUDA_PATH:-}" && -n "${CUDA_HOME:-}" ]]; then
-    export CUDA_PATH="$CUDA_HOME"
-  fi
+  detect_cuda_toolkit_defaults
 
   local mlx_cmake_src="$repo_root/.build/native/src/mlx-swift"
   local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
@@ -485,10 +592,16 @@ mlx_swift_cuda_link_flags() {
     flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
   fi
   if [[ -z "$cudnn_library_path" ]]; then
-    for candidate in \
-      "/usr/lib/$deb_multiarch" \
-      /usr/local/cuda/lib64 \
-      /usr/local/cuda/targets/sbsa-linux/lib; do
+    local cudnn_library_candidates=("/usr/lib/$deb_multiarch")
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cudnn_library_candidates+=("$cuda_root/lib64")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cudnn_library_candidates+=("$cuda_root/targets/$cuda_target/lib")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cudnn_library_candidates[@]}"; do
       if [[ -f "$candidate/libcudnn.so" || -f "$candidate/libcudnn.so.9" ]]; then
         cudnn_library_path="$candidate"
         break
@@ -513,13 +626,16 @@ mlx_swift_cuda_link_flags() {
     done
   fi
   if [[ -z "$cuda_library_path" ]]; then
-    for candidate in \
-      "${CUDA_HOME:-}/lib64" \
-      "${CUDA_HOME:-}/targets/sbsa-linux/lib" \
-      "${CUDA_PATH:-}/lib64" \
-      "${CUDA_PATH:-}/targets/sbsa-linux/lib" \
-      /usr/local/cuda/lib64 \
-      /usr/local/cuda/targets/sbsa-linux/lib; do
+    local cuda_library_candidates=()
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cuda_library_candidates+=("$cuda_root/lib64")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cuda_library_candidates+=("$cuda_root/targets/$cuda_target/lib")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cuda_library_candidates[@]}"; do
       if [[ -f "$candidate/libcublasLt.so" || -f "$candidate/libnvrtc.so" || -f "$candidate/libcudart.so" ]]; then
         cuda_library_path="$candidate"
         break

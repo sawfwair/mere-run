@@ -35,6 +35,11 @@ output_dir="$fixture_root/output"
 
 cat >"$fake_build/mere.run" <<'CLI'
 #!/usr/bin/env bash
+if [[ "${1:-}" == "__print-env" ]]; then
+  printf 'MERERUN_CUDA_CCCL_INCLUDE_PATH=%s\n' "${MERERUN_CUDA_CCCL_INCLUDE_PATH:-}"
+  printf 'CPATH=%s\n' "${CPATH:-}"
+  exit 0
+fi
 echo "mere.run package fixture"
 CLI
 chmod +x "$fake_build/mere.run"
@@ -84,7 +89,8 @@ fi
 (cd "$output_dir" && sha256sum -c SHA256SUMS >/dev/null)
 
 tar -xzf "$tarball" -C "$fixture_root"
-staged_lib="$fixture_root/mere-run-symlink-fixture-linux-${platform_arch}/lib/libopenblas.so.0"
+payload_dir="$fixture_root/mere-run-symlink-fixture-linux-${platform_arch}"
+staged_lib="$payload_dir/lib/libopenblas.so.0"
 
 if [[ ! -f "$staged_lib" || -L "$staged_lib" ]]; then
   echo "[test-package-linux] expected libopenblas.so.0 to be bundled as a real file, got:" >&2
@@ -94,6 +100,21 @@ fi
 
 if ! grep -q 'openblas runtime fixture' "$staged_lib"; then
   echo "[test-package-linux] bundled libopenblas.so.0 did not contain the resolved library contents" >&2
+  exit 1
+fi
+
+cuda_home_fixture="$fixture_root/cuda-13.0"
+cuda_cccl_fixture="$cuda_home_fixture/targets/sbsa-linux/include/cccl"
+mkdir -p "$cuda_cccl_fixture/cuda/std"
+wrapper_env_output="$(CUDA_HOME="$cuda_home_fixture" "$payload_dir/mere.run" __print-env)"
+if ! grep -q "^MERERUN_CUDA_CCCL_INCLUDE_PATH=$cuda_cccl_fixture$" <<<"$wrapper_env_output"; then
+  echo "[test-package-linux] launcher did not export the target-specific CUDA CCCL include root:" >&2
+  printf '%s\n' "$wrapper_env_output" >&2
+  exit 1
+fi
+if ! grep -q "^CPATH=$cuda_cccl_fixture" <<<"$wrapper_env_output"; then
+  echo "[test-package-linux] launcher did not add the CUDA CCCL include root to CPATH:" >&2
+  printf '%s\n' "$wrapper_env_output" >&2
   exit 1
 fi
 

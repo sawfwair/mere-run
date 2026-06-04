@@ -147,6 +147,28 @@ llama_prefix="$native_root/llama"
 pkgconfig_dir="$native_root/pkgconfig"
 linux_accel="${MERERUN_LINUX_ACCEL:-cpu}"
 
+cuda_target_names=(sbsa-linux aarch64-linux x86_64-linux)
+
+cuda_toolkit_root_candidates() {
+  local seen=":"
+  local candidate
+  for candidate in \
+    "${CUDA_HOME:-}" \
+    "${CUDA_PATH:-}" \
+    /usr/local/cuda \
+    /usr/local/cuda-* \
+    /usr; do
+    [[ -n "$candidate" && -d "$candidate" ]] || continue
+    local resolved
+    resolved="$(cd "$candidate" && pwd -P)"
+    case "$seen" in
+      *":$resolved:"*) continue ;;
+    esac
+    seen="$seen$resolved:"
+    printf '%s\n' "$resolved"
+  done
+}
+
 case "$linux_accel" in
   cpu|cuda) ;;
   *)
@@ -182,10 +204,16 @@ mlx_swift_cuda_link_flags() {
     flags+=("-Xlinker" "-rpath" "-Xlinker" "$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread")
   fi
   if [[ -z "$cudnn_library_path" ]]; then
-    for candidate in \
-      "/usr/lib/$deb_multiarch" \
-      /usr/local/cuda/lib64 \
-      /usr/local/cuda/targets/sbsa-linux/lib; do
+    local cudnn_library_candidates=("/usr/lib/$deb_multiarch")
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cudnn_library_candidates+=("$cuda_root/lib64")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cudnn_library_candidates+=("$cuda_root/targets/$cuda_target/lib")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cudnn_library_candidates[@]}"; do
       if [[ -f "$candidate/libcudnn.so" || -f "$candidate/libcudnn.so.9" ]]; then
         cudnn_library_path="$candidate"
         break
@@ -210,13 +238,16 @@ mlx_swift_cuda_link_flags() {
     done
   fi
   if [[ -z "$cuda_library_path" ]]; then
-    for candidate in \
-      "${CUDA_HOME:-}/lib64" \
-      "${CUDA_HOME:-}/targets/sbsa-linux/lib" \
-      "${CUDA_PATH:-}/lib64" \
-      "${CUDA_PATH:-}/targets/sbsa-linux/lib" \
-      /usr/local/cuda/lib64 \
-      /usr/local/cuda/targets/sbsa-linux/lib; do
+    local cuda_library_candidates=()
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cuda_library_candidates+=("$cuda_root/lib64")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cuda_library_candidates+=("$cuda_root/targets/$cuda_target/lib")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cuda_library_candidates[@]}"; do
       if [[ -f "$candidate/libcublasLt.so" || -f "$candidate/libnvrtc.so" || -f "$candidate/libcudart.so" ]]; then
         cuda_library_path="$candidate"
         break
@@ -336,13 +367,24 @@ fi
 if [[ -x "$payload_dir/llama-cli" && -z "${MERERUN_LLAMA_CLI:-}" ]]; then
   export MERERUN_LLAMA_CLI="$payload_dir/llama-cli"
 fi
-for cuda_cccl_include in \
-  "${CUDA_HOME:-}/include/cccl" \
-  "${CUDA_PATH:-}/include/cccl" \
-  /usr/local/cuda/include/cccl \
-  /usr/local/cuda/targets/sbsa-linux/include/cccl
+cuda_cccl_candidates=()
+for cuda_root in \
+  "${CUDA_HOME:-}" \
+  "${CUDA_PATH:-}" \
+  /usr/local/cuda \
+  /usr/local/cuda-* \
+  /usr
 do
+  [[ -n "$cuda_root" && -d "$cuda_root" ]] || continue
+  cuda_cccl_candidates+=("$cuda_root/include/cccl")
+  for cuda_target in sbsa-linux aarch64-linux x86_64-linux; do
+    cuda_cccl_candidates+=("$cuda_root/targets/$cuda_target/include/cccl")
+  done
+done
+cuda_cccl_candidates+=(/usr/include/cccl)
+for cuda_cccl_include in "${cuda_cccl_candidates[@]}"; do
   if [[ -d "$cuda_cccl_include/cuda/std" ]]; then
+    export MERERUN_CUDA_CCCL_INCLUDE_PATH="$cuda_cccl_include"
     case ":${CPATH:-}:" in
       *":$cuda_cccl_include:"*) ;;
       *) export CPATH="$cuda_cccl_include${CPATH:+:$CPATH}" ;;

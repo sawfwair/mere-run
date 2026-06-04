@@ -67,9 +67,10 @@ mere.run status
 The tarball installer copies the CLI and its runtime assets together. The
 packaged launcher resolves its own install location and sets `LD_LIBRARY_PATH`
 for the bundled runtime libraries before it starts the real `mere.run` binary.
-On CUDA 13 SBSA hosts it also adds the CUDA CCCL `cuda/std` include directory to
-`CPATH` when present, so MLX CUDA kernels can be JIT-compiled by the installed
-package without extra shell setup.
+On CUDA 13 hosts it also resolves CUDA CCCL from CUDA home, versioned Toolkit
+roots, and target-specific include directories, then adds that `cuda/std` root
+to `CPATH` and `MERERUN_CUDA_CCCL_INCLUDE_PATH`. MLX CUDA kernels use that
+explicit path while JIT-compiling in the installed package.
 
 ## First commands
 
