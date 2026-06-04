@@ -206,7 +206,7 @@ patch_mlx_cuda_jit_include_path() {
       print "      auto mererun_cuda_home = []() -> std::filesystem::path {"
       print "        if (auto home = std::getenv(\"CUDA_HOME\")) { return home; }"
       print "        if (auto path = std::getenv(\"CUDA_PATH\")) { return path; }"
-      print "        return default_cuda_toolkit_path();"
+      print "        return std::filesystem::path(\"/usr/local/cuda\");"
       print "      }();"
       print "      add_mererun_cuda_cccl_include(mererun_cuda_home / \"include\" / \"cccl\");"
       print "      add_mererun_cuda_cccl_include(mererun_cuda_home / \"targets\" / \"sbsa-linux\" / \"include\" / \"cccl\");"
