@@ -29,7 +29,7 @@ and CUDA-gated arm64 package work.
 Use this path on Debian or Ubuntu-style systems:
 
 ```bash
-tag=v0.10.0
+tag=v0.12.0
 version="${tag#v}"
 case "$(uname -m)" in
   x86_64|amd64) deb_arch=amd64 ;;
@@ -50,7 +50,7 @@ assets that the CLI needs at runtime.
 Use this path when you do not want to install a Debian package:
 
 ```bash
-tag=v0.10.0
+tag=v0.12.0
 case "$(uname -m)" in
   x86_64|amd64) linux_arch=x86_64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
@@ -116,7 +116,7 @@ repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.10.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.12.0
 ls dist/linux/
 ```
 
@@ -183,7 +183,7 @@ studio, and DMG packaging are macOS-only.
 Each Linux release includes `SHA256SUMS` beside the tarball and `.deb`:
 
 ```bash
-tag=v0.10.0
+tag=v0.12.0
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
 sha256sum -c SHA256SUMS

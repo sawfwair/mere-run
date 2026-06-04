@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.12.0 - 2026-06-04
+
+### Added
+
+- added `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` managed model
+  support for Google's dense Gemma 4 12B-it checkpoint, including native
+  unified image preprocessing, catalog metadata, API serving, validation, and
+  user-facing docs.
+- added `model benchmark vlm`, a local VLM benchmark command with a tiny
+  synthetic smoke suite plus an `lmms-eval` bridge for existing datasets such as
+  MathVista testmini, MMMU validation, ChartQA, DocVQA validation, and MME.
+
+### Fixed
+
+- cleaned Gemma4 chat responses so completed or dangling hidden-thinking blocks
+  do not leak into CLI or API output.
+
 ## 0.11.0 - 2026-05-31
 
 ### Changed
