@@ -334,7 +334,15 @@ public actor Q35Generator: ChatGenerator {
         }
 
         let messages = request.messages
-        let effectiveContext = min(maxContextLength, loadedConfig.textConfig.maxPositionEmbeddings)
+        let requestedContextLength = request.maxContextTokens ?? maxContextLength
+        guard requestedContextLength > 0 else {
+            throw Q35Error.generationFailed("maxContextTokens must be greater than zero.")
+        }
+        let effectiveContext = min(
+            maxContextLength,
+            requestedContextLength,
+            loadedConfig.textConfig.maxPositionEmbeddings
+        )
         let prefillStart = Date()
 
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
@@ -458,6 +466,7 @@ public actor Q35Generator: ChatGenerator {
             tokenBudget: tokenBudget,
             prefillTokenCount: prefillLength,
             promptTokens: promptTokens,
+            maxContextTokens: effectiveContext,
             progressHandler: progressHandler
         )
 
@@ -486,16 +495,34 @@ public actor Q35Generator: ChatGenerator {
     /// more expensive as the KV cache grows, so verifying several drafted tokens per
     /// pass amortizes — but at short prompts the draft-head overhead dominates.
     /// Measured (Qwen3.6-35B-A3B OptiQ-4bit, M4 Max): ~20-tok ctx -31%, ~4K -22%,
-    /// ~12K +1.5-2.5x. Default to speculating only when the prompt is long; the env
-    /// forces it on/off, and MERERUN_Q35_MTP_MIN_PROMPT_TOKENS tunes the threshold.
-    static func shouldSpeculate(promptTokenCount: Int) -> Bool {
-        let env = ProcessInfo.processInfo.environment
+    /// ~12K +1.5-2.5x. Default to speculating only when the prompt and request
+    /// context are long; MERERUN_Q35_MTP_SPECULATION can enable/disable it, and
+    /// MERERUN_Q35_MTP_MIN_PROMPT_TOKENS tunes the threshold.
+    static func shouldSpeculate(promptTokenCount: Int, maxContextTokens: Int? = nil) -> Bool {
+        shouldSpeculate(
+            promptTokenCount: promptTokenCount,
+            maxContextTokens: maxContextTokens,
+            environment: ProcessInfo.processInfo.environment
+        )
+    }
+
+    static func shouldSpeculate(
+        promptTokenCount: Int,
+        maxContextTokens: Int?,
+        environment env: [String: String]
+    ) -> Bool {
+        let threshold = env["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"].flatMap { Int($0) } ?? 6144
+        let contextAllowsSpeculation = maxContextTokens.map { $0 >= threshold } ?? true
         if let raw = env["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() {
             if raw == "0" || raw == "false" || raw == "no" { return false }
-            if raw == "1" || raw == "true" || raw == "yes" || raw == "on" { return true }
+            if raw == "1" || raw == "true" || raw == "yes" || raw == "on" {
+                return contextAllowsSpeculation
+            }
             // any other value (e.g. "auto") falls through to the adaptive threshold
         }
-        let threshold = env["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"].flatMap { Int($0) } ?? 6144
+        if !contextAllowsSpeculation {
+            return false
+        }
         return promptTokenCount >= threshold
     }
 
@@ -510,6 +537,7 @@ public actor Q35Generator: ChatGenerator {
         tokenBudget: Int,
         prefillTokenCount: Int,
         promptTokens: [Int],
+        maxContextTokens: Int,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         guard tokenBudget > 0 else {
@@ -518,7 +546,10 @@ public actor Q35Generator: ChatGenerator {
         guard continuousBatchingEnabled else {
             // Use the loaded MTP head only when the prompt is long enough for
             // speculation to pay off; otherwise decode without it (nil).
-            let speculationMTP = Self.shouldSpeculate(promptTokenCount: promptTokens.count) ? mtpModel : nil
+            let speculationMTP = Self.shouldSpeculate(
+                promptTokenCount: promptTokens.count,
+                maxContextTokens: maxContextTokens
+            ) ? mtpModel : nil
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,

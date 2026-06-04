@@ -56,11 +56,12 @@ alternatives, not upgrades from DeepSeek V4 Flash.
 
 `text-chat-q36-nano` uses the public `mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit`
 snapshot. That Hugging Face repo includes an MTP head (`mtp.safetensors`) for
-OptiQ serving; mere.run currently loads the main MLX chat weights through its
-native Qwen-family runtime and does not consume the MTP head for speculative
-decode yet. The dense `mlx-community/Qwen3.6-27B-OptiQ-4bit` MTP quant also
-exists on Hugging Face, but is not a managed native target until the dense
-Qwen3.6 layer path is implemented.
+OptiQ serving; mere.run loads that draft head when present, but only uses it for
+adaptive speculative decode when the effective prompt and context window are
+long enough. Short-context requests decode with the main chat weights. The dense
+`mlx-community/Qwen3.6-27B-OptiQ-4bit` MTP quant also exists on Hugging Face,
+but is not a managed native target until the dense Qwen3.6 layer path is
+implemented.
 
 `text-chat-gemma4` is the dense bf16 Gemma 4 31B alias and is gated for larger
 machines. On 32 GB Apple Silicon Macs, use `text-chat-gemma4-turbo`, which

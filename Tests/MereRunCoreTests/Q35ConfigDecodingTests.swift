@@ -174,6 +174,33 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(draftLogits.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testQ35MTPSpeculationRequiresAdaptiveContextWindow() {
+        XCTAssertFalse(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 8_192,
+                maxContextTokens: 4_096,
+                environment: ["MERERUN_Q35_MTP_SPECULATION": "1"]
+            )
+        )
+        XCTAssertTrue(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 8_192,
+                maxContextTokens: 8_192,
+                environment: ["MERERUN_Q35_MTP_SPECULATION": "1"]
+            )
+        )
+        XCTAssertTrue(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 2_048,
+                maxContextTokens: 4_096,
+                environment: [
+                    "MERERUN_Q35_MTP_SPECULATION": "1",
+                    "MERERUN_Q35_MTP_MIN_PROMPT_TOKENS": "2048",
+                ]
+            )
+        )
+    }
+
     func testQ35ConfigAllowsTextOnlyQwen36Layout() throws {
         var configObject = makeBaseConfig()
         configObject["model_type"] = "qwen3_5_moe"
