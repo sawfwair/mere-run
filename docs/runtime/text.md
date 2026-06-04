@@ -15,6 +15,7 @@ embeddings, and PII anonymization.
 ### Chat
 
 - `text-chat-gemma4`
+- `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q36-nano`
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
@@ -45,9 +46,11 @@ swift run mere.run text chat \
   --prompt "Summarize diffusion models in one paragraph."
 ```
 
-On 32 GB Apple Silicon Macs, avoid pulling the dense bf16
-`text-chat-gemma4`/31B path. Use `text-chat-gemma4-turbo` for the managed
-Gemma 4 26B-A4B-it NVFP4 snapshot, which uses the native Swift Gemma MoE runtime.
+`text-chat-gemma4-12b` runs Google's dense Gemma 4 12B-it checkpoint through
+the native Swift Gemma runtime. On 32 GB Apple Silicon Macs, avoid pulling the
+dense bf16 `text-chat-gemma4`/31B path. Use `text-chat-gemma4-turbo` for the
+managed Gemma 4 26B-A4B-it NVFP4 snapshot, which uses the native Swift Gemma
+MoE runtime.
 
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use

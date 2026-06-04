@@ -279,6 +279,17 @@ swift run mere.run model benchmark gemma4-kv \
   --decode-token-values 32,128 \
   --json
 
+# Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend
+swift run mere.run model benchmark vlm --json
+
+# Existing-dataset VLM eval via lmms-eval; dry-run prints the exact command first
+swift run mere.run model benchmark vlm \
+  --dataset mathvista-testmini \
+  --limit 16 \
+  --lmms-eval-root ~/src/lmms-eval \
+  --dry-run \
+  --json
+
 # Expose the API beyond loopback only with an explicit key
 export MERERUN_API_KEY=change-me
 swift run mere.run api serve \

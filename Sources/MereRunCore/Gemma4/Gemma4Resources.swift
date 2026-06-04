@@ -5,9 +5,12 @@ public struct Gemma4Resources: Sendable, Hashable {
     public static let nanoModelId = "text-chat-gemma4-nano"
     public static let maxModelId = "text-chat-gemma4-max"
     public static let turboModelId = "text-chat-gemma4-turbo"
+    public static let twelveBModelId = "text-chat-gemma4-12b"
+    public static let visionTwelveBModelId = "vision-chat-gemma4-12b"
     public static let nanoUpstreamModelId = "google/gemma-4-E4B-it"
     public static let maxUpstreamModelId = "google/gemma-4-31B-it"
     public static let turboUpstreamModelId = "mlx-community/gemma-4-26b-a4b-it-nvfp4"
+    public static let twelveBUpstreamModelId = "google/gemma-4-12B-it"
     public static let defaultUpstreamModelId = maxUpstreamModelId
     public static let defaultContextLength = 32_768
     public static let defaultKVGroupSize = 64
@@ -28,6 +31,9 @@ public struct Gemma4Resources: Sendable, Hashable {
         "generation_config.json",
         "tokenizer.json",
         "tokenizer_config.json",
+        "processor_config.json",
+        "preprocessor_config.json",
+        "video_preprocessor_config.json",
         "chat_template.jinja",
         "chat_template.json",
         "model.safetensors",
@@ -46,9 +52,11 @@ public struct Gemma4Resources: Sendable, Hashable {
     public var modelWeightsURL: URL { rootURL.appending(path: "model.safetensors") }
     public var tokenizerURL: URL { rootURL.appending(path: "tokenizer.json") }
     public var tokenizerConfigURL: URL { rootURL.appending(path: "tokenizer_config.json") }
+    public var processorConfigURL: URL { rootURL.appending(path: "processor_config.json") }
+    public var preprocessorConfigURL: URL { rootURL.appending(path: "preprocessor_config.json") }
     public var chatTemplateURL: URL { rootURL.appending(path: "chat_template.jinja") }
 
-    public func validate(fileManager: FileManager = .default) -> [URL] {
+    public func validate(fileManager: FileManager = .default, requireUnifiedProcessor: Bool = false) -> [URL] {
         var missing: [URL] = []
 
         if !fileManager.fileExists(atPath: configURL.path) {
@@ -67,6 +75,12 @@ public struct Gemma4Resources: Sendable, Hashable {
 
         if !fileManager.fileExists(atPath: tokenizerConfigURL.path) {
             missing.append(tokenizerConfigURL)
+        }
+
+        if requireUnifiedProcessor,
+           !fileManager.fileExists(atPath: processorConfigURL.path),
+           !fileManager.fileExists(atPath: preprocessorConfigURL.path) {
+            missing.append(processorConfigURL)
         }
 
         return missing
@@ -100,6 +114,14 @@ public struct Gemma4Resources: Sendable, Hashable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         return normalized == turboModelId || normalized == turboUpstreamModelId.lowercased()
+    }
+
+    public static func supportsVision(modelSpec raw: String) -> Bool {
+        let normalized = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return normalized == visionTwelveBModelId
+            || normalized == twelveBUpstreamModelId.lowercased()
     }
 }
 

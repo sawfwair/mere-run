@@ -167,6 +167,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.maxContextTokens, 4_096)
         XCTAssertEqual(chatRequest.temperature, 1.0)
         XCTAssertEqual(chatRequest.topP, 0.95)
+        XCTAssertFalse(chatRequest.showThinking)
         XCTAssertEqual(chatRequest.maxContextTokens, 4_096)
         XCTAssertEqual(chatRequest.messages, [ChatMessage(role: .user, content: "hello")])
         guard case .local(let path, let scale) = chatRequest.lora else {

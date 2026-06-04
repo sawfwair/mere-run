@@ -87,7 +87,7 @@ public actor Gemma4Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
-    private var model: Gemma4TextCausalLM?
+    private var model: (any Gemma4CausalModel)?
     private var tokenizerAndTemplate: Gemma4TokenizerAndTemplate?
     private var loadedModelPath: String?
     private var loadedConfig: Gemma4Config?
@@ -228,10 +228,15 @@ public actor Gemma4Generator: ChatGenerator {
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 weights"))
-        let textModel = Gemma4TextCausalLM(config: config.textConfig)
-        try loadWeights(into: textModel, from: resources, config: config)
-
-        model = textModel
+        if Gemma4Resources.supportsVision(modelSpec: modelId) {
+            let unifiedModel = try Gemma4UnifiedCausalLM(config: config)
+            try loadWeights(into: unifiedModel, from: resources, config: config)
+            model = unifiedModel
+        } else {
+            let textModel = Gemma4TextCausalLM(config: config.textConfig)
+            try loadWeights(into: textModel, from: resources, config: config)
+            model = textModel
+        }
         tokenizerAndTemplate = tokenizer
         loadedConfig = config
         loadedModelPath = normalizedRoot.path
@@ -258,6 +263,31 @@ public actor Gemma4Generator: ChatGenerator {
         )
         let prefillStart = Date()
         let messages = request.messages
+        let imageReferences = messages.compactMap { message -> String? in
+            guard let imageURL = message.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !imageURL.isEmpty else {
+                return nil
+            }
+            return imageURL
+        }
+        let imageBatch: Gemma4UnifiedImageBatch?
+        if imageReferences.isEmpty {
+            imageBatch = nil
+        } else {
+            guard let visionConfig = loadedConfig.visionConfig,
+                  loadedConfig.imageTokenId != nil,
+                  loadedConfig.boiTokenId != nil,
+                  loadedConfig.eoiTokenId != nil else {
+                throw Gemma4Error.unsupportedConfiguration("This Gemma4 model does not support image inputs.")
+            }
+            guard model is Gemma4UnifiedCausalLM else {
+                throw Gemma4Error.unsupportedConfiguration("Image inputs require \(Gemma4Resources.visionTwelveBModelId).")
+            }
+            imageBatch = try Gemma4UnifiedImageProcessor.makeBatch(
+                imageReferences: imageReferences,
+                visionConfig: visionConfig
+            )
+        }
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: messages,
             tools: request.tools,
@@ -265,6 +295,20 @@ public actor Gemma4Generator: ChatGenerator {
             includeThinking: request.showThinking,
             maxLength: effectiveContext
         )
+        if let imageBatch {
+            guard let imageTokenId = loadedConfig.imageTokenId,
+                  let boiTokenId = loadedConfig.boiTokenId,
+                  let eoiTokenId = loadedConfig.eoiTokenId else {
+                throw Gemma4Error.unsupportedConfiguration("Gemma4 unified prompt expansion requires image token IDs.")
+            }
+            promptTokens = try Gemma4UnifiedImageProcessor.expandedPromptTokens(
+                promptTokens,
+                softTokenCounts: imageBatch.softTokenCounts,
+                imageTokenId: imageTokenId,
+                boiTokenId: boiTokenId,
+                eoiTokenId: eoiTokenId
+            )
+        }
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
@@ -287,34 +331,51 @@ public actor Gemma4Generator: ChatGenerator {
             repetitionContextSize: 64
         )
 
-        let prefixSeed = prefixKVCacheSeed(
+        let usePrefixKVCache = imageBatch == nil
+        let prefixSeed = usePrefixKVCache ? prefixKVCacheSeed(
             modelPath: loadedModelPath ?? "",
             quantization: kvCacheQuantization,
             promptTokens: promptTokens
-        )
-        let prefixCheckpoints = semanticPrefixCheckpoints(
+        ) : nil
+        let prefixCheckpoints = usePrefixKVCache ? semanticPrefixCheckpoints(
             tokenizerAndTemplate: tokenizerAndTemplate,
             messages: messages,
             tools: request.tools,
             includeThinking: request.showThinking,
             promptTokens: promptTokens,
             maxContextLength: effectiveContext
-        )
+        ) : []
         let layerCaches = try prefixSeed?.caches ?? makeLayerCaches(
             model: model,
             quantization: prefillKVCacheQuantization
         )
-        let logits = try await chunkedPrefill(
-            model: model,
-            promptTokens: promptTokens,
-            cache: layerCaches,
-            startIndex: prefixSeed?.tokenCount ?? 0,
-            existingLogits: prefixSeed?.logits,
-            modelPath: loadedModelPath ?? "",
-            quantization: kvCacheQuantization,
-            checkpointTokenCounts: prefixCheckpoints,
-            progressHandler: progressHandler
-        )
+        let logits: MLXArray
+        if let imageBatch {
+            guard let unifiedModel = model as? Gemma4UnifiedCausalLM,
+                  let imageTokenId = loadedConfig.imageTokenId else {
+                throw Gemma4Error.unsupportedConfiguration("Gemma4 unified prefill requires a unified runtime model.")
+            }
+            logits = try await unifiedPrefill(
+                model: unifiedModel,
+                promptTokens: promptTokens,
+                imageBatch: imageBatch,
+                imageTokenId: imageTokenId,
+                cache: layerCaches,
+                progressHandler: progressHandler
+            )
+        } else {
+            logits = try await chunkedPrefill(
+                model: model,
+                promptTokens: promptTokens,
+                cache: layerCaches,
+                startIndex: prefixSeed?.tokenCount ?? 0,
+                existingLogits: prefixSeed?.logits,
+                modelPath: loadedModelPath ?? "",
+                quantization: kvCacheQuantization,
+                checkpointTokenCounts: prefixCheckpoints,
+                progressHandler: progressHandler
+            )
+        }
 
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
         let preparedCaches = try prepareLayerCachesForDecode(
@@ -338,7 +399,10 @@ public actor Gemma4Generator: ChatGenerator {
             progressHandler: progressHandler
         )
         let generated = decodeResult.generatedTokens
-        let decoded = tokenizerAndTemplate.decode(tokens: generated)
+        let decoded = Self.cleanedResponse(
+            tokenizerAndTemplate.decode(tokens: generated),
+            showThinking: request.showThinking
+        )
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let toolCalls: [ToolCall]? = hasTools ? {
@@ -386,6 +450,62 @@ public actor Gemma4Generator: ChatGenerator {
         quantization.isEnabled && quantization.scheme == .polar
     }
 
+    static func cleanedResponse(_ response: String, showThinking: Bool) -> String {
+        guard !showThinking else { return response }
+
+        if let finalRange = response.range(
+            of: #"(?is)<\|channel>final\s*"#,
+            options: .regularExpression
+        ) {
+            return String(response[finalRange.upperBound...])
+                .replacingOccurrences(
+                    of: #"(?is)<\|channel>[a-z_]+\s*"#,
+                    with: "",
+                    options: .regularExpression
+                )
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let thoughtCloseRange = response.range(
+            of: #"(?is)<\|channel>thought\b.*?<channel\|>\s*"#,
+            options: .regularExpression
+        ) {
+            return String(response[thoughtCloseRange.upperBound...])
+                .replacingOccurrences(
+                    of: #"(?is)<\|channel>[a-z_]+\s*|<channel\|>"#,
+                    with: "",
+                    options: .regularExpression
+                )
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var cleaned = response.replacingOccurrences(
+            of: #"(?is)<\|channel>thought\b.*\z"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?is)<think>.*?</think>",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?is)<think>.*\\z",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?i)</think>",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"(?is)<\|channel>[a-z_]+\s*|<channel\|>"#,
+            with: "",
+            options: .regularExpression
+        )
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func prepareLayerCachesForDecode(
         _ layerCaches: [Gemma4AttentionCache],
         quantization: Gemma4KVCacheQuantization,
@@ -408,7 +528,7 @@ public actor Gemma4Generator: ChatGenerator {
     }
 
     private func decodeTokens(
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate,
         initialLogits: MLXArray,
         layerCaches: [Gemma4AttentionCache],
@@ -462,7 +582,7 @@ public actor Gemma4Generator: ChatGenerator {
     }
 
     private func decodeTokensSerially(
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate,
         initialLogits: MLXArray,
         layerCaches: [Gemma4AttentionCache],
@@ -505,7 +625,7 @@ public actor Gemma4Generator: ChatGenerator {
                 break
             }
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            logits = model(nextInput, cache: layerCaches as [AnyObject])
+            logits = model.forward(inputIds: nextInput, cache: layerCaches as [AnyObject])
             MLX.eval(logits)
         }
 
@@ -518,7 +638,7 @@ public actor Gemma4Generator: ChatGenerator {
 
     private func enqueueDecodeRow(
         _ row: Gemma4BatchedDecodeRow,
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate
     ) {
         decodeQueue.append(row)
@@ -538,7 +658,7 @@ public actor Gemma4Generator: ChatGenerator {
     }
 
     private func startDecodeLoopIfNeeded(
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate
     ) {
         guard !decodeLoopRunning else { return }
@@ -549,7 +669,7 @@ public actor Gemma4Generator: ChatGenerator {
     }
 
     private func runDecodeLoop(
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate
     ) async {
         defer {
@@ -615,7 +735,7 @@ public actor Gemma4Generator: ChatGenerator {
 
     private func decodeOneStep(
         rows: [Gemma4BatchedDecodeRow],
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate
     ) throws {
         let sampledRows = rows.filter(\.needsDecodeStep)
@@ -649,7 +769,7 @@ public actor Gemma4Generator: ChatGenerator {
            let batchedCaches = makeBatchedLayerCaches(continuingRows.map(\.layerCaches)) {
             let nextInput = MLXArray(continuingRows.compactMap { $0.generatedTokens.last }.map(Int32.init))
                 .reshaped(continuingRows.count, 1)
-            let batchedLogits = model(nextInput, cache: batchedCaches as [AnyObject])
+            let batchedLogits = model.forward(inputIds: nextInput, cache: batchedCaches as [AnyObject])
             MLX.eval(batchedLogits)
             guard let splitCaches = splitBatchedLayerCaches(batchedCaches, rowCount: continuingRows.count) else {
                 throw Gemma4Error.unsupportedConfiguration("Gemma4 batched decode could not split merged KV cache rows.")
@@ -672,7 +792,7 @@ public actor Gemma4Generator: ChatGenerator {
         for row in continuingRows {
             guard let next = row.generatedTokens.last else { continue }
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            row.logits = model(nextInput, cache: row.layerCaches as [AnyObject])
+            row.logits = model.forward(inputIds: nextInput, cache: row.layerCaches as [AnyObject])
             MLX.eval(row.logits)
             singleDecodeSteps += 1
         }
@@ -745,7 +865,7 @@ public actor Gemma4Generator: ChatGenerator {
     }
 
     private func chunkedPrefill(
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         promptTokens: [Int],
         cache: [Gemma4AttentionCache],
         startIndex: Int,
@@ -777,7 +897,7 @@ public actor Gemma4Generator: ChatGenerator {
             }
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
                 .reshaped(1, end - processed)
-            let chunkLogits = model(chunk, cache: cache as [AnyObject])
+            let chunkLogits = model.forward(inputIds: chunk, cache: cache as [AnyObject])
             MLX.eval(chunkLogits)
             logits = chunkLogits
             processed = end
@@ -799,8 +919,42 @@ public actor Gemma4Generator: ChatGenerator {
         return logits
     }
 
+    private func unifiedPrefill(
+        model: Gemma4UnifiedCausalLM,
+        promptTokens: [Int],
+        imageBatch: Gemma4UnifiedImageBatch,
+        imageTokenId: Int,
+        cache: [Gemma4AttentionCache],
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws -> MLXArray {
+        guard !promptTokens.isEmpty else {
+            throw Gemma4Error.unsupportedConfiguration("Prompt is empty after tokenization.")
+        }
+
+        progressHandler?(ChatProgress(
+            stage: .encoding,
+            message: "Prefilling \(promptTokens.count) multimodal tokens"
+        ))
+        let inputIds = MLXArray(promptTokens.map(Int32.init))
+            .reshaped(1, promptTokens.count)
+        let mmTokenTypeIds = Gemma4UnifiedImageProcessor.mmTokenTypeIds(
+            tokens: promptTokens,
+            imageTokenId: imageTokenId
+        )
+        let logits = try model.forward(
+            inputIds: inputIds,
+            pixelValues: imageBatch.pixelValues,
+            imagePositionIds: imageBatch.imagePositionIds,
+            mmTokenTypeIds: mmTokenTypeIds,
+            cache: cache as [AnyObject]
+        )
+        MLX.eval(logits)
+        await Task.yield()
+        return logits
+    }
+
     private func makeLayerCaches(
-        model: Gemma4TextCausalLM,
+        model: any Gemma4CausalModel,
         quantization: Gemma4KVCacheQuantization
     ) throws -> [Gemma4AttentionCache] {
         guard let caches = model.makeCache(quantization: quantization) as? [Gemma4AttentionCache] else {
@@ -1097,5 +1251,68 @@ public actor Gemma4Generator: ChatGenerator {
         } else {
             throw Gemma4Error.missingFiles([resources.modelIndexURL.lastPathComponent, resources.modelWeightsURL.lastPathComponent])
         }
+    }
+
+    private func loadWeights(
+        into model: Gemma4UnifiedCausalLM,
+        from resources: Gemma4Resources,
+        config: Gemma4Config
+    ) throws {
+        let include: (String) -> Bool = { key in
+            Self.normalizedUnifiedWeightKey(key) != nil
+        }
+        let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            guard let mapped = Self.normalizedUnifiedWeightKey(key) else {
+                return []
+            }
+            return [(mapped, value)]
+        }
+
+        if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
+            try HFSafetensorsWeightsLoader.applyShardedWeights(
+                indexURL: resources.modelIndexURL,
+                to: model,
+                dtype: .bfloat16,
+                verify: .none,
+                mapper: mapper
+            )
+        } else if FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) {
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: resources.modelWeightsURL,
+                to: model,
+                dtype: .bfloat16,
+                verify: .none,
+                include: include,
+                mapper: mapper,
+                batchSize: 24
+            )
+        } else {
+            throw Gemma4Error.missingFiles([resources.modelIndexURL.lastPathComponent, resources.modelWeightsURL.lastPathComponent])
+        }
+        _ = config
+    }
+
+    private static func normalizedUnifiedWeightKey(_ key: String) -> String? {
+        guard !key.contains("rotary_emb"),
+              key != "lm_head.weight",
+              !key.contains("embed_audio") else {
+            return nil
+        }
+
+        let withoutModelPrefix = key.hasPrefix("model.")
+            ? String(key.dropFirst("model.".count))
+            : key
+
+        if withoutModelPrefix.hasPrefix("language_model.model.") {
+            return "language_model.\(withoutModelPrefix.dropFirst("language_model.model.".count))"
+        }
+        if withoutModelPrefix.hasPrefix("language_model.") {
+            return withoutModelPrefix
+        }
+        if withoutModelPrefix.hasPrefix("vision_embedder.")
+            || withoutModelPrefix.hasPrefix("embed_vision.") {
+            return withoutModelPrefix
+        }
+        return nil
     }
 }

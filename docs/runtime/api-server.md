@@ -39,6 +39,15 @@ package-scoped.
 swift run mere.run api serve --engine text-chat-gemma4
 ```
 
+For Gemma 4 12B vision chat:
+
+```bash
+swift run mere.run model pull vision-chat-gemma4-12b
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model vision-chat-gemma4-12b
+```
+
 For the LiquidAI LFM2.5 MLX 8-bit model:
 
 ```bash
@@ -194,6 +203,9 @@ Engine compatibility:
   `ds4-server`, preserving DS4's OpenAI-compatible behavior.
 - `text-chat-gemma4`: accepts function tools and emits OpenAI tool-call
   responses when the model generates a tool call.
+- `vision-chat-gemma4-12b`: uses the Gemma4 serving engine and accepts one
+  OpenAI image content part per message. The native runtime accepts local file
+  paths, `file://` URLs, or base64 data URLs; it does not fetch remote images.
 - `text-chat-q36-nano`: uses the Qwen-family serving engine with Qwen3.6
   35B-A3B OptiQ chat weights, accepts function tools, and accepts one image
   content part per message.

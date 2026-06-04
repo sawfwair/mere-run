@@ -11,6 +11,7 @@ struct ModelBenchmark: ParsableCommand {
         abstract: "Run focused local model benchmarks.",
         subcommands: [
             ModelBenchmarkGemma4KV.self,
+            ModelBenchmarkVLM.self,
         ]
     )
 }

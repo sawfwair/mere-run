@@ -23,7 +23,8 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Category | Hugging Face pull IDs |
 | --- | --- |
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev` |
-| Text chat | `text-chat-gemma4`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
+| Text chat | `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
+| Vision chat | `vision-chat-gemma4-12b` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Text anonymize | `text-anonymize-privacy-filter` |
@@ -63,8 +64,11 @@ long enough. Short-context requests decode with the main chat weights. The dense
 but is not a managed native target until the dense Qwen3.6 layer path is
 implemented.
 
-`text-chat-gemma4` is the dense bf16 Gemma 4 31B alias and is gated for larger
-machines. On 32 GB Apple Silicon Macs, use `text-chat-gemma4-turbo`, which
+`text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
+4 12B-it checkpoint; the text id uses the native chat path, while the vision id
+enables OpenAI image content parts through `api serve`. `text-chat-gemma4` is
+the dense bf16 Gemma 4 31B alias and is gated for larger machines. On 32 GB
+Apple Silicon Macs, use `text-chat-gemma4-turbo`, which
 installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot and runs through the native
 Swift Gemma runtime.
 

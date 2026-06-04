@@ -123,6 +123,28 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .gemma4)
     }
 
+    func testGemma4TwelveBUsesGoogleUnifiedHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.twelveBModelId))
+
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.hubFallback?.repoId, Gemma4Resources.twelveBUpstreamModelId)
+        XCTAssertEqual(spec.upstreamRepoId, Gemma4Resources.twelveBUpstreamModelId)
+        XCTAssertEqual(spec.validationKind, .gemma4)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
+    }
+
+    func testGemma4TwelveBVisionRequiresUnifiedProcessorFiles() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.visionTwelveBModelId))
+
+        XCTAssertEqual(spec.category, .visionChat)
+        XCTAssertEqual(spec.hubFallback?.repoId, Gemma4Resources.twelveBUpstreamModelId)
+        XCTAssertEqual(spec.upstreamRepoId, Gemma4Resources.twelveBUpstreamModelId)
+        XCTAssertEqual(spec.validationKind, .gemma4Unified)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("processor_config.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
+    }
+
     func testQ36NanoUsesOptiQHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.q36NanoModelId))
 
