@@ -33,7 +33,10 @@ struct APIServe: AsyncParsableCommand {
           mere.run api serve --engine text-chat-gemma4
 
           # Start a Qwen3.6 text-chat server with an explicit model root
-          mere.run api serve --engine text-chat-q35 -m ~/Models/text-chat-q36-nano
+          mere.run api serve --engine text-chat-q36 -m ~/Models/text-chat-q36-nano
+
+          # Start an LFM2.5 text-chat server
+          mere.run api serve --engine text-chat-lfm2
 
           # Start the DeepSeek V4 Flash OpenAI-compatible server
           mere.run api serve --engine text-chat-deepseek-v4-flash
@@ -58,11 +61,11 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q35, pass a Qwen3.6 text chat model root. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-chat-q35 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, or text-chat-deepseek-v4-flash.")
-    var engine: APIEngine = .textChatQ35
+    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-lfm2, or text-chat-deepseek-v4-flash.")
+    var engine: APIEngine = .textChatQ36
 
     @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
     var lora: String?
@@ -124,8 +127,10 @@ struct APIServe: AsyncParsableCommand {
             return ModelResolver.ModelID.mebot.rawValue
         case .textChatGemma4:
             return ModelResolver.ModelID.gemma4.rawValue
-        case .textChatQ35:
+        case .textChatQ36, .textChatQ35:
             return ModelResolver.ModelID.q36Nano.rawValue
+        case .textChatLFM2:
+            return LFM2Resources.defaultModelId
         case .textCode:
             return CodeGenResources.defaultModelId
         case .textChatDeepseekV4Flash:
@@ -153,14 +158,23 @@ struct APIServe: AsyncParsableCommand {
                 return resolved.rootURL.path
             }
             return nil
-        case .textChatQ35:
+        case .textChatQ36, .textChatQ35:
             if let explicit = model {
                 return explicit
             }
             if let resolved = ModelResolver().resolveIfPresent(.q36Nano) {
                 return resolved.rootURL.path
             }
-            // Allow Q35Generator to auto-download from Hugging Face when model path is omitted.
+            // Allow the Qwen-family generator to auto-download from Hugging Face when model path is omitted.
+            return nil
+        case .textChatLFM2:
+            if let explicit = model {
+                return explicit
+            }
+            if let resolved = ModelResolver().resolveIfPresent(.lfm25A1B8Bit) {
+                return resolved.rootURL.path
+            }
+            // Allow LFM2Generator to auto-download from Hugging Face when model path is omitted.
             return nil
         case .textChatDeepseekV4Flash:
             // DeepseekV4FlashGenerator resolves and (if needed) downloads its own GGUF.
@@ -248,7 +262,9 @@ enum APIEngine: String, ExpressibleByArgument {
     case textCode = "text-code"
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
+    case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
+    case textChatLFM2 = "text-chat-lfm2"
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
 
     var runtimeServingEngine: RuntimeServingEngine {
@@ -259,8 +275,12 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatKlein
         case .textChatGemma4:
             return .textChatGemma4
+        case .textChatQ36:
+            return .textChatQ36
         case .textChatQ35:
-            return .textChatQ35
+            return .textChatQ36
+        case .textChatLFM2:
+            return .textChatLFM2
         case .textChatDeepseekV4Flash:
             return .textChatDeepseekV4Flash
         }

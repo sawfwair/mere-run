@@ -611,13 +611,18 @@ actor RuntimeModelPool {
                 ),
                 modelPath: resolved.installPath
             )
-        case .textChatQ35:
+        case .textChatQ36, .textChatQ35:
             return .textChatQ35(
                 Q35Generator(
                     modelId: resolved.id,
                     prefixKVCacheEnabled: q35PrefixKVCacheEnabled,
                     continuousBatchingEnabled: q35ContinuousBatchingEnabled
                 ),
+                modelPath: resolved.installPath
+            )
+        case .textChatLFM2:
+            return .textChatLFM2(
+                LFM2Generator(modelId: resolved.id),
                 modelPath: resolved.installPath
             )
         case .textChatDeepseekV4Flash:
@@ -643,7 +648,7 @@ actor RuntimeModelPool {
             }
             let settings = try settingsForSpec(spec)
             let engine = settings.engineOverride ?? defaultEngine
-            guard engine == defaultEngine else {
+            guard engine.isCompatible(with: defaultEngine) else {
                 throw RuntimeModelPoolError.incompatibleEngine(
                     "Engine '\(engine.rawValue)' is not compatible with model '\(spec.id)'."
                 )
@@ -832,7 +837,12 @@ actor RuntimeModelPool {
         switch engine {
         case .textCode:
             return ManagedModelCategory.textCode.rawValue
-        case .textChatKlein, .textChatGemma4, .textChatQ35, .textChatDeepseekV4Flash:
+        case .textChatKlein,
+             .textChatGemma4,
+             .textChatQ36,
+             .textChatQ35,
+             .textChatLFM2,
+             .textChatDeepseekV4Flash:
             return ManagedModelCategory.textChat.rawValue
         }
     }
@@ -1052,6 +1062,7 @@ enum RuntimeLoadedModel: Sendable {
     case textChatKlein(Flux2KleinGenerator, modelPath: String?, useStandalone: Bool)
     case textChatGemma4(Gemma4Generator, modelPath: String?)
     case textChatQ35(Q35Generator, modelPath: String?)
+    case textChatLFM2(LFM2Generator, modelPath: String?)
     case textChatDeepseekV4Flash(DeepseekV4FlashGenerator, modelPath: String?)
 
     func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
@@ -1071,6 +1082,8 @@ enum RuntimeLoadedModel: Sendable {
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatQ35(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatLFM2(let generator, let modelPath):
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatDeepseekV4Flash(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         }
@@ -1086,6 +1099,8 @@ enum RuntimeLoadedModel: Sendable {
             await generator.unload()
         case .textChatQ35(let generator, _):
             await generator.unload()
+        case .textChatLFM2(let generator, _):
+            await generator.unload()
         case .textChatDeepseekV4Flash(let generator, _):
             await generator.shutdown()
         }
@@ -1097,7 +1112,7 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatQ35(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
+        case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
             return nil
         }
     }
@@ -1108,7 +1123,7 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.continuousBatchingStats()
         case .textChatQ35(let generator, _):
             return await generator.continuousBatchingStats()
-        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
+        case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
             return nil
         }
     }
@@ -1136,6 +1151,8 @@ enum RuntimeLoadedModel: Sendable {
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatQ35(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatLFM2(let generator, let modelPath):
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatDeepseekV4Flash(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }
@@ -1150,7 +1167,7 @@ enum RuntimeLoadedModel: Sendable {
                 modelPath: modelPath,
                 progressHandler: progressHandler
             )
-        case .textCode, .textChatKlein, .textChatGemma4, .textChatQ35:
+        case .textCode, .textChatKlein, .textChatGemma4, .textChatQ35, .textChatLFM2:
             throw RuntimeModelPoolError.rawProxyUnavailable("")
         }
     }
@@ -1165,8 +1182,10 @@ extension RuntimeServingEngine {
             return .localTextWithStructuredJSON
         case .textChatGemma4:
             return .localTextWithTools
-        case .textChatQ35:
+        case .textChatQ36, .textChatQ35:
             return .localTextWithToolsAndVision
+        case .textChatLFM2:
+            return .localTextWithTools
         case .textChatDeepseekV4Flash:
             return .rawProxy
         }

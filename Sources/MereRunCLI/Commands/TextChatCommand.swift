@@ -24,6 +24,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
+          - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
@@ -88,7 +89,7 @@ struct TextChat: AsyncParsableCommand {
         return Gemma4Resources.nanoModelId
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-turbo|-max|-nano], text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
@@ -180,6 +181,10 @@ struct TextChat: AsyncParsableCommand {
                 // `text code` uses). On Linux CUDA this is the GB10-optimized
                 // llama.cpp runtime, which has fast quantized-MoE kernels MLX lacks.
                 let generator = CodeGenGenerator(modelId: normalizedModelId)
+                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+            } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
+                let effectiveModelId = normalizedModelId.isEmpty ? LFM2Resources.defaultModelId : normalizedModelId
+                let generator = LFM2Generator(modelId: effectiveModelId)
                 return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
             } else {
                 let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
@@ -293,15 +298,23 @@ struct TextChat: AsyncParsableCommand {
         }
     }
 
-    private func cleanResponse(_ response: String, showThinking: Bool) -> String {
+    func cleanResponse(_ response: String, showThinking: Bool) -> String {
         guard !showThinking else { return response }
         var cleaned = response.replacingOccurrences(
             of: "(?is)<think>.*?</think>",
             with: "",
             options: .regularExpression
         )
-        cleaned = cleaned.replacingOccurrences(of: "<think>", with: "")
-        cleaned = cleaned.replacingOccurrences(of: "</think>", with: "")
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?is)<think>.*\\z",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?i)</think>",
+            with: "",
+            options: .regularExpression
+        )
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

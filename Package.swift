@@ -257,6 +257,7 @@ targets.append(contentsOf: [
       "Flux2Klein/Model/Transformer/README.md",
       "Gemma4/README.md",
       "HiDreamO1/README.md",
+      "LFM2/README.md",
       "LightOnOCR/README.md",
       "LTX/README.md",
       "LoRA/README.md",
@@ -274,6 +275,7 @@ targets.append(contentsOf: [
       "ZImageI2L/Model/README.md",
       "ZImageTurbo/README.md",
       "ZImageTurbo/Model/TextEncoder/README.md",
+      "ZImageTurbo/Model/TextEncoder/LLMGeneration/README.md",
       "ZImageTurbo/Model/TextEncoder/Vision/README.md",
       "ZImageTurbo/Model/Transformer/README.md",
       "ZImageTurbo/Model/VAE/README.md",
@@ -385,7 +387,7 @@ let packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
     url: "https://github.com/huggingface/swift-transformers",
     from: "1.3.0"
   ),
-  .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+  .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"4.5.0"),
   .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
   .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0")
 ]

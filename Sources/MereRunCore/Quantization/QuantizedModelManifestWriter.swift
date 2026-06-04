@@ -42,6 +42,7 @@ public enum QuantizedModelManifestWriter {
             case .zimageTurbo: return .zimage
             case .hidreamO1: return .hidream
             case .gemma4: return .gemma
+            case .lfm2: return .liquid
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
             case .falconPerception: return .falcon
@@ -86,6 +87,8 @@ public enum QuantizedModelManifestWriter {
                 case .hidreamO1:
                     return [.txt2img, .referenceEdit, .subjectPersonalization]
                 case .gemma4:
+                    return [.chat]
+                case .lfm2:
                     return [.chat]
                 case .qwen35HybridMoE:
                     return [.chat]
@@ -166,6 +169,8 @@ public enum QuantizedModelManifestWriter {
             case .hidreamO1:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 28, cfg: 0.0)
             case .gemma4:
+                break
+            case .lfm2:
                 break
             case .qwen35HybridMoE:
                 break

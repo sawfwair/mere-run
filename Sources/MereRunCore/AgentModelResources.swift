@@ -17,6 +17,7 @@ public struct AgentModelResources: Sendable, Hashable {
 
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
+    case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
     case deepseekV4Flash = "text-chat-deepseek-v4-flash"
     case sourceConfigured = "external"
@@ -162,7 +163,7 @@ public enum MereRunAgentModelCatalog {
             summary: "Higher-quality Qwen3.6 MLX agent tier for Macs with enough memory.",
             minimumUnifiedMemoryGB: 24,
             recommendedUnifiedMemoryGB: 32,
-            servingEngine: .textChatQ35,
+            servingEngine: .textChatQ36,
             managedModelID: Q35Resources.q36NanoModelId
         )
     }

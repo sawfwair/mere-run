@@ -145,7 +145,7 @@ public actor Gemma4Generator: ChatGenerator {
         var response = try await generate(
             request,
             progressHandler: progressHandler,
-            maxContextLength: Gemma4Resources.defaultContextLength
+            maxContextLength: request.maxContextTokens ?? Gemma4Resources.defaultContextLength
         )
         if var timing = response.timing {
             timing.loadSeconds = loadSeconds

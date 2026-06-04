@@ -64,7 +64,7 @@ are:
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
   `image-hidream-o1`, `image-hidream-o1-dev`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
@@ -220,7 +220,7 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Gemma 4, Qwen3.6, or Psi family.
+Run local text chat with the Gemma 4, Qwen3.6, LFM2, or Psi family.
 
 ```bash
 swift run mere.run text chat --prompt "<text>" [options]
@@ -245,6 +245,7 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
+swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
 ```
@@ -843,7 +844,8 @@ Engine values:
 - `text-code`
 - `text-chat-klein`
 - `text-chat-gemma4`
-- `text-chat-q35`
+- `text-chat-q36`
+- `text-chat-lfm2`
 - `text-chat-deepseek-v4-flash`
 
 OpenAI chat compatibility:
@@ -860,6 +862,7 @@ Examples:
 ```bash
 swift run mere.run api serve
 swift run mere.run api serve --engine text-chat-gemma4
+swift run mere.run api serve --engine text-chat-lfm2
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
 swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120 --max-active-requests 1
 ```
@@ -919,7 +922,7 @@ swift run mere.run agent install-pi
 
 Start a local API server for a selected managed agent model and launch Pi
 against the `mere-run` provider. GGUF code models use `--engine text-code`,
-Qwen3.6 uses `--engine text-chat-q35`, and DeepSeek V4 Flash uses the DS4-backed
+Qwen3.6 uses `--engine text-chat-q36`, and DeepSeek V4 Flash uses the DS4-backed
 `--engine text-chat-deepseek-v4-flash`. If `--model` is omitted, `agent start`
 uses the best installed startable setup agent first, then a valid persisted Pi
 provider model, then the current machine's startable hardware tier. On 96 GB+

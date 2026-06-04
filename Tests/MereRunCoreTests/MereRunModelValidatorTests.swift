@@ -39,6 +39,16 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidLFM2Model(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .lfm25A1B8Bit, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data(#"{"model_type":"lfm2_moe"}"#.utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+    }
+
     private func writeMinimalValidGemma4Model(at root: URL, id: ModelResolver.ModelID = .gemma4) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -165,6 +175,22 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.tier, .nano)
         XCTAssertEqual(report.manifest?.family, .qwen)
         XCTAssertEqual(report.manifest?.upstreamRepoId, "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)")
+    }
+
+    func testLFM2ChatOnlyRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("text-chat-lfm25-a1b-8bit", isDirectory: true)
+        try writeMinimalValidLFM2Model(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: LFM2Resources.defaultModelId)
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.engine, .lfm2)
+        XCTAssertEqual(report.manifest?.family, .liquid)
+        XCTAssertEqual(report.manifest?.precision, .int8)
+        XCTAssertEqual(report.manifest?.upstreamRepoId, "\(LFM2Resources.upstreamRepoId)@\(LFM2Resources.upstreamRevision)")
     }
 
     func testGemma4ChatOnlyRootLayoutPassesValidation() throws {

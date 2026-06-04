@@ -22,6 +22,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case hidreamO1 = "hidream-o1"
         /// Gemma 4 family via the native Swift runtime.
         case gemma4 = "gemma-4"
+        /// LiquidAI LFM2 family via the native Swift runtime.
+        case lfm2 = "lfm2"
         /// Q35 family (Qwen3.5 hybrid MoE + hybrid attention).
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
         /// SAM image segmentation family.
@@ -57,6 +59,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case zimage
         case hidream
         case gemma
+        case liquid
         case qwen
         case sam
         case falcon
@@ -641,6 +644,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: q35TextComponents,
                 upstreamRepoId: "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25A1B8Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int8,
+                quantization: Quantization(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(LFM2Resources.upstreamRepoId)@\(LFM2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .qwen35Agent9B:

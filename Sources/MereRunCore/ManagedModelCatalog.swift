@@ -28,6 +28,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case hidreamO1
     case gemma4
     case q35
+    case lfm2
     case qwen3TTS
     case qwen3ASR
     case parakeet
@@ -461,6 +462,21 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve", "agent"]
         ),
         ManagedModelSpec(
+            id: LFM2Resources.defaultModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.upstreamRepoId,
+                revision: LFM2Resources.upstreamRevision,
+                patterns: LFM2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.upstreamRepoId,
+            upstreamRevision: LFM2Resources.upstreamRevision,
+            validationKind: .lfm2,
+            estimatedDownloadBytes: 10 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
             category: .speechTTS,
             installShape: .directoryRoot,
@@ -784,6 +800,8 @@ public extension ManagedModelSpec {
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .q35:
             return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .lfm2:
+            return LFM2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .sam31:
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:

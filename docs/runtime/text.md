@@ -17,6 +17,7 @@ embeddings, and PII anonymization.
 - `text-chat-gemma4`
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q36-nano`
+- `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot`
 - `text-chat-psi-agent`
@@ -47,6 +48,10 @@ swift run mere.run text chat \
 On 32 GB Apple Silicon Macs, avoid pulling the dense bf16
 `text-chat-gemma4`/31B path. Use `text-chat-gemma4-turbo` for the managed
 Gemma 4 26B-A4B-it NVFP4 snapshot, which uses the native Swift Gemma MoE runtime.
+
+`text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
+and runs through the native Swift LFM2 runtime. It is text-only; use
+`--model text-chat-lfm25-a1b-8bit` for CLI chat or `api serve --engine text-chat-lfm2`.
 
 ### Local code generation
 
@@ -83,6 +88,7 @@ swift run mere.run text anonymize \
 
 - `Sources/MereRunCore/Q35/`
 - `Sources/MereRunCore/Gemma4/`
+- `Sources/MereRunCore/LFM2/`
 - `Sources/MereRunCore/Psi/`
 - `Sources/MereRunCore/MeBot/`
 

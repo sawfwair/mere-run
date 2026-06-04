@@ -856,7 +856,7 @@ private struct APIOptions: View {
             VStack(spacing: 10) {
                 Picker("Engine", selection: $controller.draft.engine) {
                     Text("Chat Gemma4").tag("text-chat-gemma4")
-                    Text("Chat Qwen 3.6").tag("text-chat-q35")
+                    Text("Chat Qwen 3.6").tag("text-chat-q36")
                     Text("Chat Klein").tag("text-chat-klein")
                     Text("Code").tag("text-code")
                 }
