@@ -192,6 +192,17 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
     }
 
+    func testQ36NanoGGUFUsesUpstreamFilePath() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "text-chat-q36-nano-gguf"))
+
+        XCTAssertEqual(spec.installShape, .singleFile(relativePath: "text-chat-q36-nano-gguf.gguf"))
+        XCTAssertEqual(spec.hubFallback?.repoId, "unsloth/Qwen3.6-35B-A3B-GGUF")
+        XCTAssertEqual(spec.hubFallback?.patterns, ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"])
+        XCTAssertEqual(spec.hubFallback?.filePath, "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf")
+        XCTAssertEqual(spec.upstreamRepoId, "unsloth/Qwen3.6-35B-A3B-GGUF")
+        XCTAssertEqual(spec.validationKind, .codegenGGUF)
+    }
+
     func testLFM2UsesLiquidAIHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId))
 

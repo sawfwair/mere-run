@@ -140,7 +140,7 @@ run_installer_fixture() {
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/mere-run-linux-install.XXXXXX")"
   source_dir="$fixture_root/source"
   dest_dir="$fixture_root/dest"
-  mkdir -p "$source_dir" "$dest_dir"
+  mkdir -p "$source_dir/MereRun_MereRunCLI.resources/Guides" "$dest_dir"
   trap "rm -rf '$fixture_root'; cleanup" EXIT
 
   cp scripts/install.sh "$source_dir/install.sh"
@@ -151,6 +151,7 @@ echo "mere.run fixture"
 EOF
   chmod +x "$source_dir/mere.run"
   printf 'fake shared library\n' >"$source_dir/libmere_native.so"
+  printf '# Text Chat\n' >"$source_dir/MereRun_MereRunCLI.resources/Guides/text-chat.md"
 
   MERERUN_INSTALL_BIN_DEST="$dest_dir/mere.run" \
     MERERUN_INSTALL_PLATFORM=Linux \
@@ -159,6 +160,7 @@ EOF
 
   [[ -x "$dest_dir/mere.run" ]]
   [[ -f "$dest_dir/libmere_native.so" ]]
+  [[ -f "$dest_dir/MereRun_MereRunCLI.resources/Guides/text-chat.md" ]]
 }
 
 run_installer_fixture
