@@ -20,6 +20,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case zimageTurbo = "zimage-turbo"
         /// HiDream O1 unified pixel transformer family.
         case hidreamO1 = "hidream-o1"
+        /// Ideogram 4 text-to-image family.
+        case ideogram4 = "ideogram-4"
         /// Gemma 4 family via the native Swift runtime.
         case gemma4 = "gemma-4"
         /// LiquidAI LFM2 family via the native Swift runtime.
@@ -58,6 +60,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case klein
         case zimage
         case hidream
+        case ideogram
         case gemma
         case liquid
         case qwen
@@ -203,6 +206,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         public var tokenizer: ComponentRef?
         public var textEncoder: ComponentRef?
         public var transformer: ComponentRef?
+        public var unconditionalTransformer: ComponentRef?
         public var vae: ComponentRef?
         public var scheduler: ComponentRef?
 
@@ -210,12 +214,14 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             tokenizer: ComponentRef? = nil,
             textEncoder: ComponentRef? = nil,
             transformer: ComponentRef? = nil,
+            unconditionalTransformer: ComponentRef? = nil,
             vae: ComponentRef? = nil,
             scheduler: ComponentRef? = nil
         ) {
             self.tokenizer = tokenizer
             self.textEncoder = textEncoder
             self.transformer = transformer
+            self.unconditionalTransformer = unconditionalTransformer
             self.vae = vae
             self.scheduler = scheduler
         }
@@ -224,6 +230,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             case tokenizer
             case textEncoder = "text_encoder"
             case transformer
+            case unconditionalTransformer = "unconditional_transformer"
             case vae
             case scheduler
         }
@@ -437,6 +444,14 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             tokenizer: .local(path: "tokenizer"),
             textEncoder: .local(path: "text_encoder-mlx-4bit"),
             transformer: .local(path: "transformer-packed-mflux"),
+            vae: .local(path: "vae"),
+            scheduler: .local(path: "scheduler")
+        )
+        let ideogram4Components = Components(
+            tokenizer: .local(path: "tokenizer"),
+            textEncoder: .local(path: "text_encoder"),
+            transformer: .local(path: "transformer"),
+            unconditionalTransformer: .local(path: "unconditional_transformer"),
             vae: .local(path: "vae"),
             scheduler: .local(path: "scheduler")
         )
@@ -881,6 +896,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     scheduler: nil
                 ),
                 upstreamRepoId: "HiDream-ai/HiDream-O1-Image-Dev",
+                createdAt: createdAt
+            )
+        case .ideogram4SDNQUInt4:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .ideogram4,
+                family: .ideogram,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "sdnq-uint4"),
+                defaults: Defaults(steps: 20, cfg: 7.0),
+                supports: [.txt2img],
+                components: ideogram4Components,
+                upstreamRepoId: "\(Ideogram4Resources.upstreamRepoId)@\(Ideogram4Resources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .visionSegmentSAM31:

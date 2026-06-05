@@ -27,6 +27,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case bonsaiImage
     case zimageTurbo
     case hidreamO1
+    case ideogram4SDNQ
     case gemma4
     case gemma4Unified
     case gemma4MTPAssistant
@@ -350,6 +351,22 @@ public enum ManagedModelCatalog {
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: Ideogram4Resources.modelId,
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Ideogram4Resources.upstreamRepoId,
+                revision: Ideogram4Resources.upstreamRevision,
+                patterns: Ideogram4Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Ideogram4Resources.upstreamRepoId,
+            upstreamRevision: Ideogram4Resources.upstreamRevision,
+            validationKind: .ideogram4SDNQ,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Ideogram4Resources.estimatedDownloadBytes,
+            defaultCLICommands: []
         ),
         ManagedModelSpec(
             id: "text-chat-mebot",
@@ -868,6 +885,8 @@ public extension ManagedModelSpec {
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hidreamO1:
             return HiDreamO1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .ideogram4SDNQ:
+            return Ideogram4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4Unified:

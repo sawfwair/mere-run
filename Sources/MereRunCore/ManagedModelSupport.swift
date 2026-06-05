@@ -259,6 +259,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                Ideogram4Resources.modelId,
+                "Image, Ideogram 4 typography",
+                "Installs the SDNQ uint4 Ideogram 4 text-to-image stack with dedicated positive and unconditional transformers.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
                 "text-chat-mebot",
                 "Local personal chat",
                 "Adds a compact local chat model for API serving and personal-agent style workflows.",

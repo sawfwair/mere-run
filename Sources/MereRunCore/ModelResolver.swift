@@ -20,6 +20,7 @@ public struct ModelResolver {
         case zetaBase = "image-zimage-base"
         case hidreamO1 = "image-hidream-o1"
         case hidreamO1Dev = "image-hidream-o1-dev"
+        case ideogram4SDNQUInt4 = "image-ideogram4-sdnq-uint4"
         case mebot = "text-chat-mebot"
         case psiAgent = "text-chat-psi-agent"
         case gemma4 = "text-chat-gemma4"

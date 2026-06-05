@@ -65,6 +65,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-zimage-nano",
             "image-zimage-base",
             "image-zimage-max",
+            "image-ideogram4-sdnq-uint4",
         ]
 
         for id in expectedPullableImageIDs {
@@ -113,6 +114,20 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRevision, "main")
         XCTAssertEqual(spec.validationKind, .bonsaiImage)
         XCTAssertEqual(spec.estimatedDownloadBytes, 3_428_210_775)
+    }
+
+    func testIdeogram4UsesWaveCutSDNQHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ideogram4Resources.modelId))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "WaveCut/ideogram-4-sdnq-uint4")
+        XCTAssertEqual(spec.hubFallback?.revision, "main")
+        XCTAssertEqual(spec.upstreamRepoId, "WaveCut/ideogram-4-sdnq-uint4")
+        XCTAssertEqual(spec.upstreamRevision, "main")
+        XCTAssertEqual(spec.validationKind, .ideogram4SDNQ)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 16 * 1_073_741_824)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("unconditional_transformer/diffusion_pytorch_model.safetensors"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("quantization_manifest.json"), true)
     }
 
     func testGemma4TurboUsesNVFP4HubSource() throws {
@@ -241,6 +256,36 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(report.manifest?.precision, .int1)
         XCTAssertEqual(report.manifest?.quantization?.bits, 1)
         XCTAssertEqual(report.manifest?.quantization?.groupSize, 128)
+    }
+
+    func testIdeogram4AcceptsSDNQDiffusersLayout() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalIdeogram4(at: root)
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ideogram4Resources.modelId))
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Ideogram4Resources.modelId)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertTrue(report.warnings.isEmpty)
+        XCTAssertEqual(report.manifest?.engine, .ideogram4)
+        XCTAssertEqual(report.manifest?.family, .ideogram)
+        XCTAssertEqual(report.manifest?.components?.unconditionalTransformer, .local(path: "unconditional_transformer"))
+    }
+
+    func testIdeogram4RejectsMissingUnconditionalTransformer() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalIdeogram4(at: root)
+        try FileManager.default.removeItem(at: root.appendingPathComponent("unconditional_transformer"))
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ideogram4Resources.modelId))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Ideogram4Resources.modelId)
+        XCTAssertFalse(report.errors.isEmpty)
+        XCTAssertTrue(report.errors.contains { $0.contains("unconditional_transformer/config.json") })
     }
 
     func testZImageNanoRejectsStaleManagedSource() throws {
@@ -414,4 +459,52 @@ final class ManagedModelCatalogTests: XCTestCase {
         ))
     }
 
+    private func writeMinimalIdeogram4(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(
+            for: .ideogram4SDNQUInt4,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+
+        for file in ["model_index.json", "quantization_manifest.json"] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data("{}".utf8)
+            ))
+        }
+
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoder = root.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformer = root.appendingPathComponent("transformer", isDirectory: true)
+        let unconditional = root.appendingPathComponent("unconditional_transformer", isDirectory: true)
+        let vae = root.appendingPathComponent("vae", isDirectory: true)
+        let scheduler = root.appendingPathComponent("scheduler", isDirectory: true)
+
+        for dir in [tokenizer, textEncoder, transformer, unconditional, vae, scheduler] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: tokenizer.appendingPathComponent("tokenizer_config.json").path,
+            contents: Data("{}".utf8)
+        ))
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: textEncoder.appendingPathComponent("config.json").path,
+            contents: Data(#"{"model_type":"qwen3_vl_text"}"#.utf8)
+        ))
+        for component in [transformer, unconditional, vae] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: component.appendingPathComponent("config.json").path,
+                contents: Data("{}".utf8)
+            ))
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: component.appendingPathComponent("diffusion_pytorch_model.safetensors").path,
+                contents: Data()
+            ))
+        }
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: scheduler.appendingPathComponent("scheduler_config.json").path,
+            contents: Data("{}".utf8)
+        ))
+    }
 }
