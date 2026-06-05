@@ -117,7 +117,7 @@ labeled `self-hosted`, `linux`, `arm64`, and `cuda`; enable it manually with
 the CUDA Toolkit headers, CUDA CCCL headers, cuDNN, NCCL, Swift, and the normal
 Linux packaging dependencies. CUDA `.deb` artifacts add default runtime/JIT
 dependencies on `cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
-`libcublas-13-0`, `libcudnn9-cuda-13`, and `libnccl2`. On published GitHub Release
+`libcublas-13-0`, `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`. On published GitHub Release
 events, the workflow uploads the available Linux artifacts and checksum manifest
 to the release.
 

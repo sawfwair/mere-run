@@ -122,7 +122,7 @@ ls dist/linux/
 
 CUDA `.deb` packages declare the CUDA 13 runtime/JIT packages they need:
 `cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
-`libcublas-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
+`libcublas-13-0`, `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
 
 For source-only CUDA checks, prepare native artifacts and then export the
 environment printed by the script before building:
