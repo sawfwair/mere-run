@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.13.1 - 2026-06-05
+
+### Fixed
+
+- fixed GGUF chat statistics so `text chat --stats` reports llama.cpp prefill
+  and decode throughput when available, instead of only the CLI wrapper's
+  end-to-end rate.
+- fixed Linux arm64 CUDA Debian package portability by declaring the missing
+  `libcufft-13-0` runtime dependency and covering it in the Linux package
+  fixture.
+- fixed the GB10/Spark smoke sweep so `text-chat-q36-nano-gguf` is exercised as
+  its own text-chat row and no-pull speech-ASR checks do not download a TTS
+  fixture by accident.
+
 ## 0.13.0 - 2026-06-05
 
 ### Added
