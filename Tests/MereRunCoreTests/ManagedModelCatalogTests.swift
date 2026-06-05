@@ -131,6 +131,18 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRepoId, Gemma4Resources.twelveBUpstreamModelId)
         XCTAssertEqual(spec.validationKind, .gemma4)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
+        XCTAssertEqual(spec.companionModelIDs, [Gemma4MTPResources.modelId])
+    }
+
+    func testGemma4TwelveB4BitUsesMLXQuantizedHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.twelveB4BitModelId))
+
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.hubFallback?.repoId, Gemma4Resources.twelveB4BitUpstreamModelId)
+        XCTAssertEqual(spec.upstreamRepoId, Gemma4Resources.twelveB4BitUpstreamModelId)
+        XCTAssertEqual(spec.validationKind, .gemma4)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
+        XCTAssertEqual(spec.companionModelIDs, [Gemma4MTPResources.modelId])
     }
 
     func testGemma4TwelveBVisionRequiresUnifiedProcessorFiles() throws {
@@ -143,6 +155,16 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("processor_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
+        XCTAssertEqual(spec.companionModelIDs, [Gemma4MTPResources.modelId])
+    }
+
+    func testGemma4TwelveBMTPAssistantIsCompanionOnly() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4MTPResources.modelId))
+
+        XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == Gemma4MTPResources.modelId })
+        XCTAssertEqual(spec.hubFallback?.repoId, Gemma4MTPResources.upstreamModelId)
+        XCTAssertEqual(spec.validationKind, .gemma4MTPAssistant)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {
@@ -391,4 +413,5 @@ final class ManagedModelCatalogTests: XCTestCase {
             contents: Data("{}".utf8)
         ))
     }
+
 }

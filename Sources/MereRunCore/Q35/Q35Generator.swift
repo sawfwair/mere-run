@@ -91,6 +91,7 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
 public actor Q35Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
+    private static let defaultMTPBlockSize = 4
 
     private var model: Q35Model?
     private var tokenizerAndTemplate: Q35TokenizerAndTemplate?
@@ -485,7 +486,8 @@ public actor Q35Generator: ChatGenerator {
                 prefillSeconds: prefillSeconds,
                 decodeSeconds: decodeResult.decodeSeconds
             ),
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            promptTokens: promptTokens.count
         )
     }
 
@@ -524,6 +526,14 @@ public actor Q35Generator: ChatGenerator {
             return false
         }
         return promptTokenCount >= threshold
+    }
+
+    static func mtpBlockSize(environment env: [String: String] = ProcessInfo.processInfo.environment) -> Int {
+        guard let raw = env["MERERUN_Q35_MTP_BLOCK_SIZE"],
+              let value = Int(raw), value >= 2 else {
+            return defaultMTPBlockSize
+        }
+        return min(16, value)
     }
 
     private func decodeTokens(
@@ -655,6 +665,97 @@ public actor Q35Generator: ChatGenerator {
 
             if let mtpModel, let hidden = previousHidden {
                 let positionOffset = prefillTokenCount + generated.count - 1
+                if generationConfig.temperature == 0 {
+                    let blockSize = min(
+                        Self.mtpBlockSize(),
+                        max(2, tokenBudget - generated.count + 1)
+                    )
+                    let draftTokens = mtpModel.draftBlock(
+                        lastToken: next,
+                        hidden: hidden,
+                        positionOffset: positionOffset,
+                        blockSize: blockSize,
+                        baseModel: model
+                    )
+                    guard !draftTokens.isEmpty else {
+                        continue
+                    }
+
+                    let candidateCaches = forkLayerCaches(layerCaches)
+                    let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
+                        .reshaped(1, draftTokens.count + 1)
+                    let candidate = model.forward(candidateInput, cache: candidateCaches)
+                    MLX.eval(candidate.logits)
+                    MLX.eval(candidate.hidden)
+
+                    var accepted = 0
+                    var verificationHistory = repetitionHistory
+                    var replacement: Int?
+                    for (index, draftToken) in draftTokens.enumerated() {
+                        let targetToken = sampleToken(
+                            logits: candidate.logits[0, index, 0...],
+                            config: generationConfig,
+                            previousTokens: verificationHistory
+                        )
+                        guard targetToken == draftToken else {
+                            replacement = targetToken
+                            break
+                        }
+                        accepted += 1
+                        verificationHistory.append(draftToken)
+                    }
+
+                    if accepted == draftTokens.count {
+                        var hitEOS = false
+                        for token in draftTokens {
+                            if eosSet.contains(token) {
+                                hitEOS = true
+                                break
+                            }
+                            emit(token)
+                        }
+                        layerCaches = candidateCaches
+                        logits = lastTokenLogits(candidate.logits)
+                        previousHidden = lastTokenHidden(candidate.hidden)
+                        if hitEOS || generated.count >= tokenBudget {
+                            break
+                        }
+                        continue
+                    }
+
+                    let acceptedPrefix = Array(draftTokens.prefix(accepted))
+                    var hitEOS = false
+                    for token in acceptedPrefix {
+                        if eosSet.contains(token) {
+                            hitEOS = true
+                            break
+                        }
+                        emit(token)
+                    }
+                    if hitEOS || generated.count >= tokenBudget {
+                        break
+                    }
+
+                    guard let replacement else {
+                        continue
+                    }
+                    if eosSet.contains(replacement) {
+                        break
+                    }
+
+                    let replacementCaches = forkLayerCaches(layerCaches)
+                    let replacementInput = MLXArray(([next] + acceptedPrefix + [replacement]).map(Int32.init))
+                        .reshaped(1, acceptedPrefix.count + 2)
+                    let replacementForward = model.forward(replacementInput, cache: replacementCaches)
+                    MLX.eval(replacementForward.logits)
+                    MLX.eval(replacementForward.hidden)
+                    emit(replacement)
+                    layerCaches = replacementCaches
+                    logits = lastTokenLogits(replacementForward.logits)
+                    previousHidden = lastTokenHidden(replacementForward.hidden)
+                    continue
+                }
+
                 let draftLogits = mtpModel.draftLogits(
                     token: next,
                     previousHidden: hidden,

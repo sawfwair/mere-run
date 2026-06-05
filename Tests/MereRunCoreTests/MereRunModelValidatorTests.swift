@@ -59,6 +59,14 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidGemma4MTPAssistant(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .gemma4TwelveBMTP, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
+    }
+
     private func writeMinimalValidHiDreamO1Model(at root: URL, id: ModelResolver.ModelID = .hidreamO1Dev) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -263,6 +271,19 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.isEmpty)
         XCTAssertEqual(report.manifest?.tier, .nano)
         XCTAssertEqual(report.manifest?.family, .gemma)
+    }
+
+    func testGemma4MTPAssistantRootLayoutPassesValidationWithoutManifestComponents() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("text-chat-gemma4-12b-mtp", isDirectory: true)
+        try writeMinimalValidGemma4MTPAssistant(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Gemma4MTPResources.modelId)
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertNil(report.manifest?.components)
     }
 
     func testSAM31VisionSegmentationRootLayoutPassesValidation() throws {

@@ -21,6 +21,13 @@ private struct Gemma4BatchedDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
     let firstTokenSeconds: Double?
+    let mtpStats: Gemma4MTPStats?
+}
+
+private struct Gemma4PrefillResult {
+    let logits: MLXArray
+    let hidden: MLXArray?
+    let sharedKVStates: [String: Gemma4SharedKVState]
 }
 
 private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
@@ -73,7 +80,8 @@ private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
             returning: Gemma4BatchedDecodeResult(
                 generatedTokens: generatedTokens,
                 decodeSeconds: Date().timeIntervalSince(decodeStart),
-                firstTokenSeconds: firstTokenSeconds
+                firstTokenSeconds: firstTokenSeconds,
+                mtpStats: nil
             )
         )
     }
@@ -88,9 +96,12 @@ public actor Gemma4Generator: ChatGenerator {
     private static let prefixKVCacheMaxEntries = 4
 
     private var model: (any Gemma4CausalModel)?
+    private var mtpModel: Gemma4AssistantDraftModel?
+    private var loadedMTPModelPath: String?
     private var tokenizerAndTemplate: Gemma4TokenizerAndTemplate?
     private var loadedModelPath: String?
     private var loadedConfig: Gemma4Config?
+    private var lastMTPStats = Gemma4MTPStats()
 
     private let modelId: String
     private let kvCacheQuantization: Gemma4KVCacheQuantization
@@ -168,9 +179,12 @@ public actor Gemma4Generator: ChatGenerator {
         failQueuedDecodeRows(CancellationError())
         resetPrefixKVCache()
         model = nil
+        mtpModel = nil
+        loadedMTPModelPath = nil
         tokenizerAndTemplate = nil
         loadedModelPath = nil
         loadedConfig = nil
+        lastMTPStats = Gemma4MTPStats()
         Memory.clearCache()
     }
 
@@ -199,6 +213,10 @@ public actor Gemma4Generator: ChatGenerator {
             totalBatchedRows: totalBatchedRows,
             maxBatchSize: maxObservedBatchSize
         )
+    }
+
+    public func mtpStats() -> Gemma4MTPStats {
+        lastMTPStats
     }
 
     private func ensureLoaded(
@@ -237,6 +255,13 @@ public actor Gemma4Generator: ChatGenerator {
             try loadWeights(into: textModel, from: resources, config: config)
             model = textModel
         }
+        let loadedMTP = try loadMTPAssistantIfAvailable(
+            baseModelRoot: normalizedRoot,
+            config: config,
+            progressHandler: progressHandler
+        )
+        mtpModel = loadedMTP.model
+        loadedMTPModelPath = loadedMTP.path
         tokenizerAndTemplate = tokenizer
         loadedConfig = config
         loadedModelPath = normalizedRoot.path
@@ -345,26 +370,37 @@ public actor Gemma4Generator: ChatGenerator {
             promptTokens: promptTokens,
             maxContextLength: effectiveContext
         ) : []
+        var mtpReason = Gemma4MTPPolicy.activationReason(
+            assistant: mtpModel,
+            promptTokenCount: promptTokens.count,
+            generationConfig: generationConfig,
+            prefixSeedWasUsed: prefixSeed != nil
+        )
+        if continuousBatchingEnabled, mtpReason == nil {
+            mtpReason = "continuous batching"
+        }
+        let useMTP = mtpReason == nil
         let layerCaches = try prefixSeed?.caches ?? makeLayerCaches(
             model: model,
             quantization: prefillKVCacheQuantization
         )
-        let logits: MLXArray
+        let prefillResult: Gemma4PrefillResult
         if let imageBatch {
             guard let unifiedModel = model as? Gemma4UnifiedCausalLM,
                   let imageTokenId = loadedConfig.imageTokenId else {
                 throw Gemma4Error.unsupportedConfiguration("Gemma4 unified prefill requires a unified runtime model.")
             }
-            logits = try await unifiedPrefill(
+            prefillResult = try await unifiedPrefill(
                 model: unifiedModel,
                 promptTokens: promptTokens,
                 imageBatch: imageBatch,
                 imageTokenId: imageTokenId,
                 cache: layerCaches,
+                captureSpeculation: useMTP,
                 progressHandler: progressHandler
             )
         } else {
-            logits = try await chunkedPrefill(
+            prefillResult = try await chunkedPrefill(
                 model: model,
                 promptTokens: promptTokens,
                 cache: layerCaches,
@@ -373,6 +409,7 @@ public actor Gemma4Generator: ChatGenerator {
                 modelPath: loadedModelPath ?? "",
                 quantization: kvCacheQuantization,
                 checkpointTokenCounts: prefixCheckpoints,
+                captureSpeculation: useMTP,
                 progressHandler: progressHandler
             )
         }
@@ -384,20 +421,42 @@ public actor Gemma4Generator: ChatGenerator {
             progressHandler: progressHandler
         )
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
+        let mtpSharedKVStates = useMTP
+            ? collectSharedKVStatesForMTP(config: loadedConfig.textConfig, caches: preparedCaches.caches)
+            : [:]
+        if useMTP, mtpSharedKVStates.isEmpty {
+            mtpReason = "shared KV unavailable"
+        }
+        let mtpTemplate = Gemma4MTPStats(
+            available: mtpModel != nil,
+            enabled: Gemma4MTPPolicy.enabled(),
+            active: useMTP && mtpReason == nil,
+            assistantModelPath: loadedMTPModelPath,
+            reason: mtpReason,
+            blockSize: mtpModel.map { Gemma4MTPPolicy.blockSize(configured: $0.config.blockSize) } ?? 0,
+            threshold: Gemma4MTPPolicy.promptThreshold()
+        )
+        lastMTPStats = mtpTemplate
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
 
         let decodeResult = try await decodeTokens(
             model: model,
             tokenizerAndTemplate: tokenizerAndTemplate,
-            initialLogits: logits,
+            initialLogits: prefillResult.logits,
             layerCaches: preparedCaches.caches,
             eosSet: eosSet,
             generationConfig: generationConfig,
             tokenBudget: tokenBudget,
             promptTokens: promptTokens,
+            mtpModel: mtpTemplate.active ? mtpModel : nil,
+            prefillHidden: mtpTemplate.active ? prefillResult.hidden : nil,
+            sharedKVStates: mtpTemplate.active ? mtpSharedKVStates : [:],
+            prefillTokenCount: promptTokens.count,
+            mtpStatsTemplate: mtpTemplate,
             progressHandler: progressHandler
         )
+        lastMTPStats = decodeResult.mtpStats ?? mtpTemplate
         let generated = decodeResult.generatedTokens
         let decoded = Self.cleanedResponse(
             tokenizerAndTemplate.decode(tokens: generated),
@@ -536,10 +595,20 @@ public actor Gemma4Generator: ChatGenerator {
         generationConfig: GenerationConfig,
         tokenBudget: Int,
         promptTokens: [Int],
+        mtpModel: Gemma4AssistantDraftModel?,
+        prefillHidden: MLXArray?,
+        sharedKVStates: [String: Gemma4SharedKVState],
+        prefillTokenCount: Int,
+        mtpStatsTemplate: Gemma4MTPStats,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         guard tokenBudget > 0 else {
-            return Gemma4BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0, firstTokenSeconds: nil)
+            return Gemma4BatchedDecodeResult(
+                generatedTokens: [],
+                decodeSeconds: 0,
+                firstTokenSeconds: nil,
+                mtpStats: mtpStatsTemplate
+            )
         }
         guard continuousBatchingEnabled else {
             return try await decodeTokensSerially(
@@ -551,6 +620,11 @@ public actor Gemma4Generator: ChatGenerator {
                 generationConfig: generationConfig,
                 tokenBudget: tokenBudget,
                 promptTokens: promptTokens,
+                mtpModel: mtpModel,
+                prefillHidden: prefillHidden,
+                sharedKVStates: sharedKVStates,
+                prefillTokenCount: prefillTokenCount,
+                mtpStatsTemplate: mtpStatsTemplate,
                 progressHandler: progressHandler
             )
         }
@@ -590,22 +664,38 @@ public actor Gemma4Generator: ChatGenerator {
         generationConfig: GenerationConfig,
         tokenBudget: Int,
         promptTokens: [Int],
+        mtpModel: Gemma4AssistantDraftModel?,
+        prefillHidden: MLXArray?,
+        sharedKVStates: [String: Gemma4SharedKVState],
+        prefillTokenCount: Int,
+        mtpStatsTemplate: Gemma4MTPStats,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         var logits = initialLogits
+        var layerCaches = layerCaches
         var generated: [Int] = []
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
+        var previousHidden = prefillHidden.map { model.speculativeDraftHidden(lastTokenHidden($0)) }
+        var currentSharedKVStates = sharedKVStates
+        var mtpStats = mtpStatsTemplate
         var firstTokenSeconds: Double?
+        var pendingSampledToken: Int?
         let decodeStart = Date()
 
-        for _ in 0..<tokenBudget {
+        while generated.count < tokenBudget {
             try Task.checkCancellation()
-            let next = sampleToken(
-                logits: logits[0, -1, 0...],
-                config: generationConfig,
-                previousTokens: repetitionHistory
-            )
+            let next: Int
+            if let pending = pendingSampledToken {
+                next = pending
+                pendingSampledToken = nil
+            } else {
+                next = sampleToken(
+                    logits: logits[0, -1, 0...],
+                    config: generationConfig,
+                    previousTokens: repetitionHistory
+                )
+            }
 
             if eosSet.contains(next) {
                 break
@@ -624,15 +714,156 @@ public actor Gemma4Generator: ChatGenerator {
             guard generated.count < tokenBudget else {
                 break
             }
+
+            if let mtpModel, let hidden = previousHidden, !currentSharedKVStates.isEmpty {
+                let baseCaches = layerCaches
+                let blockSize = min(
+                    mtpStats.blockSize,
+                    max(2, tokenBudget - generated.count + 1)
+                )
+                let positionOffset = prefillTokenCount + generated.count - 1
+                let draft = try mtpModel.draftBlock(
+                    lastToken: next,
+                    hidden: hidden,
+                    sharedKVStates: currentSharedKVStates,
+                    positionOffset: positionOffset,
+                    blockSize: blockSize,
+                    baseModel: model,
+                    generationConfig: generationConfig,
+                    repetitionHistory: repetitionHistory
+                )
+                if !draft.tokens.isEmpty {
+                    mtpStats.rounds += 1
+                    mtpStats.draftedTokens += draft.tokens.count
+                    let candidateCaches = forkLayerCaches(baseCaches)
+                    let candidateInput = MLXArray(([next] + draft.tokens).map(Int32.init))
+                        .reshaped(1, draft.tokens.count + 1)
+                    let candidate = model.forwardForSpeculation(
+                        inputIds: candidateInput,
+                        cache: candidateCaches as [AnyObject]
+                    )
+                    MLX.eval(candidate.logits, candidate.hidden)
+
+                    var accepted = 0
+                    var verificationHistory = repetitionHistory
+                    var replacement: Int?
+                    for (index, draftToken) in draft.tokens.enumerated() {
+                        let targetToken = sampleToken(
+                            logits: candidate.logits[0, index, 0...],
+                            config: generationConfig,
+                            previousTokens: verificationHistory
+                        )
+                        guard targetToken == draftToken else {
+                            replacement = targetToken
+                            mtpStats.rejectedTokens += 1
+                            break
+                        }
+                        accepted += 1
+                        verificationHistory.append(draftToken)
+                    }
+
+                    if accepted == draft.tokens.count {
+                        var hitEOS = false
+                        for token in draft.tokens {
+                            if eosSet.contains(token) {
+                                hitEOS = true
+                                break
+                            }
+                            generated.append(token)
+                            repetitionHistory.append(token)
+                            mtpStats.acceptedTokens += 1
+                            let tokenPiece = tokenizerAndTemplate.decode(token: token)
+                            if !tokenPiece.isEmpty {
+                                progressHandler?(ChatProgress(stage: .generating, message: tokenPiece))
+                            }
+                        }
+                        layerCaches = candidateCaches
+                        logits = lastTokenLogits(candidate.logits)
+                        previousHidden = model.speculativeDraftHidden(lastTokenHidden(candidate.hidden))
+                        currentSharedKVStates = candidate.sharedKVStates
+                        if hitEOS || generated.count >= tokenBudget {
+                            break
+                        }
+                        pendingSampledToken = sampleToken(
+                            logits: logits[0, -1, 0...],
+                            config: generationConfig,
+                            previousTokens: repetitionHistory
+                        )
+                        if let previousHidden {
+                            MLX.eval(logits, previousHidden)
+                        }
+                        continue
+                    }
+
+                    let acceptedPrefix = Array(draft.tokens.prefix(accepted))
+                    var hitEOS = false
+                    for token in acceptedPrefix {
+                        if eosSet.contains(token) {
+                            hitEOS = true
+                            break
+                        }
+                        generated.append(token)
+                        repetitionHistory.append(token)
+                        mtpStats.acceptedTokens += 1
+                        let tokenPiece = tokenizerAndTemplate.decode(token: token)
+                        if !tokenPiece.isEmpty {
+                            progressHandler?(ChatProgress(stage: .generating, message: tokenPiece))
+                        }
+                    }
+                    if hitEOS || generated.count >= tokenBudget {
+                        break
+                    }
+
+                    guard let replacement else {
+                        continue
+                    }
+                    if eosSet.contains(replacement) {
+                        break
+                    }
+                    generated.append(replacement)
+                    repetitionHistory.append(replacement)
+                    let replacementPiece = tokenizerAndTemplate.decode(token: replacement)
+                    if !replacementPiece.isEmpty {
+                        progressHandler?(ChatProgress(stage: .generating, message: replacementPiece))
+                    }
+
+                    let replacementCaches = forkLayerCaches(baseCaches)
+                    let replacementInput = MLXArray(([next] + acceptedPrefix + [replacement]).map(Int32.init))
+                        .reshaped(1, acceptedPrefix.count + 2)
+                    let replacementForward = model.forwardForSpeculation(
+                        inputIds: replacementInput,
+                        cache: replacementCaches as [AnyObject]
+                    )
+                    MLX.eval(replacementForward.logits, replacementForward.hidden)
+                    layerCaches = replacementCaches
+                    logits = lastTokenLogits(replacementForward.logits)
+                    previousHidden = model.speculativeDraftHidden(lastTokenHidden(replacementForward.hidden))
+                    currentSharedKVStates = replacementForward.sharedKVStates
+                    if let previousHidden {
+                        MLX.eval(logits, previousHidden)
+                    }
+                    continue
+                }
+            }
+
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            logits = model.forward(inputIds: nextInput, cache: layerCaches as [AnyObject])
-            MLX.eval(logits)
+            if mtpModel != nil {
+                let output = model.forwardForSpeculation(inputIds: nextInput, cache: layerCaches as [AnyObject])
+                logits = output.logits
+                previousHidden = model.speculativeDraftHidden(lastTokenHidden(output.hidden))
+                currentSharedKVStates = output.sharedKVStates
+                MLX.eval(logits, previousHidden!)
+            } else {
+                logits = model.forward(inputIds: nextInput, cache: layerCaches as [AnyObject])
+                MLX.eval(logits)
+            }
         }
 
         return Gemma4BatchedDecodeResult(
             generatedTokens: generated,
             decodeSeconds: Date().timeIntervalSince(decodeStart),
-            firstTokenSeconds: firstTokenSeconds
+            firstTokenSeconds: firstTokenSeconds,
+            mtpStats: mtpStats
         )
     }
 
@@ -831,6 +1062,18 @@ public actor Gemma4Generator: ChatGenerator {
         return rows
     }
 
+    private func forkLayerCaches(_ caches: [Gemma4AttentionCache]) -> [Gemma4AttentionCache] {
+        caches.map { $0.fork() }
+    }
+
+    private func lastTokenLogits(_ logits: MLXArray) -> MLXArray {
+        logits[0..., (logits.dim(1) - 1)..., 0...]
+    }
+
+    private func lastTokenHidden(_ hidden: MLXArray) -> MLXArray {
+        hidden[0..., (hidden.dim(1) - 1)..., 0...]
+    }
+
     private func finishCompletedDecodeRows() {
         var remaining: [Gemma4BatchedDecodeRow] = []
         remaining.reserveCapacity(activeDecodeRows.count)
@@ -873,14 +1116,17 @@ public actor Gemma4Generator: ChatGenerator {
         modelPath: String,
         quantization: Gemma4KVCacheQuantization,
         checkpointTokenCounts: Set<Int> = [],
+        captureSpeculation: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> MLXArray {
+    ) async throws -> Gemma4PrefillResult {
         guard !promptTokens.isEmpty else {
             throw Gemma4Error.unsupportedConfiguration("Prompt is empty after tokenization.")
         }
 
         var processed = startIndex
         var logits = existingLogits
+        var hidden: MLXArray?
+        var sharedKVStates: [String: Gemma4SharedKVState] = [:]
         if processed > 0, processed < promptTokens.count {
             progressHandler?(ChatProgress(stage: .encoding, message: "Reusing \(processed) prompt KV tokens"))
         }
@@ -897,8 +1143,17 @@ public actor Gemma4Generator: ChatGenerator {
             }
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
                 .reshaped(1, end - processed)
-            let chunkLogits = model.forward(inputIds: chunk, cache: cache as [AnyObject])
-            MLX.eval(chunkLogits)
+            let chunkLogits: MLXArray
+            if captureSpeculation, end == promptTokens.count {
+                let output = model.forwardForSpeculation(inputIds: chunk, cache: cache as [AnyObject])
+                chunkLogits = output.logits
+                hidden = output.hidden
+                sharedKVStates = output.sharedKVStates
+                MLX.eval(chunkLogits, output.hidden)
+            } else {
+                chunkLogits = model.forward(inputIds: chunk, cache: cache as [AnyObject])
+                MLX.eval(chunkLogits)
+            }
             logits = chunkLogits
             processed = end
             storePrefixKVCache(
@@ -916,7 +1171,7 @@ public actor Gemma4Generator: ChatGenerator {
         guard let logits else {
             throw Gemma4Error.unsupportedConfiguration("Prefill did not produce logits.")
         }
-        return logits
+        return Gemma4PrefillResult(logits: logits, hidden: hidden, sharedKVStates: sharedKVStates)
     }
 
     private func unifiedPrefill(
@@ -925,8 +1180,9 @@ public actor Gemma4Generator: ChatGenerator {
         imageBatch: Gemma4UnifiedImageBatch,
         imageTokenId: Int,
         cache: [Gemma4AttentionCache],
+        captureSpeculation: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> MLXArray {
+    ) async throws -> Gemma4PrefillResult {
         guard !promptTokens.isEmpty else {
             throw Gemma4Error.unsupportedConfiguration("Prompt is empty after tokenization.")
         }
@@ -941,16 +1197,34 @@ public actor Gemma4Generator: ChatGenerator {
             tokens: promptTokens,
             imageTokenId: imageTokenId
         )
-        let logits = try model.forward(
-            inputIds: inputIds,
-            pixelValues: imageBatch.pixelValues,
-            imagePositionIds: imageBatch.imagePositionIds,
-            mmTokenTypeIds: mmTokenTypeIds,
-            cache: cache as [AnyObject]
-        )
-        MLX.eval(logits)
+        let result: Gemma4PrefillResult
+        if captureSpeculation {
+            let output = try model.forwardForSpeculation(
+                inputIds: inputIds,
+                pixelValues: imageBatch.pixelValues,
+                imagePositionIds: imageBatch.imagePositionIds,
+                mmTokenTypeIds: mmTokenTypeIds,
+                cache: cache as [AnyObject]
+            )
+            MLX.eval(output.logits, output.hidden)
+            result = Gemma4PrefillResult(
+                logits: output.logits,
+                hidden: output.hidden,
+                sharedKVStates: output.sharedKVStates
+            )
+        } else {
+            let logits = try model.forward(
+                inputIds: inputIds,
+                pixelValues: imageBatch.pixelValues,
+                imagePositionIds: imageBatch.imagePositionIds,
+                mmTokenTypeIds: mmTokenTypeIds,
+                cache: cache as [AnyObject]
+            )
+            MLX.eval(logits)
+            result = Gemma4PrefillResult(logits: logits, hidden: nil, sharedKVStates: [:])
+        }
         await Task.yield()
-        return logits
+        return result
     }
 
     private func makeLayerCaches(
@@ -961,6 +1235,45 @@ public actor Gemma4Generator: ChatGenerator {
             throw Gemma4Error.unsupportedConfiguration("Gemma4 cache construction returned an incompatible cache type.")
         }
         return caches
+    }
+
+    private func collectSharedKVStatesForMTP(
+        config: Gemma4TextConfig,
+        caches: [Gemma4AttentionCache]
+    ) -> [String: Gemma4SharedKVState] {
+        guard !caches.isEmpty else { return [:] }
+        let firstSharedLayerIndex = max(0, config.numHiddenLayers - config.numKVSharedLayers)
+        var cacheMap: [Int] = Array(0..<firstSharedLayerIndex)
+        if firstSharedLayerIndex < config.numHiddenLayers {
+            let concreteLayerTypes = Array(config.layerTypes.prefix(firstSharedLayerIndex))
+            let sharedFullIndex = concreteLayerTypes.lastIndex(of: "full_attention") ?? 0
+            let sharedSlidingIndex = concreteLayerTypes.lastIndex(of: "sliding_attention") ?? 0
+            for index in firstSharedLayerIndex..<config.numHiddenLayers {
+                if config.layerTypes[index] == "full_attention" {
+                    cacheMap.append(sharedFullIndex)
+                } else {
+                    cacheMap.append(sharedSlidingIndex)
+                }
+            }
+        }
+
+        var states: [String: Gemma4SharedKVState] = [:]
+        for index in 0..<min(config.numHiddenLayers, cacheMap.count) {
+            let cacheIndex = cacheMap[index]
+            guard cacheIndex < caches.count,
+                  index < config.layerTypes.count,
+                  let state = caches[cacheIndex].currentState() else {
+                continue
+            }
+            let maxSize = (caches[cacheIndex] as? Gemma4SlidingKVCache)?.configuredMaxSize
+            states[config.layerTypes[index]] = Gemma4SharedKVState(
+                keys: state.0,
+                values: state.1,
+                offset: caches[cacheIndex].offset,
+                maxSize: maxSize
+            )
+        }
+        return states
     }
 
     private func semanticPrefixCheckpoints(
@@ -1176,6 +1489,54 @@ public actor Gemma4Generator: ChatGenerator {
         }
     }
 
+    private func loadMTPAssistantIfAvailable(
+        baseModelRoot: URL,
+        config: Gemma4Config,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) throws -> (model: Gemma4AssistantDraftModel?, path: String?) {
+        guard Gemma4MTPPolicy.enabled() else {
+            return (nil, nil)
+        }
+        guard supportsManagedMTPAssistant(baseModelRoot: baseModelRoot) else {
+            return (nil, nil)
+        }
+        guard let assistantRoot = ManagedModelResolver.resolveInstalledModel(id: Gemma4MTPResources.modelId) else {
+            return (nil, nil)
+        }
+
+        let resources = Gemma4MTPResources(rootURL: assistantRoot)
+        let missing = resources.validate()
+        guard missing.isEmpty else {
+            return (nil, nil)
+        }
+
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 MTP assistant"))
+        let configData = try Data(contentsOf: resources.configURL)
+        let assistantConfig = try JSONDecoder().decode(Gemma4AssistantConfig.self, from: configData)
+        guard assistantConfig.backboneHiddenSize == config.textConfig.hiddenSize else {
+            throw Gemma4Error.unsupportedConfiguration(
+                "Gemma4 MTP assistant hidden size \(assistantConfig.backboneHiddenSize) does not match target hidden size \(config.textConfig.hiddenSize)."
+            )
+        }
+        let assistant = try Gemma4AssistantDraftModel(config: assistantConfig)
+        try assistant.loadWeights(from: resources)
+        return (assistant, assistantRoot.path)
+    }
+
+    private func supportsManagedMTPAssistant(baseModelRoot: URL) -> Bool {
+        let normalizedModelId = modelId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalizedModelId == Gemma4Resources.twelveBModelId
+            || normalizedModelId == Gemma4Resources.twelveB4BitModelId
+            || normalizedModelId == Gemma4Resources.visionTwelveBModelId {
+            return true
+        }
+        let path = baseModelRoot.standardizedFileURL.path
+        let textManagedRoot = MereRunModelPaths.modelDir(Gemma4Resources.twelveBModelId).standardizedFileURL.path
+        let text4BitManagedRoot = MereRunModelPaths.modelDir(Gemma4Resources.twelveB4BitModelId).standardizedFileURL.path
+        let visionManagedRoot = MereRunModelPaths.modelDir(Gemma4Resources.visionTwelveBModelId).standardizedFileURL.path
+        return path == textManagedRoot || path == text4BitManagedRoot || path == visionManagedRoot
+    }
+
     private func loadWeights(
         into model: Gemma4TextCausalLM,
         from resources: Gemma4Resources,
@@ -1219,11 +1580,11 @@ public actor Gemma4Generator: ChatGenerator {
         }
 
         if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
-            if config.textConfig.enableMoEBlock {
+            if try Self.indexContainsQuantizedWeights(resources.modelIndexURL) {
                 try HFSafetensorsWeightsLoader.applyQuantizedWeights(
                     indexURL: resources.modelIndexURL,
                     to: model,
-                    groupSize: 16,
+                    groupSize: config.textConfig.enableMoEBlock ? 16 : 64,
                     bits: 4,
                     quantizedModuleResolver: quantizedModuleResolver,
                     keyMapper: keyMapper,
@@ -1251,6 +1612,12 @@ public actor Gemma4Generator: ChatGenerator {
         } else {
             throw Gemma4Error.missingFiles([resources.modelIndexURL.lastPathComponent, resources.modelWeightsURL.lastPathComponent])
         }
+    }
+
+    private static func indexContainsQuantizedWeights(_ indexURL: URL) throws -> Bool {
+        let data = try Data(contentsOf: indexURL)
+        let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+        return index.weightMap.keys.contains { $0.hasSuffix(".scales") }
     }
 
     private func loadWeights(

@@ -18,8 +18,31 @@ private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
     return normalized.asType(dtype)
 }
 
+struct Gemma4SharedKVState {
+    let keys: MLXArray
+    let values: MLXArray
+    let offset: Int
+    let maxSize: Int?
+}
+
+struct Gemma4LanguageModelOutput {
+    let hidden: MLXArray
+    let preNormHidden: MLXArray
+    let sharedKVStates: [String: Gemma4SharedKVState]
+}
+
+struct Gemma4ForwardOutput {
+    let logits: MLXArray
+    let hidden: MLXArray
+    let sharedKVStates: [String: Gemma4SharedKVState]
+}
+
 protocol Gemma4CausalModel: AnyObject, Sendable {
     func forward(inputIds: MLXArray, cache: [AnyObject]?) -> MLXArray
+    func forwardForSpeculation(inputIds: MLXArray, cache: [AnyObject]?) -> Gemma4ForwardOutput
+    func inputEmbeddings(for inputIds: MLXArray) -> MLXArray
+    func speculativeLogits(fromHidden hidden: MLXArray) -> MLXArray
+    func speculativeDraftHidden(_ hidden: MLXArray) -> MLXArray
     func makeCache(quantization: Gemma4KVCacheQuantization?) -> [AnyObject]
 }
 
@@ -220,6 +243,10 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         self.maxSize = max(1, maxSize)
     }
 
+    var configuredMaxSize: Int {
+        maxSize
+    }
+
     func currentState() -> (MLXArray, MLXArray)? {
         guard let keys, let values else { return nil }
         return (keys, values)
@@ -363,9 +390,9 @@ final class Gemma4MLP: Module {
     @ModuleInfo(key: "down_proj") var downProj: Linear
     @ModuleInfo(key: "up_proj") var upProj: Linear
 
-    init(config: Gemma4TextConfig, layerIndex: Int) {
+    init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         let firstSharedIndex = config.numHiddenLayers - config.numKVSharedLayers
-        let isSharedKVLayer = config.numKVSharedLayers > 0 && layerIndex >= firstSharedIndex
+        let isSharedKVLayer = forceKVShared || (config.numKVSharedLayers > 0 && layerIndex >= firstSharedIndex)
         let widthMultiplier = (config.useDoubleWideMLP && isSharedKVLayer) ? 2 : 1
         let intermediate = config.intermediateSize * widthMultiplier
 
@@ -566,7 +593,7 @@ final class Gemma4Attention: Module {
     private let isKVSharedLayer: Bool
     private let useKeyEqualsValue: Bool
 
-    init(config: Gemma4TextConfig, layerIndex: Int) {
+    init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         self.layerType = config.layerTypes[layerIndex]
         self.numHeads = config.numAttentionHeads
         self.windowSize = config.slidingWindow
@@ -575,7 +602,7 @@ final class Gemma4Attention: Module {
         let isFullAttention = layerType == "full_attention"
         self.headDim = isFullAttention ? (config.globalHeadDim ?? config.headDim) : config.headDim
         self.numKVHeads = isFullAttention ? (config.numGlobalKeyValueHeads ?? config.numKeyValueHeads) : config.numKeyValueHeads
-        self.isKVSharedLayer = config.numKVSharedLayers > 0 && layerIndex >= (config.numHiddenLayers - config.numKVSharedLayers)
+        self.isKVSharedLayer = forceKVShared || (config.numKVSharedLayers > 0 && layerIndex >= (config.numHiddenLayers - config.numKVSharedLayers))
         self.useKeyEqualsValue = config.attentionKEqV && isFullAttention
 
         let ropeConfig = config.ropeParameters[layerType] ?? config.ropeParameters["sliding_attention"]
@@ -768,9 +795,13 @@ final class Gemma4DecoderLayer: Module {
 
     private let hasPerLayerInput: Bool
 
-    init(config: Gemma4TextConfig, layerIndex: Int) {
-        self._selfAttention.wrappedValue = Gemma4Attention(config: config, layerIndex: layerIndex)
-        self._mlp.wrappedValue = Gemma4MLP(config: config, layerIndex: layerIndex)
+    init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
+        self._selfAttention.wrappedValue = Gemma4Attention(
+            config: config,
+            layerIndex: layerIndex,
+            forceKVShared: forceKVShared
+        )
+        self._mlp.wrappedValue = Gemma4MLP(config: config, layerIndex: layerIndex, forceKVShared: forceKVShared)
         if config.enableMoEBlock {
             self._router.wrappedValue = Gemma4Router(config: config)
             self._experts.wrappedValue = Gemma4Experts(config: config)
@@ -932,6 +963,22 @@ final class Gemma4LanguageModel: Module {
         cache: [Gemma4AttentionCache]? = nil,
         mmTokenTypeIds: MLXArray? = nil
     ) -> MLXArray {
+        forwardDetailed(
+            embeddings: embeddings,
+            inputIds: inputIds,
+            cache: cache,
+            mmTokenTypeIds: mmTokenTypeIds,
+            captureSharedKV: false
+        ).hidden
+    }
+
+    func forwardDetailed(
+        embeddings: MLXArray,
+        inputIds: MLXArray?,
+        cache: [Gemma4AttentionCache]? = nil,
+        mmTokenTypeIds: MLXArray? = nil,
+        captureSharedKV: Bool = true
+    ) -> Gemma4LanguageModelOutput {
         var hidden = embeddings
         let perLayerInputs = inputIds.flatMap { tokenIds -> MLXArray? in
             guard config.hiddenSizePerLayerInput > 0 else { return nil }
@@ -952,7 +999,14 @@ final class Gemma4LanguageModel: Module {
                 visionBlockIDs: visionBlockIDs
             )
         }
-        return norm(hidden)
+        let preNormHidden = hidden
+        let normalizedHidden = norm(hidden)
+        let sharedKVStates = captureSharedKV ? collectSharedKVStates(from: caches) : [:]
+        return Gemma4LanguageModelOutput(
+            hidden: normalizedHidden,
+            preNormHidden: preNormHidden,
+            sharedKVStates: sharedKVStates
+        )
     }
 
     func logits(_ inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
@@ -973,6 +1027,25 @@ final class Gemma4LanguageModel: Module {
             mmTokenTypeIds: mmTokenTypeIds
         )
         return embedTokens.asLinear(hidden)
+    }
+
+    func detailedLogits(
+        embeddings: MLXArray,
+        inputIds: MLXArray?,
+        cache: [Gemma4AttentionCache]? = nil,
+        mmTokenTypeIds: MLXArray? = nil
+    ) -> Gemma4ForwardOutput {
+        let output = forwardDetailed(
+            embeddings: embeddings,
+            inputIds: inputIds,
+            cache: cache,
+            mmTokenTypeIds: mmTokenTypeIds
+        )
+        return Gemma4ForwardOutput(
+            logits: embedTokens.asLinear(output.hidden),
+            hidden: output.preNormHidden,
+            sharedKVStates: output.sharedKVStates
+        )
     }
 
     func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [Gemma4AttentionCache] {
@@ -1012,6 +1085,26 @@ final class Gemma4LanguageModel: Module {
         )
         projected = perLayerProjectionNorm(projected)
         return (projected + reshapedEmbedding) * MLXArray(perLayerInputScale).asType(hiddenStates.dtype)
+    }
+
+    private func collectSharedKVStates(from caches: [Gemma4AttentionCache]) -> [String: Gemma4SharedKVState] {
+        guard !caches.isEmpty else { return [:] }
+        var states: [String: Gemma4SharedKVState] = [:]
+        for index in 0..<min(layers.count, layerIndexToCacheIndex.count) {
+            let cacheIndex = layerIndexToCacheIndex[index]
+            guard cacheIndex < caches.count,
+                  let state = caches[cacheIndex].currentState() else {
+                continue
+            }
+            let maxSize = (caches[cacheIndex] as? Gemma4SlidingKVCache)?.configuredMaxSize
+            states[layers[index].selfAttention.layerType] = Gemma4SharedKVState(
+                keys: state.0,
+                values: state.1,
+                offset: caches[cacheIndex].offset,
+                maxSize: maxSize
+            )
+        }
+        return states
     }
 
     private static func visionBlockIDs(from mmTokenTypeIds: MLXArray?, sequenceLength: Int) -> MLXArray? {
@@ -1069,8 +1162,49 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         self(inputIds, cache: cache)
     }
 
+    func forwardForSpeculation(inputIds: MLXArray, cache: [AnyObject]? = nil) -> Gemma4ForwardOutput {
+        let typedCache = cache as? [Gemma4AttentionCache]
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        let output = languageModel.detailedLogits(
+            embeddings: languageModel.embeddings(inputIds: tokenIds),
+            inputIds: tokenIds,
+            cache: typedCache
+        )
+        let logits = applyFinalSoftcap(output.logits)
+        return Gemma4ForwardOutput(
+            logits: logits,
+            hidden: output.hidden,
+            sharedKVStates: output.sharedKVStates
+        )
+    }
+
+    func inputEmbeddings(for inputIds: MLXArray) -> MLXArray {
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        return languageModel.embeddings(inputIds: tokenIds)
+    }
+
+    func speculativeLogits(fromHidden hidden: MLXArray) -> MLXArray {
+        applyFinalSoftcap(languageModel.embedTokens.asLinear(languageModel.norm(hidden)))
+    }
+
+    func speculativeDraftHidden(_ hidden: MLXArray) -> MLXArray {
+        languageModel.norm(hidden)
+    }
+
     public func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [AnyObject] {
         languageModel.makeCache(quantization: quantization)
+    }
+
+    private func applyFinalSoftcap(_ logits: MLXArray) -> MLXArray {
+        guard let finalLogitSoftcapping else { return logits }
+        let softcap = MLXArray(finalLogitSoftcapping).asType(logits.dtype)
+        return tanh(logits / softcap) * softcap
     }
 }
 
@@ -1180,6 +1314,25 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         return logits
     }
 
+    func forwardForSpeculation(inputIds: MLXArray, cache: [AnyObject]? = nil) -> Gemma4ForwardOutput {
+        let typedCache = cache as? [Gemma4AttentionCache]
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        let output = languageModel.detailedLogits(
+            embeddings: languageModel.embeddings(inputIds: tokenIds),
+            inputIds: tokenIds,
+            cache: typedCache
+        )
+        let logits = applyFinalSoftcap(output.logits)
+        return Gemma4ForwardOutput(
+            logits: logits,
+            hidden: output.hidden,
+            sharedKVStates: output.sharedKVStates
+        )
+    }
+
     func forward(
         inputIds: MLXArray,
         pixelValues: MLXArray,
@@ -1216,8 +1369,66 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         return logits
     }
 
+    func forwardForSpeculation(
+        inputIds: MLXArray,
+        pixelValues: MLXArray,
+        imagePositionIds: MLXArray,
+        mmTokenTypeIds: MLXArray,
+        cache: [AnyObject]? = nil
+    ) throws -> Gemma4ForwardOutput {
+        let typedCache = cache as? [Gemma4AttentionCache]
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        var embeddings = languageModel.embeddings(inputIds: tokenIds)
+        let imageFeatures = try compactImageFeatures(
+            pixelValues: pixelValues,
+            imagePositionIds: imagePositionIds,
+            dtype: embeddings.dtype
+        )
+        embeddings = try replaceImageEmbeddings(
+            embeddings,
+            inputIds: tokenIds,
+            imageFeatures: imageFeatures
+        )
+        let output = languageModel.detailedLogits(
+            embeddings: embeddings,
+            inputIds: tokenIds,
+            cache: typedCache,
+            mmTokenTypeIds: mmTokenTypeIds
+        )
+        return Gemma4ForwardOutput(
+            logits: applyFinalSoftcap(output.logits),
+            hidden: output.hidden,
+            sharedKVStates: output.sharedKVStates
+        )
+    }
+
+    func inputEmbeddings(for inputIds: MLXArray) -> MLXArray {
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        return languageModel.embeddings(inputIds: tokenIds)
+    }
+
+    func speculativeLogits(fromHidden hidden: MLXArray) -> MLXArray {
+        applyFinalSoftcap(languageModel.embedTokens.asLinear(languageModel.norm(hidden)))
+    }
+
+    func speculativeDraftHidden(_ hidden: MLXArray) -> MLXArray {
+        languageModel.norm(hidden)
+    }
+
     public func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [AnyObject] {
         languageModel.makeCache(quantization: quantization)
+    }
+
+    private func applyFinalSoftcap(_ logits: MLXArray) -> MLXArray {
+        guard let finalLogitSoftcapping else { return logits }
+        let softcap = MLXArray(finalLogitSoftcapping).asType(logits.dtype)
+        return tanh(logits / softcap) * softcap
     }
 
     private func compactImageFeatures(

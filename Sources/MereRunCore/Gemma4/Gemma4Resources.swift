@@ -6,11 +6,13 @@ public struct Gemma4Resources: Sendable, Hashable {
     public static let maxModelId = "text-chat-gemma4-max"
     public static let turboModelId = "text-chat-gemma4-turbo"
     public static let twelveBModelId = "text-chat-gemma4-12b"
+    public static let twelveB4BitModelId = "text-chat-gemma4-12b-4bit"
     public static let visionTwelveBModelId = "vision-chat-gemma4-12b"
     public static let nanoUpstreamModelId = "google/gemma-4-E4B-it"
     public static let maxUpstreamModelId = "google/gemma-4-31B-it"
     public static let turboUpstreamModelId = "mlx-community/gemma-4-26b-a4b-it-nvfp4"
     public static let twelveBUpstreamModelId = "google/gemma-4-12B-it"
+    public static let twelveB4BitUpstreamModelId = "mlx-community/gemma-4-12B-it-4bit"
     public static let defaultUpstreamModelId = maxUpstreamModelId
     public static let defaultContextLength = 32_768
     public static let defaultKVGroupSize = 64

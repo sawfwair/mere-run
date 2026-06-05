@@ -312,6 +312,10 @@ enum StatusFormatter {
                     guard let batching = model.continuousBatching else { continue }
                     lines.append("    \(model.id) batching: \(decodeBatchingText(batching))")
                 }
+                for model in runtime.models {
+                    guard let mtp = model.mtp else { continue }
+                    lines.append("    \(model.id) MTP: \(mtpText(mtp))")
+                }
             } else if !snapshot.server.loadedModels.isEmpty {
                 lines.append("  loaded models: \(snapshot.server.loadedModels.joined(separator: ", "))")
             } else if let modelsDetail = snapshot.server.modelsDetail {
@@ -391,6 +395,28 @@ enum StatusFormatter {
             + "\(stats.samePositionBatchedSteps) same-position, "
             + "\(stats.variablePositionBatchedSteps) variable-position, "
             + "max batch \(stats.maxBatchSize), \(stats.queuedRows) queued rows"
+    }
+
+    private static func mtpText(_ stats: Gemma4MTPStats) -> String {
+        let state: String
+        if stats.active {
+            state = "active"
+        } else if stats.available {
+            state = "available"
+        } else if stats.enabled {
+            state = "enabled, assistant unavailable"
+        } else {
+            state = "disabled"
+        }
+        var parts = [
+            state,
+            "block \(stats.blockSize)",
+            "\(stats.acceptedTokens)/\(stats.draftedTokens) accepted",
+        ]
+        if let reason = stats.reason, !reason.isEmpty {
+            parts.append(reason)
+        }
+        return parts.joined(separator: ", ")
     }
 
     private static func benchmarkStatsText(_ stats: RuntimeBenchmarkStatsSummary) -> String? {

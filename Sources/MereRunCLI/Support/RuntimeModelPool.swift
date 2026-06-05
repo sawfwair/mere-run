@@ -284,6 +284,7 @@ struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
     let kvCacheMode: RuntimeKVCacheMode?
     let prefixKVCache: PrefixKVCacheStats?
     let continuousBatching: RuntimeDecodeBatchingStats?
+    let mtp: Gemma4MTPStats?
     let benchmarkStats: RuntimeModelBenchmarkStats?
 }
 
@@ -420,6 +421,7 @@ actor RuntimeModelPool {
         let ids = Set(installed + Array(loadedModels.keys) + [defaultModelID] + Array(settings.keys))
         var prefixStats: [String: PrefixKVCacheStats] = [:]
         var batchingStats: [String: RuntimeDecodeBatchingStats] = [:]
+        var mtpStats: [String: Gemma4MTPStats] = [:]
         let currentLoadedModels = loadedModels
         for (id, loaded) in currentLoadedModels {
             if let stats = await loaded.prefixKVCacheStats() {
@@ -428,13 +430,17 @@ actor RuntimeModelPool {
             if let stats = await loaded.continuousBatchingStats() {
                 batchingStats[id] = stats
             }
+            if let stats = await loaded.mtpStats() {
+                mtpStats[id] = stats
+            }
         }
         let snapshots = ids.sorted().compactMap { id in
             snapshot(
                 for: id,
                 settings: settings,
                 prefixKVCache: prefixStats[id],
-                continuousBatching: batchingStats[id]
+                continuousBatching: batchingStats[id],
+                mtp: mtpStats[id]
             )
         }
         let activeRequests = snapshots.reduce(0) { $0 + $1.activeRequests }
@@ -767,7 +773,8 @@ actor RuntimeModelPool {
         for id: String,
         settings: [String: RuntimeModelSettings],
         prefixKVCache: PrefixKVCacheStats? = nil,
-        continuousBatching: RuntimeDecodeBatchingStats? = nil
+        continuousBatching: RuntimeDecodeBatchingStats? = nil,
+        mtp: Gemma4MTPStats? = nil
     ) -> RuntimeModelPoolEntrySnapshot? {
         let spec = ManagedModelCatalog.spec(for: id)
         let engine = settings[id]?.engineOverride
@@ -804,6 +811,7 @@ actor RuntimeModelPool {
             kvCacheMode: modelSettings.kvCacheMode,
             prefixKVCache: prefixKVCache,
             continuousBatching: continuousBatching,
+            mtp: mtp,
             benchmarkStats: state.benchmarkStats
         )
     }
@@ -1132,6 +1140,15 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatQ35(let generator, _):
             return await generator.continuousBatchingStats()
         case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
+            return nil
+        }
+    }
+
+    func mtpStats() async -> Gemma4MTPStats? {
+        switch self {
+        case .textChatGemma4(let generator, _):
+            return await generator.mtpStats()
+        case .textCode, .textChatKlein, .textChatQ35, .textChatLFM2, .textChatDeepseekV4Flash:
             return nil
         }
     }

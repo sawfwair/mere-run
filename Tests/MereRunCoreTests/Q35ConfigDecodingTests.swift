@@ -174,6 +174,31 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(draftLogits.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testQ35MTPDraftBlockReturnsRequestedGreedyTokens() throws {
+        MLXRandom.seed(40)
+        let config = try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"]))
+        let model = Q35Model(config: config)
+        let mtp = Q35MTPModel(config: config)
+        let tokens = [1, 2, 3]
+        let cache = makeLayerCaches(config: config)
+        let input = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+        let output = model.forward(input, cache: cache)
+        MLX.eval(output.hidden)
+
+        let lastIndex = output.hidden.dim(1) - 1
+        let previousHidden = output.hidden[0..., lastIndex..<(lastIndex + 1), 0...]
+        let draftTokens = mtp.draftBlock(
+            lastToken: 4,
+            hidden: previousHidden,
+            positionOffset: tokens.count,
+            blockSize: 4,
+            baseModel: model
+        )
+
+        XCTAssertEqual(draftTokens.count, 3)
+        XCTAssertTrue(draftTokens.allSatisfy { $0 >= 0 && $0 < config.textConfig.vocabSize })
+    }
+
     func testQ35MTPSpeculationRequiresAdaptiveContextWindow() {
         XCTAssertFalse(
             Q35Generator.shouldSpeculate(
@@ -199,6 +224,13 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
                 ]
             )
         )
+    }
+
+    func testQ35MTPBlockSizeUsesEnvironmentClamp() {
+        XCTAssertEqual(Q35Generator.mtpBlockSize(environment: [:]), 4)
+        XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "1"]), 4)
+        XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "6"]), 6)
+        XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "32"]), 16)
     }
 
     func testQ35ConfigAllowsTextOnlyQwen36Layout() throws {

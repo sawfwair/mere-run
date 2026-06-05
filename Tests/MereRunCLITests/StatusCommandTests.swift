@@ -163,6 +163,19 @@ final class StatusCommandTests: XCTestCase {
                         totalBatchedRows: 8,
                         maxBatchSize: 2
                     ),
+                    mtp: Gemma4MTPStats(
+                        available: true,
+                        enabled: true,
+                        active: true,
+                        assistantModelPath: "/tmp/models/text-chat-gemma4-12b-mtp",
+                        reason: nil,
+                        blockSize: 4,
+                        threshold: 2048,
+                        rounds: 3,
+                        draftedTokens: 9,
+                        acceptedTokens: 6,
+                        rejectedTokens: 1
+                    ),
                     benchmarkStats: RuntimeModelBenchmarkStats(
                         completedRequests: 2,
                         failedRequests: 1,
@@ -251,6 +264,7 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(output.contains(
             "text-chat-gemma4 batching: 4 batched steps, 3 same-position, 1 variable-position, max batch 2, 1 queued rows"
         ))
+        XCTAssertTrue(output.contains("text-chat-gemma4 MTP: active, block 4, 6/9 accepted"))
         XCTAssertTrue(output.contains("runtime settings: /tmp/models/.mere-run/runtime-model-settings.json"))
     }
 

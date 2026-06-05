@@ -13,6 +13,108 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("vlm"))
     }
 
+    func testBenchmarkCommandExposesGemma4MTPSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("gemma4-mtp"))
+    }
+
+    func testBenchmarkCommandExposesQ36MTPSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("q36-mtp"))
+    }
+
+    func testQ36MTPBenchmarkParsesDefaults() throws {
+        let cmd = try ModelBenchmarkQ36MTP.parse([])
+
+        XCTAssertEqual(cmd.model, Q35Resources.q36NanoModelId)
+        XCTAssertNil(cmd.modelRoot)
+        XCTAssertNil(cmd.prompt)
+        XCTAssertNil(cmd.promptFile)
+        XCTAssertEqual(cmd.promptRepeat, 150)
+        XCTAssertNil(cmd.promptRepeatValues)
+        XCTAssertEqual(cmd.decodeTokens, 32)
+        XCTAssertNil(cmd.decodeTokenValues)
+        XCTAssertEqual(cmd.temperature, 0)
+        XCTAssertNil(cmd.temperatureValues)
+        XCTAssertEqual(cmd.topP, 0.9)
+        XCTAssertEqual(cmd.contextSize, Q35Resources.defaultContextLength)
+        XCTAssertNil(cmd.mtpBlockSize)
+        XCTAssertEqual(cmd.forcedMTPMinPromptTokens, 1)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testQ36MTPBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkQ36MTP.parse([
+            "--model", Q35Resources.q36NanoModelId,
+            "--model-root", "/tmp/q36",
+            "--prompt", "Benchmark Q36",
+            "--decode-tokens", "24",
+            "--decode-token-values", "24,48",
+            "--prompt-repeat-values", "64",
+            "--temperature", "0.7",
+            "--temperature-values", "0,0.7",
+            "--top-p", "0.8",
+            "--context-size", "8192",
+            "--mtp-block-size", "6",
+            "--forced-mtp-min-prompt-tokens", "2",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.model, Q35Resources.q36NanoModelId)
+        XCTAssertEqual(cmd.modelRoot, "/tmp/q36")
+        XCTAssertEqual(cmd.prompt, "Benchmark Q36")
+        XCTAssertEqual(cmd.decodeTokens, 24)
+        XCTAssertEqual(cmd.decodeTokenValues, "24,48")
+        XCTAssertEqual(cmd.promptRepeatValues, "64")
+        XCTAssertEqual(cmd.temperature, 0.7)
+        XCTAssertEqual(cmd.temperatureValues, "0,0.7")
+        XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.contextSize, 8192)
+        XCTAssertEqual(cmd.mtpBlockSize, 6)
+        XCTAssertEqual(cmd.forcedMTPMinPromptTokens, 2)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testGemma4MTPBenchmarkParsesDefaults() throws {
+        let cmd = try ModelBenchmarkGemma4MTP.parse([])
+
+        XCTAssertEqual(cmd.model, Gemma4Resources.twelveB4BitModelId)
+        XCTAssertNil(cmd.modelRoot)
+        XCTAssertNil(cmd.prompt)
+        XCTAssertNil(cmd.promptFile)
+        XCTAssertEqual(cmd.promptRepeat, 220)
+        XCTAssertNil(cmd.promptRepeatValues)
+        XCTAssertEqual(cmd.decodeTokens, 48)
+        XCTAssertNil(cmd.decodeTokenValues)
+        XCTAssertNil(cmd.mtpBlockSize)
+        XCTAssertNil(cmd.mtpMinPromptTokens)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testGemma4MTPBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkGemma4MTP.parse([
+            "--model", Gemma4Resources.twelveB4BitModelId,
+            "--model-root", "/tmp/gemma4-4bit",
+            "--prompt", "Benchmark MTP",
+            "--decode-tokens", "32",
+            "--decode-token-values", "32,128",
+            "--prompt-repeat-values", "64",
+            "--mtp-block-size", "6",
+            "--mtp-min-prompt-tokens", "1",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.model, Gemma4Resources.twelveB4BitModelId)
+        XCTAssertEqual(cmd.modelRoot, "/tmp/gemma4-4bit")
+        XCTAssertEqual(cmd.prompt, "Benchmark MTP")
+        XCTAssertEqual(cmd.decodeTokens, 32)
+        XCTAssertEqual(cmd.decodeTokenValues, "32,128")
+        XCTAssertEqual(cmd.promptRepeatValues, "64")
+        XCTAssertEqual(cmd.mtpBlockSize, 6)
+        XCTAssertEqual(cmd.mtpMinPromptTokens, 1)
+        XCTAssertTrue(cmd.json)
+    }
+
     func testGemma4KVBenchmarkParsesDefaults() throws {
         let cmd = try ModelBenchmarkGemma4KV.parse([])
 

@@ -193,4 +193,37 @@ final class Q35MTPModel: Module {
         )
         return baseModel.logits(from: hidden)
     }
+
+    func draftBlock(
+        lastToken: Int,
+        hidden: MLXArray,
+        positionOffset: Int,
+        blockSize: Int,
+        baseModel: Q35Model
+    ) -> [Int] {
+        let total = max(1, blockSize) - 1
+        guard total > 0 else {
+            return []
+        }
+
+        var tokenArray = MLXArray([Int32(lastToken)]).reshaped(1, 1)
+        var previousHidden = hidden
+        var tokenArrays: [MLXArray] = []
+        tokenArrays.reserveCapacity(total)
+        for index in 0..<total {
+            let embeddings = baseModel.embeddings(for: tokenArray)
+            previousHidden = self(
+                inputEmbeddings: embeddings,
+                hiddenStates: previousHidden,
+                positionOffset: positionOffset + index
+            )
+            let draftLogits = baseModel.logits(from: previousHidden)[0, -1, 0...]
+            tokenArray = argMax(draftLogits, axis: -1).asType(.int32).reshaped(1, 1)
+            tokenArrays.append(tokenArray)
+        }
+
+        let draftTokens = MLX.concatenated(tokenArrays, axis: 1)
+        MLX.eval(draftTokens)
+        return draftTokens.asArray(Int32.self).map(Int.init)
+    }
 }
