@@ -22,9 +22,11 @@ mkdir -p "$fake_build/MereRun_MereRunCLI.resources/Guides"
 case "$(uname -m)" in
   x86_64|amd64)
     platform_arch="x86_64"
+    deb_arch="amd64"
     ;;
   aarch64|arm64)
     platform_arch="arm64"
+    deb_arch="arm64"
     ;;
   *)
     echo "[test-package-linux] unsupported Linux architecture: $(uname -m)" >&2
@@ -128,3 +130,24 @@ if ! grep -q "^CPATH=$cuda_cccl_fixture" <<<"$wrapper_env_output"; then
 fi
 
 echo "[test-package-linux] package runtime library symlink test passed."
+
+cuda_output_dir="$fixture_root/output-cuda"
+PATH="$fake_bin:$PATH" \
+  MERERUN_LINUX_ACCEL=cuda \
+  MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
+  bash scripts/package-linux.sh \
+    --version 0.0.0+cuda-deps-fixture \
+    --configuration release \
+    --skip-build \
+    --skip-native \
+    --output-dir "$cuda_output_dir" >/dev/null
+
+cuda_deb="$cuda_output_dir/mere-run_0.0.0+cuda-deps-fixture_${deb_arch}.deb"
+[[ -f "$cuda_deb" ]]
+if ! dpkg-deb --field "$cuda_deb" Depends | grep -q 'libcufft-13-0'; then
+  echo "[test-package-linux] expected CUDA .deb dependencies to include libcufft-13-0:" >&2
+  dpkg-deb --field "$cuda_deb" Depends >&2
+  exit 1
+fi
+
+echo "[test-package-linux] CUDA deb dependency test passed."

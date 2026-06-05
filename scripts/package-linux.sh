@@ -480,7 +480,7 @@ if (( do_deb )); then
 
     default_depends="ffmpeg, libcurl4, zlib1g, libopenblas0-pthread | libopenblas0, liblapacke"
     if [[ "$linux_accel" == "cuda" ]]; then
-      default_depends="$default_depends, cuda-cccl-13-0, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcudnn9-cuda-13, libnccl2"
+      default_depends="$default_depends, cuda-cccl-13-0, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcufft-13-0, libcudnn9-cuda-13, libnccl2"
     fi
     depends="${MERERUN_PACKAGE_LINUX_DEPS:-$default_depends}"
     installed_size="$(du -sk "$deb_root/usr" | awk '{print $1}')"
