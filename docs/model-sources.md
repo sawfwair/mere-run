@@ -66,11 +66,15 @@ implemented.
 
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id
-enables OpenAI image content parts through `api serve`. `text-chat-gemma4` is
-the dense bf16 Gemma 4 31B alias and is gated for larger machines. On 32 GB
-Apple Silicon Macs, use `text-chat-gemma4-turbo`, which
-installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot and runs through the native
-Swift Gemma runtime.
+enables OpenAI image content parts through `api serve`. Pulling either managed
+12B id also pulls the companion `google/gemma-4-12B-it-assistant` MTP drafter.
+The native Swift runtime uses that assistant only for greedy decode-tail
+speculation after text, image, or audio prefill has produced target hidden state
+and shared KV; raw local model paths and sampled generations fall back to
+baseline decode. `text-chat-gemma4` is the dense bf16 Gemma 4 31B alias and is
+gated for larger machines. On 32 GB Apple Silicon Macs, use
+`text-chat-gemma4-turbo`, which installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE
+snapshot and runs through the native Swift Gemma runtime.
 
 `text-chat-lfm25-a1b-8bit` uses the public
 `LiquidAI/LFM2.5-8B-A1B-MLX-8bit` snapshot at the pinned catalog revision. It is

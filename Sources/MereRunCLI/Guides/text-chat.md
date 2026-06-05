@@ -6,17 +6,27 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
+Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
 `text-chat-q36-nano` is the managed Qwen3.6 35B-A3B OptiQ 4-bit MLX snapshot; its upstream repo includes an MTP head that is used only by the adaptive long-context speculative decode path.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
+
+## Chat Winners By RAM Band
+
+| Unified memory | Winner | Why |
+| --- | --- | --- |
+| 16-23 GB | `text-chat-gemma4-12b-4bit` | Best compact first chat pick; `text-chat-gemma4-nano` is the safer smallest fallback. |
+| 24-63 GB | `text-chat-q36-nano` | Default strong chat tier; `text-chat-gemma4-turbo` is the Gemma-specific alternative. |
+| 64-95 GB | `text-chat-q36-nano` | Extra RAM is better spent on context, concurrency, or code models than dense Gemma 31B as a default. |
+| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Q36 for lower-latency interactive chat. |
 
 ## Install And Check
 
 ```bash
 mere.run model capabilities
-mere.run model pull text-chat-gemma4-nano
+mere.run model pull text-chat-gemma4-12b-4bit
 mere.run text chat --help
 ```
 
@@ -31,7 +41,7 @@ mere.run text chat --help
 - `--model-root`, `-m`: explicit local model root.
 - `--model`: canonical model id.
 - `--thinking`, `--show-thinking`: include hidden reasoning output when supported.
-- `--stats`: print timing to stderr.
+- `--stats`: print timing to stderr; Gemma4 runs also include MTP state and accept/draft counts.
 - `--stream`: stream tokens to stdout.
 - `--tools`: comma-separated built-ins, currently `write_file` and `shell_exec`.
 - `--tool-loop`: let the model call tools repeatedly.

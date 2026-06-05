@@ -16,6 +16,7 @@ embeddings, and PII anonymization.
 
 - `text-chat-gemma4`
 - `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
+- `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q36-nano`
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
@@ -47,10 +48,21 @@ swift run mere.run text chat \
 ```
 
 `text-chat-gemma4-12b` runs Google's dense Gemma 4 12B-it checkpoint through
-the native Swift Gemma runtime. On 32 GB Apple Silicon Macs, avoid pulling the
-dense bf16 `text-chat-gemma4`/31B path. Use `text-chat-gemma4-turbo` for the
-managed Gemma 4 26B-A4B-it NVFP4 snapshot, which uses the native Swift Gemma
-MoE runtime.
+the native Swift Gemma runtime. Managed pulls for `text-chat-gemma4-12b` and
+`vision-chat-gemma4-12b` install the `google/gemma-4-12B-it-assistant`
+companion as `text-chat-gemma4-12b-mtp`; when it is present, greedy serial
+decode can use native MTP on the decode tail after text or multimodal prefill.
+Sampled requests, prefix-KV seeded requests, continuous batching, raw local
+model paths, and prompts below the MTP threshold fall back to baseline decode.
+Use these chat winners by RAM band instead of treating every supported model as
+equally recommended:
+
+| Unified memory | Winner | Notes |
+| --- | --- | --- |
+| 16-23 GB | `text-chat-gemma4-12b-4bit` | Best compact first chat pick; `text-chat-gemma4-nano` is the safer smallest fallback. |
+| 24-63 GB | `text-chat-q36-nano` | Default strong chat tier; `text-chat-gemma4-turbo` is the Gemma-specific alternative. |
+| 64-95 GB | `text-chat-q36-nano` | Extra RAM is better spent on context, concurrency, or code models than dense Gemma 31B as a default. |
+| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Q36 for lower-latency interactive chat. |
 
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use

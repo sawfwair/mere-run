@@ -48,7 +48,7 @@ struct ModelPull: AsyncParsableCommand {
                     }
                     continue
                 }
-                try await pull(spec)
+                try await pullWithCompanions(spec)
             }
             return
         }
@@ -63,7 +63,7 @@ struct ModelPull: AsyncParsableCommand {
                 ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
             )
         }
-        try await pull(spec)
+        try await pullWithCompanions(spec)
     }
 
     private func validateHardwareSupport(for spec: ManagedModelSpec) throws {
@@ -78,6 +78,19 @@ struct ModelPull: AsyncParsableCommand {
                 Run `mere.run model capabilities --all` to see supported models, or pass --allow-unsupported if you are intentionally using external hardware or accepting the risk.
                 """
             )
+        }
+    }
+
+    private func pullWithCompanions(_ spec: ManagedModelSpec) async throws {
+        try await pull(spec)
+        for companionID in spec.companionModelIDs {
+            guard let companion = ManagedModelCatalog.spec(for: companionID) else {
+                throw ValidationError("Unknown companion model id for \(spec.id): \(companionID)")
+            }
+            if !quiet {
+                stderr("[\(spec.id)] pulling companion \(companion.id)")
+            }
+            try await pull(companion)
         }
     }
 

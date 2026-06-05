@@ -29,6 +29,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case hidreamO1
     case gemma4
     case gemma4Unified
+    case gemma4MTPAssistant
     case q35
     case lfm2
     case qwen3TTS
@@ -72,6 +73,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let resolutionFallbackIDs: [String]
     public let estimatedDownloadBytes: Int64?
     public let defaultCLICommands: [String]
+    public let companionModelIDs: [String]
 
     public init(
         id: String,
@@ -86,7 +88,8 @@ public struct ManagedModelSpec: Hashable, Sendable {
         runtimeAutoDownloadAllowed: Bool = true,
         resolutionFallbackIDs: [String] = [],
         estimatedDownloadBytes: Int64? = nil,
-        defaultCLICommands: [String] = []
+        defaultCLICommands: [String] = [],
+        companionModelIDs: [String] = []
     ) {
         self.id = id
         self.category = category
@@ -101,6 +104,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
         self.resolutionFallbackIDs = resolutionFallbackIDs
         self.estimatedDownloadBytes = estimatedDownloadBytes
         self.defaultCLICommands = defaultCLICommands
+        self.companionModelIDs = companionModelIDs
     }
 }
 
@@ -400,7 +404,22 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
             validationKind: .gemma4,
             estimatedDownloadBytes: 25 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"]
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [Gemma4MTPResources.modelId]
+        ),
+        ManagedModelSpec(
+            id: Gemma4Resources.twelveB4BitModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Gemma4Resources.twelveB4BitUpstreamModelId,
+                patterns: Gemma4Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Gemma4Resources.twelveB4BitUpstreamModelId,
+            validationKind: .gemma4,
+            estimatedDownloadBytes: 12 * 1_073_741_824,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [Gemma4MTPResources.modelId]
         ),
         ManagedModelSpec(
             id: Gemma4Resources.visionTwelveBModelId,
@@ -413,7 +432,8 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
             validationKind: .gemma4Unified,
             estimatedDownloadBytes: 25 * 1_073_741_824,
-            defaultCLICommands: ["api serve"]
+            defaultCLICommands: ["api serve"],
+            companionModelIDs: [Gemma4MTPResources.modelId]
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-nano",
@@ -762,13 +782,37 @@ public enum ManagedModelCatalog {
 
     public static func spec(for id: String) -> ManagedModelSpec? {
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return allSpecs.first {
+        return allKnownSpecs.first {
             $0.id == normalized || $0.upstreamRepoId?.lowercased() == normalized
         }
     }
 
     public static func missingHubSourceMessage(for modelId: String) -> String {
         "Model \(modelId) does not have a Hugging Face Hub source in this public build. Install it from a local path or choose a model listed by `mere.run model capabilities --recommended`."
+    }
+}
+
+private extension ManagedModelCatalog {
+    static var allKnownSpecs: [ManagedModelSpec] {
+        allSpecs + companionSpecs
+    }
+
+    static var companionSpecs: [ManagedModelSpec] {
+        [
+            ManagedModelSpec(
+                id: Gemma4MTPResources.modelId,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: Gemma4MTPResources.upstreamModelId,
+                    patterns: Gemma4MTPResources.snapshotPatterns
+                ),
+                upstreamRepoId: Gemma4MTPResources.upstreamModelId,
+                validationKind: .gemma4MTPAssistant,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: 4 * 1_073_741_824
+            ),
+        ]
     }
 }
 
@@ -831,6 +875,8 @@ public extension ManagedModelSpec {
                 fileManager: fileManager,
                 requireUnifiedProcessor: true
             )
+        case .gemma4MTPAssistant:
+            return Gemma4MTPResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .q35:
             return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .lfm2:

@@ -237,7 +237,7 @@ Key options:
 - `--top-p`
 - `--stream`
 - `--thinking`
-- `--stats`
+- `--stats`: includes Gemma4 MTP state and accept/draft counts when a Gemma4 model is used
 - `--quiet`
 
 Examples:
@@ -741,6 +741,61 @@ values to run a prompt-size/decode-length matrix for promotion evidence.
 The default fixture prompt is deterministic and intended for local A/B
 comparisons, not model-quality evaluation.
 
+### `mere.run model benchmark gemma4-mtp`
+
+Run a fixed-token real-checkpoint Gemma4 MTP comparison. The command runs the
+selected Gemma4 model twice in one process: `baseline` with
+`MERERUN_GEMMA4_MTP=0`, then `mtp` with `MERERUN_GEMMA4_MTP=1`. It defaults to
+the practical 4-bit checkpoint and disables EOS stopping so both variants decode
+exactly `--decode-tokens`.
+
+```bash
+swift run mere.run model benchmark gemma4-mtp \
+  --model text-chat-gemma4-12b-4bit \
+  --decode-tokens 48 \
+  --json
+```
+
+Output includes prompt tokens, generated tokens, load time, prefill time, decode
+time, TTFT, prefill tok/s, decode tok/s, end-to-end tok/s, process resident
+memory, decode speedup, end-to-end speedup, and MTP counters for rounds, drafted
+tokens, accepted tokens, rejected tokens, acceptance rate, and accepted tokens
+per round.
+
+Use `--prompt`, `--prompt-file`, or `--prompt-repeat` to control prompt length.
+Use `--prompt-repeat-values` and `--decode-token-values` with comma-separated
+values to run a prompt-size/decode-length matrix. `--mtp-block-size` and
+`--mtp-min-prompt-tokens` are optional benchmark overrides for draft block size
+and the activation threshold; leaving them unset uses the runtime policy
+defaults. The default fixture is deterministic and intended for throughput
+comparison, not model-quality evaluation.
+
+### `mere.run model benchmark q36-mtp`
+
+Run a requested-token real-checkpoint Qwen3.6 MTP comparison. The command runs
+`text-chat-q36-nano` with three policies:
+
+- `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
+- `adaptive`: production long-context policy.
+- `forced`: MTP enabled with `MERERUN_Q35_MTP_SPECULATION=1` and a configurable
+  forced threshold.
+
+```bash
+swift run mere.run model benchmark q36-mtp \
+  --prompt-repeat-values 8,80,150 \
+  --temperature-values 0,0.7 \
+  --decode-tokens 32 \
+  --json
+```
+
+The runtime may still stop on EOS before `--decode-tokens`. Output includes
+prompt tokens, generated tokens, load time, prefill time, decode time, TTFT,
+prefill tok/s, decode tok/s, end-to-end tok/s, process resident memory, and
+adaptive/forced speedups versus baseline. Greedy forced MTP uses the native
+block verifier; non-greedy forced MTP stays on the exact probabilistic
+speculative path. Use `--mtp-block-size` to test a different greedy draft block
+cap and `--forced-mtp-min-prompt-tokens` to adjust the forced policy threshold.
+
 ### `mere.run model benchmark vlm`
 
 Run a tiny synthetic VLM smoke, or use `lmms-eval` to compare an installed
@@ -782,8 +837,8 @@ command start a local `mere.run api serve` process per requested model.
 
 ### `mere.run model capabilities`
 
-Show this machine's supported models, recommended setup package, and a short summary
-of what each model does.
+Show this machine's supported models, recommended setup package, chat winners
+by RAM band, and a short summary of what each model does.
 
 ```bash
 swift run mere.run model capabilities
@@ -853,6 +908,11 @@ Security defaults:
 - Qwen-family chat can opt into text-only in-memory prefix KV reuse with
   `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
   text-only requests use the same semantic chat-prefix checkpoints as Gemma4
+- Managed Gemma4 12B text and vision pulls install a companion MTP assistant.
+  When `MERERUN_GEMMA4_MTP` is not disabled, greedy serial decode can use that
+  assistant on the decode tail after prefill; sampled requests, continuous
+  batching, raw local model paths, and prefix-KV seeded requests use baseline
+  decode
 - Gemma4 and Qwen-family chat can opt into decode batching with
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to

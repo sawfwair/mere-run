@@ -124,6 +124,58 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertFalse(reports.contains { $0.spec.id == CodeGenResources.defaultModelId })
     }
 
+    func testChatBandRecommendationsNameOneWinnerPerRAMBand() {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let bands = ManagedModelCapabilityCatalog.recommendedChatBandReports(on: machine)
+
+        XCTAssertEqual(bands.map(\.bandLabel), ["16-23 GB", "24-63 GB", "64-95 GB", "96+ GB"])
+        XCTAssertEqual(bands.map(\.modelID), [
+            Gemma4Resources.twelveB4BitModelId,
+            Q35Resources.q36NanoModelId,
+            Q35Resources.q36NanoModelId,
+            DeepseekV4FlashResources.defaultModelId,
+        ])
+        XCTAssertTrue(bands.allSatisfy { !$0.title.isEmpty && !$0.summary.isEmpty })
+    }
+
+    func testChatBandRecommendationDetectsCurrentMachineBand() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M2 Max",
+            isAppleSiliconMac: true
+        )
+
+        let currentBand = try XCTUnwrap(
+            ManagedModelCapabilityCatalog
+                .recommendedChatBandReports(on: machine)
+                .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
+        )
+
+        XCTAssertEqual(currentBand.modelID, Q35Resources.q36NanoModelId)
+    }
+
+    func testChatBandRecommendationUsesGGUFQ36OnLinux() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "Linux",
+            isAppleSiliconMac: false,
+            isLinux: true
+        )
+
+        let currentBand = try XCTUnwrap(
+            ManagedModelCapabilityCatalog
+                .recommendedChatBandReports(on: machine)
+                .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
+        )
+
+        XCTAssertEqual(currentBand.modelID, ModelResolver.ModelID.q36NanoGGUF.rawValue)
+    }
+
     func testRecommendedSetupIncludesDeepseekV4FlashOnLargeAppleSilicon() {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 128 * 1_073_741_824,

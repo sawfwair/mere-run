@@ -168,6 +168,77 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         XCTAssertNil(fullAttention.vProj)
     }
 
+    func testDetailedForwardCapturesPreNormHiddenAndSharedKV() throws {
+        var configObject = makeBaseConfig()
+        configObject["num_hidden_layers"] = 2
+        configObject["layer_types"] = ["full_attention", "full_attention"]
+        configObject["num_kv_shared_layers"] = 1
+        configObject["hidden_size_per_layer_input"] = 0
+        let config = try decodeTextConfig(configObject)
+        let model = Gemma4TextCausalLM(config: config)
+        let caches = try XCTUnwrap(model.makeCache(quantization: nil) as? [Gemma4AttentionCache])
+        let inputIds = MLXArray([Int32(3), Int32(4)]).reshaped(1, 2)
+
+        let output = model.forwardForSpeculation(inputIds: inputIds, cache: caches as [AnyObject])
+
+        MLX.eval(output.logits, output.hidden)
+        XCTAssertEqual(output.logits.shape, [1, 2, config.vocabSize])
+        XCTAssertEqual(output.hidden.shape, [1, 2, config.hiddenSize])
+        XCTAssertNotNil(output.sharedKVStates["full_attention"])
+        XCTAssertEqual(output.sharedKVStates["full_attention"]?.offset, 2)
+    }
+
+    func testAssistantConfigDecodesMTPDefaults() throws {
+        var textConfig = makeBaseConfig()
+        textConfig["num_hidden_layers"] = 1
+        textConfig["layer_types"] = ["full_attention"]
+        let data = try JSONSerialization.data(withJSONObject: [
+            "model_type": "gemma4_assistant",
+            "backbone_hidden_size": 8,
+            "text_config": textConfig,
+        ], options: [])
+
+        let config = try JSONDecoder().decode(Gemma4AssistantConfig.self, from: data)
+
+        XCTAssertEqual(config.modelType, "gemma4_assistant")
+        XCTAssertEqual(config.backboneHiddenSize, 8)
+        XCTAssertEqual(config.blockSize, Gemma4MTPResources.defaultBlockSize)
+        XCTAssertTrue(config.tieWordEmbeddings)
+        XCTAssertFalse(config.useOrderedEmbeddings)
+    }
+
+    func testGemma4MTPPolicyGatesOnGreedyPromptAndEnvironment() {
+        let greedy = GenerationConfig(maxTokens: 16, temperature: 0, topP: 1)
+        let sampled = GenerationConfig(maxTokens: 16, temperature: 0.7, topP: 0.9)
+        let env = [
+            "MERERUN_GEMMA4_MTP_MIN_PROMPT_TOKENS": "8",
+            "MERERUN_GEMMA4_MTP_BLOCK_SIZE": "6",
+        ]
+
+        XCTAssertNil(Gemma4MTPPolicy.activationReason(
+            assistantAvailable: true,
+            promptTokenCount: 8,
+            generationConfig: greedy,
+            prefixSeedWasUsed: false,
+            environment: env
+        ))
+        XCTAssertEqual(Gemma4MTPPolicy.activationReason(
+            assistantAvailable: true,
+            promptTokenCount: 8,
+            generationConfig: sampled,
+            prefixSeedWasUsed: false,
+            environment: env
+        ), "non-greedy sampling")
+        XCTAssertEqual(Gemma4MTPPolicy.activationReason(
+            assistantAvailable: false,
+            promptTokenCount: 8,
+            generationConfig: greedy,
+            prefixSeedWasUsed: false,
+            environment: env
+        ), "assistant not installed")
+        XCTAssertEqual(Gemma4MTPPolicy.blockSize(configured: 4, environment: env), 6)
+    }
+
     func testAttentionKEqVFullAttentionStillProducesExpectedShape() throws {
         let config = try decodeTextConfig([
             "model_type": "gemma4_text",

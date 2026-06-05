@@ -646,6 +646,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
                 createdAt: createdAt
             )
+        case .gemma4TwelveB4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: gemma4TextComponents,
+                upstreamRepoId: Gemma4Resources.twelveB4BitUpstreamModelId,
+                createdAt: createdAt
+            )
         case .gemma4VisionTwelveB:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -658,6 +673,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration, .visionChat],
                 components: gemma4TextComponents,
                 upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
+                createdAt: createdAt
+            )
+        case .gemma4TwelveBMTP:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId: Gemma4MTPResources.upstreamModelId,
                 createdAt: createdAt
             )
         case .q36Nano:

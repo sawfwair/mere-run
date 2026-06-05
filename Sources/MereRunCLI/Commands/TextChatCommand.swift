@@ -21,6 +21,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit, default on Apple Silicon)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-chat-gemma4-12b (Gemma 4 12B dense native Swift runtime)
+          - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit native Swift runtime)
           - text-chat-gemma4-turbo (Gemma 4 26B-A4B NVFP4 native Swift runtime)
           - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
@@ -68,8 +69,7 @@ struct TextChat: AsyncParsableCommand {
     /// the capability catalog), and the right engine per platform: Qwen3.6-35B-A3B
     /// as MLX on Apple Silicon (~64 tok/s on M4 Max) or GGUF/llama.cpp on Linux
     /// CUDA (~68 tok/s on GB10, vs ~13 for MLX there). Below the A3B memory tier
-    /// it steps down to the 4B gemma4-nano so low-memory machines still get a
-    /// working default instead of a 21GB+ model they can't load.
+    /// it steps down to Gemma 4 12B 4-bit, then nano as the final fallback.
     static var defaultChatModelId: String {
         let machine = MereRunMachineProfile.current
         func fits(_ id: String) -> Bool {
@@ -84,13 +84,17 @@ struct TextChat: AsyncParsableCommand {
         isCUDA = false
         #endif
 
+        #if os(Linux)
         let a3b = isCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId
+        #else
+        let a3b = Q35Resources.q36NanoModelId
+        #endif
         if fits(a3b) { return a3b }
-        if fits(Gemma4Resources.turboModelId) { return Gemma4Resources.turboModelId }
+        if fits(Gemma4Resources.twelveB4BitModelId) { return Gemma4Resources.twelveB4BitModelId }
         return Gemma4Resources.nanoModelId
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-12b|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
@@ -164,6 +168,7 @@ struct TextChat: AsyncParsableCommand {
 
         let startTime = Date()
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var lastGemma4MTPStats: Gemma4MTPStats?
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
             if normalizedModelId == Psi3ChatResources.defaultModelId {
@@ -176,7 +181,9 @@ struct TextChat: AsyncParsableCommand {
                     modelId: effectiveModelId,
                     kvCacheQuantization: kvQuantization
                 )
-                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                let response = try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                lastGemma4MTPStats = await generator.mtpStats()
+                return response
             } else if ManagedModelCatalog.spec(for: normalizedModelId)?.validationKind == .codegenGGUF {
                 // GGUF chat models run through the llama.cpp engine (the same path
                 // `text code` uses). On Linux CUDA this is the GB10-optimized
@@ -285,9 +292,15 @@ struct TextChat: AsyncParsableCommand {
                         e2eTps
                     )
                     CLIStderr.write("\(line)\n")
+                    if let mtp = lastGemma4MTPStats {
+                        CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
+                    }
                 } else {
                     let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
                     CLIStderr.write("\(line)\n")
+                    if let mtp = lastGemma4MTPStats {
+                        CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
+                    }
                 }
             }
 
@@ -297,6 +310,19 @@ struct TextChat: AsyncParsableCommand {
                 print(cleanResponse(result.response, showThinking: thinking))
             }
         }
+    }
+
+    static func formatGemma4MTPStats(_ stats: Gemma4MTPStats) -> String {
+        let state: String
+        if stats.active {
+            state = "active"
+        } else if stats.available {
+            state = stats.enabled ? "available" : "disabled"
+        } else {
+            state = stats.enabled ? "unavailable" : "disabled"
+        }
+        let reason = stats.reason.map { " reason=\($0)" } ?? ""
+        return "mtp=\(state) block=\(stats.blockSize) threshold=\(stats.threshold) rounds=\(stats.rounds) drafted=\(stats.draftedTokens) accepted=\(stats.acceptedTokens) rejected=\(stats.rejectedTokens)\(reason)"
     }
 
     func cleanResponse(_ response: String, showThinking: Bool) -> String {

@@ -202,6 +202,11 @@ swift run mere.run model runtime set text-chat-gemma4 \
 swift run mere.run model capabilities
 swift run mere.run model capabilities --recommended
 
+# Chat winners by RAM band
+# 16-23 GB: text-chat-gemma4-12b-4bit
+# 24-95 GB: text-chat-q36-nano
+# 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Q36 for lower-latency CLI chat
+
 # Choose guided, bring-your-own-agent, or manual setup
 swift run mere.run setup
 
@@ -277,6 +282,20 @@ swift run mere.run model benchmark gemma4-kv \
   --model text-chat-gemma4-turbo \
   --prompt-repeat-values 32,128,220 \
   --decode-token-values 32,128 \
+  --json
+
+# Fixed-token real-checkpoint Gemma4 MTP benchmark: serial decode vs verified MTP
+swift run mere.run model benchmark gemma4-mtp \
+  --model text-chat-gemma4-12b-4bit \
+  --prompt-repeat-values 128,220 \
+  --decode-token-values 48,128 \
+  --json
+
+# Requested-token real-checkpoint Qwen3.6 MTP benchmark: baseline vs adaptive vs forced
+swift run mere.run model benchmark q36-mtp \
+  --prompt-repeat-values 8,80,150 \
+  --temperature-values 0,0.7 \
+  --decode-tokens 32 \
   --json
 
 # Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend

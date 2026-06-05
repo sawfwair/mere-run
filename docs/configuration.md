@@ -67,6 +67,46 @@ keeps semantic checkpoints ahead of ordinary chunk checkpoints when pruning.
 
 Continuous batching and SSD KV cache are not enabled by this flag.
 
+### `MERERUN_GEMMA4_MTP`
+
+Gemma 4 12B MTP is enabled by default when the managed
+`text-chat-gemma4-12b-mtp` assistant companion is installed. Set this to `0`,
+`false`, or `off` to force baseline decode. The runtime only uses Gemma MTP for
+greedy serial decode after the main Gemma 12B model has prefetched the prompt and
+exposed hidden state plus shared KV; sampled requests, continuous batching, raw
+local model paths, and prefix-KV seeded requests stay on baseline decode.
+
+### `MERERUN_GEMMA4_MTP_MIN_PROMPT_TOKENS`
+
+Minimum effective prompt length before Gemma 4 12B MTP is considered. Defaults
+to `2048`.
+
+### `MERERUN_GEMMA4_MTP_BLOCK_SIZE`
+
+Override the Gemma 4 12B assistant draft block size. Defaults to the assistant
+config value, currently `4`, and is clamped to the native runtime's supported
+range.
+
+### `MERERUN_Q35_MTP_SPECULATION`
+
+Controls the Qwen-family MTP path used by `text-chat-q36-nano`. Set this to
+`1`, `true`, `yes`, or `on` to force consideration when the effective context
+window is large enough; set it to `0`, `false`, or `no` to disable MTP. Any other
+value, including unset, uses the adaptive long-context threshold.
+
+The `Q35` name is an internal compatibility prefix for the Qwen-family runtime;
+the public managed model id is `text-chat-q36-nano`.
+
+### `MERERUN_Q35_MTP_MIN_PROMPT_TOKENS`
+
+Minimum effective prompt length before Qwen-family MTP is considered. Defaults
+to `6144`, and the effective request context must also be at least this large.
+
+### `MERERUN_Q35_MTP_BLOCK_SIZE`
+
+Override the Qwen-family greedy MTP draft block size. Defaults to `4` and is
+clamped to the native runtime's supported range.
+
 ### `MERERUN_Q35_PREFIX_KV_CACHE`
 
 Set to `1` to enable the in-memory Qwen-family text-only prefix KV reuse prototype in

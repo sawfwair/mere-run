@@ -136,6 +136,46 @@ public struct ManagedModelSupportReport: Hashable, Sendable {
     }
 }
 
+public struct ManagedChatModelBandRecommendation: Hashable, Sendable {
+    public let minimumUnifiedMemoryGB: Int
+    public let maximumUnifiedMemoryGB: Int?
+    public let modelID: String
+    public let title: String
+    public let summary: String
+    public let alternateModelIDs: [String]
+
+    public init(
+        minimumUnifiedMemoryGB: Int,
+        maximumUnifiedMemoryGB: Int?,
+        modelID: String,
+        title: String,
+        summary: String,
+        alternateModelIDs: [String] = []
+    ) {
+        self.minimumUnifiedMemoryGB = minimumUnifiedMemoryGB
+        self.maximumUnifiedMemoryGB = maximumUnifiedMemoryGB
+        self.modelID = modelID
+        self.title = title
+        self.summary = summary
+        self.alternateModelIDs = alternateModelIDs
+    }
+
+    public var bandLabel: String {
+        if let maximumUnifiedMemoryGB {
+            return "\(minimumUnifiedMemoryGB)-\(maximumUnifiedMemoryGB) GB"
+        }
+        return "\(minimumUnifiedMemoryGB)+ GB"
+    }
+
+    public func contains(unifiedMemoryGB: Int) -> Bool {
+        guard unifiedMemoryGB >= minimumUnifiedMemoryGB else { return false }
+        if let maximumUnifiedMemoryGB {
+            return unifiedMemoryGB <= maximumUnifiedMemoryGB
+        }
+        return true
+    }
+}
+
 public enum ManagedModelCapabilityCatalog {
     private static let descriptorsByID: [String: ManagedModelCapabilityDescriptor] = {
         let descriptors = [
@@ -255,11 +295,26 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                Gemma4Resources.twelveB4BitModelId,
+                "Gemma 4 12B 4-bit chat",
+                "Installs the MLX 4-bit Gemma 4 12B instruction snapshot for faster native Swift text chat.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            ),
+            descriptor(
                 Gemma4Resources.visionTwelveBModelId,
                 "Gemma 4 12B vision chat",
                 "Runs the dense Gemma 4 12B unified model for single-image chat through the native Swift runtime.",
                 minimum: 32,
                 recommended: 48
+            ),
+            descriptor(
+                Gemma4MTPResources.modelId,
+                "Gemma 4 12B MTP assistant",
+                "Installs the companion drafter used for verified Gemma 4 12B decode-tail speculation.",
+                minimum: 24,
+                recommended: 32
             ),
             descriptor(
                 "text-chat-gemma4-nano",
@@ -465,6 +520,46 @@ public enum ManagedModelCapabilityCatalog {
                 && $0.descriptor.isRecommendedForSetup
                 && $0.spec.hasAnyManagedDownloadSource()
         }
+    }
+
+    public static func recommendedChatBandReports(
+        on machine: MereRunMachineProfile = .current
+    ) -> [ManagedChatModelBandRecommendation] {
+        let q36ModelID = machine.isLinux ? ModelResolver.ModelID.q36NanoGGUF.rawValue : Q35Resources.q36NanoModelId
+        return [
+            ManagedChatModelBandRecommendation(
+                minimumUnifiedMemoryGB: 16,
+                maximumUnifiedMemoryGB: 23,
+                modelID: Gemma4Resources.twelveB4BitModelId,
+                title: "Compact native chat",
+                summary: "Best first chat pick for the smallest supported RAM band; use nano only when the 12B 4-bit lane is too tight.",
+                alternateModelIDs: [Gemma4Resources.nanoModelId, LFM2Resources.defaultModelId]
+            ),
+            ManagedChatModelBandRecommendation(
+                minimumUnifiedMemoryGB: 24,
+                maximumUnifiedMemoryGB: 63,
+                modelID: q36ModelID,
+                title: "Default strong chat",
+                summary: "Best general-purpose chat tier; Gemma 4 Turbo is the Gemma-specific alternative.",
+                alternateModelIDs: [Gemma4Resources.turboModelId, Gemma4Resources.twelveB4BitModelId]
+            ),
+            ManagedChatModelBandRecommendation(
+                minimumUnifiedMemoryGB: 64,
+                maximumUnifiedMemoryGB: 95,
+                modelID: q36ModelID,
+                title: "Strong chat with headroom",
+                summary: "Q36 remains the general chat winner; spend the extra RAM on context, concurrency, or code models.",
+                alternateModelIDs: [Gemma4Resources.maxModelId, CodeGenResources.defaultModelId]
+            ),
+            ManagedChatModelBandRecommendation(
+                minimumUnifiedMemoryGB: 96,
+                maximumUnifiedMemoryGB: nil,
+                modelID: DeepseekV4FlashResources.defaultModelId,
+                title: "Premier agent/API chat",
+                summary: "Highest-tier agent/API chat model; keep Q36 as the lower-latency interactive chat lane.",
+                alternateModelIDs: [q36ModelID]
+            ),
+        ]
     }
 
     private static func descriptor(

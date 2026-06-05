@@ -123,6 +123,12 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
+        } else if spec?.validationKind == .gemma4MTPAssistant {
+            errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
         } else if spec?.validationKind == .aceStep || spec?.validationKind == .ltxVideo {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
@@ -415,6 +421,9 @@ public enum MereRunModelValidator {
                 || manifest.family == .falcon
         }()
         let skipsComponentValidation = {
+            if ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .gemma4MTPAssistant {
+                return true
+            }
             switch manifest.engine {
             case .qwen3Coder?, .aceStep?, .ltxVideo?:
                 return true
@@ -474,6 +483,7 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.gemma4Max.rawValue
             || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue
             || modelId == ModelResolver.ModelID.gemma4TwelveB.rawValue
+            || modelId == ModelResolver.ModelID.gemma4TwelveB4Bit.rawValue
             || modelId == ModelResolver.ModelID.gemma4VisionTwelveB.rawValue {
             return .gemma
         }

@@ -21,6 +21,26 @@ mere.run model benchmark gemma4-kv \
   --json
 ```
 
+Compare Gemma4 12B serial decode against verified MTP speculative decode:
+
+```bash
+mere.run model benchmark gemma4-mtp \
+  --model text-chat-gemma4-12b-4bit \
+  --prompt-repeat-values 128,220 \
+  --decode-token-values 48,128 \
+  --json
+```
+
+Compare Qwen3.6 baseline decode against adaptive and forced MTP policies:
+
+```bash
+mere.run model benchmark q36-mtp \
+  --prompt-repeat-values 8,80,150 \
+  --temperature-values 0,0.7 \
+  --decode-tokens 32 \
+  --json
+```
+
 Compare Gemma4 12B vision chat against the existing Qwen3-VL inspect backend:
 
 ```bash
@@ -61,6 +81,42 @@ The command disables EOS stopping so both variants decode exactly
 prefill time, KV conversion time, decode time, TTFT, prefill tok/s, decode tok/s,
 end-to-end tok/s, and process resident memory before and after each variant.
 
+## Gemma4 MTP Benchmark
+
+`model benchmark gemma4-mtp` runs a fixed-token comparison for the selected
+Gemma4 checkpoint:
+
+- `baseline`: serial greedy decode with `MERERUN_GEMMA4_MTP=0`.
+- `mtp`: verified MTP speculative decode with `MERERUN_GEMMA4_MTP=1`.
+
+The command defaults to `text-chat-gemma4-12b-4bit`, disables EOS stopping so
+both variants decode exactly `--decode-tokens`, and reports decode speedup,
+end-to-end speedup, prompt tokens, generated tokens, timing, throughput, process
+resident memory, and MTP counters for rounds, drafted tokens, accepted tokens,
+rejected tokens, acceptance rate, and accepted tokens per round.
+
+Use `--mtp-block-size` to test a different draft block cap, or
+`--mtp-min-prompt-tokens` to force active MTP on shorter local fixtures. Leaving
+those unset uses the runtime policy defaults. This is a throughput and verifier
+benchmark, not a model-quality eval.
+
+## Qwen3.6 MTP Benchmark
+
+`model benchmark q36-mtp` runs requested-token comparisons for
+`text-chat-q36-nano`:
+
+- `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
+- `adaptive`: production policy with the default long-context threshold.
+- `forced`: MTP enabled with `MERERUN_Q35_MTP_SPECULATION=1` and a configurable
+  forced threshold, defaulting to `1` token.
+
+The runtime may still stop on EOS before `--decode-tokens`. The command reports prompt tokens, generated tokens, timing, throughput, process
+resident memory, and decode/end-to-end speedups for adaptive and forced MTP
+against baseline. Use `--temperature-values 0,0.7` to compare deterministic
+greedy decode against the default chat sampling temperature. Greedy forced MTP
+uses the native block verifier; non-greedy forced MTP stays on the exact
+probabilistic speculative path.
+
 ## Prompt Control
 
 Use one of:
@@ -70,6 +126,8 @@ Use one of:
 - `--prompt-repeat`: repeat count for the built-in deterministic fixture.
 - `--prompt-repeat-values`: comma-separated fixture sizes for a benchmark matrix.
 - `--decode-token-values`: comma-separated decode lengths for a benchmark matrix.
+- `--temperature-values`: comma-separated sampling temperatures for the Qwen3.6
+  MTP matrix.
 
 The fixture prompt is for runtime comparison only; it is not a quality eval.
 

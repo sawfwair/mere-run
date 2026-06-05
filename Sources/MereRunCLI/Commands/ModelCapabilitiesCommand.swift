@@ -31,6 +31,19 @@ struct ModelCapabilities: ParsableCommand {
         print("  unifiedMemory: \(machine.unifiedMemoryGB) GB")
         print("  appleSiliconMac: \(machine.isAppleSiliconMac)")
 
+        let chatBands = ManagedModelCapabilityCatalog.recommendedChatBandReports(on: machine)
+        if !chatBands.isEmpty {
+            print("\nRecommended chat winners by RAM band")
+            for band in chatBands {
+                let marker = band.contains(unifiedMemoryGB: machine.unifiedMemoryGB) ? " (this machine)" : ""
+                print("  \(band.bandLabel): \(band.modelID)\(marker)")
+                print("    \(band.title): \(band.summary)")
+                if !band.alternateModelIDs.isEmpty {
+                    print("    alternatives: \(band.alternateModelIDs.joined(separator: ", "))")
+                }
+            }
+        }
+
         if let agent = MereRunAgentModelCatalog.recommendation(for: .tier, on: machine) {
             print("\nRecommended setup agent")
             print("  \(CLICommandDisplay.command("agent start --model \(agent.id)"))")

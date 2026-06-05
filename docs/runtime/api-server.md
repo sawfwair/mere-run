@@ -114,6 +114,11 @@ swift run mere.run api serve \
   `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded because image
   embeddings alter the effective prefix; text-only requests use the same stable
   chat-prefix checkpoint and pruning rule as Gemma4
+- Managed Gemma4 12B text and vision installs include the
+  `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
+  for greedy serial decode-tail speculation after prefill; sampled requests,
+  raw local model paths, prefix-KV seeded requests, and continuous batching stay
+  on baseline decode.
 - Gemma4 and Qwen-family chat have opt-in decode batching prototypes behind
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` and
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; set `--max-active-requests` above `1` to
