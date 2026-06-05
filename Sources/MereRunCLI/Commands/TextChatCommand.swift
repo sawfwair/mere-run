@@ -278,10 +278,9 @@ struct TextChat: AsyncParsableCommand {
             if stats {
                 let e2eTps = elapsed > 0 ? Double(result.tokensGenerated) / elapsed : 0
                 if let timing = result.timing {
-                    let decodeTps = timing.decodeSeconds > 0
-                        ? Double(result.tokensGenerated) / timing.decodeSeconds
-                        : 0
-                    let line = String(
+                    let decodeTps = timing.decodeTokensPerSecond
+                        ?? (timing.decodeSeconds > 0 ? Double(result.tokensGenerated) / timing.decodeSeconds : 0)
+                    var line = String(
                         format: "time=%.2fs load=%.2fs prefill=%.2fs decode=%.2fs tokens=%d decode_tps=%.2f e2e_tps=%.2f",
                         elapsed,
                         timing.loadSeconds,
@@ -291,6 +290,9 @@ struct TextChat: AsyncParsableCommand {
                         decodeTps,
                         e2eTps
                     )
+                    if let prefillTps = timing.prefillTokensPerSecond {
+                        line += String(format: " prefill_tps=%.2f", prefillTps)
+                    }
                     CLIStderr.write("\(line)\n")
                     if let mtp = lastGemma4MTPStats {
                         CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
