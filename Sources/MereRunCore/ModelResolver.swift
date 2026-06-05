@@ -47,6 +47,8 @@ public struct ModelResolver {
         case visionSegmentSAM31 = "vision-segment-sam31"
         case visionGroundFalconPerception = "vision-ground-falcon-perception"
         case aceStep = "music-acestep"
+        case magentaRT2Small = "music-magenta-rt2-small"
+        case magentaRT2Base = "music-magenta-rt2-base"
         case ltxVideoAV = "video-ltx-av"
     }
 

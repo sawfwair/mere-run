@@ -1,0 +1,1 @@
+vendor/magentart.xcframework/**/Resources/*.metallib filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,5 @@
+framework module magentart {
+  umbrella header "mrt2_c_api.h"
+  export *
+  module * { export * }
+}

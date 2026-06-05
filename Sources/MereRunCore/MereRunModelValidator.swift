@@ -103,6 +103,7 @@ public enum MereRunModelValidator {
             case .directoryRoot, .structuredRoot:
                 return spec.validationKind != .codegenGGUF
                     && spec.validationKind != .deepseekV4FlashIMatrixGGUF
+                    && spec.validationKind != .magentaRT2
             }
         }()
         if !hasRootMarker && !usesMFluxZImage && requiresRootMarker {
@@ -129,7 +130,7 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .aceStep || spec?.validationKind == .ltxVideo {
+        } else if spec?.validationKind == .aceStep || spec?.validationKind == .magentaRT2 || spec?.validationKind == .ltxVideo {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -357,8 +358,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=code expects qwen3-coder.")
             case .ocr where engine != .lightOnOCR:
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr.")
-            case .music where engine != .aceStep:
-                warnings.append("Manifest engine mismatch: family=music expects ace-step.")
+            case .music where engine != .aceStep && engine != .magentaRT2:
+                warnings.append("Manifest engine mismatch: family=music expects ace-step or magenta-rt2.")
             case .video where engine != .ltxVideo:
                 warnings.append("Manifest engine mismatch: family=video expects ltx-video.")
             case .psi where engine != .psiChat:
@@ -433,7 +434,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .aceStep?, .ltxVideo?:
+            case .qwen3Coder?, .aceStep?, .magentaRT2?, .ltxVideo?:
                 return true
             default:
                 return false
@@ -511,6 +512,7 @@ public enum MereRunModelValidator {
 
     private static func inferTier(from modelId: String) -> MereRunModelManifest.Tier? {
         if modelId.hasSuffix("-nano") { return .nano }
+        if modelId.hasSuffix("-small") { return .small }
         if modelId.hasSuffix("-max") { return .max }
         if modelId.hasSuffix("-base") { return .base }
         return nil

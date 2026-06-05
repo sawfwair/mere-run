@@ -42,7 +42,7 @@ Examples:
 - text: `text-chat-gemma4`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
-- music: `music-acestep`
+- music: `music-acestep`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - video: `video-ltx-av`
 
 The public runtime resolves these IDs directly, so docs and examples should use

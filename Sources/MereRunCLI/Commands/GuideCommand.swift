@@ -327,7 +327,11 @@ enum GuideRegistry {
             topic: "music-generate",
             title: "Music Generate",
             commandPaths: [["music", "generate"]],
-            models: ["music-acestep"],
+            models: [
+                "music-acestep",
+                "music-magenta-rt2-small",
+                "music-magenta-rt2-base",
+            ],
             resourceName: "music-generate.md"
         ),
         GuideTopic(

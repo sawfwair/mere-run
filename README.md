@@ -345,6 +345,14 @@ swift run mere.run music generate \
   "upbeat electronic groove" \
   --output ./track.wav
 
+# Stream and optionally capture Magenta RT2 music on Apple Silicon macOS
+swift run mere.run music realtime \
+  "ambient modular synths with brushed drums" \
+  --model music-magenta-rt2-small \
+  --duration 4 \
+  --output ./live.wav \
+  --no-play
+
 # Generate video
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
@@ -375,6 +383,7 @@ The public CLI is modality-first:
 - `mere.run vision track-live`
 - `mere.run vision ocr`
 - `mere.run music generate`
+- `mere.run music realtime`
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`

@@ -462,6 +462,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                ModelResolver.ModelID.magentaRT2Small.rawValue,
+                "Magenta RealTime 2 small",
+                "Streams controllable Magenta RT2 music on Apple Silicon with the 230M model.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                ModelResolver.ModelID.magentaRT2Base.rawValue,
+                "Magenta RealTime 2 base",
+                "Streams higher-quality Magenta RT2 music on Pro/Max-class Apple Silicon.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 "video-ltx-av",
                 "Video generation",
                 "Generates short audio-video clips with the LTX unified AV model stack.",
@@ -496,6 +510,10 @@ public enum ManagedModelCapabilityCatalog {
 
         if !machine.isSupportedRuntime {
             reasons.append("Apple Silicon macOS or Linux is required.")
+        }
+
+        if spec.validationKind == .magentaRT2 && !machine.isAppleSiliconMac {
+            reasons.append("Magenta RT2 requires Apple Silicon macOS.")
         }
 
         if machine.unifiedMemoryGB < descriptor.minimumUnifiedMemoryGB {

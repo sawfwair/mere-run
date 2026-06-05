@@ -42,6 +42,8 @@ mere.run model pull text-chat-lfm25-a1b-8bit
 ```bash
 MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
   mere.run model pull music-acestep
+MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
+  mere.run model pull music-magenta-rt2-small
 ```
 
 ## Iteration Tips

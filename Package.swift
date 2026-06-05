@@ -84,6 +84,7 @@ let commonSwiftSettings: [SwiftSetting] = [
   .interoperabilityMode(.Cxx)
 ] + prebuiltMLXSwiftSettings + linuxPackageSwiftSettings
 let hasMediaIOTarget = packageDirectoryContainsSwiftSources("Sources/MediaIO")
+let hasMagentaRT2Binary = !isLinuxPackage && packagePathExists("vendor/magentart.xcframework")
 
 func mlxDependency(_ name: String) -> [Target.Dependency] {
   useLinuxPrebuiltMLX ? [] : [.product(name: name, package: "mlx-swift")]
@@ -186,7 +187,7 @@ if isLinuxPackage {
         pkgConfig: "llama"
       )
     )
-    mereRunCoreDependencies.append("llama")
+    mereRunCoreDependencies.append(.target(name: "llama"))
   }
 } else {
   targets.append(
@@ -195,7 +196,16 @@ if isLinuxPackage {
       path: "vendor/llama.xcframework"
     )
   )
-  mereRunCoreDependencies.append("llama")
+  mereRunCoreDependencies.append(.target(name: "llama"))
+}
+if hasMagentaRT2Binary {
+  targets.append(
+    .binaryTarget(
+      name: "magentart",
+      path: "vendor/magentart.xcframework"
+    )
+  )
+  mereRunCoreDependencies.append(.target(name: "magentart"))
 }
 
 let linuxNativeLlamaLibraryPath = packagePath(".build/native/linux-\(hostArch)/llama/lib").path

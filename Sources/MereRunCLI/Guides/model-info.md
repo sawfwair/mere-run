@@ -34,6 +34,7 @@ mere.run model info image-zimage-nano --components
 
 ```bash
 mere.run model info music-acestep --components
+mere.run model info music-magenta-rt2-small --components
 ```
 
 ```bash

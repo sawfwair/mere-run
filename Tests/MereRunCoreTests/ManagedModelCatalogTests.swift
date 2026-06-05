@@ -352,6 +352,40 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.isManagedRootComplete(legacyRoot, fileManager: .default))
     }
 
+    func testMagentaRT2SpecsUsePinnedExportedRuntimeAssets() throws {
+        let small = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.magentaRT2Small.rawValue))
+        XCTAssertEqual(small.category, .music)
+        XCTAssertEqual(small.hubFallback?.repoId, "google/magenta-realtime-2")
+        XCTAssertEqual(small.hubFallback?.revision, "010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc")
+        XCTAssertEqual(small.validationKind, .magentaRT2)
+        XCTAssertEqual(small.hubFallback?.patterns.contains("models/mrt2_small/mrt2_small.mlxfn"), true)
+        XCTAssertEqual(small.hubFallback?.patterns.contains("checkpoints/mrt2_small.safetensors"), false)
+
+        let base = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.magentaRT2Base.rawValue))
+        XCTAssertEqual(base.category, .music)
+        XCTAssertEqual(base.hubFallback?.repoId, "google/magenta-realtime-2")
+        XCTAssertEqual(base.hubFallback?.revision, "010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc")
+        XCTAssertEqual(base.validationKind, .magentaRT2)
+        XCTAssertEqual(base.hubFallback?.patterns.contains("models/mrt2_base/mrt2_base.mlxfn"), true)
+        XCTAssertEqual(base.hubFallback?.patterns.contains("checkpoints/mrt2_base.safetensors"), false)
+    }
+
+    func testMagentaRT2RootValidationRequiresModelAndSharedResources() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.magentaRT2Small.rawValue))
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalMagentaRT2Root(at: root, modelName: "mrt2_small")
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent("resources/musiccoca/text_encoder.tflite"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["text_encoder.tflite"]
+        )
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
@@ -365,6 +399,36 @@ final class ManagedModelCatalogTests: XCTestCase {
                 at: root.appendingPathComponent(subdirectory, isDirectory: true),
                 withIntermediateDirectories: true
             )
+        }
+    }
+
+    private func writeMinimalMagentaRT2Root(at root: URL, modelName: String) throws {
+        let modelDir = root.appendingPathComponent("models/\(modelName)", isDirectory: true)
+        let musicCoCa = root.appendingPathComponent("resources/musiccoca", isDirectory: true)
+        let spectrostream = root.appendingPathComponent("resources/spectrostream", isDirectory: true)
+        for directory in [modelDir, musicCoCa, spectrostream] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        for file in ["\(modelName).mlxfn", "\(modelName)_state.safetensors"] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: modelDir.appendingPathComponent(file).path, contents: Data()))
+        }
+        for file in [
+            "audio_preprocessor.tflite",
+            "mapper.tflite",
+            "music_encoder.tflite",
+            "pretrained_vector_quantizer.tflite",
+            "spm.model",
+            "text_encoder.tflite",
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: musicCoCa.appendingPathComponent(file).path, contents: Data()))
+        }
+        for file in [
+            "decoder.safetensors",
+            "encoder.safetensors",
+            "quantizer.safetensors",
+            "spectrostream_encoder.mlxfn",
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: spectrostream.appendingPathComponent(file).path, contents: Data()))
         }
     }
 

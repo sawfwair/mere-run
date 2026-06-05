@@ -31,6 +31,7 @@ public enum QuantizedModelManifestWriter {
 
         func inferTier(from id: String) -> MereRunModelManifest.Tier? {
             if id.hasSuffix("-nano") { return .nano }
+            if id.hasSuffix("-small") { return .small }
             if id.hasSuffix("-max") { return .max }
             if id.hasSuffix("-base") { return .base }
             return nil
@@ -53,7 +54,7 @@ public enum QuantizedModelManifestWriter {
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder: return .code
             case .lightOnOCR: return .ocr
-            case .aceStep: return .music
+            case .aceStep, .magentaRT2: return .music
             case .ltxVideo: return .video
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
@@ -111,7 +112,7 @@ public enum QuantizedModelManifestWriter {
                     return [.chat, .codeGeneration]
                 case .lightOnOCR:
                     return [.visionOCR]
-                case .aceStep:
+                case .aceStep, .magentaRT2:
                     return [.musicGeneration]
                 case .ltxVideo:
                     return [.videoGeneration]
@@ -183,7 +184,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter, .qwen3Coder, .lightOnOCR, .psiChat, .deepseekV4Flash:
                 break
-            case .aceStep, .ltxVideo:
+            case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)
             }
         }

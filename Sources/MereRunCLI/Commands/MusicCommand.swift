@@ -6,6 +6,7 @@ struct Music: ParsableCommand {
         abstract: "Generate music locally.",
         subcommands: [
             MusicGenerate.self,
+            MusicRealtime.self,
         ]
     )
 }

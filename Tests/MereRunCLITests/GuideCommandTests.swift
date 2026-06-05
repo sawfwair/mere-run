@@ -19,12 +19,17 @@ final class GuideCommandTests: XCTestCase {
     }
 
     func testGuideMusicGenerateModelFocusParsesAndRenders() throws {
-        let command = try GuideCommand.parse(["music", "generate", "--model", "music-acestep"])
+        let command = try GuideCommand.parse([
+            "music",
+            "generate",
+            "--model",
+            ModelResolver.ModelID.magentaRT2Small.rawValue,
+        ])
         let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
         let rendered = try GuideCommand.render(entry: entry, model: command.model, json: false)
 
-        XCTAssertEqual(command.model, "music-acestep")
-        XCTAssertTrue(rendered.contains("Model focus: `music-acestep`"))
+        XCTAssertEqual(command.model, ModelResolver.ModelID.magentaRT2Small.rawValue)
+        XCTAssertTrue(rendered.contains("Model focus: `\(ModelResolver.ModelID.magentaRT2Small.rawValue)`"))
         XCTAssertTrue(rendered.contains("# Music Generate"))
     }
 
@@ -51,6 +56,7 @@ final class GuideCommandTests: XCTestCase {
             let message = String(describing: error)
             XCTAssertTrue(message.contains("not covered"))
             XCTAssertTrue(message.contains("music-acestep"))
+            XCTAssertTrue(message.contains(ModelResolver.ModelID.magentaRT2Small.rawValue))
         }
     }
 
@@ -63,7 +69,14 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(payload.topic, "music-generate")
         XCTAssertEqual(payload.title, "Music Generate")
         XCTAssertEqual(payload.commands, ["music generate"])
-        XCTAssertEqual(payload.models, ["music-acestep"])
+        XCTAssertEqual(
+            payload.models,
+            [
+                "music-acestep",
+                ModelResolver.ModelID.magentaRT2Small.rawValue,
+                ModelResolver.ModelID.magentaRT2Base.rawValue,
+            ]
+        )
         XCTAssertTrue(payload.content.contains("# Music Generate"))
     }
 
