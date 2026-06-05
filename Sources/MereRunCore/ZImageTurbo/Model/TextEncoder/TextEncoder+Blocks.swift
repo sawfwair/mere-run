@@ -379,6 +379,53 @@ public final class QwenEncoder: Module {
     return (h, allHiddenStates)
   }
 
+  public func forwardActivationHiddenStates(
+    inputIds: MLXArray,
+    attentionMask: MLXArray?,
+    activationLayers: [Int]
+  ) -> [MLXArray] {
+    var tokenIds = inputIds
+    if tokenIds.dtype != .int32 {
+      tokenIds = tokenIds.asType(.int32)
+    }
+
+    let wantedLayers = Set(activationLayers)
+    var captured: [Int: MLXArray] = [:]
+    var h = embedTokens(tokenIds).asType(.bfloat16)
+    let mask = createAttentionMask(h: h, attentionMask: attentionMask)
+
+    for (index, layer) in layers.enumerated() {
+      h = layer(h, mask: mask)
+      if wantedLayers.contains(index) {
+        captured[index] = h
+      }
+    }
+
+    return activationLayers.compactMap { captured[$0] }
+  }
+
+  public func forwardActivationHiddenStates(
+    embeddings: MLXArray,
+    attentionMask: MLXArray?,
+    positionIds: MLXArray? = nil,
+    tokenTypes: MLXArray? = nil,
+    activationLayers: [Int]
+  ) -> [MLXArray] {
+    let wantedLayers = Set(activationLayers)
+    var captured: [Int: MLXArray] = [:]
+    var h = embeddings.dtype == .bfloat16 ? embeddings : embeddings.asType(.bfloat16)
+    let mask = createAttentionMask(h: h, attentionMask: attentionMask, tokenTypes: tokenTypes)
+
+    for (index, layer) in layers.enumerated() {
+      h = layer(h, mask: mask, positionIds: positionIds)
+      if wantedLayers.contains(index) {
+        captured[index] = h
+      }
+    }
+
+    return activationLayers.compactMap { captured[$0] }
+  }
+
   private func createAttentionMask(
     h: MLXArray,
     attentionMask: MLXArray?,

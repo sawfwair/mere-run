@@ -17,6 +17,7 @@ The public image families are:
 - `image-bonsai-ternary`: PrismML Bonsai ternary FLUX.2 Klein deployment
 - `image-zimage-*`: ZImage image family
 - `image-hidream-o1*`: HiDream O1 unified pixel-transformer family
+- `image-ideogram4-sdnq-uint4`: Ideogram 4 SDNQ uint4 text-to-image family
 
 Common managed IDs:
 
@@ -30,6 +31,7 @@ Common managed IDs:
 - `image-zimage-max`
 - `image-hidream-o1-dev`
 - `image-hidream-o1`
+- `image-ideogram4-sdnq-uint4`
 
 ## Typical workflows
 
@@ -109,6 +111,18 @@ is large and GPU time is meaningful:
 MERERUN_RUN_E2E=installed MERERUN_E2E_HIDREAM=1 ./scripts/check.sh
 MERERUN_RUN_E2E=installed MERERUN_E2E_HIDREAM_FULL=1 ./scripts/check.sh
 ```
+
+### Ideogram 4 SDNQ
+
+`image-ideogram4-sdnq-uint4` maps to `WaveCut/ideogram-4-sdnq-uint4`. The
+managed model path can pull and validate the SDNQ diffusers layout, including
+the separate `unconditional_transformer` branch used for guidance. The native
+quantization bridge decodes SDNQ asymmetric uint4 linear, embedding, and Conv2d
+weights, the runtime builds Qwen3-VL concatenated text features, packs Ideogram
+4 text/image samples, runs positive/unconditional CFG denoising, and decodes
+through the Flux2-style VAE. Plain text-to-image generation is wired through
+`image generate`; image-to-image, reference inputs, and LoRA are not supported
+for this family yet.
 
 ### Deterministic validation
 

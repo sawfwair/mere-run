@@ -155,9 +155,9 @@ struct ImageGenerate: AsyncParsableCommand {
 
         let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
         let effectiveSteps = steps
-            ?? (manifest.family == .hidream ? (manifest.defaults?.steps ?? 4) : 4)
+            ?? ((manifest.family == .hidream || manifest.family == .ideogram) ? (manifest.defaults?.steps ?? 4) : 4)
         let effectiveCFG = cfgScale
-            ?? (manifest.family == .hidream ? (manifest.defaults?.cfg ?? 1.0) : 1.0)
+            ?? ((manifest.family == .hidream || manifest.family == .ideogram) ? (manifest.defaults?.cfg ?? 1.0) : 1.0)
         let effectiveSigmaShift = sigmaShift.map { Float($0) }
             ?? manifest.defaults?.sigmaShift.map { Float($0) }
 
@@ -194,6 +194,9 @@ struct ImageGenerate: AsyncParsableCommand {
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .hidream:
             let generator = HiDreamO1Generator()
+            result = try await generator.generate(request, progressHandler: progressHandler)
+        case .ideogram:
+            let generator = Ideogram4Generator()
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .video, .psi, .privacy, .deepseek, nil:
             throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")

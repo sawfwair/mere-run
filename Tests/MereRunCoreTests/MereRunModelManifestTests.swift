@@ -132,6 +132,25 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "HiDream-ai/HiDream-O1-Image")
     }
 
+    func testIdeogram4TemplateHasExpectedSDNQMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .ideogram4SDNQUInt4, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Ideogram4Resources.modelId)
+        XCTAssertEqual(manifest.engine, .ideogram4)
+        XCTAssertEqual(manifest.family, .ideogram)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "sdnq-uint4")
+        XCTAssertEqual(manifest.defaults?.steps, 20)
+        XCTAssertEqual(manifest.defaults?.cfg, 7.0)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img]))
+        XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer"))
+        XCTAssertEqual(manifest.components?.unconditionalTransformer, .local(path: "unconditional_transformer"))
+        XCTAssertEqual(manifest.upstreamRepoId, "WaveCut/ideogram-4-sdnq-uint4@main")
+    }
+
     func testPrivacyFilterTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .privacyFilter, createdAt: Date(timeIntervalSince1970: 0))
 

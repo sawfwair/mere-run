@@ -257,6 +257,7 @@ targets.append(contentsOf: [
       "Flux2Klein/Model/Transformer/README.md",
       "Gemma4/README.md",
       "HiDreamO1/README.md",
+      "Ideogram4/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",
       "LTX/README.md",

@@ -135,6 +135,12 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
+        } else if spec?.validationKind == .ideogram4SDNQ {
+            errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
         } else if spec?.validationKind == .sam31 {
             errors.append(contentsOf: SAM31Resources.validateRoot(rootURL, fileManager: fileManager))
             transformerDir = nil
@@ -327,6 +333,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
             case .hidream where engine != .hidreamO1:
                 warnings.append("Manifest engine mismatch: family=hidream expects hidream-o1.")
+            case .ideogram where engine != .ideogram4:
+                warnings.append("Manifest engine mismatch: family=ideogram expects ideogram-4.")
             case .gemma where engine != .gemma4:
                 warnings.append("Manifest engine mismatch: family=gemma expects gemma-4.")
             case .liquid where engine != .lfm2:
@@ -450,13 +458,16 @@ public enum MereRunModelValidator {
 
         if components.textEncoder == nil { errors.append("Manifest components missing text_encoder.") }
         if supportsImagePipeline && components.transformer == nil { errors.append("Manifest components missing transformer.") }
+        if manifest.engine == .ideogram4 && components.unconditionalTransformer == nil {
+            errors.append("Manifest components missing unconditional_transformer.")
+        }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
     }
 
     private static func manifestRequiresInlineQuantization(_ manifest: MereRunModelManifest) -> Bool {
         switch manifest.engine {
-        case .flux2Klein?, .zimageTurbo?, .qwen35HybridMoE?:
+        case .flux2Klein?, .zimageTurbo?, .ideogram4?, .qwen35HybridMoE?:
             return true
         default:
             return false
@@ -467,6 +478,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("image-hidream-") { return .hidream }
+        if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
         if modelId.hasPrefix("speech-tts-") { return .tts }
