@@ -85,7 +85,7 @@ artifacts. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for
 the current validation boundary, CUDA notes, and first commands:
 
 ```bash
-tag=v0.12.0
+tag=v0.13.0
 version="${tag#v}"
 
 # Portable tarball
@@ -113,7 +113,7 @@ installed launcher also exports the resolved CUDA CCCL include root through
 during NVRTC JIT compilation:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.12.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.13.0
 ```
 
 Current CUDA validation should be treated as limited to the exact hosts that
@@ -158,14 +158,14 @@ swift run mere.run --help
 To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
-scripts/package-linux.sh --version 0.12.0
+scripts/package-linux.sh --version 0.13.0
 ls dist/linux/
 ```
 
 On Linux arm64, use a CUDA-provisioned host:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.12.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.13.0
 ```
 
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio

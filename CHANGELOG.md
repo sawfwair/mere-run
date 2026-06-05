@@ -6,6 +6,55 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.13.0 - 2026-06-05
+
+### Added
+
+- added native Gemma4 and Qwen-family MTP benchmarking support, including
+  `--variant mtp` / `--variant no-mtp` controls, speedup reporting, JSON output,
+  status surfacing, and guide coverage so decode acceleration can be compared
+  from the public CLI instead of private notebooks.
+- added Gemma4 MTP runtime wiring with typed draft-head loading, cache-aware
+  generation, short-prompt gating, and tests around model decoding, manifest
+  handling, and benchmark output.
+- added Q36 MTP runtime support on the existing Qwen-family path, including
+  draft-head resource discovery, benchmark coverage, and CLI guidance for when
+  MTP is enabled or skipped.
+- added `image-generate` support for Ideogram4 SDNQ checkpoints, including
+  SDNQ quantized loaders, text-feature handling, scheduler support, VAE weight
+  loading, model manifests, catalog metadata, validation, docs, and runtime
+  tests.
+- added native Magenta RT2 realtime music support through the new
+  `music realtime` command, with prompt-conditioned streaming generation,
+  playback controls, managed-model metadata, docs, and a vendored
+  `magentart.xcframework` runtime.
+- added `music generate` support for prompt audio controls that are shared with
+  the realtime path, plus parser tests for duration, seed, temperature, guidance,
+  and scheduler options.
+- added richer model capability/status reporting for installed runtime support,
+  recommended IDs, MTP availability, realtime music support, and SDNQ-backed
+  image generation.
+
+### Changed
+
+- expanded the public docs, guides, and README model surface to include the new
+  MTP benchmark path, Ideogram4 image runtime, and realtime music workflow.
+- updated runtime model pooling so MTP-capable text runtimes and new media
+  runtimes can expose their support cleanly through the CLI and API-facing
+  status surfaces.
+- extended managed model manifests and validators with SDNQ, Magenta RT2, and
+  MTP metadata while keeping model installs typed and schema-checked.
+- refreshed third-party notices for the newly bundled Magenta RT2 runtime
+  artifact.
+
+### Fixed
+
+- fixed MLX CUDA JIT discovery so packaged Linux installs export the resolved
+  CUDA CCCL include path and can find `cuda/std/*` during NVRTC compilation.
+- fixed model pull and guide output around newly recommended runtime families
+  so capability output, install guidance, and user-facing docs agree on the
+  current public model IDs.
+
 ## 0.12.0 - 2026-06-04
 
 ### Added
