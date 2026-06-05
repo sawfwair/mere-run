@@ -288,6 +288,8 @@ public struct ChatTiming: Sendable, Hashable {
     public var kvCacheMode: RuntimeKVCacheMode?
     public var prefillKVCache: String?
     public var decodeKVCache: String?
+    public var prefillTokensPerSecond: Double?
+    public var decodeTokensPerSecond: Double?
 
     public init(
         loadSeconds: Double = 0,
@@ -297,7 +299,9 @@ public struct ChatTiming: Sendable, Hashable {
         firstTokenSeconds: Double? = nil,
         kvCacheMode: RuntimeKVCacheMode? = nil,
         prefillKVCache: String? = nil,
-        decodeKVCache: String? = nil
+        decodeKVCache: String? = nil,
+        prefillTokensPerSecond: Double? = nil,
+        decodeTokensPerSecond: Double? = nil
     ) {
         self.loadSeconds = loadSeconds
         self.prefillSeconds = prefillSeconds
@@ -307,6 +311,8 @@ public struct ChatTiming: Sendable, Hashable {
         self.kvCacheMode = kvCacheMode
         self.prefillKVCache = prefillKVCache
         self.decodeKVCache = decodeKVCache
+        self.prefillTokensPerSecond = prefillTokensPerSecond
+        self.decodeTokensPerSecond = decodeTokensPerSecond
     }
 }
 

@@ -23,6 +23,11 @@ enum LlamaCLIProcessError: LocalizedError {
 struct LlamaCLIProcess {
     let executableURL: URL
 
+    struct Performance: Sendable, Hashable {
+        var promptTokensPerSecond: Double?
+        var generationTokensPerSecond: Double?
+    }
+
     static func discover(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         arguments: [String] = CommandLine.arguments,
@@ -73,13 +78,15 @@ struct LlamaCLIProcess {
             progressHandler?(ChatProgress(stage: .generating, message: "Generating..."))
             let result = try run(arguments: invocation.arguments)
             let response = Self.extractResponse(from: result.stdout)
+            let performance = Self.extractPerformance(from: result.stdout)
             guard !response.isEmpty else {
                 throw LlamaCLIProcessError.emptyResponse(stderr: Self.tail(result.stderr))
             }
             progressHandler?(ChatProgress(stage: .generating, message: response))
             return ChatResponse(
                 response: response,
-                tokensGenerated: max(1, response.split(whereSeparator: { $0.isWhitespace }).count)
+                tokensGenerated: max(1, response.split(whereSeparator: { $0.isWhitespace }).count),
+                timing: performance.chatTiming
             )
         }.value
     }
@@ -228,8 +235,43 @@ struct LlamaCLIProcess {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    static func extractPerformance(from stdout: String) -> Performance {
+        let pattern = #"\[\s*Prompt:\s*([0-9.]+)\s*t/s\s*\|\s*Generation:\s*([0-9.]+)\s*t/s\s*\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return Performance()
+        }
+
+        let range = NSRange(stdout.startIndex..<stdout.endIndex, in: stdout)
+        guard let match = regex.matches(in: stdout, range: range).last else {
+            return Performance()
+        }
+
+        func value(at index: Int) -> Double? {
+            let nsRange = match.range(at: index)
+            guard let range = Range(nsRange, in: stdout) else { return nil }
+            return Double(stdout[range])
+        }
+
+        return Performance(
+            promptTokensPerSecond: value(at: 1),
+            generationTokensPerSecond: value(at: 2)
+        )
+    }
+
     private static func tail(_ text: String, maxLines: Int = 40) -> String {
         text.components(separatedBy: .newlines).suffix(maxLines).joined(separator: "\n")
+    }
+}
+
+private extension LlamaCLIProcess.Performance {
+    var chatTiming: ChatTiming? {
+        guard promptTokensPerSecond != nil || generationTokensPerSecond != nil else {
+            return nil
+        }
+        return ChatTiming(
+            prefillTokensPerSecond: promptTokensPerSecond,
+            decodeTokensPerSecond: generationTokensPerSecond
+        )
     }
 }
 #endif

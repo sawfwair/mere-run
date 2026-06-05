@@ -142,7 +142,7 @@ SPEECH_WAV="$ASSETS/tts.wav"
 OCR_IMG="$ASSETS/ocr.png"
 
 # ---- text ----
-want text-chat && for m in text-chat-q36-nano \
+want text-chat && for m in text-chat-q36-nano text-chat-q36-nano-gguf \
                            text-chat-gemma4-turbo text-chat-gemma4-nano \
                            text-chat-gemma4 text-chat-gemma4-max; do
   run_case text-chat "$m" text "" 900 \
@@ -175,12 +175,36 @@ want speech-tts && for m in speech-tts-qwen3-nano speech-tts-qwen3-customvoice; 
     "$BIN" speech synthesize "mere run end to end test one two three" --model "$m" --quiet --output "$wav"
 done
 if want speech-asr; then
-  [[ -f "$SPEECH_WAV" ]] || "$BIN" speech synthesize "mere run end to end test one two three" --model speech-tts-qwen3-nano --quiet --output "$SPEECH_WAV" >/dev/null 2>&1 || true
-  for m in speech-asr-parakeet speech-asr-qwen3; do
-    backend=parakeet; [[ "$m" == *qwen3* ]] && backend=qwen
-    run_case speech-asr "$m" text "" 400 \
-      "$BIN" speech transcribe "$SPEECH_WAV" --model "$m" --backend "$backend" --quiet
-  done
+  if [[ ! -f "$SPEECH_WAV" ]]; then
+    if installed speech-tts-qwen3-nano; then
+      "$BIN" speech synthesize "mere run end to end test one two three" \
+        --model speech-tts-qwen3-nano --quiet --output "$SPEECH_WAV" >/dev/null 2>&1 || true
+    elif [[ "$DO_PULL" == "1" ]]; then
+      echo "[pull] speech-tts-qwen3-nano for speech-asr fixture"
+      if "$BIN" model pull speech-tts-qwen3-nano; then
+        "$BIN" speech synthesize "mere run end to end test one two three" \
+          --model speech-tts-qwen3-nano --quiet --output "$SPEECH_WAV" >/dev/null 2>&1 || true
+      else
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+          "speech-asr" "speech-tts-qwen3-nano" "PULL_FAIL" "0" "-" "-" "fixture pull failed" >>"$TSV"
+      fi
+    else
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "speech-asr" "speech-tts-qwen3-nano" "SKIP" "0" "-" "-" "fixture model not installed (use --pull)" >>"$TSV"
+    fi
+  fi
+  if [[ -f "$SPEECH_WAV" ]]; then
+    for m in speech-asr-parakeet speech-asr-qwen3; do
+      backend=parakeet; [[ "$m" == *qwen3* ]] && backend=qwen
+      run_case speech-asr "$m" text "" 400 \
+        "$BIN" speech transcribe "$SPEECH_WAV" --model "$m" --backend "$backend" --quiet
+    done
+  else
+    for m in speech-asr-parakeet speech-asr-qwen3; do
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "speech-asr" "$m" "SKIP" "0" "-" "-" "missing speech fixture (use --pull)" >>"$TSV"
+    done
+  fi
 fi
 
 # ---- vision (needs an input image; reuse a generated one) ----
