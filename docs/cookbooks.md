@@ -7,6 +7,7 @@ Markdown by default and can emit JSON for agents or tools.
 mere.run guide --list
 mere.run guide image generate
 mere.run guide music generate --model music-acestep
+mere.run guide music generate --model music-magenta-rt2-small
 mere.run guide video generate --json
 ```
 

@@ -131,6 +131,38 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("Qwen3.5-9B-Q4_K_M.gguf"), contents: Data())
     }
 
+    private func writeMinimalValidMagentaRT2Model(at root: URL, modelID: ModelResolver.ModelID = .magentaRT2Small) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        let modelName = MagentaRT2Resources.modelName(for: modelID.rawValue)
+        let modelDir = root.appendingPathComponent("models/\(modelName)", isDirectory: true)
+        let musicCoCa = root.appendingPathComponent("resources/musiccoca", isDirectory: true)
+        let spectrostream = root.appendingPathComponent("resources/spectrostream", isDirectory: true)
+        for directory in [modelDir, musicCoCa, spectrostream] {
+            try TestFileSystem.createDirectory(directory)
+        }
+        try TestFileSystem.writeFile(modelDir.appendingPathComponent("\(modelName).mlxfn"), contents: Data())
+        try TestFileSystem.writeFile(modelDir.appendingPathComponent("\(modelName)_state.safetensors"), contents: Data())
+        for file in [
+            "audio_preprocessor.tflite",
+            "mapper.tflite",
+            "music_encoder.tflite",
+            "pretrained_vector_quantizer.tflite",
+            "spm.model",
+            "text_encoder.tflite",
+        ] {
+            try TestFileSystem.writeFile(musicCoCa.appendingPathComponent(file), contents: Data())
+        }
+        for file in [
+            "decoder.safetensors",
+            "encoder.safetensors",
+            "quantizer.safetensors",
+            "spectrostream_encoder.mlxfn",
+        ] {
+            try TestFileSystem.writeFile(spectrostream.appendingPathComponent(file), contents: Data())
+        }
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -141,6 +173,41 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: "image-klein-nano")
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
+    }
+
+    func testMagentaRT2RootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("music-magenta-rt2-small", isDirectory: true)
+        try writeMinimalValidMagentaRT2Model(at: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.magentaRT2Small.rawValue
+        )
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertFalse(report.warnings.contains { $0.contains("model root marker") })
+        XCTAssertEqual(report.manifest?.engine, .magentaRT2)
+        XCTAssertEqual(report.manifest?.family, .music)
+        XCTAssertEqual(report.manifest?.tier, .small)
+    }
+
+    func testMagentaRT2MissingRuntimeAssetFailsValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("music-magenta-rt2-small", isDirectory: true)
+        try writeMinimalValidMagentaRT2Model(at: root)
+        try FileManager.default.removeItem(at: root.appendingPathComponent("models/mrt2_small/mrt2_small.mlxfn"))
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.magentaRT2Small.rawValue
+        )
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { $0.contains("mrt2_small.mlxfn") })
     }
 
     func testMissingWeightsFails() throws {

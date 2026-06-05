@@ -48,6 +48,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case lightOnOCR = "lighton-ocr"
         /// ACE-Step music family.
         case aceStep = "ace-step"
+        /// Magenta RealTime 2 streaming music family.
+        case magentaRT2 = "magenta-rt2"
         /// LTX video family.
         case ltxVideo = "ltx-video"
         /// Psi agent chat family.
@@ -80,6 +82,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
         case nano
+        case small
         case base
         case max
         case latest
@@ -1084,6 +1087,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.musicGeneration],
                 components: nil,
                 upstreamRepoId: "ACE-Step/Ace-Step1.5",
+                createdAt: createdAt
+            )
+        case .magentaRT2Small, .magentaRT2Base:
+            let isBase = modelID == .magentaRT2Base
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .magentaRT2,
+                family: .music,
+                tier: isBase ? .base : .small,
+                variant: .standard,
+                precision: .unknown,
+                defaults: Defaults(steps: isBase ? 100 : 100, cfg: 3.0),
+                supports: [.musicGeneration],
+                components: nil,
+                upstreamRepoId: "google/magenta-realtime-2@010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc",
                 createdAt: createdAt
             )
         case .ltxVideoAV:

@@ -33,6 +33,7 @@ Public tree:
 - `mere.run vision track-live`
 - `mere.run vision ocr`
 - `mere.run music generate`
+- `mere.run music realtime`
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
@@ -73,7 +74,7 @@ are:
 - Vision OCR: `vision-ocr-lighton`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
-- Music: `music-acestep`
+- Music: `music-acestep`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - Video: `video-ltx-av`
 
 For subsystem-specific implementation guides, see:
@@ -139,6 +140,14 @@ swift run mere.run model pull music-acestep
 swift run mere.run music generate \
   "upbeat electronic groove" \
   --output ./track.wav
+
+swift run mere.run model pull music-magenta-rt2-small
+swift run mere.run music realtime \
+  "ambient modular synths with brushed drums" \
+  --model music-magenta-rt2-small \
+  --duration 4 \
+  --output ./live.wav \
+  --no-play
 ```
 
 ### Generate video
@@ -552,7 +561,9 @@ swift run mere.run vision ocr ./page.png --backend glm
 
 ### `mere.run music generate`
 
-Generate music from a caption and optional lyrics using the native ACE-Step pipeline.
+Generate music from a caption. The default model uses the native ACE-Step
+pipeline with optional lyrics; Magenta RT2 models use the native Apple Silicon
+Magenta bridge and ignore ACE-Step-only controls.
 
 ```bash
 swift run mere.run music generate "<caption>" [options]
@@ -572,6 +583,20 @@ Key options:
 - `--seed`
 - `--quiet`
 
+Magenta RT2 options:
+
+- `--style-conditioning`: `streaming` keeps the realtime C++ coarse style-token policy; `full` uses all MusicCoCa style tokens like the Python high-level generator
+- `--temperature`
+- `--top-k`
+- `--cfg-musiccoca`
+- `--cfg-notes`
+- `--cfg-drums`
+- `--drumless`
+- `--unmask-width`
+- `--seed-rotation`
+- `--prefill-silence`
+- `--prefill-duration`
+
 Environment:
 
 - `MERERUN_MUSIC_ACESTEP_ROOT`
@@ -586,6 +611,74 @@ swift run mere.run music generate \
   --duration 8 \
   --steps 4 \
   --output ./ambient.wav
+swift run mere.run music generate \
+  "ambient modular synths with brushed drums" \
+  --model music-magenta-rt2-small \
+  --duration 4 \
+  --output ./magenta.wav
+```
+
+### `mere.run music realtime`
+
+Run Magenta RealTime 2 generation. On macOS the command plays to the default
+audio device by default; pass `--output` to capture a WAV file. Use `--no-play`
+with `--output` and `--duration` for a headless smoke run.
+
+```bash
+swift run mere.run music realtime "<prompt>" [options]
+```
+
+Key options:
+
+- `--model`: `music-magenta-rt2-small`, `music-magenta-rt2-base`, or a local Magenta RT2 root
+- `--duration`
+- `--output`
+- `--play`, `--no-play`
+- `--style-conditioning`: `streaming` keeps the realtime C++ coarse style-token policy; `full` uses all MusicCoCa style tokens like the Python high-level generator
+- `--temperature`
+- `--top-k`
+- `--cfg-musiccoca`
+- `--cfg-notes`
+- `--cfg-drums`
+- `--drumless`
+- `--unmask-width`
+- `--seed-rotation`
+- `--prefill-silence`
+- `--prefill-duration`
+- `--interactive`: read live steering commands from stdin
+- `--quiet`
+
+Interactive commands:
+
+- `prompt <text>`
+- `style streaming|full`
+- `temp <value>`, `topk <value>`
+- `mc <value>`, `notes <value>`, `drums <value>`
+- `noteon <0-131>`, `noteoff <0-131>`, `onset 0|1`
+- `drumless on|off`, `unmask <value>`, `seed <value>`
+- `reset`, `quit`, `help`
+
+Examples:
+
+```bash
+swift run mere.run music realtime \
+  "ambient pads with sub bass" \
+  --model music-magenta-rt2-small \
+  --duration 4 \
+  --output ./live.wav
+
+swift run mere.run music realtime \
+  "drumless glassy arpeggios" \
+  --model music-magenta-rt2-small \
+  --duration 2 \
+  --output ./smoke.wav \
+  --no-play
+
+swift run mere.run music realtime \
+  "ambient modular synths" \
+  --model music-magenta-rt2-small \
+  --duration 30 \
+  --interactive
 ```
 
 ### `mere.run video generate`

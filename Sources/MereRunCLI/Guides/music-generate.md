@@ -2,18 +2,27 @@
 
 ## Purpose
 
-Generate a WAV music clip from a caption and optional structured lyrics using ACE-Step. This is the main cookbook for "make a good song" requests.
+Generate a WAV music clip from a caption. ACE-Step supports optional structured
+lyrics, while Magenta RT2 supports native Apple Silicon offline and realtime
+prompt-to-music generation.
 
 ## Required Models
 
-Managed id: `music-acestep`. The expected layout includes ACE-Step turbo, VAE, Qwen3 text encoder, and optionally the 5 Hz LM subdirectory.
+Managed ids:
+
+- `music-acestep`: ACE-Step turbo, VAE, Qwen3 text encoder, and optionally the
+  5 Hz LM subdirectory.
+- `music-magenta-rt2-small`: Magenta RealTime 2 small exported runtime assets.
+- `music-magenta-rt2-base`: Magenta RealTime 2 base exported runtime assets.
 
 ## Install And Check
 
 ```bash
 mere.run model pull music-acestep
+mere.run model pull music-magenta-rt2-small
 mere.run music generate --help
 mere.run guide music generate --model music-acestep
+mere.run guide music generate --model music-magenta-rt2-small
 ```
 
 ## Parameters
@@ -41,7 +50,20 @@ mere.run guide music generate --model music-acestep
 - `--lm-top-k`, `--lm-top-p`: constrained LM sampling controls.
 - `--metadata-duration`, `--metadata-language`: metadata overrides for LM.
 - `--no-tiled-vae`, `--vae-chunk-size`, `--vae-overlap`: VAE decode memory controls.
+- `--temperature`, `--top-k`: Magenta RT2 sampling controls.
+- `--style-conditioning streaming|full`: choose realtime C++ style-token
+  masking or Python-like full MusicCoCa style conditioning.
+- `--cfg-musiccoca`, `--cfg-notes`, `--cfg-drums`: Magenta RT2 guidance scales.
+- `--drumless`: Magenta RT2 drumless generation.
+- `--unmask-width`, `--seed-rotation`: Magenta RT2 generation controls.
+- `--prefill-silence`, `--prefill-duration`: Magenta RT2 realtime prefill controls.
 - `--quiet`, `-q`: suppress diagnostics.
+
+For realtime Magenta RT2 runs, use `mere.run music realtime`. It accepts the
+same Magenta controls plus `--play` or `--no-play` and optional `--output` WAV
+capture. Add `--interactive` to steer while it runs with stdin commands such as
+`prompt <text>`, `temp <value>`, `noteon <0-131>`, `noteoff <0-131>`,
+`style streaming|full`, `drumless on|off`, `reset`, and `quit`.
 
 ## Prompting Patterns
 
@@ -50,6 +72,8 @@ mere.run guide music generate --model music-acestep
 - Match `--vocal-language` to the lyrics language.
 - Use `--bpm`, `--keyscale`, and `--timesignature` when rhythm or harmony must be stable.
 - Use `--duration 10` to draft, then extend once the caption works.
+- For Magenta RT2, put all musical direction in the prompt; lyrics and ACE-Step
+  task modes are not supported by that runtime.
 
 ## Examples
 
@@ -72,12 +96,32 @@ mere.run music generate \
   --output ./cue.wav
 ```
 
+```bash
+mere.run music generate \
+  "ambient modular synths with brushed drums, slow evolving harmony" \
+  --model music-magenta-rt2-small \
+  --duration 4 \
+  --temperature 0.8 \
+  --output ./magenta-cue.wav
+```
+
+```bash
+mere.run music realtime \
+  "drumless glassy arpeggios with soft tape hiss" \
+  --model music-magenta-rt2-small \
+  --duration 2 \
+  --output ./magenta-live.wav \
+  --no-play
+```
+
 ## Iteration Tips
 
 - First iterate caption and lyrics at 10 to 20 seconds.
 - Lock `--seed` after a promising groove, then adjust metadata.
 - If vocals are garbled, simplify lyrics and add section tags.
 - If structure drifts, try `--use-lm` with BPM/key/time metadata.
+- For Magenta RT2, use `music realtime --output --no-play --duration 2` for a
+  fast headless smoke before running an audible session.
 
 ## Troubleshooting
 
@@ -85,6 +129,12 @@ mere.run music generate \
 - Text encoder missing: set `--text-subdirectory` or keep the default layout.
 - `--use-lm` fails: ensure the LM subdirectory exists or pass `--lm-subdirectory`.
 - Audio decode memory pressure: keep tiled VAE enabled, reduce duration, or tune VAE chunk size.
+- Magenta RT2 unsupported runtime: build `vendor/magentart.xcframework` with
+  `scripts/rebuild_magentart_xcframework.sh` on Apple Silicon macOS, then
+  rebuild `mere.run`.
+- Magenta RT2 missing assets: pull the managed model or provide a local root
+  with exported `.mlxfn` files plus `resources/musiccoca` and
+  `resources/spectrostream`.
 
 ## Sources
 
@@ -92,3 +142,5 @@ mere.run music generate \
 - https://huggingface.co/docs/diffusers/api/pipelines/ace_step
 - https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/INFERENCE.md
 - https://huggingface.co/ACE-Step/Ace-Step1.5
+- https://github.com/magenta/magenta-realtime
+- https://huggingface.co/google/magenta-realtime-2

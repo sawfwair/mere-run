@@ -73,6 +73,31 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### `vendor/magentart.xcframework`
+
+- purpose: optional native Magenta RealTime 2 runtime used by `mere.run music generate --model music-magenta-rt2-*` and `mere.run music realtime`
+- upstream project: [`magenta/magenta-realtime`](https://github.com/magenta/magenta-realtime)
+- pinned upstream commit: `51836beddf5fbb33636830efd919884f40ef56c5`
+- rebuild note: generated from a temporary upstream checkout plus the C ABI shim in [`scripts/rebuild_magentart_xcframework.sh`](./scripts/rebuild_magentart_xcframework.sh)
+- code license: Apache License 2.0
+- model weights: [`google/magenta-realtime-2`](https://huggingface.co/google/magenta-realtime-2), revision `010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc`, Creative Commons Attribution 4.0 International
+
+```
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
 ### `vendor/ds4`
 
 - purpose: packaged DeepSeek V4 Flash runtime used by the premier setup-agent tier

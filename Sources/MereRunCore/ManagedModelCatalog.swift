@@ -44,6 +44,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case sam31
     case falconPerception
     case aceStep
+    case magentaRT2
     case ltxVideo
     case hfTextChat
 }
@@ -157,6 +158,20 @@ public enum ManagedModelCatalog {
     private static let kleinNanoUpstreamRepoId = "stereovoid/flux2-klein-4b-4bit"
     private static let bonsaiBinaryUpstreamRepoId = "prism-ml/bonsai-image-binary-4B-mlx-1bit"
     private static let bonsaiTernaryUpstreamRepoId = "prism-ml/bonsai-image-ternary-4B-mlx-2bit"
+    private static let magentaRT2UpstreamRepoId = "google/magenta-realtime-2"
+    private static let magentaRT2UpstreamRevision = "010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc"
+    private static let magentaRT2ResourcePatterns = [
+        "resources/musiccoca/audio_preprocessor.tflite",
+        "resources/musiccoca/mapper.tflite",
+        "resources/musiccoca/music_encoder.tflite",
+        "resources/musiccoca/pretrained_vector_quantizer.tflite",
+        "resources/musiccoca/spm.model",
+        "resources/musiccoca/text_encoder.tflite",
+        "resources/spectrostream/decoder.safetensors",
+        "resources/spectrostream/encoder.safetensors",
+        "resources/spectrostream/quantizer.safetensors",
+        "resources/spectrostream/spectrostream_encoder.mlxfn",
+    ]
 
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
@@ -773,6 +788,42 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.magentaRT2Small.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: magentaRT2UpstreamRepoId,
+                revision: magentaRT2UpstreamRevision,
+                patterns: [
+                    "models/mrt2_small/mrt2_small.mlxfn",
+                    "models/mrt2_small/mrt2_small_state.safetensors",
+                ] + magentaRT2ResourcePatterns
+            ),
+            upstreamRepoId: magentaRT2UpstreamRepoId,
+            upstreamRevision: magentaRT2UpstreamRevision,
+            validationKind: .magentaRT2,
+            estimatedDownloadBytes: 1_840_072_891,
+            defaultCLICommands: ["music generate", "music realtime"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.magentaRT2Base.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: magentaRT2UpstreamRepoId,
+                revision: magentaRT2UpstreamRevision,
+                patterns: [
+                    "models/mrt2_base/mrt2_base.mlxfn",
+                    "models/mrt2_base/mrt2_base_state.safetensors",
+                ] + magentaRT2ResourcePatterns
+            ),
+            upstreamRepoId: magentaRT2UpstreamRepoId,
+            upstreamRevision: magentaRT2UpstreamRevision,
+            validationKind: .magentaRT2,
+            estimatedDownloadBytes: 4_164_096_058,
+            defaultCLICommands: ["music generate", "music realtime"]
+        ),
+        ManagedModelSpec(
             id: "video-ltx-av",
             category: .video,
             installShape: .structuredRoot,
@@ -922,6 +973,8 @@ public extension ManagedModelSpec {
             return Self.missingLightOnOCRPaths(in: rootURL, fileManager: fileManager)
         case .aceStep:
             return Self.missingACEStepPaths(in: rootURL, fileManager: fileManager)
+        case .magentaRT2:
+            return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .hfTextChat:
@@ -938,6 +991,12 @@ public extension ManagedModelSpec {
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
                 .map { "Missing required LTX file: \($0.path)" }
+        case .magentaRT2:
+            return Self.missingMagentaRT2Paths(
+                modelID: id,
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            ).map { "Missing required Magenta RT2 file: \($0.path)" }
         default:
             return missingPaths(in: rootURL, fileManager: fileManager).map { "Missing required file: \($0.path)" }
         }
@@ -1171,6 +1230,31 @@ public extension ManagedModelSpec {
         if !fileManager.fileExists(atPath: vaeDir.path) { missing.append(vaeDir) }
         if !fileManager.fileExists(atPath: textDir.path) { missing.append(textDir) }
         return missing
+    }
+
+    private static func missingMagentaRT2Paths(
+        modelID: String,
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        let modelName = modelID == ModelResolver.ModelID.magentaRT2Base.rawValue ? "mrt2_base" : "mrt2_small"
+        let relativePaths = [
+            "models/\(modelName)/\(modelName).mlxfn",
+            "models/\(modelName)/\(modelName)_state.safetensors",
+            "resources/musiccoca/audio_preprocessor.tflite",
+            "resources/musiccoca/mapper.tflite",
+            "resources/musiccoca/music_encoder.tflite",
+            "resources/musiccoca/pretrained_vector_quantizer.tflite",
+            "resources/musiccoca/spm.model",
+            "resources/musiccoca/text_encoder.tflite",
+            "resources/spectrostream/decoder.safetensors",
+            "resources/spectrostream/encoder.safetensors",
+            "resources/spectrostream/quantizer.safetensors",
+            "resources/spectrostream/spectrostream_encoder.mlxfn",
+        ]
+        return relativePaths
+            .map { rootURL.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     private static func missingLTXVideoPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {

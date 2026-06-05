@@ -31,7 +31,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
 | Vision | `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
-| Music | `music-acestep` |
+| Music | `music-acestep`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
 | Video | `video-ltx-av` |
 
 Some legacy/local IDs remain in the catalog so existing installs and explicit
@@ -267,6 +267,28 @@ supported.
 
 `mere.run music generate` auto-discovers that layout unless you override the root
 with `--checkpoints-root` or `MERERUN_MUSIC_ACESTEP_ROOT`.
+
+### `music-magenta-rt2-small` and `music-magenta-rt2-base`
+
+Magenta RT2 models use exported runtime assets from
+`google/magenta-realtime-2` at revision
+`010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc`. The managed pull keeps only the
+files needed by the native runtime:
+
+```text
+.../models/music-magenta-rt2-small
+├── models/mrt2_small/mrt2_small.mlxfn
+├── models/mrt2_small/mrt2_small_state.safetensors
+├── resources/musiccoca/
+└── resources/spectrostream/
+```
+
+The base model uses `models/mrt2_base/` with matching `mrt2_base` filenames.
+Raw `checkpoints/*.safetensors` files are not a complete `mere.run` layout.
+
+`mere.run music generate --model music-magenta-rt2-small` renders an offline
+WAV. `mere.run music realtime --model music-magenta-rt2-small` plays on the
+default macOS audio device and can capture to WAV with `--output`.
 
 ### `video-ltx-av`
 

@@ -762,7 +762,7 @@ enum CommandCatalog {
             id: .musicGenerate,
             category: .media,
             title: "Generate music",
-            subtitle: "ACE-Step music generation",
+            subtitle: "ACE-Step or Magenta RT2 music generation",
             systemImage: "music.note",
             promptLabel: "Caption",
             secondaryLabel: "Lyrics",

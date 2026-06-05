@@ -1,4 +1,5 @@
 import ArgumentParser
+import AudioCodecs
 import Foundation
 import MLX
 import MereRunCore
@@ -6,7 +7,7 @@ import MereRunCore
 struct MusicGenerate: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "generate",
-        abstract: "Generate audio from caption + optional lyrics using ACE-Step.",
+        abstract: "Generate audio from a music prompt.",
         discussion: """
         Prints the output WAV path to stdout.
         Progress and diagnostics are printed to stderr.
@@ -16,6 +17,11 @@ struct MusicGenerate: AsyncParsableCommand {
             --model music-acestep \
             --lyrics "[verse]\\nwe dance all night" \
             --text-subdirectory Qwen3-Embedding-0.6B \
+            -o out.wav
+
+          mere.run music generate "ambient modular synths with brushed drums" \
+            --model music-magenta-rt2-small \
+            --duration 4 \
             -o out.wav
         """
     )
@@ -119,6 +125,39 @@ struct MusicGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    @Option(name: [.customLong("temperature")], help: "Magenta RT2 sampling temperature.")
+    var magentaTemperature: Float = 1.0
+
+    @Option(name: [.customLong("style-conditioning")], help: "Magenta RT2 style conditioning detail: streaming or full.")
+    var magentaStyleConditioning: MagentaRT2StyleConditioning = .streaming
+
+    @Option(name: [.customLong("top-k")], help: "Magenta RT2 top-k sampling.")
+    var magentaTopK: Int = 100
+
+    @Option(name: [.customLong("cfg-musiccoca")], help: "Magenta RT2 MusicCoCa guidance scale.")
+    var magentaCFGMusicCoCa: Float = 3.0
+
+    @Option(name: [.customLong("cfg-notes")], help: "Magenta RT2 MIDI-notes guidance scale.")
+    var magentaCFGNotes: Float = 5.0
+
+    @Option(name: [.customLong("cfg-drums")], help: "Magenta RT2 drums guidance scale.")
+    var magentaCFGDrums: Float = 1.0
+
+    @Flag(name: [.customLong("drumless")], help: "Enable Magenta RT2 drumless mode.")
+    var magentaDrumless: Bool = false
+
+    @Option(name: [.customLong("unmask-width")], help: "Magenta RT2 token unmask width.")
+    var magentaUnmaskWidth: Int = 0
+
+    @Option(name: [.customLong("seed-rotation")], help: "Magenta RT2 seed rotation.")
+    var magentaSeedRotation: Int = 0
+
+    @Flag(name: [.customLong("prefill-silence")], help: "Prefill Magenta RT2 state with silence before generation.")
+    var magentaPrefillSilence: Bool = false
+
+    @Option(name: [.customLong("prefill-duration")], help: "Magenta RT2 silent prefill duration in seconds.")
+    var magentaPrefillDuration: Float = 1.64
+
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
@@ -145,6 +184,11 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         if lyricsFile != nil, !lyrics.isEmpty {
             throw ValidationError("Pass either --lyrics or --lyrics-file, not both.")
+        }
+
+        if isMagentaRT2Request {
+            try await runMagentaRT2()
+            return
         }
 
         let checkpointsRootURL = try await resolveACEStepCheckpointsRoot()
@@ -267,6 +311,108 @@ struct MusicGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+    }
+
+    private var isMagentaRT2Request: Bool {
+        if MagentaRT2Resources.isMagentaRT2Model(model) {
+            return true
+        }
+        let url = URL(fileURLWithPath: model).standardizedFileURL
+        return MagentaRT2Resources.looksLikeMagentaRT2Root(url)
+    }
+
+    private func runMagentaRT2() async throws {
+        try validateMagentaRT2Options()
+
+        let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-magenta-rt2", defaultExtension: "wav")
+        try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+        let resources = try await MagentaRT2Resources.resolve(
+            requestedModel: model,
+            progress: { event in
+                guard !quiet else { return }
+                switch event {
+                case .downloading(let percent):
+                    CLIStderr.write("Downloading Magenta RT2 assets... \(percent)%\n")
+                case .extracting:
+                    CLIStderr.write("Extracting Magenta RT2 assets...\n")
+                }
+            }
+        )
+        let controls = try magentaControls()
+        if !quiet {
+            CLIStderr.write("Loading Magenta RT2 model from \(resources.modelURL.path)\n")
+        }
+        let audio = try await MagentaRT2Renderer.render(
+            MagentaRT2RenderRequest(
+                prompt: caption,
+                resources: resources,
+                durationSeconds: durationSeconds,
+                controls: controls
+            ),
+            progress: { frame, total in
+                guard !quiet, frame % 10 == 0 || frame + 1 == total else { return }
+                CLIStderr.write("Generated Magenta RT2 frame \(frame + 1)/\(total)\n")
+            }
+        )
+        let writer = try StreamingWAVWriter(
+            outputURL: outputURL,
+            sampleRate: MagentaRT2Resources.sampleRate,
+            channels: MagentaRT2Resources.channels
+        )
+        try writer.append(samples: audio)
+        try writer.close()
+        if !quiet {
+            CLIStderr.write("Saved audio: \(outputURL.path)\n")
+        }
+        print(outputURL.path)
+    }
+
+    private func validateMagentaRT2Options() throws {
+        if !lyrics.isEmpty || lyricsFile != nil {
+            throw ValidationError("Magenta RT2 does not support --lyrics or --lyrics-file. Put musical direction in the prompt.")
+        }
+        if useLM {
+            throw ValidationError("Magenta RT2 does not support --use-lm; that option is ACE-Step only.")
+        }
+        if taskType != "text2music" {
+            throw ValidationError("Magenta RT2 does not support --task-type; that option is ACE-Step only.")
+        }
+        if trackName != nil || completeTrackClasses != nil || nonCover {
+            throw ValidationError("Magenta RT2 does not support ACE-Step cover/extract/lego options.")
+        }
+        if seed != nil {
+            throw ValidationError("Magenta RT2 uses --seed-rotation instead of --seed.")
+        }
+        if steps != 8 || shift != 1.0 {
+            throw ValidationError("Magenta RT2 does not use ACE-Step --steps or --shift.")
+        }
+        _ = try magentaControls()
+    }
+
+    private func magentaControls() throws -> MagentaRT2Controls {
+        guard magentaTopK >= 0 else {
+            throw ValidationError("--top-k must be >= 0")
+        }
+        guard magentaUnmaskWidth >= 0 else {
+            throw ValidationError("--unmask-width must be >= 0")
+        }
+        guard magentaPrefillDuration > 0 else {
+            throw ValidationError("--prefill-duration must be > 0")
+        }
+        return MagentaRT2Controls(
+            styleConditioning: magentaStyleConditioning,
+            temperature: magentaTemperature,
+            topK: Int32(magentaTopK),
+            cfgMusicCoCa: magentaCFGMusicCoCa,
+            cfgNotes: magentaCFGNotes,
+            cfgDrums: magentaCFGDrums,
+            drumless: magentaDrumless,
+            unmaskWidth: Int32(magentaUnmaskWidth),
+            seedRotation: Int32(magentaSeedRotation),
+            prefillSilence: magentaPrefillSilence,
+            prefillDurationSeconds: magentaPrefillDuration
+        )
     }
 
     private func loadLyrics() throws -> String {
