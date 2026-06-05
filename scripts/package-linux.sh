@@ -417,7 +417,8 @@ stage_asset() {
 
 for asset in \
   "$build_dir"/*.so \
-  "$build_dir"/*.so.*
+  "$build_dir"/*.so.* \
+  "$build_dir"/*.resources
 do
   stage_asset "$asset"
 done

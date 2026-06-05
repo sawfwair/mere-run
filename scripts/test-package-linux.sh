@@ -17,6 +17,7 @@ fake_bin="$fixture_root/bin"
 fake_build="$fixture_root/build"
 fake_libs="$fixture_root/libs"
 mkdir -p "$fake_bin" "$fake_build" "$fake_libs/real" "$fake_libs/alternatives"
+mkdir -p "$fake_build/MereRun_MereRunCLI.resources/Guides"
 
 case "$(uname -m)" in
   x86_64|amd64)
@@ -43,6 +44,7 @@ fi
 echo "mere.run package fixture"
 CLI
 chmod +x "$fake_build/mere.run"
+printf '# Text Chat\n' >"$fake_build/MereRun_MereRunCLI.resources/Guides/text-chat.md"
 
 printf 'openblas runtime fixture\n' >"$fake_libs/real/libopenblas.so.0.3.26"
 ln -s "$fake_libs/real/libopenblas.so.0.3.26" "$fake_libs/alternatives/libopenblas.so.0-${platform_arch}-linux-gnu"
@@ -91,6 +93,13 @@ fi
 tar -xzf "$tarball" -C "$fixture_root"
 payload_dir="$fixture_root/mere-run-symlink-fixture-linux-${platform_arch}"
 staged_lib="$payload_dir/lib/libopenblas.so.0"
+staged_guide="$payload_dir/MereRun_MereRunCLI.resources/Guides/text-chat.md"
+
+if [[ ! -f "$staged_guide" ]]; then
+  echo "[test-package-linux] expected SwiftPM CLI resources to be bundled at $staged_guide" >&2
+  find "$payload_dir" -maxdepth 3 \( -type f -o -type d \) -print >&2
+  exit 1
+fi
 
 if [[ ! -f "$staged_lib" || -L "$staged_lib" ]]; then
   echo "[test-package-linux] expected libopenblas.so.0 to be bundled as a real file, got:" >&2

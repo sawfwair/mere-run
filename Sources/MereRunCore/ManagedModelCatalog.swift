@@ -523,7 +523,8 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
                 revision: "main",
-                patterns: ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"]
+                patterns: ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"],
+                filePath: "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
             ),
             upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF",
             upstreamRevision: "main",
