@@ -254,9 +254,11 @@ struct ImageGenerate: AsyncParsableCommand {
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .hidream:
             let generator = HiDreamO1Generator()
+            defer { generator.unload() }
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .ideogram:
             let generator = Ideogram4Generator()
+            defer { generator.unload() }
             result = try await generator.generate(request, progressHandler: progressHandler)
         case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .video, .psi, .privacy, .deepseek, nil:
             throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")

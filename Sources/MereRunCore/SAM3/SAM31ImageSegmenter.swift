@@ -202,6 +202,19 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
         }
     }
 
+    deinit {
+        unload()
+    }
+
+    public func unload() {
+        loadedState = nil
+        clearCache()
+    }
+
+    public func clearCache() {
+        clearGPUMemory()
+    }
+
     public static func defaultAnnotatedOutputURL(for imageURL: URL) -> URL {
         let parent = imageURL.deletingLastPathComponent()
         let stem = imageURL.deletingPathExtension().lastPathComponent
@@ -254,6 +267,9 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
         }
         guard !promptSet.isEmpty else {
             throw SegmenterError.failedToEncodeMetadata("At least one prompt is required.")
+        }
+        defer {
+            clearCache()
         }
 
         #if canImport(CoreGraphics)
@@ -442,6 +458,14 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
         let state = LoadedState(config: config, tokenizer: tokenizer, model: model)
         self.loadedState = state
         return state
+    }
+
+    private func clearGPUMemory(synchronize: Bool = true) {
+        if synchronize {
+            Stream.gpu.synchronize()
+        }
+        MLX.eval(MLXArray([]))
+        Memory.clearCache()
     }
 
     private static func loadWeights(resources: SAM31Resources, into model: SAM31Model) throws {

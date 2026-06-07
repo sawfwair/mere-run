@@ -92,6 +92,7 @@ struct VisionTrack: AsyncParsableCommand {
             modelRootURL: resolvedModel.rootURL,
             expectedModelID: resolvedModel.isManaged ? resolvedModel.modelID : nil
         )
+        defer { segmenter.unload() }
         let tracker = SAM31VideoTracker(segmenter: segmenter)
         let result = try tracker.track(
             videoURL: videoURL,

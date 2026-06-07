@@ -114,6 +114,65 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(caption.textRender, [])
     }
 
+    func testQuotedStringsExtraction() {
+        let prompt = """
+        a trailhead sign reads 'THE LOCAL WILD' with a smaller line below reading \
+        'do not feed the models', the sign's letters carved into wood, titled "Field Notes"
+        """
+        let quoted = StructuredImagePromptAdapter.quotedStrings(in: prompt)
+        XCTAssertEqual(quoted, ["Field Notes", "THE LOCAL WILD", "do not feed the models"])
+    }
+
+    func testQuotedStringsIgnoresApostrophes() {
+        let quoted = StructuredImagePromptAdapter.quotedStrings(
+            in: "the sign's weathered face catches the morning's first light"
+        )
+        XCTAssertEqual(quoted, [])
+    }
+
+    func testEnsuringTextRenderInjectsQuotedPromptText() throws {
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
+        XCTAssertEqual(caption.textRender, [])
+
+        let ensured = StructuredImagePromptAdapter.ensuringTextRender(
+            caption,
+            prompt: "a banner above the knight reads 'ONWARD'"
+        )
+        XCTAssertEqual(ensured.textRender.count, 1)
+        XCTAssertEqual(ensured.textRender.first?.text, "ONWARD")
+    }
+
+    func testEnsuringTextRenderKeepsModelProvidedEntries() throws {
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
+        let withEntry = StructuredImagePromptAdapter.ensuringTextRender(
+            caption,
+            prompt: "a banner reads 'ONWARD'"
+        )
+        // A second pass must not duplicate or overwrite the existing entry.
+        let unchanged = StructuredImagePromptAdapter.ensuringTextRender(
+            withEntry,
+            prompt: "a banner reads 'SOMETHING ELSE'"
+        )
+        XCTAssertEqual(unchanged.textRender, withEntry.textRender)
+    }
+
+    func testNormalizedCaptionJSONInjectsTextRenderForQuotedPrompt() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.validStructuredCaptionJSON,
+            fallbackPrompt: "a knight under a banner that reads 'ONWARD', sunny meadow"
+        )
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.textRender.map(\.text), ["ONWARD"])
+    }
+
+    func testIsParseableJSONDistinguishesNearMissFromTokenSalad() {
+        XCTAssertTrue(StructuredImagePromptAdapter.isParseableJSON(#"{"objects": "wrong shape"}"#))
+        XCTAssertFalse(StructuredImagePromptAdapter.isParseableJSON(
+            "{ed feetization mas Dod asked Lolamente lesser0 or<audio|>"
+        ))
+        XCTAssertFalse(StructuredImagePromptAdapter.isParseableJSON(""))
+    }
+
     private static let validStructuredCaptionJSON = """
     {
       "short description": "A knight riding a white horse in a sunlit meadow.",

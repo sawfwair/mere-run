@@ -77,14 +77,17 @@ enum StructuredImagePromptAdapter {
         let candidate = cleanedJSONCandidate(from: rawJSON)
         do {
             let caption = try validateCaptionJSON(candidate)
-            return try encodeCaptionJSON(caption)
+            return try encodeCaptionJSON(ensuringTextRender(caption, prompt: fallbackPrompt))
         } catch {
             guard let data = candidate.data(using: .utf8), !data.isEmpty else {
                 throw StructuredImagePromptAdapterError.invalidCaptionJSON("Output was empty.")
             }
             do {
                 let flexibleCaption = try JSONDecoder().decode(FlexibleStructuredImageCaption.self, from: data)
-                let normalizedCaption = flexibleCaption.normalized(fallbackPrompt: fallbackPrompt)
+                let normalizedCaption = ensuringTextRender(
+                    flexibleCaption.normalized(fallbackPrompt: fallbackPrompt),
+                    prompt: fallbackPrompt
+                )
                 let normalizedJSON = try encodeCaptionJSON(normalizedCaption)
                 _ = try validateCaptionJSON(normalizedJSON)
                 return normalizedJSON
@@ -94,6 +97,61 @@ enum StructuredImagePromptAdapter {
                 )
             }
         }
+    }
+
+    /// Deterministic safety net: if the adapter model left "text render" empty but the
+    /// original prompt asks for visible text in quotes, copy those strings in verbatim.
+    /// Without this, requested glyphs silently degrade into garbled texture.
+    static func ensuringTextRender(_ caption: StructuredImageCaption, prompt: String) -> StructuredImageCaption {
+        guard caption.textRender.isEmpty else { return caption }
+        let quoted = quotedStrings(in: prompt)
+        guard !quoted.isEmpty else { return caption }
+        let entries = quoted.prefix(5).map { text in
+            StructuredImageTextRender(
+                text: text,
+                location: "as described in the prompt",
+                size: "medium",
+                color: "unspecified",
+                font: "unspecified",
+                appearanceDetails: nil
+            )
+        }
+        return StructuredImageCaption(
+            shortDescription: caption.shortDescription,
+            objects: caption.objects,
+            backgroundSetting: caption.backgroundSetting,
+            lighting: caption.lighting,
+            aesthetics: caption.aesthetics,
+            photographicCharacteristics: caption.photographicCharacteristics,
+            styleMedium: caption.styleMedium,
+            textRender: Array(entries),
+            context: caption.context,
+            artisticStyle: caption.artisticStyle
+        )
+    }
+
+    /// Extracts double-, curly-, and single-quoted strings. Single quotes must sit on
+    /// word boundaries so apostrophes ("the sign's letters") do not produce matches.
+    static func quotedStrings(in prompt: String) -> [String] {
+        let patterns = [
+            #""([^"\n]{1,120})""#,
+            #"“([^”\n]{1,120})”"#,
+            #"(?<=^|[\s(])'([^'\n]{1,120})'(?=$|[\s,.!?;:)])"#,
+        ]
+        var seen = Set<String>()
+        var results: [String] = []
+        let range = NSRange(prompt.startIndex..., in: prompt)
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            for match in regex.matches(in: prompt, range: range) {
+                guard match.numberOfRanges > 1,
+                      let captureRange = Range(match.range(at: 1), in: prompt) else { continue }
+                let text = String(prompt[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty, seen.insert(text.lowercased()).inserted else { continue }
+                results.append(text)
+            }
+        }
+        return results
     }
 
     static func cleanedJSONCandidate(from response: String) -> String {
@@ -157,7 +215,7 @@ enum StructuredImagePromptAdapter {
         session: ChatSession,
         progressHandler: (@Sendable (String) -> Void)?
     ) async throws -> String {
-        var messages = [
+        let initialMessages = [
             ChatMessage(role: .system, content: structuredCaptionSystemPrompt),
             ChatMessage(
                 role: .user,
@@ -169,6 +227,7 @@ enum StructuredImagePromptAdapter {
                 """
             ),
         ]
+        var messages = initialMessages
         var lastDetail = "No response was generated."
 
         for attempt in 1...3 {
@@ -182,24 +241,44 @@ enum StructuredImagePromptAdapter {
                 requiresJSON: true
             )
             let response = try await session.chat(request, nil)
+            if let debugRoot = ProcessInfo.processInfo.environment["MERERUN_STRUCTURED_PROMPT_DEBUG"] {
+                let url = URL(fileURLWithPath: debugRoot).appendingPathComponent("adapter_attempt_\(attempt).txt")
+                try? response.response.write(to: url, atomically: true, encoding: .utf8)
+            }
             do {
                 return try normalizedCaptionJSON(from: response.response, fallbackPrompt: prompt)
             } catch {
-                lastDetail = validationFailureDetail(error: error, candidate: cleanedJSONCandidate(from: response.response))
-                messages.append(ChatMessage(role: .assistant, content: response.response))
-                messages.append(ChatMessage(
-                    role: .user,
-                    content: """
-                    The previous response was invalid for this task:
-                    \(lastDetail)
+                let candidate = cleanedJSONCandidate(from: response.response)
+                lastDetail = validationFailureDetail(error: error, candidate: candidate)
+                if isParseableJSON(candidate) {
+                    // Near miss: valid JSON, wrong shape. Keep the exchange and correct it.
+                    messages.append(ChatMessage(role: .assistant, content: response.response))
+                    messages.append(ChatMessage(
+                        role: .user,
+                        content: """
+                        The previous response was invalid for this task:
+                        \(lastDetail)
 
-                    Return only one valid JSON object matching the exact template from the system message. Do not use "name" or "attributes" as object keys. "text render" must be an array; use [] when no text should appear. Use null only for optional nested values.
-                    """
-                ))
+                        Return only one valid JSON object matching the exact template from the system message. Do not use "name" or "attributes" as object keys. "text render" must be an array; use [] when no text should appear. Use null only for optional nested values.
+                        """
+                    ))
+                } else {
+                    // Gross failure (token salad / truncation / empty): feeding it back as
+                    // context would poison every remaining attempt, and a corrupted runtime
+                    // state would survive into them. Reload the model and retry fresh.
+                    progressHandler?("adapter output was not JSON; reloading model for a fresh attempt")
+                    await session.unload()
+                    messages = initialMessages
+                }
             }
         }
 
         throw StructuredImagePromptAdapterError.invalidCaptionJSON(lastDetail)
+    }
+
+    static func isParseableJSON(_ candidate: String) -> Bool {
+        guard let data = candidate.data(using: .utf8), !data.isEmpty else { return false }
+        return (try? JSONDecoder().decode(OpenAIJSONValue.self, from: data)) != nil
     }
 
     private static func makeChatSession(modelID: String, modelRoot: String?) throws -> ChatSession {
@@ -291,7 +370,13 @@ enum StructuredImagePromptAdapter {
     "lighting" should cover conditions, direction, and shadows.
     "aesthetics" should cover composition, color scheme, and mood atmosphere.
     "photographic characteristics" should cover depth of field, focus, camera angle, and lens focal length.
-    "text render" must be an array; use [] when no visible text is requested.
+    "text render" must be an array of objects with keys:
+    "text", "location", "size", "color", "font", "appearance details".
+    Any words the image must display — strings in quotes, or text introduced by phrases
+    like "reads", "says", "labeled", "titled", or "captioned" — MUST be copied verbatim
+    (preserving case) into "text render", one entry per distinct string.
+    Describe the surface carrying the text (sign, screen, label) in "objects", but put
+    the exact strings only in "text render". Use [] only when no visible text is requested.
     """
 }
 
@@ -309,12 +394,15 @@ private func validationFailureDetail(error: Error, candidate: String) -> String 
     } else {
         base = error.localizedDescription
     }
-    let preview = candidate
+    let collapsed = candidate
         .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)
-        .prefix(700)
-    guard !preview.isEmpty else { return base }
-    return "\(base) Candidate preview: \(preview)"
+    guard !collapsed.isEmpty else { return base }
+    var detail = "\(base) Candidate length: \(collapsed.count) characters. Candidate preview: \(collapsed.prefix(700))"
+    if collapsed.count > 900 {
+        detail += " […] Candidate tail: \(collapsed.suffix(200))"
+    }
+    return detail
 }
 
 private struct FlexibleStructuredImageCaption: Decodable {

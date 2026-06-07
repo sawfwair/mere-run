@@ -99,6 +99,7 @@ struct VisionSegment: AsyncParsableCommand {
             modelRootURL: resolvedModel.rootURL,
             expectedModelID: resolvedModel.isManaged ? resolvedModel.modelID : nil
         )
+        defer { segmenter.unload() }
         let result = try segmenter.segment(
             imageURL: imageURL,
             promptSet: promptSet,

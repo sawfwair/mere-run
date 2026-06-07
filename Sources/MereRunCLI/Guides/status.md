@@ -41,7 +41,10 @@ mere.run guide status
   server sees the same control-plane state.
 - During overlapping API traffic, check `request admission` to see how many
   requests are running and how many are queued behind `--max-active-requests`.
-  JSON status also includes admitted, completed, and cancelled admission totals.
+  JSON status also includes admitted, completed, cancelled, pressure, and
+  whether admission is currently paused by the memory guard.
+- Use `memory` to see the active memory guard tier, pressure level, current
+  resident usage, and the computed soft/hard/ceiling limits.
 - Use `continuous batching` and `prefix KV reuse` to see which scheduler/cache
   features are actually enabled instead of assuming they are active.
 - Use `cache stats` to check aggregate prefix hits, reused tokens, and batched

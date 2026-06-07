@@ -168,6 +168,20 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         }
     }
 
+    deinit {
+        unload()
+    }
+
+    public func unload() {
+        loadedState?.model.resetGroundingState()
+        loadedState = nil
+        clearCache()
+    }
+
+    public func clearCache() {
+        clearGPUMemory()
+    }
+
     public static func defaultAnnotatedOutputURL(for imageURL: URL) -> URL {
         let parent = imageURL.deletingLastPathComponent()
         let stem = imageURL.deletingPathExtension().lastPathComponent
@@ -195,6 +209,9 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         }.filter { !$0.isEmpty }
         guard !normalizedQueries.isEmpty else {
             throw GrounderError.failedToEncodeMetadata("At least one non-empty query is required.")
+        }
+        defer {
+            clearCache()
         }
 
         let imageWidth: Int
@@ -232,6 +249,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                     segmentationThreshold: segmentationThreshold
                 )
             )
+            state.model.resetGroundingState()
+            clearCache()
         }
 
         try createParentDirectoryIfNeeded(for: annotatedImageURL)
@@ -323,6 +342,14 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         return state
     }
 
+    private func clearGPUMemory(synchronize: Bool = true) {
+        if synchronize {
+            Stream.gpu.synchronize()
+        }
+        MLX.eval(MLXArray([]))
+        Memory.clearCache()
+    }
+
     private func groundSingleQuery(
         query: String,
         imageURL: URL,
@@ -351,6 +378,9 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
 
         let processed = try state.processor.process(imageURL: imageURL, query: query)
         let model = state.model
+        defer {
+            model.resetGroundingState()
+        }
         let config = state.config
         model.resetGroundingState()
         trace("TRACE runtime query: \(query)")

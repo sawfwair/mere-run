@@ -50,9 +50,15 @@ mere.run status --json
   prompts and switch to packed 2-bit PolarKV for prompts at or above 1024
   tokens. `polar2` forces that path for every request, and non-Gemma4 models
   reject the setting.
-- Treat TTL/LRU as forward-compatible settings. The first runtime-pool
-  milestone records them and exposes them in status; later schedulers can act
-  on them.
+- `ttlSeconds` unloads an idle, loaded model after that many seconds during the
+  pool's opportunistic eviction passes. `pinned` exempts the model from
+  automatic TTL/LRU eviction, but explicit unload still works.
+- Memory-pressure LRU uses the API server's `--memory-guard` tier. The guard
+  derives soft/hard ceilings from process resident memory, host memory
+  headroom, and a tier reserve (`safe`, `balanced`, `aggressive`, or
+  `custom`). Elevated pressure evicts the least-recently-used idle unpinned
+  model; critical pressure evicts every idle unpinned model. Active requests
+  are never evicted, and pinned models are skipped.
 
 ## Examples
 

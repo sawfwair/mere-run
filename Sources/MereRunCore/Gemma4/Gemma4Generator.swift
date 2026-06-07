@@ -348,13 +348,22 @@ public actor Gemma4Generator: ChatGenerator {
         let eosSet = request.stopOnEOS
             ? Set(loadedConfig.eosTokenIds + tokenizerAndTemplate.stopTokenIds(withTools: hasTools))
             : []
-        let generationConfig = GenerationConfig(
+        var generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
             topP: Float(request.topP),
             repetitionPenalty: 1.05,
             repetitionContextSize: 64
         )
+        if imageBatch == nil {
+            // Text-only generation must never emit multimodal placeholder tokens.
+            // A corrupted or degenerate decode otherwise surfaces them as token salad.
+            generationConfig.bannedTokens = [
+                loadedConfig.imageTokenId,
+                loadedConfig.boiTokenId,
+                loadedConfig.eoiTokenId,
+            ].compactMap { $0 }
+        }
 
         let usePrefixKVCache = imageBatch == nil
         let prefixSeed = usePrefixKVCache ? prefixKVCacheSeed(
@@ -378,6 +387,11 @@ public actor Gemma4Generator: ChatGenerator {
         )
         if continuousBatchingEnabled, mtpReason == nil {
             mtpReason = "continuous batching"
+        }
+        if request.requiresJSON, mtpReason == nil {
+            // Speculative drafting verifies tokens against the unconstrained
+            // distribution; JSON-constrained decoding must stay on the serial path.
+            mtpReason = "json constrained decoding"
         }
         let useMTP = mtpReason == nil
         let layerCaches = try prefixSeed?.caches ?? makeLayerCaches(
@@ -454,6 +468,7 @@ public actor Gemma4Generator: ChatGenerator {
             sharedKVStates: mtpTemplate.active ? mtpSharedKVStates : [:],
             prefillTokenCount: promptTokens.count,
             mtpStatsTemplate: mtpTemplate,
+            jsonConstrained: request.requiresJSON,
             progressHandler: progressHandler
         )
         lastMTPStats = decodeResult.mtpStats ?? mtpTemplate
@@ -600,6 +615,7 @@ public actor Gemma4Generator: ChatGenerator {
         sharedKVStates: [String: Gemma4SharedKVState],
         prefillTokenCount: Int,
         mtpStatsTemplate: Gemma4MTPStats,
+        jsonConstrained: Bool = false,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         guard tokenBudget > 0 else {
@@ -610,7 +626,9 @@ public actor Gemma4Generator: ChatGenerator {
                 mtpStats: mtpStatsTemplate
             )
         }
-        guard continuousBatchingEnabled else {
+        // JSON-constrained requests always decode serially: the batched rows share
+        // one sampling path and cannot carry per-request scanner state.
+        guard continuousBatchingEnabled, !jsonConstrained else {
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -625,6 +643,7 @@ public actor Gemma4Generator: ChatGenerator {
                 sharedKVStates: sharedKVStates,
                 prefillTokenCount: prefillTokenCount,
                 mtpStatsTemplate: mtpStatsTemplate,
+                jsonConstrained: jsonConstrained,
                 progressHandler: progressHandler
             )
         }
@@ -669,6 +688,7 @@ public actor Gemma4Generator: ChatGenerator {
         sharedKVStates: [String: Gemma4SharedKVState],
         prefillTokenCount: Int,
         mtpStatsTemplate: Gemma4MTPStats,
+        jsonConstrained: Bool = false,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         var logits = initialLogits
@@ -681,11 +701,12 @@ public actor Gemma4Generator: ChatGenerator {
         var mtpStats = mtpStatsTemplate
         var firstTokenSeconds: Double?
         var pendingSampledToken: Int?
+        var jsonScanner = JSONPrefixScanner()
         let decodeStart = Date()
 
         while generated.count < tokenBudget {
             try Task.checkCancellation()
-            let next: Int
+            var next: Int
             if let pending = pendingSampledToken {
                 next = pending
                 pendingSampledToken = nil
@@ -695,6 +716,20 @@ public actor Gemma4Generator: ChatGenerator {
                     config: generationConfig,
                     previousTokens: repetitionHistory
                 )
+            }
+            if jsonConstrained {
+                guard let constrained = jsonConstrainedToken(
+                    initial: next,
+                    logits: logits[0, -1, 0...],
+                    config: generationConfig,
+                    previousTokens: repetitionHistory,
+                    eosSet: eosSet,
+                    scanner: &jsonScanner,
+                    decode: { tokenizerAndTemplate.decode(token: $0) }
+                ) else {
+                    break
+                }
+                next = constrained
             }
 
             if eosSet.contains(next) {
@@ -709,6 +744,10 @@ public actor Gemma4Generator: ChatGenerator {
             let piece = tokenizerAndTemplate.decode(token: next)
             if !piece.isEmpty {
                 progressHandler?(ChatProgress(stage: .generating, message: piece))
+            }
+
+            if jsonConstrained, jsonScanner.isComplete {
+                break
             }
 
             guard generated.count < tokenBudget else {

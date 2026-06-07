@@ -79,6 +79,12 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Maximum chat completions admitted at once. Defaults to 1 for serialized local inference.")
     var maxActiveRequests: Int = 1
 
+    @Option(name: [.long], help: "Runtime memory guard tier: off, safe, balanced, aggressive, or custom.")
+    var memoryGuard: RuntimeMemoryGuardTier = .default
+
+    @Option(name: [.long], help: "Custom memory guard ceiling in GiB. Requires --memory-guard custom.")
+    var memoryGuardCustomCeilingGB: Double?
+
     @Option(name: [.long], help: "Context size (default: 32768).")
     var contextSize: Int = 32768
 
@@ -99,6 +105,7 @@ struct APIServe: AsyncParsableCommand {
         try validateServerSecurity(apiKey: resolvedAPIKey)
         let resolvedModelPath = try resolveModelPath()
         let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
+        let memoryPressurePolicy = try resolveMemoryPressurePolicy()
         let server = try await CodeGenServer(
             defaultModelID: defaultRuntimeModelID(modelPath: resolvedModelPath),
             modelPath: resolvedModelPath,
@@ -108,7 +115,8 @@ struct APIServe: AsyncParsableCommand {
             maxActiveRequests: maxActiveRequests,
             engine: engine,
             contextSize: contextSize,
-            gemma4KVCacheQuantization: gemma4KVCacheQuantization
+            gemma4KVCacheQuantization: gemma4KVCacheQuantization,
+            memoryPressurePolicy: memoryPressurePolicy
         )
         try await server.run(host: host, port: port)
     }
@@ -244,6 +252,14 @@ struct APIServe: AsyncParsableCommand {
         guard maxActiveRequests > 0 else {
             throw ValidationError("--max-active-requests must be greater than zero.")
         }
+        if let memoryGuardCustomCeilingGB {
+            guard memoryGuard == .custom else {
+                throw ValidationError("--memory-guard-custom-ceiling-gb requires --memory-guard custom.")
+            }
+            guard memoryGuardCustomCeilingGB.isFinite, memoryGuardCustomCeilingGB > 0 else {
+                throw ValidationError("--memory-guard-custom-ceiling-gb must be greater than zero.")
+            }
+        }
         guard (1...Int(Int32.max)).contains(contextSize) else {
             throw ValidationError("--context-size must be between 1 and \(Int(Int32.max)).")
         }
@@ -252,11 +268,25 @@ struct APIServe: AsyncParsableCommand {
         }
     }
 
+    private func resolveMemoryPressurePolicy() throws -> RuntimeMemoryPressurePolicy {
+        let gib = Double(1024 * 1024 * 1024)
+        let customCeilingBytes = memoryGuardCustomCeilingGB.map { UInt64(($0 * gib).rounded(.down)) }
+        if memoryGuard == .custom, customCeilingBytes == nil {
+            throw ValidationError("--memory-guard custom requires --memory-guard-custom-ceiling-gb.")
+        }
+        return RuntimeMemoryPressurePolicy(
+            tier: memoryGuard,
+            customCeilingBytes: customCeilingBytes
+        )
+    }
+
     private static func isLoopbackHost(_ host: String) -> Bool {
         let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized == "127.0.0.1" || normalized == "localhost" || normalized == "::1"
     }
 }
+
+extension RuntimeMemoryGuardTier: ExpressibleByArgument {}
 
 enum APIEngine: String, ExpressibleByArgument {
     case textCode = "text-code"
@@ -766,19 +796,27 @@ actor CodeGenServer {
         maxActiveRequests: Int = 1,
         engine: APIEngine,
         contextSize: Int = 32768,
-        gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization()
+        gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
     ) async throws {
         self.apiKey = apiKey
         self.contextSize = contextSize
         self.fallbackLoraPath = fallbackLoraPath
         self.defaultModelID = defaultModelID
         self.requestLimiter = APIRateLimiter(limitPerMinute: rateLimitPerMinute)
-        self.requestAdmission = RuntimeRequestAdmission(maxActiveRequests: maxActiveRequests)
-        self.pool = RuntimeModelPool(
+        let runtimePool = RuntimeModelPool(
             defaultModelID: defaultModelID,
             defaultEngine: engine.runtimeServingEngine,
             startupModelPath: modelPath,
-            gemma4KVCacheQuantization: gemma4KVCacheQuantization
+            gemma4KVCacheQuantization: gemma4KVCacheQuantization,
+            memoryPressurePolicy: memoryPressurePolicy
+        )
+        self.pool = runtimePool
+        self.requestAdmission = RuntimeRequestAdmission(
+            maxActiveRequests: maxActiveRequests,
+            pressureProvider: {
+                await runtimePool.currentMemoryPressure()
+            }
         )
         try await pool.preloadDefault()
     }

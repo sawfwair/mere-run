@@ -36,6 +36,10 @@ mere.run status
 - `--api-key`: bearer token, also read from `MERERUN_API_KEY`.
 - `--rate-limit-per-minute`: global chat completions limit.
 - `--max-active-requests`: fair FIFO admission limit for concurrent chat completions; default `1`.
+- `--memory-guard`: runtime memory guard tier, default `balanced`. Accepted
+  values are `off`, `safe`, `balanced`, `aggressive`, and `custom`.
+- `--memory-guard-custom-ceiling-gb`: custom process-memory ceiling in GiB.
+  Requires `--memory-guard custom`.
 - `--context-size`: context limit used for request validation and native prompt truncation.
 - `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`:
   Gemma4 KV cache controls. Serving `text-chat-gemma4-turbo` defaults to the
@@ -52,7 +56,13 @@ mere.run status
 - Choose the engine first, then the model path/id.
 - Use `mere.run status` as the quick `/health` plus `/v1/models` check.
 - Use `mere.run model runtime set` to configure aliases, pinning, TTL, and
-  default generation limits without starting the server.
+  default generation limits without starting the server. TTL unloads idle
+  models during runtime pool operations, and pinned models skip automatic
+  TTL/LRU eviction. `--memory-guard` computes tiered soft/hard ceilings from
+  process resident memory and host memory headroom. Under elevated pressure,
+  chat admission pauses extra concurrent prefills and the pool evicts the
+  least-recently-used idle unpinned model; under critical pressure, it evicts
+  every idle unpinned model. Active requests are never evicted.
 - Test `/v1/chat/completions` after status shows the expected served model.
 - Request `model` resolves by runtime alias, then curated catalog id, then the
   startup default from `--engine`/`--model`.
