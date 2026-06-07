@@ -124,6 +124,14 @@ through the Flux2-style VAE. Plain text-to-image generation is wired through
 `image generate`; image-to-image, reference inputs, and LoRA are not supported
 for this family yet.
 
+Ideogram also works with the `image generate --structured-prompt` adapter. The
+adapter uses a local text chat model to expand a short prompt into a long,
+FIBO-style structured JSON caption covering objects, background, lighting,
+aesthetics, camera characteristics, style, context, and text renders. When the
+adapter is enabled, the CLI raises the image prompt token budget to 2048 unless
+the user already requested a larger value. Use `--structured-prompt-output` to
+save the generated JSON for review or later refinement.
+
 ### Deterministic validation
 
 ```bash

@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Inspect a managed model id or local model root: manifest, validation status, and component directories.
+Inspect a managed model id or local model root: storage layout, resolved size,
+manifest, validation status, and component directories.
 
 ## Required Models
 
@@ -27,6 +28,9 @@ mere.run model info image-zimage-nano --components
 
 - Use before debugging a failed generation command.
 - Start with `status` when you are unsure which model store is active.
+- Check the Storage section when a model store is a wrapper directory with
+  symlinked payload directories; `size` is resolved payload size and
+  `localWrapperSize` is only the local wrapper files.
 - Use `--components` for structured roots with tokenizer, transformer, VAE, scheduler, or text encoder folders.
 - Use `--json` when scripts need the manifest.
 

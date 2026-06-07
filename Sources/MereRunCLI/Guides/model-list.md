@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Show all known managed model ids, categories, install status, and local size. Use this before pulling or running models.
+Show all known managed model ids, categories, install status, and resolved local
+payload size. Use this before pulling or running models.
 Use `mere.run status` when you also need the active API server and currently
 served model.
 
@@ -43,7 +44,9 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run mere.run model list
 ## Iteration Tips
 
 - Look for `missing` vs `installed`, not just whether the id exists.
-- If a size looks too small, inspect with `model info` or repair manifests.
+- The size follows symlinked payload files and directories in managed model
+  stores. If layout is confusing, inspect with `model info`.
+- If validation looks wrong, inspect with `model info` or repair manifests.
 
 ## Troubleshooting
 

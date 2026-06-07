@@ -64,6 +64,24 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("max-sequence-length")], help: "Max text sequence length.")
     var maxSequenceLength: Int = 512
 
+    @Flag(
+        name: [.customLong("structured-prompt"), .customLong("json-prompt")],
+        help: "Expand --prompt into a structured JSON caption with a local text chat model before image generation."
+    )
+    var structuredPrompt: Bool = false
+
+    @Option(name: [.customLong("structured-prompt-model")], help: "Text chat model id for --structured-prompt.")
+    var structuredPromptModel: String = StructuredImagePromptAdapter.defaultModelID
+
+    @Option(name: [.customLong("structured-prompt-model-root")], help: "Optional local model root for --structured-prompt-model.")
+    var structuredPromptModelRoot: String?
+
+    @Option(name: [.customLong("structured-prompt-max-tokens")], help: "Max new tokens for the structured prompt adapter.")
+    var structuredPromptMaxTokens: Int = StructuredImagePromptAdapter.defaultMaxTokens
+
+    @Option(name: [.customLong("structured-prompt-output")], help: "Write the generated structured JSON caption to this path.")
+    var structuredPromptOutput: String?
+
     @Option(name: [.customShort("l"), .long], help: "LoRA safetensors file path.")
     var lora: String?
 
@@ -161,8 +179,47 @@ struct ImageGenerate: AsyncParsableCommand {
         let effectiveSigmaShift = sigmaShift.map { Float($0) }
             ?? manifest.defaults?.sigmaShift.map { Float($0) }
 
+        var effectivePrompt = prompt
+        var effectiveMaxSequenceLength = maxSequenceLength
+        if structuredPrompt {
+            if !quiet {
+                let backend = StructuredImagePromptAdapter.backendDescription(for: structuredPromptModel)
+                CLIStderr.write("[structured-prompt] Expanding prompt with \(structuredPromptModel) (\(backend))...\n")
+            }
+            let adapterProgressHandler: (@Sendable (String) -> Void)?
+            if quiet {
+                adapterProgressHandler = nil
+            } else {
+                adapterProgressHandler = { message in
+                    CLIStderr.write("[structured-prompt] \(message)\n")
+                }
+            }
+            effectivePrompt = try await StructuredImagePromptAdapter.expand(
+                prompt: prompt,
+                modelID: structuredPromptModel,
+                modelRoot: structuredPromptModelRoot,
+                maxTokens: structuredPromptMaxTokens,
+                progressHandler: adapterProgressHandler
+            )
+            effectiveMaxSequenceLength = max(
+                effectiveMaxSequenceLength,
+                StructuredImagePromptAdapter.recommendedImagePromptTokens
+            )
+            if let structuredPromptOutput {
+                let jsonURL = URL(fileURLWithPath: structuredPromptOutput).standardizedFileURL
+                try FileManager.default.createDirectory(
+                    at: jsonURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try Data(effectivePrompt.utf8).write(to: jsonURL)
+                if !quiet {
+                    CLIStderr.write("[structured-prompt] JSON: \(jsonURL.path)\n")
+                }
+            }
+        }
+
         let request = GenerationRequest(
-            prompt: prompt,
+            prompt: effectivePrompt,
             negativePrompt: negativePrompt,
             referenceImages: referenceImageURLs,
             width: width,
@@ -172,7 +229,7 @@ struct ImageGenerate: AsyncParsableCommand {
             seed: seed,
             outputURL: outputURL,
             model: resolvedModel,
-            maxSequenceLength: maxSequenceLength,
+            maxSequenceLength: effectiveMaxSequenceLength,
             lora: loraConfig,
             enhancePrompt: false,
             inputImage: inputURL,
@@ -183,6 +240,9 @@ struct ImageGenerate: AsyncParsableCommand {
         )
 
         let progressHandler: (@Sendable (GenerationProgress) -> Void)? = quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
+        if !quiet {
+            CLIStderr.write("[runtime] image backend: \(NativeMLXRuntime.backendDescription)\n")
+        }
 
         let result: GenerationResult
         switch manifest.family {

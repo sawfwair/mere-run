@@ -190,8 +190,14 @@ Key options:
 - `--ref-image`: repeatable HiDream O1 reference image
 - `--keep-original-aspect`: preserve one HiDream reference image's aspect ratio
 - `--strength`: image-to-image strength
+- `--structured-prompt`, `--json-prompt`: expand the prompt into a structured JSON caption with a local text chat model before image generation
+- `--structured-prompt-model`: text chat model id for the adapter; defaults to `text-chat-gemma4-12b-4bit`
+- `--structured-prompt-output`: write the generated structured JSON caption to a file
 - `--lora`, `--lora-scale`
 - `--quiet`
+
+Unless `--quiet` is set, progress diagnostics on stderr include the native image
+backend, for example `native MLX/Metal (default device: gpu)` on Apple Silicon.
 
 Examples:
 
@@ -200,6 +206,7 @@ swift run mere.run image generate --prompt "a black cat on a red sofa"
 swift run mere.run image generate --model image-zimage-nano --prompt "retro robot illustration" --output ./robot.png
 swift run mere.run image generate --model image-bonsai-binary --prompt "sunlit greenhouse bonsai" --output ./bonsai.png
 swift run mere.run image generate --prompt "turn this into a pencil sketch" --input ./photo.png --strength 0.6
+swift run mere.run image generate --model image-ideogram4-sdnq-uint4 --prompt "a knight and a white horse in a sunny meadow" --structured-prompt --structured-prompt-output ./knight-prompt.json --output ./knight.png
 swift run mere.run image generate \
   --model image-hidream-o1-dev \
   --prompt "put this subject in a studio portrait" \
@@ -248,6 +255,10 @@ Key options:
 - `--thinking`
 - `--stats`: includes Gemma4 MTP state and accept/draft counts when a Gemma4 model is used
 - `--quiet`
+
+Unless `--quiet` is set, diagnostics on stderr include the selected text
+backend, for example native MLX/Metal for MLX models or llama.cpp/GGUF for GGUF
+models.
 
 Examples:
 
@@ -733,7 +744,8 @@ swift run mere.run video export-latents \
 
 ### `mere.run model list`
 
-List all managed model IDs and whether they are installed.
+List all managed model IDs, whether they are installed, and their resolved
+payload size. Sizes follow symlinked payload directories in the model store.
 
 ```bash
 swift run mere.run model list
@@ -940,7 +952,9 @@ swift run mere.run model capabilities --all
 
 ### `mere.run model info`
 
-Inspect a canonical model ID or a local model root.
+Inspect a canonical model ID or a local model root. The Storage section reports
+the layout, resolved payload size, wrapper size when different, and symlink
+counts.
 
 ```bash
 swift run mere.run model info image-zimage-nano

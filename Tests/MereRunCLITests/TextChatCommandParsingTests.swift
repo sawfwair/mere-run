@@ -21,6 +21,18 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.stream)
     }
 
+    func testTextChatBackendDescriptionIdentifiesNativeMLXModels() {
+        let backend = TextChat.backendDescription(for: Gemma4Resources.twelveB4BitModelId)
+
+        XCTAssertTrue(backend.contains("native MLX"))
+    }
+
+    func testTextChatBackendDescriptionIdentifiesGGUFModels() {
+        let backend = TextChat.backendDescription(for: ModelResolver.ModelID.q36NanoGGUF.rawValue)
+
+        XCTAssertEqual(backend, "llama.cpp/GGUF")
+    }
+
     func testGemma4TurboDefaultsToTurboQuantKVCache() throws {
         let cmd = try TextChat.parse([
             "--prompt", "Say hello",

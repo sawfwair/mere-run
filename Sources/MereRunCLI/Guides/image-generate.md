@@ -11,6 +11,8 @@ Use one installed image model:
 - `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
 - `image-klein-max`, `image-klein-base`, `image-klein-nano`
 - `image-bonsai-binary`, `image-bonsai-ternary`
+- `image-ideogram4-sdnq-uint4`
+- `image-hidream-o1`, `image-hidream-o1-dev`
 
 ## Install And Check
 
@@ -37,6 +39,11 @@ mere.run guide image generate --model image-zimage-nano
 - `--input`, `-i`: source image for image-to-image.
 - `--strength`, `--str`: image-to-image change strength from `0.0` to `1.0`.
 - `--max-sequence-length`: prompt token budget.
+- `--structured-prompt`, `--json-prompt`: expand the prompt into a structured JSON caption with a local text chat model before generation.
+- `--structured-prompt-model`: text chat model id for the adapter. Defaults to `text-chat-gemma4-12b-4bit`.
+- `--structured-prompt-model-root`: optional local model root for the adapter.
+- `--structured-prompt-max-tokens`: max new tokens for the adapter.
+- `--structured-prompt-output`: write the generated JSON caption for review or reuse.
 - `--lora`, `-l`: LoRA safetensors path.
 - `--lora-scale`: LoRA strength.
 - `--quiet`, `-q`: print only the output path.
@@ -47,6 +54,7 @@ mere.run guide image generate --model image-zimage-nano
 - For product or inspection images, prefer concrete nouns over mood words: size, surface, label text, angle, background.
 - For Z-Image, keep prompts compact and descriptive. Iterate seed, dimensions, and input strength before piling on adjectives.
 - For FLUX.2 Klein, use explicit visual composition and relationships: foreground, background, lens/framing, color palette, and what must be absent.
+- For Ideogram 4 SDNQ, use `--structured-prompt` when a short prompt needs stronger object, spatial, lighting, camera, or text-render control. The adapter converts the prompt into a long JSON caption and raises the prompt token budget to 2048.
 - For Bonsai binary or ternary, start with four steps at 512 or 1024 square; the manifest applies its native FlowMatch sigma shift.
 - Use `--input` plus `--strength 0.25` to preserve layout; use `0.65` or higher for stronger reinterpretation.
 
@@ -77,6 +85,15 @@ mere.run image generate \
   --strength 0.45 \
   --prompt "architectural watercolor rendering of the same cabin, pine forest, late afternoon light" \
   --output ./cabin-watercolor.png
+```
+
+```bash
+mere.run image generate \
+  --model image-ideogram4-sdnq-uint4 \
+  --prompt "a knight and a white horse in a meadow, remove the helmet, make it sunny" \
+  --structured-prompt \
+  --structured-prompt-output ./knight-prompt.json \
+  --output ./knight.png
 ```
 
 ## Iteration Tips
