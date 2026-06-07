@@ -94,6 +94,14 @@ struct TextChat: AsyncParsableCommand {
         return Gemma4Resources.nanoModelId
     }
 
+    static func backendDescription(for modelID: String) -> String {
+        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if ManagedModelCatalog.spec(for: normalizedModelID)?.validationKind == .codegenGGUF {
+            return "llama.cpp/GGUF"
+        }
+        return NativeMLXRuntime.backendDescription
+    }
+
     @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
@@ -168,6 +176,9 @@ struct TextChat: AsyncParsableCommand {
 
         let startTime = Date()
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !quiet {
+            CLIStderr.write("[runtime] text backend: \(Self.backendDescription(for: normalizedModelId))\n")
+        }
         var lastGemma4MTPStats: Gemma4MTPStats?
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in

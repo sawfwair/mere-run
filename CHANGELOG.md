@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added `image generate --structured-prompt` / `--json-prompt`, an opt-in local
+  text-chat adapter that expands short image prompts into typed structured JSON
+  captions before generation, defaulting the adapter to
+  `text-chat-gemma4-12b-4bit` with reviewable `--structured-prompt-output`
+  artifacts and Ideogram-friendly prompt token budgeting.
+
+### Fixed
+
+- fixed model-store size reporting for real directories that contain symlinked
+  payload directories, and added `model info` storage layout details so wrapper
+  directories no longer look like tiny installs.
+- added native runtime backend diagnostics on stderr for text and image
+  generation so MLX/Metal vs GGUF backend selection is visible during smoke
+  tests.
+
 ## 0.13.1 - 2026-06-05
 
 ### Fixed

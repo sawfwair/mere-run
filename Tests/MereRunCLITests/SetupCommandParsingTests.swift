@@ -266,6 +266,59 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(FileSystemHelper.directorySize(at: modelRoot), 7)
     }
 
+    func testDirectorySizeFollowsSymlinkedDirectoriesInsideModelRoots() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-size-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let target = root.appendingPathComponent("target", isDirectory: true)
+        let modelRoot = root.appendingPathComponent("image-ideogram4-sdnq-uint4", isDirectory: true)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 3).write(to: modelRoot.appendingPathComponent("mererun_model.json"))
+        try Data(repeating: 1, count: 11).write(to: target.appendingPathComponent("model.safetensors"))
+        try FileManager.default.createSymbolicLink(
+            at: modelRoot.appendingPathComponent("transformer", isDirectory: true),
+            withDestinationURL: target
+        )
+
+        let usage = FileSystemHelper.directoryUsage(at: modelRoot)
+        XCTAssertEqual(usage.resolvedBytes, 14)
+        XCTAssertEqual(usage.localBytes, 3)
+        XCTAssertEqual(usage.symlinkCount, 1)
+        XCTAssertEqual(usage.symlinkedDirectoryCount, 1)
+        XCTAssertEqual(usage.layoutDescription, "directory with symlinked directories")
+        XCTAssertEqual(FileSystemHelper.directorySize(at: modelRoot), 14)
+    }
+
+    func testModelInventoryUsesResolvedSizeForSymlinkedModelDirectories() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-inventory-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: root)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(root)
+
+        let target = root.appendingPathComponent("hub/ideogram-transformer", isDirectory: true)
+        let modelRoot = root.appendingPathComponent(ModelResolver.ModelID.ideogram4SDNQUInt4.rawValue, isDirectory: true)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 13).write(to: modelRoot.appendingPathComponent("mererun_model.json"))
+        try Data(repeating: 1, count: 29).write(to: target.appendingPathComponent("diffusion_pytorch_model.safetensors"))
+        try FileManager.default.createSymbolicLink(
+            at: modelRoot.appendingPathComponent("transformer", isDirectory: true),
+            withDestinationURL: target
+        )
+
+        let row = try XCTUnwrap(
+            ModelInventory.rows().first { $0.id == ModelResolver.ModelID.ideogram4SDNQUInt4.rawValue }
+        )
+        XCTAssertEqual(row.status, "installed")
+        XCTAssertEqual(row.size, ByteCountFormatter.string(fromByteCount: 42, countStyle: .file))
+    }
+
     func testPiBinaryFinderSkipsDirectoryNamedPi() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-pi-finder-\(UUID().uuidString)", isDirectory: true)

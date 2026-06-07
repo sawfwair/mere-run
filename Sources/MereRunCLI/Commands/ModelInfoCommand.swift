@@ -70,6 +70,24 @@ struct ModelInfo: ParsableCommand {
             print("Source: \(resolved.source.rawValue)")
         }
 
+        let usage = FileSystemHelper.directoryUsage(at: rootURL)
+        print("\nStorage")
+        print("  layout: \(usage.layoutDescription)")
+        print("  size: \(ByteCountFormatter.string(fromByteCount: usage.resolvedBytes, countStyle: .file))")
+        if usage.localBytes != usage.resolvedBytes {
+            print("  localWrapperSize: \(ByteCountFormatter.string(fromByteCount: usage.localBytes, countStyle: .file))")
+        }
+        let standardizedRoot = rootURL.standardizedFileURL.path
+        let resolvedRoot = rootURL.resolvingSymlinksInPath().standardizedFileURL.path
+        if resolvedRoot != standardizedRoot {
+            print("  resolvedRoot: \(resolvedRoot)")
+        }
+        if usage.symlinkCount > 0 {
+            print(
+                "  symlinks: \(usage.symlinkCount) total, \(usage.symlinkedDirectoryCount) directories, \(usage.symlinkedFileCount) files"
+            )
+        }
+
         if let manifest {
             print("\nManifest (\(MereRunModelManifest.filename))")
             print("  schemaVersion: \(manifest.schemaVersion)")

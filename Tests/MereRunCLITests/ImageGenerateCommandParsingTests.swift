@@ -39,4 +39,181 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.steps, 4)
         XCTAssertEqual(cmd.cfgScale, 1.0)
     }
+
+    func testParsesStructuredPromptOptions() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a knight and a white horse",
+            "--model", "image-ideogram4-sdnq-uint4",
+            "--structured-prompt",
+            "--structured-prompt-model", "text-chat-q36-nano",
+            "--structured-prompt-model-root", "/tmp/q36",
+            "--structured-prompt-max-tokens", "3072",
+            "--structured-prompt-output", "/tmp/prompt.json",
+        ])
+
+        XCTAssertTrue(cmd.structuredPrompt)
+        XCTAssertEqual(cmd.structuredPromptModel, "text-chat-q36-nano")
+        XCTAssertEqual(cmd.structuredPromptModelRoot, "/tmp/q36")
+        XCTAssertEqual(cmd.structuredPromptMaxTokens, 3_072)
+        XCTAssertEqual(cmd.structuredPromptOutput, "/tmp/prompt.json")
+    }
+
+    func testParsesJSONPromptAlias() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "editorial product photo",
+            "--json-prompt",
+        ])
+
+        XCTAssertTrue(cmd.structuredPrompt)
+        XCTAssertEqual(cmd.structuredPromptModel, "text-chat-gemma4-12b-4bit")
+    }
+
+    func testStructuredPromptAdapterValidatesPaperSchema() throws {
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
+
+        XCTAssertEqual(caption.shortDescription, "A knight riding a white horse in a sunlit meadow.")
+        XCTAssertEqual(caption.objects.first?.shapeAndColor, "armored human figure in silver and blue")
+        XCTAssertEqual(caption.textRender, [])
+    }
+
+    func testStructuredPromptAdapterCleansJSONCodeFence() throws {
+        let wrapped = """
+        <think>draft</think>
+        ```json
+        \(Self.validStructuredCaptionJSON)
+        ```
+        """
+
+        let cleaned = StructuredImagePromptAdapter.cleanedJSONCandidate(from: wrapped)
+        XCTAssertNoThrow(try StructuredImagePromptAdapter.validateCaptionJSON(cleaned))
+    }
+
+    func testStructuredPromptAdapterNormalizesQ36NearSchema() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.q36NearStructuredCaptionJSON,
+            fallbackPrompt: "a small matte red cube on a white table"
+        )
+
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.shortDescription, "A clean product photograph featuring a small matte red cube.")
+        XCTAssertEqual(caption.objects.first?.description, "matte red cube, small, matte finish, red color")
+        XCTAssertEqual(caption.objects.first?.texture, "matte surface")
+        XCTAssertEqual(caption.textRender, [])
+    }
+
+    func testStructuredPromptAdapterNormalizesCompactGemmaSchema() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.gemmaCompactStructuredCaptionJSON,
+            fallbackPrompt: "a small matte red cube on a white table"
+        )
+
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.objects.first?.description, "small matte red cube")
+        XCTAssertEqual(caption.lighting.conditions, "Soft window light, natural diffusion")
+        XCTAssertEqual(caption.photographicCharacteristics.depthOfField, "Product photography, sharp focus")
+        XCTAssertEqual(caption.textRender, [])
+    }
+
+    private static let validStructuredCaptionJSON = """
+    {
+      "short description": "A knight riding a white horse in a sunlit meadow.",
+      "objects": [
+        {
+          "description": "A calm medieval knight seated on a horse, wearing polished armor and a blue cloak.",
+          "location": "center foreground",
+          "relationship": "The knight is riding the horse and looking toward the horizon.",
+          "relative size": "large within frame",
+          "shape and color": "armored human figure in silver and blue",
+          "texture": "metallic armor and woven fabric",
+          "appearance details": "helmet visor raised, cloak moving lightly",
+          "number of objects": null,
+          "pose": "upright seated riding pose",
+          "expression": "calm and focused",
+          "clothing": "plate armor and blue cloak",
+          "action": "riding a horse",
+          "gender": "unspecified",
+          "skin tone and texture": null,
+          "orientation": "facing right"
+        }
+      ],
+      "background setting": "Open meadow with distant trees and low hills under a clear sky.",
+      "lighting": {
+        "conditions": "bright daylight",
+        "direction": "side-lit from left",
+        "shadows": "soft shadows falling to the right"
+      },
+      "aesthetics": {
+        "composition": "centered heroic composition",
+        "color scheme": "natural greens with silver and blue accents",
+        "mood atmosphere": "noble and serene"
+      },
+      "photographic characteristics": {
+        "depth of field": "moderate",
+        "focus": "sharp focus on knight and horse",
+        "camera angle": "eye-level",
+        "lens focal length": "normal lens"
+      },
+      "style medium": "digital illustration",
+      "text render": [],
+      "context": "Fantasy character illustration suitable for concept art.",
+      "artistic style": "cinematic realism"
+    }
+    """
+
+    private static let q36NearStructuredCaptionJSON = """
+    {
+      "short description": "A clean product photograph featuring a small matte red cube.",
+      "objects": [
+        {
+          "name": "matte red cube",
+          "attributes": [
+            "small",
+            "matte finish",
+            "red color"
+          ]
+        }
+      ],
+      "background setting": "Minimalist white tabletop and clean neutral background.",
+      "lighting": {
+        "conditions": "Soft, diffused natural light",
+        "direction": "From a side window",
+        "shadows": "Soft, subtle shadows"
+      },
+      "aesthetics": {
+        "composition": "Centered product composition",
+        "color scheme": "Red and white with neutral tones",
+        "mood atmosphere": "Clean and professional"
+      },
+      "photographic characteristics": {
+        "depth of field": "Shallow to medium",
+        "focus": "Sharp focus on the cube",
+        "camera angle": "Slightly elevated",
+        "lens focal length": "50mm"
+      },
+      "style medium": "photograph",
+      "artistic style": "minimal product",
+      "context": "Product showcase",
+      "text render": null
+    }
+    """
+
+    private static let gemmaCompactStructuredCaptionJSON = """
+    ```json
+    {
+      "short description": "A small matte red cube on a white table.",
+      "objects": [
+        "small matte red cube",
+        "white table"
+      ],
+      "background setting": "Minimalist interior, clean studio environment",
+      "lighting": "Soft window light, natural diffusion",
+      "aesthetics": "Minimalist, clean, modern",
+      "photographic characteristics": "Product photography, sharp focus",
+      "style medium": "Photography",
+      "artistic style": "Commercial product photography",
+      "context": "Product showcase",
+      "text render": "none"
+    }
+    ```
+    """
 }
