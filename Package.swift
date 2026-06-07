@@ -272,6 +272,7 @@ targets.append(contentsOf: [
       "LightOnOCR/README.md",
       "LTX/README.md",
       "LoRA/README.md",
+      "MagentaRT2/README.md",
       "PrivacyFilter/README.md",
       "Psi/README.md",
       "Q35/README.md",
