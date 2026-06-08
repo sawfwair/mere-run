@@ -462,6 +462,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                ModelResolver.ModelID.aceStepXLTurbo.rawValue,
+                "ACE-Step XL Turbo",
+                "Generates higher-quality music with the ACE-Step 1.5 XL turbo DiT.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
+                "ACE-Step XL Turbo + 4B LM",
+                "Adds the optional 4B 5Hz LM to the ACE-Step 1.5 XL turbo stack.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 ModelResolver.ModelID.magentaRT2Small.rawValue,
                 "Magenta RealTime 2 small",
                 "Streams controllable Magenta RT2 music on Apple Silicon with the 230M model.",

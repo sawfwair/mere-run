@@ -257,6 +257,24 @@ final class ACEStepPipelineIntegrationTests: MereRunCoreTestCase {
         let nonCoverSlice = nonCoverHiddenStates[0..., 0..<compareLength, 0...].asType(.float32)
         let maxDiff = MLX.max(MLX.abs(coverSlice - nonCoverSlice)).item(Float.self)
         XCTAssertGreaterThan(maxDiff, 1e-4)
+
+        let nonCoverPrepared = try XCTUnwrap(pipeline.prepareNonCoverConditionIfNeeded(conditionInputs: partialCoverInputs))
+        let contextLatents = nonCoverPrepared.contextLatents.asType(.float32)
+        XCTAssertEqual(contextLatents.dim(1), latentFrames)
+        XCTAssertEqual(contextLatents.dim(2), config.inChannels - config.audioAcousticHiddenDim)
+
+        let expectedSilence = pipeline.defaultSourceLatents(targetFrames: latentFrames)
+            .asType(partialCoverInputs.srcLatents.dtype)
+            .asType(.float32)
+        let nonCoverSource = contextLatents[0..., 0..<latentFrames, 0..<config.audioAcousticHiddenDim]
+        let silenceDiff = MLX.max(MLX.abs(nonCoverSource - expectedSilence)).item(Float.self)
+        XCTAssertEqual(silenceDiff, 0, accuracy: 1e-4)
+        XCTAssertGreaterThan(MLX.sum(MLX.abs(nonCoverSource)).item(Float.self), 0)
+
+        let chunkStart = config.audioAcousticHiddenDim
+        let nonCoverChunks = contextLatents[0..., 0..<latentFrames, chunkStart..<contextLatents.dim(2)]
+        let chunkDiff = MLX.max(MLX.abs(nonCoverChunks - MLXArray(Float(1.0)))).item(Float.self)
+        XCTAssertEqual(chunkDiff, 0, accuracy: 1e-4)
     }
 
     func testPreparePromptConditionInputsUsesReferenceTimbreLatentsWhenProvided() throws {
@@ -401,6 +419,57 @@ final class ACEStepPipelineIntegrationTests: MereRunCoreTestCase {
             audioCoverStrength: 0.5,
             vocalLanguage: "en",
             instruction: "Strong cover conditioning instruction",
+            isCover: true
+        )
+
+        XCTAssertEqual(audio.dim(0), 1)
+        XCTAssertEqual(audio.dim(1), expectedSamples)
+        XCTAssertEqual(audio.dim(2), vaeConfig.audioChannels)
+
+        let maxAbs = MLX.max(MLX.abs(audio.asType(.float32))).item(Float.self)
+        XCTAssertFalse(maxAbs.isNaN)
+        XCTAssertFalse(maxAbs.isInfinite)
+        XCTAssertGreaterThan(maxAbs, 0)
+    }
+
+    func testPromptTurboEndToEndWithSourceAudioCover() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let turboRoot = env["MERERUN_TEST_ACESTEP_TURBO_ROOT"], !turboRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_ACESTEP_TURBO_ROOT=/path/to/ACE-Step-1.5/checkpoints/acestep-v15-turbo to run this test.")
+        }
+        guard let vaeRoot = env["MERERUN_TEST_ACESTEP_VAE_ROOT"], !vaeRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_ACESTEP_VAE_ROOT=/path/to/ACE-Step-1.5/checkpoints/vae to run this test.")
+        }
+
+        let decoderResources = ACEStepResources(rootURL: URL(fileURLWithPath: turboRoot))
+        let vaeResources = OobleckVAEResources(rootURL: URL(fileURLWithPath: vaeRoot))
+        let vaeConfig = try OobleckVAECheckpointLoader.loadConfig(resources: vaeResources)
+        let factor = vaeConfig.downsamplingRatios.reduce(1, *)
+
+        let pipeline = try ACEStepPipeline(decoderResources: decoderResources, vaeResources: vaeResources)
+
+        let durationSeconds: Float = 0.2
+        let sourceSamples = max(1, Int(durationSeconds * 48_000))
+        let left = (0..<sourceSamples).map { index in
+            Float(sin((Double(index) / 48_000.0) * 2.0 * Double.pi * 220.0) * 0.1)
+        }
+        var interleaved: [Float] = []
+        interleaved.reserveCapacity(sourceSamples * 2)
+        for sample in left {
+            interleaved.append(sample)
+            interleaved.append(sample)
+        }
+        let sourceAudio = MLXArray(interleaved, [1, sourceSamples, 2]).asType(.float32)
+
+        let expectedLatentFrames = Int((Double(durationSeconds) * 25.0).rounded())
+        let expectedSamples = expectedLatentFrames * factor
+
+        let audio = try pipeline.generatePromptToAudio(
+            caption: "soft synth-pop cover with gentle drums",
+            lyrics: "[verse]\ncover smoke test",
+            config: .init(durationSeconds: durationSeconds, seed: 91),
+            sourceAudio48kHz: sourceAudio,
+            audioCoverStrength: 0.8,
             isCover: true
         )
 

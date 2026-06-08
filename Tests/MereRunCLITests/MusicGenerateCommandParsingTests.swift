@@ -1,4 +1,5 @@
 import XCTest
+import MLX
 @testable import MereRunCLI
 @testable import MereRunCore
 
@@ -15,7 +16,9 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.vaeSubdirectory, "vae")
         XCTAssertFalse(cmd.useLM)
         XCTAssertEqual(cmd.durationSeconds, 10.0, accuracy: 0.0001)
-        XCTAssertEqual(cmd.shift, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.shift, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.coverNoiseStrength, 0.0, accuracy: 0.0001)
+        XCTAssertFalse(cmd.resolvedACEStepIsCover)
     }
 
     func testMusicGenerateParsesModelAndAdvancedOverrides() throws {
@@ -41,6 +44,102 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.useLM)
         XCTAssertEqual(cmd.durationSeconds, 18.0, accuracy: 0.0001)
         XCTAssertEqual(cmd.steps, 12)
+    }
+
+    func testMusicGenerateCheckpointCandidatesHonorRequestedManagedModel() throws {
+        let cmd = try MusicGenerate.parse([
+            "xl track",
+            "--model", ModelResolver.ModelID.aceStepXLTurbo.rawValue,
+        ])
+
+        let candidates = cmd.buildAcestepCheckpointCandidates().map(\.standardizedFileURL.path)
+        let requestedRoot = MereRunModelPaths.modelsDir
+            .appendingPathComponent(ModelResolver.ModelID.aceStepXLTurbo.rawValue, isDirectory: true)
+            .standardizedFileURL
+            .path
+        let defaultRoot = MereRunModelPaths.modelsDir
+            .appendingPathComponent(ModelResolver.ModelID.aceStep.rawValue, isDirectory: true)
+            .standardizedFileURL
+            .path
+
+        XCTAssertTrue(candidates.contains(requestedRoot))
+        XCTAssertFalse(candidates.contains(defaultRoot))
+    }
+
+    func testMusicGenerateResolvesCoverOnlyForCoverTask() throws {
+        let cover = try MusicGenerate.parse([
+            "cover this",
+            "--task-type", "cover",
+        ])
+        XCTAssertTrue(cover.resolvedACEStepIsCover)
+
+        let forcedNonCover = try MusicGenerate.parse([
+            "cover this",
+            "--task-type", "cover",
+            "--non-cover",
+        ])
+        XCTAssertFalse(forcedNonCover.resolvedACEStepIsCover)
+
+        let textToMusic = try MusicGenerate.parse([
+            "new song",
+            "--task-type", "text2music",
+        ])
+        XCTAssertFalse(textToMusic.resolvedACEStepIsCover)
+    }
+
+    func testMusicGenerateSourceAudioImpliesCoverMode() throws {
+        let cmd = try MusicGenerate.parse([
+            "dream-pop cover",
+            "--source-audio", "~/Downloads/song.mp3",
+            "--reference-audio", "/tmp/ref-a.wav", "/tmp/ref-b.wav",
+            "--audio-cover-strength", "0.75",
+            "--cover-noise-strength", "0.45",
+        ])
+
+        XCTAssertEqual(cmd.sourceAudio, "~/Downloads/song.mp3")
+        XCTAssertEqual(cmd.referenceAudio, ["/tmp/ref-a.wav", "/tmp/ref-b.wav"])
+        XCTAssertEqual(cmd.audioCoverStrength, 0.75, accuracy: 0.0001)
+        XCTAssertEqual(cmd.coverNoiseStrength, 0.45, accuracy: 0.0001)
+        XCTAssertTrue(cmd.resolvedACEStepIsCover)
+        XCTAssertEqual(cmd.resolvedACEStepTaskType(isCover: cmd.resolvedACEStepIsCover), "cover")
+    }
+
+    func testMusicGenerateSkipsLMForCoverParity() throws {
+        let cover = try MusicGenerate.parse([
+            "faithful cover",
+            "--source-audio", "~/Downloads/song.mp3",
+            "--use-lm",
+            "--lm-subdirectory", "acestep-5Hz-lm-4B",
+        ])
+        let taskType = cover.resolvedACEStepTaskType(isCover: cover.resolvedACEStepIsCover)
+
+        XCTAssertEqual(taskType, "cover")
+        XCTAssertFalse(cover.resolvedACEStepUsesLM(taskType: taskType))
+
+        let textToMusic = try MusicGenerate.parse([
+            "fresh song",
+            "--use-lm",
+            "--lm-subdirectory", "acestep-5Hz-lm-4B",
+        ])
+
+        XCTAssertTrue(textToMusic.resolvedACEStepUsesLM(taskType: "text2music"))
+    }
+
+    func testMusicGenerateCoverDurationUsesSourceAudioLength() throws {
+        let cmd = try MusicGenerate.parse([
+            "dream-pop cover",
+            "--source-audio", "~/Downloads/song.mp3",
+            "--duration", "30",
+        ])
+        let sourceAudio = MLXArray(Array(repeating: Float(0), count: 48_000 * 2 * 2), [1, 48_000 * 2, 2])
+
+        let duration = cmd.resolvedACEStepDurationSeconds(
+            isCover: cmd.resolvedACEStepIsCover,
+            sourceAudio48kHz: sourceAudio
+        )
+
+        XCTAssertEqual(duration, 2.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.resolvedMetadataDuration(effectiveDurationSeconds: duration), "2 seconds")
     }
 
     func testMusicGenerateParsesMagentaControls() throws {

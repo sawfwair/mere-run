@@ -1,6 +1,5 @@
 import Foundation
 import MLX
-import MLXNN
 
 // Owns LM fallback, condition assembly, and denoising helpers for
 // ACEStepPipeline. Public entrypoints stay in the main pipeline file.
@@ -97,33 +96,23 @@ extension ACEStepPipeline {
         let B = conditionInputs.srcLatents.dim(0)
         let T = conditionInputs.srcLatents.dim(1)
 
-        let zeroSrcLatents = MLXArray.zeros(conditionInputs.srcLatents.shape, dtype: conditionInputs.srcLatents.dtype)
-        let zeroChunkMasks = MLXArray.zeros(conditionInputs.chunkMasks.shape, dtype: conditionInputs.chunkMasks.dtype)
-        let zeroLyricHiddenStates = MLXArray.zeros(conditionInputs.lyricHiddenStates.shape, dtype: conditionInputs.lyricHiddenStates.dtype)
-        let zeroLyricAttentionMask = MLXArray.zeros(conditionInputs.lyricAttentionMask.shape, dtype: conditionInputs.lyricAttentionMask.dtype)
-        let zeroReferAudioPacked = MLXArray.zeros(
-            conditionInputs.referAudioAcousticHiddenStatesPacked.shape,
-            dtype: conditionInputs.referAudioAcousticHiddenStatesPacked.dtype
-        )
-        let zeroReferOrderMask = MLXArray.zeros(
-            conditionInputs.referAudioOrderMask.shape,
-            dtype: conditionInputs.referAudioOrderMask.dtype
-        )
-        let nonCoverAttentionMask = MLXArray.ones([B, T], dtype: .int32)
+        let nonCoverSrcLatents = defaultSourceLatents(targetFrames: T, batchSize: B)
+            .asType(conditionInputs.srcLatents.dtype)
+        let nonCoverAttentionMask = conditionInputs.attentionMask ?? MLXArray.ones([B, T], dtype: .int32)
         let nonCoverIsCovers = MLXArray.zeros(conditionInputs.isCovers.shape, dtype: conditionInputs.isCovers.dtype)
 
         return prepareCondition(
             textHiddenStates: nonCoverTextHiddenStates,
             textAttentionMask: nonCoverTextAttentionMask,
-            lyricHiddenStates: zeroLyricHiddenStates,
-            lyricAttentionMask: zeroLyricAttentionMask,
-            referAudioAcousticHiddenStatesPacked: zeroReferAudioPacked,
-            referAudioOrderMask: zeroReferOrderMask,
-            hiddenStates: zeroSrcLatents,
+            lyricHiddenStates: conditionInputs.lyricHiddenStates,
+            lyricAttentionMask: conditionInputs.lyricAttentionMask,
+            referAudioAcousticHiddenStatesPacked: conditionInputs.referAudioAcousticHiddenStatesPacked,
+            referAudioOrderMask: conditionInputs.referAudioOrderMask,
+            hiddenStates: nonCoverSrcLatents,
             attentionMask: nonCoverAttentionMask,
             silenceLatent: conditionInputs.silenceLatent,
-            srcLatents: zeroSrcLatents,
-            chunkMasks: zeroChunkMasks,
+            srcLatents: nonCoverSrcLatents,
+            chunkMasks: conditionInputs.chunkMasks,
             isCovers: nonCoverIsCovers
         )
     }
@@ -135,24 +124,40 @@ extension ACEStepPipeline {
         encoderHiddenStates: MLXArray,
         encoderAttentionMask: MLXArray,
         contextLatents: MLXArray,
+        sourceLatentsForCoverNoise: MLXArray? = nil,
         nonCoverEncoderHiddenStates: MLXArray? = nil,
         nonCoverEncoderAttentionMask: MLXArray? = nil,
         nonCoverContextLatents: MLXArray? = nil,
-        audioCoverStrength: Float = 1.0
+        audioCoverStrength: Float = 1.0,
+        coverNoiseStrength: Float = 0.0,
+        dcwEnabled: Bool = true,
+        dcwMode: ACEStepDCWMode = .double,
+        dcwScaler: Float = 0.05,
+        dcwHighScaler: Float = 0.02
     ) -> MLXArray {
         precondition(!timesteps.isEmpty, "Turbo timesteps must not be empty.")
 
-        var xt = noise
+        let coverNoise = Self.prepareCoverNoiseSchedule(
+            noise: noise,
+            sourceLatents: sourceLatentsForCoverNoise,
+            timesteps: timesteps,
+            coverNoiseStrength: coverNoiseStrength
+        )
+        var xt = coverNoise.latents
+        let activeTimesteps = coverNoise.timesteps
         let B = xt.dim(0)
         let hasNonCoverCondition =
             nonCoverEncoderHiddenStates != nil
             && nonCoverEncoderAttentionMask != nil
             && nonCoverContextLatents != nil
         let clampedCoverStrength = min(max(audioCoverStrength, 0.0), 1.0)
-        let coverSteps = hasNonCoverCondition ? Int(Float(timesteps.count) * clampedCoverStrength) : timesteps.count
+        let coverSteps = hasNonCoverCondition ? Int(Float(activeTimesteps.count) * clampedCoverStrength) : activeTimesteps.count
+        let dcwActive =
+            dcwEnabled
+            && (dcwScaler != 0 || (dcwMode == .double && dcwHighScaler != 0))
 
-        for i in 0..<timesteps.count {
-            let t = timesteps[i]
+        for i in 0..<activeTimesteps.count {
+            let t = activeTimesteps[i]
             let tBatch = MLXArray((0..<B).map { _ in t }).asType(.float32)
             let useNonCoverCondition = hasNonCoverCondition && i >= coverSteps
             let currentEncoderHiddenStates = useNonCoverCondition ? nonCoverEncoderHiddenStates! : encoderHiddenStates
@@ -168,26 +173,86 @@ extension ACEStepPipeline {
                 contextLatents: currentContextLatents
             )
 
-            if i == timesteps.count - 1 {
+            let xtBeforeStep = xt
+            let vtForDenoise = vt
+
+            if i == activeTimesteps.count - 1 {
                 let tBroadcast = tBatch.asType(vt.dtype).reshaped(B, 1, 1)
                 xt = xt - vt * tBroadcast
                 MLX.eval(xt)
-                Memory.clearCache()
-                break
+            } else {
+                switch inferMethod {
+                case .sde:
+                    let tBroadcast = tBatch.asType(vt.dtype).reshaped(B, 1, 1)
+                    let predClean = xt - vt * tBroadcast
+                    let nextT = activeTimesteps[i + 1]
+                    let newNoise = MLXRandom.normal(xt.shape).asType(xt.dtype)
+                    xt = MLXArray(nextT).asType(xt.dtype) * newNoise
+                        + (MLXArray(Float(1.0 - nextT)).asType(xt.dtype) * predClean)
+                    MLX.eval(xt)
+                case .ode:
+                    let dt = t - activeTimesteps[i + 1]
+                    xt = xt - vt * MLXArray(dt).asType(vt.dtype)
+                    MLX.eval(xt)
+                }
             }
 
-            switch inferMethod {
-            case .sde:
-                fallthrough
-            case .ode:
-                let dt = t - timesteps[i + 1]
-                xt = xt - vt * MLXArray(dt).asType(vt.dtype)
+            if dcwActive {
+                let tBroadcast = tBatch.asType(vtForDenoise.dtype).reshaped(B, 1, 1)
+                let denoised = xtBeforeStep - vtForDenoise * tBroadcast
+                xt = ACEStepDCW.applyHaar(
+                    xNext: xt,
+                    denoised: denoised,
+                    tCurr: t,
+                    enabled: true,
+                    mode: dcwMode,
+                    scaler: dcwScaler,
+                    highScaler: dcwHighScaler
+                )
                 MLX.eval(xt)
-                Memory.clearCache()
             }
+
+            Memory.clearCache()
         }
 
         return xt
+    }
+
+    static func prepareCoverNoiseSchedule(
+        noise: MLXArray,
+        sourceLatents: MLXArray?,
+        timesteps: [Float],
+        coverNoiseStrength: Float
+    ) -> (latents: MLXArray, timesteps: [Float]) {
+        precondition(!timesteps.isEmpty, "Turbo timesteps must not be empty.")
+
+        let clamped = min(max(coverNoiseStrength, 0.0), 1.0)
+        guard clamped > 0, let sourceLatents else {
+            return (noise, timesteps)
+        }
+        precondition(
+            sourceLatents.shape == noise.shape,
+            "sourceLatentsForCoverNoise must match noise shape \(noise.shape); got \(sourceLatents.shape)."
+        )
+
+        let effectiveNoiseLevel = Float(1.0) - clamped
+        var nearestIndex = 0
+        var nearestDistance = abs(timesteps[0] - effectiveNoiseLevel)
+        for index in timesteps.indices.dropFirst() {
+            let distance = abs(timesteps[index] - effectiveNoiseLevel)
+            if distance < nearestDistance {
+                nearestIndex = index
+                nearestDistance = distance
+            }
+        }
+
+        let nearestT = timesteps[nearestIndex]
+        let t = MLXArray(nearestT).asType(noise.dtype)
+        let oneMinusT = MLXArray(Float(1.0 - nearestT)).asType(noise.dtype)
+        let initialLatents = t * noise + oneMinusT * sourceLatents.asType(noise.dtype)
+        MLX.eval(initialLatents)
+
+        return (initialLatents, Array(timesteps[nearestIndex...]))
     }
 
     func prepareCondition(
@@ -279,9 +344,7 @@ extension ACEStepPipeline {
         let T5 = x.dim(1) / P
         let patched = x.reshaped(B, T5, P, D)
 
-        let chunk = Int(ceil(Double(mask.dim(1)) / Double(T5)))
-        let pool = MaxPool1d(kernelSize: chunk, stride: chunk)
-        let pooled = pool(mask.asType(.float32).expandedDimensions(axis: 1)).squeezed(axis: 1).asType(.int32)
+        let pooled = mask.asType(.float32).reshaped(B, T5, P).max(axis: -1).asType(.int32)
 
         let (quantized, indices) = tokenizer(patched)
         return (quantized, indices, pooled)

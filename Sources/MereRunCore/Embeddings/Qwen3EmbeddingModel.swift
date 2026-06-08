@@ -64,7 +64,7 @@ public final class Qwen3EmbeddingModel {
             singleURL: resources.weightsURL,
             to: qwen,
             dtype: dtype,
-            mapper: { key, value in [(key, value)] },
+            mapper: QwenEncoder.mapHFSafetensorWeight,
             fileManager: fileManager
         )
 

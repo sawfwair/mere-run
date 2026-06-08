@@ -74,7 +74,7 @@ are:
 - Vision OCR: `vision-ocr-lighton`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
-- Music: `music-acestep`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
+- Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - Video: `video-ltx-av`
 
 For subsystem-specific implementation guides, see:
@@ -140,6 +140,12 @@ swift run mere.run model pull music-acestep
 swift run mere.run music generate \
   "upbeat electronic groove" \
   --output ./track.wav
+
+swift run mere.run model pull music-acestep-xl-turbo
+swift run mere.run music generate \
+  "upbeat electronic groove" \
+  --model music-acestep-xl-turbo \
+  --output ./xl-track.wav
 
 swift run mere.run model pull music-magenta-rt2-small
 swift run mere.run music realtime \
@@ -586,10 +592,12 @@ Key options:
 - `--checkpoints-root`
 - `--lyrics`
 - `--lyrics-file`
+- `--source-audio`: source song for ACE-Step cover conditioning; implies cover mode unless `--non-cover` is set
+- `--reference-audio`: optional ACE-Step timbre reference audio file(s)
 - `--duration`
 - `--steps`
 - `--use-lm`
-- `--lm-subdirectory`
+- `--lm-subdirectory` (for example `acestep-5Hz-lm-4B` with `music-acestep-xl-turbo-lm4b`)
 - `--text-subdirectory`
 - `--seed`
 - `--quiet`
@@ -622,6 +630,12 @@ swift run mere.run music generate \
   --duration 8 \
   --steps 4 \
   --output ./ambient.wav
+swift run mere.run music generate \
+  "dream-pop cover with soft vocals" \
+  --source-audio ./song.mp3 \
+  --lyrics-file ./cover-lyrics.txt \
+  --audio-cover-strength 0.85 \
+  --output ./cover.wav
 swift run mere.run music generate \
   "ambient modular synths with brushed drums" \
   --model music-magenta-rt2-small \
@@ -808,7 +822,13 @@ swift run mere.run model runtime set text-chat-gemma4 \
 Use the matching `--clear-*` flags to remove optional values. Engine overrides
 are validated against the curated catalog. Gemma4 accepts `--kv-cache-mode`
 values of `default`, `polar2`, and `auto`; non-Gemma4 models reject PolarKV
-runtime modes.
+runtime modes. `--ttl-seconds` unloads idle loaded models during the runtime
+pool's opportunistic eviction passes, while `--pinned` protects a model from
+automatic TTL/LRU eviction without blocking explicit unload. Memory-pressure LRU
+uses the API server's `--memory-guard` tier. The guard derives soft/hard
+ceilings from process resident memory, host memory headroom, and a tier reserve;
+elevated pressure evicts the least-recently-used idle unpinned model, while
+critical pressure evicts every idle unpinned model.
 
 ### `mere.run model pull`
 
@@ -1007,6 +1027,11 @@ Security defaults:
 - `--max-active-requests` controls fair FIFO chat admission; the default `1`
   preserves serialized local inference while exposing queue depth in status;
   queued client cancellations are removed from the FIFO instead of running later
+- `--memory-guard` controls runtime memory pressure behavior. Accepted values
+  are `off`, `safe`, `balanced`, `aggressive`, and `custom`; `custom` also
+  requires `--memory-guard-custom-ceiling-gb`.
+- elevated or critical memory pressure pauses extra concurrent admissions while
+  letting one request run so the server can make progress
 - Gemma4 and Qwen-family chat use chunked prefill checkpoints for long prompts.
 - Gemma4 can opt into an in-memory prefix KV reuse prototype with
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; runtime status reports entries, hits, and

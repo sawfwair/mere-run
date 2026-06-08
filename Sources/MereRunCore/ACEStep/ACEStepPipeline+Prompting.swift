@@ -6,14 +6,32 @@ import MLX
 // generation entrypoints and denoising loop live elsewhere.
 
 extension ACEStepPipeline {
-    func normalizeSourceLatents(_ sourceLatents25Hz: MLXArray?, targetFrames: Int) throws -> MLXArray {
+    func normalizeSourceLatents(
+        _ sourceLatents25Hz: MLXArray?,
+        sourceAudio48kHz: MLXArray? = nil,
+        targetFrames: Int
+    ) throws -> MLXArray {
         let B = 1
-        guard let sourceLatents25Hz else {
-            return MLXArray.zeros([B, targetFrames, decoderConfig.audioAcousticHiddenDim], dtype: .bfloat16)
+        if let sourceLatents25Hz {
+            return try normalizeEncodedSourceLatents(sourceLatents25Hz, targetFrames: targetFrames, batchSize: B)
         }
 
+        if let sourceAudio48kHz {
+            let normalizedAudio = try normalizeReferenceTimbreAudio(sourceAudio48kHz)
+            let encodedLatents = vae.tiledEncode(normalizedAudio)
+            return try normalizeEncodedSourceLatents(encodedLatents, targetFrames: targetFrames, batchSize: B)
+        }
+
+        return defaultSourceLatents(targetFrames: targetFrames, batchSize: B)
+    }
+
+    private func normalizeEncodedSourceLatents(
+        _ sourceLatents25Hz: MLXArray,
+        targetFrames: Int,
+        batchSize: Int
+    ) throws -> MLXArray {
         guard sourceLatents25Hz.ndim == 3,
-              sourceLatents25Hz.dim(0) == B,
+              sourceLatents25Hz.dim(0) == batchSize,
               sourceLatents25Hz.dim(2) == decoderConfig.audioAcousticHiddenDim
         else {
             throw PipelineError.invalidConditioningInput(
@@ -22,17 +40,59 @@ extension ACEStepPipeline {
         }
 
         if sourceLatents25Hz.dim(1) == targetFrames {
-            return sourceLatents25Hz.asType(.bfloat16)
+            return sourceLatents25Hz.asType(.float32)
         }
         if sourceLatents25Hz.dim(1) > targetFrames {
-            return sourceLatents25Hz[0..., 0..<targetFrames, 0...].asType(.bfloat16)
+            return sourceLatents25Hz[0..., 0..<targetFrames, 0...].asType(.float32)
         }
 
-        let pad = MLXArray.zeros(
-            [B, targetFrames - sourceLatents25Hz.dim(1), decoderConfig.audioAcousticHiddenDim],
-            dtype: sourceLatents25Hz.dtype
+        let pad = defaultSourceLatents(
+            targetFrames: targetFrames - sourceLatents25Hz.dim(1),
+            batchSize: batchSize
+        ).asType(sourceLatents25Hz.dtype)
+        return MLX.concatenated([sourceLatents25Hz, pad], axis: 1).asType(.float32)
+    }
+
+    func defaultSourceLatents(targetFrames: Int, batchSize: Int = 1) -> MLXArray {
+        precondition(targetFrames > 0, "targetFrames must be positive.")
+        precondition(batchSize > 0, "batchSize must be positive.")
+
+        let fallback = {
+            MLXArray.zeros(
+                [batchSize, targetFrames, self.decoderConfig.audioAcousticHiddenDim],
+                dtype: .float32
+            )
+        }
+
+        guard let silenceLatent,
+              silenceLatent.ndim == 3,
+              silenceLatent.dim(0) == 1,
+              silenceLatent.dim(1) > 0,
+              silenceLatent.dim(2) == decoderConfig.audioAcousticHiddenDim
+        else {
+            return fallback()
+        }
+
+        let base = silenceLatent.asType(.float32)
+        let sourceFrames = base.dim(1)
+        var chunks: [MLXArray] = []
+        chunks.reserveCapacity(Int(ceil(Double(targetFrames) / Double(sourceFrames))))
+
+        var remaining = targetFrames
+        while remaining > 0 {
+            let take = min(remaining, sourceFrames)
+            chunks.append(base[0..., 0..<take, 0...])
+            remaining -= take
+        }
+
+        let tiled = chunks.count == 1 ? chunks[0] : MLX.concatenated(chunks, axis: 1)
+        if batchSize == 1 {
+            return tiled
+        }
+        return MLX.broadcast(
+            tiled,
+            to: [batchSize, targetFrames, decoderConfig.audioAcousticHiddenDim]
         )
-        return MLX.concatenated([sourceLatents25Hz, pad], axis: 1).asType(.bfloat16)
     }
 
     func chunkChannelsForPromptConditioning() -> Int {
@@ -74,9 +134,9 @@ extension ACEStepPipeline {
         ) = {
             guard let conditionTextTokenizer, let conditionTextEncoder else {
                 return (
-                    textHiddenStates: MLXArray.zeros([B, 1, decoderConfig.textHiddenDim], dtype: .bfloat16),
+                    textHiddenStates: MLXArray.zeros([B, 1, decoderConfig.textHiddenDim], dtype: .float32),
                     textAttentionMask: MLXArray.ones([B, 1], dtype: .int32),
-                    lyricHiddenStates: MLXArray.zeros([B, 1, decoderConfig.textHiddenDim], dtype: .bfloat16),
+                    lyricHiddenStates: MLXArray.zeros([B, 1, decoderConfig.textHiddenDim], dtype: .float32),
                     lyricAttentionMask: MLXArray.ones([B, 1], dtype: .int32),
                     nonCoverTextHiddenStates: nil,
                     nonCoverTextAttentionMask: nil
@@ -159,11 +219,11 @@ extension ACEStepPipeline {
             referAudioAcousticHiddenStatesPacked: timbre.packed,
             referAudioOrderMask: timbre.orderMask,
             srcLatents: srcLatents,
-            chunkMasks: MLXArray.ones([B, T, chunkChannels], dtype: .bfloat16),
+            chunkMasks: MLXArray.ones([B, T, chunkChannels], dtype: .float32),
             isCovers: MLXArray([isCover ? Int32(1) : Int32(0)]).asType(.int32),
             hiddenStates: srcLatents,
             attentionMask: MLXArray.ones([B, T], dtype: .int32),
-            silenceLatent: nil,
+            silenceLatent: silenceLatent,
             nonCoverTextHiddenStates: textConditioning.nonCoverTextHiddenStates,
             nonCoverTextAttentionMask: textConditioning.nonCoverTextAttentionMask
         )
@@ -174,7 +234,8 @@ extension ACEStepPipeline {
         referenceTimbreAudio48kHz: [MLXArray]?,
         fallbackLatents25Hz: MLXArray
     ) throws -> (packed: MLXArray, orderMask: MLXArray) {
-        let targetFrames = min(max(1, fallbackLatents25Hz.dim(1)), decoderConfig.timbreFixFrame)
+        let referenceTargetFrames = min(max(1, fallbackLatents25Hz.dim(1)), decoderConfig.timbreFixFrame)
+        let fallbackTargetFrames = max(1, decoderConfig.timbreFixFrame)
         let latentDim = decoderConfig.audioAcousticHiddenDim
 
         let references: [MLXArray]
@@ -190,9 +251,8 @@ extension ACEStepPipeline {
         }
 
         if references.isEmpty {
-            let fallback = try normalizeReferenceTimbreLatents(
-                fallbackLatents25Hz,
-                targetFrames: targetFrames,
+            let fallback = try defaultReferenceTimbreLatents(
+                targetFrames: fallbackTargetFrames,
                 latentDim: latentDim
             )
             return (fallback, MLXArray([Int32(0)]).asType(.int32))
@@ -202,7 +262,7 @@ extension ACEStepPipeline {
             try references.map {
                 try normalizeReferenceTimbreLatents(
                     $0,
-                    targetFrames: targetFrames,
+                    targetFrames: referenceTargetFrames,
                     latentDim: latentDim
                 )
             },
@@ -210,6 +270,15 @@ extension ACEStepPipeline {
         )
         let order = MLXArray(Array(repeating: Int32(0), count: references.count)).asType(.int32)
         return (packed, order)
+    }
+
+    func defaultReferenceTimbreLatents(targetFrames: Int, latentDim: Int) throws -> MLXArray {
+        let encoded = defaultSourceLatents(targetFrames: targetFrames, batchSize: 1)
+        return try normalizeReferenceTimbreLatents(
+            encoded,
+            targetFrames: targetFrames,
+            latentDim: latentDim
+        )
     }
 
     func normalizeReferenceTimbreAudio(_ audio: MLXArray) throws -> MLXArray {
@@ -244,10 +313,10 @@ extension ACEStepPipeline {
                 )
             }
             if audio.dim(2) == vaeConfig.audioChannels {
-                return audio.asType(.bfloat16)
+                return audio.asType(.float32)
             }
             if audio.dim(1) == vaeConfig.audioChannels {
-                return audio.transposed(0, 2, 1).asType(.bfloat16)
+                return audio.transposed(0, 2, 1).asType(.float32)
             }
             throw PipelineError.invalidConditioningInput(
                 "referenceTimbreAudio48kHz 3D tensors must be [1,S,\(vaeConfig.audioChannels)] or [1,\(vaeConfig.audioChannels),S]; got \(audio.shape)."
@@ -258,7 +327,7 @@ extension ACEStepPipeline {
             )
         }
 
-        return stereo2D.reshaped(1, stereo2D.dim(0), vaeConfig.audioChannels).asType(.bfloat16)
+        return stereo2D.reshaped(1, stereo2D.dim(0), vaeConfig.audioChannels).asType(.float32)
     }
 
     func normalizeReferenceTimbreLatents(
@@ -291,14 +360,14 @@ extension ACEStepPipeline {
 
         let frames = normalized.dim(1)
         if frames == targetFrames {
-            return normalized.asType(.bfloat16)
+            return normalized.asType(.float32)
         }
         if frames > targetFrames {
-            return normalized[0..., 0..<targetFrames, 0...].asType(.bfloat16)
+            return normalized[0..., 0..<targetFrames, 0...].asType(.float32)
         }
 
         let pad = MLXArray.zeros([1, targetFrames - frames, latentDim], dtype: normalized.dtype)
-        return MLX.concatenated([normalized, pad], axis: 1).asType(.bfloat16)
+        return MLX.concatenated([normalized, pad], axis: 1).asType(.float32)
     }
 
     func tokenizePrompt(
@@ -325,46 +394,34 @@ extension ACEStepPipeline {
     }
 
     func makePromptMetasString(_ metadata: ACEStep5HzLMConstrainedSampler.UserMetadata) -> String {
-        var rows: [String] = []
-        if let value = metadata.bpm {
-            rows.append("- bpm: \(value)")
+        func normalized(_ value: String?, default defaultValue: String) -> String {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? defaultValue : trimmed
         }
-        if let value = metadata.timesignature {
-            rows.append("- timesignature: \(value)")
-        }
-        if let value = metadata.keyscale {
-            rows.append("- keyscale: \(value)")
-        }
-        if let value = metadata.duration {
-            rows.append("- duration: \(value)")
-        }
-        if rows.isEmpty {
-            return ""
-        }
-        return rows.joined(separator: "\n") + "\n"
+
+        let bpm = normalized(metadata.bpm, default: "N/A")
+        let timesignature = normalized(metadata.timesignature, default: "N/A")
+        let keyscale = normalized(metadata.keyscale, default: "N/A")
+        let duration = normalized(metadata.duration, default: "30 seconds")
+        return "- bpm: \(bpm)\n"
+            + "- timesignature: \(timesignature)\n"
+            + "- keyscale: \(keyscale)\n"
+            + "- duration: \(duration)\n"
     }
 
     func makeCaptionPrompt(instruction: String, caption: String, metas: String) -> String {
-        """
-        # Instruction
-        \(instruction)
-
-        # Caption
-        \(caption)
-
-        # Metas
-        \(metas)<|endoftext|>
-        """
-        + "\n"
+        "# Instruction\n"
+            + "\(instruction)\n\n"
+            + "# Caption\n"
+            + "\(caption)\n\n"
+            + "# Metas\n"
+            + "\(metas)<|endoftext|>\n"
     }
 
     func makeLyricsPrompt(lyrics: String, language: String) -> String {
-        """
-        # Languages
-        \(language)
-
-        # Lyric
-        \(lyrics)<|endoftext|>
-        """
+        "# Languages\n"
+            + "\(language)\n\n"
+            + "# Lyric\n"
+            + "\(lyrics)<|endoftext|>"
     }
 }

@@ -11,6 +11,7 @@ final class ACEStepResidualFSQ: Module {
 
     let levels: [Int]
     private let levelsMinus1: MLXArray
+    private let softClampValues: MLXArray
     private let basis: MLXArray
 
     init(config: ACEStepConfig) {
@@ -25,6 +26,10 @@ final class ACEStepResidualFSQ: Module {
 
         let minus1 = config.fsqInputLevels.map { Float32(max(1, $0 - 1)) }
         self.levelsMinus1 = MLXArray(minus1, [1, 1, d]).asType(.float32)
+        self.softClampValues = MLXArray(
+            minus1.map { Float32(1.0) + (Float32(1.0) / $0) },
+            [1, 1, d]
+        ).asType(.float32)
 
         var basisVals: [Int32] = []
         basisVals.reserveCapacity(d)
@@ -42,12 +47,13 @@ final class ACEStepResidualFSQ: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> (quantized: MLXArray, indices: MLXArray) {
-        // Project to scalar code dims.
+        // vector-quantize-pytorch ResidualFSQ soft-clamps before the
+        // symmetry-preserving one-layer FSQ used by ACE-Step.
         var y = projectIn(x).asType(.float32)
-        y = MLX.tanh(y)
+        y = MLX.tanh(y / softClampValues) * softClampValues
+        y = minimum(maximum(y, MLXArray(Float32(-1))), MLXArray(Float32(1)))
 
-        // Map [-1, 1] -> [0, L-1], quantize, then map back to [-1, 1].
-        let qFloat = round((y + 1) * 0.5 * levelsMinus1)
+        let qFloat = floor(levelsMinus1 * ((y + 1) * 0.5) + MLXArray(Float32(0.5)))
         let qClamped = minimum(maximum(qFloat, MLXArray(Float32(0))), levelsMinus1)
         let qInt = qClamped.asType(.int32)
 
@@ -83,4 +89,3 @@ final class ACEStepResidualFSQ: Module {
         return projectOut(scalars).asType(dtype)
     }
 }
-

@@ -63,7 +63,7 @@ final class OobleckDecoderBlock: Module {
         self._snake1.wrappedValue = OobleckSnakeBeta(channels: inputChannels)
 
         let kernelSize = stride * 2
-        let padding = stride / 2
+        let padding = (stride + 1) / 2
         self._convT1.wrappedValue = OobleckWNConvTranspose1d(
             inputChannels: inputChannels,
             outputChannels: outputChannels,
@@ -104,7 +104,7 @@ final class OobleckEncoderBlock: Module {
         self._resUnit3.wrappedValue = OobleckResUnit(channels: inputChannels, dilation: 9)
 
         let kernelSize = stride * 2
-        let padding = stride / 2
+        let padding = (stride + 1) / 2
         self._conv1.wrappedValue = WNConv1d(
             inputChannels: inputChannels,
             outputChannels: outputChannels,
@@ -117,10 +117,10 @@ final class OobleckEncoderBlock: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        var h = snake1(x)
-        h = resUnit1(h)
+        var h = resUnit1(x)
         h = resUnit2(h)
         h = resUnit3(h)
+        h = snake1(h)
         return conv1(h)
     }
 }

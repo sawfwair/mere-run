@@ -8,6 +8,7 @@ final class ACEStepAttention: Module {
     let numKVHeads: Int
     let headDim: Int
     let scale: Float
+    let ropeTheta: Float
 
     @ModuleInfo(key: "q_proj") var qProj: Linear
     @ModuleInfo(key: "k_proj") var kProj: Linear
@@ -22,6 +23,7 @@ final class ACEStepAttention: Module {
         self.numKVHeads = config.numKeyValueHeads
         self.headDim = config.headDim
         self.scale = pow(Float(headDim), -0.5)
+        self.ropeTheta = config.ropeTheta
 
         self._qProj.wrappedValue = Linear(config.hiddenSize, numHeads * headDim, bias: config.attentionBias)
         self._kProj.wrappedValue = Linear(config.hiddenSize, numKVHeads * headDim, bias: config.attentionBias)
@@ -53,9 +55,9 @@ final class ACEStepAttention: Module {
         k = kNorm(k.reshaped(B, kLen, numKVHeads, headDim)).transposed(0, 2, 1, 3)
         v = v.reshaped(B, kLen, numKVHeads, headDim).transposed(0, 2, 1, 3)
 
-        if encoderHiddenStates == nil, let rope {
-            q = rope(q.asType(.bfloat16), offset: ropeOffset).asType(q.dtype)
-            k = rope(k.asType(.bfloat16), offset: ropeOffset).asType(k.dtype)
+        if encoderHiddenStates == nil, rope != nil {
+            q = applySplitRoPE(q, offset: ropeOffset)
+            k = applySplitRoPE(k, offset: ropeOffset)
         }
 
         if numKVHeads != numHeads {
@@ -78,6 +80,26 @@ final class ACEStepAttention: Module {
 
         out = out.transposed(0, 2, 1, 3).reshaped(B, qLen, -1)
         return oProj(out)
+    }
+
+    private func applySplitRoPE(_ x: MLXArray, offset: Int) -> MLXArray {
+        let dtype = x.dtype
+        let x32 = x.asType(.float32)
+        let seqLen = x32.dim(2)
+        let half = headDim / 2
+
+        let positions = MLXArray((offset..<(offset + seqLen)).map { Float($0) }).asType(.float32)
+        let indices = MLXArray((0..<half).map { Float($0) }).asType(.float32)
+        let freqs = MLX.exp(-MLXArray(Float(log(ropeTheta))) * indices / Float(half))
+        let args = positions[0..., .newAxis] * freqs[.newAxis]
+        let cos = MLX.cos(args).reshaped(1, 1, seqLen, half)
+        let sin = MLX.sin(args).reshaped(1, 1, seqLen, half)
+
+        let x1 = x32[0..., 0..., 0..., 0..<half]
+        let x2 = x32[0..., 0..., 0..., half...]
+        let out1 = x1 * cos - x2 * sin
+        let out2 = x2 * cos + x1 * sin
+        return MLX.concatenated([out1, out2], axis: 3).asType(dtype)
     }
 
     private func expandKeyValue(_ x: MLXArray, repeats: Int) -> MLXArray {

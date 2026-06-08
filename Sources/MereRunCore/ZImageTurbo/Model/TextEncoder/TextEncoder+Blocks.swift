@@ -124,8 +124,8 @@ public final class QwenAttention: Module {
         mropeSection: mropeSection
       )
     } else if let rope {
-      queries = rope(queries.asType(.bfloat16), offset: offset)
-      keys = rope(keys.asType(.bfloat16), offset: offset)
+      queries = rope(queries, offset: offset)
+      keys = rope(keys, offset: offset)
     }
 
     if debug {
@@ -326,7 +326,8 @@ public final class QwenEncoder: Module {
       tokenIds = tokenIds.asType(.int32)
     }
 
-    var h = embedTokens(tokenIds).asType(.bfloat16)
+    let computeDType: DType = configuration.useFloat32Activations ? .float32 : .bfloat16
+    var h = embedTokens(tokenIds).asType(computeDType)
 
     let mask = createAttentionMask(h: h, attentionMask: attentionMask)
 
@@ -356,7 +357,8 @@ public final class QwenEncoder: Module {
     tokenTypes: MLXArray? = nil,
     outputHiddenStates: Bool = false
   ) -> (lastHiddenState: MLXArray, hiddenStates: [MLXArray]?) {
-    var h = embeddings.dtype == .bfloat16 ? embeddings : embeddings.asType(.bfloat16)
+    let computeDType: DType = configuration.useFloat32Activations ? .float32 : .bfloat16
+    var h = embeddings.dtype == computeDType ? embeddings : embeddings.asType(computeDType)
 
     let mask = createAttentionMask(h: h, attentionMask: attentionMask, tokenTypes: tokenTypes)
 
@@ -391,7 +393,8 @@ public final class QwenEncoder: Module {
 
     let wantedLayers = Set(activationLayers)
     var captured: [Int: MLXArray] = [:]
-    var h = embedTokens(tokenIds).asType(.bfloat16)
+    let computeDType: DType = configuration.useFloat32Activations ? .float32 : .bfloat16
+    var h = embedTokens(tokenIds).asType(computeDType)
     let mask = createAttentionMask(h: h, attentionMask: attentionMask)
 
     for (index, layer) in layers.enumerated() {
@@ -413,7 +416,8 @@ public final class QwenEncoder: Module {
   ) -> [MLXArray] {
     let wantedLayers = Set(activationLayers)
     var captured: [Int: MLXArray] = [:]
-    var h = embeddings.dtype == .bfloat16 ? embeddings : embeddings.asType(.bfloat16)
+    let computeDType: DType = configuration.useFloat32Activations ? .float32 : .bfloat16
+    var h = embeddings.dtype == computeDType ? embeddings : embeddings.asType(computeDType)
     let mask = createAttentionMask(h: h, attentionMask: attentionMask, tokenTypes: tokenTypes)
 
     for (index, layer) in layers.enumerated() {
@@ -491,6 +495,13 @@ public final class QwenEncoder: Module {
 }
 
 extension QwenEncoder {
+  public static func mapHFSafetensorWeight(key: String, value: MLXArray) -> [(String, MLXArray)] {
+    if key.hasPrefix("model.") {
+      return [(String(key.dropFirst("model.".count)), value)]
+    }
+    return [(key, value)]
+  }
+
   public func embed(inputIds: MLXArray) -> MLXArray {
     var tokenIds = inputIds
     if tokenIds.dtype != .int32 {

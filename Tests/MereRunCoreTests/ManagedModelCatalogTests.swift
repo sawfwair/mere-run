@@ -363,6 +363,40 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.isManagedRootComplete(legacyRoot, fileManager: .default))
     }
 
+    func testACEStepXLTurboUsesMountedXLLayout() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.aceStepXLTurbo.rawValue))
+        XCTAssertEqual(spec.hubFallback?.repoId, "ACE-Step/Ace-Step1.5")
+        XCTAssertEqual(spec.mountedHubFallbacks.map(\.destinationPath), ["acestep-v15-xl-turbo"])
+        XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.repoId, "ACE-Step/acestep-v15-xl-turbo")
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalACEStepRoot(at: root, turboSubdirectory: "acestep-v15-xl-turbo")
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        let standardRoot = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: standardRoot) }
+        try writeMinimalACEStepRoot(at: standardRoot, turboSubdirectory: "acestep-v15-turbo")
+        XCTAssertFalse(spec.isManagedRootComplete(standardRoot, fileManager: .default))
+    }
+
+    func testACEStepXLTurboLM4BRequiresMountedLM() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue))
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.map(\.destinationPath),
+            ["acestep-v15-xl-turbo", "acestep-5Hz-lm-4B"]
+        )
+        XCTAssertEqual(spec.mountedHubFallbacks.last?.hubFallback.repoId, "ACE-Step/acestep-5Hz-lm-4B")
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalACEStepRoot(at: root, turboSubdirectory: "acestep-v15-xl-turbo")
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try writeMinimalACEStepLMRoot(at: root.appendingPathComponent("acestep-5Hz-lm-4B", isDirectory: true))
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+    }
+
     func testMagentaRT2SpecsUsePinnedExportedRuntimeAssets() throws {
         let small = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.magentaRT2Small.rawValue))
         XCTAssertEqual(small.category, .music)
@@ -410,6 +444,19 @@ final class ManagedModelCatalogTests: XCTestCase {
                 at: root.appendingPathComponent(subdirectory, isDirectory: true),
                 withIntermediateDirectories: true
             )
+        }
+    }
+
+    private func writeMinimalACEStepLMRoot(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for file in [
+            "config.json",
+            "tokenizer_config.json",
+            "added_tokens.json",
+            "tokenizer.json",
+            "model.safetensors.index.json",
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: root.appendingPathComponent(file).path, contents: Data()))
         }
     }
 

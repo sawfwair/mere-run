@@ -114,6 +114,33 @@ public enum ManagedModelResolver {
             throw ResolverError.autoDownloadDisabled(spec.id)
         }
 
+        if !spec.mountedHubFallbacks.isEmpty {
+            let result = try await installManagedModel(
+                id: spec.id,
+                fileManager: fileManager,
+                progress: { installProgress in
+                    switch installProgress {
+                    case .downloadingBytes(let completed, let total):
+                        guard let total, total > 0 else {
+                            progress?(.downloading(percent: 0))
+                            return
+                        }
+                        let percent = min(100, max(0, Int(Double(completed) / Double(total) * 100)))
+                        progress?(.downloading(percent: percent))
+                    case .downloadingPercent(let percent, _):
+                        progress?(.downloading(percent: percent))
+                    case .extracting:
+                        progress?(.extracting)
+                    }
+                }
+            )
+            return RuntimeResolution(
+                spec: spec,
+                url: spec.normalizedRootURL(result.installURL, fileManager: fileManager),
+                source: .managedStore
+            )
+        }
+
         switch spec.installShape {
         case .directoryRoot:
             guard let hubFallback = spec.hubFallback else {
@@ -208,11 +235,16 @@ public enum ManagedModelResolver {
             config: hubFallback,
             progress: progress
         )
+        let mountedSnapshots = try await downloadMountedHubSnapshots(
+            for: spec,
+            progress: progress
+        )
         try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
         try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
         let manifest = try materializeManagedInstallRoot(
             for: spec,
             snapshotURL: snapshotURL,
+            mountedSnapshots: mountedSnapshots,
             modelDir: modelDir,
             fileManager: fileManager
         )
@@ -316,6 +348,24 @@ public enum ManagedModelResolver {
         }
     }
 
+    private static func downloadMountedHubSnapshots(
+        for spec: ManagedModelSpec,
+        progress: (@Sendable (InstallProgress) -> Void)?
+    ) async throws -> [(MountedHubFallbackConfig, URL)] {
+        var snapshots: [(MountedHubFallbackConfig, URL)] = []
+        snapshots.reserveCapacity(spec.mountedHubFallbacks.count)
+
+        for mounted in spec.mountedHubFallbacks {
+            let snapshotURL = try await downloadHubSnapshotWithByteProgress(
+                config: mounted.hubFallback,
+                progress: progress
+            )
+            snapshots.append((mounted, snapshotURL))
+        }
+
+        return snapshots
+    }
+
     private static func normalizeManagedLayoutIfNeeded(
         for spec: ManagedModelSpec,
         in rootURL: URL,
@@ -330,20 +380,36 @@ public enum ManagedModelResolver {
     static func materializeManagedInstallRoot(
         for spec: ManagedModelSpec,
         snapshotURL: URL,
+        mountedSnapshots: [(MountedHubFallbackConfig, URL)] = [],
         modelDir: URL,
         fileManager: FileManager
     ) throws -> MereRunModelManifest? {
         try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        try materializeSnapshotEntries(from: snapshotURL, to: modelDir, fileManager: fileManager)
+
+        for (mounted, mountedSnapshotURL) in mountedSnapshots {
+            let destinationURL = modelDir.appendingPathComponent(mounted.destinationPath, isDirectory: true)
+            try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+            try materializeSnapshotEntries(from: mountedSnapshotURL, to: destinationURL, fileManager: fileManager)
+        }
+
+        return try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
+    }
+
+    private static func materializeSnapshotEntries(
+        from snapshotURL: URL,
+        to destinationRoot: URL,
+        fileManager: FileManager
+    ) throws {
         let entries = try fileManager.contentsOfDirectory(
             at: snapshotURL,
             includingPropertiesForKeys: nil,
             options: []
         )
         for entry in entries where entry.lastPathComponent != MereRunModelManifest.filename {
-            let linkURL = modelDir.appendingPathComponent(entry.lastPathComponent)
+            let linkURL = destinationRoot.appendingPathComponent(entry.lastPathComponent)
             try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: entry)
         }
-        return try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
     }
 
     private static func installManagedAliasesIfNeeded(

@@ -23,6 +23,12 @@ struct MusicGenerate: AsyncParsableCommand {
             --model music-magenta-rt2-small \
             --duration 4 \
             -o out.wav
+
+          mere.run music generate "dream-pop cover with soft vocals" \
+            --source-audio ~/Downloads/song.mp3 \
+            --lyrics "[verse]\\nnew words over the old shape" \
+            --audio-cover-strength 1.0 \
+            -o cover.wav
         """
     )
 
@@ -56,7 +62,7 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("text-subdirectory")], help: "Text encoder subdirectory under checkpoints root. Auto-detected as 'Qwen3-Embedding-0.6B' when omitted.")
     var textSubdirectory: String?
 
-    @Flag(name: [.customLong("use-lm")], help: "Use 5Hz LM constrained decoding.")
+    @Flag(name: [.customLong("use-lm")], help: "Use 5Hz LM constrained decoding for supported ACE-Step tasks.")
     var useLM: Bool = false
 
     @Option(name: [.customLong("duration")], help: "Output duration in seconds.")
@@ -66,13 +72,16 @@ struct MusicGenerate: AsyncParsableCommand {
     var steps: Int = 8
 
     @Option(name: [.customLong("shift")], help: "Turbo scheduler shift.")
-    var shift: Float = 1.0
+    var shift: Float = Self.defaultACEStepShift
 
     @Option(name: [.long], help: "Seed for deterministic generation.")
     var seed: UInt64?
 
     @Option(name: [.customLong("audio-cover-strength")], help: "Cover-conditioning strength in [0, 1].")
     var audioCoverStrength: Float = 1.0
+
+    @Option(name: [.customLong("cover-noise-strength")], help: "Source-latent noise initialization strength in [0, 1] for ACE-Step covers.")
+    var coverNoiseStrength: Float = 0.0
 
     @Option(name: [.customLong("vocal-language")], help: "Language tag used in lyric prompt formatting.")
     var vocalLanguage: String = "en"
@@ -83,13 +92,19 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("task-type"), .customLong("task")], help: "Task type: text2music, cover, repaint, extract, lego, complete.")
     var taskType: String = "text2music"
 
+    @Option(name: [.customLong("source-audio")], help: "Source audio file for ACE-Step cover conditioning. Implies cover mode unless --non-cover is set.")
+    var sourceAudio: String?
+
+    @Option(name: [.customLong("reference-audio")], parsing: .upToNextOption, help: "Optional reference audio file(s) for ACE-Step timbre conditioning.")
+    var referenceAudio: [String] = []
+
     @Option(name: [.customLong("track-name")], help: "Track name for extract/lego tasks.")
     var trackName: String?
 
     @Option(name: [.customLong("complete-track-classes")], help: "Comma-separated track classes for complete task (e.g. Drums,Bass).")
     var completeTrackClasses: String?
 
-    @Flag(name: [.customLong("non-cover")], help: "Generate as non-cover (isCover=false).")
+    @Flag(name: [.customLong("non-cover")], help: "Force non-cover conditioning for cover-style tasks.")
     var nonCover: Bool = false
 
     @Option(name: [.customLong("bpm")], help: "Optional BPM metadata for constrained LM / prompt metadata.")
@@ -170,6 +185,9 @@ struct MusicGenerate: AsyncParsableCommand {
         guard (0.0...1.0).contains(audioCoverStrength) else {
             throw ValidationError("--audio-cover-strength must be between 0.0 and 1.0")
         }
+        guard (0.0...1.0).contains(coverNoiseStrength) else {
+            throw ValidationError("--cover-noise-strength must be between 0.0 and 1.0")
+        }
         guard lmTopK >= 0 else {
             throw ValidationError("--lm-top-k must be >= 0")
         }
@@ -191,20 +209,23 @@ struct MusicGenerate: AsyncParsableCommand {
             return
         }
 
+        let isCover = resolvedACEStepIsCover
+        let effectiveTaskType = resolvedACEStepTaskType(isCover: isCover)
+        let effectiveUseLM = resolvedACEStepUsesLM(taskType: effectiveTaskType)
+
         let checkpointsRootURL = try await resolveACEStepCheckpointsRoot()
         let resolvedTurboSubdirectory = try resolveACEStepTurboSubdirectory(
             at: checkpointsRootURL,
             explicit: turboSubdirectory
         )
-        let resolvedLMSubdirectory = try resolveACEStepLMSubdirectory(
-            at: checkpointsRootURL,
-            explicit: lmSubdirectory
-        )
+        let resolvedLMSubdirectory = try effectiveUseLM
+            ? resolveACEStepLMSubdirectory(at: checkpointsRootURL, explicit: lmSubdirectory)
+            : nil
         let resolvedTextSubdirectory = try resolveACEStepTextSubdirectory(
             at: checkpointsRootURL,
             explicit: textSubdirectory
         )
-        if useLM && resolvedLMSubdirectory == nil {
+        if effectiveUseLM && resolvedLMSubdirectory == nil {
             throw ValidationError("--use-lm requires --lm-subdirectory. Set --lm-subdirectory or keep a default layout like 'acestep-5Hz-lm-1.7B'.")
         }
         if resolvedTextSubdirectory == nil {
@@ -215,9 +236,17 @@ struct MusicGenerate: AsyncParsableCommand {
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         let resolvedLyrics = try loadLyrics()
-        let isCover = !nonCover
+        let sourceAudio48kHz = try loadACEStepSourceAudio48kHz()
+        let referenceAudio48kHz = try loadACEStepReferenceAudio48kHz()
+        if isCover && sourceAudio48kHz == nil {
+            throw ValidationError("--source-audio is required for ACE-Step cover mode.")
+        }
+        let effectiveDurationSeconds = resolvedACEStepDurationSeconds(
+            isCover: isCover,
+            sourceAudio48kHz: sourceAudio48kHz
+        )
         let resolvedInstruction = resolveInstruction(
-            taskType: taskType,
+            taskType: effectiveTaskType,
             explicitInstruction: instruction,
             trackName: trackName,
             completeTrackClasses: completeTrackClasses
@@ -226,7 +255,7 @@ struct MusicGenerate: AsyncParsableCommand {
         let userMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
             bpm: bpm.map(String.init),
             caption: caption,
-            duration: resolvedMetadataDuration(),
+            duration: resolvedMetadataDuration(effectiveDurationSeconds: effectiveDurationSeconds),
             keyscale: keyscale,
             language: metadataLanguage,
             timesignature: timesignature
@@ -234,13 +263,16 @@ struct MusicGenerate: AsyncParsableCommand {
 
         if !quiet {
             CLIStderr.write("Loading ACE-Step checkpoints from \(checkpointsRootURL.path)\n")
+            if useLM && !effectiveUseLM {
+                CLIStderr.write("Skipping 5Hz LM for ACE-Step \(effectiveTaskType) task; upstream uses direct DiT conditioning for this task.\n")
+            }
         }
 
         let container = ACEStepModelContainer(
             checkpointsRootURL: checkpointsRootURL,
             turboSubdirectory: resolvedTurboSubdirectory,
             vaeSubdirectory: vaeSubdirectory,
-            lmSubdirectory: useLM ? resolvedLMSubdirectory : nil,
+            lmSubdirectory: effectiveUseLM ? resolvedLMSubdirectory : nil,
             textEncoderSubdirectory: resolvedTextSubdirectory
         )
         let resources = try await container.resources()
@@ -252,10 +284,11 @@ struct MusicGenerate: AsyncParsableCommand {
         )
 
         let inference = ACEStepInferenceConfig(
-            durationSeconds: durationSeconds,
+            durationSeconds: effectiveDurationSeconds,
             fixNFE: steps,
             shift: shift,
             timesteps: nil,
+            coverNoiseStrength: coverNoiseStrength,
             inferMethod: .ode,
             useTiledVaeDecode: !noTiledVAE,
             vaeChunkSize: vaeChunkSize,
@@ -264,7 +297,7 @@ struct MusicGenerate: AsyncParsableCommand {
         )
 
         let audio: MLXArray
-        if useLM {
+        if effectiveUseLM {
             if !quiet {
                 CLIStderr.write("Running constrained 5Hz LM + diffusion\n")
             }
@@ -275,8 +308,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 lmConfig: .init(maxNewTokens: 4096, temperature: 0.85, topK: lmTopK, topP: lmTopP),
                 lmUserMetadata: userMetadata,
                 sourceLatents25Hz: nil,
+                sourceAudio48kHz: sourceAudio48kHz,
                 referenceTimbreLatents25Hz: nil,
-                referenceTimbreAudio48kHz: nil,
+                referenceTimbreAudio48kHz: referenceAudio48kHz,
                 audioCoverStrength: audioCoverStrength,
                 vocalLanguage: vocalLanguage,
                 instruction: resolvedInstruction,
@@ -296,8 +330,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 config: inference,
                 lmUserMetadata: userMetadata,
                 sourceLatents25Hz: nil,
+                sourceAudio48kHz: sourceAudio48kHz,
                 referenceTimbreLatents25Hz: nil,
-                referenceTimbreAudio48kHz: nil,
+                referenceTimbreAudio48kHz: referenceAudio48kHz,
                 audioCoverStrength: audioCoverStrength,
                 vocalLanguage: vocalLanguage,
                 instruction: resolvedInstruction,
@@ -320,6 +355,39 @@ struct MusicGenerate: AsyncParsableCommand {
         let url = URL(fileURLWithPath: model).standardizedFileURL
         return MagentaRT2Resources.looksLikeMagentaRT2Root(url)
     }
+
+    var resolvedACEStepIsCover: Bool {
+        guard !nonCover else {
+            return false
+        }
+        if sourceAudio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return true
+        }
+        return taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "cover"
+    }
+
+    func resolvedACEStepTaskType(isCover: Bool) -> String {
+        let normalized = taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if isCover && normalized == "text2music" {
+            return "cover"
+        }
+        return normalized
+    }
+
+    func resolvedACEStepUsesLM(taskType: String) -> Bool {
+        guard useLM else {
+            return false
+        }
+        let normalized = taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return !Self.aceStepTasksSkippingLM.contains(normalized)
+    }
+
+    private static let aceStepTasksSkippingLM: Set<String> = [
+        "cover",
+        "cover-nofsq",
+        "repaint",
+        "extract"
+    ]
 
     private func runMagentaRT2() async throws {
         try validateMagentaRT2Options()
@@ -378,13 +446,19 @@ struct MusicGenerate: AsyncParsableCommand {
         if taskType != "text2music" {
             throw ValidationError("Magenta RT2 does not support --task-type; that option is ACE-Step only.")
         }
-        if trackName != nil || completeTrackClasses != nil || nonCover {
+        if trackName != nil
+            || completeTrackClasses != nil
+            || nonCover
+            || sourceAudio != nil
+            || coverNoiseStrength != 0.0
+            || !referenceAudio.isEmpty
+        {
             throw ValidationError("Magenta RT2 does not support ACE-Step cover/extract/lego options.")
         }
         if seed != nil {
             throw ValidationError("Magenta RT2 uses --seed-rotation instead of --seed.")
         }
-        if steps != 8 || shift != 1.0 {
+        if steps != 8 || shift != Self.defaultACEStepShift {
             throw ValidationError("Magenta RT2 does not use ACE-Step --steps or --shift.")
         }
         _ = try magentaControls()
@@ -417,7 +491,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
     private func loadLyrics() throws -> String {
         if let lyricsFile {
-            let lyricsURL = URL(fileURLWithPath: lyricsFile).standardizedFileURL
+            let lyricsURL = resolveUserPath(lyricsFile)
             guard FileManager.default.fileExists(atPath: lyricsURL.path) else {
                 throw ValidationError("Lyrics file not found: \(lyricsURL.path)")
             }
@@ -426,12 +500,95 @@ struct MusicGenerate: AsyncParsableCommand {
         return lyrics
     }
 
-    private func resolvedMetadataDuration() -> String {
+    private func loadACEStepSourceAudio48kHz() throws -> MLXArray? {
+        guard let sourceAudio,
+              !sourceAudio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        let audio = try loadACEStepAudio48kHz(sourceAudio, label: "--source-audio")
+        if !quiet {
+            CLIStderr.write("Using ACE-Step source audio: \(resolveUserPath(sourceAudio).path)\n")
+        }
+        return audio
+    }
+
+    private func loadACEStepReferenceAudio48kHz() throws -> [MLXArray]? {
+        let paths = referenceAudio
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !paths.isEmpty else {
+            return nil
+        }
+        let audios = try paths.map { try loadACEStepAudio48kHz($0, label: "--reference-audio") }
+        if !quiet {
+            CLIStderr.write("Using \(audios.count) ACE-Step reference audio file(s)\n")
+        }
+        return audios
+    }
+
+    private func loadACEStepAudio48kHz(_ path: String, label: String) throws -> MLXArray {
+        let url = resolveUserPath(path)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ValidationError("\(label) not found: \(url.path)")
+        }
+
+        let buffer = try AudioReader.readAudioBuffer(from: url, sampleRate: 48_000, channels: 2)
+        guard buffer.isInterleaved else {
+            throw ValidationError("\(label) decoded to a non-interleaved buffer: \(url.path)")
+        }
+        guard buffer.channelCount == 2 else {
+            throw ValidationError("\(label) must decode to stereo at 48 kHz; got \(buffer.channelCount) channel(s).")
+        }
+        guard buffer.samples.count >= buffer.channelCount else {
+            throw ValidationError("\(label) contains no audio samples: \(url.path)")
+        }
+
+        let frames = buffer.samples.count / buffer.channelCount
+        let trimmedSampleCount = frames * buffer.channelCount
+        let samples = trimmedSampleCount == buffer.samples.count
+            ? buffer.samples
+            : Array(buffer.samples.prefix(trimmedSampleCount))
+        let clamped = samples.map { sample -> Float in
+            guard sample.isFinite else {
+                return 0
+            }
+            return max(-1.0, min(1.0, sample))
+        }
+        return MLXArray(clamped, [1, frames, buffer.channelCount]).asType(.float32)
+    }
+
+    private func resolveUserPath(_ path: String) -> URL {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == "~" {
+            return URL(fileURLWithPath: NSHomeDirectory()).standardizedFileURL
+        }
+        if trimmed.hasPrefix("~/") {
+            let suffix = String(trimmed.dropFirst(2))
+            return URL(fileURLWithPath: NSHomeDirectory())
+                .appendingPathComponent(suffix)
+                .standardizedFileURL
+        }
+        return URL(fileURLWithPath: trimmed).standardizedFileURL
+    }
+
+    func resolvedACEStepDurationSeconds(isCover: Bool, sourceAudio48kHz: MLXArray?) -> Float {
+        guard isCover, let sourceAudio48kHz, sourceAudio48kHz.ndim >= 2 else {
+            return durationSeconds
+        }
+        let sourceFrames = sourceAudio48kHz.dim(1)
+        guard sourceFrames > 0 else {
+            return durationSeconds
+        }
+        return Float(sourceFrames) / 48_000.0
+    }
+
+    func resolvedMetadataDuration(effectiveDurationSeconds: Float) -> String {
         if let metadataDuration, !metadataDuration.isEmpty {
             return metadataDuration
         }
-        let rounded = max(1, Int(durationSeconds.rounded()))
-        return String(rounded)
+        let seconds = max(1, Int(effectiveDurationSeconds))
+        return "\(seconds) seconds"
     }
 
     private func resolveInstruction(
@@ -531,11 +688,14 @@ struct MusicGenerate: AsyncParsableCommand {
             var isDir: ObjCBool = false
             return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
         }
+        func isUsableLMDirectory(_ url: URL) -> Bool {
+            isDirectory(url) && ACEStep5HzLMResources(rootURL: url).validate(fileManager: fm).isEmpty
+        }
 
         if let explicit, !explicit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let explicitNormalized = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
             let explicitRoot = root.appendingPathComponent(explicitNormalized, isDirectory: true)
-            guard isDirectory(explicitRoot) else {
+            guard isUsableLMDirectory(explicitRoot) else {
                 throw ValidationError("--lm-subdirectory not found: \(explicitNormalized)")
             }
             return explicitNormalized
@@ -544,10 +704,14 @@ struct MusicGenerate: AsyncParsableCommand {
         let preferredCandidates = [
             "acestep-5Hz-lm-1.7B",
             "acestep-5hz-lm-1.7b",
+            "acestep-5Hz-lm-4B",
+            "acestep-5hz-lm-4b",
             "acestep-5Hz-lm",
             "acestep-5hz-lm",
             "music-acestep-5hz-lm-1.7b",
             "music-acestep-5Hz-lm-1.7B",
+            "music-acestep-5hz-lm-4b",
+            "music-acestep-5Hz-lm-4B",
             "music-acestep-5hz-lm",
             "music-acestep-5Hz-lm",
             "lm",
@@ -555,7 +719,7 @@ struct MusicGenerate: AsyncParsableCommand {
         ]
 
         for candidate in preferredCandidates {
-            if isDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
+            if isUsableLMDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
                 return candidate
             }
         }
@@ -569,6 +733,7 @@ struct MusicGenerate: AsyncParsableCommand {
             return isDirectory
                 && directory.lastPathComponent.lowercased().contains("lm")
                 && directory.lastPathComponent.lowercased().contains("5hz")
+                && ACEStep5HzLMResources(rootURL: directory).validate(fileManager: fm).isEmpty
         })
 
         return discovered?.lastPathComponent
@@ -625,16 +790,19 @@ struct MusicGenerate: AsyncParsableCommand {
         return discovered?.lastPathComponent
     }
 
-    private func buildAcestepCheckpointCandidates() -> [URL] {
+    func buildAcestepCheckpointCandidates() -> [URL] {
         var candidates: [URL] = []
 
         if let explicit = checkpointsRoot?.trimmingCharacters(in: .whitespacesAndNewlines), !explicit.isEmpty {
             candidates.append(URL(fileURLWithPath: explicit).standardizedFileURL)
         }
 
+        var modelPathExists = false
+        let explicitModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         if let explicitModel = model.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty {
             let url = URL(fileURLWithPath: explicitModel).standardizedFileURL
             if FileManager.default.fileExists(atPath: url.path) {
+                modelPathExists = true
                 candidates.append(url)
             }
         }
@@ -646,11 +814,23 @@ struct MusicGenerate: AsyncParsableCommand {
             candidates.append(URL(fileURLWithPath: envRoot).standardizedFileURL)
         }
 
-        let localModelRoot = MereRunModelPaths.modelsDir
-            .appendingPathComponent("music-acestep", isDirectory: true)
-            .standardizedFileURL
-        candidates.append(localModelRoot)
-        candidates.append(localModelRoot.appendingPathComponent("checkpoints", isDirectory: true))
+        let managedModelID = explicitModel.lowercased()
+        if !managedModelID.isEmpty && !modelPathExists {
+            let requestedRoot = MereRunModelPaths.modelsDir
+                .appendingPathComponent(managedModelID, isDirectory: true)
+                .standardizedFileURL
+            candidates.append(requestedRoot)
+            candidates.append(requestedRoot.appendingPathComponent("checkpoints", isDirectory: true))
+        }
+
+        if managedModelID.isEmpty {
+            let localModelRoot = MereRunModelPaths.modelsDir
+                .appendingPathComponent(ModelResolver.ModelID.aceStep.rawValue, isDirectory: true)
+                .standardizedFileURL
+            candidates.append(localModelRoot)
+            candidates.append(localModelRoot.appendingPathComponent("checkpoints", isDirectory: true))
+        }
+
         return candidates
     }
 
@@ -660,15 +840,19 @@ struct MusicGenerate: AsyncParsableCommand {
             var isDir: ObjCBool = false
             return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
         }
+        func isUsableTurboDirectory(_ url: URL) -> Bool {
+            isDirectory(url) && ACEStepResources(rootURL: url).validate(fileManager: fm).isEmpty
+        }
 
         let trimmed = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
         let upstreamDefault = "acestep-v15-turbo"
         let compatibilityDefault = "music-acestep-v15-turbo"
+        let xlTurboDefault = "acestep-v15-xl-turbo"
         let candidates = trimmed == upstreamDefault
-            ? [upstreamDefault, compatibilityDefault]
+            ? [upstreamDefault, compatibilityDefault, xlTurboDefault]
             : [trimmed]
 
-        for candidate in candidates where isDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
+        for candidate in candidates where isUsableTurboDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
             return candidate
         }
         throw ValidationError("--turbo-subdirectory not found: \(trimmed)")
@@ -681,14 +865,17 @@ struct MusicGenerate: AsyncParsableCommand {
             var isDir: ObjCBool = false
             return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
         }
+        func isUsableTurboDirectory(_ url: URL) -> Bool {
+            isDirectory(url) && ACEStepResources(rootURL: url).validate(fileManager: fm).isEmpty
+        }
 
         guard isDirectory(root) else {
             return false
         }
         let turboCandidates = turboSubdirectory == "acestep-v15-turbo"
-            ? ["acestep-v15-turbo", "music-acestep-v15-turbo"]
+            ? ["acestep-v15-turbo", "music-acestep-v15-turbo", "acestep-v15-xl-turbo"]
             : [turboSubdirectory]
-        guard turboCandidates.contains(where: { isDirectory(root.appendingPathComponent($0, isDirectory: true)) }) else {
+        guard turboCandidates.contains(where: { isUsableTurboDirectory(root.appendingPathComponent($0, isDirectory: true)) }) else {
             return false
         }
         guard isDirectory(root.appendingPathComponent(vaeSubdirectory)) else {
@@ -709,6 +896,8 @@ struct MusicGenerate: AsyncParsableCommand {
 
         return true
     }
+
+    private static let defaultACEStepShift: Float = 3.0
 }
 
 private extension String {
@@ -738,8 +927,9 @@ private enum ACEStepWAVWriter {
             throw WriterError.invalidChannels(channels)
         }
 
-        let int16Samples = interleaved.map { sample -> Int16 in
-            let clamped = max(-1.0, min(1.0, sample))
+        let int16Samples = peakNormalized(interleaved).map { sample -> Int16 in
+            let finiteSample = sample.isFinite ? sample : 0.0
+            let clamped = max(-1.0, min(1.0, finiteSample))
             return Int16(clamped * 32767.0)
         }
 
@@ -806,6 +996,19 @@ private enum ACEStepWAVWriter {
         let channels = sampleChannel.dim(1)
         let interleaved = sampleChannel.asType(.float32).reshaped(-1).asArray(Float.self)
         return (interleaved, channels)
+    }
+
+    private static func peakNormalized(_ samples: [Float]) -> [Float] {
+        var peak: Float = 0
+        for sample in samples where sample.isFinite {
+            peak = max(peak, abs(sample))
+        }
+        guard peak > 1 else {
+            return samples
+        }
+        return samples.map { sample in
+            sample.isFinite ? sample / peak : 0.0
+        }
     }
 
     private static func append<T: FixedWidthInteger>(_ value: T, to data: inout Data) {

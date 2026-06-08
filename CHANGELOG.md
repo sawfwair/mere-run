@@ -13,6 +13,20 @@ The format is based on Keep a Changelog.
   captions before generation, defaulting the adapter to
   `text-chat-gemma4-12b-4bit` with reviewable `--structured-prompt-output`
   artifacts and Ideogram-friendly prompt token budgeting.
+- added runtime-pool TTL eviction so loaded API models with `ttlSeconds` unload
+  after they sit idle, while pinned models stay protected from automatic
+  TTL/LRU eviction.
+- added runtime-pool memory-guard tiers (`off`, `safe`, `balanced`,
+  `aggressive`, `custom`) so pressure LRU uses tiered soft/hard ceilings rather
+  than fixed resident-memory ratios. Elevated pressure pauses extra concurrent
+  admissions and evicts the least-recently-used idle unpinned model; critical
+  pressure evicts every idle unpinned model.
+- added `music generate --source-audio` and `--reference-audio` so ACE-Step can
+  run source-conditioned cover generation from regular audio files.
+- added ACE-Step Haar DCW sampler correction with upstream defaults for cleaner
+  native diffusion output.
+- added managed ACE-Step 1.5 XL Turbo pulls with `music-acestep-xl-turbo`, plus
+  optional 4B 5 Hz LM installation through `music-acestep-xl-turbo-lm4b`.
 
 ### Fixed
 
