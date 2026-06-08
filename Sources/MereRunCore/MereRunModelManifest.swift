@@ -1075,18 +1075,19 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "lightonai/LightOnOCR-2-1B",
                 createdAt: createdAt
             )
-        case .aceStep:
+        case .aceStep, .aceStepXLTurbo, .aceStepXLTurboLM4B:
+            let isXL = modelID == .aceStepXLTurbo || modelID == .aceStepXLTurboLM4B
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .aceStep,
                 family: .music,
-                tier: .latest,
-                variant: .standard,
+                tier: isXL ? .turbo : .latest,
+                variant: isXL ? .distilled : .standard,
                 precision: .bf16,
                 defaults: Defaults(steps: 8, cfg: 1.0),
                 supports: [.musicGeneration],
                 components: nil,
-                upstreamRepoId: "ACE-Step/Ace-Step1.5",
+                upstreamRepoId: isXL ? "ACE-Step/acestep-v15-xl-turbo" : "ACE-Step/Ace-Step1.5",
                 createdAt: createdAt
             )
         case .magentaRT2Small, .magentaRT2Base:

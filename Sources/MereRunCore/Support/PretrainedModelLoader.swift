@@ -19,6 +19,16 @@ public struct HubFallbackConfig: Sendable, Hashable {
     }
 }
 
+public struct MountedHubFallbackConfig: Sendable, Hashable {
+    public let destinationPath: String
+    public let hubFallback: HubFallbackConfig
+
+    public init(destinationPath: String, hubFallback: HubFallbackConfig) {
+        self.destinationPath = destinationPath
+        self.hubFallback = hubFallback
+    }
+}
+
 /// Shared model-loading utilities for local path resolution and managed model directories.
 public enum PretrainedModelLoader {
     public enum ProgressEvent: Sendable, Hashable {

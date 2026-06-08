@@ -31,7 +31,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
 | Vision | `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
-| Music | `music-acestep`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
+| Music | `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
 | Video | `video-ltx-av` |
 
 Some legacy/local IDs remain in the catalog so existing installs and explicit
@@ -247,26 +247,38 @@ swift run mere.run model info image-klein-max
 
 Two retained surfaces have more structure than a flat model root.
 
-### `music-acestep`
+### `music-acestep`, `music-acestep-xl-turbo`, and `music-acestep-xl-turbo-lm4b`
 
-The top-level model root is:
+The top-level model roots are:
 
 ```text
 .../models/music-acestep
+.../models/music-acestep-xl-turbo
+.../models/music-acestep-xl-turbo-lm4b
 ```
 
-That root may contain:
+Those roots may contain:
 
 - `acestep-v15-turbo/`
+- `acestep-v15-xl-turbo/`
 - `acestep-5Hz-lm-1.7B/` or another supported LM subdirectory
+- `acestep-5Hz-lm-4B/`
 - `Qwen3-Embedding-0.6B/`
 - `vae/`
 
 Older local installs that still use `music-acestep-v15-turbo/` remain
 supported.
 
-`mere.run music generate` auto-discovers that layout unless you override the root
-with `--checkpoints-root` or `MERERUN_MUSIC_ACESTEP_ROOT`.
+`music-acestep-xl-turbo` pulls the ACE-Step 1.5 XL turbo DiT into
+`acestep-v15-xl-turbo/` and reuses the base ACE-Step 1.5 VAE and Qwen3 text
+encoder components. `music-acestep-xl-turbo-lm4b` adds the optional
+`acestep-5Hz-lm-4B/` 5 Hz LM. The default ACE-Step LM component discovery
+continues to prefer the smaller `acestep-5Hz-lm-1.7B/` when both LM directories
+are present; pass `--lm-subdirectory acestep-5Hz-lm-4B` to force the 4B LM.
+
+`mere.run music generate` and `mere.run music analyze` auto-discover these
+layouts unless you override the root with `--checkpoints-root` or
+`MERERUN_MUSIC_ACESTEP_ROOT`.
 
 ### `music-magenta-rt2-small` and `music-magenta-rt2-base`
 

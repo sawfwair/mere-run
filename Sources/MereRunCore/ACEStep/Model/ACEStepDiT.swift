@@ -56,7 +56,7 @@ final class ACEStepDiT: Module {
         self._timeEmbed.wrappedValue = ACEStepTimestepEmbedding(inChannels: 256, timeEmbedDim: config.hiddenSize)
         self._timeEmbedR.wrappedValue = ACEStepTimestepEmbedding(inChannels: 256, timeEmbedDim: config.hiddenSize)
 
-        self._conditionEmbedder.wrappedValue = Linear(config.hiddenSize, config.hiddenSize, bias: true)
+        self._conditionEmbedder.wrappedValue = Linear(config.encoderHiddenSize, config.hiddenSize, bias: true)
 
         self._normOut.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         self._scaleShiftTable.wrappedValue = MLXArray.zeros([1, 2, config.hiddenSize])
@@ -96,11 +96,10 @@ final class ACEStepDiT: Module {
             return .array(mask)
         }()
 
-        let encoderMask: MLXFast.ScaledDotProductAttentionMaskMode = {
-            guard let encoderAttentionMask else { return .none }
-            let mask = makeCrossAttentionMask(attentionMask: encoderAttentionMask, queryLen: seqLen)
-            return .array(mask)
-        }()
+        // The upstream ACE-Step MLX DiT accepts encoder masks at the service
+        // boundary but does not apply them inside the decoder.
+        let encoderMask: MLXFast.ScaledDotProductAttentionMaskMode = .none
+        _ = encoderAttentionMask
 
         for layer in layers {
             let selfMask: MLXFast.ScaledDotProductAttentionMaskMode = (layer.attentionType == "sliding_attention") ? slidingMask : fullMask
@@ -137,17 +136,4 @@ final class ACEStepDiT: Module {
         return additive.reshaped(1, 1, seqLen, seqLen)
     }
 
-    private func makeCrossAttentionMask(attentionMask: MLXArray, queryLen: Int) -> MLXArray {
-        // attentionMask: [B, S] (1 = keep, 0 = mask)
-        let B = attentionMask.dim(0)
-        let S = attentionMask.dim(1)
-
-        let keep = (attentionMask .> MLXArray(Float(0))).asType(.bool)
-        let keepExpanded = keep.reshaped(B, 1, 1, S)
-        let keepBroadcast = MLX.broadcast(keepExpanded, to: [B, 1, queryLen, S])
-
-        let zeros = MLX.zeros([B, 1, queryLen, S], dtype: .float32)
-        let negInf = MLXArray(-1.0e9)
-        return MLX.where(keepBroadcast, zeros, zeros + negInf)
-    }
 }

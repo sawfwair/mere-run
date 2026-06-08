@@ -14,19 +14,22 @@ final class ACEStepAudioTokenDetokenizer: Module {
     @ModuleInfo(key: "proj_out") var projOut: Linear
 
     init(config: ACEStepConfig) {
-        self.config = config
+        let encoderConfig = config.conditionEncoderConfig
+        self.config = encoderConfig
         self.rope = RoPE(
-            dimensions: config.headDim,
+            dimensions: encoderConfig.headDim,
             traditional: false,
-            base: config.ropeTheta,
+            base: encoderConfig.ropeTheta,
             scale: 1.0
         )
 
-        self._embedTokens.wrappedValue = Linear(config.hiddenSize, config.hiddenSize, bias: true)
-        self._norm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        self._specialTokens.wrappedValue = MLXArray.zeros([1, config.poolWindowSize, config.hiddenSize])
-        self._layers.wrappedValue = (0..<config.numAttentionPoolerHiddenLayers).map { ACEStepEncoderLayer(config: config, layerIdx: $0) }
-        self._projOut.wrappedValue = Linear(config.hiddenSize, config.audioAcousticHiddenDim, bias: true)
+        self._embedTokens.wrappedValue = Linear(encoderConfig.hiddenSize, encoderConfig.hiddenSize, bias: true)
+        self._norm.wrappedValue = RMSNorm(dimensions: encoderConfig.hiddenSize, eps: encoderConfig.rmsNormEps)
+        self._specialTokens.wrappedValue = MLXArray.zeros([1, encoderConfig.poolWindowSize, encoderConfig.hiddenSize])
+        self._layers.wrappedValue = (0..<encoderConfig.numAttentionPoolerHiddenLayers).map {
+            ACEStepEncoderLayer(config: encoderConfig, layerIdx: $0)
+        }
+        self._projOut.wrappedValue = Linear(encoderConfig.hiddenSize, encoderConfig.audioAcousticHiddenDim, bias: true)
     }
 
     /// Detokenize quantized 5Hz tokens `[B, T5, 2048]` back to 25Hz latents `[B, T25, 64]`.
@@ -63,4 +66,3 @@ final class ACEStepAudioTokenDetokenizer: Module {
         return h.reshaped(B, T5 * P, config.audioAcousticHiddenDim)
     }
 }
-

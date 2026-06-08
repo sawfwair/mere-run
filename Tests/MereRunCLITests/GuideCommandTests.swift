@@ -18,6 +18,14 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(entry.topic, "music-generate")
     }
 
+    func testGuideMusicAnalyzeParsesAndResolves() throws {
+        let command = try GuideCommand.parse(["music", "analyze"])
+        let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
+
+        XCTAssertEqual(command.commandPath, ["music", "analyze"])
+        XCTAssertEqual(entry.topic, "music-analyze")
+    }
+
     func testGuideMusicGenerateModelFocusParsesAndRenders() throws {
         let command = try GuideCommand.parse([
             "music",
@@ -73,6 +81,8 @@ final class GuideCommandTests: XCTestCase {
             payload.models,
             [
                 "music-acestep",
+                ModelResolver.ModelID.aceStepXLTurbo.rawValue,
+                ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
                 ModelResolver.ModelID.magentaRT2Small.rawValue,
                 ModelResolver.ModelID.magentaRT2Base.rawValue,
             ]

@@ -26,6 +26,7 @@ public struct QwenTextEncoderConfiguration {
   public var headDim: Int
   public var mropeSection: [Int]?
   public var mropeInterleaved: Bool
+  public var useFloat32Activations: Bool
 
   public init(
     vocabSize: Int = 151_936,
@@ -40,7 +41,8 @@ public struct QwenTextEncoderConfiguration {
     promptDropIndex: Int = 0,
     headDim: Int = 128,
     mropeSection: [Int]? = nil,
-    mropeInterleaved: Bool = false
+    mropeInterleaved: Bool = false,
+    useFloat32Activations: Bool = false
   ) {
     self.vocabSize = vocabSize
     self.hiddenSize = hiddenSize
@@ -55,6 +57,7 @@ public struct QwenTextEncoderConfiguration {
     self.headDim = headDim
     self.mropeSection = mropeSection
     self.mropeInterleaved = mropeInterleaved
+    self.useFloat32Activations = useFloat32Activations
   }
 }
 

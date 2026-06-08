@@ -81,7 +81,8 @@ public final class ACEStep5HzLM {
             promptDropIndex: 0,
             headDim: config.headDim,
             mropeSection: nil,
-            mropeInterleaved: false
+            mropeInterleaved: false,
+            useFloat32Activations: true
         )
 
         let encoder = QwenEncoder(configuration: qwenConfig)
@@ -91,7 +92,7 @@ public final class ACEStep5HzLM {
             to: encoder,
             dtype: dtype,
             verify: verify,
-            mapper: { key, value in [(key, value)] },
+            mapper: QwenEncoder.mapHFSafetensorWeight,
             fileManager: fileManager
         )
         self.model = encoder

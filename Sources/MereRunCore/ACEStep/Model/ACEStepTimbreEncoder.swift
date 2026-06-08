@@ -56,7 +56,6 @@ final class ACEStepTimbreEncoder: Module {
         packedEmbeddings: MLXArray, // [N, D]
         referAudioOrderMask: MLXArray // [N]
     ) -> (embeddings: MLXArray, attentionMask: MLXArray) {
-        let N = packedEmbeddings.dim(0)
         let D = packedEmbeddings.dim(1)
 
         let order = referAudioOrderMask.asType(.int32)
@@ -105,4 +104,3 @@ final class ACEStepTimbreEncoder: Module {
         return (unpacked, mask)
     }
 }
-

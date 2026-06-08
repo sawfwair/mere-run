@@ -3,6 +3,17 @@ import XCTest
 @testable import MereRunCore
 
 final class Ideogram4RuntimeTests: XCTestCase {
+    func testQwenEncoderWeightMapperStripsUpstreamModelPrefix() {
+        let value = MLXArray([Float(1)], [1])
+
+        let mapped = QwenEncoder.mapHFSafetensorWeight(
+            key: "model.embed_tokens.weight",
+            value: value
+        )
+
+        XCTAssertEqual(mapped.map(\.0), ["embed_tokens.weight"])
+    }
+
     func testTransformerConfigurationDecodesDiffusersConfig() throws {
         let json = """
         {

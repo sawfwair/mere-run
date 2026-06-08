@@ -10,6 +10,10 @@ public struct ACEStepConfig: Decodable, Sendable, Hashable {
     public let numHiddenLayers: Int
     public let numAttentionHeads: Int
     public let numKeyValueHeads: Int
+    public let encoderHiddenSize: Int
+    public let encoderIntermediateSize: Int
+    public let encoderNumAttentionHeads: Int
+    public let encoderNumKeyValueHeads: Int
     public let headDim: Int
     public let hiddenAct: String
     public let maxPositionEmbeddings: Int
@@ -46,6 +50,10 @@ public struct ACEStepConfig: Decodable, Sendable, Hashable {
         case numHiddenLayers = "num_hidden_layers"
         case numAttentionHeads = "num_attention_heads"
         case numKeyValueHeads = "num_key_value_heads"
+        case encoderHiddenSize = "encoder_hidden_size"
+        case encoderIntermediateSize = "encoder_intermediate_size"
+        case encoderNumAttentionHeads = "encoder_num_attention_heads"
+        case encoderNumKeyValueHeads = "encoder_num_key_value_heads"
         case headDim = "head_dim"
         case hiddenAct = "hidden_act"
         case maxPositionEmbeddings = "max_position_embeddings"
@@ -83,6 +91,10 @@ public struct ACEStepConfig: Decodable, Sendable, Hashable {
         numHiddenLayers: Int = 24,
         numAttentionHeads: Int = 16,
         numKeyValueHeads: Int = 8,
+        encoderHiddenSize: Int? = nil,
+        encoderIntermediateSize: Int? = nil,
+        encoderNumAttentionHeads: Int? = nil,
+        encoderNumKeyValueHeads: Int? = nil,
         headDim: Int = 128,
         hiddenAct: String = "silu",
         maxPositionEmbeddings: Int = 32768,
@@ -115,6 +127,10 @@ public struct ACEStepConfig: Decodable, Sendable, Hashable {
         self.numHiddenLayers = numHiddenLayers
         self.numAttentionHeads = numAttentionHeads
         self.numKeyValueHeads = numKeyValueHeads
+        self.encoderHiddenSize = encoderHiddenSize ?? hiddenSize
+        self.encoderIntermediateSize = encoderIntermediateSize ?? intermediateSize
+        self.encoderNumAttentionHeads = encoderNumAttentionHeads ?? numAttentionHeads
+        self.encoderNumKeyValueHeads = encoderNumKeyValueHeads ?? numKeyValueHeads
         self.headDim = headDim
         self.hiddenAct = hiddenAct
         self.maxPositionEmbeddings = maxPositionEmbeddings
@@ -151,6 +167,10 @@ public struct ACEStepConfig: Decodable, Sendable, Hashable {
         numHiddenLayers = try container.decodeIfPresent(Int.self, forKey: .numHiddenLayers) ?? 24
         numAttentionHeads = try container.decodeIfPresent(Int.self, forKey: .numAttentionHeads) ?? 16
         numKeyValueHeads = try container.decodeIfPresent(Int.self, forKey: .numKeyValueHeads) ?? 8
+        encoderHiddenSize = try container.decodeIfPresent(Int.self, forKey: .encoderHiddenSize) ?? hiddenSize
+        encoderIntermediateSize = try container.decodeIfPresent(Int.self, forKey: .encoderIntermediateSize) ?? intermediateSize
+        encoderNumAttentionHeads = try container.decodeIfPresent(Int.self, forKey: .encoderNumAttentionHeads) ?? numAttentionHeads
+        encoderNumKeyValueHeads = try container.decodeIfPresent(Int.self, forKey: .encoderNumKeyValueHeads) ?? numKeyValueHeads
         headDim = try container.decodeIfPresent(Int.self, forKey: .headDim) ?? (hiddenSize / max(1, numAttentionHeads))
         hiddenAct = try container.decodeIfPresent(String.self, forKey: .hiddenAct) ?? "silu"
         maxPositionEmbeddings = try container.decodeIfPresent(Int.self, forKey: .maxPositionEmbeddings) ?? 32768
@@ -176,5 +196,45 @@ public struct ACEStepConfig: Decodable, Sendable, Hashable {
         timbreFixFrame = try container.decodeIfPresent(Int.self, forKey: .timbreFixFrame) ?? 750
 
         isTurbo = try container.decodeIfPresent(Bool.self, forKey: .isTurbo) ?? false
+    }
+
+    public var conditionEncoderConfig: ACEStepConfig {
+        ACEStepConfig(
+            vocabSize: vocabSize,
+            fsqDim: fsqDim,
+            fsqInputLevels: fsqInputLevels,
+            fsqInputNumQuantizers: fsqInputNumQuantizers,
+            hiddenSize: encoderHiddenSize,
+            intermediateSize: encoderIntermediateSize,
+            numHiddenLayers: numHiddenLayers,
+            numAttentionHeads: encoderNumAttentionHeads,
+            numKeyValueHeads: encoderNumKeyValueHeads,
+            encoderHiddenSize: encoderHiddenSize,
+            encoderIntermediateSize: encoderIntermediateSize,
+            encoderNumAttentionHeads: encoderNumAttentionHeads,
+            encoderNumKeyValueHeads: encoderNumKeyValueHeads,
+            headDim: headDim,
+            hiddenAct: hiddenAct,
+            maxPositionEmbeddings: maxPositionEmbeddings,
+            rmsNormEps: rmsNormEps,
+            ropeTheta: ropeTheta,
+            attentionBias: attentionBias,
+            attentionDropout: attentionDropout,
+            useSlidingWindow: useSlidingWindow,
+            slidingWindow: slidingWindow,
+            layerTypes: layerTypes,
+            audioAcousticHiddenDim: audioAcousticHiddenDim,
+            poolWindowSize: poolWindowSize,
+            textHiddenDim: textHiddenDim,
+            inChannels: inChannels,
+            patchSize: patchSize,
+            numLyricEncoderHiddenLayers: numLyricEncoderHiddenLayers,
+            numAttentionPoolerHiddenLayers: numAttentionPoolerHiddenLayers,
+            numAudioDecoderHiddenLayers: numAudioDecoderHiddenLayers,
+            timbreHiddenDim: timbreHiddenDim,
+            numTimbreEncoderHiddenLayers: numTimbreEncoderHiddenLayers,
+            timbreFixFrame: timbreFixFrame,
+            isTurbo: isTurbo
+        )
     }
 }

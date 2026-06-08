@@ -54,6 +54,7 @@ fi
 "$mere_run_bin" speech profile --help >/dev/null
 "$mere_run_bin" vision inspect --help >/dev/null
 "$mere_run_bin" vision ocr --help >/dev/null
+"$mere_run_bin" music analyze --help >/dev/null
 "$mere_run_bin" music generate --help >/dev/null
 "$mere_run_bin" video generate --help >/dev/null
 "$mere_run_bin" video export-latents --help >/dev/null

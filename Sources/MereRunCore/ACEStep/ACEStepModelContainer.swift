@@ -58,7 +58,7 @@ public actor ACEStepModelContainer {
         vaeResources: OobleckVAEResources,
         lmResources: ACEStep5HzLMResources? = nil,
         textEncoderResources: ACEStep5HzLMResources? = nil,
-        dtype: DType? = .bfloat16,
+        dtype: DType? = .float32,
         verify: Module.VerifyUpdate = .noUnusedKeys
     ) {
         self.configuredResources = ACEStepModelResources(
@@ -76,7 +76,7 @@ public actor ACEStepModelContainer {
         vaeRootURL: URL,
         lmRootURL: URL? = nil,
         textEncoderRootURL: URL? = nil,
-        dtype: DType? = .bfloat16,
+        dtype: DType? = .float32,
         verify: Module.VerifyUpdate = .noUnusedKeys
     ) {
         self.configuredResources = ACEStepModelResources(
@@ -95,7 +95,7 @@ public actor ACEStepModelContainer {
         vaeSubdirectory: String = "vae",
         lmSubdirectory: String? = nil,
         textEncoderSubdirectory: String? = nil,
-        dtype: DType? = .bfloat16,
+        dtype: DType? = .float32,
         verify: Module.VerifyUpdate = .noUnusedKeys
     ) {
         self.configuredResources = ACEStepModelResources(

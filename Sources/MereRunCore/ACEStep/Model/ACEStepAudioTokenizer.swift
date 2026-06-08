@@ -8,8 +8,9 @@ final class ACEStepAudioTokenizer: Module {
     @ModuleInfo(key: "quantizer") var quantizer: ACEStepResidualFSQ
 
     init(config: ACEStepConfig) {
-        self._audioAcousticProj.wrappedValue = Linear(config.audioAcousticHiddenDim, config.hiddenSize, bias: true)
-        self._attentionPooler.wrappedValue = ACEStepAttentionPooler(config: config)
+        let encoderConfig = config.conditionEncoderConfig
+        self._audioAcousticProj.wrappedValue = Linear(config.audioAcousticHiddenDim, config.encoderHiddenSize, bias: true)
+        self._attentionPooler.wrappedValue = ACEStepAttentionPooler(config: encoderConfig)
         self._quantizer.wrappedValue = ACEStepResidualFSQ(config: config)
     }
 
@@ -20,4 +21,3 @@ final class ACEStepAudioTokenizer: Module {
         return quantizer(h)
     }
 }
-

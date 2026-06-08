@@ -28,9 +28,12 @@ final class OobleckVAE: Module {
             return mean
         }
 
-        let logvar = stats[0..., 0..., latentChannels..<(latentChannels * 2)]
-        let clampedLogvar = MLX.clip(logvar, min: -30.0, max: 20.0)
-        let std = MLX.exp(clampedLogvar * 0.5)
+        let scale = stats[0..., 0..., latentChannels..<(latentChannels * 2)]
+        let std = MLX.where(
+            scale .> MLXArray(Float(20.0)).asType(scale.dtype),
+            scale,
+            MLX.log(MLXArray(Float(1.0)).asType(scale.dtype) + MLX.exp(scale))
+        ) + MLXArray(Float(1e-4)).asType(scale.dtype)
 
         let noise: MLXArray
         if let seed {
@@ -119,11 +122,12 @@ final class OobleckVAE: Module {
         let stride = chunkSize - 2 * overlap
         precondition(stride > 0, "chunkSize \(chunkSize) must be > 2 * overlap \(overlap)")
 
-        let upsampleFactor = config.downsamplingRatios.reduce(1, *)
         let numSteps = (T + stride - 1) / stride
 
         var decoded: [MLXArray] = []
         decoded.reserveCapacity(numSteps)
+
+        var upsampleFactor: Double?
 
         for i in 0..<numSteps {
             let coreStart = i * stride
@@ -135,8 +139,13 @@ final class OobleckVAE: Module {
             let latentChunk = latents[0..., winStart..<winEnd, 0...]
             let audioChunk = decode(latentChunk)
 
-            let trimStart = (coreStart - winStart) * upsampleFactor
-            let trimEnd = (winEnd - coreEnd) * upsampleFactor
+            if upsampleFactor == nil {
+                upsampleFactor = Double(audioChunk.dim(1)) / Double(latentChunk.dim(1))
+            }
+
+            let factor = upsampleFactor!
+            let trimStart = Int(round(Double(coreStart - winStart) * factor))
+            let trimEnd = Int(round(Double(winEnd - coreEnd) * factor))
 
             let audioLen = audioChunk.dim(1)
             let endIndex = trimEnd > 0 ? (audioLen - trimEnd) : audioLen

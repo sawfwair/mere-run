@@ -8,9 +8,10 @@ final class ACEStepConditionEncoder: Module {
     @ModuleInfo(key: "timbre_encoder") var timbreEncoder: ACEStepTimbreEncoder
 
     init(config: ACEStepConfig) {
-        self._textProjector.wrappedValue = Linear(config.textHiddenDim, config.hiddenSize, bias: false)
-        self._lyricEncoder.wrappedValue = ACEStepLyricEncoder(config: config)
-        self._timbreEncoder.wrappedValue = ACEStepTimbreEncoder(config: config)
+        let encoderConfig = config.conditionEncoderConfig
+        self._textProjector.wrappedValue = Linear(config.textHiddenDim, config.encoderHiddenSize, bias: false)
+        self._lyricEncoder.wrappedValue = ACEStepLyricEncoder(config: encoderConfig)
+        self._timbreEncoder.wrappedValue = ACEStepTimbreEncoder(config: encoderConfig)
     }
 
     func callAsFunction(
@@ -44,4 +45,3 @@ final class ACEStepConditionEncoder: Module {
         return packed
     }
 }
-

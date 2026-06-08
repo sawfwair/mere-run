@@ -197,6 +197,9 @@ swift run mere.run model runtime set text-chat-gemma4 \
   --pinned \
   --ttl-seconds 3600 \
   --max-tokens 1024
+# Runtime TTLs unload idle loaded models during pool operations.
+# Memory-guard tiers drive pressure LRU and admission pauses.
+# Pinned models are kept out of automatic eviction.
 
 # See what this Mac can run before pulling large models
 swift run mere.run model capabilities
@@ -341,9 +344,41 @@ swift run mere.run vision track ./clip.mp4 --prompt "a person"
 swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
 
 # Generate music
+swift run mere.run model pull music-acestep
 swift run mere.run music generate \
   "upbeat electronic groove" \
   --output ./track.wav
+
+# Generate with ACE-Step XL Turbo on larger Macs
+swift run mere.run model pull music-acestep-xl-turbo
+swift run mere.run music generate \
+  "cinematic synth pop with bright vocal harmonies" \
+  --model music-acestep-xl-turbo \
+  --output ./xl-track.wav
+
+# Generate an ACE-Step cover from a source song
+swift run mere.run music generate \
+  "dream-pop cover with soft vocals" \
+  --source-audio ./song.mp3 \
+  --analyze-source-audio \
+  --audio-cover-strength 1.0 \
+  --output ./cover.wav
+
+# Analyze a source song before cover/remix work
+swift run mere.run music analyze ./song.mp3 \
+  --model music-acestep-xl-turbo-lm4b \
+  --lm-subdirectory acestep-5Hz-lm-4B \
+  > ./song-analysis.json
+
+# Generate a style-transfer cover from a source song
+swift run mere.run music generate \
+  "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \
+  --model music-acestep-xl-turbo \
+  --source-audio ./song.mp3 \
+  --analyze-source-audio \
+  --audio-cover-strength 0.20 \
+  --cover-noise-strength 0.0 \
+  --output ./reggaeton-cover.wav
 
 # Stream and optionally capture Magenta RT2 music on Apple Silicon macOS
 swift run mere.run music realtime \
@@ -382,6 +417,7 @@ The public CLI is modality-first:
 - `mere.run vision track`
 - `mere.run vision track-live`
 - `mere.run vision ocr`
+- `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
 - `mere.run video generate`
