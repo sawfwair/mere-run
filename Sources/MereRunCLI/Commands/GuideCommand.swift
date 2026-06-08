@@ -329,10 +329,22 @@ enum GuideRegistry {
             commandPaths: [["music", "generate"]],
             models: [
                 "music-acestep",
+                "music-acestep-xl-turbo",
+                "music-acestep-xl-turbo-lm4b",
                 "music-magenta-rt2-small",
                 "music-magenta-rt2-base",
             ],
             resourceName: "music-generate.md"
+        ),
+        GuideTopic(
+            topic: "music-analyze",
+            title: "Music Analyze",
+            commandPaths: [["music", "analyze"]],
+            models: [
+                "music-acestep",
+                "music-acestep-xl-turbo-lm4b",
+            ],
+            resourceName: "music-analyze.md"
         ),
         GuideTopic(
             topic: "video-generate",

@@ -27,6 +27,7 @@ mere.run model pull music-acestep-xl-turbo
 mere.run model pull music-acestep-xl-turbo-lm4b
 mere.run model pull music-magenta-rt2-small
 mere.run music generate --help
+mere.run music analyze --help
 mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music generate --model music-magenta-rt2-small
@@ -99,6 +100,8 @@ capture. Add `--interactive` to steer while it runs with stdin commands such as
 - Lyrics work best with tags like `[verse]`, `[chorus]`, `[bridge]`.
 - Match `--vocal-language` to the lyrics language.
 - Use `--bpm`, `--keyscale`, and `--timesignature` when rhythm or harmony must be stable.
+- Use `music analyze` first when you want to inspect source BPM, key/scale, and
+  time signature before choosing generation overrides.
 - Use `--duration 10` to draft, then extend once the caption works.
 - For Magenta RT2, put all musical direction in the prompt; lyrics and ACE-Step
   task modes are not supported by that runtime.

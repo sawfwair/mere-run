@@ -32,6 +32,7 @@ Public tree:
 - `mere.run vision track`
 - `mere.run vision track-live`
 - `mere.run vision ocr`
+- `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
 - `mere.run video generate`
@@ -146,6 +147,10 @@ swift run mere.run music generate \
   "upbeat electronic groove" \
   --model music-acestep-xl-turbo \
   --output ./xl-track.wav
+
+swift run mere.run music analyze ./song.mp3 \
+  --model music-acestep-xl-turbo-lm4b \
+  --lm-subdirectory acestep-5Hz-lm-4B
 
 swift run mere.run model pull music-magenta-rt2-small
 swift run mere.run music realtime \
@@ -574,6 +579,40 @@ Examples:
 swift run mere.run model pull vision-ocr-lighton
 swift run mere.run vision ocr ./page.png --backend lighton --model ~/Library/Application\ Support/MereRun/models/vision-ocr-lighton
 swift run mere.run vision ocr ./page.png --backend glm
+```
+
+### `mere.run music analyze`
+
+Analyze an audio file with ACE-Step 5 Hz LM audio understanding and print JSON
+metadata to stdout.
+
+```bash
+swift run mere.run music analyze "<audio>" [options]
+```
+
+Key options:
+
+- `--model`, `-m`
+- `--checkpoints-root`
+- `--turbo-subdirectory`
+- `--vae-subdirectory`
+- `--lm-subdirectory`
+- `--duration`: analyze the first N seconds instead of the full decoded input
+- `--max-new-tokens`
+- `--lm-temperature`
+- `--lm-top-k`
+- `--lm-top-p`
+- `--include-raw-lm`
+- `--include-audio-codes`
+- `--quiet`
+
+Examples:
+
+```bash
+swift run mere.run music analyze ./song.mp3 \
+  --model music-acestep-xl-turbo-lm4b \
+  --lm-subdirectory acestep-5Hz-lm-4B
+swift run mere.run music analyze ./song.mp3 --duration 30 > ./song-analysis.json
 ```
 
 ### `mere.run music generate`

@@ -789,7 +789,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
-            defaultCLICommands: ["music generate"]
+            defaultCLICommands: ["music generate", "music analyze"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLTurbo.rawValue,
@@ -875,7 +875,7 @@ public enum ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 32 * 1_073_741_824,
-            defaultCLICommands: ["music generate"]
+            defaultCLICommands: ["music generate", "music analyze"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.magentaRT2Small.rawValue,

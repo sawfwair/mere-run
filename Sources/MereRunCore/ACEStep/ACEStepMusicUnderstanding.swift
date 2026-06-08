@@ -1,7 +1,7 @@
 import Foundation
 import MLX
 
-public struct ACEStepMusicUnderstandingMetadata: Sendable, Hashable {
+public struct ACEStepMusicUnderstandingMetadata: Sendable, Hashable, Codable {
     public var caption: String?
     public var lyrics: String?
     public var bpm: Int?

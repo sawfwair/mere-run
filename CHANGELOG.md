@@ -26,6 +26,9 @@ The format is based on Keep a Changelog.
 - added `music generate --analyze-source-audio` so ACE-Step covers can use
   5 Hz LM audio understanding to fill missing BPM, key/scale, language, and
   time-signature metadata from the source song before direct DiT generation.
+- added `music analyze` so ACE-Step can inspect regular audio files and emit
+  JSON metadata from the 5 Hz LM audio-understanding path before cover/remix
+  workflows.
 - added ACE-Step Haar DCW sampler correction with upstream defaults for cleaner
   native diffusion output.
 - added managed ACE-Step 1.5 XL Turbo pulls with `music-acestep-xl-turbo`, plus

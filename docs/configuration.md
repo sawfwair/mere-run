@@ -41,7 +41,9 @@ Sets the default root used by `mere.run video generate` and `mere.run video expo
 
 ### `MERERUN_MUSIC_ACESTEP_ROOT`
 
-Sets the default checkpoint root used by `mere.run music generate` when the command is not resolving from the shared model store.
+Sets the default checkpoint root used by `mere.run music generate` and
+`mere.run music analyze` when the command is not resolving from the shared model
+store.
 
 ## API server security
 

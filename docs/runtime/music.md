@@ -1,11 +1,13 @@
 # Music Runtime
 
 This page covers the native music-generation paths exposed through
-`mere.run music generate` and `mere.run music realtime`.
+`mere.run music analyze`, `mere.run music generate`, and
+`mere.run music realtime`.
 
 ## Public surface
 
 - `mere.run music generate`
+- `mere.run music analyze`
 - `mere.run music realtime`
 
 ## Model family
@@ -38,6 +40,11 @@ swift run mere.run music generate \
   --audio-cover-strength 0.20 \
   --cover-noise-strength 0.0 \
   --output ./reggaeton-cover.wav
+
+swift run mere.run music analyze ./song.mp3 \
+  --model music-acestep-xl-turbo-lm4b \
+  --lm-subdirectory acestep-5Hz-lm-4B \
+  > ./song-analysis.json
 
 swift run mere.run model pull music-acestep-xl-turbo
 swift run mere.run music generate \
@@ -74,6 +81,11 @@ the direct DiT cover pass. It converts the source audio to 5 Hz audio codes,
 asks the LM for source BPM, key/scale, language, and time signature, and fills
 only metadata fields you did not pass explicitly.
 
+Use `music analyze` when you want that same ACE-Step audio-understanding result
+as a standalone JSON artifact before deciding how to prompt a cover or remix.
+It accepts the same ACE-Step model/checkpoint layout flags plus an optional
+`--duration` prefix limit for fast probes.
+
 For faithful covers, keep `--audio-cover-strength 1.0` and leave
 `--cover-noise-strength` at its default `0.0`. For style-transfer covers, lower
 `--audio-cover-strength` so the text prompt can steer genre, keep
@@ -101,6 +113,7 @@ Supported steering commands are `prompt <text>`, `style streaming|full`,
 
 ### CLI
 
+- `Sources/MereRunCLI/Commands/MusicAnalyzeCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicGenerateCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicRealtimeCommand.swift`
 

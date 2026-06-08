@@ -364,6 +364,12 @@ swift run mere.run music generate \
   --audio-cover-strength 1.0 \
   --output ./cover.wav
 
+# Analyze a source song before cover/remix work
+swift run mere.run music analyze ./song.mp3 \
+  --model music-acestep-xl-turbo-lm4b \
+  --lm-subdirectory acestep-5Hz-lm-4B \
+  > ./song-analysis.json
+
 # Generate a style-transfer cover from a source song
 swift run mere.run music generate \
   "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \
@@ -411,6 +417,7 @@ The public CLI is modality-first:
 - `mere.run vision track`
 - `mere.run vision track-live`
 - `mere.run vision ocr`
+- `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
 - `mere.run video generate`

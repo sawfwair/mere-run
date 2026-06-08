@@ -272,12 +272,13 @@ supported.
 `music-acestep-xl-turbo` pulls the ACE-Step 1.5 XL turbo DiT into
 `acestep-v15-xl-turbo/` and reuses the base ACE-Step 1.5 VAE and Qwen3 text
 encoder components. `music-acestep-xl-turbo-lm4b` adds the optional
-`acestep-5Hz-lm-4B/` 5 Hz LM. The default `music generate` component discovery
+`acestep-5Hz-lm-4B/` 5 Hz LM. The default ACE-Step LM component discovery
 continues to prefer the smaller `acestep-5Hz-lm-1.7B/` when both LM directories
 are present; pass `--lm-subdirectory acestep-5Hz-lm-4B` to force the 4B LM.
 
-`mere.run music generate` auto-discovers these layouts unless you override the
-root with `--checkpoints-root` or `MERERUN_MUSIC_ACESTEP_ROOT`.
+`mere.run music generate` and `mere.run music analyze` auto-discover these
+layouts unless you override the root with `--checkpoints-root` or
+`MERERUN_MUSIC_ACESTEP_ROOT`.
 
 ### `music-magenta-rt2-small` and `music-magenta-rt2-base`
 

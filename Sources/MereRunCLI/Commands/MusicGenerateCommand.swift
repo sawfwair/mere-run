@@ -566,48 +566,11 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     private func loadACEStepAudio48kHz(_ path: String, label: String) throws -> MLXArray {
-        let url = resolveUserPath(path)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw ValidationError("\(label) not found: \(url.path)")
-        }
-
-        let buffer = try AudioReader.readAudioBuffer(from: url, sampleRate: 48_000, channels: 2)
-        guard buffer.isInterleaved else {
-            throw ValidationError("\(label) decoded to a non-interleaved buffer: \(url.path)")
-        }
-        guard buffer.channelCount == 2 else {
-            throw ValidationError("\(label) must decode to stereo at 48 kHz; got \(buffer.channelCount) channel(s).")
-        }
-        guard buffer.samples.count >= buffer.channelCount else {
-            throw ValidationError("\(label) contains no audio samples: \(url.path)")
-        }
-
-        let frames = buffer.samples.count / buffer.channelCount
-        let trimmedSampleCount = frames * buffer.channelCount
-        let samples = trimmedSampleCount == buffer.samples.count
-            ? buffer.samples
-            : Array(buffer.samples.prefix(trimmedSampleCount))
-        let clamped = samples.map { sample -> Float in
-            guard sample.isFinite else {
-                return 0
-            }
-            return max(-1.0, min(1.0, sample))
-        }
-        return MLXArray(clamped, [1, frames, buffer.channelCount]).asType(.float32)
+        try ACEStepCLIHelper.loadAudio48kHz(path, label: label)
     }
 
     private func resolveUserPath(_ path: String) -> URL {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed == "~" {
-            return URL(fileURLWithPath: NSHomeDirectory()).standardizedFileURL
-        }
-        if trimmed.hasPrefix("~/") {
-            let suffix = String(trimmed.dropFirst(2))
-            return URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent(suffix)
-                .standardizedFileURL
-        }
-        return URL(fileURLWithPath: trimmed).standardizedFileURL
+        ACEStepCLIHelper.resolveUserPath(path)
     }
 
     func resolvedACEStepDurationSeconds(isCover: Bool, sourceAudio48kHz: MLXArray?) -> Float {
@@ -731,265 +694,33 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     private func resolveACEStepCheckpointsRoot() async throws -> URL {
-        let candidates = buildAcestepCheckpointCandidates()
-
-        for candidate in candidates {
-            if isUsableCheckpointsRoot(candidate) {
-                return candidate
-            }
-            let nested = candidate.appendingPathComponent("checkpoints", isDirectory: true)
-            if isUsableCheckpointsRoot(nested) {
-                return nested
-            }
-        }
-
-        if let explicit = checkpointsRoot, !explicit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw ValidationError("Checkpoints root not found or incomplete: \(explicit)")
-        }
-
-        do {
-            let resolved = try await ManagedModelResolver.resolveForRuntime(
-                requestedModel: model,
-                defaultModelID: ModelResolver.ModelID.aceStep.rawValue
-            )
-            let root = resolved.url
-            if isUsableCheckpointsRoot(root) {
-                return root
-            }
-            let nested = root.appendingPathComponent("checkpoints", isDirectory: true)
-            if isUsableCheckpointsRoot(nested) {
-                return nested
-            }
-        } catch let error as ManagedModelResolver.ResolverError {
-            throw ValidationError(error.localizedDescription)
-        }
-
-        throw ValidationError("Music Acestep checkpoints not found. Add --checkpoints-root or set MERERUN_MUSIC_ACESTEP_ROOT.")
+        try await ACEStepCLIHelper.resolveCheckpointsRoot(
+            model: model,
+            checkpointsRoot: checkpointsRoot,
+            turboSubdirectory: turboSubdirectory,
+            vaeSubdirectory: vaeSubdirectory,
+            lmSubdirectory: useLM ? lmSubdirectory : nil,
+            textSubdirectory: textSubdirectory
+        )
     }
 
     private func resolveACEStepLMSubdirectory(at root: URL, explicit: String?) throws -> String? {
-        let fm = FileManager.default
-
-        func isDirectory(_ url: URL) -> Bool {
-            var isDir: ObjCBool = false
-            return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
-        }
-        func isUsableLMDirectory(_ url: URL) -> Bool {
-            isDirectory(url) && ACEStep5HzLMResources(rootURL: url).validate(fileManager: fm).isEmpty
-        }
-
-        if let explicit, !explicit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let explicitNormalized = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
-            let explicitRoot = root.appendingPathComponent(explicitNormalized, isDirectory: true)
-            guard isUsableLMDirectory(explicitRoot) else {
-                throw ValidationError("--lm-subdirectory not found: \(explicitNormalized)")
-            }
-            return explicitNormalized
-        }
-
-        let preferredCandidates = [
-            "acestep-5Hz-lm-1.7B",
-            "acestep-5hz-lm-1.7b",
-            "acestep-5Hz-lm-4B",
-            "acestep-5hz-lm-4b",
-            "acestep-5Hz-lm",
-            "acestep-5hz-lm",
-            "music-acestep-5hz-lm-1.7b",
-            "music-acestep-5Hz-lm-1.7B",
-            "music-acestep-5hz-lm-4b",
-            "music-acestep-5Hz-lm-4B",
-            "music-acestep-5hz-lm",
-            "music-acestep-5Hz-lm",
-            "lm",
-            "music-acestep-lm"
-        ]
-
-        for candidate in preferredCandidates {
-            if isUsableLMDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
-                return candidate
-            }
-        }
-
-        let discovered = (try? fm.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ))?.first(where: { directory in
-            let isDirectory = (try? directory.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-            return isDirectory
-                && directory.lastPathComponent.lowercased().contains("lm")
-                && directory.lastPathComponent.lowercased().contains("5hz")
-                && ACEStep5HzLMResources(rootURL: directory).validate(fileManager: fm).isEmpty
-        })
-
-        return discovered?.lastPathComponent
+        try ACEStepCLIHelper.resolveLMSubdirectory(at: root, explicit: explicit)
     }
 
     private func resolveACEStepTextSubdirectory(at root: URL, explicit: String?) throws -> String? {
-        let fm = FileManager.default
-
-        func isDirectory(_ url: URL) -> Bool {
-            var isDir: ObjCBool = false
-            return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
-        }
-
-        if let explicit, !explicit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let explicitNormalized = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
-            let explicitRoot = root.appendingPathComponent(explicitNormalized, isDirectory: true)
-            guard isDirectory(explicitRoot) else {
-                throw ValidationError("--text-subdirectory not found: \(explicitNormalized)")
-            }
-            return explicitNormalized
-        }
-
-        let preferredCandidates = [
-            "Qwen3-Embedding-0.6B",
-            "qwen3-embedding-0.6b",
-            "Qwen3-Embedding-4B",
-            "qwen3-embedding-4b",
-            "Qwen3-Embedding",
-            "qwen3-embedding",
-            "text_encoder",
-            "text-encoder"
-        ]
-
-        for candidate in preferredCandidates {
-            if isDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
-                return candidate
-            }
-        }
-
-        let discovered = (try? fm.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ))?.first(where: { directory in
-            let isDirectory = (try? directory.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-            let name = directory.lastPathComponent.lowercased()
-            return isDirectory && (
-                (name.contains("qwen3") && name.contains("embedding"))
-                || name == "text_encoder"
-                || name == "text-encoder"
-            )
-        })
-
-        return discovered?.lastPathComponent
+        try ACEStepCLIHelper.resolveTextSubdirectory(at: root, explicit: explicit)
     }
 
     func buildAcestepCheckpointCandidates() -> [URL] {
-        var candidates: [URL] = []
-
-        if let explicit = checkpointsRoot?.trimmingCharacters(in: .whitespacesAndNewlines), !explicit.isEmpty {
-            candidates.append(URL(fileURLWithPath: explicit).standardizedFileURL)
-        }
-
-        var modelPathExists = false
-        let explicitModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let explicitModel = model.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty {
-            let url = URL(fileURLWithPath: explicitModel).standardizedFileURL
-            if FileManager.default.fileExists(atPath: url.path) {
-                modelPathExists = true
-                candidates.append(url)
-            }
-        }
-
-        if let envRoot = ProcessInfo.processInfo.environment["MERERUN_MUSIC_ACESTEP_ROOT"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !envRoot.isEmpty
-        {
-            candidates.append(URL(fileURLWithPath: envRoot).standardizedFileURL)
-        }
-
-        let managedModelID = explicitModel.lowercased()
-        if !managedModelID.isEmpty && !modelPathExists {
-            let requestedRoot = MereRunModelPaths.modelsDir
-                .appendingPathComponent(managedModelID, isDirectory: true)
-                .standardizedFileURL
-            candidates.append(requestedRoot)
-            candidates.append(requestedRoot.appendingPathComponent("checkpoints", isDirectory: true))
-        }
-
-        if managedModelID.isEmpty {
-            let localModelRoot = MereRunModelPaths.modelsDir
-                .appendingPathComponent(ModelResolver.ModelID.aceStep.rawValue, isDirectory: true)
-                .standardizedFileURL
-            candidates.append(localModelRoot)
-            candidates.append(localModelRoot.appendingPathComponent("checkpoints", isDirectory: true))
-        }
-
-        return candidates
+        ACEStepCLIHelper.buildCheckpointCandidates(model: model, checkpointsRoot: checkpointsRoot)
     }
 
     private func resolveACEStepTurboSubdirectory(at root: URL, explicit: String) throws -> String {
-        let fm = FileManager.default
-        func isDirectory(_ url: URL) -> Bool {
-            var isDir: ObjCBool = false
-            return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
-        }
-        func isUsableTurboDirectory(_ url: URL) -> Bool {
-            isDirectory(url) && ACEStepResources(rootURL: url).validate(fileManager: fm).isEmpty
-        }
-
-        let trimmed = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
-        let upstreamDefault = "acestep-v15-turbo"
-        let compatibilityDefault = "music-acestep-v15-turbo"
-        let xlTurboDefault = "acestep-v15-xl-turbo"
-        let candidates = trimmed == upstreamDefault
-            ? [upstreamDefault, compatibilityDefault, xlTurboDefault]
-            : [trimmed]
-
-        for candidate in candidates where isUsableTurboDirectory(root.appendingPathComponent(candidate, isDirectory: true)) {
-            return candidate
-        }
-        throw ValidationError("--turbo-subdirectory not found: \(trimmed)")
-    }
-
-    private func isUsableCheckpointsRoot(_ root: URL) -> Bool {
-        let fm = FileManager.default
-
-        func isDirectory(_ url: URL) -> Bool {
-            var isDir: ObjCBool = false
-            return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
-        }
-        func isUsableTurboDirectory(_ url: URL) -> Bool {
-            isDirectory(url) && ACEStepResources(rootURL: url).validate(fileManager: fm).isEmpty
-        }
-
-        guard isDirectory(root) else {
-            return false
-        }
-        let turboCandidates = turboSubdirectory == "acestep-v15-turbo"
-            ? ["acestep-v15-turbo", "music-acestep-v15-turbo", "acestep-v15-xl-turbo"]
-            : [turboSubdirectory]
-        guard turboCandidates.contains(where: { isUsableTurboDirectory(root.appendingPathComponent($0, isDirectory: true)) }) else {
-            return false
-        }
-        guard isDirectory(root.appendingPathComponent(vaeSubdirectory)) else {
-            return false
-        }
-
-        if useLM, let lmSubdirectory, !lmSubdirectory.isEmpty {
-            guard isDirectory(root.appendingPathComponent(lmSubdirectory)) else {
-                return false
-            }
-        }
-
-        if let textSubdirectory, !textSubdirectory.isEmpty {
-            guard isDirectory(root.appendingPathComponent(textSubdirectory)) else {
-                return false
-            }
-        }
-
-        return true
+        try ACEStepCLIHelper.resolveTurboSubdirectory(at: root, explicit: explicit)
     }
 
     private static let defaultACEStepShift: Float = 3.0
-}
-
-private extension String {
-    var nonEmpty: String? {
-        isEmpty ? nil : self
-    }
 }
 
 private enum ACEStepWAVWriter {
