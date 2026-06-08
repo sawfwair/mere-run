@@ -784,7 +784,11 @@ actor RuntimeModelPool {
         let memoryLimits = memoryPressurePolicy.limits(for: memorySample)
         let settings = (try? settingsStore.load())?.models ?? [:]
         let installed = installedServableCatalogIDs()
-        let ids = Set(installed + Array(loadedModels.keys) + [defaultModelID] + Array(settings.keys))
+        var ids = Set<String>(installed)
+        ids.formUnion(loadedModels.keys)
+        ids.formUnion(states.keys)
+        ids.insert(defaultModelID)
+        ids.formUnion(settings.keys)
         var prefixStats: [String: PrefixKVCacheStats] = [:]
         var batchingStats: [String: RuntimeDecodeBatchingStats] = [:]
         var mtpStats: [String: Gemma4MTPStats] = [:]
@@ -800,7 +804,7 @@ actor RuntimeModelPool {
                 mtpStats[id] = stats
             }
         }
-        let snapshots = ids.sorted().compactMap { id in
+        let snapshots: [RuntimeModelPoolEntrySnapshot] = ids.sorted().compactMap { id in
             snapshot(
                 for: id,
                 settings: settings,
@@ -810,7 +814,7 @@ actor RuntimeModelPool {
             )
         }
         let activeRequests = snapshots.reduce(0) { $0 + $1.activeRequests }
-        let loadedCount = snapshots.filter(\.loaded).count
+        let loadedCount = snapshots.filter { $0.loaded }.count
         return RuntimeModelPoolStatus(
             object: "runtime.status",
             defaultModel: defaultModelID,
@@ -841,7 +845,7 @@ actor RuntimeModelPool {
                 decodeBatchers: Array(batchingStats.values)
             ),
             benchmarkStats: RuntimeBenchmarkStatsSummary(
-                stats: snapshots.compactMap(\.benchmarkStats).filter {
+                stats: snapshots.compactMap { $0.benchmarkStats }.filter {
                     $0.completedRequests > 0 || $0.failedRequests > 0
                 }
             )
