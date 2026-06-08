@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Fixed
+
+- fixed `scripts/install-local.sh` on macOS so local installs stage every built
+  framework and SwiftPM bundle, including Magenta RT2, plus the vendored MLX
+  shader bundle before invoking the packaged installer.
+
 ## 0.14.0 - 2026-06-08
 
 ### Added

@@ -114,13 +114,14 @@ stage_asset() {
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   for asset in \
-    "${build_dir}/llama.framework" \
-    "${build_dir}/mlx-swift_Cmlx.bundle" \
+    "${build_dir}"/*.framework \
+    "${build_dir}"/*.bundle \
     "${build_dir}/Resources" \
     "${build_dir}"/*.dylib
   do
     stage_asset "$asset"
   done
+  stage_asset "${repo_root}/vendor/mlx-swift_Cmlx.bundle"
 else
   native_lib_dir="${repo_root}/.build/native/linux-$(uname -m)/llama/lib"
   case "$(uname -m)" in

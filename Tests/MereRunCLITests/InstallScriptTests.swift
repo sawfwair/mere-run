@@ -232,6 +232,108 @@ final class InstallScriptTests: XCTestCase {
         )
     }
 
+    func testInstallLocalStagesDarwinFrameworksBundlesAndVendoredMlx() throws {
+        #if os(Linux)
+        throw XCTSkip("install-local Darwin runtime asset staging is macOS-only.")
+        #else
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appendingPathComponent("InstallLocalTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: rootURL) }
+
+        let repoURL = rootURL.appendingPathComponent("repo", isDirectory: true)
+        let scriptsURL = repoURL.appendingPathComponent("scripts", isDirectory: true)
+        let vendorMlxResourcesURL = repoURL
+            .appendingPathComponent("vendor/mlx-swift_Cmlx.bundle/Contents/Resources", isDirectory: true)
+        let buildURL = rootURL.appendingPathComponent("build", isDirectory: true)
+        let fakeBinURL = rootURL.appendingPathComponent("bin", isDirectory: true)
+        let destURL = rootURL.appendingPathComponent("dest/mere.run", isDirectory: false)
+        try fileManager.createDirectory(at: scriptsURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: vendorMlxResourcesURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: buildURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: fakeBinURL, withIntermediateDirectories: true)
+
+        let repoRootURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for scriptName in ["install-local.sh", "install.sh"] {
+            let scriptURL = scriptsURL.appendingPathComponent(scriptName, isDirectory: false)
+            try fileManager.copyItem(
+                at: repoRootURL.appendingPathComponent("scripts/\(scriptName)", isDirectory: false),
+                to: scriptURL
+            )
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+        }
+
+        let fakeCLIURL = buildURL.appendingPathComponent("mere.run", isDirectory: false)
+        try """
+        #!/usr/bin/env bash
+        echo "mere.run local test"
+        """.write(to: fakeCLIURL, atomically: true, encoding: .utf8)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeCLIURL.path)
+
+        try fileManager.createDirectory(
+            at: buildURL.appendingPathComponent("magentart.framework", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try "fake framework".write(
+            to: buildURL.appendingPathComponent("magentart.framework/magentart", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+        try fileManager.createDirectory(
+            at: buildURL.appendingPathComponent("MereRun_MereRunCLI.bundle", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try "fake guide".write(
+            to: buildURL.appendingPathComponent("MereRun_MereRunCLI.bundle/guide.txt", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "fake metallib".write(
+            to: vendorMlxResourcesURL.appendingPathComponent("default.metallib", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let fakeSwiftURL = fakeBinURL.appendingPathComponent("swift", isDirectory: false)
+        try """
+        #!/usr/bin/env bash
+        if [[ "$*" == *"--show-bin-path"* ]]; then
+          printf '%s\\n' "\(buildURL.path)"
+          exit 0
+        fi
+        exit 0
+        """.write(to: fakeSwiftURL, atomically: true, encoding: .utf8)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeSwiftURL.path)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [
+            scriptsURL.appendingPathComponent("install-local.sh", isDirectory: false).path,
+            "--no-build",
+        ]
+        var environment = ProcessInfo.processInfo.environment
+        environment["MERERUN_INSTALL_BIN_DEST"] = destURL.path
+        environment["PATH"] = "\(fakeBinURL.path):/usr/bin:/bin:/usr/sbin:/sbin"
+        process.environment = environment
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        try process.run()
+        process.waitUntilExit()
+        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+        XCTAssertEqual(process.terminationStatus, 0, output)
+        XCTAssertTrue(fileManager.fileExists(atPath: destURL.path))
+        XCTAssertTrue(fileManager.fileExists(atPath: destURL.deletingLastPathComponent().appendingPathComponent("magentart.framework/magentart").path))
+        XCTAssertTrue(fileManager.fileExists(atPath: destURL.deletingLastPathComponent().appendingPathComponent("MereRun_MereRunCLI.bundle/guide.txt").path))
+        XCTAssertTrue(fileManager.fileExists(atPath: destURL.deletingLastPathComponent().appendingPathComponent("mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib").path))
+        #endif
+    }
+
     private func makeInstallerFixture() throws -> InstallerFixture {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
