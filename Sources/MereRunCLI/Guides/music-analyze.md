@@ -54,6 +54,28 @@ Important fields:
 - `inputDurationSeconds`
 - `analyzedDurationSeconds`
 
+## Workflow Choices
+
+Use this guide as the command topic for ACE-Step audio understanding:
+
+```bash
+mere.run guide music analyze --model music-acestep
+mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
+```
+
+Use standalone `music analyze` when you want a reviewable JSON artifact before
+generation, when you are cataloging source files, or when you want to decide
+which metadata to override manually.
+
+Use `music generate --analyze-source-audio` when analysis is only an input to a
+cover or remix. In that path, analysis fills missing generation metadata before
+the direct ACE-Step DiT cover pass. Explicit generation flags such as `--bpm`,
+`--keyscale`, `--timesignature`, and `--metadata-language` still take priority.
+
+Use `--duration 30` for fast probes on long songs. Run without `--duration` when
+the entire song structure matters, or add `--include-raw-lm` when debugging why
+metadata was missing or parsed unexpectedly.
+
 ## Examples
 
 ```bash
@@ -67,6 +89,15 @@ mere.run music analyze ./song.mp3 \
   --duration 30 \
   --include-raw-lm \
   > ./song-analysis.json
+```
+
+```bash
+mere.run music generate \
+  "dream-pop cover with soft vocals, preserve melody and phrasing" \
+  --source-audio ./song.mp3 \
+  --analyze-source-audio \
+  --audio-cover-strength 1.0 \
+  --output ./faithful-cover.wav
 ```
 
 ```bash

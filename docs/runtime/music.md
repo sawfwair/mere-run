@@ -18,6 +18,22 @@ This page covers the native music-generation paths exposed through
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
 
+## Guides
+
+Music guidance follows the command/cookbook shape used by the rest of
+`mere.run`: choose the command first, then focus the guide with a model id.
+
+```bash
+mere.run guide music generate --model music-acestep
+mere.run guide music generate --model music-acestep-xl-turbo
+mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
+mere.run guide music generate --model music-magenta-rt2-small
+```
+
+There is no separate `ace-step` guide topic. ACE-Step text-to-music, covers,
+style-transfer covers, and source-audio understanding are documented under
+`music generate` and `music analyze`, because those are the public CLI surfaces.
+
 ## Typical workflow
 
 ```bash
