@@ -26,6 +26,7 @@ swift run mere.run music generate \
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --audio-cover-strength 1.0 \
   --output ./cover.wav
 
@@ -33,6 +34,7 @@ swift run mere.run music generate \
   "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \
   --model music-acestep-xl-turbo \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --audio-cover-strength 0.20 \
   --cover-noise-strength 0.0 \
   --output ./reggaeton-cover.wav
@@ -66,6 +68,11 @@ base ACE-Step VAE and Qwen3 text encoder; the `-lm4b` variant also installs the
 optional 4B 5 Hz LM for `--use-lm` runs. ACE-Step cover/repaint/extract tasks
 follow upstream and skip the 5 Hz LM phase so source-audio conditioning stays
 faithful.
+
+For covers, `--analyze-source-audio` runs ACE-Step audio understanding before
+the direct DiT cover pass. It converts the source audio to 5 Hz audio codes,
+asks the LM for source BPM, key/scale, language, and time signature, and fills
+only metadata fields you did not pass explicitly.
 
 For faithful covers, keep `--audio-cover-strength 1.0` and leave
 `--cover-noise-strength` at its default `0.0`. For style-transfer covers, lower

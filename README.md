@@ -360,6 +360,7 @@ swift run mere.run music generate \
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --audio-cover-strength 1.0 \
   --output ./cover.wav
 
@@ -368,6 +369,7 @@ swift run mere.run music generate \
   "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \
   --model music-acestep-xl-turbo \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --audio-cover-strength 0.20 \
   --cover-noise-strength 0.0 \
   --output ./reggaeton-cover.wav

@@ -92,12 +92,14 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "dream-pop cover",
             "--source-audio", "~/Downloads/song.mp3",
             "--reference-audio", "/tmp/ref-a.wav", "/tmp/ref-b.wav",
+            "--analyze-source-audio",
             "--audio-cover-strength", "0.75",
             "--cover-noise-strength", "0.45",
         ])
 
         XCTAssertEqual(cmd.sourceAudio, "~/Downloads/song.mp3")
         XCTAssertEqual(cmd.referenceAudio, ["/tmp/ref-a.wav", "/tmp/ref-b.wav"])
+        XCTAssertTrue(cmd.analyzeSourceAudio)
         XCTAssertEqual(cmd.audioCoverStrength, 0.75, accuracy: 0.0001)
         XCTAssertEqual(cmd.coverNoiseStrength, 0.45, accuracy: 0.0001)
         XCTAssertTrue(cmd.resolvedACEStepIsCover)
@@ -140,6 +142,38 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
 
         XCTAssertEqual(duration, 2.0, accuracy: 0.0001)
         XCTAssertEqual(cmd.resolvedMetadataDuration(effectiveDurationSeconds: duration), "2 seconds")
+    }
+
+    func testMusicGenerateSourceAnalysisFillsOnlyMissingMetadata() throws {
+        let cmd = try MusicGenerate.parse([
+            "reggaeton cover",
+            "--source-audio", "~/Downloads/song.mp3",
+        ])
+        let metadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
+            bpm: nil,
+            caption: "reggaeton cover",
+            duration: "180 seconds",
+            keyscale: "A minor",
+            language: nil,
+            timesignature: nil
+        )
+        let analysis = ACEStepMusicUnderstandingMetadata(
+            bpm: 95,
+            durationSeconds: 180,
+            keyscale: "G major",
+            language: "en",
+            timesignature: "4"
+        )
+
+        let merged = cmd.mergedMetadataWithSourceAnalysis(metadata, analysis)
+
+        XCTAssertEqual(merged.metadata.bpm, "95")
+        XCTAssertEqual(merged.metadata.caption, "reggaeton cover")
+        XCTAssertEqual(merged.metadata.duration, "180 seconds")
+        XCTAssertEqual(merged.metadata.keyscale, "A minor")
+        XCTAssertEqual(merged.metadata.language, "en")
+        XCTAssertEqual(merged.metadata.timesignature, "4")
+        XCTAssertEqual(merged.filledFields, ["bpm", "language", "timesignature"])
     }
 
     func testMusicGenerateParsesMagentaControls() throws {

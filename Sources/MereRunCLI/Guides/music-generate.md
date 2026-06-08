@@ -49,6 +49,10 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--shift`: turbo scheduler shift; ACE-Step CLI default is `3.0`, matching upstream.
 - `--seed`: deterministic generation.
 - `--source-audio`: source song for ACE-Step cover conditioning; implies cover mode unless `--non-cover` is set.
+- `--analyze-source-audio`: run ACE-Step 5 Hz LM audio understanding before a
+  cover and fill missing BPM, key/scale, language, and time signature metadata
+  from the source audio. Explicit `--bpm`, `--keyscale`, `--timesignature`, and
+  `--metadata-language` values always win.
 - `--reference-audio`: optional ACE-Step timbre reference audio file(s).
 - `--audio-cover-strength`: cover conditioning strength from `0` to `1`.
 - `--cover-noise-strength`: source-latent noise initialization strength from
@@ -124,6 +128,7 @@ mere.run music generate \
 mere.run music generate \
   "dream-pop cover with soft vocals, lush guitars, wide chorus" \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --lyrics-file ./cover-lyrics.txt \
   --audio-cover-strength 1.0 \
   --duration 20 \
@@ -135,6 +140,7 @@ mere.run music generate \
   "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion, perreo club energy, chopped pop vocals, glossy synth stabs" \
   --model music-acestep-xl-turbo \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --lyrics-file ./lyrics.txt \
   --audio-cover-strength 0.20 \
   --cover-noise-strength 0.0 \
@@ -166,6 +172,9 @@ mere.run music realtime \
 - If vocals are garbled, simplify lyrics and add section tags.
 - If a cover drifts, keep `--audio-cover-strength 1.0`, avoid `--use-lm`, and
   make the caption explicitly ask to preserve melody, tempo, phrasing, and structure.
+- For covers with unknown metadata, add `--analyze-source-audio` so the 5 Hz LM
+  can infer BPM, key/scale, language, and time signature from the source's audio
+  codes before direct DiT cover generation. User-provided metadata stays pinned.
 - For style-transfer covers, start around `--audio-cover-strength 0.2` and keep
   `--cover-noise-strength 0.0` so the prompt can steer genre and arrangement.
   Lower `--audio-cover-strength` if the original still dominates; only raise

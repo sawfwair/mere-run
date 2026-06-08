@@ -23,6 +23,9 @@ The format is based on Keep a Changelog.
   pressure evicts every idle unpinned model.
 - added `music generate --source-audio` and `--reference-audio` so ACE-Step can
   run source-conditioned cover generation from regular audio files.
+- added `music generate --analyze-source-audio` so ACE-Step covers can use
+  5 Hz LM audio understanding to fill missing BPM, key/scale, language, and
+  time-signature metadata from the source song before direct DiT generation.
 - added ACE-Step Haar DCW sampler correction with upstream defaults for cleaner
   native diffusion output.
 - added managed ACE-Step 1.5 XL Turbo pulls with `music-acestep-xl-turbo`, plus

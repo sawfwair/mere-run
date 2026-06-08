@@ -593,6 +593,7 @@ Key options:
 - `--lyrics`
 - `--lyrics-file`
 - `--source-audio`: source song for ACE-Step cover conditioning; implies cover mode unless `--non-cover` is set
+- `--analyze-source-audio`: use ACE-Step 5 Hz LM audio understanding to fill missing cover metadata from `--source-audio`
 - `--reference-audio`: optional ACE-Step timbre reference audio file(s)
 - `--duration`
 - `--steps`
@@ -633,6 +634,7 @@ swift run mere.run music generate \
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \
   --source-audio ./song.mp3 \
+  --analyze-source-audio \
   --lyrics-file ./cover-lyrics.txt \
   --audio-cover-strength 0.85 \
   --output ./cover.wav

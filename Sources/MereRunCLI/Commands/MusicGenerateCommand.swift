@@ -65,6 +65,12 @@ struct MusicGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong("use-lm")], help: "Use 5Hz LM constrained decoding for supported ACE-Step tasks.")
     var useLM: Bool = false
 
+    @Flag(
+        name: [.customLong("analyze-source-audio")],
+        help: "Use ACE-Step 5Hz LM audio understanding to fill missing cover metadata from --source-audio."
+    )
+    var analyzeSourceAudio: Bool = false
+
     @Option(name: [.customLong("duration")], help: "Output duration in seconds.")
     var durationSeconds: Float = 10.0
 
@@ -212,21 +218,28 @@ struct MusicGenerate: AsyncParsableCommand {
         let isCover = resolvedACEStepIsCover
         let effectiveTaskType = resolvedACEStepTaskType(isCover: isCover)
         let effectiveUseLM = resolvedACEStepUsesLM(taskType: effectiveTaskType)
+        if analyzeSourceAudio && !isCover {
+            throw ValidationError("--analyze-source-audio requires ACE-Step cover mode with --source-audio.")
+        }
+        let needsLMResources = effectiveUseLM || analyzeSourceAudio
 
         let checkpointsRootURL = try await resolveACEStepCheckpointsRoot()
         let resolvedTurboSubdirectory = try resolveACEStepTurboSubdirectory(
             at: checkpointsRootURL,
             explicit: turboSubdirectory
         )
-        let resolvedLMSubdirectory = try effectiveUseLM
+        let resolvedLMSubdirectory = try needsLMResources
             ? resolveACEStepLMSubdirectory(at: checkpointsRootURL, explicit: lmSubdirectory)
             : nil
         let resolvedTextSubdirectory = try resolveACEStepTextSubdirectory(
             at: checkpointsRootURL,
             explicit: textSubdirectory
         )
-        if effectiveUseLM && resolvedLMSubdirectory == nil {
-            throw ValidationError("--use-lm requires --lm-subdirectory. Set --lm-subdirectory or keep a default layout like 'acestep-5Hz-lm-1.7B'.")
+        if needsLMResources && resolvedLMSubdirectory == nil {
+            throw ValidationError(
+                "--use-lm and --analyze-source-audio require --lm-subdirectory. "
+                    + "Set --lm-subdirectory or keep a default layout like 'acestep-5Hz-lm-1.7B'."
+            )
         }
         if resolvedTextSubdirectory == nil {
             throw ValidationError("ACE-Step text encoder not found. Set --text-subdirectory or keep a default layout like 'Qwen3-Embedding-0.6B'.")
@@ -252,7 +265,7 @@ struct MusicGenerate: AsyncParsableCommand {
             completeTrackClasses: completeTrackClasses
         )
 
-        let userMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
+        var userMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
             bpm: bpm.map(String.init),
             caption: caption,
             duration: resolvedMetadataDuration(effectiveDurationSeconds: effectiveDurationSeconds),
@@ -272,7 +285,7 @@ struct MusicGenerate: AsyncParsableCommand {
             checkpointsRootURL: checkpointsRootURL,
             turboSubdirectory: resolvedTurboSubdirectory,
             vaeSubdirectory: vaeSubdirectory,
-            lmSubdirectory: effectiveUseLM ? resolvedLMSubdirectory : nil,
+            lmSubdirectory: needsLMResources ? resolvedLMSubdirectory : nil,
             textEncoderSubdirectory: resolvedTextSubdirectory
         )
         let resources = try await container.resources()
@@ -282,6 +295,31 @@ struct MusicGenerate: AsyncParsableCommand {
             lmResources: resources.lmResources,
             textEncoderResources: resources.textEncoderResources
         )
+
+        if analyzeSourceAudio {
+            guard let sourceAudio48kHz else {
+                throw ValidationError("--analyze-source-audio requires --source-audio.")
+            }
+            if !quiet {
+                CLIStderr.write("Analyzing ACE-Step source audio with 5Hz LM\n")
+            }
+            let sourceAnalysis = try pipeline.understandSourceAudio(
+                sourceAudio48kHz: sourceAudio48kHz,
+                durationSeconds: effectiveDurationSeconds,
+                lmConfig: .init(maxNewTokens: 2048, temperature: 0.3, topK: lmTopK, topP: lmTopP)
+            )
+            let merge = mergedMetadataWithSourceAnalysis(userMetadata, sourceAnalysis.metadata)
+            userMetadata = merge.metadata
+            if !quiet {
+                let summary = sourceAnalysis.metadata.understandingSummary
+                CLIStderr.write("ACE-Step source analysis: \(summary)\n")
+                if merge.filledFields.isEmpty {
+                    CLIStderr.write("No missing ACE-Step metadata fields were filled from source analysis\n")
+                } else {
+                    CLIStderr.write("Filled ACE-Step metadata from source analysis: \(merge.filledFields.joined(separator: ", "))\n")
+                }
+            }
+        }
 
         let inference = ACEStepInferenceConfig(
             durationSeconds: effectiveDurationSeconds,
@@ -589,6 +627,54 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         let seconds = max(1, Int(effectiveDurationSeconds))
         return "\(seconds) seconds"
+    }
+
+    func mergedMetadataWithSourceAnalysis(
+        _ metadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
+        _ analysis: ACEStepMusicUnderstandingMetadata
+    ) -> (metadata: ACEStep5HzLMConstrainedSampler.UserMetadata, filledFields: [String]) {
+        var filledFields: [String] = []
+
+        let analyzedBPM = analysis.bpm.map(String.init)
+        let mergedBPM = fillMissing(metadata.bpm, with: analyzedBPM, field: "bpm", filledFields: &filledFields)
+        let mergedKeyscale = fillMissing(metadata.keyscale, with: analysis.keyscale, field: "keyscale", filledFields: &filledFields)
+        let mergedLanguage = fillMissing(metadata.language, with: analysis.language, field: "language", filledFields: &filledFields)
+        let mergedTimeSignature = fillMissing(
+            metadata.timesignature,
+            with: analysis.timesignature,
+            field: "timesignature",
+            filledFields: &filledFields
+        )
+
+        return (
+            ACEStep5HzLMConstrainedSampler.UserMetadata(
+                bpm: mergedBPM,
+                caption: metadata.caption,
+                duration: metadata.duration,
+                keyscale: mergedKeyscale,
+                language: mergedLanguage,
+                timesignature: mergedTimeSignature
+            ),
+            filledFields
+        )
+    }
+
+    private func fillMissing(
+        _ existing: String?,
+        with analyzed: String?,
+        field: String,
+        filledFields: inout [String]
+    ) -> String? {
+        let trimmedExisting = existing?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedExisting.isEmpty {
+            return existing
+        }
+        let trimmedAnalyzed = analyzed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedAnalyzed.isEmpty else {
+            return existing
+        }
+        filledFields.append(field)
+        return trimmedAnalyzed
     }
 
     private func resolveInstruction(
