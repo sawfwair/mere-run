@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.14.0 - 2026-06-08
+
 ### Added
 
 - added `image generate --structured-prompt` / `--json-prompt`, an opt-in local
@@ -13,6 +15,8 @@ The format is based on Keep a Changelog.
   captions before generation, defaulting the adapter to
   `text-chat-gemma4-12b-4bit` with reviewable `--structured-prompt-output`
   artifacts and Ideogram-friendly prompt token budgeting.
+- added Gemma structured-image JSON recovery so malformed local adapter output
+  can be repaired and retried before image generation falls back.
 - added runtime-pool TTL eviction so loaded API models with `ttlSeconds` unload
   after they sit idle, while pinned models stay protected from automatic
   TTL/LRU eviction.
@@ -21,6 +25,9 @@ The format is based on Keep a Changelog.
   than fixed resident-memory ratios. Elevated pressure pauses extra concurrent
   admissions and evicts the least-recently-used idle unpinned model; critical
   pressure evicts every idle unpinned model.
+- added API/runtime status details for active requests, admission pressure,
+  cache summaries, loaded runtime entries, and per-model benchmark state so
+  server health can be inspected without private tooling.
 - added `music generate --source-audio` and `--reference-audio` so ACE-Step can
   run source-conditioned cover generation from regular audio files.
 - added `music generate --analyze-source-audio` so ACE-Step covers can use
@@ -29,19 +36,34 @@ The format is based on Keep a Changelog.
 - added `music analyze` so ACE-Step can inspect regular audio files and emit
   JSON metadata from the 5 Hz LM audio-understanding path before cover/remix
   workflows.
+- added ACE-Step cover controls for source-latent noise, cover strength,
+  reference audio, task routing, metadata hints, and lyrics-file workflows so
+  covers can be tuned between faithful and style-transferred outputs.
 - added ACE-Step Haar DCW sampler correction with upstream defaults for cleaner
   native diffusion output.
 - added managed ACE-Step 1.5 XL Turbo pulls with `music-acestep-xl-turbo`, plus
   optional 4B 5 Hz LM installation through `music-acestep-xl-turbo-lm4b`.
+
+### Changed
+
+- changed ACE-Step cover prompting to preserve bracketed lyric sections and to
+  let source-audio understanding fill only missing metadata, keeping user style
+  prompts in control when direct values are supplied.
+- changed structured image generation to keep generated JSON artifacts
+  reviewable while retrying adapter output with a narrower repair prompt.
 
 ### Fixed
 
 - fixed model-store size reporting for real directories that contain symlinked
   payload directories, and added `model info` storage layout details so wrapper
   directories no longer look like tiny installs.
-- added native runtime backend diagnostics on stderr for text and image
+- fixed native runtime backend diagnostics on stderr for text and image
   generation so MLX/Metal vs GGUF backend selection is visible during smoke
   tests.
+- fixed runtime status after pressure eviction so models touched by settings or
+  memory-guard state still appear even when they are no longer loaded locally.
+- fixed SwiftPM target membership so the MagentaRT2 README stays out of CLI
+  compilation.
 
 ## 0.13.1 - 2026-06-05
 
