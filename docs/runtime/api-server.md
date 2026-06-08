@@ -144,6 +144,15 @@ swift run mere.run api serve \
   in-memory counters justify it
 - runtime settings are stored at
   `<active model store>/.mere-run/runtime-model-settings.json`
+- the runtime pool applies `ttlSeconds` opportunistically when handling pool
+  operations; expired idle models unload automatically unless their settings are
+  pinned. Explicit unload remains available for pinned models.
+- memory-pressure LRU uses the API server's `--memory-guard` tier. The guard
+  derives soft/hard ceilings from process resident memory, host memory
+  headroom, and a tier reserve (`safe`, `balanced`, `aggressive`, or
+  `custom`). Elevated pressure pauses extra concurrent admissions and evicts the
+  least-recently-used idle unpinned model; critical pressure evicts every idle
+  unpinned model. Active requests are never evicted.
 - `mere.run status` is the preferred quick check before wiring an editor or
   agent to a local server
 - it is intentionally local-first

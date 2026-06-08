@@ -74,7 +74,7 @@ struct ModelRuntimeSet: ParsableCommand {
     @Flag(name: [.long], help: "Clear this model's alias.")
     var clearAlias: Bool = false
 
-    @Flag(name: [.long], help: "Keep this model loaded across future TTL/LRU passes.")
+    @Flag(name: [.long], help: "Keep this model loaded across automatic TTL/LRU eviction.")
     var pinned: Bool = false
 
     @Flag(name: [.long], help: "Clear the pinned flag.")

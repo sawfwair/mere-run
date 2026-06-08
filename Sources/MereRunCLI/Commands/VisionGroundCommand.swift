@@ -67,6 +67,7 @@ struct VisionGround: AsyncParsableCommand {
             modelRootURL: resolvedModel.rootURL,
             expectedModelID: resolvedModel.isManaged ? resolvedModel.modelID : nil
         )
+        defer { grounder.unload() }
         let result = try grounder.ground(
             imageURL: imageURL,
             queries: query,

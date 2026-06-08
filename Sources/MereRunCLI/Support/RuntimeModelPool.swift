@@ -1,5 +1,8 @@
 import Foundation
 import MereRunCore
+#if canImport(Darwin)
+import Darwin
+#endif
 
 struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     let object: String
@@ -76,6 +79,28 @@ struct RuntimeRequestAdmissionSnapshot: Codable, Equatable, Sendable {
     let totalAdmittedRequests: Int
     let totalCompletedRequests: Int
     let totalCancelledRequests: Int
+    let admissionPaused: Bool?
+    let pressure: String?
+
+    init(
+        maxActiveRequests: Int,
+        activeRequests: Int,
+        queuedRequests: Int,
+        totalAdmittedRequests: Int,
+        totalCompletedRequests: Int,
+        totalCancelledRequests: Int,
+        admissionPaused: Bool? = nil,
+        pressure: String? = nil
+    ) {
+        self.maxActiveRequests = maxActiveRequests
+        self.activeRequests = activeRequests
+        self.queuedRequests = queuedRequests
+        self.totalAdmittedRequests = totalAdmittedRequests
+        self.totalCompletedRequests = totalCompletedRequests
+        self.totalCancelledRequests = totalCancelledRequests
+        self.admissionPaused = admissionPaused
+        self.pressure = pressure
+    }
 }
 
 struct RuntimeFutureStats: Codable, Equatable, Sendable {
@@ -259,9 +284,333 @@ struct RuntimeDecodeBatchingSummary: Codable, Equatable, Sendable {
 
 struct RuntimeMemorySnapshot: Codable, Equatable, Sendable {
     let physicalBytes: UInt64
+    let residentBytes: UInt64?
+    let currentBytes: UInt64?
+    let ceilingBytes: UInt64?
+    let softLimitBytes: UInt64?
+    let hardLimitBytes: UInt64?
     let activeRequests: Int
     let activeModelCount: Int
+    let guardTier: RuntimeMemoryGuardTier
     let pressure: String
+
+    init(
+        physicalBytes: UInt64,
+        residentBytes: UInt64? = nil,
+        currentBytes: UInt64? = nil,
+        ceilingBytes: UInt64? = nil,
+        softLimitBytes: UInt64? = nil,
+        hardLimitBytes: UInt64? = nil,
+        activeRequests: Int,
+        activeModelCount: Int,
+        guardTier: RuntimeMemoryGuardTier = .balanced,
+        pressure: String
+    ) {
+        self.physicalBytes = physicalBytes
+        self.residentBytes = residentBytes
+        self.currentBytes = currentBytes
+        self.ceilingBytes = ceilingBytes
+        self.softLimitBytes = softLimitBytes
+        self.hardLimitBytes = hardLimitBytes
+        self.activeRequests = activeRequests
+        self.activeModelCount = activeModelCount
+        self.guardTier = guardTier
+        self.pressure = pressure
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case physicalBytes
+        case residentBytes
+        case currentBytes
+        case ceilingBytes
+        case softLimitBytes
+        case hardLimitBytes
+        case activeRequests
+        case activeModelCount
+        case guardTier
+        case pressure
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        physicalBytes = try container.decode(UInt64.self, forKey: .physicalBytes)
+        residentBytes = try container.decodeIfPresent(UInt64.self, forKey: .residentBytes)
+        currentBytes = try container.decodeIfPresent(UInt64.self, forKey: .currentBytes)
+        ceilingBytes = try container.decodeIfPresent(UInt64.self, forKey: .ceilingBytes)
+        softLimitBytes = try container.decodeIfPresent(UInt64.self, forKey: .softLimitBytes)
+        hardLimitBytes = try container.decodeIfPresent(UInt64.self, forKey: .hardLimitBytes)
+        activeRequests = try container.decode(Int.self, forKey: .activeRequests)
+        activeModelCount = try container.decode(Int.self, forKey: .activeModelCount)
+        guardTier = try container.decodeIfPresent(RuntimeMemoryGuardTier.self, forKey: .guardTier) ?? .balanced
+        pressure = try container.decode(String.self, forKey: .pressure)
+    }
+}
+
+enum RuntimeMemoryPressureLevel: String, Codable, Equatable, Sendable {
+    case disabled
+    case unknown
+    case nominal
+    case elevated
+    case critical
+}
+
+enum RuntimeMemoryGuardTier: String, Codable, CaseIterable, Equatable, Sendable {
+    case off
+    case safe
+    case balanced
+    case aggressive
+    case custom
+
+    static let `default` = RuntimeMemoryGuardTier.balanced
+}
+
+struct RuntimeMemorySample: Equatable, Sendable {
+    let physicalBytes: UInt64
+    let residentBytes: UInt64?
+    let availableBytes: UInt64?
+    let freeBytes: UInt64?
+    let activeBytes: UInt64?
+    let inactiveBytes: UInt64?
+
+    init(
+        physicalBytes: UInt64,
+        residentBytes: UInt64?,
+        availableBytes: UInt64? = nil,
+        freeBytes: UInt64? = nil,
+        activeBytes: UInt64? = nil,
+        inactiveBytes: UInt64? = nil
+    ) {
+        self.physicalBytes = physicalBytes
+        self.residentBytes = residentBytes
+        self.availableBytes = availableBytes
+        self.freeBytes = freeBytes
+        self.activeBytes = activeBytes
+        self.inactiveBytes = inactiveBytes
+    }
+
+    static func current() -> RuntimeMemorySample {
+        RuntimeProcessMemory.currentSample()
+    }
+}
+
+struct RuntimeMemoryPressurePolicy: Equatable, Sendable {
+    let tier: RuntimeMemoryGuardTier
+    let customCeilingBytes: UInt64?
+    let softLimitFraction: Double
+    let hardLimitFraction: Double
+
+    static let `default` = RuntimeMemoryPressurePolicy(
+        tier: .default
+    )
+
+    init(
+        tier: RuntimeMemoryGuardTier = .default,
+        customCeilingBytes: UInt64? = nil,
+        softLimitFraction: Double = 0.90,
+        hardLimitFraction: Double = 0.95
+    ) {
+        self.tier = tier
+        self.customCeilingBytes = customCeilingBytes
+        self.softLimitFraction = softLimitFraction
+        self.hardLimitFraction = hardLimitFraction
+    }
+
+    func pressure(for sample: RuntimeMemorySample) -> RuntimeMemoryPressureLevel {
+        guard tier != .off else {
+            return .disabled
+        }
+        guard let currentBytes = currentBytes(for: sample),
+              let limits = limits(for: sample) else {
+            return .unknown
+        }
+        if currentBytes >= limits.hard {
+            return .critical
+        }
+        if currentBytes >= limits.soft {
+            return .elevated
+        }
+        return .nominal
+    }
+
+    func currentBytes(for sample: RuntimeMemorySample) -> UInt64? {
+        sample.residentBytes
+    }
+
+    func limits(for sample: RuntimeMemorySample) -> (ceiling: UInt64, soft: UInt64, hard: UInt64)? {
+        guard tier != .off, sample.physicalBytes > 0 else {
+            return nil
+        }
+        let ceiling: UInt64
+        switch tier {
+        case .off:
+            return nil
+        case .custom:
+            let custom = customCeilingBytes ?? 0
+            guard custom > 0 else {
+                return nil
+            }
+            ceiling = min(custom, staticCeiling(for: sample))
+        case .safe, .balanced, .aggressive:
+            ceiling = min(staticCeiling(for: sample), dynamicCeiling(for: sample))
+        }
+        guard ceiling > 0 else {
+            return nil
+        }
+        let soft = UInt64((Double(ceiling) * softLimitFraction).rounded(.down))
+        let hard = UInt64((Double(ceiling) * hardLimitFraction).rounded(.down))
+        return (ceiling, soft, hard)
+    }
+
+    private func staticCeiling(for sample: RuntimeMemorySample) -> UInt64 {
+        let reserve = staticReserveBytes(forPhysicalBytes: sample.physicalBytes)
+        guard sample.physicalBytes > reserve else {
+            return 0
+        }
+        return sample.physicalBytes - reserve
+    }
+
+    private func dynamicCeiling(for sample: RuntimeMemorySample) -> UInt64 {
+        guard let residentBytes = sample.residentBytes else {
+            return staticCeiling(for: sample)
+        }
+        if let freeBytes = sample.freeBytes,
+           let inactiveBytes = sample.inactiveBytes,
+           let activeBytes = sample.activeBytes {
+            return residentBytes
+                + freeBytes
+                + inactiveBytes
+                + UInt64((Double(activeBytes) * activeReclaimRatio).rounded(.down))
+        }
+        if let availableBytes = sample.availableBytes {
+            return residentBytes + availableBytes
+        }
+        return sample.physicalBytes
+    }
+
+    private var activeReclaimRatio: Double {
+        switch tier {
+        case .off, .custom:
+            return 0
+        case .safe:
+            return 0.20
+        case .balanced:
+            return 0.50
+        case .aggressive:
+            return 0.80
+        }
+    }
+
+    private func staticReserveBytes(forPhysicalBytes physicalBytes: UInt64) -> UInt64 {
+        let gib = UInt64(1024 * 1024 * 1024)
+        let smallSystemThreshold = 24 * gib
+        if physicalBytes < smallSystemThreshold {
+            return 4 * gib
+        }
+        switch tier {
+        case .off:
+            return physicalBytes
+        case .safe:
+            return 8 * gib
+        case .balanced:
+            return 6 * gib
+        case .aggressive:
+            return 4 * gib
+        case .custom:
+            return 2 * gib
+        }
+    }
+}
+
+private enum RuntimeProcessMemory {
+    static func currentSample() -> RuntimeMemorySample {
+        let physicalBytes = ProcessInfo.processInfo.physicalMemory
+        let residentBytes = currentResidentBytes()
+        let host = currentHostMemory()
+        return RuntimeMemorySample(
+            physicalBytes: physicalBytes,
+            residentBytes: residentBytes,
+            availableBytes: host.availableBytes,
+            freeBytes: host.freeBytes,
+            activeBytes: host.activeBytes,
+            inactiveBytes: host.inactiveBytes
+        )
+    }
+
+    private static func currentResidentBytes() -> UInt64? {
+        #if canImport(Darwin)
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), rebound, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else {
+            return nil
+        }
+        return UInt64(info.resident_size)
+        #elseif os(Linux)
+        guard let status = try? String(contentsOfFile: "/proc/self/status") else {
+            return nil
+        }
+        for line in status.split(separator: "\n") where line.hasPrefix("VmRSS:") {
+            let parts = line.split(separator: " ").compactMap { UInt64($0) }
+            guard let kilobytes = parts.first else {
+                return nil
+            }
+            return kilobytes * 1024
+        }
+        return nil
+        #else
+        return nil
+        #endif
+    }
+
+    private static func currentHostMemory() -> (
+        availableBytes: UInt64?,
+        freeBytes: UInt64?,
+        activeBytes: UInt64?,
+        inactiveBytes: UInt64?
+    ) {
+        #if canImport(Darwin)
+        var stats = vm_statistics64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size) / 4
+        let result = withUnsafeMutablePointer(to: &stats) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, rebound, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else {
+            return (nil, nil, nil, nil)
+        }
+        let pageSize = UInt64(getpagesize())
+        let free = UInt64(stats.free_count) * pageSize
+        let active = UInt64(stats.active_count) * pageSize
+        let inactive = UInt64(stats.inactive_count) * pageSize
+        return (free + inactive, free, active, inactive)
+        #elseif os(Linux)
+        guard let meminfo = try? String(contentsOfFile: "/proc/meminfo") else {
+            return (nil, nil, nil, nil)
+        }
+        var values: [String: UInt64] = [:]
+        for line in meminfo.split(separator: "\n") {
+            let parts = line.split(separator: " ")
+            guard let key = parts.first?.dropLast(),
+                  let kilobytes = parts.dropFirst().compactMap({ UInt64($0) }).first else {
+                continue
+            }
+            values[String(key)] = kilobytes * 1024
+        }
+        return (
+            values["MemAvailable"],
+            values["MemFree"],
+            values["Active"],
+            values["Inactive"]
+        )
+        #else
+        return (nil, nil, nil, nil)
+        #endif
+    }
 }
 
 struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
@@ -368,6 +717,11 @@ actor RuntimeModelPool {
         }
     }
 
+    private struct RuntimeLRUEvictionCandidate {
+        let id: String
+        let lastAccess: Date
+    }
+
     private let defaultModelID: String
     private let defaultEngine: RuntimeServingEngine
     private let startupModelPath: String?
@@ -377,6 +731,9 @@ actor RuntimeModelPool {
     private let gemma4ContinuousBatchingEnabled: Bool
     private let q35PrefixKVCacheEnabled: Bool
     private let q35ContinuousBatchingEnabled: Bool
+    private let currentDate: @Sendable () -> Date
+    private let currentMemorySample: @Sendable () -> RuntimeMemorySample
+    private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
 
     private var loadedModels: [String: RuntimeLoadedModel] = [:]
     private var states: [String: MutableState] = [:]
@@ -390,7 +747,10 @@ actor RuntimeModelPool {
         gemma4PrefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_PREFIX_KV_CACHE"] == "1",
         gemma4ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_CONTINUOUS_BATCHING"] == "1",
         q35PrefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFIX_KV_CACHE"] == "1",
-        q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1"
+        q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
+        currentDate: @escaping @Sendable () -> Date = { Date() },
+        currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
     ) {
         self.defaultModelID = defaultModelID
         self.defaultEngine = defaultEngine
@@ -401,6 +761,9 @@ actor RuntimeModelPool {
         self.gemma4ContinuousBatchingEnabled = gemma4ContinuousBatchingEnabled
         self.q35PrefixKVCacheEnabled = q35PrefixKVCacheEnabled
         self.q35ContinuousBatchingEnabled = q35ContinuousBatchingEnabled
+        self.currentDate = currentDate
+        self.currentMemorySample = currentMemorySample
+        self.memoryPressurePolicy = memoryPressurePolicy
     }
 
     func preloadDefault() async throws {
@@ -416,9 +779,16 @@ actor RuntimeModelPool {
     }
 
     func status(admission: RuntimeRequestAdmissionSnapshot?) async -> RuntimeModelPoolStatus {
+        await evictIdleModels()
+        let memorySample = currentMemorySample()
+        let memoryLimits = memoryPressurePolicy.limits(for: memorySample)
         let settings = (try? settingsStore.load())?.models ?? [:]
         let installed = installedServableCatalogIDs()
-        let ids = Set(installed + Array(loadedModels.keys) + [defaultModelID] + Array(settings.keys))
+        var ids = Set<String>(installed)
+        ids.formUnion(loadedModels.keys)
+        ids.formUnion(states.keys)
+        ids.insert(defaultModelID)
+        ids.formUnion(settings.keys)
         var prefixStats: [String: PrefixKVCacheStats] = [:]
         var batchingStats: [String: RuntimeDecodeBatchingStats] = [:]
         var mtpStats: [String: Gemma4MTPStats] = [:]
@@ -434,7 +804,7 @@ actor RuntimeModelPool {
                 mtpStats[id] = stats
             }
         }
-        let snapshots = ids.sorted().compactMap { id in
+        let snapshots: [RuntimeModelPoolEntrySnapshot] = ids.sorted().compactMap { id in
             snapshot(
                 for: id,
                 settings: settings,
@@ -444,7 +814,7 @@ actor RuntimeModelPool {
             )
         }
         let activeRequests = snapshots.reduce(0) { $0 + $1.activeRequests }
-        let loadedCount = snapshots.filter(\.loaded).count
+        let loadedCount = snapshots.filter { $0.loaded }.count
         return RuntimeModelPoolStatus(
             object: "runtime.status",
             defaultModel: defaultModelID,
@@ -458,10 +828,16 @@ actor RuntimeModelPool {
                 q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled
             ),
             memory: RuntimeMemorySnapshot(
-                physicalBytes: ProcessInfo.processInfo.physicalMemory,
+                physicalBytes: memorySample.physicalBytes,
+                residentBytes: memorySample.residentBytes,
+                currentBytes: memoryPressurePolicy.currentBytes(for: memorySample),
+                ceilingBytes: memoryLimits?.ceiling,
+                softLimitBytes: memoryLimits?.soft,
+                hardLimitBytes: memoryLimits?.hard,
                 activeRequests: activeRequests,
                 activeModelCount: loadedCount,
-                pressure: "unknown"
+                guardTier: memoryPressurePolicy.tier,
+                pressure: memoryPressurePolicy.pressure(for: memorySample).rawValue
             ),
             models: snapshots,
             cacheStats: RuntimeCacheStatsSummary(
@@ -469,7 +845,7 @@ actor RuntimeModelPool {
                 decodeBatchers: Array(batchingStats.values)
             ),
             benchmarkStats: RuntimeBenchmarkStatsSummary(
-                stats: snapshots.compactMap(\.benchmarkStats).filter {
+                stats: snapshots.compactMap { $0.benchmarkStats }.filter {
                     $0.completedRequests > 0 || $0.failedRequests > 0
                 }
             )
@@ -478,6 +854,7 @@ actor RuntimeModelPool {
 
     func loadModel(idOrAlias: String) async throws -> RuntimeModelPoolEntrySnapshot {
         let resolved = try resolveModel(idOrAlias)
+        await evictIdleModels(excluding: [resolved.id])
         _ = try await ensureLoaded(resolved)
         touch(id: resolved.id, error: nil)
         return try snapshot(idOrAlias: resolved.id)
@@ -496,22 +873,28 @@ actor RuntimeModelPool {
         return try snapshot(idOrAlias: resolved.id)
     }
 
-    func settings(idOrAlias: String) throws -> RuntimeModelSettings {
+    func settings(idOrAlias: String) async throws -> RuntimeModelSettings {
+        await evictIdleModels()
         let resolved = try resolveModel(idOrAlias)
         return resolved.settings
     }
 
-    func updateSettings(idOrAlias: String, settings: RuntimeModelSettings) throws -> RuntimeModelSettings {
+    func updateSettings(idOrAlias: String, settings: RuntimeModelSettings) async throws -> RuntimeModelSettings {
         let resolved = try resolveModel(idOrAlias, requireInstalled: false)
         guard let spec = resolved.spec else {
             throw RuntimeModelPoolError.invalidSettings("Runtime settings require a managed catalog model id.")
         }
         do {
             try settingsStore.writeSettings(settings, for: spec.id)
+            await evictIdleModels()
             return try settingsStore.settings(for: spec.id)
         } catch {
             throw RuntimeModelPoolError.invalidSettings(error.localizedDescription)
         }
+    }
+
+    func currentMemoryPressure() -> RuntimeMemoryPressureLevel {
+        memoryPressurePolicy.pressure(for: currentMemorySample())
     }
 
     func makeChatPlan(
@@ -520,6 +903,7 @@ actor RuntimeModelPool {
         serverContextSize: Int
     ) async throws -> RuntimeChatPlan {
         let resolved = try resolveModel(openAIRequest.model)
+        await evictIdleModels(excluding: [resolved.id])
         var effectiveRequest = openAIRequest
         applyDefaults(from: resolved.settings, to: &effectiveRequest)
         let contextSize = resolved.settings.maxContextTokens ?? serverContextSize
@@ -555,7 +939,7 @@ actor RuntimeModelPool {
     fileprivate func releaseLease(modelID: String) {
         var state = state(for: modelID)
         state.activeRequests = max(0, state.activeRequests - 1)
-        state.lastAccess = Date()
+        state.lastAccess = currentDate()
         states[modelID] = state
     }
 
@@ -568,7 +952,7 @@ actor RuntimeModelPool {
             state.totalPrefillSeconds += timing.prefillSeconds
             state.totalDecodeSeconds += timing.decodeSeconds
         }
-        state.lastCompletedAt = Date()
+        state.lastCompletedAt = currentDate()
         state.lastError = nil
         states[modelID] = state
     }
@@ -578,6 +962,101 @@ actor RuntimeModelPool {
         state.failedRequests += 1
         state.lastError = error.localizedDescription
         states[modelID] = state
+    }
+
+    @discardableResult
+    func evictIdleModels(
+        now: Date? = nil,
+        memorySample: RuntimeMemorySample? = nil,
+        excluding excludedIDs: Set<String> = []
+    ) async -> [String] {
+        let expired = await evictExpiredIdleModels(now: now, excluding: excludedIDs)
+        let lru = await evictIdleModelsForMemoryPressure(sample: memorySample, excluding: excludedIDs)
+        return Array(Set(expired + lru)).sorted()
+    }
+
+    @discardableResult
+    func evictExpiredIdleModels(
+        now: Date? = nil,
+        excluding excludedIDs: Set<String> = []
+    ) async -> [String] {
+        let referenceDate = now ?? currentDate()
+        let settings = (try? settingsStore.load())?.models ?? [:]
+        let loadedEntries = loadedModels
+        var evicted: [String] = []
+
+        for (id, loaded) in loadedEntries {
+            let state = state(for: id)
+            guard loadedModels[id] != nil,
+                  !excludedIDs.contains(id),
+                  let modelSettings = settings[id],
+                  !modelSettings.pinned,
+                  let ttlSeconds = modelSettings.ttlSeconds,
+                  let lastAccess = state.lastAccess,
+                  state.activeRequests == 0,
+                  referenceDate.timeIntervalSince(lastAccess) >= Double(ttlSeconds) else {
+                continue
+            }
+
+            loadedModels.removeValue(forKey: id)
+            await loaded.unload()
+            evicted.append(id)
+        }
+
+        return evicted.sorted()
+    }
+
+    @discardableResult
+    func evictIdleModelsForMemoryPressure(
+        sample: RuntimeMemorySample? = nil,
+        excluding excludedIDs: Set<String> = []
+    ) async -> [String] {
+        let memorySample = sample ?? currentMemorySample()
+        let pressure = memoryPressurePolicy.pressure(for: memorySample)
+        let evictionLimit: Int?
+        switch pressure {
+        case .disabled, .unknown, .nominal:
+            return []
+        case .elevated:
+            evictionLimit = 1
+        case .critical:
+            evictionLimit = nil
+        }
+
+        let settings = (try? settingsStore.load())?.models ?? [:]
+        let candidates = loadedModels.compactMap { id, _ -> RuntimeLRUEvictionCandidate? in
+            let state = state(for: id)
+            let modelSettings = settings[id] ?? RuntimeModelSettings()
+            guard !excludedIDs.contains(id),
+                  state.activeRequests == 0,
+                  !modelSettings.pinned else {
+                return nil
+            }
+            return RuntimeLRUEvictionCandidate(
+                id: id,
+                lastAccess: state.lastAccess ?? .distantPast
+            )
+        }
+        .sorted {
+            if $0.lastAccess == $1.lastAccess {
+                return $0.id < $1.id
+            }
+            return $0.lastAccess < $1.lastAccess
+        }
+
+        var evicted: [String] = []
+        for candidate in candidates {
+            guard evictionLimit.map({ evicted.count < $0 }) ?? true else {
+                break
+            }
+            guard let loaded = loadedModels.removeValue(forKey: candidate.id) else {
+                continue
+            }
+            await loaded.unload()
+            evicted.append(candidate.id)
+        }
+
+        return evicted.sorted()
     }
 
     private func ensureLoaded(_ resolved: ResolvedModel) async throws -> RuntimeLoadedModel {
@@ -837,7 +1316,7 @@ actor RuntimeModelPool {
 
     private func touch(id: String, error: String?) {
         var state = state(for: id)
-        state.lastAccess = Date()
+        state.lastAccess = currentDate()
         state.lastError = error
         states[id] = state
     }
@@ -845,7 +1324,7 @@ actor RuntimeModelPool {
     private func retainLease(id: String) {
         var state = state(for: id)
         state.activeRequests += 1
-        state.lastAccess = Date()
+        state.lastAccess = currentDate()
         states[id] = state
     }
 
@@ -862,6 +1341,20 @@ actor RuntimeModelPool {
             return ManagedModelCategory.textChat.rawValue
         }
     }
+
+    #if DEBUG
+    func seedLoadedModelForTesting(
+        id: String,
+        lastAccess: Date,
+        activeRequests: Int = 0
+    ) {
+        loadedModels[id] = .textCode(CodeGenGenerator(modelId: id), modelPath: nil)
+        var state = state(for: id)
+        state.activeRequests = activeRequests
+        state.lastAccess = lastAccess
+        states[id] = state
+    }
+    #endif
 }
 
 actor RuntimeRequestAdmission {
@@ -877,6 +1370,7 @@ actor RuntimeRequestAdmission {
     }
 
     private let maxActiveRequests: Int
+    private let pressureProvider: @Sendable () async -> RuntimeMemoryPressureLevel
     private var activeRequests = 0
     private var waiters: [Waiter] = []
     private var waiterStates: [UUID: WaiterState] = [:]
@@ -884,13 +1378,18 @@ actor RuntimeRequestAdmission {
     private var totalCompletedRequests = 0
     private var totalCancelledRequests = 0
 
-    init(maxActiveRequests: Int) {
+    init(
+        maxActiveRequests: Int,
+        pressureProvider: @escaping @Sendable () async -> RuntimeMemoryPressureLevel = { .nominal }
+    ) {
         precondition(maxActiveRequests > 0, "maxActiveRequests must be positive")
         self.maxActiveRequests = maxActiveRequests
+        self.pressureProvider = pressureProvider
     }
 
     func acquire() async throws -> RuntimeRequestAdmissionLease {
-        if activeRequests < maxActiveRequests {
+        await drain()
+        if await canAdmitNow() {
             return admit()
         }
 
@@ -908,20 +1407,23 @@ actor RuntimeRequestAdmission {
         }
     }
 
-    fileprivate func releaseLease() {
+    fileprivate func releaseLease() async {
         activeRequests = max(0, activeRequests - 1)
         totalCompletedRequests += 1
-        drain()
+        await drain()
     }
 
-    func snapshot() -> RuntimeRequestAdmissionSnapshot {
-        RuntimeRequestAdmissionSnapshot(
+    func snapshot() async -> RuntimeRequestAdmissionSnapshot {
+        let pressure = await pressureProvider()
+        return RuntimeRequestAdmissionSnapshot(
             maxActiveRequests: maxActiveRequests,
             activeRequests: activeRequests,
             queuedRequests: waiters.count,
             totalAdmittedRequests: totalAdmittedRequests,
             totalCompletedRequests: totalCompletedRequests,
-            totalCancelledRequests: totalCancelledRequests
+            totalCancelledRequests: totalCancelledRequests,
+            admissionPaused: admissionPaused(for: pressure),
+            pressure: pressure.rawValue
         )
     }
 
@@ -958,8 +1460,11 @@ actor RuntimeRequestAdmission {
         }
     }
 
-    private func drain() {
+    private func drain() async {
         while activeRequests < maxActiveRequests, !waiters.isEmpty {
+            guard await canAdmitNow() else {
+                return
+            }
             let waiter = waiters.removeFirst()
             guard waiterStates[waiter.id] != .cancelled else {
                 waiterStates.removeValue(forKey: waiter.id)
@@ -975,6 +1480,26 @@ actor RuntimeRequestAdmission {
         activeRequests += 1
         totalAdmittedRequests += 1
         return RuntimeRequestAdmissionLease(admission: self)
+    }
+
+    private func canAdmitNow() async -> Bool {
+        guard activeRequests < maxActiveRequests else {
+            return false
+        }
+        let pressure = await pressureProvider()
+        guard admissionPaused(for: pressure) else {
+            return true
+        }
+        return activeRequests == 0
+    }
+
+    private func admissionPaused(for pressure: RuntimeMemoryPressureLevel) -> Bool {
+        switch pressure {
+        case .elevated, .critical:
+            return true
+        case .disabled, .unknown, .nominal:
+            return false
+        }
     }
 }
 
@@ -1206,7 +1731,7 @@ extension RuntimeServingEngine {
         case .textChatKlein:
             return .localTextWithStructuredJSON
         case .textChatGemma4:
-            return .localTextWithTools
+            return .localTextWithToolsAndStructuredJSON
         case .textChatQ36, .textChatQ35:
             return .localTextWithToolsAndVision
         case .textChatLFM2:

@@ -20,6 +20,8 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertNil(cmd.apiKey)
         XCTAssertEqual(cmd.rateLimitPerMinute, 60)
         XCTAssertEqual(cmd.maxActiveRequests, 1)
+        XCTAssertEqual(cmd.memoryGuard, .balanced)
+        XCTAssertNil(cmd.memoryGuardCustomCeilingGB)
         XCTAssertEqual(cmd.contextSize, 32_768)
         XCTAssertNil(cmd.kvBits)
         XCTAssertNil(cmd.kvQuantScheme)
@@ -37,6 +39,8 @@ final class APIServeCommandTests: XCTestCase {
             "--api-key", "secret",
             "--rate-limit-per-minute", "120",
             "--max-active-requests", "2",
+            "--memory-guard", "custom",
+            "--memory-guard-custom-ceiling-gb", "42.5",
             "--context-size", "8192",
             "--kv-bits", "3.5",
             "--kv-quant-scheme", "turboquant",
@@ -52,6 +56,8 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.apiKey, "secret")
         XCTAssertEqual(cmd.rateLimitPerMinute, 120)
         XCTAssertEqual(cmd.maxActiveRequests, 2)
+        XCTAssertEqual(cmd.memoryGuard, .custom)
+        XCTAssertEqual(cmd.memoryGuardCustomCeilingGB, 42.5)
         XCTAssertEqual(cmd.contextSize, 8192)
         XCTAssertEqual(cmd.kvBits, 3.5)
         XCTAssertEqual(cmd.kvQuantScheme, "turboquant")
@@ -363,6 +369,22 @@ final class APIServeCommandTests: XCTestCase {
             fallbackLoraPath: nil,
             contextSize: 4_096,
             capabilities: .localTextWithStructuredJSON
+        )
+        XCTAssertTrue(chatRequest.requiresJSON)
+    }
+
+    func testGemma4EngineCapabilityAcceptsJSONMode() throws {
+        let request = OpenAIChatRequest(
+            model: "text-chat-gemma4-12b-4bit",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            response_format: OpenAIResponseFormat(type: "json_object")
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textChatGemma4.openAICompatibility
         )
         XCTAssertTrue(chatRequest.requiresJSON)
     }

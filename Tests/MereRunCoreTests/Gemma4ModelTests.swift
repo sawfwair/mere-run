@@ -155,6 +155,31 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         XCTAssertEqual(logits.shape, [1, 4, 64])
     }
 
+    func testUnifiedConfigDecodesMultimodalTokenIds() throws {
+        let config = try decodeConfig([
+            "model_type": "gemma4_unified",
+            "architectures": ["Gemma4UnifiedForConditionalGeneration"],
+            "tie_word_embeddings": true,
+            "eos_token_id": [1, 106, 50],
+            "image_token_id": 258_880,
+            "audio_token_id": 258_881,
+            "video_token_id": 258_884,
+            "boi_token_id": 255_999,
+            "boa_token_id": 256_000,
+            "eoa_token_index": 258_883,
+            "eoi_token_id": 258_882,
+            "text_config": makeBaseConfig(),
+        ])
+
+        XCTAssertEqual(config.imageTokenId, 258_880)
+        XCTAssertEqual(config.audioTokenId, 258_881)
+        XCTAssertEqual(config.videoTokenId, 258_884)
+        XCTAssertEqual(config.boiTokenId, 255_999)
+        XCTAssertEqual(config.boaTokenId, 256_000)
+        XCTAssertEqual(config.eoaTokenId, 258_883)
+        XCTAssertEqual(config.eoiTokenId, 258_882)
+    }
+
     func testAttentionKEqVDisablesValueProjectionForFullAttentionLayers() throws {
         var configObject = makeBaseConfig()
         configObject["attention_k_eq_v"] = true

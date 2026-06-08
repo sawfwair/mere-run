@@ -11,6 +11,9 @@ public struct GenerationConfig: Sendable {
     public var topP: Float
     public var repetitionPenalty: Float?
     public var repetitionContextSize: Int
+    /// Token ids that must never be sampled (e.g. multimodal special tokens
+    /// during text-only generation). Applied as a -inf logit mask.
+    public var bannedTokens: [Int]
 
     public init(
         maxTokens: Int = 256,
@@ -18,7 +21,8 @@ public struct GenerationConfig: Sendable {
         topK: Int = 0,
         topP: Float = 0.9,
         repetitionPenalty: Float? = 1.05,
-        repetitionContextSize: Int = 20
+        repetitionContextSize: Int = 20,
+        bannedTokens: [Int] = []
     ) {
         self.maxTokens = maxTokens
         self.temperature = temperature
@@ -26,7 +30,21 @@ public struct GenerationConfig: Sendable {
         self.topP = topP
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
+        self.bannedTokens = bannedTokens
     }
+}
+
+public func applyTokenBan(logits: MLXArray, tokens: [Int]) -> MLXArray {
+    guard !tokens.isEmpty else { return logits }
+    let vocabularySize = logits.dim(-1)
+    let valid = tokens.filter { $0 >= 0 && $0 < vocabularySize }
+    guard !valid.isEmpty else { return logits }
+    // Build the ban as an additive mask on a fresh array — MLXArray is a reference
+    // type, so writing into `logits` directly would mutate the caller's tensor.
+    let indices = MLXArray(valid.map(Int32.init))
+    let mask = MLXArray.zeros(like: logits)
+    mask[indices] = MLXArray(Array(repeating: -Float.infinity, count: valid.count)).asType(logits.dtype)
+    return logits + mask
 }
 
 public func argMaxSample(logits: MLXArray) -> Int {
@@ -103,6 +121,8 @@ public func sampleToken(
 ) -> Int {
     var logits = logits
 
+    logits = applyTokenBan(logits: logits, tokens: config.bannedTokens)
+
     if let penalty = config.repetitionPenalty, !previousTokens.isEmpty {
         let contextTokens = Array(previousTokens.suffix(config.repetitionContextSize))
         logits = applyRepetitionPenalty(logits: logits, tokens: contextTokens, penalty: penalty)
@@ -141,6 +161,8 @@ public func samplingProbabilities(
     previousTokens: [Int]
 ) -> MLXArray {
     var logits = logits
+
+    logits = applyTokenBan(logits: logits, tokens: config.bannedTokens)
 
     if let penalty = config.repetitionPenalty, !previousTokens.isEmpty {
         let contextTokens = Array(previousTokens.suffix(config.repetitionContextSize))

@@ -30,10 +30,28 @@ public final class Ideogram4Generator: ImageGenerator {
 
     public init() {}
 
+    deinit {
+        unload()
+    }
+
+    public func unload() {
+        loadedModelPath = nil
+        conditionalTransformer = nil
+        unconditionalTransformer = nil
+        textEncoder = nil
+        tokenizer = nil
+        vae = nil
+        clearGPUMemory()
+    }
+
     public func generate(
         _ request: GenerationRequest,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
+        defer {
+            clearGPUMemory()
+        }
+
         guard request.referenceImages.isEmpty else {
             throw Ideogram4GeneratorError.unsupportedMode("reference images")
         }
@@ -52,7 +70,13 @@ public final class Ideogram4Generator: ImageGenerator {
         }
 
         if loadedModelPath != rootURL.path || conditionalTransformer == nil {
-            try loadModels(from: resources, progressHandler: progressHandler)
+            do {
+                unload()
+                try loadModels(from: resources, progressHandler: progressHandler)
+            } catch {
+                unload()
+                throw error
+            }
             loadedModelPath = rootURL.path
         }
 
@@ -247,5 +271,13 @@ public final class Ideogram4Generator: ImageGenerator {
             hash &*= 0x0000_0100_0000_01b3
         }
         return hash
+    }
+
+    private func clearGPUMemory(synchronize: Bool = true) {
+        if synchronize {
+            Stream.gpu.synchronize()
+        }
+        MLX.eval(MLXArray([]))
+        Memory.clearCache()
     }
 }

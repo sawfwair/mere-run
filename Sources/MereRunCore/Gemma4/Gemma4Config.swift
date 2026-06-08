@@ -182,7 +182,11 @@ public struct Gemma4Config: Decodable, Sendable, Hashable {
     public let textConfig: Gemma4TextConfig
     public let visionConfig: Gemma4UnifiedVisionConfig?
     public let imageTokenId: Int?
+    public let audioTokenId: Int?
+    public let videoTokenId: Int?
+    public let boaTokenId: Int?
     public let boiTokenId: Int?
+    public let eoaTokenId: Int?
     public let eoiTokenId: Int?
 
     private enum CodingKeys: String, CodingKey {
@@ -193,7 +197,12 @@ public struct Gemma4Config: Decodable, Sendable, Hashable {
         case textConfig = "text_config"
         case visionConfig = "vision_config"
         case imageTokenId = "image_token_id"
+        case audioTokenId = "audio_token_id"
+        case videoTokenId = "video_token_id"
+        case boaTokenId = "boa_token_id"
         case boiTokenId = "boi_token_id"
+        case eoaTokenId = "eoa_token_id"
+        case eoaTokenIndex = "eoa_token_index"
         case eoiTokenId = "eoi_token_id"
     }
 
@@ -205,7 +214,12 @@ public struct Gemma4Config: Decodable, Sendable, Hashable {
         self.textConfig = try container.decode(Gemma4TextConfig.self, forKey: .textConfig)
         self.visionConfig = try container.decodeIfPresent(Gemma4UnifiedVisionConfig.self, forKey: .visionConfig)
         self.imageTokenId = try container.decodeIfPresent(Int.self, forKey: .imageTokenId)
+        self.audioTokenId = try container.decodeIfPresent(Int.self, forKey: .audioTokenId)
+        self.videoTokenId = try container.decodeIfPresent(Int.self, forKey: .videoTokenId)
+        self.boaTokenId = try container.decodeIfPresent(Int.self, forKey: .boaTokenId)
         self.boiTokenId = try container.decodeIfPresent(Int.self, forKey: .boiTokenId)
+        self.eoaTokenId = try container.decodeIfPresent(Int.self, forKey: .eoaTokenId)
+            ?? container.decodeIfPresent(Int.self, forKey: .eoaTokenIndex)
         self.eoiTokenId = try container.decodeIfPresent(Int.self, forKey: .eoiTokenId)
 
         if let direct = try container.decodeIfPresent([Int].self, forKey: .eosTokenId) {

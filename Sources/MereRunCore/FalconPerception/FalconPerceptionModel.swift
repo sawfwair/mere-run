@@ -555,6 +555,8 @@ final class FalconPerceptionLanguageModel: Module {
     }
 
     func resetGroundingState() {
+        model.lastHiddenState = nil
+        model.capturedLayerOutputs.removeAll(keepingCapacity: false)
         ropeDelta = nil
         prefillPositionIDs = nil
         prefillPosHW = nil

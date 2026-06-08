@@ -15,10 +15,22 @@ public enum HiDreamO1GeneratorError: LocalizedError, Sendable {
 public final class HiDreamO1Generator: ImageGenerator {
     public init() {}
 
+    deinit {
+        unload()
+    }
+
+    public func unload() {
+        clearGPUMemory()
+    }
+
     public func generate(
         _ request: GenerationRequest,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
+        defer {
+            clearGPUMemory()
+        }
+
         progressHandler?(GenerationProgress(stage: .loadingModel, stepIndex: 0, totalSteps: 1))
         let rootURL = try resolveModelRoot(request)
         let resources = HiDreamO1Resources(rootURL: rootURL)
@@ -237,5 +249,13 @@ public final class HiDreamO1Generator: ImageGenerator {
                 maxSize: maxSize
             )
         }
+    }
+
+    private func clearGPUMemory(synchronize: Bool = true) {
+        if synchronize {
+            Stream.gpu.synchronize()
+        }
+        MLX.eval(MLXArray([]))
+        Memory.clearCache()
     }
 }

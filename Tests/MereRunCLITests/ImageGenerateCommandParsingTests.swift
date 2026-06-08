@@ -114,6 +114,106 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(caption.textRender, [])
     }
 
+    func testStructuredPromptAdapterNormalizesGemmaSnakeCaseSchema() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.gemmaSnakeCaseStructuredCaptionJSON,
+            fallbackPrompt: "a cafe sign reads 'TOKENS: FREE TODAY'"
+        )
+
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.backgroundSetting, "quiet sidewalk cafe")
+        XCTAssertEqual(caption.aesthetics.colorScheme, "warm earth tones")
+        XCTAssertEqual(caption.photographicCharacteristics.cameraAngle, "eye-level")
+        XCTAssertEqual(caption.styleMedium, "Photography")
+        XCTAssertEqual(caption.artisticStyle, "Candid street photography")
+        XCTAssertEqual(caption.textRender.map(\.text), ["TOKENS: FREE TODAY"])
+    }
+
+    func testStructuredPromptAdapterRepairsGemmaJSONPrefix() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.gemmaTruncatedStructuredCaptionJSON,
+            fallbackPrompt: "a cafe sign reads 'TOKENS: FREE TODAY' and 'ask for Dewane'"
+        )
+
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.shortDescription, "A hand-painted cafe sign.")
+        XCTAssertEqual(caption.backgroundSetting, "quiet sidewalk cafe")
+        XCTAssertEqual(caption.textRender.map(\.text), ["TOKENS: FREE TODAY", "ask for Dewane"])
+        XCTAssertEqual(caption.textRender.last?.font, "unspecified")
+    }
+
+    func testStructuredPromptAdapterSalvagesGemmaNonsenseTail() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.gemmaNonsenseTailStructuredCaptionJSON,
+            fallbackPrompt: "a cafe sign reads 'TOKENS: FREE TODAY' and 'ask for Dewane'"
+        )
+
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.shortDescription, "A hand-painted cafe sign.")
+        XCTAssertEqual(caption.backgroundSetting, "quiet sidewalk cafe")
+        XCTAssertEqual(caption.textRender.map(\.text), ["TOKENS: FREE TODAY", "ask for Dewane"])
+        XCTAssertFalse(normalized.contains("<audio|>"))
+    }
+
+    func testQuotedStringsExtraction() {
+        let prompt = """
+        a trailhead sign reads 'THE LOCAL WILD' with a smaller line below reading \
+        'do not feed the models', the sign's letters carved into wood, titled "Field Notes"
+        """
+        let quoted = StructuredImagePromptAdapter.quotedStrings(in: prompt)
+        XCTAssertEqual(quoted, ["Field Notes", "THE LOCAL WILD", "do not feed the models"])
+    }
+
+    func testQuotedStringsIgnoresApostrophes() {
+        let quoted = StructuredImagePromptAdapter.quotedStrings(
+            in: "the sign's weathered face catches the morning's first light"
+        )
+        XCTAssertEqual(quoted, [])
+    }
+
+    func testEnsuringTextRenderInjectsQuotedPromptText() throws {
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
+        XCTAssertEqual(caption.textRender, [])
+
+        let ensured = StructuredImagePromptAdapter.ensuringTextRender(
+            caption,
+            prompt: "a banner above the knight reads 'ONWARD'"
+        )
+        XCTAssertEqual(ensured.textRender.count, 1)
+        XCTAssertEqual(ensured.textRender.first?.text, "ONWARD")
+    }
+
+    func testEnsuringTextRenderKeepsModelProvidedEntries() throws {
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
+        let withEntry = StructuredImagePromptAdapter.ensuringTextRender(
+            caption,
+            prompt: "a banner reads 'ONWARD'"
+        )
+        // A second pass must not duplicate or overwrite the existing entry.
+        let unchanged = StructuredImagePromptAdapter.ensuringTextRender(
+            withEntry,
+            prompt: "a banner reads 'SOMETHING ELSE'"
+        )
+        XCTAssertEqual(unchanged.textRender, withEntry.textRender)
+    }
+
+    func testNormalizedCaptionJSONInjectsTextRenderForQuotedPrompt() throws {
+        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+            from: Self.validStructuredCaptionJSON,
+            fallbackPrompt: "a knight under a banner that reads 'ONWARD', sunny meadow"
+        )
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
+        XCTAssertEqual(caption.textRender.map(\.text), ["ONWARD"])
+    }
+
+    func testIsParseableJSONDistinguishesNearMissFromTokenSalad() {
+        XCTAssertTrue(StructuredImagePromptAdapter.isParseableJSON(#"{"objects": "wrong shape"}"#))
+        XCTAssertFalse(StructuredImagePromptAdapter.isParseableJSON(
+            "{ed feetization mas Dod asked Lolamente lesser0 or<audio|>"
+        ))
+        XCTAssertFalse(StructuredImagePromptAdapter.isParseableJSON(""))
+    }
+
     private static let validStructuredCaptionJSON = """
     {
       "short description": "A knight riding a white horse in a sunlit meadow.",
@@ -215,5 +315,115 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
       "text render": "none"
     }
     ```
+    """
+
+    private static let gemmaSnakeCaseStructuredCaptionJSON = """
+    {
+      "short description": "A hand-painted cafe sign.",
+      "objects": [
+        {
+          "description": "wooden sandwich board",
+          "location": "sidewalk",
+          "relative size": "medium",
+          "shape and color": "brown A-frame board",
+          "texture": "painted wood",
+          "appearance details": "chalk lettering",
+          "relationship": "foreground",
+          "number of objects": 1
+        }
+      ],
+      "background_setting": "quiet sidewalk cafe",
+      "lighting": "soft morning light",
+      "aesthetics": {
+        "composition": "off-center street photo",
+        "color_scheme": "warm earth tones",
+        "mood_atmosphere": "inviting"
+      },
+      "photographic_characteristics": {
+        "depth_of_field": "shallow",
+        "focus": "sharp sign text",
+        "camera_angle": "eye-level",
+        "lens_focal_length": "35mm"
+      },
+      "style_medium": "Photography",
+      "artistic_style": "Candid street photography",
+      "context": "morning cafe promotion",
+      "text_render": [
+        {
+          "text": "TOKENS: FREE TODAY",
+          "location": "main board",
+          "size": "large",
+          "color": "white chalk",
+          "font": "handwritten",
+          "appearance details": "chalk texture"
+        }
+      ]
+    }
+    """
+
+    private static let gemmaTruncatedStructuredCaptionJSON = """
+    {
+      "short_description": "A hand-painted cafe sign.",
+      "objects": ["wooden sandwich board"],
+      "background_setting": "quiet sidewalk cafe",
+      "lighting": "soft morning light",
+      "aesthetics": "warm street photo",
+      "photographic_characteristics": "35mm lens, eye-level",
+      "style_medium": "Photography",
+      "artistic_style": "Candid street photography",
+      "context": "morning cafe promotion",
+      "text_render": [
+        {
+          "text": "TOKENS: FREE TODAY",
+          "location": "main board",
+          "size": "large",
+          "color": "white chalk",
+          "font": "handwritten"
+        },
+        {
+          "text": "ask for Dewane",
+          "location": "bottom of board",
+          "size": "small",
+          "color": "White chalk",
+    """
+
+    private static let gemmaNonsenseTailStructuredCaptionJSON = """
+    {
+      "short_description": "A hand-painted cafe sign.",
+      "objects": ["wooden sandwich board"],
+      "background_setting": "quiet sidewalk cafe",
+      "lighting": {
+        "conditions": "soft morning light",
+        "direction": "front-left"
+      },
+      "aesthetics": {
+        "composition": "off-center street photo",
+        "color_scheme": "warm earth tones",
+        "mood_atmosphere": "inviting"
+      },
+      "photographic_characteristics": {
+        "depth_of_field": "shallow",
+        "focus": "sharp sign text",
+        "camera_angle": "eye-level",
+        "lens_focal_length": "35mm"
+      },
+      "style_medium": "Photography",
+      "artistic_style": "Candid street photography",
+      "context": "morning cafe promotion",
+      "text_render": [
+        {
+          "text": "TOKENS: FREE TODAY",
+          "location": "main board",
+          "size": "large",
+          "color": "white chalk",
+          "font": "handwritten",
+          "appearance details": "chalk texture"
+        },
+        {
+          "text": "ask for Dewane",
+          "location": "bottom of board",
+          "size": "small",
+          "color": "White chalk",
+          "font": "Handwritten, rustic $" loose token salad <audio|> still spilling,
     """
 }

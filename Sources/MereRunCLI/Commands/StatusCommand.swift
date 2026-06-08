@@ -293,7 +293,11 @@ enum StatusFormatter {
                 }
                 lines.append("  active requests: \(runtime.activeRequests)")
                 if let admission = runtime.admission {
-                    lines.append("  request admission: \(admission.activeRequests)/\(admission.maxActiveRequests) active, \(admission.queuedRequests) queued")
+                    var admissionLine = "  request admission: \(admission.activeRequests)/\(admission.maxActiveRequests) active, \(admission.queuedRequests) queued"
+                    if admission.admissionPaused == true {
+                        admissionLine += " (paused by \(admission.pressure ?? "memory") pressure)"
+                    }
+                    lines.append(admissionLine)
                 }
                 lines.append("  continuous batching: \(capabilityText(runtime.capabilities.continuousBatching))")
                 lines.append("  prefix KV reuse: \(capabilityText(runtime.capabilities.prefixKVReuse))")
@@ -356,7 +360,26 @@ enum StatusFormatter {
 
     private static func memoryText(_ memory: RuntimeMemorySnapshot) -> String {
         let physical = ByteCountFormatter.string(fromByteCount: Int64(memory.physicalBytes), countStyle: .memory)
-        return "\(memory.pressure) pressure, \(memory.activeModelCount) active model(s), \(physical) physical"
+        let guardText = "guard \(memory.guardTier.rawValue)"
+        let limitsText: String
+        if let currentBytes = memory.currentBytes,
+           let ceilingBytes = memory.ceilingBytes,
+           let softLimitBytes = memory.softLimitBytes,
+           let hardLimitBytes = memory.hardLimitBytes {
+            let current = ByteCountFormatter.string(fromByteCount: Int64(currentBytes), countStyle: .memory)
+            let ceiling = ByteCountFormatter.string(fromByteCount: Int64(ceilingBytes), countStyle: .memory)
+            let soft = ByteCountFormatter.string(fromByteCount: Int64(softLimitBytes), countStyle: .memory)
+            let hard = ByteCountFormatter.string(fromByteCount: Int64(hardLimitBytes), countStyle: .memory)
+            limitsText = ", current \(current), ceiling \(ceiling), soft \(soft), hard \(hard)"
+        } else {
+            limitsText = ""
+        }
+        if let residentBytes = memory.residentBytes {
+            let resident = ByteCountFormatter.string(fromByteCount: Int64(residentBytes), countStyle: .memory)
+            return "\(memory.pressure) pressure, \(guardText), \(memory.activeModelCount) active model(s), "
+                + "\(resident) resident, \(physical) physical\(limitsText)"
+        }
+        return "\(memory.pressure) pressure, \(guardText), \(memory.activeModelCount) active model(s), \(physical) physical\(limitsText)"
     }
 
     private static func capabilityText(_ capability: RuntimeCapabilityStatus) -> String {
