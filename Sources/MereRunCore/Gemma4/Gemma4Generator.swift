@@ -360,8 +360,12 @@ public actor Gemma4Generator: ChatGenerator {
             // A corrupted or degenerate decode otherwise surfaces them as token salad.
             generationConfig.bannedTokens = [
                 loadedConfig.imageTokenId,
+                loadedConfig.audioTokenId,
+                loadedConfig.videoTokenId,
                 loadedConfig.boiTokenId,
+                loadedConfig.boaTokenId,
                 loadedConfig.eoiTokenId,
+                loadedConfig.eoaTokenId,
             ].compactMap { $0 }
         }
 

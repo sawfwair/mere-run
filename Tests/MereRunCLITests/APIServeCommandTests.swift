@@ -373,6 +373,22 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(chatRequest.requiresJSON)
     }
 
+    func testGemma4EngineCapabilityAcceptsJSONMode() throws {
+        let request = OpenAIChatRequest(
+            model: "text-chat-gemma4-12b-4bit",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            response_format: OpenAIResponseFormat(type: "json_object")
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textChatGemma4.openAICompatibility
+        )
+        XCTAssertTrue(chatRequest.requiresJSON)
+    }
+
     func testChatRequestRejectsUnsupportedHighImpactFields() {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",

@@ -1727,7 +1727,7 @@ extension RuntimeServingEngine {
         case .textChatKlein:
             return .localTextWithStructuredJSON
         case .textChatGemma4:
-            return .localTextWithTools
+            return .localTextWithToolsAndStructuredJSON
         case .textChatQ36, .textChatQ35:
             return .localTextWithToolsAndVision
         case .textChatLFM2:

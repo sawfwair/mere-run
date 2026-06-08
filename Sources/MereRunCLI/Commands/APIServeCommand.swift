@@ -349,6 +349,12 @@ struct APIEngineCapabilities: Equatable, Sendable {
         supportsToolChoice: true
     )
 
+    static let localTextWithToolsAndStructuredJSON = APIEngineCapabilities(
+        supportsTools: true,
+        supportsToolChoice: true,
+        supportsStructuredOutputs: true
+    )
+
     static let localTextWithToolsAndVision = APIEngineCapabilities(
         supportsTools: true,
         supportsToolChoice: true,
