@@ -66,6 +66,8 @@ covered by the guide before printing:
 mere.run guide image generate --model image-zimage-nano
 mere.run guide text chat --model text-chat-gemma4
 mere.run guide speech transcribe --model speech-asr-parakeet
+mere.run guide music generate --model music-acestep-xl-turbo
+mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 ```
 
 If the model does not belong to the topic, the command prints a validation error

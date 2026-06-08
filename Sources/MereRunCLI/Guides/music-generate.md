@@ -94,6 +94,36 @@ capture. Add `--interactive` to steer while it runs with stdin commands such as
 `prompt <text>`, `temp <value>`, `noteon <0-131>`, `noteoff <0-131>`,
 `style streaming|full`, `drumless on|off`, `reset`, and `quit`.
 
+## Workflow Choices
+
+Use this guide as a command topic, then focus it with `--model` when needed:
+
+```bash
+mere.run guide music generate --model music-acestep
+mere.run guide music generate --model music-acestep-xl-turbo
+mere.run guide music generate --model music-magenta-rt2-small
+```
+
+For ACE-Step text-to-music, start with a direct caption and optional structured
+lyrics. Add `--use-lm` only when you want the 5 Hz LM planning phase for
+text-to-music; cover, repaint, extract, lego, and complete tasks use direct DiT
+conditioning instead.
+
+For ACE-Step covers, keep the source song in `--source-audio` and put the target
+arrangement in the caption. Add `--analyze-source-audio` when you want missing
+BPM, key/scale, language, and time signature filled from the source before
+generation. Keep `--audio-cover-strength 1.0` for a faithful cover.
+
+For ACE-Step style-transfer covers or remixes, lower `--audio-cover-strength`
+so the caption can steer genre and arrangement. Start around `0.20`, keep
+`--cover-noise-strength 0.0`, and only raise source noise when the result needs
+more of the original song's contour.
+
+For analysis-first workflows, run `mere.run music analyze` separately, inspect
+the JSON, then pass explicit `--bpm`, `--keyscale`, `--timesignature`, or
+`--metadata-language` values to pin the generated result. Explicit generation
+flags always win over source analysis.
+
 ## Prompting Patterns
 
 - Caption formula: genre + instrumentation + vocal style + mood + tempo + mix/production references.
@@ -102,6 +132,13 @@ capture. Add `--interactive` to steer while it runs with stdin commands such as
 - Use `--bpm`, `--keyscale`, and `--timesignature` when rhythm or harmony must be stable.
 - Use `music analyze` first when you want to inspect source BPM, key/scale, and
   time signature before choosing generation overrides.
+- For faithful covers, say what must stay fixed: melody, tempo, phrasing,
+  structure, language, and vocal range.
+- For style-transfer covers, make the new genre concrete with rhythm, drums,
+  bass, percussion, mix, and club/stage/room context.
+- Keep source lyrics sectioned with tags like `[verse]`, `[chorus]`, and
+  `[bridge]`; the model responds better to visible song structure than to a
+  plain paragraph.
 - Use `--duration 10` to draft, then extend once the caption works.
 - For Magenta RT2, put all musical direction in the prompt; lyrics and ACE-Step
   task modes are not supported by that runtime.
