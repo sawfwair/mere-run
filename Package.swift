@@ -399,7 +399,7 @@ let packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
     url: "https://github.com/huggingface/swift-transformers",
     from: "1.3.0"
   ),
-  .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"4.4.0"),
+  .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"5.0.0"),
   .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
   .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0")
 ]
