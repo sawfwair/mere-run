@@ -70,7 +70,7 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
     }
 
     func testMereRunCLIExposesReleaseVersion() {
-        XCTAssertEqual(MereRunCLIVersion.current, "0.14.0")
+        XCTAssertEqual(MereRunCLIVersion.current, "0.15.0")
         XCTAssertEqual(MereRunCLI.configuration.version, MereRunCLIVersion.current)
     }
 

@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.15.0 - 2026-06-13
+
 ### Added
 
 - added native OpenAI-compatible `/v1/embeddings` to `mere.run api serve`,
