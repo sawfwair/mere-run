@@ -15,13 +15,13 @@ extension ImageValidate {
         let testPrompt = "a red cube on a white background"
         print("  Prompt: \"\(testPrompt)\"")
 
-        let resources = ZImageTurboResources(rootURL: modelURL)
+        let (resources, manifest) = try resolvedZImageResources(modelURL: modelURL)
         let configs = try ZImageTurboModelConfigs.load(from: resources)
         print("  Model path: \(modelURL.path)")
         print("  Config: vocabSize=\(configs.textEncoder.vocabSize), hiddenSize=\(configs.textEncoder.hiddenSize), numLayers=\(configs.textEncoder.numHiddenLayers)")
 
         let tokenizer = try QwenTokenizer.load(
-            from: modelURL.appendingPathComponent("tokenizer"),
+            from: resources.tokenizerDirURL,
             maxLengthOverride: configs.textEncoder.maxPositionEmbeddings
         )
 
@@ -30,7 +30,11 @@ extension ImageValidate {
         MLX.eval(batch.inputIds)
         print("  Tokens: \(batch.inputIds.dim(1)) tokens (padded to \(maxLength))")
 
-        let textEncoder = try loadValidationTextEncoder(resources: resources, configs: configs)
+        let textEncoder = try loadValidationTextEncoder(
+            resources: resources,
+            configs: configs,
+            manifest: manifest
+        )
         let (embeddings, mask) = textEncoder(inputIds: batch.inputIds, attentionMask: batch.attentionMask)
         MLX.eval(embeddings)
 
@@ -75,22 +79,25 @@ extension ImageValidate {
         print("  Size: \(width)x\(height)")
         print("  Steps: \(steps)")
 
-        let resources = ZImageTurboResources(rootURL: modelURL)
+        let (resources, manifest) = try resolvedZImageResources(modelURL: modelURL)
         let configs = try ZImageTurboModelConfigs.load(from: resources)
         print("  Loading components...")
 
         let tokenizer = try QwenTokenizer.load(
-            from: modelURL.appendingPathComponent("tokenizer"),
+            from: resources.tokenizerDirURL,
             maxLengthOverride: configs.textEncoder.maxPositionEmbeddings
         )
-        let textEncoder = try loadValidationTextEncoder(resources: resources, configs: configs)
+        let textEncoder = try loadValidationTextEncoder(
+            resources: resources,
+            configs: configs,
+            manifest: manifest
+        )
 
         let transformer = ZImageTransformer2DModel(configuration: configs.transformer)
-        try HFSafetensorsWeightsLoader.applyShardedWeights(
-            indexURL: resources.transformerWeightsIndexURL,
-            to: transformer,
-            dtype: .bfloat16,
-            verify: .none
+        try loadValidationTransformerWeights(
+            resources: resources,
+            manifest: manifest,
+            into: transformer
         )
         MLX.eval(transformer)
         print("  Components loaded")
@@ -168,7 +175,8 @@ extension ImageValidate {
 
     private func loadValidationTextEncoder(
         resources: ZImageTurboResources,
-        configs: ZImageTurboModelConfigs
+        configs: ZImageTurboModelConfigs,
+        manifest: MereRunModelManifest?
     ) throws -> QwenTextEncoder {
         print("  Loading text encoder...")
         let encoderConfig = QwenTextEncoderConfiguration(
@@ -186,22 +194,90 @@ extension ImageValidate {
         let textEncoder = QwenTextEncoder(configuration: encoderConfig)
 
         print("  Weight index: \(resources.textEncoderWeightsIndexURL.path)")
-        try HFSafetensorsWeightsLoader.applyShardedWeights(
+        let quantization = try ModelWeightsLoader.QuantizationParams.fromManifest(manifest)
+        let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            if key.hasPrefix("model.") {
+                let remainder = String(key.dropFirst("model.".count))
+                return [("encoder.\(remainder)", value)]
+            }
+            return [("encoder.\(key)", value)]
+        }
+        let keyMapper: (String) -> String = { key in
+            if key.hasPrefix("model.") {
+                return "encoder." + String(key.dropFirst("model.".count))
+            }
+            if key.hasPrefix("encoder.") {
+                return key
+            }
+            return "encoder.\(key)"
+        }
+        try ModelWeightsLoader.applyHFSafetensors(
             indexURL: resources.textEncoderWeightsIndexURL,
+            singleURL: resources.textEncoderWeightsURL,
             to: textEncoder,
             dtype: .bfloat16,
             verify: .none,
-            mapper: { key, value in
-                if key.hasPrefix("model.") {
-                    let remainder = String(key.dropFirst("model.".count))
-                    return [("encoder.\(remainder)", value)]
-                }
-                return [("encoder.\(key)", value)]
-            }
+            mapper: mapper,
+            keyMapper: keyMapper,
+            quantization: quantization
         )
         print("  Weights loaded, evaluating...")
         MLX.eval(textEncoder)
         print("  Text encoder ready")
         return textEncoder
+    }
+
+    private func loadValidationTransformerWeights(
+        resources: ZImageTurboResources,
+        manifest: MereRunModelManifest?,
+        into transformer: ZImageTransformer2DModel
+    ) throws {
+        let quantization = try ModelWeightsLoader.QuantizationParams.fromManifest(manifest)
+        let fileManager = FileManager.default
+        let hasDiffusersWeights =
+            fileManager.fileExists(atPath: resources.transformerWeightsIndexURL.path)
+            || fileManager.fileExists(atPath: resources.transformerWeightsURL.path)
+        let indexURL = hasDiffusersWeights
+            ? resources.transformerWeightsIndexURL
+            : resources.transformerMFluxWeightsIndexURL
+        let singleURL = hasDiffusersWeights
+            ? resources.transformerWeightsURL
+            : resources.transformerMFluxWeightsURL
+
+        if fileManager.fileExists(atPath: indexURL.path) || fileManager.fileExists(atPath: singleURL.path) {
+            try ModelWeightsLoader.applyHFSafetensors(
+                indexURL: indexURL,
+                singleURL: singleURL,
+                to: transformer,
+                dtype: .bfloat16,
+                verify: .none,
+                keyMapper: zimageTransformerKeyMapper,
+                quantization: quantization
+            )
+            return
+        }
+
+        let shardFiles = try ModelWeightsLoader.safetensorsShards(in: resources.transformerDirURL)
+        try ModelWeightsLoader.applySafetensorsShards(
+            files: shardFiles,
+            to: transformer,
+            dtype: .bfloat16,
+            verify: .none,
+            keyMapper: zimageTransformerKeyMapper,
+            quantization: quantization
+        )
+    }
+
+    private func zimageTransformerKeyMapper(_ key: String) -> String {
+        if key.contains("t_embedder.linear1") {
+            return key.replacingOccurrences(of: "t_embedder.linear1", with: "t_embedder.mlp.0")
+        }
+        if key.contains("t_embedder.linear2") {
+            return key.replacingOccurrences(of: "t_embedder.linear2", with: "t_embedder.mlp.2")
+        }
+        if key.contains("all_final_layer") && key.contains("adaLN_modulation.0.") {
+            return key.replacingOccurrences(of: "adaLN_modulation.0.", with: "adaLN_modulation.1.")
+        }
+        return key
     }
 }

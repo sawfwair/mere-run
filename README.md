@@ -27,7 +27,8 @@ The public OSS repo currently supports:
 - native ACEStep music generation and LTX video generation
 - Hugging Face-backed model pulls that resolve into a shared local model store
 - offline command cookbooks through `mere.run guide`
-- a local OpenAI-compatible API surface with a native Swift runtime model pool
+- a local OpenAI-compatible API surface for chat, embeddings, image generation,
+  TTS, and STT
 - a quick status snapshot for the local server, loaded API models, active requests, runtime capabilities, and installed model store
 - an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
 
@@ -257,6 +258,34 @@ swift run mere.run api serve --engine text-chat-lfm2
 # In another terminal, confirm the server and served model
 swift run mere.run status
 
+# Native embeddings for local RAG clients
+curl http://127.0.0.1:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  --data '{"model":"text-embed-qwen3-0.6b","input":"mere.run native embeddings"}'
+
+# Native image generation and audio through the same /v1 API
+curl http://127.0.0.1:8080/v1/images/generations \
+  -H "Content-Type: application/json" \
+  --data '{"model":"image-zimage-nano","prompt":"a compact local AI workstation","size":"1024x1024"}'
+curl http://127.0.0.1:8080/v1/images/edits \
+  -F model=qwen-image-edit \
+  -F prompt="make the workstation dusk-lit while preserving the layout" \
+  -F image=@input.png
+curl http://127.0.0.1:8080/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  --output speech.wav \
+  --data '{"model":"speech-tts-qwen3-nano","input":"mere.run is online","voice":"nova","response_format":"wav"}'
+curl http://127.0.0.1:8080/v1/audio/transcriptions \
+  -F model=speech-asr-parakeet \
+  -F file=@speech.wav
+
+# Optional Open WebUI companion smoke
+swift run mere.run open-webui quickstart --dry-run
+swift run mere.run open-webui quickstart --pull
+swift run mere.run guide open-webui
+scripts/smoke-open-webui.sh print-env
+scripts/smoke-open-webui.sh live-smoke
+
 # Optional Gemma4 prefix KV reuse prototype; status reports cache and timing stats
 MERERUN_GEMMA4_PREFIX_KV_CACHE=1 swift run mere.run api serve --engine text-chat-gemma4
 
@@ -474,7 +503,7 @@ point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
 The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
 
 - `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
-- the OpenAI-compatible chat route requires `Content-Type: application/json`, supports `--rate-limit-per-minute` for basic abuse control, decodes the common Chat Completions request shape, and rejects unsupported high-impact fields before generation
+- the OpenAI-compatible chat and embedding routes require `Content-Type: application/json`, support `--rate-limit-per-minute` for basic abuse control, decode the common OpenAI request shapes, and reject unsupported high-impact fields before generation
 - API LoRA adapters are operator-controlled with `--lora`; per-request LoRA paths are rejected
 - tool-loop execution in `mere.run text chat` requires interactive approval unless `--auto-approve-tools` is passed for non-shell tools
 - `shell_exec` is disabled unless `--allow-shell-exec` is set, and still requires interactive approval when enabled

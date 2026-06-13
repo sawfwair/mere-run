@@ -39,14 +39,15 @@ struct TextEmbed: AsyncParsableCommand {
         let model = try Qwen3EmbeddingModel(resources: resources)
         let result = try model.embed(texts: texts, maxTokens: maxTokens)
 
-        let payload = EmbeddingResponse(
+        let promptTokens = result.tokenCounts.reduce(0, +)
+        let payload = OpenAIEmbeddingResponse(
             model: Qwen3EmbeddingCatalog.modelId,
             data: result.embeddings.enumerated().map { index, vector in
-                EmbeddingDatum(index: index, embedding: vector)
+                OpenAIEmbeddingDatum(index: index, embedding: vector)
             },
-            usage: EmbeddingUsage(
-                promptTokens: result.tokenCounts.reduce(0, +),
-                totalTokens: result.tokenCounts.reduce(0, +)
+            usage: OpenAIEmbeddingUsage(
+                prompt_tokens: promptTokens,
+                total_tokens: promptTokens
             )
         )
 
@@ -83,28 +84,5 @@ struct TextEmbed: AsyncParsableCommand {
         } catch let error as ManagedModelResolver.ResolverError {
             throw ValidationError(error.localizedDescription)
         }
-    }
-}
-
-private struct EmbeddingResponse: Encodable, Sendable {
-    let object = "list"
-    let model: String
-    let data: [EmbeddingDatum]
-    let usage: EmbeddingUsage
-}
-
-private struct EmbeddingDatum: Encodable, Sendable {
-    let object = "embedding"
-    let index: Int
-    let embedding: [Float]
-}
-
-private struct EmbeddingUsage: Encodable, Sendable {
-    let promptTokens: Int
-    let totalTokens: Int
-
-    enum CodingKeys: String, CodingKey {
-        case promptTokens = "prompt_tokens"
-        case totalTokens = "total_tokens"
     }
 }

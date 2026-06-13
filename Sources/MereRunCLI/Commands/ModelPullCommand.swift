@@ -105,33 +105,49 @@ struct ModelPull: AsyncParsableCommand {
             stderr("  warning: \(warning)")
         }
 
-        let result = try await ManagedModelResolver.installManagedModel(
-            id: spec.id,
-            force: force,
-            progress: { progress in
-                guard !quiet else { return }
-                switch progress {
-                case .downloadingBytes(let completed, let total):
-                    let done = ByteCountFormatter.string(fromByteCount: completed, countStyle: .file)
-                    if let total, total > 0 {
-                        let totalText = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
-                        let pct = min(100, max(0, Int(Double(completed) / Double(total) * 100)))
-                        stderrRaw("\r[\(spec.id)] \(pct)%  \(done) / \(totalText)          ")
-                    } else {
-                        stderrRaw("\r[\(spec.id)] \(done)          ")
+        let result: ManagedModelResolver.InstallResult
+        do {
+            result = try await ManagedModelResolver.installManagedModel(
+                id: spec.id,
+                force: force,
+                progress: { progress in
+                    guard !quiet else { return }
+                    switch progress {
+                    case .downloadingBytes(let completed, let total):
+                        let done = ByteCountFormatter.string(fromByteCount: completed, countStyle: .file)
+                        if let total, total > 0 {
+                            let totalText = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+                            let pct = min(100, max(0, Int(Double(completed) / Double(total) * 100)))
+                            stderrRaw("\r[\(spec.id)] \(pct)%  \(done) / \(totalText)          ")
+                        } else {
+                            stderrRaw("\r[\(spec.id)] \(done)          ")
+                        }
+                    case .downloadingPercent(let percent, let speed):
+                        if let speed, speed > 0 {
+                            let speedText = ByteCountFormatter.string(fromByteCount: Int64(speed), countStyle: .file)
+                            stderrRaw("\r[\(spec.id)] \(percent)%  (\(speedText)/s)          ")
+                        } else {
+                            stderrRaw("\r[\(spec.id)] \(percent)%          ")
+                        }
+                    case .extracting:
+                        stderrRaw("\r[\(spec.id)] extracting…          ")
                     }
-                case .downloadingPercent(let percent, let speed):
-                    if let speed, speed > 0 {
-                        let speedText = ByteCountFormatter.string(fromByteCount: Int64(speed), countStyle: .file)
-                        stderrRaw("\r[\(spec.id)] \(percent)%  (\(speedText)/s)          ")
-                    } else {
-                        stderrRaw("\r[\(spec.id)] \(percent)%          ")
-                    }
-                case .extracting:
-                    stderrRaw("\r[\(spec.id)] extracting…          ")
                 }
+            )
+        } catch let error as ManagedModelResolver.ResolverError {
+            if !quiet {
+                stderrRaw("\n")
             }
-        )
+            if case .invalidInstalledModel(let message) = error {
+                throw ModelPullInstallError(
+                    modelID: spec.id,
+                    modelDir: modelDir,
+                    hubRepoID: spec.hubFallback?.repoId,
+                    details: [message]
+                )
+            }
+            throw error
+        }
         if !quiet {
             stderrRaw("\n")
         }
@@ -151,11 +167,11 @@ struct ModelPull: AsyncParsableCommand {
                 errors.append("Model was pulled but is not discoverable by `mere.run model list`.")
             }
             if !errors.isEmpty {
-                throw ValidationError(
-                    """
-                    Model \(spec.id) was not installed cleanly.
-                    \(errors.map { "- \($0)" }.joined(separator: "\n"))
-                    """
+                throw ModelPullInstallError(
+                    modelID: spec.id,
+                    modelDir: modelDir,
+                    hubRepoID: spec.hubFallback?.repoId,
+                    details: errors
                 )
             }
         }
@@ -169,6 +185,30 @@ struct ModelPull: AsyncParsableCommand {
 
     private func stderrRaw(_ message: String) {
         CLIStderr.write(message)
+    }
+}
+
+struct ModelPullInstallError: LocalizedError, Sendable {
+    let modelID: String
+    let modelDir: URL
+    let hubRepoID: String?
+    let details: [String]
+
+    var errorDescription: String? {
+        var lines: [String] = []
+        lines.append("Model \(modelID) was not installed cleanly.")
+        lines.append(contentsOf: details.map { "- \($0)" })
+        lines.append("")
+        lines.append("Model store: \(modelDir.path)")
+        lines.append("Retry with: mere.run model pull \(modelID)")
+        lines.append("Use --force only if you intentionally want to replace a complete install.")
+        if let hubRepoID,
+           let hubCache = try? HubSnapshot.resolvedDownloadBase() {
+            lines.append(
+                "If this repeats, remove the stale Hub cache for \(hubRepoID) under \(hubCache.path)/models/ and retry."
+            )
+        }
+        return lines.joined(separator: "\n")
     }
 }
 

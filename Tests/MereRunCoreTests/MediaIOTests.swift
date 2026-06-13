@@ -48,6 +48,27 @@ final class MediaIOTests: XCTestCase {
         XCTAssertEqual(readUInt32LE(data, offset: 40), 4 * UInt32(MemoryLayout<Float>.size))
     }
 
+    func testAudioTranscodeWritesRequestedContainer() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath) else {
+            throw XCTSkip("ffmpeg is not available")
+        }
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-transcode-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let wavURL = tempDir.appendingPathComponent("input.wav")
+        let mp3URL = tempDir.appendingPathComponent("output.mp3")
+        let samples = (0..<4_000).map { index in
+            sin(Float(index) * 0.05) * 0.2
+        }
+        try MediaAudioIO.writeFloatWAV(samples: samples, sampleRate: 16_000, channels: 1, to: wavURL)
+        try MediaAudioIO.transcode(wavURL, to: mp3URL, format: "mp3")
+
+        let data = try Data(contentsOf: mp3URL)
+        XCTAssertGreaterThan(data.count, 0)
+    }
+
     func testRealFFTPlanSupportsASRAndPowerOfTwoFrameSizes() throws {
         for size in [400, 512, 1024] {
             let plan = try RealFFTPlan(size: size)
@@ -71,5 +92,17 @@ final class MediaIOTests: XCTestCase {
             | (UInt32(bytes[1]) << 8)
             | (UInt32(bytes[2]) << 16)
             | (UInt32(bytes[3]) << 24)
+    }
+
+    private func isExecutableAvailable(_ tool: String) -> Bool {
+        if tool.contains("/") {
+            return FileManager.default.isExecutableFile(atPath: tool)
+        }
+        let pathEntries = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":") ?? []
+        return pathEntries.contains { entry in
+            let candidate = URL(fileURLWithPath: String(entry), isDirectory: true)
+                .appendingPathComponent(tool)
+            return FileManager.default.isExecutableFile(atPath: candidate.path)
+        }
     }
 }

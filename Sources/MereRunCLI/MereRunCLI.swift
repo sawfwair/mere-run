@@ -27,6 +27,7 @@ struct MereRunCLI: AsyncParsableCommand {
             Model.self,
             Status.self,
             API.self,
+            OpenWebUI.self,
             Setup.self,
             Agent.self,
         ]

@@ -49,8 +49,9 @@ store.
 
 ### `MERERUN_API_KEY`
 
-Provides the bearer token accepted by `mere.run api serve` for `/v1/models` and
-`/v1/chat/completions`.
+Provides the bearer token accepted by `mere.run api serve` for `/v1/models`,
+`/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`,
+`/v1/images/edits`, `/v1/audio/speech`, and `/v1/audio/transcriptions`.
 
 This is optional for loopback-only usage and required for non-loopback binds.
 `mere.run status` also reads it when probing `/v1/models`.
