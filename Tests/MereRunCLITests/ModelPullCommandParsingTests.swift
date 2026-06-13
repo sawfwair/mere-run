@@ -17,6 +17,23 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("capabilities"))
     }
 
+    func testInstallValidationErrorIncludesRetryWithoutUsage() {
+        let error = ModelPullInstallError(
+            modelID: "image-klein-max",
+            modelDir: URL(fileURLWithPath: "/tmp/mere.run/models/image-klein-max"),
+            hubRepoID: "black-forest-labs/FLUX.2-klein-4B",
+            details: ["No *.safetensors weights found in transformer/"]
+        )
+
+        let message = error.localizedDescription
+        XCTAssertTrue(message.contains("Model image-klein-max was not installed cleanly."))
+        XCTAssertTrue(message.contains("- No *.safetensors weights found in transformer/"))
+        XCTAssertTrue(message.contains("Model store: /tmp/mere.run/models/image-klein-max"))
+        XCTAssertTrue(message.contains("Retry with: mere.run model pull image-klein-max"))
+        XCTAssertTrue(message.contains("Use --force only if you intentionally want to replace a complete install."))
+        XCTAssertFalse(message.contains("Usage:"))
+    }
+
     func testDiskPreflightFailsWhenHubCacheCannotFitEstimatedModel() throws {
         XCTAssertThrowsError(
             try ModelPullDiskPreflight.evaluate(

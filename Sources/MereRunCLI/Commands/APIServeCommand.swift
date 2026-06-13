@@ -5,6 +5,10 @@ import FoundationNetworking
 #endif
 import Hummingbird
 import NIOCore
+import AudioCore
+import AudioSTT
+import AudioTTS
+import MediaIO
 import MereRunCore
 
 struct APIServe: AsyncParsableCommand {
@@ -12,15 +16,20 @@ struct APIServe: AsyncParsableCommand {
 
     static let configuration = CommandConfiguration(
         commandName: "serve",
-        abstract: "Start an OpenAI-compatible API server for local text-code or text-chat models.",
+        abstract: "Start an OpenAI-compatible API server for local chat and embedding models.",
         discussion: """
-        Runs an HTTP server that exposes an OpenAI-compatible API for the selected engine.
+        Runs an HTTP server that exposes an OpenAI-compatible API for the selected local runtime.
         Compatible with any OpenAI client (VS Code extensions, Continue, Cursor, etc.).
 
         Endpoints:
           GET  /health              - Health check
           GET  /v1/models           - List available models
           POST /v1/chat/completions - Chat completions (streaming supported)
+          POST /v1/embeddings       - Native Qwen3 text embeddings
+          POST /v1/images/generations - Native image generation
+          POST /v1/images/edits       - Native image editing
+          POST /v1/audio/speech      - Native text to speech
+          POST /v1/audio/transcriptions - Native speech to text
 
         Example:
           # Start with the default local code model
@@ -48,10 +57,37 @@ struct APIServe: AsyncParsableCommand {
           # Check server health and the served model from another terminal
           mere.run status --port 11434
 
-          # Test with curl (request.json contains an OpenAI chat payload)
+          # Test chat with curl (request.json contains an OpenAI chat payload)
           curl http://localhost:8080/v1/chat/completions \\
             -H "Content-Type: application/json" \\
             --data @request.json
+
+          # Test embeddings with curl
+          curl http://localhost:8080/v1/embeddings \\
+            -H "Content-Type: application/json" \\
+            --data '{"model":"text-embed-qwen3-0.6b","input":"hello"}'
+
+          # Generate an image as base64 PNG JSON
+          curl http://localhost:8080/v1/images/generations \\
+            -H "Content-Type: application/json" \\
+            --data '{"model":"image-zimage-nano","prompt":"a tiny workstation in morning light","size":"1024x1024"}'
+
+          # Edit an image as base64 PNG JSON
+          curl http://localhost:8080/v1/images/edits \\
+            -F model=image-zimage-nano \\
+            -F prompt='make the workstation dusk-lit' \\
+            -F image=@input.png
+
+          # Generate speech
+          curl http://localhost:8080/v1/audio/speech \\
+            -H "Content-Type: application/json" \\
+            --output speech.wav \\
+            --data '{"model":"speech-tts-qwen3-nano","input":"mere.run is online","voice":"nova","response_format":"wav"}'
+
+          # Transcribe audio
+          curl http://localhost:8080/v1/audio/transcriptions \\
+            -F model=speech-asr-parakeet \\
+            -F file=@speech.wav
         """
     )
 
@@ -70,10 +106,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
     var lora: String?
 
-    @Option(name: [.long], help: "Bearer token required by /v1/models and /v1/chat/completions. Also read from MERERUN_API_KEY.")
+    @Option(name: [.long], help: "Bearer token required by API endpoints. Also read from MERERUN_API_KEY.")
     var apiKey: String?
 
-    @Option(name: [.long], help: "Global request limit for /v1/chat/completions per rolling minute.")
+    @Option(name: [.long], help: "Global request limit for /v1/chat/completions and /v1/embeddings per rolling minute.")
     var rateLimitPerMinute: Int = 60
 
     @Option(name: [.long], help: "Maximum chat completions admitted at once. Defaults to 1 for serialized local inference.")
@@ -386,6 +422,72 @@ struct APIHealthStatus: Codable, Equatable, Sendable {
 
 enum APIServerContract {
     static let defaultMaxTokens = 2048
+    static let defaultImageModelID = ModelResolver.ModelID.zetaNano.rawValue
+    static let defaultSpeechModelID = Qwen3TTSResources.defaultModelId
+    static let defaultTranscriptionModelID = ParakeetResources.defaultModelId
+
+    struct ImageGenerationPlan: Equatable, Sendable {
+        let modelID: String
+        let prompt: String
+        let width: Int
+        let height: Int
+        let responseFormat: String
+        let seed: UInt64?
+        let negativePrompt: String?
+        let steps: Int?
+        let guidanceScale: Double?
+        let inputImage: URL?
+        let additionalInputImages: [URL]
+        let maskImage: URL?
+        let strength: Double?
+
+        init(
+            modelID: String,
+            prompt: String,
+            width: Int,
+            height: Int,
+            responseFormat: String,
+            seed: UInt64?,
+            negativePrompt: String?,
+            steps: Int?,
+            guidanceScale: Double?,
+            inputImage: URL?,
+            additionalInputImages: [URL] = [],
+            maskImage: URL? = nil,
+            strength: Double?
+        ) {
+            self.modelID = modelID
+            self.prompt = prompt
+            self.width = width
+            self.height = height
+            self.responseFormat = responseFormat
+            self.seed = seed
+            self.negativePrompt = negativePrompt
+            self.steps = steps
+            self.guidanceScale = guidanceScale
+            self.inputImage = inputImage
+            self.additionalInputImages = additionalInputImages
+            self.maskImage = maskImage
+            self.strength = strength
+        }
+    }
+
+    struct SpeechPlan: Equatable, Sendable {
+        let modelID: String
+        let input: String
+        let voiceDescription: String
+        let responseFormat: String
+        let speed: Float
+        let temperature: Float
+    }
+
+    struct TranscriptionPlan: Equatable, Sendable {
+        let modelID: String
+        let language: String?
+        let responseFormat: String
+        let task: ASRTask
+        let maxTokens: Int
+    }
 
     static func healthStatus() -> APIHealthStatus {
         APIHealthStatus(status: "ok")
@@ -407,6 +509,245 @@ enum APIServerContract {
                 )
             }
         )
+    }
+
+    static func embeddingTexts(from request: OpenAIEmbeddingRequest) throws -> [String] {
+        guard !request.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw APIRequestValidationError.invalidField("model", "must not be empty")
+        }
+        if let encodingFormat = request.encoding_format?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+           !encodingFormat.isEmpty,
+           encodingFormat != "float" {
+            throw APIRequestValidationError.invalidField(
+                "encoding_format",
+                "only float embeddings are supported"
+            )
+        }
+        if request.dimensions != nil {
+            throw APIRequestValidationError.invalidField(
+                "dimensions",
+                "dimension overrides are not supported by this embedding model"
+            )
+        }
+
+        let texts = request.input.texts
+        guard !texts.isEmpty else {
+            throw APIRequestValidationError.invalidField("input", "must contain at least one text")
+        }
+        return texts
+    }
+
+    static func embeddingResponse(
+        modelId: String,
+        embeddings: [[Float]],
+        tokenCounts: [Int]
+    ) -> OpenAIEmbeddingResponse {
+        let promptTokens = tokenCounts.reduce(0, +)
+        return OpenAIEmbeddingResponse(
+            model: modelId,
+            data: embeddings.enumerated().map { index, vector in
+                OpenAIEmbeddingDatum(index: index, embedding: vector)
+            },
+            usage: OpenAIEmbeddingUsage(
+                prompt_tokens: promptTokens,
+                total_tokens: promptTokens
+            )
+        )
+    }
+
+    static func companionModelIDs(
+        fileManager: FileManager = .default,
+        installedModelIDs: Set<String>? = nil
+    ) -> [String] {
+        let categories: Set<ManagedModelCategory> = [.image, .speechTTS, .speechASR, .textEmbed]
+        let ids = ManagedModelCatalog.allSpecs
+            .filter { categories.contains($0.category) }
+            .filter { isCompanionModelInstalled($0, fileManager: fileManager, installedModelIDs: installedModelIDs) }
+            .map(\.id)
+        var uniqueIDs = Set(ids)
+        if isQwenImageEditInstalled(fileManager: fileManager, installedModelIDs: installedModelIDs) {
+            uniqueIDs.insert(QwenImageEditRepository.modelId)
+        }
+        return Array(uniqueIDs).sorted()
+    }
+
+    static func imageGenerationPlan(
+        from request: OpenAIImageGenerationRequest
+    ) throws -> ImageGenerationPlan {
+        let prompt = request.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            throw APIRequestValidationError.invalidField("prompt", "must not be empty")
+        }
+        if let n = request.n, n != 1 {
+            throw APIRequestValidationError.invalidField("n", "only n=1 is supported")
+        }
+        if let steps = request.steps, steps <= 0 {
+            throw APIRequestValidationError.invalidField("steps", "must be greater than zero")
+        }
+        if let guidanceScale = request.guidance_scale,
+           (!guidanceScale.isFinite || guidanceScale < 0) {
+            throw APIRequestValidationError.invalidField("guidance_scale", "must be a positive number")
+        }
+        let size = try imageSize(from: request.size)
+        let responseFormat = try imageResponseFormat(request.response_format)
+        return ImageGenerationPlan(
+            modelID: normalizedImageModelID(request.model),
+            prompt: prompt,
+            width: size.width,
+            height: size.height,
+            responseFormat: responseFormat,
+            seed: request.seed,
+            negativePrompt: normalizedOptional(request.negative_prompt),
+            steps: request.steps,
+            guidanceScale: request.guidance_scale,
+            inputImage: nil,
+            strength: nil
+        )
+    }
+
+    static func imageEditPlan(
+        from form: MultipartFormData,
+        inputImageURL: URL
+    ) throws -> ImageGenerationPlan {
+        try imageEditPlan(from: form, inputImageURLs: [inputImageURL], maskImageURL: nil)
+    }
+
+    static func imageEditPlan(
+        from form: MultipartFormData,
+        inputImageURLs: [URL],
+        maskImageURL: URL?
+    ) throws -> ImageGenerationPlan {
+        guard let inputImageURL = inputImageURLs.first else {
+            throw APIRequestValidationError.invalidField("image", "image file is required")
+        }
+        let prompt = normalizedOptional(form.field("prompt")) ?? ""
+        guard !prompt.isEmpty else {
+            throw APIRequestValidationError.invalidField("prompt", "must not be empty")
+        }
+        if let rawN = normalizedOptional(form.field("n")) {
+            guard let n = Int(rawN), n == 1 else {
+                throw APIRequestValidationError.invalidField("n", "only n=1 is supported")
+            }
+        }
+        let steps = try optionalPositiveIntField(form.field("steps"), field: "steps")
+        let guidanceScale = try optionalPositiveDoubleField(form.field("guidance_scale"), field: "guidance_scale")
+        let strength = try optionalUnitDoubleField(form.field("strength"), field: "strength")
+        let size = try imageSize(from: form.field("size"))
+        return ImageGenerationPlan(
+            modelID: normalizedImageModelID(form.field("model")),
+            prompt: prompt,
+            width: size.width,
+            height: size.height,
+            responseFormat: try imageResponseFormat(form.field("response_format")),
+            seed: try optionalUInt64Field(form.field("seed")),
+            negativePrompt: normalizedOptional(form.field("negative_prompt")),
+            steps: steps,
+            guidanceScale: guidanceScale,
+            inputImage: inputImageURL,
+            additionalInputImages: Array(inputImageURLs.dropFirst()),
+            maskImage: maskImageURL,
+            strength: strength
+        )
+    }
+
+    static func imageResponse(
+        outputURL: URL,
+        plan: ImageGenerationPlan,
+        createdAt: Date = Date()
+    ) throws -> OpenAIImageGenerationResponse {
+        let datum: OpenAIImageGenerationData
+        switch plan.responseFormat {
+        case "url":
+            datum = OpenAIImageGenerationData(url: outputURL.absoluteString, revised_prompt: plan.prompt)
+        case "b64_json":
+            let data = try Data(contentsOf: outputURL)
+            datum = OpenAIImageGenerationData(
+                b64_json: data.base64EncodedString(),
+                revised_prompt: plan.prompt
+            )
+        default:
+            throw APIRequestValidationError.invalidField("response_format", "unsupported response format")
+        }
+        return OpenAIImageGenerationResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            data: [datum]
+        )
+    }
+
+    static func speechPlan(from request: OpenAIAudioSpeechRequest) throws -> SpeechPlan {
+        let input = request.input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else {
+            throw APIRequestValidationError.invalidField("input", "must not be empty")
+        }
+        let responseFormat = try speechResponseFormat(request.response_format)
+        let speed = try speechSpeed(request.speed)
+        let temperature = request.temperature ?? 0.6
+        guard temperature.isFinite, (0...2).contains(temperature) else {
+            throw APIRequestValidationError.invalidField("temperature", "must be between 0 and 2")
+        }
+        return SpeechPlan(
+            modelID: normalizedSpeechModelID(request.model),
+            input: input,
+            voiceDescription: voiceDescription(for: request.voice, instructions: request.instructions),
+            responseFormat: responseFormat,
+            speed: speed,
+            temperature: temperature
+        )
+    }
+
+    static func transcriptionPlan(from form: MultipartFormData) throws -> TranscriptionPlan {
+        let modelID = normalizedTranscriptionModelID(form.field("model"))
+        return TranscriptionPlan(
+            modelID: modelID,
+            language: normalizedOptional(form.field("language")),
+            responseFormat: try transcriptionResponseFormat(form.field("response_format")),
+            task: try transcriptionTask(form.field("task")),
+            maxTokens: try transcriptionMaxTokens(form.field("max_tokens"))
+        )
+    }
+
+    static func transcriptionResponse(
+        from result: ASRResult,
+        verbose: Bool
+    ) -> OpenAIAudioTranscriptionResponse {
+        OpenAIAudioTranscriptionResponse(
+            text: result.text,
+            language: result.language,
+            duration: verbose ? result.duration : nil,
+            segments: verbose ? transcriptionSegments(from: result) : nil
+        )
+    }
+
+    static func transcriptionSubtitle(from result: ASRResult, format: String) -> String {
+        let segments = transcriptionSegments(from: result) ?? [
+            OpenAIAudioTranscriptionSegment(
+                id: 0,
+                start: 0,
+                end: max(result.duration, 0.001),
+                text: result.text
+            ),
+        ]
+        switch format {
+        case "srt":
+            return segments.enumerated()
+                .map { index, segment in
+                    let start = subtitleTimestamp(segment.start, separator: ",")
+                    let end = subtitleTimestamp(max(segment.end, segment.start + 0.001), separator: ",")
+                    return "\(index + 1)\n\(start) --> \(end)\n\(segment.text)"
+                }
+                .joined(separator: "\n\n") + "\n"
+        default:
+            let body = segments
+                .map { segment in
+                    let start = subtitleTimestamp(segment.start, separator: ".")
+                    let end = subtitleTimestamp(max(segment.end, segment.start + 0.001), separator: ".")
+                    return "\(start) --> \(end)\n\(segment.text)"
+                }
+                .joined(separator: "\n\n")
+            return body.isEmpty ? "WEBVTT\n" : "WEBVTT\n\n\(body)\n"
+        }
     }
 
     static func chatRequest(
@@ -623,21 +964,25 @@ enum APIServerContract {
             throw APIRequestValidationError.invalidField("tools", "tools are not supported by this engine")
         }
 
+        let convertedTools = try tools.map { try toolDefinition(from: $0) }
         switch request.tool_choice {
         case nil, .mode("auto")?, .mode("required")?:
-            break
+            return convertedTools
         case .mode("none")?:
             return nil
-        case .function?, .custom?:
-            throw APIRequestValidationError.invalidField(
-                "tool_choice",
-                "specific tool forcing is not supported by this engine"
-            )
+        case .function(let name)?:
+            guard let selected = convertedTools.first(where: { $0.name == name }) else {
+                throw APIRequestValidationError.invalidField(
+                    "tool_choice",
+                    "requested tool '\(name)' is not present in tools"
+                )
+            }
+            return [selected]
+        case .custom?:
+            throw APIRequestValidationError.invalidField("tool_choice", "unsupported object shape")
         case .mode(let value)?:
             throw APIRequestValidationError.invalidField("tool_choice", "unsupported mode '\(value)'")
         }
-
-        return try tools.map { try toolDefinition(from: $0) }
     }
 
     private static func toolDefinition(from tool: OpenAIChatTool) throws -> ToolDefinition {
@@ -730,6 +1075,28 @@ enum APIServerContract {
         return mediaType == "application/json" || mediaType.hasSuffix("+json")
     }
 
+    static func multipartBoundary(from rawValue: String?) -> String? {
+        guard let pieces = rawValue?.split(separator: ";", omittingEmptySubsequences: true),
+              let mediaType = pieces.first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              mediaType == "multipart/form-data" else {
+            return nil
+        }
+        for piece in pieces.dropFirst() {
+            let pair = piece.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2,
+                  pair[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "boundary" else {
+                continue
+            }
+            var boundary = pair[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            if boundary.hasPrefix("\""), boundary.hasSuffix("\""), boundary.count >= 2 {
+                boundary.removeFirst()
+                boundary.removeLast()
+            }
+            return boundary.isEmpty ? nil : String(boundary)
+        }
+        return nil
+    }
+
     static func isStreamingStatusMessage(_ message: String) -> Bool {
         switch message {
         case "Generating...", "Generating response", "Retrying generation", "DS4 chat completion":
@@ -769,6 +1136,263 @@ enum APIServerContract {
         }
         return value
     }
+
+    private static func imageSize(from rawValue: String?) throws -> (width: Int, height: Int) {
+        guard let rawValue = normalizedOptional(rawValue), rawValue.lowercased() != "auto" else {
+            return (1024, 1024)
+        }
+        let parts = rawValue.lowercased().split(separator: "x", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let width = Int(parts[0]),
+              let height = Int(parts[1]),
+              width > 0,
+              height > 0 else {
+            throw APIRequestValidationError.invalidField("size", "expected WIDTHxHEIGHT, for example 1024x1024")
+        }
+        return (width, height)
+    }
+
+    private static func imageResponseFormat(_ rawValue: String?) throws -> String {
+        let value = normalizedOptional(rawValue)?.lowercased() ?? "b64_json"
+        guard value == "b64_json" || value == "url" else {
+            throw APIRequestValidationError.invalidField("response_format", "expected b64_json or url")
+        }
+        return value
+    }
+
+    private static func speechResponseFormat(_ rawValue: String?) throws -> String {
+        let value = normalizedOptional(rawValue)?.lowercased() ?? "wav"
+        guard ["wav", "mp3", "opus", "aac", "flac"].contains(value) else {
+            throw APIRequestValidationError.invalidField(
+                "response_format",
+                "expected wav, mp3, opus, aac, or flac"
+            )
+        }
+        return value
+    }
+
+    static func speechContentType(for responseFormat: String) -> String {
+        switch responseFormat {
+        case "mp3":
+            return "audio/mpeg"
+        case "opus":
+            return "audio/ogg"
+        case "aac":
+            return "audio/aac"
+        case "flac":
+            return "audio/flac"
+        default:
+            return "audio/wav"
+        }
+    }
+
+    private static func speechSpeed(_ rawValue: Double?) throws -> Float {
+        let value = rawValue ?? 1.0
+        guard value.isFinite, (0.25...4.0).contains(value) else {
+            throw APIRequestValidationError.invalidField("speed", "must be between 0.25 and 4.0")
+        }
+        return Float(value)
+    }
+
+    private static func transcriptionResponseFormat(_ rawValue: String?) throws -> String {
+        let value = normalizedOptional(rawValue)?.lowercased() ?? "json"
+        guard ["json", "text", "verbose_json", "srt", "vtt"].contains(value) else {
+            throw APIRequestValidationError.invalidField(
+                "response_format",
+                "expected json, text, verbose_json, srt, or vtt"
+            )
+        }
+        return value
+    }
+
+    private static func transcriptionTask(_ rawValue: String?) throws -> ASRTask {
+        let value = normalizedOptional(rawValue)?.lowercased() ?? ASRTask.transcribe.rawValue
+        guard let task = ASRTask(rawValue: value) else {
+            throw APIRequestValidationError.invalidField("task", "expected transcribe or translate")
+        }
+        return task
+    }
+
+    private static func transcriptionMaxTokens(_ rawValue: String?) throws -> Int {
+        guard let rawValue = normalizedOptional(rawValue) else {
+            return 448
+        }
+        guard let value = Int(rawValue), (1...Int(Int32.max)).contains(value) else {
+            throw APIRequestValidationError.invalidField("max_tokens", "must be a positive integer")
+        }
+        return value
+    }
+
+    private static func optionalUInt64Field(_ rawValue: String?) throws -> UInt64? {
+        guard let rawValue = normalizedOptional(rawValue) else {
+            return nil
+        }
+        guard let value = UInt64(rawValue) else {
+            throw APIRequestValidationError.invalidField("seed", "must be an unsigned integer")
+        }
+        return value
+    }
+
+    private static func optionalPositiveIntField(_ rawValue: String?, field: String) throws -> Int? {
+        guard let rawValue = normalizedOptional(rawValue) else {
+            return nil
+        }
+        guard let value = Int(rawValue), value > 0 else {
+            throw APIRequestValidationError.invalidField(field, "must be greater than zero")
+        }
+        return value
+    }
+
+    private static func optionalPositiveDoubleField(_ rawValue: String?, field: String) throws -> Double? {
+        guard let rawValue = normalizedOptional(rawValue) else {
+            return nil
+        }
+        guard let value = Double(rawValue), value.isFinite, value >= 0 else {
+            throw APIRequestValidationError.invalidField(field, "must be a positive number")
+        }
+        return value
+    }
+
+    private static func optionalUnitDoubleField(_ rawValue: String?, field: String) throws -> Double? {
+        guard let rawValue = normalizedOptional(rawValue) else {
+            return nil
+        }
+        guard let value = Double(rawValue), value.isFinite, (0...1).contains(value) else {
+            throw APIRequestValidationError.invalidField(field, "must be between 0 and 1")
+        }
+        return value
+    }
+
+    private static func normalizedModelID(_ rawValue: String?, defaultID: String) -> String {
+        normalizedOptional(rawValue) ?? defaultID
+    }
+
+    private static func normalizedImageModelID(_ rawValue: String?) -> String {
+        let modelID = normalizedModelID(rawValue, defaultID: defaultImageModelID)
+        switch modelID.lowercased() {
+        case "gpt-image-1", "dall-e-3", "dall-e-2":
+            return defaultImageModelID
+        default:
+            return modelID
+        }
+    }
+
+    private static func normalizedSpeechModelID(_ rawValue: String?) -> String {
+        let modelID = normalizedModelID(rawValue, defaultID: defaultSpeechModelID)
+        switch modelID.lowercased() {
+        case "tts-1", "tts-1-hd", "gpt-4o-mini-tts":
+            return defaultSpeechModelID
+        default:
+            return modelID
+        }
+    }
+
+    private static func normalizedTranscriptionModelID(_ rawValue: String?) -> String {
+        let modelID = normalizedModelID(rawValue, defaultID: defaultTranscriptionModelID)
+        switch modelID.lowercased() {
+        case "whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe":
+            return defaultTranscriptionModelID
+        default:
+            return modelID
+        }
+    }
+
+    private static func normalizedOptional(_ rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func isCompanionModelInstalled(
+        _ spec: ManagedModelSpec,
+        fileManager: FileManager,
+        installedModelIDs: Set<String>?
+    ) -> Bool {
+        if let installedModelIDs {
+            return installedModelIDs.contains(spec.id)
+        }
+        return spec.managedRuntimeURL(fileManager: fileManager) != nil
+    }
+
+    private static func isQwenImageEditInstalled(
+        fileManager: FileManager,
+        installedModelIDs: Set<String>?
+    ) -> Bool {
+        if let installedModelIDs {
+            return installedModelIDs.contains(QwenImageEditRepository.modelId)
+        }
+        return QwenImageEditRepository.resolveInstalledModelRoot(fileManager: fileManager) != nil
+    }
+
+    private static func voiceDescription(for rawVoice: String?, instructions: String?) -> String {
+        let instructionText = normalizedOptional(instructions)
+        let voice = normalizedOptional(rawVoice)?.lowercased() ?? "nova"
+        let base: String
+        switch voice {
+        case "alloy":
+            base = "A balanced, natural voice with clear pronunciation"
+        case "ash":
+            base = "A calm, low voice with a steady delivery"
+        case "ballad":
+            base = "A warm, expressive voice with a storytelling cadence"
+        case "coral":
+            base = "A bright, friendly voice with gentle energy"
+        case "echo":
+            base = "A clear male voice with an even, conversational tone"
+        case "fable":
+            base = "A warm narrative voice with a measured pace"
+        case "nova":
+            base = "A calm female voice with clear pronunciation"
+        case "onyx":
+            base = "A deep, confident voice with crisp articulation"
+        case "sage":
+            base = "A thoughtful, composed voice with soft emphasis"
+        case "shimmer":
+            base = "A bright, gentle voice with smooth pronunciation"
+        default:
+            base = rawVoice?.trimmingCharacters(in: .whitespacesAndNewlines)
+                ?? "A calm female voice with clear pronunciation"
+        }
+        if let instructionText {
+            return "\(base). \(instructionText)"
+        }
+        return base
+    }
+
+    private static func transcriptionSegments(
+        from result: ASRResult
+    ) -> [OpenAIAudioTranscriptionSegment]? {
+        if let sentences = result.sentenceAlignments, !sentences.isEmpty {
+            return sentences.enumerated().map { index, sentence in
+                OpenAIAudioTranscriptionSegment(
+                    id: index,
+                    start: sentence.startSeconds,
+                    end: sentence.endSeconds,
+                    text: sentence.text
+                )
+            }
+        }
+        if let tokens = result.tokenAlignments, !tokens.isEmpty {
+            return tokens.enumerated().map { index, token in
+                OpenAIAudioTranscriptionSegment(
+                    id: index,
+                    start: token.startSeconds,
+                    end: token.endSeconds,
+                    text: token.text
+                )
+            }
+        }
+        return nil
+    }
+
+    private static func subtitleTimestamp(_ seconds: Double, separator: String) -> String {
+        let milliseconds = max(0, Int((seconds * 1_000).rounded()))
+        let hours = milliseconds / 3_600_000
+        let minutes = (milliseconds % 3_600_000) / 60_000
+        let secs = (milliseconds % 60_000) / 1_000
+        let millis = milliseconds % 1_000
+        return String(format: "%02d:%02d:%02d%@%03d", hours, minutes, secs, separator, millis)
+    }
 }
 
 enum APIRequestValidationError: LocalizedError, Equatable {
@@ -782,6 +1406,163 @@ enum APIRequestValidationError: LocalizedError, Equatable {
     }
 }
 
+struct MultipartFormData: Equatable, Sendable {
+    struct Part: Equatable, Sendable {
+        let name: String
+        let filename: String?
+        let contentType: String?
+        let body: Data
+    }
+
+    enum ParseError: LocalizedError, Equatable {
+        case missingBoundary
+        case malformedBody
+        case missingName
+
+        var errorDescription: String? {
+            switch self {
+            case .missingBoundary:
+                return "Missing multipart boundary."
+            case .malformedBody:
+                return "Malformed multipart body."
+            case .missingName:
+                return "Multipart part is missing a form-data name."
+            }
+        }
+    }
+
+    let parts: [Part]
+
+    static func parse(body: Data, boundary: String?) throws -> MultipartFormData {
+        guard let boundary, !boundary.isEmpty else {
+            throw ParseError.missingBoundary
+        }
+        let marker = Data("--\(boundary)".utf8)
+        guard !marker.isEmpty,
+              let firstMarker = body.range(of: marker, options: [], in: body.startIndex..<body.endIndex) else {
+            throw ParseError.malformedBody
+        }
+
+        var parts: [Part] = []
+        var markerRange = firstMarker
+        while true {
+            let afterMarker = markerRange.upperBound
+            if body.hasBytes(Data("--".utf8), at: afterMarker) {
+                break
+            }
+            let partStart = body.indexAfterLineBreak(at: afterMarker)
+            guard let nextMarker = body.range(of: marker, options: [], in: partStart..<body.endIndex) else {
+                throw ParseError.malformedBody
+            }
+            let partEnd = body.indexTrimmingLineBreak(before: nextMarker.lowerBound)
+            if partStart < partEnd {
+                parts.append(try parsePart(Data(body[partStart..<partEnd])))
+            }
+            markerRange = nextMarker
+        }
+
+        return MultipartFormData(parts: parts)
+    }
+
+    func field(_ name: String) -> String? {
+        guard let part = parts.first(where: { $0.name == name && $0.filename == nil }) else {
+            return nil
+        }
+        return String(data: part.body, encoding: .utf8)
+    }
+
+    func file(named name: String) -> Part? {
+        parts.first { $0.name == name && $0.filename != nil }
+    }
+
+    func files(named name: String) -> [Part] {
+        parts.filter { $0.name == name && $0.filename != nil }
+    }
+
+    private static func parsePart(_ data: Data) throws -> Part {
+        let separator = Data("\r\n\r\n".utf8)
+        let fallbackSeparator = Data("\n\n".utf8)
+        let separatorRange = data.range(of: separator, options: [], in: data.startIndex..<data.endIndex)
+            ?? data.range(of: fallbackSeparator, options: [], in: data.startIndex..<data.endIndex)
+        guard let separatorRange,
+              let headerText = String(data: data[data.startIndex..<separatorRange.lowerBound], encoding: .utf8) else {
+            throw ParseError.malformedBody
+        }
+        let body = Data(data[separatorRange.upperBound..<data.endIndex])
+        let headers = parseHeaders(headerText)
+        guard let disposition = headers["content-disposition"] else {
+            throw ParseError.missingName
+        }
+        let params = parseDispositionParameters(disposition)
+        guard let name = params["name"], !name.isEmpty else {
+            throw ParseError.missingName
+        }
+        return Part(
+            name: name,
+            filename: params["filename"],
+            contentType: headers["content-type"],
+            body: body
+        )
+    }
+
+    private static func parseHeaders(_ text: String) -> [String: String] {
+        var headers: [String: String] = [:]
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let name = line[..<colon].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            headers[name] = value
+        }
+        return headers
+    }
+
+    private static func parseDispositionParameters(_ value: String) -> [String: String] {
+        var params: [String: String] = [:]
+        for part in value.split(separator: ";", omittingEmptySubsequences: false).dropFirst() {
+            let pair = part.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2 else { continue }
+            let key = pair[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            var rawValue = pair[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            if rawValue.hasPrefix("\""), rawValue.hasSuffix("\""), rawValue.count >= 2 {
+                rawValue.removeFirst()
+                rawValue.removeLast()
+            }
+            params[key] = rawValue
+        }
+        return params
+    }
+}
+
+private extension Data {
+    func hasBytes(_ bytes: Data, at index: Data.Index) -> Bool {
+        guard index >= startIndex, index + bytes.count <= endIndex else {
+            return false
+        }
+        return self[index..<(index + bytes.count)].elementsEqual(bytes)
+    }
+
+    func indexAfterLineBreak(at index: Data.Index) -> Data.Index {
+        if hasBytes(Data("\r\n".utf8), at: index) {
+            return index + 2
+        }
+        if hasBytes(Data("\n".utf8), at: index) {
+            return index + 1
+        }
+        return index
+    }
+
+    func indexTrimmingLineBreak(before index: Data.Index) -> Data.Index {
+        if index >= 2, self[(index - 2)..<index].elementsEqual(Data("\r\n".utf8)) {
+            return index - 2
+        }
+        if index >= 1, self[(index - 1)..<index].elementsEqual(Data("\n".utf8)) {
+            return index - 1
+        }
+        return index
+    }
+}
+
 // MARK: - Server Implementation
 
 actor CodeGenServer {
@@ -792,6 +1573,7 @@ actor CodeGenServer {
     private let requestLimiter: APIRateLimiter
     private let requestAdmission: RuntimeRequestAdmission
     private let pool: RuntimeModelPool
+    private var embeddingModels: [String: Qwen3EmbeddingModel] = [:]
 
     init(
         defaultModelID: String,
@@ -835,7 +1617,13 @@ actor CodeGenServer {
         )
 
         print("Starting server at http://\(host):\(port)")
-        print("OpenAI-compatible endpoint: http://\(host):\(port)/v1/chat/completions")
+        print("OpenAI-compatible base URL: http://\(host):\(port)/v1")
+        print("Chat endpoint: http://\(host):\(port)/v1/chat/completions")
+        print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
+        print("Images endpoint: http://\(host):\(port)/v1/images/generations")
+        print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
+        print("Speech endpoint: http://\(host):\(port)/v1/audio/speech")
+        print("Transcriptions endpoint: http://\(host):\(port)/v1/audio/transcriptions")
         print("Press Ctrl+C to stop.")
 
         try await app.runService()
@@ -862,6 +1650,27 @@ actor CodeGenServer {
         // Chat completions
         router.post("/v1/chat/completions") { [self] request, _ in
             return try await self.handleChatCompletions(request)
+        }
+
+        // Embeddings
+        router.post("/v1/embeddings") { [self] request, _ in
+            return try await self.handleEmbeddings(request)
+        }
+
+        router.post("/v1/images/generations") { [self] request, _ in
+            return try await self.handleImageGenerations(request)
+        }
+
+        router.post("/v1/images/edits") { [self] request, _ in
+            return try await self.handleImageEdits(request)
+        }
+
+        router.post("/v1/audio/speech") { [self] request, _ in
+            return try await self.handleAudioSpeech(request)
+        }
+
+        router.post("/v1/audio/transcriptions") { [self] request, _ in
+            return try await self.handleAudioTranscriptions(request)
         }
 
         router.get("/runtime/status") { [self] request, _ in
@@ -919,7 +1728,19 @@ actor CodeGenServer {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
         }
-        let models = try await pool.modelsResponse()
+        var models = try await pool.modelsResponse()
+        for modelID in APIServerContract.companionModelIDs()
+            where !models.data.contains(where: { $0.id == modelID }) {
+            models.data.append(
+                OpenAIModel(
+                    id: modelID,
+                    object: "model",
+                    created: Int(Date().timeIntervalSince1970),
+                    owned_by: "mere.run"
+                )
+            )
+        }
+        models.data.sort { $0.id < $1.id }
 
         let data = try JSONEncoder().encode(models)
         return Response(
@@ -1023,6 +1844,247 @@ actor CodeGenServer {
         }
     }
 
+    private func handleEmbeddings(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 10 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        let openaiRequest: OpenAIEmbeddingRequest
+        do {
+            openaiRequest = try JSONDecoder().decode(OpenAIEmbeddingRequest.self, from: Data(body.readableBytesView))
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
+        }
+
+        do {
+            let texts = try APIServerContract.embeddingTexts(from: openaiRequest)
+            let resolved = try await embeddingModel(for: openaiRequest.model)
+            let result = try resolved.model.embed(texts: texts)
+            let response = APIServerContract.embeddingResponse(
+                modelId: resolved.modelID,
+                embeddings: result.embeddings,
+                tokenCounts: result.tokenCounts
+            )
+            return try jsonResponse(response)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleImageGenerations(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 10 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        do {
+            let openaiRequest = try JSONDecoder().decode(
+                OpenAIImageGenerationRequest.self,
+                from: Data(body.readableBytesView)
+            )
+            let plan = try APIServerContract.imageGenerationPlan(from: openaiRequest)
+            let outputURL = try await generateImage(plan)
+            let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
+            return try jsonResponse(response)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleImageEdits(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 100 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        do {
+            let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
+            let imageFiles = (form.files(named: "image") + form.files(named: "image[]"))
+                .filter { !$0.body.isEmpty }
+            guard !imageFiles.isEmpty else {
+                throw APIRequestValidationError.invalidField("image", "image file is required")
+            }
+            let inputImageURLs = try imageFiles.map {
+                try writeMultipartFile($0, directoryName: "mere-run-api-image-edits")
+            }
+            let maskImageURL = try form.file(named: "mask").flatMap { mask -> URL? in
+                guard !mask.body.isEmpty else { return nil }
+                return try writeMultipartFile(mask, directoryName: "mere-run-api-image-edits")
+            }
+            let plan = try APIServerContract.imageEditPlan(
+                from: form,
+                inputImageURLs: inputImageURLs,
+                maskImageURL: maskImageURL
+            )
+            let outputURL = try await generateImage(plan)
+            let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
+            return try jsonResponse(response)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleAudioSpeech(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 10 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        do {
+            let openaiRequest = try JSONDecoder().decode(
+                OpenAIAudioSpeechRequest.self,
+                from: Data(body.readableBytesView)
+            )
+            let plan = try APIServerContract.speechPlan(from: openaiRequest)
+            let outputURL = try await synthesizeSpeech(plan)
+            let responseURL = try speechResponseURL(outputURL, responseFormat: plan.responseFormat)
+            let data = try Data(contentsOf: responseURL)
+            return binaryResponse(data, contentType: APIServerContract.speechContentType(for: plan.responseFormat))
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleAudioTranscriptions(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 100 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        do {
+            let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
+            let plan = try APIServerContract.transcriptionPlan(from: form)
+            guard let file = form.file(named: "file"), !file.body.isEmpty else {
+                throw APIRequestValidationError.invalidField("file", "audio file is required")
+            }
+            let audioURL = try writeMultipartFile(file, directoryName: "mere-run-api-audio")
+            let result = try await transcribeAudio(audioURL: audioURL, plan: plan)
+            switch plan.responseFormat {
+            case "text":
+                return binaryResponse(Data(result.text.utf8), contentType: "text/plain; charset=utf-8")
+            case "srt", "vtt":
+                let subtitle = APIServerContract.transcriptionSubtitle(from: result, format: plan.responseFormat)
+                let contentType = plan.responseFormat == "srt"
+                    ? "application/x-subrip; charset=utf-8"
+                    : "text/vtt; charset=utf-8"
+                return binaryResponse(Data(subtitle.utf8), contentType: contentType)
+            case "verbose_json":
+                return try jsonResponse(
+                    APIServerContract.transcriptionResponse(from: result, verbose: true)
+                )
+            default:
+                return try jsonResponse(
+                    APIServerContract.transcriptionResponse(from: result, verbose: false)
+                )
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
     private func handleNonStreamingChat(
         _ request: ChatRequest,
         modelID: String,
@@ -1066,6 +2128,259 @@ actor CodeGenServer {
             headers: [.contentType: "application/json"],
             body: .init(byteBuffer: ByteBuffer(bytes: data))
         )
+    }
+
+    private func embeddingModel(for requestedModel: String) async throws -> (modelID: String, model: Qwen3EmbeddingModel) {
+        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let spec = ManagedModelCatalog.spec(for: normalized),
+           spec.id != Qwen3EmbeddingCatalog.modelId {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "use \(Qwen3EmbeddingCatalog.modelId) or a local Qwen3 embedding model path"
+            )
+        }
+
+        if let model = embeddingModels[normalized] {
+            let modelID = ManagedModelCatalog.spec(for: normalized)?.id ?? normalized
+            return (modelID, model)
+        }
+
+        let resolution = try await ManagedModelResolver.resolveForRuntime(
+            requestedModel: normalized,
+            defaultModelID: Qwen3EmbeddingCatalog.modelId,
+            progress: nil
+        )
+        let modelID = resolution.source == .explicitPath ? normalized : resolution.spec.id
+        let model = try Qwen3EmbeddingModel(
+            resources: Qwen3EmbeddingResources(rootURL: resolution.url)
+        )
+        embeddingModels[normalized] = model
+        if modelID != normalized {
+            embeddingModels[modelID] = model
+        }
+        return (modelID, model)
+    }
+
+    private func generateImage(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
+        try MLXBundleSupport.ensureAvailable(quiet: true)
+        if plan.inputImage != nil,
+           QwenImageEditRepository.canonicalModelId(for: plan.modelID) != nil {
+            return try await generateQwenImageEdit(plan)
+        }
+        let resolved = try resolveImageModel(plan.modelID)
+        let effectiveSteps = plan.steps
+            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .ideogram)
+                ? (resolved.manifest.defaults?.steps ?? 4)
+                : 4)
+        let effectiveCFG = plan.guidanceScale
+            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .ideogram)
+                ? (resolved.manifest.defaults?.cfg ?? 1.0)
+                : 1.0)
+        let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
+        let request = GenerationRequest(
+            prompt: plan.prompt,
+            negativePrompt: plan.negativePrompt,
+            referenceImages: plan.additionalInputImages,
+            width: plan.width,
+            height: plan.height,
+            steps: effectiveSteps,
+            guidanceScale: effectiveCFG,
+            seed: plan.seed,
+            outputURL: outputURL,
+            model: resolved.rootURL.path,
+            maxSequenceLength: 512,
+            lora: nil,
+            enhancePrompt: false,
+            inputImage: plan.inputImage,
+            strength: plan.strength ?? 0.75,
+            keepOriginalAspect: false,
+            useBetaSigmas: false,
+            sigmaShift: resolved.manifest.defaults?.sigmaShift.map { Float($0) }
+        )
+
+        switch resolved.manifest.family {
+        case .klein:
+            _ = try await Flux2KleinGenerator().generate(request, progressHandler: nil)
+        case .zimage:
+            _ = try await ZImageTurboGenerator().generate(request, progressHandler: nil)
+        case .hidream:
+            let generator = HiDreamO1Generator()
+            defer { generator.unload() }
+            _ = try await generator.generate(request, progressHandler: nil)
+        case .ideogram:
+            let generator = Ideogram4Generator()
+            defer { generator.unload() }
+            _ = try await generator.generate(request, progressHandler: nil)
+        case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .video, .psi, .privacy, .deepseek, nil:
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "model \(resolved.modelID) is not an image generation model"
+            )
+        }
+        return outputURL
+    }
+
+    private func generateQwenImageEdit(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
+        let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
+        let request = GenerationRequest(
+            prompt: plan.prompt,
+            negativePrompt: plan.negativePrompt,
+            width: plan.width,
+            height: plan.height,
+            steps: plan.steps ?? 20,
+            guidanceScale: plan.guidanceScale ?? 4.0,
+            seed: plan.seed,
+            outputURL: outputURL,
+            model: plan.modelID,
+            maxSequenceLength: 512,
+            inputImage: plan.inputImage,
+            strength: plan.strength ?? 0.75
+        )
+        let generator = QwenImageEditGenerator()
+        _ = try await generator.generate(request, progressHandler: nil)
+        return outputURL
+    }
+
+    private func synthesizeSpeech(_ plan: APIServerContract.SpeechPlan) async throws -> URL {
+        try MLXBundleSupport.ensureAvailable(quiet: true)
+        let selection = try resolveSpeechModel(plan.modelID)
+        let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-speech", extension: "wav")
+        let request = TTSRequest(
+            text: plan.input,
+            voiceDescription: plan.voiceDescription,
+            voiceMode: .style,
+            cloneReference: nil,
+            language: "auto",
+            speed: plan.speed,
+            temperature: plan.temperature,
+            outputURL: outputURL
+        )
+        let generator = Qwen3TTSGenerator(modelId: selection.modelID)
+        _ = try await generator.generate(
+            request,
+            modelPath: selection.modelPath,
+            progressHandler: nil
+        )
+        return outputURL
+    }
+
+    private func speechResponseURL(_ wavURL: URL, responseFormat: String) throws -> URL {
+        guard responseFormat != "wav" else {
+            return wavURL
+        }
+        let outputURL = try temporaryOutputURL(
+            directoryName: "mere-run-api-speech",
+            extension: responseFormat
+        )
+        try MediaAudioIO.transcode(wavURL, to: outputURL, format: responseFormat)
+        return outputURL
+    }
+
+    private func transcribeAudio(
+        audioURL: URL,
+        plan: APIServerContract.TranscriptionPlan
+    ) async throws -> ASRResult {
+        try MLXBundleSupport.ensureAvailable(quiet: true)
+        let selection = try resolveTranscriptionModel(plan.modelID)
+        let request = ASRRequest(
+            audioURL: audioURL,
+            language: plan.language,
+            task: plan.task,
+            maxTokens: plan.maxTokens
+        )
+        let execution = try await CLIASRRouting.transcribe(
+            request: request,
+            preferredBackend: selection.backend,
+            modelOverride: selection.modelOverride,
+            progressHandler: nil
+        )
+        return execution.result
+    }
+
+    private func resolveImageModel(
+        _ requestedModel: String
+    ) throws -> (modelID: String, rootURL: URL, manifest: MereRunModelManifest) {
+        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let asPath = URL(fileURLWithPath: normalized).standardizedFileURL
+        if FileManager.default.fileExists(atPath: asPath.path) {
+            let manifest = try MereRunModelManifest.loadRequired(from: asPath)
+            return (manifest.id, asPath, manifest)
+        }
+        guard let modelID = ModelResolver.ModelID(rawValue: normalized) else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "use a mere.run image model id or a local model path"
+            )
+        }
+        let resolution = try ModelResolver().resolve(modelID)
+        let manifest = try MereRunModelManifest.loadRequired(from: resolution.rootURL)
+        return (modelID.rawValue, resolution.rootURL, manifest)
+    }
+
+    private func resolveSpeechModel(
+        _ requestedModel: String
+    ) throws -> (modelID: String, modelPath: String?) {
+        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let asPath = URL(fileURLWithPath: normalized).standardizedFileURL
+        if FileManager.default.fileExists(atPath: asPath.path) {
+            return (Qwen3TTSResources.defaultModelId, asPath.path)
+        }
+        if let spec = ManagedModelCatalog.spec(for: normalized),
+           spec.category == .speechTTS {
+            return (spec.id, nil)
+        }
+        throw APIRequestValidationError.invalidField(
+            "model",
+            "use a mere.run TTS model id or a local Qwen3-TTS model path"
+        )
+    }
+
+    private func resolveTranscriptionModel(
+        _ requestedModel: String
+    ) throws -> (modelOverride: String?, backend: ASRBackend) {
+        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let asPath = URL(fileURLWithPath: normalized).standardizedFileURL
+        if FileManager.default.fileExists(atPath: asPath.path) {
+            return (asPath.path, .auto)
+        }
+        guard let spec = ManagedModelCatalog.spec(for: normalized),
+              spec.category == .speechASR else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "use a mere.run ASR model id or a local ASR model path"
+            )
+        }
+        let backend: ASRBackend = spec.id.contains("parakeet") ? .parakeet : .qwen
+        return (spec.id, backend)
+    }
+
+    private nonisolated func temporaryOutputURL(
+        directoryName: String,
+        extension pathExtension: String
+    ) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("\(UUID().uuidString).\(pathExtension)")
+    }
+
+    private nonisolated func writeMultipartFile(
+        _ file: MultipartFormData.Part,
+        directoryName: String
+    ) throws -> URL {
+        let pathExtension = sanitizedPathExtension(from: file.filename) ?? "wav"
+        let outputURL = try temporaryOutputURL(directoryName: directoryName, extension: pathExtension)
+        try file.body.write(to: outputURL)
+        return outputURL
+    }
+
+    private nonisolated func sanitizedPathExtension(from filename: String?) -> String? {
+        guard let rawExtension = filename.flatMap({ URL(fileURLWithPath: $0).pathExtension.lowercased() }),
+              !rawExtension.isEmpty,
+              rawExtension.allSatisfy({ $0.isLetter || $0.isNumber }) else {
+            return nil
+        }
+        return rawExtension
     }
 
     private func handleRuntimeStatus(_ request: Request) async throws -> Response {
@@ -1477,6 +2792,14 @@ actor CodeGenServer {
         )
     }
 
+    private nonisolated func binaryResponse(_ data: Data, contentType: String) -> Response {
+        Response(
+            status: .ok,
+            headers: [.contentType: contentType],
+            body: .init(byteBuffer: ByteBuffer(bytes: data))
+        )
+    }
+
     private nonisolated func runtimeErrorResponse(_ error: Error) -> Response {
         switch error {
         case let error as RuntimeModelPoolError:
@@ -1501,6 +2824,24 @@ actor CodeGenServer {
                 )
             }
         case let error as APIRequestValidationError:
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
+        case let error as MultipartFormData.ParseError:
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
+        case let error as ManagedModelResolver.ResolverError:
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
+        case let error as Qwen3EmbeddingModel.EmbeddingError:
             return makeErrorResponse(
                 status: .badRequest,
                 message: error.localizedDescription,

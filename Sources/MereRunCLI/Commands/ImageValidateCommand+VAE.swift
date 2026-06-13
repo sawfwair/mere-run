@@ -11,13 +11,14 @@ extension ImageValidate {
     func runVAETests(modelURL: URL, outputDir: URL) async throws {
         print("\n== VAE validation (\(family.uppercased())) ==")
 
-        let vaeWeightsPath = modelURL.appendingPathComponent("vae/diffusion_pytorch_model.safetensors")
-        let (vaeConfig, latentChannels) = try loadVAEConfig(from: modelURL)
+        let (vaeConfig, latentChannels, resources, manifest) = try loadVAEConfig(from: modelURL)
         let vae = AutoencoderKL(configuration: vaeConfig)
 
         try loadVAEWeights(
             into: vae,
-            from: vaeWeightsPath,
+            modelURL: modelURL,
+            resources: resources,
+            manifest: manifest,
             family: family.lowercased(),
             config: vaeConfig
         )
@@ -29,7 +30,12 @@ extension ImageValidate {
         Memory.clearCache()
     }
 
-    private func loadVAEConfig(from modelURL: URL) throws -> (VAEConfig, Int) {
+    private func loadVAEConfig(from modelURL: URL) throws -> (
+        config: VAEConfig,
+        latentChannels: Int,
+        resources: ZImageTurboResources?,
+        manifest: MereRunModelManifest?
+    ) {
         if family.lowercased() == "klein" {
             let configURL = modelURL.appendingPathComponent("vae/config.json")
             let data = try Data(contentsOf: configURL)
@@ -49,21 +55,38 @@ extension ImageValidate {
                 usePostQuantConv: flux2Config.usePostQuantConv ?? false
             )
             print("  Config: Klein VAE (latentChannels=\(flux2Config.latentChannels), useQuantConv=\(vaeConfig.useQuantConv))")
-            return (vaeConfig, flux2Config.latentChannels)
+            return (vaeConfig, flux2Config.latentChannels, nil, nil)
         }
 
-        let vaeConfig = VAEConfig()
+        let (resources, manifest) = try resolvedZImageResources(modelURL: modelURL)
+        let configs = try ZImageTurboModelConfigs.load(from: resources)
+        let zimageConfig = configs.vae
+        let vaeConfig = VAEConfig(
+            inChannels: zimageConfig.inChannels,
+            outChannels: zimageConfig.outChannels,
+            latentChannels: zimageConfig.latentChannels,
+            scalingFactor: zimageConfig.scalingFactor,
+            shiftFactor: zimageConfig.shiftFactor,
+            blockOutChannels: zimageConfig.blockOutChannels,
+            layersPerBlock: zimageConfig.layersPerBlock,
+            normNumGroups: zimageConfig.normNumGroups,
+            sampleSize: zimageConfig.sampleSize ?? ZImageModelMetadata.VAE.sampleSize,
+            midBlockAddAttention: zimageConfig.midBlockAddAttention
+        )
         print("  Config: Z-Image Turbo VAE (latentChannels=\(vaeConfig.latentChannels))")
-        return (vaeConfig, vaeConfig.latentChannels)
+        return (vaeConfig, vaeConfig.latentChannels, resources, manifest)
     }
 
     private func loadVAEWeights(
         into vae: AutoencoderKL,
-        from weightsURL: URL,
+        modelURL: URL,
+        resources: ZImageTurboResources?,
+        manifest: MereRunModelManifest?,
         family: String,
         config: VAEConfig
     ) throws {
         if family == "klein" {
+            let weightsURL = modelURL.appendingPathComponent("vae/diffusion_pytorch_model.safetensors")
             let hasQuantConv = config.useQuantConv
             let hasPostQuantConv = config.usePostQuantConv
             try HFSafetensorsWeightsLoader.applyWeights(
@@ -90,12 +113,60 @@ extension ImageValidate {
             return
         }
 
-        try HFSafetensorsWeightsLoader.applyWeights(
-            url: weightsURL,
+        guard let resources else {
+            throw ImageValidateRuntimeError("Could not resolve Z-Image VAE resources.")
+        }
+        let quantization = try ModelWeightsLoader.QuantizationParams.fromManifest(manifest)
+
+        if FileManager.default.fileExists(atPath: resources.vaeWeightsURL.path) {
+            try HFSafetensorsWeightsLoader.applyWeights(
+                url: resources.vaeWeightsURL,
+                to: vae,
+                dtype: .bfloat16,
+                verify: [],
+                mapper: { key, value in
+                    let converted = value.ndim == 4
+                        ? HFSafetensorsWeightsLoader.convWeightOIHWToOHWI(value)
+                        : value
+                    return [(key, converted)]
+                }
+            )
+            return
+        }
+
+        if FileManager.default.fileExists(atPath: resources.vaeWeightsIndexURL.path)
+            || FileManager.default.fileExists(atPath: resources.vaeMFluxWeightsURL.path) {
+            try ModelWeightsLoader.applyHFSafetensors(
+                indexURL: resources.vaeWeightsIndexURL,
+                singleURL: resources.vaeMFluxWeightsURL,
+                to: vae,
+                dtype: .bfloat16,
+                verify: [],
+                mapper: zimageMFluxVAEMapper,
+                quantization: quantization
+            )
+            return
+        }
+
+        let shardFiles = try ModelWeightsLoader.safetensorsShards(in: resources.vaeDirURL)
+        try ModelWeightsLoader.applySafetensorsShards(
+            files: shardFiles,
             to: vae,
             dtype: .bfloat16,
-            verify: []
+            verify: [],
+            mapper: zimageMFluxVAEMapper,
+            quantization: quantization
         )
+    }
+
+    private func zimageMFluxVAEMapper(_ key: String, _ value: MLXArray) -> [(String, MLXArray)] {
+        let mapped = key
+            .replacingOccurrences(of: ".conv_in.conv.", with: ".conv_in.")
+            .replacingOccurrences(of: ".conv_in.conv2d.", with: ".conv_in.")
+            .replacingOccurrences(of: ".conv_out.conv.", with: ".conv_out.")
+            .replacingOccurrences(of: ".conv_out.conv2d.", with: ".conv_out.")
+            .replacingOccurrences(of: ".conv_norm_out.norm.", with: ".conv_norm_out.")
+        return [(mapped, value)]
     }
 
     private func runVAEDecodeTest(

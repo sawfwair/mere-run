@@ -94,6 +94,45 @@ enum FFmpegMediaIO {
         }
     }
 
+    static func transcodeAudio(
+        _ inputURL: URL,
+        to outputURL: URL,
+        format: String
+    ) throws {
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let normalized = format.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var arguments = [
+            "-v", "error",
+            "-y",
+            "-i", inputURL.path,
+            "-vn"
+        ]
+        switch normalized {
+        case "mp3":
+            arguments += ["-c:a", "libmp3lame", "-b:a", "192k", "-f", "mp3"]
+        case "opus":
+            arguments += ["-c:a", "libopus", "-b:a", "96k", "-f", "opus"]
+        case "aac":
+            arguments += ["-c:a", "aac", "-b:a", "192k", "-f", "adts"]
+        case "flac":
+            arguments += ["-c:a", "flac", "-f", "flac"]
+        default:
+            throw MediaIOError.audioEncodeFailed(outputURL, "Unsupported audio format: \(format)")
+        }
+        arguments.append(outputURL.path)
+
+        do {
+            _ = try FFmpegProcess.run(tool: MediaTool.ffmpegPath, arguments: arguments)
+        } catch let error as MediaIOError {
+            throw MediaIOError.audioEncodeFailed(outputURL, error.localizedDescription)
+        } catch {
+            throw MediaIOError.audioEncodeFailed(outputURL, error.localizedDescription)
+        }
+    }
+
     static func writeMP4(
         rgb24: [UInt8],
         width: Int,

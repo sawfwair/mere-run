@@ -49,6 +49,21 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(command.model, "image-zimage-max")
     }
 
+    func testGuideOpenWebUIParsesAndRenders() throws {
+        let command = try GuideCommand.parse(["open-webui"])
+        let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
+        let rendered = try GuideCommand.render(entry: entry, model: nil, json: false)
+
+        XCTAssertEqual(entry.topic, "open-webui")
+        XCTAssertTrue(rendered.contains("http://host.docker.internal:8080/v1"))
+        XCTAssertTrue(rendered.contains("text-embed-qwen3-0.6b"))
+        XCTAssertTrue(rendered.contains("scripts/smoke-open-webui.sh live-smoke"))
+        XCTAssertTrue(rendered.contains("proxy-smoke"))
+        XCTAssertTrue(rendered.contains("OPEN_WEBUI_CHAT_MODELS"))
+        XCTAssertTrue(rendered.contains("\"function_calling\":\"native\""))
+        XCTAssertTrue(rendered.contains("IMAGES_EDIT_OPENAI_API_BASE_URL"))
+    }
+
     func testUnknownGuideTopicThrows() {
         XCTAssertThrowsError(
             try GuideCommand.resolveEntry(commandPath: ["banana", "split"], model: nil)

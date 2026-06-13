@@ -250,6 +250,19 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXFast"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
+var mereRunCLIDependencies: [Target.Dependency] = [
+  "MereRunCore",
+  "AudioCore",
+  "AudioCodecs",
+  "AudioSTT",
+  "AudioTTS",
+  .product(name: "ArgumentParser", package: "swift-argument-parser"),
+  .product(name: "Hummingbird", package: "hummingbird")
+]
+if hasMediaIOTarget {
+  mereRunCLIDependencies.append("MediaIO")
+}
+
 targets.append(contentsOf: [
   .target(
     name: "MereRunCore",
@@ -336,15 +349,7 @@ targets.append(contentsOf: [
   ),
   .executableTarget(
     name: "MereRunCLI",
-    dependencies: [
-      "MereRunCore",
-      "AudioCore",
-      "AudioCodecs",
-      "AudioSTT",
-      "AudioTTS",
-      .product(name: "ArgumentParser", package: "swift-argument-parser"),
-      .product(name: "Hummingbird", package: "hummingbird")
-    ],
+    dependencies: mereRunCLIDependencies,
     path: "Sources/MereRunCLI",
     exclude: [
       "Commands/README.md",

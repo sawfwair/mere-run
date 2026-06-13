@@ -9,6 +9,7 @@ mere.run guide image generate
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-magenta-rt2-small
+mere.run guide open-webui
 mere.run guide video generate --json
 ```
 
@@ -42,6 +43,7 @@ Creative and runtime workflows:
 - `video generate`
 - `video export-latents`
 - `api serve`
+- `open-webui`
 - `status`
 
 Operational workflows:

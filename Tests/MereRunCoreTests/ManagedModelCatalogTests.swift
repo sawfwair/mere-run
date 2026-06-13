@@ -94,6 +94,20 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/*"), false)
     }
 
+    func testKleinMaxRejectsConfigOnlyPartialInstall() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-max"))
+        try writeConfigOnlyDiffusersImageRoot(at: root, id: .kleinMax)
+
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        let missing = spec.missingPaths(in: root, fileManager: .default).map(\.path)
+        XCTAssertTrue(missing.contains { $0.hasSuffix("text_encoder/model.safetensors.index.json") })
+        XCTAssertTrue(missing.contains { $0.hasSuffix("transformer/diffusion_pytorch_model.safetensors.index.json") })
+        XCTAssertTrue(missing.contains { $0.hasSuffix("vae/diffusion_pytorch_model.safetensors") })
+    }
+
     func testBonsaiTernaryUsesPrismMLHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-bonsai-ternary"))
 
@@ -216,6 +230,29 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatLFM2)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("model.safetensors.index.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
+    }
+
+    func testQwen3TTSSpecsDownloadSpeechTokenizer() throws {
+        for id in ["speech-tts-qwen3-nano", "speech-tts-qwen3-customvoice"] {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+            XCTAssertEqual(spec.category, .speechTTS)
+            XCTAssertEqual(spec.validationKind, .qwen3TTS)
+            XCTAssertEqual(spec.hubFallback?.patterns.contains("speech_tokenizer/*"), true)
+        }
+    }
+
+    func testQwen3TTSRejectsRootMissingSpeechTokenizer() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalQwen3TTSRootWithoutSpeechTokenizer(at: root, id: .qwen3TTSNano)
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "speech-tts-qwen3-nano"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+
+        let missing = spec.missingPaths(in: root, fileManager: .default).map(\.path)
+        XCTAssertTrue(missing.contains { $0.hasSuffix("speech_tokenizer/config.json") })
+        XCTAssertTrue(missing.contains { $0.hasSuffix("speech_tokenizer") })
     }
 
     func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
@@ -438,6 +475,39 @@ final class ManagedModelCatalogTests: XCTestCase {
         return url
     }
 
+    private func writeConfigOnlyDiffusersImageRoot(at root: URL, id: ModelResolver.ModelID) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model_index.json").path,
+            contents: Data("{}".utf8)
+        ))
+
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoder = root.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformer = root.appendingPathComponent("transformer", isDirectory: true)
+        let vae = root.appendingPathComponent("vae", isDirectory: true)
+        let scheduler = root.appendingPathComponent("scheduler", isDirectory: true)
+        for directory in [tokenizer, textEncoder, transformer, vae, scheduler] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: tokenizer.appendingPathComponent("tokenizer_config.json").path,
+            contents: Data("{}".utf8)
+        ))
+        for directory in [textEncoder, transformer, vae] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: directory.appendingPathComponent("config.json").path,
+                contents: Data("{}".utf8)
+            ))
+        }
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: scheduler.appendingPathComponent("scheduler_config.json").path,
+            contents: Data("{}".utf8)
+        ))
+    }
+
     private func writeMinimalACEStepRoot(at root: URL, turboSubdirectory: String) throws {
         for subdirectory in [turboSubdirectory, "vae", "Qwen3-Embedding-0.6B"] {
             try FileManager.default.createDirectory(
@@ -487,6 +557,30 @@ final class ManagedModelCatalogTests: XCTestCase {
             "spectrostream_encoder.mlxfn",
         ] {
             XCTAssertTrue(FileManager.default.createFile(atPath: spectrostream.appendingPathComponent(file).path, contents: Data()))
+        }
+    }
+
+    private func writeMinimalQwen3TTSRootWithoutSpeechTokenizer(
+        at root: URL,
+        id: ModelResolver.ModelID
+    ) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        let files = [
+            "config.json",
+            "generation_config.json",
+            "merges.txt",
+            "model.safetensors",
+            "tokenizer_config.json",
+            "vocab.json",
+        ]
+
+        for file in files {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data("{}".utf8)
+            ))
         }
     }
 

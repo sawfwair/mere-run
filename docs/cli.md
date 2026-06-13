@@ -40,6 +40,7 @@ Public tree:
 - `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
+- `mere.run open-webui quickstart`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`
 
@@ -1054,6 +1055,11 @@ Current endpoint surface:
 - `GET /health`
 - `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/embeddings`
+- `POST /v1/images/generations`
+- `POST /v1/images/edits`
+- `POST /v1/audio/speech`
+- `POST /v1/audio/transcriptions`
 - `GET /runtime/status`
 - `POST /runtime/models/{id}/load`
 - `POST /runtime/models/{id}/unload`
@@ -1063,8 +1069,12 @@ Security defaults:
 
 - loopback binds are local-first and do not require auth
 - non-loopback binds require `--api-key` or `MERERUN_API_KEY`
-- `POST /v1/chat/completions` requires `Content-Type: application/json`
-- `--rate-limit-per-minute` applies basic request throttling to `POST /v1/chat/completions`
+- `POST /v1/chat/completions`, `POST /v1/embeddings`,
+  `POST /v1/images/generations`, and `POST /v1/audio/speech` require
+  `Content-Type: application/json`; `POST /v1/images/edits` and
+  `POST /v1/audio/transcriptions` require `multipart/form-data`
+- `--rate-limit-per-minute` applies basic request throttling to the
+  OpenAI-compatible routes
 - `--max-active-requests` controls fair FIFO chat admission; the default `1`
   preserves serialized local inference while exposing queue depth in status;
   queued client cancellations are removed from the FIFO instead of running later
@@ -1128,6 +1138,32 @@ OpenAI chat compatibility:
 - `max_completion_tokens`, `developer` messages, function tools, image content
   parts, structured JSON mode, and streaming usage are capability-gated by
   engine.
+- `tool_choice` accepts `none`, `auto`, `required`, and specific function
+  choices by narrowing the advertised tool list to the named function.
+
+OpenAI embeddings compatibility:
+
+- `POST /v1/embeddings` serves native `text-embed-qwen3-0.6b` embeddings.
+- `input` may be a string or array of strings.
+- `encoding_format` may be omitted or set to `float`; base64 encoding and
+  dimension overrides are rejected.
+
+OpenAI image/audio compatibility:
+
+- `POST /v1/images/generations` serves native image generation models such as
+  `image-zimage-nano`; it supports `prompt`, `size`, `n=1`, `response_format`
+  `b64_json` or `url`, and local extensions such as `seed`.
+- `POST /v1/images/edits` accepts multipart `image` uploads, Open WebUI-style
+  `image[]` repeated uploads, an optional `mask`, and an edit `prompt`; it uses
+  the same image runtime with input-image conditioning. Masks are accepted for
+  client compatibility; current native edit models use whole-image conditioning.
+- `POST /v1/audio/speech` serves `speech-tts-qwen3-nano` and returns WAV by
+  default, with `mp3`, `opus`, `aac`, and `flac` available when `ffmpeg` is
+  installed. OpenAI model names such as `tts-1` map to the local default.
+- `POST /v1/audio/transcriptions` accepts multipart uploads for
+  `speech-asr-parakeet` or `speech-asr-qwen3`, with `json`, `text`,
+  `verbose_json`, `srt`, and `vtt` response formats. OpenAI model names such as
+  `whisper-1` map to the local default.
 
 Examples:
 
@@ -1137,6 +1173,23 @@ swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-chat-lfm2
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
 swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120 --max-active-requests 1
+curl http://127.0.0.1:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  --data '{"model":"text-embed-qwen3-0.6b","input":"local RAG"}'
+curl http://127.0.0.1:8080/v1/images/generations \
+  -H "Content-Type: application/json" \
+  --data '{"model":"image-zimage-nano","prompt":"a compact local AI workstation","size":"1024x1024"}'
+curl http://127.0.0.1:8080/v1/images/edits \
+  -F model=qwen-image-edit \
+  -F prompt="make the workstation dusk-lit while preserving the layout" \
+  -F image=@input.png
+curl http://127.0.0.1:8080/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  --output speech.wav \
+  --data '{"model":"speech-tts-qwen3-nano","input":"mere.run is online","voice":"nova","response_format":"wav"}'
+curl http://127.0.0.1:8080/v1/audio/transcriptions \
+  -F model=speech-asr-parakeet \
+  -F file=@speech.wav
 ```
 
 After starting a server, run `swift run mere.run status` from another terminal

@@ -126,7 +126,9 @@ struct ImageValidate: AsyncParsableCommand {
             for error in report.errors {
                 print("    - \(error)")
             }
-            throw ValidationError("Model directory is incomplete. Repair the manifest or pull the model again with `mere.run model pull \(modelId.rawValue)`.")
+            throw ImageValidateRuntimeError(
+                "Model directory is incomplete. Repair the manifest or pull the model again with `mere.run model pull \(modelId.rawValue)`."
+            )
         }
 
         return resolved.rootURL
@@ -146,5 +148,44 @@ struct ImageValidate: AsyncParsableCommand {
 
     func print(_ message: String) {
         CLIStderr.write(message + "\n")
+    }
+}
+
+struct ImageValidateRuntimeError: LocalizedError, Sendable {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
+    }
+}
+
+extension ImageValidate {
+    func resolvedZImageResources(modelURL: URL) throws -> (ZImageTurboResources, MereRunModelManifest?) {
+        guard let manifest = try MereRunModelManifest.loadIfPresent(from: modelURL) else {
+            return (ZImageTurboResources(rootURL: modelURL), nil)
+        }
+
+        let componentResolver = ModelComponentResolver(modelRootURL: modelURL, manifest: manifest)
+        let tokenizer = try componentResolver.resolveDirectory(for: .tokenizer, fallbackLocalPath: "tokenizer")
+        let textEncoder = try componentResolver.resolveDirectory(for: .textEncoder, fallbackLocalPath: "text_encoder")
+        let transformer = try componentResolver.resolveDirectory(for: .transformer, fallbackLocalPath: "transformer")
+        let vae = try componentResolver.resolveDirectory(for: .vae, fallbackLocalPath: "vae")
+        let scheduler = try? componentResolver.resolveDirectory(for: .scheduler, fallbackLocalPath: "scheduler")
+
+        return (
+            ZImageTurboResources(
+                modelRootURL: modelURL,
+                tokenizerDirURL: tokenizer.directoryURL,
+                textEncoderDirURL: textEncoder.directoryURL,
+                transformerDirURL: transformer.directoryURL,
+                vaeDirURL: vae.directoryURL,
+                schedulerDirURL: scheduler?.directoryURL ?? modelURL.appendingPathComponent("scheduler", isDirectory: true)
+            ),
+            manifest
+        )
     }
 }

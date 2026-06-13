@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import AudioCore
 @testable import MereRunCLI
 @testable import MereRunCore
 
@@ -155,6 +156,386 @@ final class APIServeCommandTests: XCTestCase {
 
         XCTAssertEqual(response.data.map(\.id), ["text-chat-gemma4", "chat-default"])
         XCTAssertEqual(Set(response.data.map(\.owned_by)), Set(["mere.run"]))
+    }
+
+    func testEmbeddingRequestDecodesStringInputAndUnknownFields() throws {
+        let data = """
+        {
+          "model": "text-embed-qwen3-0.6b",
+          "input": "semantic search query",
+          "encoding_format": "float",
+          "user": "rag-test",
+          "x-client-extra": { "kept": true }
+        }
+        """.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(OpenAIEmbeddingRequest.self, from: data)
+
+        XCTAssertEqual(request.model, "text-embed-qwen3-0.6b")
+        XCTAssertEqual(request.input.texts, ["semantic search query"])
+        XCTAssertEqual(request.encoding_format, "float")
+        XCTAssertEqual(request.user, "rag-test")
+        XCTAssertEqual(request.unknownFields["x-client-extra"]?.objectValue?["kept"]?.boolValue, true)
+    }
+
+    func testEmbeddingRequestDecodesArrayInput() throws {
+        let data = """
+        {
+          "model": "text-embed-qwen3-0.6b",
+          "input": ["first", "second"]
+        }
+        """.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(OpenAIEmbeddingRequest.self, from: data)
+
+        XCTAssertEqual(request.input.texts, ["first", "second"])
+    }
+
+    func testEmbeddingContractValidatesSupportedOptions() throws {
+        let request = OpenAIEmbeddingRequest(
+            model: "text-embed-qwen3-0.6b",
+            input: .array(["first", "second"]),
+            encoding_format: "float"
+        )
+
+        XCTAssertEqual(try APIServerContract.embeddingTexts(from: request), ["first", "second"])
+
+        let base64Request = OpenAIEmbeddingRequest(
+            model: "text-embed-qwen3-0.6b",
+            input: .string("hello"),
+            encoding_format: "base64"
+        )
+        XCTAssertThrowsError(try APIServerContract.embeddingTexts(from: base64Request)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("encoding_format"))
+        }
+
+        let dimensionsRequest = OpenAIEmbeddingRequest(
+            model: "text-embed-qwen3-0.6b",
+            input: .string("hello"),
+            dimensions: 128
+        )
+        XCTAssertThrowsError(try APIServerContract.embeddingTexts(from: dimensionsRequest)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("dimensions"))
+        }
+
+        let emptyRequest = OpenAIEmbeddingRequest(
+            model: "text-embed-qwen3-0.6b",
+            input: .array([])
+        )
+        XCTAssertThrowsError(try APIServerContract.embeddingTexts(from: emptyRequest)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("input"))
+        }
+    }
+
+    func testEmbeddingContractUsesOpenAICompatibleResponseShape() {
+        let response = APIServerContract.embeddingResponse(
+            modelId: "text-embed-qwen3-0.6b",
+            embeddings: [[0.1, 0.2], [0.3, 0.4]],
+            tokenCounts: [3, 5]
+        )
+
+        XCTAssertEqual(response.object, "list")
+        XCTAssertEqual(response.model, "text-embed-qwen3-0.6b")
+        XCTAssertEqual(response.data.count, 2)
+        XCTAssertEqual(response.data[0].object, "embedding")
+        XCTAssertEqual(response.data[0].index, 0)
+        XCTAssertEqual(response.data[0].embedding, [0.1, 0.2])
+        XCTAssertEqual(response.usage.prompt_tokens, 8)
+        XCTAssertEqual(response.usage.total_tokens, 8)
+    }
+
+    func testCompanionModelIDsIncludeNativeOpenAIStyleModalities() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: Set([
+            "image-zimage-nano",
+            "speech-tts-qwen3-nano",
+            "speech-asr-parakeet",
+            "text-embed-qwen3-0.6b",
+            "qwen-image-edit",
+        ]))
+
+        XCTAssertTrue(ids.contains("text-embed-qwen3-0.6b"))
+        XCTAssertTrue(ids.contains("image-zimage-nano"))
+        XCTAssertTrue(ids.contains("speech-tts-qwen3-nano"))
+        XCTAssertTrue(ids.contains("speech-asr-parakeet"))
+        XCTAssertTrue(ids.contains("qwen-image-edit"))
+        XCTAssertFalse(ids.contains("image-zimage-max"))
+        XCTAssertFalse(ids.contains("speech-asr-qwen3"))
+    }
+
+    func testCompanionModelIDsHideMissingSidecarModels() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [])
+
+        XCTAssertFalse(ids.contains("image-zimage-nano"))
+        XCTAssertFalse(ids.contains("speech-tts-qwen3-nano"))
+        XCTAssertFalse(ids.contains("speech-asr-parakeet"))
+        XCTAssertFalse(ids.contains("text-embed-qwen3-0.6b"))
+    }
+
+    func testImageGenerationContractMapsOpenAINamesAndValidatesOptions() throws {
+        let request = OpenAIImageGenerationRequest(
+            prompt: "  workstation in morning light  ",
+            model: "dall-e-3",
+            n: 1,
+            size: "512x768",
+            response_format: "url",
+            seed: 123,
+            negative_prompt: "blur",
+            steps: 4,
+            guidance_scale: 1.2
+        )
+
+        let plan = try APIServerContract.imageGenerationPlan(from: request)
+
+        XCTAssertEqual(plan.modelID, "image-zimage-nano")
+        XCTAssertEqual(plan.prompt, "workstation in morning light")
+        XCTAssertEqual(plan.width, 512)
+        XCTAssertEqual(plan.height, 768)
+        XCTAssertEqual(plan.responseFormat, "url")
+        XCTAssertEqual(plan.seed, 123)
+        XCTAssertEqual(plan.negativePrompt, "blur")
+        XCTAssertEqual(plan.steps, 4)
+        XCTAssertEqual(plan.guidanceScale, 1.2)
+        XCTAssertNil(plan.inputImage)
+        XCTAssertNil(plan.strength)
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", n: 2)
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("n"))
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", size: "large")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("size"))
+        }
+    }
+
+    func testImageGenerationResponseCanReturnBase64OrFileURL() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-api-test-\(UUID().uuidString).png")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        let plan = APIServerContract.ImageGenerationPlan(
+            modelID: "image-zimage-nano",
+            prompt: "hello",
+            width: 1024,
+            height: 1024,
+            responseFormat: "b64_json",
+            seed: nil,
+            negativePrompt: nil,
+            steps: nil,
+            guidanceScale: nil,
+            inputImage: nil,
+            strength: nil
+        )
+
+        let b64 = try APIServerContract.imageResponse(
+            outputURL: tempURL,
+            plan: plan,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(b64.created, 123)
+        XCTAssertEqual(b64.data.first?.b64_json, Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString())
+        XCTAssertEqual(b64.data.first?.revised_prompt, "hello")
+
+        let urlPlan = APIServerContract.ImageGenerationPlan(
+            modelID: plan.modelID,
+            prompt: plan.prompt,
+            width: plan.width,
+            height: plan.height,
+            responseFormat: "url",
+            seed: nil,
+            negativePrompt: nil,
+            steps: nil,
+            guidanceScale: nil,
+            inputImage: nil,
+            strength: nil
+        )
+        let urlResponse = try APIServerContract.imageResponse(outputURL: tempURL, plan: urlPlan)
+        XCTAssertEqual(urlResponse.data.first?.url, tempURL.absoluteString)
+    }
+
+    func testImageEditContractReadsMultipartFields() throws {
+        let inputURL = URL(fileURLWithPath: "/tmp/input.png")
+        let secondURL = URL(fileURLWithPath: "/tmp/second.png")
+        let maskURL = URL(fileURLWithPath: "/tmp/mask.png")
+        let form = MultipartFormData(parts: [
+            MultipartFormData.Part(name: "model", filename: nil, contentType: nil, body: Data("gpt-image-1".utf8)),
+            MultipartFormData.Part(name: "prompt", filename: nil, contentType: nil, body: Data("  add warm light  ".utf8)),
+            MultipartFormData.Part(name: "size", filename: nil, contentType: nil, body: Data("768x512".utf8)),
+            MultipartFormData.Part(name: "response_format", filename: nil, contentType: nil, body: Data("url".utf8)),
+            MultipartFormData.Part(name: "seed", filename: nil, contentType: nil, body: Data("42".utf8)),
+            MultipartFormData.Part(name: "strength", filename: nil, contentType: nil, body: Data("0.4".utf8)),
+        ])
+
+        let plan = try APIServerContract.imageEditPlan(
+            from: form,
+            inputImageURLs: [inputURL, secondURL],
+            maskImageURL: maskURL
+        )
+
+        XCTAssertEqual(plan.modelID, "image-zimage-nano")
+        XCTAssertEqual(plan.prompt, "add warm light")
+        XCTAssertEqual(plan.width, 768)
+        XCTAssertEqual(plan.height, 512)
+        XCTAssertEqual(plan.responseFormat, "url")
+        XCTAssertEqual(plan.seed, 42)
+        XCTAssertEqual(plan.inputImage, inputURL)
+        XCTAssertEqual(plan.additionalInputImages, [secondURL])
+        XCTAssertEqual(plan.maskImage, maskURL)
+        XCTAssertEqual(plan.strength, 0.4)
+    }
+
+    func testSpeechContractMapsOpenAINamesAndValidatesOutputFormats() throws {
+        let request = OpenAIAudioSpeechRequest(
+            model: "tts-1",
+            input: "  hello from mere.run  ",
+            voice: "onyx",
+            response_format: "mp3",
+            speed: 1.25,
+            instructions: "Use a friendly pace.",
+            temperature: 0.7
+        )
+
+        let plan = try APIServerContract.speechPlan(from: request)
+
+        XCTAssertEqual(plan.modelID, "speech-tts-qwen3-nano")
+        XCTAssertEqual(plan.input, "hello from mere.run")
+        XCTAssertTrue(plan.voiceDescription.contains("deep"))
+        XCTAssertTrue(plan.voiceDescription.contains("friendly pace"))
+        XCTAssertEqual(plan.responseFormat, "mp3")
+        XCTAssertEqual(APIServerContract.speechContentType(for: plan.responseFormat), "audio/mpeg")
+        XCTAssertEqual(plan.speed, 1.25)
+        XCTAssertEqual(plan.temperature, 0.7)
+
+        XCTAssertThrowsError(
+            try APIServerContract.speechPlan(
+                from: OpenAIAudioSpeechRequest(input: "hello", response_format: "caf")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("response_format"))
+        }
+    }
+
+    func testMultipartFormDataParserExtractsFieldsAndFile() throws {
+        let boundary = "mere-boundary"
+        let body = [
+            "--mere-boundary",
+            "Content-Disposition: form-data; name=\"model\"",
+            "",
+            "whisper-1",
+            "--mere-boundary",
+            "Content-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"",
+            "Content-Type: audio/wav",
+            "",
+            "WAVDATA",
+            "--mere-boundary--",
+            "",
+        ].joined(separator: "\r\n").data(using: .utf8)!
+
+        let form = try MultipartFormData.parse(body: body, boundary: boundary)
+
+        XCTAssertEqual(form.field("model"), "whisper-1")
+        XCTAssertEqual(form.file(named: "file")?.filename, "speech.wav")
+        XCTAssertEqual(form.files(named: "file").map(\.filename), ["speech.wav"])
+        XCTAssertEqual(form.file(named: "file")?.contentType, "audio/wav")
+        XCTAssertEqual(form.file(named: "file")?.body, Data("WAVDATA".utf8))
+    }
+
+    func testMultipartFormDataParserExtractsRepeatedFiles() throws {
+        let boundary = "mere-boundary"
+        let body = [
+            "--mere-boundary",
+            "Content-Disposition: form-data; name=\"image\"; filename=\"first.png\"",
+            "Content-Type: image/png",
+            "",
+            "FIRST",
+            "--mere-boundary",
+            "Content-Disposition: form-data; name=\"image[]\"; filename=\"second.png\"",
+            "Content-Type: image/png",
+            "",
+            "SECOND",
+            "--mere-boundary",
+            "Content-Disposition: form-data; name=\"mask\"; filename=\"mask.png\"",
+            "Content-Type: image/png",
+            "",
+            "MASK",
+            "--mere-boundary--",
+            "",
+        ].joined(separator: "\r\n").data(using: .utf8)!
+
+        let form = try MultipartFormData.parse(body: body, boundary: boundary)
+
+        XCTAssertEqual(form.files(named: "image").map(\.filename), ["first.png"])
+        XCTAssertEqual(form.files(named: "image[]").map(\.filename), ["second.png"])
+        XCTAssertEqual(form.file(named: "mask")?.body, Data("MASK".utf8))
+    }
+
+    func testTranscriptionContractMapsOpenAINamesAndVerboseResponse() throws {
+        let form = MultipartFormData(parts: [
+            MultipartFormData.Part(name: "model", filename: nil, contentType: nil, body: Data("whisper-1".utf8)),
+            MultipartFormData.Part(name: "language", filename: nil, contentType: nil, body: Data("en".utf8)),
+            MultipartFormData.Part(name: "response_format", filename: nil, contentType: nil, body: Data("verbose_json".utf8)),
+            MultipartFormData.Part(name: "task", filename: nil, contentType: nil, body: Data("transcribe".utf8)),
+        ])
+
+        let plan = try APIServerContract.transcriptionPlan(from: form)
+
+        XCTAssertEqual(plan.modelID, "speech-asr-parakeet")
+        XCTAssertEqual(plan.language, "en")
+        XCTAssertEqual(plan.responseFormat, "verbose_json")
+        XCTAssertEqual(plan.task, .transcribe)
+        XCTAssertEqual(plan.maxTokens, 448)
+
+        let response = APIServerContract.transcriptionResponse(
+            from: ASRResult(
+                text: "hello",
+                language: "en",
+                duration: 1.5,
+                sentenceAlignments: [
+                    ASRSentenceAlignment(
+                        text: "hello",
+                        startSeconds: 0,
+                        durationSeconds: 1.5,
+                        tokens: []
+                    ),
+                ]
+            ),
+            verbose: true
+        )
+
+        XCTAssertEqual(response.text, "hello")
+        XCTAssertEqual(response.language, "en")
+        XCTAssertEqual(response.duration, 1.5)
+        XCTAssertEqual(response.segments?.first?.text, "hello")
+    }
+
+    func testTranscriptionContractCanRenderSubtitleFormats() throws {
+        let srtForm = MultipartFormData(parts: [
+            MultipartFormData.Part(name: "response_format", filename: nil, contentType: nil, body: Data("srt".utf8)),
+        ])
+        let plan = try APIServerContract.transcriptionPlan(from: srtForm)
+        XCTAssertEqual(plan.responseFormat, "srt")
+
+        let result = ASRResult(
+            text: "hello",
+            language: "en",
+            duration: 1.5,
+            sentenceAlignments: [
+                ASRSentenceAlignment(text: "hello", startSeconds: 0, durationSeconds: 1.5, tokens: []),
+            ]
+        )
+        let srt = APIServerContract.transcriptionSubtitle(from: result, format: "srt")
+        XCTAssertTrue(srt.contains("1\n00:00:00,000 --> 00:00:01,500\nhello"))
+
+        let vtt = APIServerContract.transcriptionSubtitle(from: result, format: "vtt")
+        XCTAssertTrue(vtt.hasPrefix("WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nhello"))
     }
 
     func testChatRequestValidationAcceptsBoundedDefaults() throws {
@@ -344,6 +725,65 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.tools?.first?.name, "lookup")
         XCTAssertEqual(chatRequest.tools?.first?.parameters["query"]?.description, "Search query")
         XCTAssertEqual(chatRequest.tools?.first?.required, ["query"])
+    }
+
+    func testChatRequestAcceptsSpecificFunctionToolChoice() throws {
+        let lookup = OpenAIChatTool(
+            function: OpenAIChatToolFunction(
+                name: "lookup",
+                description: "Look up a value.",
+                parameters: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "query": .object(["type": .string("string")]),
+                    ]),
+                ])
+            )
+        )
+        let summarize = OpenAIChatTool(
+            function: OpenAIChatToolFunction(
+                name: "summarize",
+                description: "Summarize text.",
+                parameters: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "text": .object(["type": .string("string")]),
+                    ]),
+                ])
+            )
+        )
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            tools: [lookup, summarize],
+            tool_choice: .function(name: "summarize")
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .localTextWithTools
+        )
+
+        XCTAssertEqual(chatRequest.tools?.map(\.name), ["summarize"])
+
+        let missing = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            tools: [lookup],
+            tool_choice: .function(name: "missing")
+        )
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: missing,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: .localTextWithTools
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("tool_choice"))
+        }
     }
 
     func testChatRequestValidatesStructuredOutputsAgainstEngineCapability() throws {

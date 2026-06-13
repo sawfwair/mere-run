@@ -49,6 +49,14 @@ public enum MediaAudioIO {
         }
         try data.write(to: url)
     }
+
+    public static func transcode(
+        _ inputURL: URL,
+        to outputURL: URL,
+        format: String
+    ) throws {
+        try FFmpegMediaIO.transcodeAudio(inputURL, to: outputURL, format: format)
+    }
 }
 
 extension Data {

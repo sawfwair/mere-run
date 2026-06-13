@@ -374,8 +374,22 @@ enum GuideRegistry {
                 "text-chat-q36-nano",
                 "text-chat-lfm25-a1b-8bit",
                 "text-chat-mebot",
+                "text-embed-qwen3-0.6b",
             ],
             resourceName: "api-serve.md"
+        ),
+        GuideTopic(
+            topic: "open-webui",
+            title: "Open WebUI",
+            commandPaths: [["open-webui"]],
+            models: [
+                "text-chat-gemma4",
+                "text-chat-gemma4-12b",
+                "vision-chat-gemma4-12b",
+                "text-chat-q36-nano",
+                "text-embed-qwen3-0.6b",
+            ],
+            resourceName: "open-webui.md"
         ),
         GuideTopic(
             topic: "status",

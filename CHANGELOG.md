@@ -6,6 +6,26 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added native OpenAI-compatible `/v1/embeddings` to `mere.run api serve`,
+  backed by `text-embed-qwen3-0.6b`, and documented Open WebUI as an optional
+  companion UI with Docker and pip connection recipes.
+- added OpenAI-ish `/v1/images/generations`, `/v1/images/edits`,
+  `/v1/audio/speech`, and `/v1/audio/transcriptions` endpoints backed by
+  native image, Qwen3-TTS, and ASR runtime paths, with installed-only sidecar
+  model listing plus MP3/Opus/AAC/FLAC speech transcoding and SRT/VTT
+  transcription output.
+- added an Open WebUI smoke harness, native function-calling settings guidance,
+  conservative model capability metadata, Open WebUI chat model filtering,
+  per-model metadata wrapper import, and Open WebUI-style image edit multipart
+  compatibility for `image[]` uploads plus optional masks.
+- added `mere.run open-webui quickstart` to start a local mere.run API server,
+  launch the official Open WebUI Docker image, and apply the same native
+  chat/RAG/image/TTS/STT configuration used by the smoke harness.
+- documented Docker Compose and `uvx` Open WebUI companion paths for longer-lived
+  Linux/DGX Spark and same-host Python installs.
+
 ### Fixed
 
 - fixed `scripts/install-local.sh` on macOS so local installs stage every built

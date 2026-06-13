@@ -295,6 +295,103 @@ public struct OpenAIChatRequest: Codable, Sendable {
     }
 }
 
+public enum OpenAIEmbeddingInput: Codable, Hashable, Sendable {
+    case string(String)
+    case array([String])
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(String.self) {
+            self = .string(value)
+            return
+        }
+        self = .array(try container.decode([String].self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .array(let value):
+            try container.encode(value)
+        }
+    }
+
+    public var texts: [String] {
+        switch self {
+        case .string(let value):
+            return [value]
+        case .array(let value):
+            return value
+        }
+    }
+}
+
+public struct OpenAIEmbeddingRequest: Codable, Sendable {
+    public var model: String
+    public var input: OpenAIEmbeddingInput
+    public var encoding_format: String?
+    public var dimensions: Int?
+    public var user: String?
+    public var unknownFields: [String: OpenAIJSONValue]
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case model
+        case input
+        case encoding_format
+        case dimensions
+        case user
+    }
+
+    public init(
+        model: String,
+        input: OpenAIEmbeddingInput,
+        encoding_format: String? = nil,
+        dimensions: Int? = nil,
+        user: String? = nil
+    ) {
+        self.model = model
+        self.input = input
+        self.encoding_format = encoding_format
+        self.dimensions = dimensions
+        self.user = user
+        self.unknownFields = [:]
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        model = try container.decode(String.self, forKey: .model)
+        input = try container.decode(OpenAIEmbeddingInput.self, forKey: .input)
+        encoding_format = try container.decodeIfPresent(String.self, forKey: .encoding_format)
+        dimensions = try container.decodeIfPresent(Int.self, forKey: .dimensions)
+        user = try container.decodeIfPresent(String.self, forKey: .user)
+
+        let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
+        let dynamic = try decoder.container(keyedBy: OpenAIDynamicCodingKey.self)
+        var unknown: [String: OpenAIJSONValue] = [:]
+        for key in dynamic.allKeys where !knownKeys.contains(key.stringValue) {
+            unknown[key.stringValue] = try dynamic.decode(OpenAIJSONValue.self, forKey: key)
+        }
+        unknownFields = unknown
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(model, forKey: .model)
+        try container.encode(input, forKey: .input)
+        try container.encodeIfPresent(encoding_format, forKey: .encoding_format)
+        try container.encodeIfPresent(dimensions, forKey: .dimensions)
+        try container.encodeIfPresent(user, forKey: .user)
+
+        var dynamic = encoder.container(keyedBy: OpenAIDynamicCodingKey.self)
+        for (key, value) in unknownFields {
+            guard let codingKey = OpenAIDynamicCodingKey(stringValue: key) else { continue }
+            try dynamic.encode(value, forKey: codingKey)
+        }
+    }
+}
+
 public struct OpenAIChatMessage: Codable, Sendable {
     public var role: String
     public var content: String
@@ -661,6 +758,177 @@ public struct OpenAIUsage: Codable, Sendable {
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
         self.total_tokens = total_tokens
+    }
+}
+
+public struct OpenAIEmbeddingResponse: Codable, Sendable {
+    public var object: String
+    public var model: String
+    public var data: [OpenAIEmbeddingDatum]
+    public var usage: OpenAIEmbeddingUsage
+
+    public init(
+        model: String,
+        data: [OpenAIEmbeddingDatum],
+        usage: OpenAIEmbeddingUsage,
+        object: String = "list"
+    ) {
+        self.object = object
+        self.model = model
+        self.data = data
+        self.usage = usage
+    }
+}
+
+public struct OpenAIEmbeddingDatum: Codable, Sendable {
+    public var object: String
+    public var index: Int
+    public var embedding: [Float]
+
+    public init(index: Int, embedding: [Float], object: String = "embedding") {
+        self.object = object
+        self.index = index
+        self.embedding = embedding
+    }
+}
+
+public struct OpenAIEmbeddingUsage: Codable, Sendable {
+    public var prompt_tokens: Int
+    public var total_tokens: Int
+
+    public init(prompt_tokens: Int, total_tokens: Int) {
+        self.prompt_tokens = prompt_tokens
+        self.total_tokens = total_tokens
+    }
+}
+
+// MARK: - Images Endpoint
+
+public struct OpenAIImageGenerationRequest: Codable, Sendable {
+    public var prompt: String
+    public var model: String?
+    public var n: Int?
+    public var size: String?
+    public var response_format: String?
+    public var quality: String?
+    public var style: String?
+    public var user: String?
+    public var seed: UInt64?
+    public var negative_prompt: String?
+    public var steps: Int?
+    public var guidance_scale: Double?
+
+    public init(
+        prompt: String,
+        model: String? = nil,
+        n: Int? = nil,
+        size: String? = nil,
+        response_format: String? = nil,
+        quality: String? = nil,
+        style: String? = nil,
+        user: String? = nil,
+        seed: UInt64? = nil,
+        negative_prompt: String? = nil,
+        steps: Int? = nil,
+        guidance_scale: Double? = nil
+    ) {
+        self.prompt = prompt
+        self.model = model
+        self.n = n
+        self.size = size
+        self.response_format = response_format
+        self.quality = quality
+        self.style = style
+        self.user = user
+        self.seed = seed
+        self.negative_prompt = negative_prompt
+        self.steps = steps
+        self.guidance_scale = guidance_scale
+    }
+}
+
+public struct OpenAIImageGenerationResponse: Codable, Sendable {
+    public var created: Int
+    public var data: [OpenAIImageGenerationData]
+
+    public init(created: Int, data: [OpenAIImageGenerationData]) {
+        self.created = created
+        self.data = data
+    }
+}
+
+public struct OpenAIImageGenerationData: Codable, Sendable {
+    public var url: String?
+    public var b64_json: String?
+    public var revised_prompt: String?
+
+    public init(url: String? = nil, b64_json: String? = nil, revised_prompt: String? = nil) {
+        self.url = url
+        self.b64_json = b64_json
+        self.revised_prompt = revised_prompt
+    }
+}
+
+// MARK: - Audio Endpoint
+
+public struct OpenAIAudioSpeechRequest: Codable, Sendable {
+    public var model: String?
+    public var input: String
+    public var voice: String?
+    public var response_format: String?
+    public var speed: Double?
+    public var instructions: String?
+    public var temperature: Float?
+
+    public init(
+        model: String? = nil,
+        input: String,
+        voice: String? = nil,
+        response_format: String? = nil,
+        speed: Double? = nil,
+        instructions: String? = nil,
+        temperature: Float? = nil
+    ) {
+        self.model = model
+        self.input = input
+        self.voice = voice
+        self.response_format = response_format
+        self.speed = speed
+        self.instructions = instructions
+        self.temperature = temperature
+    }
+}
+
+public struct OpenAIAudioTranscriptionResponse: Codable, Sendable {
+    public var text: String
+    public var language: String?
+    public var duration: Double?
+    public var segments: [OpenAIAudioTranscriptionSegment]?
+
+    public init(
+        text: String,
+        language: String? = nil,
+        duration: Double? = nil,
+        segments: [OpenAIAudioTranscriptionSegment]? = nil
+    ) {
+        self.text = text
+        self.language = language
+        self.duration = duration
+        self.segments = segments
+    }
+}
+
+public struct OpenAIAudioTranscriptionSegment: Codable, Sendable {
+    public var id: Int
+    public var start: Double
+    public var end: Double
+    public var text: String
+
+    public init(id: Int, start: Double, end: Double, text: String) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.text = text
     }
 }
 
