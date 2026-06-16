@@ -3,11 +3,14 @@ import MediaIO
 import MLX
 
 public enum LTXVideoMP4Writer {
+    static let defaultAudioBitRate = 192_000
+
     public enum WriterError: LocalizedError {
         case invalidFPS(Int)
         case unsupportedShape([Int])
         case unsupportedChannels(Int)
         case unsupportedAudioShape([Int])
+        case nonFiniteAudioSample
         case writerCreationFailed(URL)
         case inputRejected
         case pixelBufferPoolUnavailable
@@ -29,6 +32,8 @@ public enum LTXVideoMP4Writer {
                 return "Expected 3-channel RGB frames, got \(channels) channels."
             case .unsupportedAudioShape(let shape):
                 return "Expected audio shaped [S], [C,S], [1,C,S], or [1,S,C], got \(shape)."
+            case .nonFiniteAudioSample:
+                return "Audio contains a non-finite sample."
             case .writerCreationFailed(let url):
                 return "Could not create MP4 writer for \(url.path)."
             case .inputRejected:
@@ -72,7 +77,12 @@ public enum LTXVideoMP4Writer {
 
                 let preparedAudio = try prepareAudio(audioWaveform)
                 try writeWAV(interleaved: preparedAudio.interleaved, channels: preparedAudio.channels, sampleRate: audioSampleRate, to: tempAudioURL)
-                try mux(videoURL: tempVideoURL, audioURL: tempAudioURL, outputURL: outputURL)
+                try mux(
+                    videoURL: tempVideoURL,
+                    audioURL: tempAudioURL,
+                    outputURL: outputURL,
+                    audioBitRate: Self.defaultAudioBitRate
+                )
             } catch {
                 try? fm.removeItem(at: tempVideoURL)
                 try? fm.removeItem(at: tempAudioURL)
@@ -151,7 +161,7 @@ public enum LTXVideoMP4Writer {
         return (rgbBytes, frameCount, height, width)
     }
 
-    private static func prepareAudio(_ audio: MLXArray) throws -> (interleaved: [Float], channels: Int) {
+    static func prepareAudio(_ audio: MLXArray) throws -> (interleaved: [Float], channels: Int) {
         var sampleChannel = audio
         if sampleChannel.ndim == 1 {
             sampleChannel = sampleChannel.reshaped(sampleChannel.dim(0), 1)
@@ -185,7 +195,13 @@ public enum LTXVideoMP4Writer {
             throw WriterError.unsupportedAudioShape(audio.shape)
         }
         let floatSamples = sampleChannel.asType(.float32).reshaped(-1).asArray(Float.self)
-        return (floatSamples, channels)
+        let encodedSamples = try floatSamples.map { sample -> Float in
+            guard sample.isFinite else {
+                throw WriterError.nonFiniteAudioSample
+            }
+            return min(1.0, max(-1.0, sample))
+        }
+        return (encodedSamples, channels)
     }
 
     private static func writeWAV(
@@ -208,9 +224,19 @@ public enum LTXVideoMP4Writer {
         )
     }
 
-    private static func mux(videoURL: URL, audioURL: URL, outputURL: URL) throws {
+    private static func mux(
+        videoURL: URL,
+        audioURL: URL,
+        outputURL: URL,
+        audioBitRate: Int
+    ) throws {
         do {
-            try MediaVideoIO.mux(videoURL: videoURL, audioURL: audioURL, outputURL: outputURL)
+            try MediaVideoIO.mux(
+                videoURL: videoURL,
+                audioURL: audioURL,
+                outputURL: outputURL,
+                audioBitRate: audioBitRate
+            )
         } catch {
             throw WriterError.exportSessionCreationFailed
         }

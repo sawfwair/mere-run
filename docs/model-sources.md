@@ -32,7 +32,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
 | Vision | `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
 | Music | `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
-| Video | `video-ltx-av` |
+| Video | `video-ltx-av`, `video-ltx23-av-mlx` |
 
 Some legacy/local IDs remain in the catalog so existing installs and explicit
 local paths keep working:
@@ -310,5 +310,30 @@ The unified AV model root is:
 .../models/video-ltx-av
 ```
 
-`mere.run video generate --variant unified-av` can use that root directly or
-resolve it from `MERERUN_VIDEO_LTX_MODEL_ROOT`.
+`mere.run video generate --variant distilled --model video-ltx-av` is the
+faster video-only draft path. `mere.run video generate --variant unified-av
+--model video-ltx-av` remains available for the older synchronized AV root.
+`MERERUN_VIDEO_LTX_MODEL_ROOT` can still point at this layout explicitly.
+
+### `video-ltx23-av-mlx`
+
+The LTX 2.3 MLX split model root is:
+
+```text
+.../models/video-ltx23-av-mlx
+```
+
+It pulls the distilled split checkpoint from
+`dgrauet/ltx-2.3-mlx`, including `split_model.json`, connector weights,
+separate video VAE/audio VAE/vocoder files, and the LTX 2.3 upscalers.
+`mere.run model pull video-ltx23-av-mlx` also installs the hidden
+`text-encoder-ltx-gemma3-12b-4bit` companion used for Gemma 3 prompt
+conditioning. Set `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` only when pointing at an
+external `mlx-community/gemma-3-12b-it-4bit` checkout.
+
+The native Swift `unified-av` runtime has a split loader for this layout,
+including the LTX 2.3 V2 connector, unified AV transformer, split video/audio
+VAE files, BWE vocoder, and MLX-native tensor layouts. Use this model for the
+current high-quality synchronized audio/video lane.
+The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane
+and is not loaded by the native MLX video runtime.

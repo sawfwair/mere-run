@@ -163,6 +163,37 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    private func writeMinimalValidLTX23MLXModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: .ltxVideo23AVMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+
+        for file in [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-distilled.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "vocoder.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
+            "spatial_upscaler_x1_5_v1_0.safetensors",
+            "spatial_upscaler_x1_5_v1_0_config.json",
+            "temporal_upscaler_x2_v1_0.safetensors",
+            "temporal_upscaler_x2_v1_0_config.json",
+        ] {
+            try TestFileSystem.writeFile(
+                root.appendingPathComponent(file),
+                contents: file.hasSuffix(".json") ? Data(#"{"model_version":"2.3.0"}"#.utf8) : Data()
+            )
+        }
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -208,6 +239,24 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         )
         XCTAssertFalse(report.isValid)
         XCTAssertTrue(report.errors.contains { $0.contains("mrt2_small.mlxfn") })
+    }
+
+    func testLTX23MLXRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue, isDirectory: true)
+        try writeMinimalValidLTX23MLXModel(at: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
+        )
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.engine, .ltxVideo)
+        XCTAssertEqual(report.manifest?.family, .video)
+        XCTAssertEqual(report.manifest?.upstreamRepoId, "dgrauet/ltx-2.3-mlx@main")
     }
 
     func testMissingWeightsFails() throws {

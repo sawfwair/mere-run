@@ -160,6 +160,7 @@ enum FFmpegMediaIO {
                 "-i", "pipe:0",
                 "-an",
                 "-c:v", "libx264",
+                "-crf", "18",
                 "-pix_fmt", "yuv420p",
                 outputURL.path
             ],
@@ -167,23 +168,34 @@ enum FFmpegMediaIO {
         )
     }
 
-    static func mux(videoURL: URL, audioURL: URL, outputURL: URL) throws {
+    static func mux(
+        videoURL: URL,
+        audioURL: URL,
+        outputURL: URL,
+        audioBitRate: Int? = nil
+    ) throws {
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        var arguments = [
+            "-v", "error",
+            "-y",
+            "-i", videoURL.path,
+            "-i", audioURL.path,
+            "-c:v", "copy",
+            "-c:a", "aac",
+        ]
+        if let audioBitRate {
+            arguments += ["-b:a", "\(max(1, audioBitRate))"]
+        }
+        arguments += [
+            "-shortest",
+            outputURL.path,
+        ]
         _ = try FFmpegProcess.run(
             tool: MediaTool.ffmpegPath,
-            arguments: [
-                "-v", "error",
-                "-y",
-                "-i", videoURL.path,
-                "-i", audioURL.path,
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-shortest",
-                outputURL.path
-            ]
+            arguments: arguments
         )
     }
 

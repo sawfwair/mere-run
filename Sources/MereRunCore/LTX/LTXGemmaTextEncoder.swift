@@ -74,6 +74,7 @@ public actor LTXGemmaTextEncoder {
     private var tokenizer: (any Tokenizer)?
     private var model: LTXGemmaLanguageModel?
     private var featureExtractor: LTXGemmaFeaturesExtractor?
+    private var featureExtractorV2: LTXGemmaFeaturesExtractorV2?
     private var videoConnector: LTXEmbeddings1DConnector?
     private var audioConnector: LTXEmbeddings1DConnector?
     private var loadedRoot: URL?
@@ -88,6 +89,7 @@ public actor LTXGemmaTextEncoder {
     ) async throws {
         let fm = FileManager.default
         let root = modelRoot.standardizedFileURL
+        let usesLTX23SplitConnector = isLTX23SplitModelRoot(root)
         let textRoot = (overrideTextEncoderRoot ?? root.appendingPathComponent("text_encoder", isDirectory: true))
             .standardizedFileURL
 
@@ -118,6 +120,17 @@ public actor LTXGemmaTextEncoder {
             inputDim: modelConfig.hiddenSize * hiddenStateCount,
             outputDim: modelConfig.hiddenSize
         )
+        let textFeaturesV2 = LTXGemmaFeaturesExtractorV2(
+            captionChannels: modelConfig.hiddenSize,
+            numGemmaLayers: hiddenStateCount,
+            videoDim: 4_096,
+            audioDim: 2_048,
+            numHeads: 32,
+            videoHeadDim: 128,
+            audioHeadDim: 64,
+            numConnectorLayers: 8,
+            numRegisters: 128
+        )
         let connector = LTXEmbeddings1DConnector(
             dim: modelConfig.hiddenSize,
             numHeads: 30,
@@ -137,70 +150,116 @@ public actor LTXGemmaTextEncoder {
             positionalEmbeddingMaxPos: [4_096]
         )
 
-        try HFSafetensorsWeightsLoader.applyShardedWeights(
-            indexURL: indexURL,
-            to: languageModel,
-            dtype: dtype,
-            verify: .none,
-            mapper: { key, value in
-                mapGemmaLanguageWeight(key: key, value: value, dtype: dtype)
-            }
-        )
+        if gemmaIndexContainsQuantizedWeights(indexURL: indexURL) {
+            try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+                indexURL: indexURL,
+                to: languageModel,
+                groupSize: 64,
+                bits: 4,
+                keyMapper: mapGemmaLanguageWeightKey,
+                mapper: { key, value in
+                    mapGemmaLanguageWeight(key: key, value: value, dtype: dtype)
+                }
+            )
+        } else {
+            try HFSafetensorsWeightsLoader.applyShardedWeights(
+                indexURL: indexURL,
+                to: languageModel,
+                dtype: dtype,
+                verify: .none,
+                mapper: { key, value in
+                    mapGemmaLanguageWeight(key: key, value: value, dtype: dtype)
+                }
+            )
+        }
 
         let loadedTokenizer = try await AutoTokenizer.from(modelFolder: tokenizerRoot)
 
         if loadConnectorWeights {
-            let transformerURL = try findLTXTransformerWeights(modelRoot: root)
-            let connectorSourceWeights = try SafetensorsStreamingLoader.loadArrays(
-                url: transformerURL,
-                where: { key in
-                    key == "text_embedding_projection.aggregate_embed.weight"
-                        || key == "model.diffusion_model.video_embeddings_connector.learnable_registers"
-                        || key.hasPrefix("model.diffusion_model.video_embeddings_connector.transformer_1d_blocks.")
-                        || key == "model.diffusion_model.audio_embeddings_connector.learnable_registers"
-                        || key.hasPrefix("model.diffusion_model.audio_embeddings_connector.transformer_1d_blocks.")
-                },
-                dtype: dtype
-            )
+            if usesLTX23SplitConnector {
+                let connectorURL = root.appendingPathComponent("connector.safetensors", isDirectory: false)
+                guard fm.fileExists(atPath: connectorURL.path) else {
+                    throw LTXGemmaTextEncoderError.missingConnectorWeights(connectorURL)
+                }
+                let connectorMetadata = try SafetensorsStreamingLoader.metadata(url: connectorURL)
+                guard connectorMetadata.keys.contains("connector.text_embedding_projection.video_aggregate_embed.weight"),
+                      connectorMetadata.keys.contains("connector.text_embedding_projection.audio_aggregate_embed.weight")
+                else {
+                    throw LTXGemmaTextEncoderError.missingConnectorProjection(connectorURL)
+                }
+                guard connectorMetadata.keys.contains("connector.video_embeddings_connector.learnable_registers"),
+                      connectorMetadata.keys.contains("connector.audio_embeddings_connector.learnable_registers")
+                else {
+                    throw LTXGemmaTextEncoderError.missingConnectorWeights(connectorURL)
+                }
 
-            guard let projection = connectorSourceWeights["text_embedding_projection.aggregate_embed.weight"] else {
-                throw LTXGemmaTextEncoderError.missingConnectorProjection(transformerURL)
-            }
-            try textFeatures.update(
-                parameters: ModuleParameters.unflattened([("aggregate_embed.weight", projection)]),
-                verify: .none
-            )
+                try SafetensorsStreamingLoader.applyWeightsStreaming(
+                    url: connectorURL,
+                    to: textFeaturesV2,
+                    dtype: dtype,
+                    verify: .none,
+                    include: { key in
+                        key.hasPrefix("connector.")
+                    },
+                    mapper: { key, value in
+                        mapLTX23TextConnectorWeight(key: key, value: value, dtype: dtype)
+                    },
+                    batchSize: 24
+                )
+            } else {
+                let transformerURL = try findLTXTransformerWeights(modelRoot: root)
+                let connectorSourceWeights = try SafetensorsStreamingLoader.loadArrays(
+                    url: transformerURL,
+                    where: { key in
+                        key == "text_embedding_projection.aggregate_embed.weight"
+                            || key == "model.diffusion_model.video_embeddings_connector.learnable_registers"
+                            || key.hasPrefix("model.diffusion_model.video_embeddings_connector.transformer_1d_blocks.")
+                            || key == "model.diffusion_model.audio_embeddings_connector.learnable_registers"
+                            || key.hasPrefix("model.diffusion_model.audio_embeddings_connector.transformer_1d_blocks.")
+                    },
+                    dtype: dtype
+                )
 
-            let connectorWeights = mapConnectorWeights(
-                arrays: connectorSourceWeights,
-                prefix: "model.diffusion_model.video_embeddings_connector.",
-                dtype: dtype
-            )
-            guard !connectorWeights.isEmpty else {
-                throw LTXGemmaTextEncoderError.missingConnectorWeights(transformerURL)
-            }
-            try connector.update(
-                parameters: ModuleParameters.unflattened(connectorWeights),
-                verify: .none
-            )
-
-            let audioConnectorWeights = mapConnectorWeights(
-                arrays: connectorSourceWeights,
-                prefix: "model.diffusion_model.audio_embeddings_connector.",
-                dtype: dtype
-            )
-            if !audioConnectorWeights.isEmpty {
-                try audioConnector.update(
-                    parameters: ModuleParameters.unflattened(audioConnectorWeights),
+                guard let projection = connectorSourceWeights["text_embedding_projection.aggregate_embed.weight"] else {
+                    throw LTXGemmaTextEncoderError.missingConnectorProjection(transformerURL)
+                }
+                try textFeatures.update(
+                    parameters: ModuleParameters.unflattened([("aggregate_embed.weight", projection)]),
                     verify: .none
                 )
+
+                let connectorWeights = mapConnectorWeights(
+                    arrays: connectorSourceWeights,
+                    prefix: "model.diffusion_model.video_embeddings_connector.",
+                    dtype: dtype
+                )
+                guard !connectorWeights.isEmpty else {
+                    throw LTXGemmaTextEncoderError.missingConnectorWeights(transformerURL)
+                }
+                try connector.update(
+                    parameters: ModuleParameters.unflattened(connectorWeights),
+                    verify: .none
+                )
+
+                let audioConnectorWeights = mapConnectorWeights(
+                    arrays: connectorSourceWeights,
+                    prefix: "model.diffusion_model.audio_embeddings_connector.",
+                    dtype: dtype
+                )
+                if !audioConnectorWeights.isEmpty {
+                    try audioConnector.update(
+                        parameters: ModuleParameters.unflattened(audioConnectorWeights),
+                        verify: .none
+                    )
+                }
             }
         }
 
         self.model = languageModel
-        self.featureExtractor = textFeatures
-        self.videoConnector = connector
-        self.audioConnector = audioConnector
+        self.featureExtractor = usesLTX23SplitConnector ? nil : textFeatures
+        self.featureExtractorV2 = usesLTX23SplitConnector ? textFeaturesV2 : nil
+        self.videoConnector = usesLTX23SplitConnector ? nil : connector
+        self.audioConnector = usesLTX23SplitConnector ? nil : audioConnector
         self.tokenizer = loadedTokenizer
         self.loadedRoot = root
     }
@@ -222,10 +281,7 @@ public actor LTXGemmaTextEncoder {
         guard let tokenizer else {
             throw LTXGemmaTextEncoderError.tokenizerUnavailable
         }
-        guard let featureExtractor else {
-            throw LTXGemmaTextEncoderError.connectorNotLoaded
-        }
-        guard let videoConnector else {
+        guard featureExtractor != nil || featureExtractorV2 != nil else {
             throw LTXGemmaTextEncoderError.connectorNotLoaded
         }
 
@@ -248,6 +304,25 @@ public actor LTXGemmaTextEncoder {
             outputHiddenStates: true
         )
         let hiddenStates = result.hiddenStates ?? [result.lastHiddenState]
+        if let featureExtractorV2 {
+            let normalized = normalizeAndConcatHiddenStatesV2(
+                hiddenStates: hiddenStates,
+                attentionMask: maskArray
+            )
+            let extraction = featureExtractorV2(normalized, attentionMask: maskArray)
+            return LTXGemmaTextEncoding(
+                lastHiddenState: result.lastHiddenState,
+                attentionMask: maskArray,
+                normalizedStackedHiddenStates: normalized,
+                features: extraction.projectedVideo,
+                videoEmbeddings: extraction.videoEmbeddings,
+                audioEmbeddings: extraction.audioEmbeddings
+            )
+        }
+
+        guard let featureExtractor, let videoConnector else {
+            throw LTXGemmaTextEncoderError.connectorNotLoaded
+        }
         let normalized = normalizeAndConcatHiddenStates(
             hiddenStates: hiddenStates,
             attentionMask: maskArray
@@ -274,6 +349,7 @@ public actor LTXGemmaTextEncoder {
         tokenizer = nil
         model = nil
         featureExtractor = nil
+        featureExtractorV2 = nil
         videoConnector = nil
         audioConnector = nil
         loadedRoot = nil
@@ -287,7 +363,7 @@ public actor LTXGemmaTextEncoder {
 
 // MARK: - Config
 
-private struct LTXGemmaTopConfig: Decodable {
+struct LTXGemmaTopConfig: Decodable {
     let textConfig: LTXGemmaTextConfig?
     let modelType: String?
 
@@ -317,17 +393,17 @@ private struct LTXGemmaTopConfig: Decodable {
     }
 }
 
-private struct LTXGemmaTextConfig: Decodable {
-    let vocabSize: Int
+struct LTXGemmaTextConfig: Decodable {
+    let vocabSize: Int?
     let hiddenSize: Int
     let numHiddenLayers: Int
     let numAttentionHeads: Int
     let numKeyValueHeads: Int
     let intermediateSize: Int
-    let maxPositionEmbeddings: Int
-    let rmsNormEps: Float
-    let headDim: Int
-    let ropeTheta: Float
+    let maxPositionEmbeddings: Int?
+    let rmsNormEps: Float?
+    let headDim: Int?
+    let ropeTheta: Float?
     let ropeLocalBaseFreq: Float?
     let ropeGlobalBaseFreq: Float?
     let ropeTraditional: Bool?
@@ -353,7 +429,7 @@ private struct LTXGemmaTextConfig: Decodable {
     }
 }
 
-private struct LTXGemmaModelConfig {
+struct LTXGemmaModelConfig {
     let vocabSize: Int
     let hiddenSize: Int
     let numHiddenLayers: Int
@@ -372,19 +448,25 @@ private struct LTXGemmaModelConfig {
 
     init(textConfig: LTXGemmaTextConfig) {
         self.vocabSize = textConfig.vocabSize
+            ?? 262_208
         self.hiddenSize = textConfig.hiddenSize
         self.numHiddenLayers = textConfig.numHiddenLayers
         self.numAttentionHeads = textConfig.numAttentionHeads
         self.numKeyValueHeads = textConfig.numKeyValueHeads
         self.intermediateSize = textConfig.intermediateSize
         self.maxPositionEmbeddings = textConfig.maxPositionEmbeddings
+            ?? 131_072
         self.rmsNormEps = textConfig.rmsNormEps
+            ?? 1e-6
         self.headDim = textConfig.headDim
+            ?? 256
         self.ropeTheta = textConfig.ropeTheta
+            ?? 1_000_000
         self.ropeLocalBaseFreq = textConfig.ropeLocalBaseFreq ?? 10_000
         self.ropeGlobalBaseFreq = textConfig.ropeGlobalBaseFreq ?? textConfig.ropeTheta
+            ?? 1_000_000
         self.ropeTraditional = textConfig.ropeTraditional ?? false
-        self.queryPreAttnScalar = Float(textConfig.queryPreAttnScalar ?? textConfig.headDim)
+        self.queryPreAttnScalar = Float(textConfig.queryPreAttnScalar ?? textConfig.headDim ?? 256)
         self.slidingWindowPattern = max(1, textConfig.slidingWindowPattern ?? 6)
     }
 }
@@ -442,17 +524,18 @@ private final class LTXGemmaModel: Module {
         let mask = makeCausalMask(sequenceLength: h.dim(1), attentionMask: attentionMask, dtype: .float32)
         var allHiddenStates: [MLXArray]? = outputHiddenStates ? [h] : nil
 
+        let evalEvery = Int(ProcessInfo.processInfo.environment["LTX2_GEMMA_EVAL_EVERY"] ?? "1") ?? 1
         for (idx, layer) in layers.enumerated() {
             h = layer(h, mask: mask)
-            if outputHiddenStates && idx < layers.count - 1 {
+            if outputHiddenStates {
                 allHiddenStates?.append(h)
+            }
+            if evalEvery > 0 && (idx + 1).isMultiple(of: evalEvery) {
+                MLX.eval(h)
             }
         }
 
         h = norm(h)
-        if outputHiddenStates {
-            allHiddenStates?.append(h)
-        }
         return (h, allHiddenStates)
     }
 }
@@ -620,6 +703,90 @@ private final class LTXGemmaFeaturesExtractor: Module {
     }
 }
 
+private final class LTXTextEmbeddingProjectionV2: Module {
+    @ModuleInfo(key: "video_aggregate_embed") var videoAggregateEmbed: Linear
+    @ModuleInfo(key: "audio_aggregate_embed") var audioAggregateEmbed: Linear
+
+    let embeddingDim: Int
+    let videoDim: Int
+    let audioDim: Int
+
+    init(inputDim: Int, videoDim: Int, audioDim: Int, embeddingDim: Int) {
+        self.embeddingDim = embeddingDim
+        self.videoDim = videoDim
+        self.audioDim = audioDim
+        self._videoAggregateEmbed.wrappedValue = Linear(inputDim, videoDim, bias: true)
+        self._audioAggregateEmbed.wrappedValue = Linear(inputDim, audioDim, bias: true)
+    }
+
+    func callAsFunction(_ hiddenStates: MLXArray) -> (video: MLXArray, audio: MLXArray) {
+        let videoScale = Float(sqrt(Double(videoDim) / Double(embeddingDim)))
+        let video = videoAggregateEmbed(hiddenStates * MLXArray(videoScale).asType(hiddenStates.dtype))
+        MLX.eval(video)
+
+        let audioScale = Float(sqrt(Double(audioDim) / Double(embeddingDim)))
+        let audio = audioAggregateEmbed(hiddenStates * MLXArray(audioScale).asType(hiddenStates.dtype))
+        MLX.eval(audio)
+        return (video, audio)
+    }
+}
+
+private final class LTXGemmaFeaturesExtractorV2: Module {
+    @ModuleInfo(key: "text_embedding_projection") var textEmbeddingProjection: LTXTextEmbeddingProjectionV2
+    @ModuleInfo(key: "video_embeddings_connector") var videoConnector: LTXEmbeddings1DConnector
+    @ModuleInfo(key: "audio_embeddings_connector") var audioConnector: LTXEmbeddings1DConnector
+
+    init(
+        captionChannels: Int,
+        numGemmaLayers: Int,
+        videoDim: Int,
+        audioDim: Int,
+        numHeads: Int,
+        videoHeadDim: Int,
+        audioHeadDim: Int,
+        numConnectorLayers: Int,
+        numRegisters: Int
+    ) {
+        let inputDim = captionChannels * numGemmaLayers
+        self._textEmbeddingProjection.wrappedValue = LTXTextEmbeddingProjectionV2(
+            inputDim: inputDim,
+            videoDim: videoDim,
+            audioDim: audioDim,
+            embeddingDim: captionChannels
+        )
+        self._videoConnector.wrappedValue = LTXEmbeddings1DConnector(
+            dim: videoDim,
+            numHeads: numHeads,
+            headDim: videoHeadDim,
+            numLayers: numConnectorLayers,
+            numLearnableRegisters: numRegisters,
+            positionalEmbeddingTheta: 10_000.0,
+            positionalEmbeddingMaxPos: [4_096],
+            applyGatedAttention: true
+        )
+        self._audioConnector.wrappedValue = LTXEmbeddings1DConnector(
+            dim: audioDim,
+            numHeads: numHeads,
+            headDim: audioHeadDim,
+            numLayers: numConnectorLayers,
+            numLearnableRegisters: numRegisters,
+            positionalEmbeddingTheta: 10_000.0,
+            positionalEmbeddingMaxPos: [4_096],
+            applyGatedAttention: true
+        )
+    }
+
+    func callAsFunction(
+        _ hiddenStates: MLXArray,
+        attentionMask: MLXArray?
+    ) -> (projectedVideo: MLXArray, videoEmbeddings: MLXArray, audioEmbeddings: MLXArray) {
+        let projected = textEmbeddingProjection(hiddenStates)
+        let videoEmbeddings = videoConnector(projected.video, attentionMask: attentionMask).0
+        let audioEmbeddings = audioConnector(projected.audio, attentionMask: attentionMask).0
+        return (projected.video, videoEmbeddings, audioEmbeddings)
+    }
+}
+
 private final class LTXEmbeddings1DConnector: Module {
     let dim: Int
     let numHeads: Int
@@ -640,7 +807,8 @@ private final class LTXEmbeddings1DConnector: Module {
         numLearnableRegisters: Int,
         positionalEmbeddingTheta: Float,
         positionalEmbeddingMaxPos: [Int],
-        eps: Float = 1e-6
+        eps: Float = 1e-6,
+        applyGatedAttention: Bool = false
     ) {
         self.dim = dim
         self.numHeads = numHeads
@@ -651,7 +819,13 @@ private final class LTXEmbeddings1DConnector: Module {
         self.eps = eps
 
         self._transformer1DBlocks.wrappedValue = (0..<numLayers).map { _ in
-            LTXConnectorTransformerBlock(dim: dim, numHeads: numHeads, headDim: headDim, eps: eps)
+            LTXConnectorTransformerBlock(
+                dim: dim,
+                numHeads: numHeads,
+                headDim: headDim,
+                eps: eps,
+                applyGatedAttention: applyGatedAttention
+            )
         }
         self._learnableRegisters.wrappedValue = MLX.zeros([max(0, numLearnableRegisters), dim], dtype: .float32)
     }
@@ -666,7 +840,7 @@ private final class LTXEmbeddings1DConnector: Module {
         if numLearnableRegisters > 0, let attentionMask {
             let adjusted = replacePaddedWithRegisters(hiddenStates: states, attentionMask: attentionMask)
             states = adjusted.hiddenStates
-            mask = adjusted.attentionMask
+            mask = nil
         }
 
         let pe = precomputeFreqsCis(seqLen: states.dim(1), dtype: states.dtype)
@@ -723,8 +897,13 @@ private final class LTXEmbeddings1DConnector: Module {
         let seqLen = hiddenStates.dim(1)
         let dtype = hiddenStates.dtype
 
-        let binaryMask = (attentionMask.reshaped(batch, seqLen) .>= MLXArray(-9_000.0).asType(attentionMask.dtype))
-            .asType(.int32)
+        let reshapedMask = attentionMask.reshaped(batch, seqLen)
+        let binaryMask: MLXArray
+        if attentionMask.ndim == 2 {
+            binaryMask = (reshapedMask .> MLXArray(0).asType(reshapedMask.dtype)).asType(.int32)
+        } else {
+            binaryMask = (reshapedMask .>= MLXArray(-9_000.0).asType(reshapedMask.dtype)).asType(.int32)
+        }
         let binaryValues = binaryMask.asArray(Int32.self)
 
         var rows: [MLXArray] = []
@@ -790,13 +969,20 @@ private final class LTXConnectorTransformerBlock: Module {
     @ModuleInfo(key: "ff") var ff: LTXConnectorFeedForward
     let eps: Float
 
-    init(dim: Int, numHeads: Int, headDim: Int, eps: Float = 1e-6) {
+    init(
+        dim: Int,
+        numHeads: Int,
+        headDim: Int,
+        eps: Float = 1e-6,
+        applyGatedAttention: Bool = false
+    ) {
         self.eps = eps
         self._attn1.wrappedValue = LTXConnectorAttention(
             dim: dim,
             numHeads: numHeads,
             headDim: headDim,
-            eps: eps
+            eps: eps,
+            applyGatedAttention: applyGatedAttention
         )
         self._ff.wrappedValue = LTXConnectorFeedForward(dim: dim, mult: 4)
     }
@@ -825,10 +1011,11 @@ private final class LTXConnectorAttention: Module {
     @ModuleInfo(key: "to_k") var toK: Linear
     @ModuleInfo(key: "to_v") var toV: Linear
     @ModuleInfo(key: "to_out") var toOut: Linear
+    @ModuleInfo(key: "to_gate_logits") var toGateLogits: Linear?
     @ModuleInfo(key: "q_norm") var qNorm: RMSNorm
     @ModuleInfo(key: "k_norm") var kNorm: RMSNorm
 
-    init(dim: Int, numHeads: Int, headDim: Int, eps: Float = 1e-6) {
+    init(dim: Int, numHeads: Int, headDim: Int, eps: Float = 1e-6, applyGatedAttention: Bool = false) {
         self.numHeads = numHeads
         self.headDim = headDim
         self.scale = 1.0 / Float(headDim).squareRoot()
@@ -838,13 +1025,14 @@ private final class LTXConnectorAttention: Module {
         self._toK.wrappedValue = Linear(dim, innerDim, bias: true)
         self._toV.wrappedValue = Linear(dim, innerDim, bias: true)
         self._toOut.wrappedValue = Linear(innerDim, dim, bias: true)
+        self._toGateLogits.wrappedValue = applyGatedAttention ? Linear(dim, numHeads, bias: true) : nil
         self._qNorm.wrappedValue = RMSNorm(dimensions: innerDim, eps: eps)
         self._kNorm.wrappedValue = RMSNorm(dimensions: innerDim, eps: eps)
     }
 
     func callAsFunction(
         _ x: MLXArray,
-        attentionMask _: MLXArray?,
+        attentionMask: MLXArray?,
         pe: (cos: MLXArray, sin: MLXArray)
     ) -> MLXArray {
         let batch = x.dim(0)
@@ -858,13 +1046,20 @@ private final class LTXConnectorAttention: Module {
         q = applySplitRoPE(q, cosFreq: pe.cos, sinFreq: pe.sin)
         k = applySplitRoPE(k, cosFreq: pe.cos, sinFreq: pe.sin)
 
-        let out = MLXFast.scaledDotProductAttention(
+        let maskMode: MLXFast.ScaledDotProductAttentionMaskMode = attentionMask
+            .map { .array($0.asType(.float32)) } ?? .none
+        var out = MLXFast.scaledDotProductAttention(
             queries: q.asType(.float32),
             keys: k.asType(.float32),
             values: v.asType(.float32),
             scale: scale,
-            mask: .none
+            mask: maskMode
         ).asType(q.dtype)
+
+        if let toGateLogits {
+            let gate = MLXArray(2.0).asType(out.dtype) * MLX.sigmoid(toGateLogits(x).asType(out.dtype))
+            out = out * gate.transposed(0, 2, 1).expandedDimensions(axis: 3)
+        }
 
         let merged = out.transposed(0, 2, 1, 3).reshaped(batch, seqLen, innerDim)
         return toOut(merged)
@@ -957,6 +1152,44 @@ private func mapConnectorWeights(
 
     updates.sort { lhs, rhs in lhs.0 < rhs.0 }
     return updates
+}
+
+func mapLTX23TextConnectorWeight(
+    key: String,
+    value: MLXArray,
+    dtype: DType
+) -> [(String, MLXArray)] {
+    guard key.hasPrefix("connector.") else {
+        return []
+    }
+
+    var mapped = String(key.dropFirst("connector.".count))
+    mapped = mapped.replacingOccurrences(of: ".ff.net.0.proj.", with: ".ff.proj_in.")
+    mapped = mapped.replacingOccurrences(of: ".ff.net.2.", with: ".ff.proj_out.")
+    mapped = mapped.replacingOccurrences(of: ".to_out.0.", with: ".to_out.")
+
+    let casted: MLXArray
+    if value.dtype.isFloatingPoint && value.dtype != dtype {
+        casted = value.asType(dtype)
+    } else {
+        casted = value
+    }
+    return [(mapped, casted)]
+}
+
+func mapGemmaLanguageWeightKey(_ key: String) -> String {
+    guard key.hasPrefix("language_model.") else {
+        return key
+    }
+    return String(key.dropFirst("language_model.".count))
+}
+
+func gemmaIndexContainsQuantizedWeights(indexURL: URL) -> Bool {
+    guard let data = try? Data(contentsOf: indexURL),
+          let index = try? JSONDecoder().decode(HFSafetensorsIndex.self, from: data) else {
+        return false
+    }
+    return index.weightMap.keys.contains { $0.hasSuffix(".scales") }
 }
 
 private func rmsNormNoWeight(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
@@ -1052,16 +1285,39 @@ private func normalizeAndConcatHiddenStates(
     return MLX.stacked(rows, axis: 0).asType(.bfloat16)
 }
 
-private func mapGemmaLanguageWeight(
+func normalizeAndConcatHiddenStatesV2(
+    hiddenStates: [MLXArray],
+    attentionMask: MLXArray,
+    eps: Float = 1e-6,
+    dtype: DType = .bfloat16
+) -> MLXArray {
+    guard !hiddenStates.isEmpty else {
+        return MLXArray.zeros([attentionMask.dim(0), attentionMask.dim(1), 0], dtype: dtype)
+    }
+
+    let batch = hiddenStates[0].dim(0)
+    let seqLen = hiddenStates[0].dim(1)
+    let hidden = hiddenStates[0].dim(2)
+    let layerCount = hiddenStates.count
+    let stacked = MLX.stacked(hiddenStates.map { $0.asType(.float32) }, axis: -1)
+    let variance = MLX.mean(stacked * stacked, axis: 2, keepDims: true)
+    let normalized = stacked * rsqrt(variance + MLXArray(eps))
+    var flattened = normalized.reshaped(batch, seqLen, hidden * layerCount)
+    let mask = attentionMask.asType(flattened.dtype).reshaped(batch, seqLen, 1)
+    flattened = flattened * mask
+    return flattened.asType(dtype)
+}
+
+func mapGemmaLanguageWeight(
     key: String,
     value: MLXArray,
     dtype: DType
 ) -> [(String, MLXArray)] {
-    guard key.hasPrefix("language_model.") else {
+    guard key.hasPrefix("language_model.") || key.hasPrefix("model.") || key.hasPrefix("lm_head.") else {
         return []
     }
 
-    let stripped = String(key.dropFirst("language_model.".count))
+    let stripped = mapGemmaLanguageWeightKey(key)
 
     // Ignore logits head and other non-backbone keys.
     if stripped.hasPrefix("lm_head.") {

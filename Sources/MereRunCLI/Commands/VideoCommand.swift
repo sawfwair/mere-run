@@ -79,6 +79,14 @@ struct VideoExportLatents: AsyncParsableCommand {
             allowAutoDownload: true
         )
         try validateNativeModelRoot(rootURL)
+        guard !isLTX23SplitModelRoot(rootURL) else {
+            throw ValidationError(
+                """
+                LTX 2.3 split MLX model roots are recognized, but `video export-latents` still requires the older \
+                `video-ltx-av` merged LTX layout.
+                """
+            )
+        }
 
         let upsamplerWeights = rootURL.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
         guard FileManager.default.fileExists(atPath: upsamplerWeights.path) else {
@@ -118,15 +126,19 @@ struct VideoExportLatents: AsyncParsableCommand {
 struct VideoGenerate: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "generate",
-        abstract: "Generate a video with native Swift/MLX LTX.",
+        abstract: "Generate MP4 video with native Swift/MLX LTX.",
         discussion: """
         Prints the output MP4 path to stdout.
         Progress and diagnostics are printed to stderr.
 
+        Use the default distilled variant for faster video-only drafts. Use
+        --variant unified-av for synchronized audio/video, and prefer
+        --model video-ltx23-av-mlx for LTX 2.3 quality renders.
+
         Examples:
-          swift run mere.run video generate "a cinematic drone flythrough over snowy mountains"
+          swift run mere.run video generate "a cinematic drone flythrough over snowy mountains" --num-frames 65
           swift run mere.run video generate "woman walking in neon rain" --image frame.png
-          swift run mere.run video generate "city time-lapse" --variant unified-av --model video-ltx-av
+          swift run mere.run video generate "dialogue with clean background music" --variant unified-av --model video-ltx23-av-mlx --duration 15 --fps 24
         """
     )
 
@@ -139,7 +151,7 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LTX model root.")
     var model: String = ModelResolver.ModelID.ltxVideoAV.rawValue
 
-    @Option(name: [.customLong("variant")], help: "Native model variant to run.")
+    @Option(name: [.customLong("variant")], help: "Native LTX lane: distilled for faster video-only drafts, unified-av for synchronized audio/video.")
     var variant: LTXVideoVariant = .distilled
 
     @Option(name: [.customLong("model-root")], help: "Local LTX model root. Takes precedence over --model.")
@@ -153,6 +165,9 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.customLong("num-frames")], help: "Frame count (must be 8n+1; auto-adjusted).")
     var numFrames: Int = 65
+
+    @Option(name: [.long], help: "Target output duration in seconds. Overrides --num-frames by choosing the nearest 8n+1 frame count for --fps.")
+    var duration: Double?
 
     @Option(name: [.long], help: "Frames per second.")
     var fps: Int = 24
@@ -178,6 +193,11 @@ struct VideoGenerate: AsyncParsableCommand {
         guard fps > 0 else {
             throw ValidationError("--fps must be >= 1")
         }
+        if let duration {
+            guard duration > 0 else {
+                throw ValidationError("--duration must be > 0")
+            }
+        }
         guard width >= 64 else {
             throw ValidationError("--width must be >= 64")
         }
@@ -193,13 +213,24 @@ struct VideoGenerate: AsyncParsableCommand {
 
         let resolvedWidth = max(64, (width / 64) * 64)
         let resolvedHeight = max(64, (height / 64) * 64)
-        let resolvedNumFrames = max(9, ((numFrames - 1) / 8) * 8 + 1)
+        let requestedNumFrames = duration.map { nearestLTXFrameCount(duration: $0, fps: fps) } ?? numFrames
+        let resolvedNumFrames = max(9, ((requestedNumFrames - 1) / 8) * 8 + 1)
         if !quiet {
             if resolvedWidth != width || resolvedHeight != height {
                 CLIStderr.write("Adjusted size to \(resolvedWidth)x\(resolvedHeight) (must be divisible by 64)\n")
             }
-            if resolvedNumFrames != numFrames {
+            if let duration {
+                let resolvedSeconds = Double(resolvedNumFrames) / Double(fps)
+                CLIStderr.write(
+                    "Resolved duration \(String(format: "%.2f", duration))s to \(resolvedNumFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 8n+1)\n"
+                )
+            } else if resolvedNumFrames != numFrames {
                 CLIStderr.write("Adjusted frame count to \(resolvedNumFrames) (must satisfy 8n+1)\n")
+            }
+            if variant == .unifiedAV && fps != 24 {
+                CLIStderr.write(
+                    "Warning: LTX unified AV is trained for 24 fps; --fps \(fps) can make generated motion look time-stretched relative to audio.\n"
+                )
             }
         }
 
@@ -371,6 +402,10 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
         throw ValidationError("Model root directory not found: \(rootURL.path)")
     }
 
+    if isLTX23SplitModelRoot(rootURL) {
+        return
+    }
+
     let required = [
         rootURL.appendingPathComponent("text_encoder/config.json", isDirectory: false),
         rootURL.appendingPathComponent("text_encoder/model.safetensors.index.json", isDirectory: false),
@@ -477,8 +512,10 @@ private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
         case .unifiedAV:
             return [
                 zeroModels.appendingPathComponent("video-ltx-av", isDirectory: true).path,
+                zeroModels.appendingPathComponent("video-ltx23-av-mlx", isDirectory: true).path,
                 zeroModels.appendingPathComponent("LTX-2-mlx-av", isDirectory: true).path,
                 home.appendingPathComponent("models/video-ltx-av", isDirectory: true).path,
+                home.appendingPathComponent("models/video-ltx23-av-mlx", isDirectory: true).path,
                 home.appendingPathComponent("models/LTX-2-mlx-av", isDirectory: true).path,
                 home.appendingPathComponent("Models/LTX-2-mlx-av", isDirectory: true).path,
             ]
@@ -489,6 +526,12 @@ private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
         return candidate
     }
     return nil
+}
+
+func nearestLTXFrameCount(duration: Double, fps: Int) -> Int {
+    let targetFrames = max(9.0, duration * Double(max(1, fps)))
+    let chunks = max(1, Int(((targetFrames - 1.0) / 8.0).rounded()))
+    return chunks * 8 + 1
 }
 
 private func isNativeVideoModelRootAvailable(at path: String) -> Bool {

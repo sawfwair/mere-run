@@ -468,11 +468,121 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
+    func testLTX23MLXSpecUsesDgrauetSplitSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue))
+
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.hubFallback?.repoId, "dgrauet/ltx-2.3-mlx")
+        XCTAssertEqual(spec.hubFallback?.revision, "main")
+        XCTAssertEqual(spec.upstreamRepoId, "dgrauet/ltx-2.3-mlx")
+        XCTAssertEqual(spec.validationKind, .ltxVideo23MLX)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.companionModelIDs, [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue])
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("embedded_config.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("vocoder.safetensors"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-dev.safetensors"), false)
+    }
+
+    func testLTX23CompanionGemma3TextEncoderSpecIsKnownButHidden() throws {
+        let companionID = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
+
+        XCTAssertFalse(ManagedModelCatalog.allModelIDs.contains(companionID))
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.hubFallback?.repoId, "mlx-community/gemma-3-12b-it-4bit")
+        XCTAssertEqual(spec.hubFallback?.revision, "14d891e009084901c434304fe93a86fd9013e84c")
+        XCTAssertEqual(spec.upstreamRevision, "14d891e009084901c434304fe93a86fd9013e84c")
+        XCTAssertEqual(spec.validationKind, .hfTextChat)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+    }
+
+    func testHFTextRootValidationRequiresShardsNamedByIndex() throws {
+        let companionID = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for file in ["config.json", "tokenizer.json", "tokenizer_config.json"] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data("{}".utf8)
+            ))
+        }
+        let index = """
+        {
+          "metadata": {"total_size": 1},
+          "weight_map": {
+            "language_model.model.embed_tokens.weight": "model-00001-of-00002.safetensors"
+          }
+        }
+        """
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model.safetensors.index.json").path,
+            contents: Data(index.utf8)
+        ))
+
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["model-00001-of-00002.safetensors"]
+        )
+    }
+
+    func testLTX23MLXRootValidationRequiresSplitComponents() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue))
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLTX23MLXRoot(at: root)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent("vocoder.safetensors"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["vocoder.safetensors"]
+        )
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func writeMinimalLTX23MLXRoot(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(
+            for: .ltxVideo23AVMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+
+        for file in [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-distilled.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "vocoder.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
+            "spatial_upscaler_x1_5_v1_0.safetensors",
+            "spatial_upscaler_x1_5_v1_0_config.json",
+            "temporal_upscaler_x2_v1_0.safetensors",
+            "temporal_upscaler_x2_v1_0_config.json",
+        ] {
+            let contents = file.hasSuffix(".json")
+                ? Data(#"{"model_version":"2.3.0"}"#.utf8)
+                : Data()
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: contents
+            ))
+        }
     }
 
     private func writeConfigOnlyDiffusersImageRoot(at root: URL, id: ModelResolver.ModelID) throws {
