@@ -139,7 +139,7 @@ Video generation:
   - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
   - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 
-The LTX file is still large because it also contains low-level model
+The LTX runtime combines public generation flow with lower-level model
 definitions. Read it in this order:
 
 - public generation types and `LTXDistilledLatentGenerator`

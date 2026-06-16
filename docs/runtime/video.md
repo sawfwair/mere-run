@@ -69,19 +69,19 @@ swift run mere.run video export-latents \
 
 ### CLI
 
-- `Sources/MereRunCLI/Commands/VideoGenerateCommand.swift`
-- `Sources/MereRunCLI/Commands/VideoExportLatentsCommand.swift`
 - `Sources/MereRunCLI/Commands/VideoCommand.swift`
 
 ### Runtime
 
 - `Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift`
+- `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
+- `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 
-## Important note on code shape
+## Source Reading Notes
 
-The LTX runtime is still the largest major runtime file in the repo. It is not
-an architecture mess anymore, but it still contains more low-level video-model
-logic than the other family entrypoints.
+The LTX runtime has more low-level model, media, and checkpoint-layout code
+than most other runtime families in this repo. Start from the public generation
+flow before reading the lower-level model definitions.
 
 The best reading order is:
 
