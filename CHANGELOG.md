@@ -6,6 +6,38 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.16.0 - 2026-06-16
+
+### Added
+
+- added native LTX 2.3 unified audio/video generation through the managed
+  `video-ltx23-av-mlx` model, including the split MLX checkpoint layout,
+  Gemma 3 prompt-conditioning companion model, separate video/audio VAE files,
+  BWE vocoder, and LTX 2.3 upscaler components.
+- added LTX 2.3 guidance across the CLI, runtime, model-source, and testing
+  docs, with examples that pull `video-ltx23-av-mlx` and render synchronized
+  audio/video at the trained 24 fps timing.
+- added `scripts/compare-ltx-av-audio.py` to compare native unified-AV output
+  against upstream LTX-2 media and inspect codec, sample-rate, loudness, and
+  model-root hints when validating audio quality.
+
+### Changed
+
+- changed `video generate --duration` handling for LTX to resolve to valid
+  frame counts and warn when unified-AV renders use timing that can stretch
+  motion relative to audio.
+- changed `model info --components` to render LTX 2.3 split-model components
+  directly, including resolved symlink targets and companion text-encoder
+  readiness, instead of forcing the layout through generic file enumeration.
+
+### Fixed
+
+- fixed LTX unified-AV MP4 assembly so native audio is written at the expected
+  24 kHz path and muxed through the shared media I/O layer on both Apple and
+  FFmpeg-backed platforms.
+- fixed LTX model validation and managed-model metadata for the split LTX 2.3
+  layout so pulls, model info, and video generation agree on the required files.
+
 ## 0.15.0 - 2026-06-13
 
 ### Added
