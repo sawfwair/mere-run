@@ -774,7 +774,7 @@ enum CommandCatalog {
             id: .videoGenerate,
             category: .media,
             title: "Generate video",
-            subtitle: "Native LTX video generation",
+            subtitle: "Native LTX draft or unified AV generation",
             systemImage: "film",
             promptLabel: "Prompt",
             inputKind: .image,

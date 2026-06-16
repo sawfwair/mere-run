@@ -496,6 +496,13 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 64,
                 recommended: 96
             ),
+            descriptor(
+                ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
+                "LTX 2.3 MLX",
+                "Installs the split LTX 2.3 MLX audio-video checkpoint for the V2 runtime.",
+                minimum: 96,
+                recommended: 128
+            ),
         ]
         return Dictionary(uniqueKeysWithValues: descriptors.map { ($0.modelID, $0) })
     }()

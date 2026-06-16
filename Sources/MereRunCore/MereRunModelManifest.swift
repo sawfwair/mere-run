@@ -679,6 +679,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: Gemma4Resources.twelveB4BitUpstreamModelId,
                 createdAt: createdAt
             )
+        case .ltxGemma3TwelveB4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [],
+                components: gemma4TextComponents,
+                upstreamRepoId: "mlx-community/gemma-3-12b-it-4bit",
+                createdAt: createdAt
+            )
         case .gemma4VisionTwelveB:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1105,7 +1120,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "google/magenta-realtime-2@010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc",
                 createdAt: createdAt
             )
-        case .ltxVideoAV:
+        case .ltxVideoAV, .ltxVideo23AVMLX:
+            let isLTX23 = modelID == .ltxVideo23AVMLX
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .ltxVideo,
@@ -1116,7 +1132,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: Defaults(steps: 8, cfg: 1.0),
                 supports: [.videoGeneration],
                 components: nil,
-                upstreamRepoId: "mlx-community/LTX-2-distilled-bf16",
+                upstreamRepoId: isLTX23 ? "dgrauet/ltx-2.3-mlx@main" : "mlx-community/LTX-2-distilled-bf16",
                 createdAt: createdAt
             )
         }

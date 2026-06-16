@@ -156,22 +156,163 @@ struct ModelInfo: ParsableCommand {
 
         if components {
             print("\nComponents")
-            let resolver = ModelComponentResolver(modelRootURL: rootURL, manifest: manifest)
-            for component in ModelComponentResolver.Component.allCases {
-                let fallback = component.manifestKey
-                do {
-                    let resolved = try resolver.resolveDirectory(for: component, fallbackLocalPath: fallback)
-                    let source = resolved.sourceModelRootURL.standardizedFileURL.path
-                    let path = resolved.directoryURL.standardizedFileURL.path
-                    if source == rootURL.standardizedFileURL.path {
-                        print("  \(component.manifestKey): \(path)")
-                    } else {
-                        print("  \(component.manifestKey): \(path)  (from \(source))")
-                    }
-                } catch {
-                    print("  \(component.manifestKey): (unresolved) \(error.localizedDescription)")
+            if Self.usesLTX23SplitLayout(manifest: manifest, expectedModelID: expectedModelID) {
+                let companionRoot = ModelResolver()
+                    .resolveIfPresent(.ltxGemma3TwelveB4Bit)?
+                    .rootURL
+                for line in Self.ltx23SplitComponentLines(
+                    rootURL: rootURL,
+                    companionRootURL: companionRoot,
+                    fileManager: fm
+                ) {
+                    print(line)
                 }
+            } else if Self.usesLTXMergedLayout(manifest: manifest, expectedModelID: expectedModelID) {
+                for line in Self.ltxMergedComponentLines(rootURL: rootURL, fileManager: fm) {
+                    print(line)
+                }
+            } else {
+                printGenericComponents(rootURL: rootURL, manifest: manifest)
             }
         }
     }
+
+    private func printGenericComponents(rootURL: URL, manifest: MereRunModelManifest?) {
+        let resolver = ModelComponentResolver(modelRootURL: rootURL, manifest: manifest)
+        for component in ModelComponentResolver.Component.allCases {
+            let fallback = component.manifestKey
+            do {
+                let resolved = try resolver.resolveDirectory(for: component, fallbackLocalPath: fallback)
+                let source = resolved.sourceModelRootURL.standardizedFileURL.path
+                let path = resolved.directoryURL.standardizedFileURL.path
+                if source == rootURL.standardizedFileURL.path {
+                    print("  \(component.manifestKey): \(path)")
+                } else {
+                    print("  \(component.manifestKey): \(path)  (from \(source))")
+                }
+            } catch {
+                print("  \(component.manifestKey): (unresolved) \(error.localizedDescription)")
+            }
+        }
+    }
+
+    static func usesLTX23SplitLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
+        let id = manifest?.id ?? expectedModelID
+        guard let id else { return false }
+        return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23MLX
+    }
+
+    static func usesLTXMergedLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
+        let id = manifest?.id ?? expectedModelID
+        guard let id else { return false }
+        return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo
+    }
+
+    static func ltxMergedComponentLines(
+        rootURL: URL,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        let root = rootURL.standardizedFileURL
+        let fileRoot = rootURL.resolvingSymlinksInPath().standardizedFileURL
+        var lines = ["  layout: LTX distilled merged files"]
+        lines.append(directoryLine(label: "tokenizer", rootURL: root, relativePath: "tokenizer", fileManager: fileManager))
+        lines.append(
+            directoryLine(label: "text_encoder", rootURL: root, relativePath: "text_encoder", fileManager: fileManager)
+        )
+        lines.append(
+            matchedFileLine(
+                label: "ltx_model",
+                rootURL: fileRoot,
+                missingDescription: "ltx-2-19*.safetensors",
+                fileManager: fileManager
+            ) { name in
+                name.hasPrefix("ltx-2-19") && name.hasSuffix(".safetensors")
+            }
+        )
+        lines.append(
+            matchedFileLine(
+                label: "spatial_upscaler",
+                rootURL: fileRoot,
+                missingDescription: "ltx-2-spatial-upscaler*.safetensors",
+                fileManager: fileManager
+            ) { name in
+                name.hasPrefix("ltx-2-spatial-upscaler") && name.hasSuffix(".safetensors")
+            }
+        )
+        return lines
+    }
+
+    static func ltx23SplitComponentLines(
+        rootURL: URL,
+        companionRootURL: URL?,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        var lines = ["  layout: LTX 2.3 split MLX files"]
+        if let companionRootURL {
+            lines.append(
+                "  text_encoder: \(companionRootURL.standardizedFileURL.path)  "
+                    + "(companion \(ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue))"
+            )
+        } else {
+            lines.append(
+                "  text_encoder: \(ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue)  "
+                    + "(companion model)"
+            )
+        }
+
+        for file in ltx23SplitComponentFiles {
+            let url = rootURL.appendingPathComponent(file.relativePath, isDirectory: false).standardizedFileURL
+            let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
+            lines.append("  \(file.label): \(url.path)\(suffix)")
+        }
+        return lines
+    }
+
+    private static func directoryLine(
+        label: String,
+        rootURL: URL,
+        relativePath: String,
+        fileManager: FileManager
+    ) -> String {
+        let url = rootURL.appendingPathComponent(relativePath, isDirectory: true).standardizedFileURL
+        var isDirectory: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+        return "  \(label): \(url.path)\(exists ? "" : "  (missing)")"
+    }
+
+    private static func matchedFileLine(
+        label: String,
+        rootURL: URL,
+        missingDescription: String,
+        fileManager: FileManager,
+        matches: (String) -> Bool
+    ) -> String {
+        let entries = (try? fileManager.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        if let url = entries.first(where: { matches($0.lastPathComponent) })?.standardizedFileURL {
+            return "  \(label): \(url.path)"
+        }
+        return "  \(label): (missing \(missingDescription))"
+    }
+
+    private static let ltx23SplitComponentFiles: [(label: String, relativePath: String)] = [
+        ("split_model", "split_model.json"),
+        ("config", "config.json"),
+        ("embedded_config", "embedded_config.json"),
+        ("connector", "connector.safetensors"),
+        ("transformer", "transformer-distilled.safetensors"),
+        ("video_vae_decoder", "vae_decoder.safetensors"),
+        ("video_vae_encoder", "vae_encoder.safetensors"),
+        ("audio_vae", "audio_vae.safetensors"),
+        ("vocoder_bwe", "vocoder.safetensors"),
+        ("spatial_upscaler_x2", "spatial_upscaler_x2_v1_1.safetensors"),
+        ("spatial_upscaler_x2_config", "spatial_upscaler_x2_v1_1_config.json"),
+        ("spatial_upscaler_x1_5", "spatial_upscaler_x1_5_v1_0.safetensors"),
+        ("spatial_upscaler_x1_5_config", "spatial_upscaler_x1_5_v1_0_config.json"),
+        ("temporal_upscaler_x2", "temporal_upscaler_x2_v1_0.safetensors"),
+        ("temporal_upscaler_x2_config", "temporal_upscaler_x2_v1_0_config.json"),
+    ]
 }

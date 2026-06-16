@@ -114,6 +114,36 @@ covers pure Swift image, WAV, and FFT behavior in the normal test suite.
 to exercise Linux `ffmpeg`/`ffprobe` image, audio, MP4, mux, and frame
 extraction paths without requiring host media files or model checkpoints.
 
+### Unified AV audio comparison
+
+When unified AV audio sounds too hot, bandwidth-limited, fluttery, or different
+from the upstream LTX-2 reference, generate the same prompt/seed through both
+paths and compare the finished MP4s:
+
+```bash
+scripts/compare-ltx-av-audio.py \
+  --mere ./mere-unified-av.mp4 \
+  --ltx ./ltx-reference.mp4 \
+  --ltx-repo /path/to/LTX-2 \
+  --model-root "$HOME/Library/Application Support/MereRun/models/video-ltx-av" \
+  --json-out ./ltx-av-audio-report.json
+```
+
+The report combines `ffprobe` stream metadata, decoded PCM measurements
+(LUFS, true peak, RMS, crest factor, near-clipping, and high-frequency energy),
+and source-reference checks against local media assembly and the optional LTX-2
+checkout. When `--model-root` is provided it also scans model JSON and
+safetensors headers for vocoder BWE config/weights, so support in source code
+is kept separate from BWE actually being present in the installed checkpoint.
+Use it to separate waveform/vocoder problems from mux or AAC encoding
+differences.
+
+`video-ltx23-av-mlx` is the managed LTX 2.3 MLX split checkpoint for the
+high-quality `unified-av` path. It is validated as a split model root, uses the
+native `unified-av` split loader, and can be scanned by the comparison script
+after generating a sample. The Unsloth LTX 2.3 GGUF checkpoints are a separate
+quantized runner shape, not a drop-in native MLX model root.
+
 ## End-to-end smoke tests
 
 ### Core sweep

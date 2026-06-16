@@ -15,6 +15,11 @@ enum FFmpegProcess {
         stdin: Data? = nil
     ) throws -> Result {
         let executable = try resolveTool(tool)
+        let effectiveArguments = argumentsWithDisabledStdin(
+            for: executable,
+            rawTool: tool,
+            arguments: arguments
+        )
         let scratchID = UUID().uuidString
         let tempRoot = FileManager.default.temporaryDirectory
         let stdoutURL = tempRoot.appendingPathComponent("mererun-ffmpeg-\(scratchID).stdout")
@@ -32,7 +37,7 @@ enum FFmpegProcess {
             try stdin.write(to: stdinURL)
         }
 
-        var command = ([executable.path] + arguments).map(shellQuote).joined(separator: " ")
+        var command = ([executable.path] + effectiveArguments).map(shellQuote).joined(separator: " ")
         if stdin != nil {
             command += " < \(shellQuote(stdinURL.path))"
         }
@@ -88,6 +93,22 @@ enum FFmpegProcess {
             }
         }
         throw MediaIOError.missingTool(tool)
+    }
+
+    private static func argumentsWithDisabledStdin(
+        for executable: URL,
+        rawTool: String,
+        arguments: [String]
+    ) -> [String] {
+        let executableName = executable.lastPathComponent.lowercased()
+        let requestedName = URL(fileURLWithPath: rawTool).lastPathComponent.lowercased()
+        guard executableName == "ffmpeg" || requestedName == "ffmpeg" else {
+            return arguments
+        }
+        guard !arguments.contains("-nostdin") else {
+            return arguments
+        }
+        return ["-nostdin"] + arguments
     }
 
     private static func shellQuote(_ value: String) -> String {

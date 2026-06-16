@@ -49,6 +49,22 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(command.model, "image-zimage-max")
     }
 
+    func testGuideVideoGenerateCoversLTX23UnifiedAVModel() throws {
+        let command = try GuideCommand.parse([
+            "video",
+            "generate",
+            "--model",
+            ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
+        ])
+        let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
+        let rendered = try GuideCommand.render(entry: entry, model: command.model, json: false)
+
+        XCTAssertEqual(entry.topic, "video-generate")
+        XCTAssertEqual(command.model, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
+        XCTAssertTrue(rendered.contains("Model focus: `\(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)`"))
+        XCTAssertTrue(rendered.contains("--variant unified-av"))
+    }
+
     func testGuideOpenWebUIParsesAndRenders() throws {
         let command = try GuideCommand.parse(["open-webui"])
         let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)

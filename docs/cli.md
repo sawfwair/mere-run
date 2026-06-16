@@ -77,7 +77,7 @@ are:
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
-- Video: `video-ltx-av`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`
 
 For subsystem-specific implementation guides, see:
 
@@ -763,6 +763,7 @@ Key options:
 - `--output`
 - `--width`, `--height`
 - `--num-frames`
+- `--duration`
 - `--fps`
 - `--seed`
 - `--image`
@@ -772,19 +773,33 @@ Key options:
 Environment:
 
 - `MERERUN_VIDEO_LTX_MODEL_ROOT`
+- `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` for an external
+  `mlx-community/gemma-3-12b-it-4bit` checkout used by `video-ltx23-av-mlx`
+
+For `--variant unified-av`, keep `--fps 24` unless you are deliberately making
+a retimed clip. LTX 2.3 unified AV is trained around 24 fps; using 8 fps can
+make generated motion look slow while audio remains normal. Use `--duration`
+for clip length so the CLI can choose the nearest legal `8n+1` frame count.
+Use the default `distilled` lane for faster video-only drafts. Use
+`--variant unified-av --model video-ltx23-av-mlx` for the current high-quality
+synchronized audio/video lane.
 
 Examples:
 
 ```bash
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant unified-av \
-  --model-root ~/Library/Application\ Support/MereRun/models/video-ltx-av
+  --variant distilled \
+  --model video-ltx-av \
+  --num-frames 65
 
 swift run mere.run video generate \
-  "woman walking in neon rain" \
-  --image frame.png \
-  --output ./rain.mp4
+  "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \
+  --variant unified-av \
+  --model video-ltx23-av-mlx \
+  --duration 15 \
+  --fps 24 \
+  --output ./dialogue-score-sfx.mp4
 ```
 
 ### `mere.run video export-latents`

@@ -106,6 +106,7 @@ enum AppleMediaVideoIO {
         }
 
         input.markAsFinished()
+        writer.endSession(atSourceTime: CMTime(value: Int64(frameCount), timescale: CMTimeScale(fps)))
         let semaphore = DispatchSemaphore(value: 0)
         writer.finishWriting { semaphore.signal() }
         semaphore.wait()
