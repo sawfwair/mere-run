@@ -10,6 +10,19 @@ public enum MediaVideoIO {
         to outputURL: URL
     ) throws {
         #if canImport(AVFoundation)
+        do {
+            try FFmpegMediaIO.writeMP4(
+                rgb24: rgb24,
+                width: width,
+                height: height,
+                frameCount: frameCount,
+                fps: fps,
+                to: outputURL
+            )
+            return
+        } catch MediaIOError.missingTool where ProcessInfo.processInfo.environment["MERERUN_FFMPEG"] == nil {
+            // Fall back to the native writer on macOS machines without ffmpeg.
+        }
         try AppleMediaVideoIO.writeMP4(
             rgb24: rgb24,
             width: width,
@@ -30,11 +43,34 @@ public enum MediaVideoIO {
         #endif
     }
 
-    public static func mux(videoURL: URL, audioURL: URL, outputURL: URL) throws {
+    public static func mux(
+        videoURL: URL,
+        audioURL: URL,
+        outputURL: URL,
+        audioBitRate: Int? = nil
+    ) throws {
         #if canImport(AVFoundation)
+        if let audioBitRate {
+            do {
+                try FFmpegMediaIO.mux(
+                    videoURL: videoURL,
+                    audioURL: audioURL,
+                    outputURL: outputURL,
+                    audioBitRate: audioBitRate
+                )
+                return
+            } catch MediaIOError.missingTool where ProcessInfo.processInfo.environment["MERERUN_FFMPEG"] == nil {
+                // Fall back to the native muxer on macOS machines without ffmpeg.
+            }
+        }
         try AppleMediaVideoIO.mux(videoURL: videoURL, audioURL: audioURL, outputURL: outputURL)
         #else
-        try FFmpegMediaIO.mux(videoURL: videoURL, audioURL: audioURL, outputURL: outputURL)
+        try FFmpegMediaIO.mux(
+            videoURL: videoURL,
+            audioURL: audioURL,
+            outputURL: outputURL,
+            audioBitRate: audioBitRate
+        )
         #endif
     }
 

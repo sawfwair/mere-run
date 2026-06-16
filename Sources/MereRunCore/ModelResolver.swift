@@ -31,6 +31,7 @@ public struct ModelResolver {
         case gemma4TwelveB4Bit = "text-chat-gemma4-12b-4bit"
         case gemma4VisionTwelveB = "vision-chat-gemma4-12b"
         case gemma4TwelveBMTP = "text-chat-gemma4-12b-mtp"
+        case ltxGemma3TwelveB4Bit = "text-encoder-ltx-gemma3-12b-4bit"
         case q36Nano = "text-chat-q36-nano"
         case lfm25A1B8Bit = "text-chat-lfm25-a1b-8bit"
         case qwen35Agent9B = "text-agent-qwen35-9b"
@@ -52,6 +53,7 @@ public struct ModelResolver {
         case magentaRT2Small = "music-magenta-rt2-small"
         case magentaRT2Base = "music-magenta-rt2-base"
         case ltxVideoAV = "video-ltx-av"
+        case ltxVideo23AVMLX = "video-ltx23-av-mlx"
     }
 
     public enum Source: String, Hashable, Sendable {

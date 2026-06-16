@@ -28,9 +28,29 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.width, 768)
         XCTAssertEqual(cmd.height, 512)
         XCTAssertEqual(cmd.numFrames, 65)
+        XCTAssertNil(cmd.duration)
         XCTAssertEqual(cmd.fps, 24)
         XCTAssertEqual(cmd.imageStrength, 1.0)
         XCTAssertNil(cmd.modelRoot)
+    }
+
+    func testVideoGenerateParsesDurationOverride() throws {
+        let cmd = try VideoGenerate.parse([
+            "dialogue with background music",
+            "--variant", "unified-av",
+            "--duration", "15",
+            "--fps", "24",
+        ])
+
+        XCTAssertEqual(cmd.variant, .unifiedAV)
+        XCTAssertEqual(cmd.duration, 15)
+        XCTAssertEqual(cmd.fps, 24)
+    }
+
+    func testNearestLTXFrameCountUsesClosestLegalFrameCount() {
+        XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 24), 361)
+        XCTAssertEqual(nearestLTXFrameCount(duration: 5, fps: 24), 121)
+        XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 8), 121)
     }
 
     func testVideoExportLatentsParsesOverrides() throws {

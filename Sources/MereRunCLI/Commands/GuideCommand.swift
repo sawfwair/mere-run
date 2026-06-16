@@ -350,7 +350,10 @@ enum GuideRegistry {
             topic: "video-generate",
             title: "Video Generate",
             commandPaths: [["video", "generate"]],
-            models: ["video-ltx-av"],
+            models: [
+                "video-ltx-av",
+                "video-ltx23-av-mlx",
+            ],
             resourceName: "video-generate.md"
         ),
         GuideTopic(

@@ -417,12 +417,23 @@ swift run mere.run music realtime \
   --output ./live.wav \
   --no-play
 
-# Generate video
+# Generate a fast video-only draft
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant unified-av \
-  --model-root "$HOME/Library/Application Support/MereRun/models/video-ltx-av" \
+  --variant distilled \
+  --model video-ltx-av \
+  --num-frames 65 \
   --output ./clip.mp4
+
+# Generate synchronized LTX 2.3 audio/video
+swift run mere.run model pull video-ltx23-av-mlx
+swift run mere.run video generate \
+  "dialogue with clean background music and subtle city ambience" \
+  --variant unified-av \
+  --model video-ltx23-av-mlx \
+  --duration 15 \
+  --fps 24 \
+  --output ./clip-av.mp4
 ```
 
 ## Command tree

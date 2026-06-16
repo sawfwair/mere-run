@@ -46,6 +46,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case aceStep
     case magentaRT2
     case ltxVideo
+    case ltxVideo23MLX
     case hfTextChat
 }
 
@@ -174,6 +175,35 @@ public enum ManagedModelCatalog {
         "resources/spectrostream/encoder.safetensors",
         "resources/spectrostream/quantizer.safetensors",
         "resources/spectrostream/spectrostream_encoder.mlxfn",
+    ]
+    private static let ltx23MLXUpstreamRepoId = "dgrauet/ltx-2.3-mlx"
+    private static let ltx23MLXSnapshotPatterns = [
+        "config.json",
+        "embedded_config.json",
+        "split_model.json",
+        "connector.safetensors",
+        "transformer-distilled.safetensors",
+        "vae_decoder.safetensors",
+        "vae_encoder.safetensors",
+        "audio_vae.safetensors",
+        "vocoder.safetensors",
+        "spatial_upscaler_x2_v1_1.safetensors",
+        "spatial_upscaler_x2_v1_1_config.json",
+        "spatial_upscaler_x1_5_v1_0.safetensors",
+        "spatial_upscaler_x1_5_v1_0_config.json",
+        "temporal_upscaler_x2_v1_0.safetensors",
+        "temporal_upscaler_x2_v1_0_config.json",
+    ]
+    private static let ltxGemma3TextEncoderRepoId = "mlx-community/gemma-3-12b-it-4bit"
+    private static let ltxGemma3TextEncoderRevision = "14d891e009084901c434304fe93a86fd9013e84c"
+    private static let ltxGemma3TextEncoderSnapshotPatterns = [
+        "config.json",
+        "model.safetensors.index.json",
+        "model-*.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "generation_config.json",
     ]
 
     public static let allSpecs: [ManagedModelSpec] = [
@@ -932,6 +962,23 @@ public enum ManagedModelCatalog {
             validationKind: .ltxVideo,
             defaultCLICommands: ["video generate"]
         ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: ltx23MLXUpstreamRepoId,
+                revision: "main",
+                patterns: ltx23MLXSnapshotPatterns
+            ),
+            upstreamRepoId: ltx23MLXUpstreamRepoId,
+            upstreamRevision: "main",
+            validationKind: .ltxVideo23MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 120 * 1_073_741_824,
+            defaultCLICommands: ["video generate"],
+            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
+        ),
     ]
 
     public static var allModelIDs: [String] {
@@ -969,6 +1016,21 @@ private extension ManagedModelCatalog {
                 validationKind: .gemma4MTPAssistant,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: 4 * 1_073_741_824
+            ),
+            ManagedModelSpec(
+                id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: ltxGemma3TextEncoderRepoId,
+                    revision: ltxGemma3TextEncoderRevision,
+                    patterns: ltxGemma3TextEncoderSnapshotPatterns
+                ),
+                upstreamRepoId: ltxGemma3TextEncoderRepoId,
+                upstreamRevision: ltxGemma3TextEncoderRevision,
+                validationKind: .hfTextChat,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: 8 * 1_073_741_824
             ),
         ]
     }
@@ -1067,6 +1129,8 @@ public extension ManagedModelSpec {
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
+        case .ltxVideo23MLX:
+            return Self.missingLTXVideo23MLXPaths(in: rootURL, fileManager: fileManager)
         case .hfTextChat:
             return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }
@@ -1081,6 +1145,11 @@ public extension ManagedModelSpec {
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
                 .map { "Missing required LTX file: \($0.path)" }
+        case .ltxVideo23MLX:
+            return Self.missingLTXVideo23MLXPaths(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            ).map { "Missing required LTX 2.3 MLX file: \($0.path)" }
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(
                 modelID: id,
@@ -1250,9 +1319,24 @@ public extension ManagedModelSpec {
         let hasIndex = fileManager.fileExists(atPath: modelIndexURL.path)
         let hasSingle = fileManager.fileExists(atPath: modelWeightsURL.path)
         if !hasIndex && !hasSingle { missing.append(modelIndexURL) }
+        if hasIndex {
+            missing.append(contentsOf: missingShardPaths(indexURL: modelIndexURL, fileManager: fileManager))
+        }
         if !fileManager.fileExists(atPath: tokenizerJSON.path) { missing.append(tokenizerJSON) }
         if !fileManager.fileExists(atPath: tokenizerConfig.path) { missing.append(tokenizerConfig) }
         return missing
+    }
+
+    private static func missingShardPaths(indexURL: URL, fileManager: FileManager) -> [URL] {
+        guard let data = try? Data(contentsOf: indexURL),
+              let index = try? JSONDecoder().decode(HFSafetensorsIndex.self, from: data) else {
+            return []
+        }
+
+        let rootURL = indexURL.deletingLastPathComponent()
+        return index.shardFilenames
+            .map { rootURL.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     private static func missingCodeGenPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
@@ -1371,6 +1455,29 @@ public extension ManagedModelSpec {
         if !hasTransformer { missing.append(rootURL.appendingPathComponent("ltx-2-19b-distilled.safetensors")) }
         if !hasUpsampler { missing.append(rootURL.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors")) }
         return missing
+    }
+
+    private static func missingLTXVideo23MLXPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
+        let relativePaths = [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-distilled.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "vocoder.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
+            "spatial_upscaler_x1_5_v1_0.safetensors",
+            "spatial_upscaler_x1_5_v1_0_config.json",
+            "temporal_upscaler_x2_v1_0.safetensors",
+            "temporal_upscaler_x2_v1_0_config.json",
+        ]
+        return relativePaths
+            .map { rootURL.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     private static func missingDiffusersImagePaths(in rootURL: URL, fileManager: FileManager) -> [URL] {

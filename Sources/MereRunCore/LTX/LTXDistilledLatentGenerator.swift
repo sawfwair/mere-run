@@ -64,6 +64,7 @@ public struct LTXDistilledVideoGenerationResult: @unchecked Sendable {
 public enum LTXDistilledLatentGeneratorError: LocalizedError {
     case transformerWeightsMissing(URL)
     case upsamplerWeightsMissing(URL)
+    case unsupportedLTX23SplitModel(URL)
     case generatorNotLoaded
     case invalidResolution(width: Int, height: Int)
     case invalidFrameCount(Int)
@@ -82,6 +83,12 @@ public enum LTXDistilledLatentGeneratorError: LocalizedError {
             return "Missing LTX transformer weights at \(url.path)"
         case .upsamplerWeightsMissing(let url):
             return "Missing LTX upsampler weights at \(url.path)"
+        case .unsupportedLTX23SplitModel(let url):
+            return """
+            Detected an LTX 2.3 split MLX model at \(url.path). This native loader still supports the older \
+            merged LTX layout; port the LTX 2.3 V2 connector, transformer, and split component loader before \
+            generation.
+            """
         case .generatorNotLoaded:
             return "LTX distilled latent generator is not loaded."
         case .invalidResolution(let width, let height):
@@ -108,6 +115,23 @@ public enum LTXDistilledLatentGeneratorError: LocalizedError {
     }
 }
 
+public func isLTX23SplitModelRoot(_ rootURL: URL, fileManager: FileManager = .default) -> Bool {
+    let root = rootURL.standardizedFileURL
+    let splitModel = root.appendingPathComponent("split_model.json", isDirectory: false)
+    let transformer = root.appendingPathComponent("transformer-distilled.safetensors", isDirectory: false)
+    guard fileManager.fileExists(atPath: splitModel.path),
+          fileManager.fileExists(atPath: transformer.path) else {
+        return false
+    }
+
+    let config = root.appendingPathComponent("config.json", isDirectory: false)
+    guard let data = try? Data(contentsOf: config),
+          let text = String(data: data, encoding: .utf8) else {
+        return true
+    }
+    return text.contains(#""model_version""#) && text.contains("2.3")
+}
+
 public actor LTXDistilledLatentGenerator {
     private var textEncoder: LTXGemmaTextEncoder?
     private var transformer: LTXDistilledTransformer?
@@ -126,6 +150,9 @@ public actor LTXDistilledLatentGenerator {
         maxTextLength _: Int = 1024
     ) async throws {
         let root = modelRoot.standardizedFileURL
+        if isLTX23SplitModelRoot(root) {
+            throw LTXDistilledLatentGeneratorError.unsupportedLTX23SplitModel(root)
+        }
         let transformerURL = root.appendingPathComponent("ltx-2-19b-distilled.safetensors", isDirectory: false)
         let upsamplerURL = root.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
         guard FileManager.default.fileExists(atPath: transformerURL.path) else {
@@ -514,7 +541,12 @@ public actor LTXDistilledLatentGenerator {
         let latentResult = try await generate(options: options)
         let decoded: MLXArray?
         let frames: MLXArray
-        if let tiling = selectDecodeTilingConfig(width: options.width, height: options.height, numFrames: options.numFrames) {
+        if let tiling = selectDecodeTilingConfig(
+            width: options.width,
+            height: options.height,
+            numFrames: options.numFrames,
+            fps: options.fps
+        ) {
             decoded = nil
             frames = decodeWithTiling(
                 decoder: decoder,
@@ -531,6 +563,7 @@ public actor LTXDistilledLatentGenerator {
             decoded = fullDecoded
             frames = postprocessDecodedVideo(fullDecoded)
         }
+        MLX.eval(frames)
 
         if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {
             let base = URL(fileURLWithPath: debugPrefix).standardizedFileURL
@@ -707,8 +740,16 @@ private final class LTXDistilledAttention: Module {
     @ModuleInfo(key: "q_norm") var qNorm: RMSNorm
     @ModuleInfo(key: "k_norm") var kNorm: RMSNorm
     @ModuleInfo(key: "to_out") var toOut: Linear
+    @ModuleInfo(key: "to_gate_logits") var toGateLogits: Linear?
 
-    init(queryDim: Int, contextDim: Int?, heads: Int, headDim: Int, normEps: Float) {
+    init(
+        queryDim: Int,
+        contextDim: Int?,
+        heads: Int,
+        headDim: Int,
+        normEps: Float,
+        applyGatedAttention: Bool = false
+    ) {
         self.heads = heads
         self.headDim = headDim
         self.innerDim = heads * headDim
@@ -721,6 +762,7 @@ private final class LTXDistilledAttention: Module {
         self._qNorm.wrappedValue = RMSNorm(dimensions: innerDim, eps: normEps)
         self._kNorm.wrappedValue = RMSNorm(dimensions: innerDim, eps: normEps)
         self._toOut.wrappedValue = Linear(innerDim, queryDim, bias: true)
+        self._toGateLogits.wrappedValue = applyGatedAttention ? Linear(queryDim, heads, bias: true) : nil
     }
 
     func callAsFunction(
@@ -732,8 +774,8 @@ private final class LTXDistilledAttention: Module {
     ) -> MLXArray {
         let ctx = context ?? x
 
-        var q = qNorm(toQ(x))
-        var k = kNorm(toK(ctx))
+        let q = qNorm(toQ(x))
+        let k = kNorm(toK(ctx))
         let v = toV(ctx)
 
         var qHeads = q.reshaped(q.dim(0), q.dim(1), heads, headDim).transposed(0, 2, 1, 3)
@@ -746,13 +788,18 @@ private final class LTXDistilledAttention: Module {
             kHeads = applySplitRoPEHeads(kHeads, cosFreq: kRope.cos, sinFreq: kRope.sin)
         }
 
-        let out = MLXFast.scaledDotProductAttention(
+        var out = MLXFast.scaledDotProductAttention(
             queries: qHeads,
             keys: kHeads,
             values: vHeads,
             scale: 1.0 / Float(headDim).squareRoot(),
             mask: mask.map { .array($0) } ?? .none
         )
+
+        if let toGateLogits {
+            let gate = MLXArray(2.0).asType(out.dtype) * MLX.sigmoid(toGateLogits(x).asType(out.dtype))
+            out = out * gate.transposed(0, 2, 1).expandedDimensions(axis: 3)
+        }
 
         let merged = out.transposed(0, 2, 1, 3).reshaped(x.dim(0), x.dim(1), innerDim)
         return toOut(merged)
@@ -1360,6 +1407,11 @@ private final class LTXResnetBlock3DSimple: Module {
     }
 }
 
+enum LTXVideoVAEArchitecture: Equatable {
+    case legacy
+    case ltx23Split
+}
+
 private final class LTXVideoEncoder: Module {
     let patchSize: Int = 4
     let latentChannels: Int = 128
@@ -1371,7 +1423,7 @@ private final class LTXVideoEncoder: Module {
     var latentsMean: MLXArray = MLX.zeros([128], dtype: .float32)
     var latentsStd: MLXArray = MLX.ones([128], dtype: .float32)
 
-    override init() {
+    init(architecture: LTXVideoVAEArchitecture = .legacy) {
         self._convIn.wrappedValue = LTXCausalConv3d(
             inChannels: 3 * 4 * 4,
             outChannels: 128,
@@ -1380,25 +1432,50 @@ private final class LTXVideoEncoder: Module {
             spatialPadding: (1, 1)
         )
 
-        self._downBlocks.wrappedValue = [
-            LTXEncoderBlock(channels: 128, numLayers: 4),
-            LTXEncoderBlock(inChannels: 128, outChannels: 256, stride: (1, 2, 2)),
-            LTXEncoderBlock(channels: 256, numLayers: 6),
-            LTXEncoderBlock(inChannels: 256, outChannels: 512, stride: (2, 1, 1)),
-            LTXEncoderBlock(channels: 512, numLayers: 6),
-            LTXEncoderBlock(inChannels: 512, outChannels: 1024, stride: (2, 2, 2)),
-            LTXEncoderBlock(channels: 1024, numLayers: 2),
-            LTXEncoderBlock(inChannels: 1024, outChannels: 2048, stride: (2, 2, 2)),
-            LTXEncoderBlock(channels: 2048, numLayers: 2),
-        ]
+        switch architecture {
+        case .legacy:
+            self._downBlocks.wrappedValue = [
+                LTXEncoderBlock(channels: 128, numLayers: 4),
+                LTXEncoderBlock(inChannels: 128, outChannels: 256, stride: (1, 2, 2)),
+                LTXEncoderBlock(channels: 256, numLayers: 6),
+                LTXEncoderBlock(inChannels: 256, outChannels: 512, stride: (2, 1, 1)),
+                LTXEncoderBlock(channels: 512, numLayers: 6),
+                LTXEncoderBlock(inChannels: 512, outChannels: 1024, stride: (2, 2, 2)),
+                LTXEncoderBlock(channels: 1024, numLayers: 2),
+                LTXEncoderBlock(inChannels: 1024, outChannels: 2048, stride: (2, 2, 2)),
+                LTXEncoderBlock(channels: 2048, numLayers: 2),
+            ]
 
-        self._convOut.wrappedValue = LTXCausalConv3d(
-            inChannels: 2048,
-            outChannels: 129,
-            kernelSize: (3, 3, 3),
-            stride: (1, 1, 1),
-            spatialPadding: (1, 1)
-        )
+            self._convOut.wrappedValue = LTXCausalConv3d(
+                inChannels: 2048,
+                outChannels: 129,
+                kernelSize: (3, 3, 3),
+                stride: (1, 1, 1),
+                spatialPadding: (1, 1)
+            )
+
+        case .ltx23Split:
+            self._downBlocks.wrappedValue = [
+                LTXEncoderBlock(channels: 128, numLayers: 4),
+                LTXEncoderBlock(inChannels: 128, outChannels: 256, stride: (1, 2, 2)),
+                LTXEncoderBlock(channels: 256, numLayers: 6),
+                LTXEncoderBlock(inChannels: 256, outChannels: 512, stride: (2, 1, 1)),
+                LTXEncoderBlock(channels: 512, numLayers: 4),
+                LTXEncoderBlock(inChannels: 512, outChannels: 1024, stride: (2, 2, 2)),
+                LTXEncoderBlock(channels: 1024, numLayers: 2),
+                LTXEncoderBlock(inChannels: 1024, outChannels: 1024, stride: (2, 2, 2)),
+                LTXEncoderBlock(channels: 1024, numLayers: 2),
+            ]
+
+            self._convOut.wrappedValue = LTXCausalConv3d(
+                inChannels: 1024,
+                outChannels: 129,
+                kernelSize: (3, 3, 3),
+                stride: (1, 1, 1),
+                spatialPadding: (1, 1)
+            )
+        }
+
         super.init()
     }
 
@@ -1747,7 +1824,12 @@ private final class LTXDecoderBlock: Module {
     @ModuleInfo(key: "time_embedder") var timeEmbedder: LTXPixArtAlphaTimestepEmbedder?
     @ModuleInfo(key: "conv") var conv: LTXCausalConv3d?
 
-    init(channels: Int, numLayers: Int, timestepConditioning: Bool) {
+    init(
+        channels: Int,
+        numLayers: Int,
+        timestepConditioning: Bool,
+        spatialPaddingMode: LTXCausalConv3d.SpatialPaddingMode = .reflect
+    ) {
         self.kind = .resnetGroup
         self.channels = channels
         self.timestepConditioning = timestepConditioning
@@ -1759,7 +1841,7 @@ private final class LTXDecoderBlock: Module {
             LTXResnetBlock3DSimple(
                 channels: channels,
                 timestepConditioning: timestepConditioning,
-                spatialPaddingMode: .reflect
+                spatialPaddingMode: spatialPaddingMode
             )
         }
         self._timeEmbedder.wrappedValue = timestepConditioning
@@ -1772,7 +1854,8 @@ private final class LTXDecoderBlock: Module {
         inChannels: Int,
         stride: (Int, Int, Int),
         residual: Bool,
-        outChannelsReductionFactor: Int
+        outChannelsReductionFactor: Int,
+        spatialPaddingMode: LTXCausalConv3d.SpatialPaddingMode = .reflect
     ) {
         self.kind = .upsample
         self.channels = inChannels
@@ -1789,7 +1872,7 @@ private final class LTXDecoderBlock: Module {
             kernelSize: (3, 3, 3),
             stride: (1, 1, 1),
             spatialPadding: (1, 1),
-            spatialPaddingMode: .reflect
+            spatialPaddingMode: spatialPaddingMode
         )
         self._resBlocks.wrappedValue = []
         self._timeEmbedder.wrappedValue = nil
@@ -1859,32 +1942,98 @@ private final class LTXVideoDecoder: Module {
     var latentsMean: MLXArray = MLX.zeros([128], dtype: .float32)
     var latentsStd: MLXArray = MLX.ones([128], dtype: .float32)
 
-    init(timestepConditioning: Bool) {
+    init(timestepConditioning: Bool, architecture: LTXVideoVAEArchitecture = .legacy) {
         self.timestepConditioning = timestepConditioning
+        let spatialPaddingMode: LTXCausalConv3d.SpatialPaddingMode = architecture == .ltx23Split ? .zeros : .reflect
         self._convIn.wrappedValue = LTXCausalConv3d(
             inChannels: 128,
             outChannels: 1024,
             kernelSize: (3, 3, 3),
             stride: (1, 1, 1),
             spatialPadding: (1, 1),
-            spatialPaddingMode: .reflect
+            spatialPaddingMode: spatialPaddingMode
         )
-        self._upBlocks.wrappedValue = [
-            LTXDecoderBlock(channels: 1024, numLayers: 5, timestepConditioning: timestepConditioning),
-            LTXDecoderBlock(inChannels: 1024, stride: (2, 2, 2), residual: true, outChannelsReductionFactor: 2),
-            LTXDecoderBlock(channels: 512, numLayers: 5, timestepConditioning: timestepConditioning),
-            LTXDecoderBlock(inChannels: 512, stride: (2, 2, 2), residual: true, outChannelsReductionFactor: 2),
-            LTXDecoderBlock(channels: 256, numLayers: 5, timestepConditioning: timestepConditioning),
-            LTXDecoderBlock(inChannels: 256, stride: (2, 2, 2), residual: true, outChannelsReductionFactor: 2),
-            LTXDecoderBlock(channels: 128, numLayers: 5, timestepConditioning: timestepConditioning),
-        ]
+        switch architecture {
+        case .legacy:
+            self._upBlocks.wrappedValue = [
+                LTXDecoderBlock(channels: 1024, numLayers: 5, timestepConditioning: timestepConditioning),
+                LTXDecoderBlock(inChannels: 1024, stride: (2, 2, 2), residual: true, outChannelsReductionFactor: 2),
+                LTXDecoderBlock(channels: 512, numLayers: 5, timestepConditioning: timestepConditioning),
+                LTXDecoderBlock(inChannels: 512, stride: (2, 2, 2), residual: true, outChannelsReductionFactor: 2),
+                LTXDecoderBlock(channels: 256, numLayers: 5, timestepConditioning: timestepConditioning),
+                LTXDecoderBlock(inChannels: 256, stride: (2, 2, 2), residual: true, outChannelsReductionFactor: 2),
+                LTXDecoderBlock(channels: 128, numLayers: 5, timestepConditioning: timestepConditioning),
+            ]
+
+        case .ltx23Split:
+            self._upBlocks.wrappedValue = [
+                LTXDecoderBlock(
+                    channels: 1024,
+                    numLayers: 2,
+                    timestepConditioning: timestepConditioning,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    inChannels: 1024,
+                    stride: (2, 2, 2),
+                    residual: false,
+                    outChannelsReductionFactor: 2,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    channels: 512,
+                    numLayers: 2,
+                    timestepConditioning: timestepConditioning,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    inChannels: 512,
+                    stride: (2, 2, 2),
+                    residual: false,
+                    outChannelsReductionFactor: 1,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    channels: 512,
+                    numLayers: 4,
+                    timestepConditioning: timestepConditioning,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    inChannels: 512,
+                    stride: (2, 1, 1),
+                    residual: false,
+                    outChannelsReductionFactor: 2,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    channels: 256,
+                    numLayers: 6,
+                    timestepConditioning: timestepConditioning,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    inChannels: 256,
+                    stride: (1, 2, 2),
+                    residual: false,
+                    outChannelsReductionFactor: 2,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+                LTXDecoderBlock(
+                    channels: 128,
+                    numLayers: 4,
+                    timestepConditioning: timestepConditioning,
+                    spatialPaddingMode: spatialPaddingMode
+                ),
+            ]
+        }
         self._convOut.wrappedValue = LTXCausalConv3d(
             inChannels: 128,
             outChannels: 3 * 4 * 4,
             kernelSize: (3, 3, 3),
             stride: (1, 1, 1),
             spatialPadding: (1, 1),
-            spatialPaddingMode: .reflect
+            spatialPaddingMode: spatialPaddingMode
         )
         self._lastTimeEmbedder.wrappedValue = LTXPixArtAlphaTimestepEmbedder(embeddingDim: 128 * 2)
         self._lastScaleShiftTable.wrappedValue = MLX.zeros([2, 128], dtype: .float32)
@@ -2067,26 +2216,76 @@ private struct LTXIntervals {
     let rightRamps: [Int]
 }
 
-private struct LTXDecodeTilingConfig {
+struct LTXDecodeTilingConfig {
     let spatialTileSizeInPixels: Int?
     let spatialTileOverlapInPixels: Int
     let temporalTileSizeInFrames: Int?
     let temporalTileOverlapInFrames: Int
 }
 
-private func selectDecodeTilingConfig(width: Int, height: Int, numFrames: Int) -> LTXDecodeTilingConfig? {
-    let needsSpatial = width > 512 || height > 512
-    let needsTemporal = numFrames >= 65
-    if !needsSpatial && !needsTemporal {
+func selectDecodeTilingConfig(
+    width: Int,
+    height: Int,
+    numFrames: Int,
+    fps: Int,
+    decodeBudgetGiB: Double? = nil
+) -> LTXDecodeTilingConfig? {
+    let outputPixelBudget = 135_000_000.0
+    let framePixels = Double(max(1, width)) * Double(max(1, height))
+    let totalOutputPixels = framePixels * Double(max(1, numFrames))
+
+    let latentFrames = 1 + ((numFrames - 1) / 8)
+    let latentH = max(1, height / 32)
+    let latentW = max(1, width / 32)
+    let budgetGiB = decodeBudgetGiB ?? decodeTilingBudgetGiB()
+    let budgetBytes = max(1.0, budgetGiB) * 1024.0 * 1024.0 * 1024.0
+
+    let bytesPerLatentFrame = Double(512 * 4) * Double(latentH * 4) * Double(latentW * 4) * 2.0
+    let totalActivationBytes = bytesPerLatentFrame * Double(latentFrames)
+    let activationLimitedTileFrames: Int?
+    if totalActivationBytes > budgetBytes {
+        let maxLatentFrames = max(2, Int(budgetBytes / max(bytesPerLatentFrame, 1.0)))
+        activationLimitedTileFrames = max(16, maxLatentFrames * 8)
+    } else {
+        activationLimitedTileFrames = nil
+    }
+
+    let outputLimitedTileFrames: Int?
+    if totalOutputPixels > outputPixelBudget {
+        let rawTileFrames = max(16, Int(outputPixelBudget / max(framePixels, 1.0)))
+        outputLimitedTileFrames = max(16, (rawTileFrames / 8) * 8)
+    } else {
+        outputLimitedTileFrames = nil
+    }
+
+    let tileFramesCandidates = [
+        activationLimitedTileFrames,
+        outputLimitedTileFrames,
+    ].compactMap { $0 }
+
+    guard let tileFrames = tileFramesCandidates.min() else {
         return nil
     }
 
+    let oneSecondFrames = max(8, (max(1, fps) / 8) * 8)
+    let overlapFrames = min(oneSecondFrames, (tileFrames / 32) * 8)
+
     return LTXDecodeTilingConfig(
-        spatialTileSizeInPixels: needsSpatial ? 512 : nil,
-        spatialTileOverlapInPixels: needsSpatial ? 64 : 0,
-        temporalTileSizeInFrames: needsTemporal ? 64 : nil,
-        temporalTileOverlapInFrames: needsTemporal ? 24 : 0
+        spatialTileSizeInPixels: nil,
+        spatialTileOverlapInPixels: 0,
+        temporalTileSizeInFrames: tileFrames,
+        temporalTileOverlapInFrames: min(max(0, overlapFrames), max(0, tileFrames - 8))
     )
+}
+
+private func decodeTilingBudgetGiB() -> Double {
+    let environment = ProcessInfo.processInfo.environment
+    for key in ["LTX2_VAE_DECODE_BUDGET_GB", "MERERUN_VIDEO_LTX_VAE_DECODE_BUDGET_GB"] {
+        if let value = environment[key], let parsed = Double(value), parsed.isFinite, parsed > 0 {
+            return parsed
+        }
+    }
+    return 8.0
 }
 
 private func computeTrapezoidalMask1D(
@@ -2362,14 +2561,17 @@ private func decodeWithTiling(
     return MLXArray(frames).reshaped(outFrames, outH, outW, 3)
 }
 
-private func mapLTXDecoderWeight(
+func mapLTXDecoderWeight(
     key: String,
     value: MLXArray,
-    dtype: DType
+    dtype: DType,
+    sourceLayout: LTXTensorWeightLayout = .pytorch
 ) -> [(String, MLXArray)] {
     var mapped: String
     if key.hasPrefix("vae.decoder.") {
         mapped = String(key.dropFirst("vae.decoder.".count))
+    } else if key.hasPrefix("vae_decoder.") {
+        mapped = String(key.dropFirst("vae_decoder.".count))
     } else if key.hasPrefix("decoder.") {
         mapped = String(key.dropFirst("decoder.".count))
     } else {
@@ -2380,7 +2582,7 @@ private func mapLTXDecoderWeight(
     mapped = mapped.replacingOccurrences(of: ".linear_2.", with: ".linear2.")
 
     var casted = value
-    if mapped.contains(".conv.weight"), casted.ndim == 5 {
+    if sourceLayout == .pytorch, mapped.contains(".conv.weight"), casted.ndim == 5 {
         casted = casted.transposed(0, 2, 3, 4, 1)
     }
     if casted.dtype.isFloatingPoint && casted.dtype != dtype {
@@ -2390,14 +2592,17 @@ private func mapLTXDecoderWeight(
     return [(mapped, casted)]
 }
 
-private func mapLTXEncoderWeight(
+func mapLTXEncoderWeight(
     key: String,
     value: MLXArray,
-    dtype: DType
+    dtype: DType,
+    sourceLayout: LTXTensorWeightLayout = .pytorch
 ) -> [(String, MLXArray)] {
     var mapped: String
     if key.hasPrefix("vae.encoder.") {
         mapped = String(key.dropFirst("vae.encoder.".count))
+    } else if key.hasPrefix("vae_encoder.") {
+        mapped = String(key.dropFirst("vae_encoder.".count))
     } else if key.hasPrefix("encoder.") {
         mapped = String(key.dropFirst("encoder.".count))
     } else {
@@ -2405,7 +2610,7 @@ private func mapLTXEncoderWeight(
     }
 
     var casted = value
-    if mapped.contains(".conv.weight"), casted.ndim == 5 {
+    if sourceLayout == .pytorch, mapped.contains(".conv.weight"), casted.ndim == 5 {
         casted = casted.transposed(0, 2, 3, 4, 1)
     }
     if casted.dtype.isFloatingPoint && casted.dtype != dtype {
@@ -2415,13 +2620,25 @@ private func mapLTXEncoderWeight(
     return [(mapped, casted)]
 }
 
-private func mapLTXUpsamplerWeight(
+func mapLTXUpsamplerWeight(
     key: String,
     value: MLXArray,
-    dtype: DType
+    dtype: DType,
+    sourceLayout: LTXTensorWeightLayout = .pytorch
 ) -> [(String, MLXArray)] {
+    var mapped = key
+    for prefix in [
+        "spatial_upscaler_x2_v1_1.",
+        "spatial_upscaler_x1_5_v1_0.",
+        "temporal_upscaler_x2_v1_0.",
+    ] where mapped.hasPrefix(prefix) {
+        mapped = String(mapped.dropFirst(prefix.count))
+        break
+    }
+    mapped = mapped.replacingOccurrences(of: "upsampler.0.", with: "upsampler.conv.")
+
     var casted = value
-    if key.contains("conv"), key.contains("weight") {
+    if sourceLayout == .pytorch, mapped.contains("conv"), mapped.contains("weight") {
         if casted.ndim == 5 {
             casted = casted.transposed(0, 2, 3, 4, 1)
         } else if casted.ndim == 4 {
@@ -2431,7 +2648,12 @@ private func mapLTXUpsamplerWeight(
     if casted.dtype.isFloatingPoint && casted.dtype != dtype {
         casted = casted.asType(dtype)
     }
-    return [(key, casted)]
+    return [(mapped, casted)]
+}
+
+enum LTXTensorWeightLayout: Equatable {
+    case pytorch
+    case mlx
 }
 
 private func createPositionGrid(
@@ -2589,6 +2811,8 @@ public struct LTXUnifiedAVGenerationResult: @unchecked Sendable {
 public enum LTXUnifiedAVGeneratorError: LocalizedError {
     case transformerWeightsMissing(URL)
     case upsamplerWeightsMissing(URL)
+    case unsupportedLTX23SplitModel(URL)
+    case ltx23TextEncoderMissing(String)
     case generatorNotLoaded
     case invalidResolution(width: Int, height: Int)
     case invalidFrameCount(Int)
@@ -2603,6 +2827,7 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
     case audioEmbeddingsMissing
     case audioDecoderNotLoaded
     case vocoderNotLoaded
+    case bweVocoderConfigMissing(URL)
 
     public var errorDescription: String? {
         switch self {
@@ -2610,6 +2835,18 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
             return "Missing LTX transformer weights at \(url.path)"
         case .upsamplerWeightsMissing(let url):
             return "Missing LTX upsampler weights at \(url.path)"
+        case .unsupportedLTX23SplitModel(let url):
+            return """
+            Detected an LTX 2.3 split MLX model at \(url.path). This native loader still supports the older \
+            merged LTX layout; port the LTX 2.3 V2 connector, transformer, and split component loader before \
+            generation.
+            """
+        case .ltx23TextEncoderMissing(let id):
+            return """
+            LTX 2.3 requires the companion Gemma 3 text encoder `\(id)`. Install it with \
+            `mere.run model pull video-ltx23-av-mlx`, or set MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT to a local \
+            mlx-community/gemma-3-12b-it-4bit checkout.
+            """
         case .generatorNotLoaded:
             return "LTX unified AV generator is not loaded."
         case .invalidResolution(let width, let height):
@@ -2638,19 +2875,23 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
             return "Audio decoder is not loaded."
         case .vocoderNotLoaded:
             return "Audio vocoder is not loaded."
+        case .bweVocoderConfigMissing(let url):
+            return "LTX BWE vocoder weights require a vocoder BWE config under \(url.path)."
         }
     }
 }
 
 public actor LTXUnifiedAVGenerator {
     private var textEncoder: LTXGemmaTextEncoder?
-    private var transformer: LTXUnifiedAVTransformer?
+    private var transformer: (any LTXUnifiedAVTransformerRuntime)?
     private var decoder: LTXVideoDecoder?
     private var encoder: LTXVideoEncoder?
     private var upsampler: LTXLatentUpsampler?
     private var audioDecoder: LTXAudioDecoder?
-    private var vocoder: LTXVocoder?
+    private var vocoder: LTXAudioVocoderBase?
     private var modelWeightsURL: URL?
+    private var videoEncoderWeightsURL: URL?
+    private var videoVAEWeightLayout: LTXTensorWeightLayout = .pytorch
     private var loadedDType: DType = .bfloat16
     private var loadedRoot: URL?
 
@@ -2661,8 +2902,14 @@ public actor LTXUnifiedAVGenerator {
         dtype: DType = .bfloat16
     ) async throws {
         let root = modelRoot.standardizedFileURL
-        let transformerURL = root.appendingPathComponent("ltx-2-19b-distilled.safetensors", isDirectory: false)
-        let upsamplerURL = root.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
+        let isLTX23 = isLTX23SplitModelRoot(root)
+        let splitTensorLayout: LTXTensorWeightLayout = isLTX23 ? .mlx : .pytorch
+        let transformerURL = isLTX23
+            ? root.appendingPathComponent("transformer-distilled.safetensors", isDirectory: false)
+            : root.appendingPathComponent("ltx-2-19b-distilled.safetensors", isDirectory: false)
+        let upsamplerURL = isLTX23
+            ? root.appendingPathComponent("spatial_upscaler_x2_v1_1.safetensors", isDirectory: false)
+            : root.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
         guard FileManager.default.fileExists(atPath: transformerURL.path) else {
             throw LTXUnifiedAVGeneratorError.transformerWeightsMissing(transformerURL)
         }
@@ -2671,52 +2918,96 @@ public actor LTXUnifiedAVGenerator {
         }
 
         let text = LTXGemmaTextEncoder()
-        try await text.load(modelRoot: root, dtype: dtype, loadConnectorWeights: true)
-
-        let model = LTXUnifiedAVTransformer()
-        try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: transformerURL,
-            to: model,
+        let textEncoderRoot = try isLTX23 ? resolveLTX23TextEncoderRoot(modelRoot: root) : nil
+        try await text.load(
+            modelRoot: root,
+            textEncoderRoot: textEncoderRoot,
             dtype: dtype,
-            verify: .none,
-            include: { key in
-                key.hasPrefix("model.diffusion_model.")
-            },
-            mapper: { key, value in
-                mapUnifiedTransformerWeight(key: key, value: value, dtype: dtype)
-            },
-            batchSize: 24
+            loadConnectorWeights: true
         )
 
-        let vaeDecoder = LTXVideoDecoder(timestepConditioning: false)
+        let model: any LTXUnifiedAVTransformerRuntime
+        if isLTX23 {
+            let splitModel = LTXUnifiedAVTransformerV2()
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: transformerURL,
+                to: splitModel,
+                dtype: dtype,
+                verify: .none,
+                include: { key in
+                    key.hasPrefix("transformer.")
+                },
+                mapper: { key, value in
+                    mapLTX23UnifiedTransformerWeight(key: key, value: value, dtype: dtype)
+                },
+                batchSize: 24
+            )
+            model = splitModel
+        } else {
+            let mergedModel = LTXUnifiedAVTransformer()
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: transformerURL,
+                to: mergedModel,
+                dtype: dtype,
+                verify: .none,
+                include: { key in
+                    key.hasPrefix("model.diffusion_model.")
+                },
+                mapper: { key, value in
+                    mapUnifiedTransformerWeight(key: key, value: value, dtype: dtype)
+                },
+                batchSize: 24
+            )
+            model = mergedModel
+        }
+
+        let vaeDecoder = LTXVideoDecoder(
+            timestepConditioning: false,
+            architecture: isLTX23 ? .ltx23Split : .legacy
+        )
+        let videoDecoderURL = isLTX23
+            ? root.appendingPathComponent("vae_decoder.safetensors", isDirectory: false)
+            : transformerURL
         let decoderStats = try SafetensorsStreamingLoader.loadArrays(
-            url: transformerURL,
+            url: videoDecoderURL,
             where: { key in
                 key == "latents_mean"
                     || key == "latents_std"
                     || key == "vae.per_channel_statistics.mean-of-means"
                     || key == "vae.per_channel_statistics.std-of-means"
+                    || key == "vae_decoder.per_channel_statistics.mean-of-means"
+                    || key == "vae_decoder.per_channel_statistics.std-of-means"
+                    || key == "vae_decoder.per_channel_statistics.mean"
+                    || key == "vae_decoder.per_channel_statistics.std"
             },
             dtype: .float32
         )
 
-        if let mean = decoderStats["latents_mean"] ?? decoderStats["vae.per_channel_statistics.mean-of-means"] {
+        if let mean = decoderStats["latents_mean"]
+            ?? decoderStats["vae.per_channel_statistics.mean-of-means"]
+            ?? decoderStats["vae_decoder.per_channel_statistics.mean-of-means"]
+            ?? decoderStats["vae_decoder.per_channel_statistics.mean"] {
             vaeDecoder.latentsMean = mean.asType(.float32)
         }
-        if let std = decoderStats["latents_std"] ?? decoderStats["vae.per_channel_statistics.std-of-means"] {
+        if let std = decoderStats["latents_std"]
+            ?? decoderStats["vae.per_channel_statistics.std-of-means"]
+            ?? decoderStats["vae_decoder.per_channel_statistics.std-of-means"]
+            ?? decoderStats["vae_decoder.per_channel_statistics.std"] {
             vaeDecoder.latentsStd = std.asType(.float32)
         }
 
         try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: transformerURL,
+            url: videoDecoderURL,
             to: vaeDecoder,
             dtype: dtype,
             verify: .none,
             include: { key in
-                key.hasPrefix("decoder.") || key.hasPrefix("vae.decoder.")
+                key.hasPrefix("decoder.")
+                    || key.hasPrefix("vae.decoder.")
+                    || key.hasPrefix("vae_decoder.")
             },
             mapper: { key, value in
-                mapLTXDecoderWeight(key: key, value: value, dtype: dtype)
+                mapLTXDecoderWeight(key: key, value: value, dtype: dtype, sourceLayout: splitTensorLayout)
             },
             batchSize: 24
         )
@@ -2729,14 +3020,17 @@ public actor LTXUnifiedAVGenerator {
             verify: .none,
             include: { _ in true },
             mapper: { key, value in
-                mapLTXUpsamplerWeight(key: key, value: value, dtype: dtype)
+                mapLTXUpsamplerWeight(key: key, value: value, dtype: dtype, sourceLayout: splitTensorLayout)
             },
             batchSize: 24
         )
 
         let audioDecoder = LTXAudioDecoder()
+        let audioDecoderURL = isLTX23
+            ? root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
+            : transformerURL
         try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: transformerURL,
+            url: audioDecoderURL,
             to: audioDecoder,
             dtype: .float32,
             verify: .none,
@@ -2745,14 +3039,28 @@ public actor LTXUnifiedAVGenerator {
                     || key.hasPrefix("audio_vae.per_channel_statistics.")
             },
             mapper: { key, value in
-                mapAudioVaeDecoderWeight(key: key, value: value, dtype: .float32)
+                mapAudioVaeDecoderWeight(key: key, value: value, dtype: .float32, sourceLayout: splitTensorLayout)
             },
             batchSize: 24
         )
 
-        let vocoder = LTXVocoder()
+        let vocoderURL = isLTX23
+            ? root.appendingPathComponent("vocoder.safetensors", isDirectory: false)
+            : transformerURL
+        let vocoderMetadata = try SafetensorsStreamingLoader.metadata(url: vocoderURL)
+        let vocoderFlavor = detectLTXVocoderFlavor(keys: vocoderMetadata.keys)
+        let vocoder: LTXAudioVocoderBase = switch vocoderFlavor {
+        case .legacy:
+            LTXVocoder()
+        case .bandwidthExtension:
+            if let config = try loadLTXBWEVocoderConfig(modelRoot: root) {
+                LTXVocoderWithBWE(config: config)
+            } else {
+                throw LTXUnifiedAVGeneratorError.bweVocoderConfigMissing(root)
+            }
+        }
         try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: transformerURL,
+            url: vocoderURL,
             to: vocoder,
             dtype: .float32,
             verify: .none,
@@ -2760,7 +3068,13 @@ public actor LTXUnifiedAVGenerator {
                 key.hasPrefix("vocoder.")
             },
             mapper: { key, value in
-                mapVocoderWeight(key: key, value: value, dtype: .float32)
+                mapVocoderWeight(
+                    key: key,
+                    value: value,
+                    dtype: .float32,
+                    sourceLayout: isLTX23 ? .mlx : .pytorch,
+                    targetFlavor: vocoderFlavor
+                )
             },
             batchSize: 24
         )
@@ -2773,6 +3087,10 @@ public actor LTXUnifiedAVGenerator {
         self.vocoder = vocoder
         self.encoder = nil
         self.modelWeightsURL = transformerURL
+        self.videoEncoderWeightsURL = isLTX23
+            ? root.appendingPathComponent("vae_encoder.safetensors", isDirectory: false)
+            : transformerURL
+        self.videoVAEWeightLayout = splitTensorLayout
         self.loadedDType = dtype
         self.loadedRoot = root
     }
@@ -2789,6 +3107,8 @@ public actor LTXUnifiedAVGenerator {
         audioDecoder = nil
         vocoder = nil
         modelWeightsURL = nil
+        videoEncoderWeightsURL = nil
+        videoVAEWeightLayout = .pytorch
         loadedRoot = nil
         Memory.clearCache()
     }
@@ -2800,40 +3120,60 @@ public actor LTXUnifiedAVGenerator {
         guard let modelWeightsURL else {
             throw LTXUnifiedAVGeneratorError.encoderNotLoaded
         }
+        let encoderURL = videoEncoderWeightsURL ?? modelWeightsURL
 
-        let vaeEncoder = LTXVideoEncoder()
+        let vaeEncoder = LTXVideoEncoder(
+            architecture: videoVAEWeightLayout == .mlx ? .ltx23Split : .legacy
+        )
         if let decoder {
             vaeEncoder.latentsMean = decoder.latentsMean.asType(.float32)
             vaeEncoder.latentsStd = decoder.latentsStd.asType(.float32)
         } else {
             let stats = try SafetensorsStreamingLoader.loadArrays(
-                url: modelWeightsURL,
+                url: encoderURL,
                 where: { key in
                     key == "latents_mean"
                         || key == "latents_std"
                         || key == "vae.per_channel_statistics.mean-of-means"
                         || key == "vae.per_channel_statistics.std-of-means"
+                        || key == "vae_encoder.per_channel_statistics.mean-of-means"
+                        || key == "vae_encoder.per_channel_statistics.std-of-means"
+                        || key == "vae_encoder.per_channel_statistics._mean_of_means"
+                        || key == "vae_encoder.per_channel_statistics._std_of_means"
                 },
                 dtype: .float32
             )
-            if let mean = stats["latents_mean"] ?? stats["vae.per_channel_statistics.mean-of-means"] {
+            if let mean = stats["latents_mean"]
+                ?? stats["vae.per_channel_statistics.mean-of-means"]
+                ?? stats["vae_encoder.per_channel_statistics.mean-of-means"]
+                ?? stats["vae_encoder.per_channel_statistics._mean_of_means"] {
                 vaeEncoder.latentsMean = mean.asType(.float32)
             }
-            if let std = stats["latents_std"] ?? stats["vae.per_channel_statistics.std-of-means"] {
+            if let std = stats["latents_std"]
+                ?? stats["vae.per_channel_statistics.std-of-means"]
+                ?? stats["vae_encoder.per_channel_statistics.std-of-means"]
+                ?? stats["vae_encoder.per_channel_statistics._std_of_means"] {
                 vaeEncoder.latentsStd = std.asType(.float32)
             }
         }
 
         try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: modelWeightsURL,
+            url: encoderURL,
             to: vaeEncoder,
             dtype: loadedDType,
             verify: .none,
             include: { key in
-                key.hasPrefix("encoder.") || key.hasPrefix("vae.encoder.")
+                key.hasPrefix("encoder.")
+                    || key.hasPrefix("vae.encoder.")
+                    || key.hasPrefix("vae_encoder.")
             },
             mapper: { key, value in
-                mapLTXEncoderWeight(key: key, value: value, dtype: loadedDType)
+                mapLTXEncoderWeight(
+                    key: key,
+                    value: value,
+                    dtype: loadedDType,
+                    sourceLayout: videoVAEWeightLayout
+                )
             },
             batchSize: 24
         )
@@ -3081,7 +3421,12 @@ public actor LTXUnifiedAVGenerator {
 
         let decodedVideo: MLXArray?
         let frames: MLXArray
-        if let tiling = selectDecodeTilingConfig(width: options.width, height: options.height, numFrames: options.numFrames) {
+        if let tiling = selectDecodeTilingConfig(
+            width: options.width,
+            height: options.height,
+            numFrames: options.numFrames,
+            fps: options.fps
+        ) {
             decodedVideo = nil
             frames = decodeWithTiling(
                 decoder: decoder,
@@ -3098,20 +3443,123 @@ public actor LTXUnifiedAVGenerator {
             decodedVideo = fullDecoded
             frames = postprocessDecodedVideo(fullDecoded)
         }
+        MLX.eval(frames)
+
+        if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {
+            let base = URL(fileURLWithPath: debugPrefix).standardizedFileURL
+            let parent = base.deletingLastPathComponent()
+            try? FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+            let stem = base.lastPathComponent
+            if let decodedVideo {
+                try? MLX.save(array: decodedVideo, url: parent.appendingPathComponent("\(stem)_decoded.npy"))
+            }
+            try? MLX.save(array: frames, url: parent.appendingPathComponent("\(stem)_frames_postprocess.npy"))
+            try? MLX.save(array: videoLatents, url: parent.appendingPathComponent("\(stem)_video_latents.npy"))
+            try? MLX.save(array: audioLatents, url: parent.appendingPathComponent("\(stem)_audio_latents.npy"))
+        }
 
         _ = decodedVideo
         let mel = audioDecoder.decode(latents: audioLatents.asType(.float32))
-        let audioWaveform = vocoder(mel)
+        saveLTXAVDebugArray(mel, suffix: "audio_mel")
+        let vocodedAudio = vocoder(mel)
+        saveLTXAVDebugAudio(vocodedAudio, suffix: "audio_vocoded_raw", sampleRate: vocoder.outputSamplingRate)
+        let audioWaveform = matchLTXAudioWaveformDuration(
+            vocodedAudio,
+            videoFrames: options.numFrames,
+            fps: options.fps,
+            sampleRate: vocoder.outputSamplingRate
+        )
         MLX.eval(audioWaveform)
+        saveLTXAVDebugAudio(audioWaveform, suffix: "audio_waveform_matched", sampleRate: vocoder.outputSamplingRate)
 
         return LTXUnifiedAVGenerationResult(
             frames: frames,
             videoLatents: videoLatents,
             audioLatents: audioLatents,
             audioWaveform: audioWaveform,
-            audioSampleRate: LTXAudioSampleRate
+            audioSampleRate: vocoder.outputSamplingRate
         )
     }
+}
+
+func matchLTXAudioWaveformDuration(
+    _ waveform: MLXArray,
+    videoFrames: Int,
+    fps: Int,
+    sampleRate: Int
+) -> MLXArray {
+    guard waveform.ndim == 3,
+          videoFrames > 0,
+          fps > 0,
+          sampleRate > 0 else {
+        return waveform
+    }
+
+    let targetSamples = max(1, Int((Double(videoFrames) * Double(sampleRate) / Double(fps)).rounded()))
+    let currentSamples = waveform.dim(2)
+    if currentSamples == targetSamples {
+        return waveform
+    }
+    if currentSamples > targetSamples {
+        return waveform[0..., 0..., 0..<targetSamples]
+    }
+
+    let padding = MLX.zeros(
+        [waveform.dim(0), waveform.dim(1), targetSamples - currentSamples],
+        dtype: waveform.dtype
+    )
+    return MLX.concatenated([waveform, padding], axis: 2)
+}
+
+private func ltxAVDebugBaseURL() -> URL? {
+    guard let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"],
+          !debugPrefix.isEmpty else {
+        return nil
+    }
+    return URL(fileURLWithPath: debugPrefix).standardizedFileURL
+}
+
+private func ltxAVDebugURL(suffix: String, fileExtension: String) -> URL? {
+    guard let base = ltxAVDebugBaseURL() else { return nil }
+    let parent = base.deletingLastPathComponent()
+    try? FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    return parent.appendingPathComponent("\(base.lastPathComponent)_\(suffix).\(fileExtension)", isDirectory: false)
+}
+
+private func saveLTXAVDebugArray(_ array: MLXArray, suffix: String) {
+    guard let url = ltxAVDebugURL(suffix: suffix, fileExtension: "npy") else { return }
+    try? MLX.save(array: array, url: url)
+}
+
+private func saveLTXAVDebugAudio(_ waveform: MLXArray, suffix: String, sampleRate: Int) {
+    guard let url = ltxAVDebugURL(suffix: suffix, fileExtension: "wav") else { return }
+    guard let prepared = try? LTXVideoMP4Writer.prepareAudio(waveform) else { return }
+    try? MediaAudioIO.writeFloatWAV(
+        samples: prepared.interleaved,
+        sampleRate: sampleRate,
+        channels: prepared.channels,
+        to: url
+    )
+}
+
+private func resolveLTX23TextEncoderRoot(modelRoot: URL) throws -> URL {
+    let fm = FileManager.default
+    let localTextEncoder = modelRoot.appendingPathComponent("text_encoder", isDirectory: true)
+    if fm.fileExists(atPath: localTextEncoder.appendingPathComponent("config.json").path) {
+        return localTextEncoder
+    }
+
+    if let override = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT"],
+       !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return URL(fileURLWithPath: override).standardizedFileURL
+    }
+
+    let companionID = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
+    if let installed = ManagedModelResolver.resolveInstalledModel(id: companionID) {
+        return installed
+    }
+
+    throw LTXUnifiedAVGeneratorError.ltx23TextEncoderMissing(companionID)
 }
 
 private func denoiseAVLoop(
@@ -3123,7 +3571,7 @@ private func denoiseAVLoop(
     audioCrossRope: (cos: MLXArray, sin: MLXArray),
     videoContext: MLXArray,
     audioContext: MLXArray,
-    transformer: LTXUnifiedAVTransformer,
+    transformer: any LTXUnifiedAVTransformerRuntime,
     sigmas: [Float],
     videoConditioning: LTXLatentConditioningState?
 ) -> (MLXArray, MLXArray) {
@@ -3158,10 +3606,12 @@ private func denoiseAVLoop(
             videoTimesteps = MLX.full([b, videoTokenCount], values: MLXArray(sigma).asType(dtype))
         }
         let audioTimesteps = MLX.full([ab, at], values: MLXArray(sigma).asType(dtype))
+        let globalTimestep = MLX.full([b], values: MLXArray(sigma).asType(dtype))
 
         let velocity = transformer.forward(
             videoLatent: flatVideo,
             audioLatent: flatAudio,
+            timestep: globalTimestep,
             videoTimesteps: videoTimesteps,
             audioTimesteps: audioTimesteps,
             videoContext: videoContext,
@@ -3238,7 +3688,23 @@ private func createAudioPositionGrid(
     return MLXArray(values).reshaped(batchSize, 1, audioFrames, 2).asType(.float32)
 }
 
-private final class LTXUnifiedAVTransformer: Module {
+private protocol LTXUnifiedAVTransformerRuntime: Module {
+    func forward(
+        videoLatent: MLXArray,
+        audioLatent: MLXArray,
+        timestep: MLXArray,
+        videoTimesteps: MLXArray?,
+        audioTimesteps: MLXArray?,
+        videoContext: MLXArray,
+        audioContext: MLXArray,
+        videoRope: (cos: MLXArray, sin: MLXArray),
+        audioRope: (cos: MLXArray, sin: MLXArray),
+        videoCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+    ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray)
+}
+
+private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRuntime {
     let videoDim = 4096
     let audioDim = 2048
     let videoHeads = 32
@@ -3290,6 +3756,35 @@ private final class LTXUnifiedAVTransformer: Module {
             LTXUnifiedAVTransformerBlock()
         }
         super.init()
+    }
+
+    func forward(
+        videoLatent: MLXArray,
+        audioLatent: MLXArray,
+        timestep _: MLXArray,
+        videoTimesteps: MLXArray?,
+        audioTimesteps: MLXArray?,
+        videoContext: MLXArray,
+        audioContext: MLXArray,
+        videoRope: (cos: MLXArray, sin: MLXArray),
+        audioRope: (cos: MLXArray, sin: MLXArray),
+        videoCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+    ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray) {
+        let videoSteps = videoTimesteps ?? MLX.zeros([videoLatent.dim(0), videoLatent.dim(1)], dtype: videoLatent.dtype)
+        let audioSteps = audioTimesteps ?? MLX.zeros([audioLatent.dim(0), audioLatent.dim(1)], dtype: audioLatent.dtype)
+        return forward(
+            videoLatent: videoLatent,
+            audioLatent: audioLatent,
+            videoTimesteps: videoSteps,
+            audioTimesteps: audioSteps,
+            videoContext: videoContext,
+            audioContext: audioContext,
+            videoRope: videoRope,
+            audioRope: audioRope,
+            videoCrossRope: videoCrossRope,
+            audioCrossRope: audioCrossRope
+        )
     }
 
     func forward(
@@ -3540,6 +4035,387 @@ private final class LTXUnifiedAVTransformerBlock: Module {
     }
 }
 
+private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRuntime {
+    let videoDim = 4096
+    let audioDim = 2048
+    let videoHeads = 32
+    let videoHeadDim = 128
+    let audioHeads = 32
+    let audioHeadDim = 64
+    let avCrossHeads = 32
+    let avCrossHeadDim = 64
+    let timestepScaleMultiplier: Float = 1000.0
+    let avCaTimestepScaleMultiplier: Float = 1000.0
+
+    @ModuleInfo(key: "patchify_proj") var patchifyProj: Linear
+    @ModuleInfo(key: "audio_patchify_proj") var audioPatchifyProj: Linear
+    @ModuleInfo(key: "proj_out") var projOut: Linear
+    @ModuleInfo(key: "audio_proj_out") var audioProjOut: Linear
+    @ModuleInfo(key: "scale_shift_table") var scaleShiftTable: MLXArray
+    @ModuleInfo(key: "audio_scale_shift_table") var audioScaleShiftTable: MLXArray
+    @ModuleInfo(key: "adaln_single") var adalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "audio_adaln_single") var audioAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "prompt_adaln_single") var promptAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "audio_prompt_adaln_single") var audioPromptAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "av_ca_video_scale_shift_adaln_single") var avCaVideoScaleShiftAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "av_ca_audio_scale_shift_adaln_single") var avCaAudioScaleShiftAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "av_ca_a2v_gate_adaln_single") var avCaA2VGateAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "av_ca_v2a_gate_adaln_single") var avCaV2AGateAdalnSingle: LTXAdaLayerNormSingle
+    @ModuleInfo(key: "transformer_blocks") var transformerBlocks: [LTXUnifiedAVTransformerV2Block]
+
+    @ModuleInfo(key: "norm_out") var normOut: LayerNorm
+    @ModuleInfo(key: "audio_norm_out") var audioNormOut: LayerNorm
+
+    override init() {
+        self._patchifyProj.wrappedValue = Linear(128, videoDim, bias: true)
+        self._audioPatchifyProj.wrappedValue = Linear(128, audioDim, bias: true)
+        self._projOut.wrappedValue = Linear(videoDim, 128, bias: true)
+        self._audioProjOut.wrappedValue = Linear(audioDim, 128, bias: true)
+        self._scaleShiftTable.wrappedValue = MLX.zeros([2, videoDim], dtype: .float32)
+        self._audioScaleShiftTable.wrappedValue = MLX.zeros([2, audioDim], dtype: .float32)
+        self._adalnSingle.wrappedValue = LTXAdaLayerNormSingle(embeddingDim: videoDim, embeddingCoefficient: 9)
+        self._audioAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(embeddingDim: audioDim, embeddingCoefficient: 9)
+        self._promptAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(embeddingDim: videoDim, embeddingCoefficient: 2)
+        self._audioPromptAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(
+            embeddingDim: audioDim,
+            embeddingCoefficient: 2
+        )
+        self._avCaVideoScaleShiftAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(
+            embeddingDim: videoDim,
+            embeddingCoefficient: 4
+        )
+        self._avCaAudioScaleShiftAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(
+            embeddingDim: audioDim,
+            embeddingCoefficient: 4
+        )
+        self._avCaA2VGateAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(
+            embeddingDim: videoDim,
+            embeddingCoefficient: 1
+        )
+        self._avCaV2AGateAdalnSingle.wrappedValue = LTXAdaLayerNormSingle(
+            embeddingDim: audioDim,
+            embeddingCoefficient: 1
+        )
+        self._transformerBlocks.wrappedValue = (0..<48).map { _ in
+            LTXUnifiedAVTransformerV2Block()
+        }
+        self._normOut.wrappedValue = LayerNorm(dimensions: videoDim, eps: 1e-6, affine: false)
+        self._audioNormOut.wrappedValue = LayerNorm(dimensions: audioDim, eps: 1e-6, affine: false)
+        super.init()
+    }
+
+    func forward(
+        videoLatent: MLXArray,
+        audioLatent: MLXArray,
+        timestep: MLXArray,
+        videoTimesteps: MLXArray?,
+        audioTimesteps: MLXArray?,
+        videoContext: MLXArray,
+        audioContext: MLXArray,
+        videoRope: (cos: MLXArray, sin: MLXArray),
+        audioRope: (cos: MLXArray, sin: MLXArray),
+        videoCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+    ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray) {
+        let videoBatch = videoLatent.dim(0)
+        let videoTokens = videoLatent.dim(1)
+        let audioBatch = audioLatent.dim(0)
+        let audioTokens = audioLatent.dim(1)
+
+        var videoX = patchifyProj(videoLatent.asType(.bfloat16))
+        var audioX = audioPatchifyProj(audioLatent.asType(.bfloat16))
+        let globalTimestep = timestep.asType(videoX.dtype).reshaped(-1)
+        let scaledGlobal = globalTimestep * MLXArray(timestepScaleMultiplier).asType(globalTimestep.dtype)
+        let scaledAVGate = globalTimestep * MLXArray(avCaTimestepScaleMultiplier).asType(globalTimestep.dtype)
+
+        let (videoAdalnParams, videoEmbedded): (MLXArray, MLXArray)
+        let (avCaVideoParams, _): (MLXArray, MLXArray)
+        if let videoTimesteps {
+            let scaled = videoTimesteps.asType(videoX.dtype) * MLXArray(timestepScaleMultiplier).asType(videoX.dtype)
+            let videoFlat = scaled.reshaped(-1)
+            let adaln = adalnSingle(timestep: videoFlat, hiddenDType: videoX.dtype)
+            videoAdalnParams = adaln.0.reshaped(videoBatch, videoTokens, -1)
+            videoEmbedded = adaln.1.reshaped(videoBatch, videoTokens, -1)
+            let avCa = avCaVideoScaleShiftAdalnSingle(timestep: videoFlat, hiddenDType: videoX.dtype)
+            avCaVideoParams = avCa.0.reshaped(videoBatch, videoTokens, -1)
+        } else {
+            (videoAdalnParams, videoEmbedded) = adalnSingle(timestep: scaledGlobal, hiddenDType: videoX.dtype)
+            (avCaVideoParams, _) = avCaVideoScaleShiftAdalnSingle(timestep: scaledGlobal, hiddenDType: videoX.dtype)
+        }
+
+        let (audioAdalnParams, audioEmbedded): (MLXArray, MLXArray)
+        let (avCaAudioParams, _): (MLXArray, MLXArray)
+        if let audioTimesteps {
+            let scaled = audioTimesteps.asType(audioX.dtype) * MLXArray(timestepScaleMultiplier).asType(audioX.dtype)
+            let audioFlat = scaled.reshaped(-1)
+            let adaln = audioAdalnSingle(timestep: audioFlat, hiddenDType: audioX.dtype)
+            audioAdalnParams = adaln.0.reshaped(audioBatch, audioTokens, -1)
+            audioEmbedded = adaln.1.reshaped(audioBatch, audioTokens, -1)
+            let avCa = avCaAudioScaleShiftAdalnSingle(timestep: audioFlat, hiddenDType: audioX.dtype)
+            avCaAudioParams = avCa.0.reshaped(audioBatch, audioTokens, -1)
+        } else {
+            (audioAdalnParams, audioEmbedded) = audioAdalnSingle(timestep: scaledGlobal, hiddenDType: audioX.dtype)
+            (avCaAudioParams, _) = avCaAudioScaleShiftAdalnSingle(timestep: scaledGlobal, hiddenDType: audioX.dtype)
+        }
+
+        let (avCaA2VGateParams, _) = avCaA2VGateAdalnSingle(timestep: scaledAVGate, hiddenDType: videoX.dtype)
+        let (avCaV2AGateParams, _) = avCaV2AGateAdalnSingle(timestep: scaledAVGate, hiddenDType: audioX.dtype)
+        let (videoPromptParams, _) = promptAdalnSingle(timestep: scaledGlobal, hiddenDType: videoX.dtype)
+        let (audioPromptParams, _) = audioPromptAdalnSingle(timestep: scaledGlobal, hiddenDType: audioX.dtype)
+
+        let evalEvery = Int(ProcessInfo.processInfo.environment["LTX2_DIT_EVAL_EVERY"] ?? "8") ?? 8
+        for (index, block) in transformerBlocks.enumerated() {
+            let out = block(
+                videoHidden: videoX,
+                audioHidden: audioX,
+                videoAdalnParams: videoAdalnParams,
+                audioAdalnParams: audioAdalnParams,
+                videoPromptAdalnParams: videoPromptParams,
+                audioPromptAdalnParams: audioPromptParams,
+                avCaVideoParams: avCaVideoParams,
+                avCaAudioParams: avCaAudioParams,
+                avCaA2VGateParams: avCaA2VGateParams,
+                avCaV2AGateParams: avCaV2AGateParams,
+                videoTextEmbeds: videoContext.asType(videoX.dtype),
+                audioTextEmbeds: audioContext.asType(audioX.dtype),
+                videoRope: videoRope,
+                audioRope: audioRope,
+                videoCrossRope: videoCrossRope,
+                audioCrossRope: audioCrossRope
+            )
+            videoX = out.video
+            audioX = out.audio
+            if evalEvery > 0 && (index + 1).isMultiple(of: evalEvery) {
+                MLX.eval(videoX, audioX)
+            }
+        }
+
+        let videoVelocity = outputBlock(
+            videoX,
+            embeddedTimestep: videoEmbedded,
+            table: scaleShiftTable,
+            norm: normOut,
+            projection: projOut,
+            dim: videoDim
+        )
+        let audioVelocity = outputBlock(
+            audioX,
+            embeddedTimestep: audioEmbedded,
+            table: audioScaleShiftTable,
+            norm: audioNormOut,
+            projection: audioProjOut,
+            dim: audioDim
+        )
+        return (videoVelocity, audioVelocity)
+    }
+
+    private func outputBlock(
+        _ x: MLXArray,
+        embeddedTimestep: MLXArray,
+        table: MLXArray,
+        norm: LayerNorm,
+        projection: Linear,
+        dim: Int
+    ) -> MLXArray {
+        let embedded = embeddedTimestep.ndim == 2
+            ? embeddedTimestep.expandedDimensions(axis: 1)
+            : embeddedTimestep
+        let scaleShift = table.reshaped(1, 1, 2, dim) + embedded.expandedDimensions(axis: 2)
+        let shift = scaleShift[0..., 0..., 0, 0...]
+        let scale = scaleShift[0..., 0..., 1, 0...]
+        var y = norm(x)
+        y = y * (MLXArray(1.0).asType(y.dtype) + scale) + shift
+        return projection(y)
+    }
+}
+
+private final class LTXUnifiedAVTransformerV2Block: Module {
+    let videoDim = 4096
+    let audioDim = 2048
+
+    @ModuleInfo(key: "attn1") var attn1: LTXDistilledAttention
+    @ModuleInfo(key: "audio_attn1") var audioAttn1: LTXDistilledAttention
+    @ModuleInfo(key: "attn2") var attn2: LTXDistilledAttention
+    @ModuleInfo(key: "audio_attn2") var audioAttn2: LTXDistilledAttention
+    @ModuleInfo(key: "audio_to_video_attn") var audioToVideoAttn: LTXDistilledAttention
+    @ModuleInfo(key: "video_to_audio_attn") var videoToAudioAttn: LTXDistilledAttention
+    @ModuleInfo(key: "ff") var ff: LTXDistilledFeedForward
+    @ModuleInfo(key: "audio_ff") var audioFF: LTXDistilledFeedForward
+    @ModuleInfo(key: "scale_shift_table") var scaleShiftTable: MLXArray
+    @ModuleInfo(key: "audio_scale_shift_table") var audioScaleShiftTable: MLXArray
+    @ModuleInfo(key: "prompt_scale_shift_table") var promptScaleShiftTable: MLXArray
+    @ModuleInfo(key: "audio_prompt_scale_shift_table") var audioPromptScaleShiftTable: MLXArray
+    @ModuleInfo(key: "scale_shift_table_a2v_ca_video") var scaleShiftTableA2VCAVideo: MLXArray
+    @ModuleInfo(key: "scale_shift_table_a2v_ca_audio") var scaleShiftTableA2VCAAudio: MLXArray
+
+    override init() {
+        self._attn1.wrappedValue = LTXDistilledAttention(
+            queryDim: videoDim,
+            contextDim: nil,
+            heads: 32,
+            headDim: 128,
+            normEps: 1e-6,
+            applyGatedAttention: true
+        )
+        self._audioAttn1.wrappedValue = LTXDistilledAttention(
+            queryDim: audioDim,
+            contextDim: nil,
+            heads: 32,
+            headDim: 64,
+            normEps: 1e-6,
+            applyGatedAttention: true
+        )
+        self._attn2.wrappedValue = LTXDistilledAttention(
+            queryDim: videoDim,
+            contextDim: videoDim,
+            heads: 32,
+            headDim: 128,
+            normEps: 1e-6,
+            applyGatedAttention: true
+        )
+        self._audioAttn2.wrappedValue = LTXDistilledAttention(
+            queryDim: audioDim,
+            contextDim: audioDim,
+            heads: 32,
+            headDim: 64,
+            normEps: 1e-6,
+            applyGatedAttention: true
+        )
+        self._audioToVideoAttn.wrappedValue = LTXDistilledAttention(
+            queryDim: videoDim,
+            contextDim: audioDim,
+            heads: 32,
+            headDim: 64,
+            normEps: 1e-6,
+            applyGatedAttention: true
+        )
+        self._videoToAudioAttn.wrappedValue = LTXDistilledAttention(
+            queryDim: audioDim,
+            contextDim: videoDim,
+            heads: 32,
+            headDim: 64,
+            normEps: 1e-6,
+            applyGatedAttention: true
+        )
+        self._ff.wrappedValue = LTXDistilledFeedForward(dim: videoDim, dimOut: videoDim, mult: 4)
+        self._audioFF.wrappedValue = LTXDistilledFeedForward(dim: audioDim, dimOut: audioDim, mult: 4)
+        self._scaleShiftTable.wrappedValue = MLX.zeros([9, videoDim], dtype: .float32)
+        self._audioScaleShiftTable.wrappedValue = MLX.zeros([9, audioDim], dtype: .float32)
+        self._promptScaleShiftTable.wrappedValue = MLX.zeros([2, videoDim], dtype: .float32)
+        self._audioPromptScaleShiftTable.wrappedValue = MLX.zeros([2, audioDim], dtype: .float32)
+        self._scaleShiftTableA2VCAVideo.wrappedValue = MLX.zeros([5, videoDim], dtype: .float32)
+        self._scaleShiftTableA2VCAAudio.wrappedValue = MLX.zeros([5, audioDim], dtype: .float32)
+        super.init()
+    }
+
+    func callAsFunction(
+        videoHidden: MLXArray,
+        audioHidden: MLXArray,
+        videoAdalnParams: MLXArray,
+        audioAdalnParams: MLXArray,
+        videoPromptAdalnParams: MLXArray,
+        audioPromptAdalnParams: MLXArray,
+        avCaVideoParams: MLXArray,
+        avCaAudioParams: MLXArray,
+        avCaA2VGateParams: MLXArray,
+        avCaV2AGateParams: MLXArray,
+        videoTextEmbeds: MLXArray,
+        audioTextEmbeds: MLXArray,
+        videoRope: (cos: MLXArray, sin: MLXArray),
+        audioRope: (cos: MLXArray, sin: MLXArray),
+        videoCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+    ) -> (video: MLXArray, audio: MLXArray) {
+        var video = videoHidden
+        var audio = audioHidden
+
+        let vAda = unpackAdaln(videoAdalnParams, table: scaleShiftTable, count: 9, dim: videoDim)
+        let aAda = unpackAdaln(audioAdalnParams, table: audioScaleShiftTable, count: 9, dim: audioDim)
+
+        var videoNorm = rmsNormNoWeight(video)
+        videoNorm = videoNorm * (MLXArray(1.0).asType(videoNorm.dtype) + vAda[1]) + vAda[0]
+        video = video + attn1(videoNorm, context: nil, mask: nil, rope: videoRope) * vAda[2]
+
+        var audioNorm = rmsNormNoWeight(audio)
+        audioNorm = audioNorm * (MLXArray(1.0).asType(audioNorm.dtype) + aAda[1]) + aAda[0]
+        audio = audio + audioAttn1(audioNorm, context: nil, mask: nil, rope: audioRope) * aAda[2]
+
+        let vPromptAda = unpackAdaln(videoPromptAdalnParams, table: promptScaleShiftTable, count: 2, dim: videoDim)
+        let videoText = videoTextEmbeds * (MLXArray(1.0).asType(videoTextEmbeds.dtype) + vPromptAda[1]) + vPromptAda[0]
+        var videoCrossNorm = rmsNormNoWeight(video)
+        videoCrossNorm = videoCrossNorm * (MLXArray(1.0).asType(videoCrossNorm.dtype) + vAda[7]) + vAda[6]
+        video = video + attn2(videoCrossNorm, context: videoText, mask: nil, rope: nil) * vAda[8]
+
+        let aPromptAda = unpackAdaln(
+            audioPromptAdalnParams,
+            table: audioPromptScaleShiftTable,
+            count: 2,
+            dim: audioDim
+        )
+        let audioText = audioTextEmbeds * (MLXArray(1.0).asType(audioTextEmbeds.dtype) + aPromptAda[1]) + aPromptAda[0]
+        var audioCrossNorm = rmsNormNoWeight(audio)
+        audioCrossNorm = audioCrossNorm * (MLXArray(1.0).asType(audioCrossNorm.dtype) + aAda[7]) + aAda[6]
+        audio = audio + audioAttn2(audioCrossNorm, context: audioText, mask: nil, rope: nil) * aAda[8]
+
+        let videoNorm3 = rmsNormNoWeight(video)
+        let audioNorm3 = rmsNormNoWeight(audio)
+        let vAV = unpackAdaln(avCaVideoParams, table: scaleShiftTableA2VCAVideo, count: 4, dim: videoDim)
+        let aAV = unpackAdaln(avCaAudioParams, table: scaleShiftTableA2VCAAudio, count: 4, dim: audioDim)
+        let a2vGate = unpackAVGate(avCaA2VGateParams, table: scaleShiftTableA2VCAVideo, dim: videoDim)
+        let v2aGate = unpackAVGate(avCaV2AGateParams, table: scaleShiftTableA2VCAAudio, dim: audioDim)
+
+        let videoQA2V = videoNorm3 * (MLXArray(1.0).asType(videoNorm3.dtype) + vAV[0]) + vAV[1]
+        let audioKVA2V = audioNorm3 * (MLXArray(1.0).asType(audioNorm3.dtype) + aAV[0]) + aAV[1]
+        video = video + audioToVideoAttn(
+            videoQA2V,
+            context: audioKVA2V,
+            mask: nil,
+            rope: videoCrossRope,
+            keyRope: audioCrossRope
+        ) * a2vGate
+
+        let audioQV2A = audioNorm3 * (MLXArray(1.0).asType(audioNorm3.dtype) + aAV[2]) + aAV[3]
+        let videoKVV2A = videoNorm3 * (MLXArray(1.0).asType(videoNorm3.dtype) + vAV[2]) + vAV[3]
+        audio = audio + videoToAudioAttn(
+            audioQV2A,
+            context: videoKVV2A,
+            mask: nil,
+            rope: audioCrossRope,
+            keyRope: videoCrossRope
+        ) * v2aGate
+
+        var videoFFNorm = rmsNormNoWeight(video)
+        videoFFNorm = videoFFNorm * (MLXArray(1.0).asType(videoFFNorm.dtype) + vAda[4]) + vAda[3]
+        video = video + ff(videoFFNorm) * vAda[5]
+
+        var audioFFNorm = rmsNormNoWeight(audio)
+        audioFFNorm = audioFFNorm * (MLXArray(1.0).asType(audioFFNorm.dtype) + aAda[4]) + aAda[3]
+        audio = audio + audioFF(audioFFNorm) * aAda[5]
+
+        return (video, audio)
+    }
+
+    private func unpackAdaln(_ params: MLXArray, table: MLXArray, count: Int, dim: Int) -> [MLXArray] {
+        if params.ndim == 2 {
+            let values = params.reshaped(-1, count, dim) + table[0..<count, 0...].reshaped(1, count, dim)
+            return (0..<count).map { values[0..., $0, 0...].expandedDimensions(axis: 1) }
+        }
+
+        let batch = params.dim(0)
+        let tokens = params.dim(1)
+        let values = params.reshaped(batch, tokens, count, dim)
+            + table[0..<count, 0...].reshaped(1, 1, count, dim)
+        return (0..<count).map { values[0..., 0..., $0, 0...] }
+    }
+
+    private func unpackAVGate(_ params: MLXArray, table: MLXArray, dim: Int) -> MLXArray {
+        if params.ndim == 2 {
+            return (params + table[4, 0...]).expandedDimensions(axis: 1)
+        }
+        return params + table[4, 0...].reshaped(1, 1, dim)
+    }
+}
+
 private func mapUnifiedTransformerWeight(
     key: String,
     value: MLXArray,
@@ -3562,6 +4438,42 @@ private func mapUnifiedTransformerWeight(
         || mapped.hasPrefix("audio_embeddings_connector")
         || mapped.hasPrefix("text_embedding_projection")
     {
+        return []
+    }
+
+    var casted = value
+    if casted.dtype.isFloatingPoint && casted.dtype != dtype {
+        casted = casted.asType(dtype)
+    }
+    return [(mapped, casted)]
+}
+
+func mapLTX23UnifiedTransformerWeight(
+    key: String,
+    value: MLXArray,
+    dtype: DType
+) -> [(String, MLXArray)] {
+    guard key.hasPrefix("transformer.") else {
+        return []
+    }
+
+    var mapped = String(key.dropFirst("transformer.".count))
+    mapped = mapped.replacingOccurrences(of: ".to_out.0.", with: ".to_out.")
+    mapped = mapped.replacingOccurrences(of: ".ff.net.0.proj.", with: ".ff.proj_in.")
+    mapped = mapped.replacingOccurrences(of: ".ff.net.2.", with: ".ff.proj_out.")
+    mapped = mapped.replacingOccurrences(of: ".audio_ff.net.0.proj.", with: ".audio_ff.proj_in.")
+    mapped = mapped.replacingOccurrences(of: ".audio_ff.net.2.", with: ".audio_ff.proj_out.")
+    mapped = mapped.replacingOccurrences(of: ".linear_1.", with: ".linear1.")
+    mapped = mapped.replacingOccurrences(of: ".linear_2.", with: ".linear2.")
+
+    let ignoredPrefixes = [
+        "text_embedding_projection",
+        "video_embeddings_connector",
+        "audio_embeddings_connector",
+        "caption_projection",
+        "audio_caption_projection",
+    ]
+    if ignoredPrefixes.contains(where: { mapped.hasPrefix($0) }) {
         return []
     }
 
@@ -3864,21 +4776,26 @@ private final class LTXAudioDecoder: Module {
         var patched = patchifier.patchify(sample)
         patched = perChannelStatistics.unNormalize(patched)
         sample = patchifier.unpatchify(patched, channels: originalChannels, melBins: originalMelBins)
+        saveLTXAVDebugArray(sample, suffix: "audio_decoder_denormalized")
 
         var targetFrames = originalFrames * LTXAudioLatentDownsampleFactor
         targetFrames = max(1, targetFrames - (LTXAudioLatentDownsampleFactor - 1))
         let targetMelBins = outputMelBins
 
         var h = convIn(sample)
+        saveLTXAVDebugArray(h, suffix: "audio_decoder_conv_in")
         h = mid(h)
+        saveLTXAVDebugArray(h, suffix: "audio_decoder_mid")
 
         for level in stride(from: up.count - 1, through: 0, by: -1) {
             h = up[level](h)
+            saveLTXAVDebugArray(h, suffix: "audio_decoder_up_\(level)")
         }
 
         h = normOut(h)
         h = silu(h)
         h = convOut(h)
+        saveLTXAVDebugArray(h, suffix: "audio_decoder_conv_out")
 
         let croppedFrames = min(h.dim(1), targetFrames)
         let croppedMels = min(h.dim(2), targetMelBins)
@@ -3903,24 +4820,30 @@ private final class LTXAudioDecoder: Module {
     }
 }
 
-private func mapAudioVaeDecoderWeight(
+func mapAudioVaeDecoderWeight(
     key: String,
     value: MLXArray,
-    dtype: DType
+    dtype: DType,
+    sourceLayout: LTXTensorWeightLayout = .pytorch
 ) -> [(String, MLXArray)] {
     var mapped: String
     if key.hasPrefix("audio_vae.decoder.") {
         mapped = String(key.dropFirst("audio_vae.decoder.".count))
-    } else if key == "audio_vae.per_channel_statistics.mean-of-means" {
+    } else if key == "audio_vae.per_channel_statistics.mean-of-means"
+        || key == "audio_vae.per_channel_statistics._mean_of_means" {
         mapped = "per_channel_statistics._mean_of_means"
-    } else if key == "audio_vae.per_channel_statistics.std-of-means" {
+    } else if key == "audio_vae.per_channel_statistics.std-of-means"
+        || key == "audio_vae.per_channel_statistics._std_of_means" {
         mapped = "per_channel_statistics._std_of_means"
     } else {
         return []
     }
 
     var casted = value
-    if mapped.lowercased().contains("conv"), mapped.hasSuffix("weight"), casted.ndim == 4 {
+    if sourceLayout == .pytorch,
+       mapped.lowercased().contains("conv"),
+       mapped.hasSuffix("weight"),
+       casted.ndim == 4 {
         casted = casted.transposed(0, 2, 3, 1)
     }
     if casted.dtype.isFloatingPoint && casted.dtype != dtype {
@@ -3933,7 +4856,527 @@ private func ltxLeakyRelu(_ x: MLXArray, slope: Float) -> MLXArray {
     MLX.maximum(x, x * MLXArray(slope).asType(x.dtype))
 }
 
-private final class LTXVocoderResBlock1: Module {
+enum LTXVocoderFlavor: Equatable {
+    case legacy
+    case bandwidthExtension
+}
+
+func detectLTXVocoderFlavor<S: Sequence>(keys: S) -> LTXVocoderFlavor where S.Element == String {
+    for key in keys {
+        if key.hasPrefix("vocoder.bwe_generator.")
+            || key.hasPrefix("vocoder.mel_stft.")
+            || key.hasPrefix("vocoder.vocoder.") {
+            return .bandwidthExtension
+        }
+    }
+    return .legacy
+}
+
+enum LTXVocoderWeightLayout: Equatable {
+    case pytorch
+    case mlx
+}
+
+enum LTXVocoderResBlockKind: Equatable {
+    case legacy
+    case amp
+}
+
+enum LTXVocoderActivationKind: Equatable {
+    case leaky
+    case snake
+    case snakeBeta
+}
+
+struct LTXVocoderArchitectureConfig: Equatable {
+    let inputChannels: Int
+    let outputChannels: Int
+    let upsampleInitialChannels: Int
+    let upsampleRates: [Int]
+    let upsampleKernelSizes: [Int]
+    let resblockKernelSizes: [Int]
+    let resblockDilationSizes: [[Int]]
+    let blockKind: LTXVocoderResBlockKind
+    let activation: LTXVocoderActivationKind
+    let applyFinalActivation: Bool
+    let useTanhAtFinal: Bool
+    let useBiasAtFinal: Bool
+
+    static let legacy = LTXVocoderArchitectureConfig(
+        inputChannels: 128,
+        outputChannels: 2,
+        upsampleInitialChannels: 1024,
+        upsampleRates: [6, 5, 2, 2, 2],
+        upsampleKernelSizes: [16, 15, 8, 4, 4],
+        resblockKernelSizes: [3, 7, 11],
+        resblockDilationSizes: [[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        blockKind: .legacy,
+        activation: .leaky,
+        applyFinalActivation: true,
+        useTanhAtFinal: true,
+        useBiasAtFinal: true
+    )
+
+    static let defaultBWEBase = LTXVocoderArchitectureConfig(
+        inputChannels: 128,
+        outputChannels: 2,
+        upsampleInitialChannels: 1024,
+        upsampleRates: [6, 5, 2, 2, 2],
+        upsampleKernelSizes: [16, 15, 8, 4, 4],
+        resblockKernelSizes: [3, 7, 11],
+        resblockDilationSizes: [[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        blockKind: .amp,
+        activation: .snakeBeta,
+        applyFinalActivation: true,
+        useTanhAtFinal: true,
+        useBiasAtFinal: true
+    )
+
+    static let defaultBWEGenerator = LTXVocoderArchitectureConfig(
+        inputChannels: 128,
+        outputChannels: 2,
+        upsampleInitialChannels: 1024,
+        upsampleRates: [6, 5, 2, 2, 2],
+        upsampleKernelSizes: [16, 15, 8, 4, 4],
+        resblockKernelSizes: [3, 7, 11],
+        resblockDilationSizes: [[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        blockKind: .amp,
+        activation: .snakeBeta,
+        applyFinalActivation: false,
+        useTanhAtFinal: true,
+        useBiasAtFinal: true
+    )
+}
+
+struct LTXBWEVocoderRuntimeConfig {
+    let inputSamplingRate: Int
+    let outputSamplingRate: Int
+    let hopLength: Int
+    let filterLength: Int
+    let melChannels: Int
+    let baseVocoder: LTXVocoderArchitectureConfig
+    let bandwidthExtensionVocoder: LTXVocoderArchitectureConfig
+}
+
+private struct LTXVocoderModelConfig: Decodable {
+    let upsampleInitialChannels: Int?
+    let resblock: String?
+    let upsampleRates: [Int]?
+    let resblockKernelSizes: [Int]?
+    let upsampleKernelSizes: [Int]?
+    let resblockDilationSizes: [[Int]]?
+    let useTanhAtFinal: Bool?
+    let activation: String?
+    let useBiasAtFinal: Bool?
+    let applyFinalActivation: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case upsampleInitialChannels = "upsample_initial_channel"
+        case resblock
+        case upsampleRates = "upsample_rates"
+        case resblockKernelSizes = "resblock_kernel_sizes"
+        case upsampleKernelSizes = "upsample_kernel_sizes"
+        case resblockDilationSizes = "resblock_dilation_sizes"
+        case useTanhAtFinal = "use_tanh_at_final"
+        case activation
+        case useBiasAtFinal = "use_bias_at_final"
+        case applyFinalActivation = "apply_final_activation"
+    }
+
+    func runtimeArchitecture(
+        defaultArchitecture: LTXVocoderArchitectureConfig
+    ) -> LTXVocoderArchitectureConfig {
+        let blockKind: LTXVocoderResBlockKind = switch resblock?.lowercased() {
+        case "amp1", "amp":
+            .amp
+        default:
+            defaultArchitecture.blockKind
+        }
+        let activationKind: LTXVocoderActivationKind = switch activation?.lowercased() {
+        case "snake":
+            .snake
+        case "snakebeta", "snake_beta":
+            .snakeBeta
+        default:
+            defaultArchitecture.activation
+        }
+        return LTXVocoderArchitectureConfig(
+            inputChannels: defaultArchitecture.inputChannels,
+            outputChannels: defaultArchitecture.outputChannels,
+            upsampleInitialChannels: upsampleInitialChannels ?? defaultArchitecture.upsampleInitialChannels,
+            upsampleRates: upsampleRates ?? defaultArchitecture.upsampleRates,
+            upsampleKernelSizes: upsampleKernelSizes ?? defaultArchitecture.upsampleKernelSizes,
+            resblockKernelSizes: resblockKernelSizes ?? defaultArchitecture.resblockKernelSizes,
+            resblockDilationSizes: resblockDilationSizes ?? defaultArchitecture.resblockDilationSizes,
+            blockKind: blockKind,
+            activation: activationKind,
+            applyFinalActivation: applyFinalActivation ?? defaultArchitecture.applyFinalActivation,
+            useTanhAtFinal: useTanhAtFinal ?? defaultArchitecture.useTanhAtFinal,
+            useBiasAtFinal: useBiasAtFinal ?? defaultArchitecture.useBiasAtFinal
+        )
+    }
+
+    var hasArchitectureFields: Bool {
+        upsampleInitialChannels != nil
+            || resblock != nil
+            || upsampleRates != nil
+            || resblockKernelSizes != nil
+            || upsampleKernelSizes != nil
+            || resblockDilationSizes != nil
+            || useTanhAtFinal != nil
+            || activation != nil
+            || useBiasAtFinal != nil
+            || applyFinalActivation != nil
+    }
+}
+
+private struct LTXBWEVocoderConfig: Decodable {
+    let inputSamplingRate: Int
+    let outputSamplingRate: Int
+    let hopLength: Int
+    let filterLength: Int
+    let winLength: Int?
+    let melChannels: Int
+    let modelConfig: LTXVocoderModelConfig
+
+    private enum CodingKeys: String, CodingKey {
+        case inputSamplingRate = "input_sampling_rate"
+        case outputSamplingRate = "output_sampling_rate"
+        case hopLength = "hop_length"
+        case filterLength = "n_fft"
+        case winLength = "win_size"
+        case melChannels = "num_mels"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        inputSamplingRate = try container.decode(Int.self, forKey: .inputSamplingRate)
+        outputSamplingRate = try container.decode(Int.self, forKey: .outputSamplingRate)
+        hopLength = try container.decode(Int.self, forKey: .hopLength)
+        filterLength = try container.decode(Int.self, forKey: .filterLength)
+        winLength = try container.decodeIfPresent(Int.self, forKey: .winLength)
+        melChannels = try container.decode(Int.self, forKey: .melChannels)
+        modelConfig = try LTXVocoderModelConfig(from: decoder)
+    }
+
+    func runtimeConfig(baseVocoder: LTXVocoderArchitectureConfig?) -> LTXBWEVocoderRuntimeConfig {
+        LTXBWEVocoderRuntimeConfig(
+            inputSamplingRate: inputSamplingRate,
+            outputSamplingRate: outputSamplingRate,
+            hopLength: hopLength,
+            filterLength: winLength ?? filterLength,
+            melChannels: melChannels,
+            baseVocoder: baseVocoder ?? .defaultBWEBase,
+            bandwidthExtensionVocoder: modelConfig.runtimeArchitecture(defaultArchitecture: .defaultBWEGenerator)
+        )
+    }
+}
+
+private struct LTXVocoderConfigEnvelope: Decodable {
+    let baseVocoder: LTXVocoderModelConfig?
+    let bwe: LTXBWEVocoderConfig?
+
+    private enum CodingKeys: String, CodingKey {
+        case vocoder
+        case bwe
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let topLevelBWE = try container.decodeIfPresent(LTXBWEVocoderConfig.self, forKey: .bwe)
+
+        var resolvedBase: LTXVocoderModelConfig?
+        var resolvedBWE = topLevelBWE
+
+        if let directBase = try? container.decodeIfPresent(LTXVocoderModelConfig.self, forKey: .vocoder),
+           directBase.hasArchitectureFields {
+            resolvedBase = directBase
+        }
+
+        if let nested = try? container.decodeIfPresent(LTXVocoderConfigNode.self, forKey: .vocoder) {
+            if let nestedBase = nested.vocoder, nestedBase.hasArchitectureFields {
+                resolvedBase = nestedBase
+            }
+            if resolvedBWE == nil {
+                resolvedBWE = nested.bwe
+            }
+        }
+
+        self.baseVocoder = resolvedBase
+        self.bwe = resolvedBWE
+    }
+}
+
+private struct LTXVocoderConfigNode: Decodable {
+    let vocoder: LTXVocoderModelConfig?
+    let bwe: LTXBWEVocoderConfig?
+}
+
+func loadLTXBWEVocoderConfig(modelRoot: URL) throws -> LTXBWEVocoderRuntimeConfig? {
+    let candidates = [
+        modelRoot.appendingPathComponent("vocoder/config.json", isDirectory: false),
+        modelRoot.appendingPathComponent("embedded_config.json", isDirectory: false),
+        modelRoot.appendingPathComponent("config.json", isDirectory: false),
+        modelRoot.appendingPathComponent("audio_vae/config.json", isDirectory: false),
+    ]
+    let decoder = JSONDecoder()
+
+    for url in candidates where FileManager.default.fileExists(atPath: url.path) {
+        let data = try Data(contentsOf: url)
+        if let direct = try? decoder.decode(LTXBWEVocoderConfig.self, from: data) {
+            return direct.runtimeConfig(baseVocoder: nil)
+        }
+        if let envelope = try? decoder.decode(LTXVocoderConfigEnvelope.self, from: data) {
+            if let bwe = envelope.bwe {
+                let base = envelope.baseVocoder?.runtimeArchitecture(defaultArchitecture: .defaultBWEBase)
+                return bwe.runtimeConfig(baseVocoder: base)
+            }
+        }
+    }
+
+    return nil
+}
+
+private class LTXAudioVocoderBase: Module {
+    let outputSamplingRate: Int
+
+    init(outputSamplingRate: Int) {
+        self.outputSamplingRate = outputSamplingRate
+    }
+
+    func callAsFunction(_ mel: MLXArray) -> MLXArray {
+        preconditionFailure("LTXAudioVocoderBase must be subclassed.")
+    }
+}
+
+private class LTXVocoderResidualBlock: Module {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        preconditionFailure("LTXVocoderResidualBlock must be subclassed.")
+    }
+}
+
+private final class LTXVocoderSnake: Module {
+    @ModuleInfo(key: "alpha") var alpha: MLXArray
+    @ModuleInfo(key: "beta") var beta: MLXArray?
+
+    init(channels: Int, hasBeta: Bool) {
+        self._alpha.wrappedValue = MLXArray.zeros([channels])
+        self._beta.wrappedValue = hasBeta ? MLXArray.zeros([channels]) : nil
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        let alphaValue = MLX.exp(alpha.asType(x.dtype)).reshaped(1, 1, -1)
+        let betaValue = (beta.map { MLX.exp($0.asType(x.dtype)).reshaped(1, 1, -1) } ?? alphaValue)
+        let sine = MLX.sin(x * alphaValue)
+        return x + (sine * sine) / (betaValue + MLXArray(1e-9).asType(x.dtype))
+    }
+}
+
+private func ltxBesselI0(_ value: Double) -> Double {
+    var sum = 1.0
+    var term = 1.0
+    let scaled = (value * value) / 4.0
+    for index in 1...24 {
+        term *= scaled / Double(index * index)
+        sum += term
+        if term < 1e-12 {
+            break
+        }
+    }
+    return sum
+}
+
+private func ltxSinc(_ value: Float) -> Float {
+    if abs(value) < 1e-8 {
+        return 1.0
+    }
+    return sin(Float.pi * value) / (Float.pi * value)
+}
+
+private func ltxKaiserWindow(kernelSize: Int, beta: Float) -> [Float] {
+    guard kernelSize > 1 else { return [1.0] }
+    let denominator = ltxBesselI0(Double(beta))
+    return (0..<kernelSize).map { index in
+        let ratio = (2.0 * Double(index)) / Double(kernelSize - 1) - 1.0
+        let value = Double(beta) * sqrt(max(0.0, 1.0 - ratio * ratio))
+        return Float(ltxBesselI0(value) / denominator)
+    }
+}
+
+private func ltxKaiserSincFilter1d(cutoff: Float, halfWidth: Float, kernelSize: Int) -> [Float] {
+    let even = kernelSize.isMultiple(of: 2)
+    let halfSize = kernelSize / 2
+    let deltaF = 4.0 * halfWidth
+    let amplitude = 2.285 * Float(halfSize - 1) * Float.pi * deltaF + 7.95
+    let beta: Float
+    if amplitude > 50.0 {
+        beta = 0.1102 * (amplitude - 8.7)
+    } else if amplitude >= 21.0 {
+        beta = 0.5842 * pow(amplitude - 21.0, 0.4) + 0.07886 * (amplitude - 21.0)
+    } else {
+        beta = 0.0
+    }
+
+    let window = ltxKaiserWindow(kernelSize: kernelSize, beta: beta)
+    guard cutoff != 0 else {
+        return [Float](repeating: 0, count: kernelSize)
+    }
+
+    var filter = [Float](repeating: 0, count: kernelSize)
+    for index in 0..<kernelSize {
+        let time = even ? Float(index - halfSize) + 0.5 : Float(index - halfSize)
+        filter[index] = 2.0 * cutoff * window[index] * ltxSinc(2.0 * cutoff * time)
+    }
+
+    let total = filter.reduce(0, +)
+    if total != 0 {
+        filter = filter.map { $0 / total }
+    }
+    return filter
+}
+
+private func ltxHannSincFilter1d(ratio: Int) -> [Float] {
+    let rolloff: Float = 0.99
+    let lowpassFilterWidth: Float = 6.0
+    let width = Int(ceil(lowpassFilterWidth / rolloff))
+    let kernelSize = 2 * width * ratio + 1
+    return (0..<kernelSize).map { index in
+        let timeAxis = (Float(index) / Float(ratio) - Float(width)) * rolloff
+        let clamped = min(lowpassFilterWidth, max(-lowpassFilterWidth, timeAxis))
+        let window = pow(cos(clamped * Float.pi / lowpassFilterWidth / 2.0), 2.0)
+        return ltxSinc(timeAxis) * window * rolloff / Float(ratio)
+    }
+}
+
+private final class LTXLowPassFilter1d: Module {
+    @ModuleInfo(key: "filter") var filter: MLXArray
+    let kernelSize: Int
+    let padLeft: Int
+    let padRight: Int
+    let stride: Int
+
+    init(ratio: Int) {
+        self.kernelSize = Int(6 * ratio / 2) * 2
+        self.padLeft = kernelSize / 2 - (kernelSize.isMultiple(of: 2) ? 1 : 0)
+        self.padRight = kernelSize / 2
+        self.stride = ratio
+        let values = ltxKaiserSincFilter1d(
+            cutoff: 0.5 / Float(ratio),
+            halfWidth: 0.6 / Float(ratio),
+            kernelSize: kernelSize
+        )
+        self._filter.wrappedValue = MLXArray(values).reshaped(1, kernelSize, 1)
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        let channels = x.dim(2)
+        let paddedInput = padded(
+            x,
+            widths: [[0, 0], [padLeft, padRight], [0, 0]],
+            mode: .edge
+        )
+        let weights = broadcast(filter.asType(x.dtype), to: [channels, kernelSize, 1])
+        return MLX.conv1d(paddedInput, weights, stride: stride, padding: 0, groups: channels)
+    }
+}
+
+final class LTXSincUpsample1d: Module {
+    @ModuleInfo(key: "filter") var filter: MLXArray
+    let ratio: Int
+    let kernelSize: Int
+    let pad: Int
+    let padLeft: Int
+    let padRight: Int
+
+    init(ratio: Int, windowType: String = "kaiser") {
+        self.ratio = ratio
+        let values: [Float]
+        if windowType == "hann" {
+            values = ltxHannSincFilter1d(ratio: ratio)
+            self.kernelSize = values.count
+            let width = Int(ceil(6.0 / 0.99))
+            self.pad = width
+            self.padLeft = 2 * width * ratio
+            self.padRight = kernelSize - ratio
+        } else {
+            self.kernelSize = Int(6 * ratio / 2) * 2
+            self.pad = kernelSize / ratio - 1
+            self.padLeft = pad * ratio + (kernelSize - ratio) / 2
+            self.padRight = pad * ratio + (kernelSize - ratio + 1) / 2
+            values = ltxKaiserSincFilter1d(
+                cutoff: 0.5 / Float(ratio),
+                halfWidth: 0.6 / Float(ratio),
+                kernelSize: kernelSize
+            )
+        }
+        self._filter.wrappedValue = MLXArray(values).reshaped(1, kernelSize, 1)
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        let channels = x.dim(2)
+        let paddedInput = padded(
+            x,
+            widths: [[0, 0], [pad, pad], [0, 0]],
+            mode: .edge
+        )
+        let paddedLength = paddedInput.dim(1)
+        let upsampledLength = (paddedLength - 1) * ratio + 1
+        let zeroTail = MLX.zeros([paddedInput.dim(0), paddedLength, max(0, ratio - 1), channels], dtype: x.dtype)
+        let expanded = MLX.concatenated([paddedInput.expandedDimensions(axis: 2), zeroTail], axis: 2)
+            .reshaped(paddedInput.dim(0), paddedLength * ratio, channels)
+        let upsampled = expanded[0..., 0..<upsampledLength, 0...]
+
+        let convInput = padded(
+            upsampled,
+            widths: [[0, 0], [kernelSize - 1, kernelSize - 1], [0, 0]]
+        )
+        let weights = broadcast(filter.asType(x.dtype), to: [channels, kernelSize, 1])
+        let filtered = MLX.conv1d(
+            convInput,
+            weights,
+            stride: 1,
+            padding: 0,
+            groups: channels
+        ) * MLXArray(Float(ratio)).asType(x.dtype)
+        let end = max(padLeft, filtered.dim(1) - padRight)
+        return filtered[0..., padLeft..<end, 0...]
+    }
+}
+
+private final class LTXVocoderActivation1d: Module {
+    @ModuleInfo(key: "act") var act: LTXVocoderSnake?
+    @ModuleInfo(key: "upsample") var upsample: LTXSincUpsample1d
+    @ModuleInfo(key: "downsample") var downsample: LTXLowPassFilter1d
+    let kind: LTXVocoderActivationKind
+
+    init(channels: Int, kind: LTXVocoderActivationKind) {
+        self.kind = kind
+        switch kind {
+        case .leaky:
+            self._act.wrappedValue = nil
+        case .snake:
+            self._act.wrappedValue = LTXVocoderSnake(channels: channels, hasBeta: false)
+        case .snakeBeta:
+            self._act.wrappedValue = LTXVocoderSnake(channels: channels, hasBeta: true)
+        }
+        self._upsample.wrappedValue = LTXSincUpsample1d(ratio: 2)
+        self._downsample.wrappedValue = LTXLowPassFilter1d(ratio: 2)
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        switch kind {
+        case .leaky:
+            return ltxLeakyRelu(x, slope: 0.1)
+        case .snake, .snakeBeta:
+            guard let act else { return x }
+            var h = upsample(x)
+            h = act(h)
+            return downsample(h)
+        }
+    }
+}
+
+private final class LTXVocoderResBlock1: LTXVocoderResidualBlock {
     @ModuleInfo(key: "convs1") var convs1: [Conv1d]
     @ModuleInfo(key: "convs2") var convs2: [Conv1d]
 
@@ -3964,7 +5407,7 @@ private final class LTXVocoderResBlock1: Module {
         }
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    override func callAsFunction(_ x: MLXArray) -> MLXArray {
         var out = x
         for idx in 0..<convs1.count {
             var h = ltxLeakyRelu(out, slope: 0.1)
@@ -3977,23 +5420,92 @@ private final class LTXVocoderResBlock1: Module {
     }
 }
 
-private final class LTXVocoder: Module {
+private final class LTXVocoderAMPBlock1: LTXVocoderResidualBlock {
+    @ModuleInfo(key: "convs1") var convs1: [Conv1d]
+    @ModuleInfo(key: "convs2") var convs2: [Conv1d]
+    @ModuleInfo(key: "acts1") var acts1: [LTXVocoderActivation1d]
+    @ModuleInfo(key: "acts2") var acts2: [LTXVocoderActivation1d]
+
+    init(channels: Int, kernelSize: Int, dilations: [Int], activation: LTXVocoderActivationKind) {
+        self._convs1.wrappedValue = dilations.map { dilation in
+            Conv1d(
+                inputChannels: channels,
+                outputChannels: channels,
+                kernelSize: kernelSize,
+                stride: 1,
+                padding: ((kernelSize - 1) * dilation) / 2,
+                dilation: dilation,
+                groups: 1,
+                bias: true
+            )
+        }
+        self._convs2.wrappedValue = dilations.map { _ in
+            Conv1d(
+                inputChannels: channels,
+                outputChannels: channels,
+                kernelSize: kernelSize,
+                stride: 1,
+                padding: (kernelSize - 1) / 2,
+                dilation: 1,
+                groups: 1,
+                bias: true
+            )
+        }
+        self._acts1.wrappedValue = dilations.map { _ in
+            LTXVocoderActivation1d(channels: channels, kind: activation)
+        }
+        self._acts2.wrappedValue = dilations.map { _ in
+            LTXVocoderActivation1d(channels: channels, kind: activation)
+        }
+    }
+
+    override func callAsFunction(_ x: MLXArray) -> MLXArray {
+        var out = x
+        for idx in 0..<convs1.count {
+            var h = acts1[idx](out)
+            h = convs1[idx](h)
+            h = acts2[idx](h)
+            h = convs2[idx](h)
+            out = out + h
+        }
+        return out
+    }
+}
+
+private final class LTXVocoder: LTXAudioVocoderBase {
     @ModuleInfo(key: "conv_pre") var convPre: Conv1d
     @ModuleInfo(key: "ups") var ups: [ConvTransposed1d]
-    @ModuleInfo(key: "resblocks") var resBlocks: [LTXVocoderResBlock1]
+    @ModuleInfo(key: "resblocks") var resBlocks: [LTXVocoderResidualBlock]
+    @ModuleInfo(key: "act_post") var actPost: LTXVocoderActivation1d?
     @ModuleInfo(key: "conv_post") var convPost: Conv1d
 
-    let numKernels = 3
+    let numKernels: Int
+    let blockKind: LTXVocoderResBlockKind
+    let applyFinalActivation: Bool
+    let useTanhAtFinal: Bool
 
-    override init() {
-        let upsampleRates = [6, 5, 2, 2, 2]
-        let upsampleKernelSizes = [16, 15, 8, 4, 4]
-        let resblockKernelSizes = [3, 7, 11]
-        let resblockDilations = [1, 3, 5]
-        let upsampleInitialChannels = 1024
+    init(
+        blockKind: LTXVocoderResBlockKind = .legacy,
+        outputSamplingRate: Int = LTXAudioSampleRate,
+        activation: LTXVocoderActivationKind = .leaky,
+        applyFinalActivation: Bool = true,
+        useTanhAtFinal: Bool = true,
+        useBiasAtFinal: Bool = true,
+        inputChannels: Int = 128,
+        outputChannels: Int = 2,
+        upsampleInitialChannels: Int = 1024,
+        upsampleRates: [Int] = [6, 5, 2, 2, 2],
+        upsampleKernelSizes: [Int] = [16, 15, 8, 4, 4],
+        resblockKernelSizes: [Int] = [3, 7, 11],
+        resblockDilationSizes: [[Int]] = [[1, 3, 5], [1, 3, 5], [1, 3, 5]]
+    ) {
+        self.blockKind = blockKind
+        self.applyFinalActivation = applyFinalActivation
+        self.useTanhAtFinal = useTanhAtFinal
+        self.numKernels = resblockKernelSizes.count
 
         self._convPre.wrappedValue = Conv1d(
-            inputChannels: 128,
+            inputChannels: inputChannels,
             outputChannels: upsampleInitialChannels,
             kernelSize: 7,
             stride: 1,
@@ -4020,30 +5532,67 @@ private final class LTXVocoder: Module {
         }
         self._ups.wrappedValue = upLayers
 
-        var blocks: [LTXVocoderResBlock1] = []
+        var blocks: [LTXVocoderResidualBlock] = []
         for i in 0..<upLayers.count {
             let channels = upsampleInitialChannels / (1 << (i + 1))
-            for kernel in resblockKernelSizes {
-                blocks.append(LTXVocoderResBlock1(channels: channels, kernelSize: kernel, dilations: resblockDilations))
+            for (kernelIndex, kernel) in resblockKernelSizes.enumerated() {
+                let dilations = kernelIndex < resblockDilationSizes.count
+                    ? resblockDilationSizes[kernelIndex]
+                    : [1, 3, 5]
+                switch blockKind {
+                case .legacy:
+                    blocks.append(LTXVocoderResBlock1(channels: channels, kernelSize: kernel, dilations: dilations))
+                case .amp:
+                    blocks.append(LTXVocoderAMPBlock1(
+                        channels: channels,
+                        kernelSize: kernel,
+                        dilations: dilations,
+                        activation: activation
+                    ))
+                }
             }
         }
         self._resBlocks.wrappedValue = blocks
 
         let finalChannels = upsampleInitialChannels / (1 << upLayers.count)
+        self._actPost.wrappedValue = blockKind == .amp
+            ? LTXVocoderActivation1d(channels: finalChannels, kind: activation)
+            : nil
         self._convPost.wrappedValue = Conv1d(
             inputChannels: finalChannels,
-            outputChannels: 2,
+            outputChannels: outputChannels,
             kernelSize: 7,
             stride: 1,
             padding: 3,
             dilation: 1,
             groups: 1,
-            bias: true
+            bias: useBiasAtFinal
         )
-        super.init()
+        super.init(outputSamplingRate: outputSamplingRate)
     }
 
-    func callAsFunction(_ mel: MLXArray) -> MLXArray {
+    convenience init(
+        architecture: LTXVocoderArchitectureConfig,
+        outputSamplingRate: Int
+    ) {
+        self.init(
+            blockKind: architecture.blockKind,
+            outputSamplingRate: outputSamplingRate,
+            activation: architecture.activation,
+            applyFinalActivation: architecture.applyFinalActivation,
+            useTanhAtFinal: architecture.useTanhAtFinal,
+            useBiasAtFinal: architecture.useBiasAtFinal,
+            inputChannels: architecture.inputChannels,
+            outputChannels: architecture.outputChannels,
+            upsampleInitialChannels: architecture.upsampleInitialChannels,
+            upsampleRates: architecture.upsampleRates,
+            upsampleKernelSizes: architecture.upsampleKernelSizes,
+            resblockKernelSizes: architecture.resblockKernelSizes,
+            resblockDilationSizes: architecture.resblockDilationSizes
+        )
+    }
+
+    override func callAsFunction(_ mel: MLXArray) -> MLXArray {
         var x = mel.transposed(0, 1, 3, 2) // [B, 2, 64, T]
         let b = x.dim(0)
         let stereo = x.dim(1)
@@ -4054,7 +5603,9 @@ private final class LTXVocoder: Module {
         x = convPre(x)
 
         for i in 0..<ups.count {
-            x = ltxLeakyRelu(x, slope: 0.1)
+            if blockKind == .legacy {
+                x = ltxLeakyRelu(x, slope: 0.1)
+            }
             x = ups[i](x)
             var blockOutputs: [MLXArray] = []
             blockOutputs.reserveCapacity(numKernels)
@@ -4065,26 +5616,188 @@ private final class LTXVocoder: Module {
             x = MLX.mean(MLX.stacked(blockOutputs, axis: 0), axis: 0)
         }
 
-        x = ltxLeakyRelu(x, slope: 0.01)
+        if let actPost {
+            x = actPost(x)
+        } else {
+            x = ltxLeakyRelu(x, slope: 0.01)
+        }
         x = convPost(x)
-        x = tanh(x)
+        if applyFinalActivation {
+            x = useTanhAtFinal
+                ? tanh(x)
+                : MLX.clip(x, min: MLXArray(-1.0).asType(x.dtype), max: MLXArray(1.0).asType(x.dtype))
+        }
         return x.transposed(0, 2, 1) // [B, 2, samples]
     }
 }
 
-private func mapVocoderWeight(
+private final class LTXSTFTFn: Module {
+    @ModuleInfo(key: "forward_basis") var forwardBasis: MLXArray
+    @ModuleInfo(key: "inverse_basis") var inverseBasis: MLXArray
+    let hopLength: Int
+    let winLength: Int
+
+    init(filterLength: Int, hopLength: Int, winLength: Int) {
+        let frequencies = filterLength / 2 + 1
+        self.hopLength = hopLength
+        self.winLength = winLength
+        self._forwardBasis.wrappedValue = MLXArray.zeros([frequencies * 2, filterLength, 1])
+        self._inverseBasis.wrappedValue = MLXArray.zeros([frequencies * 2, filterLength, 1])
+    }
+
+    func magnitude(_ y: MLXArray) -> MLXArray {
+        var input = y
+        if input.ndim == 2 {
+            input = input.expandedDimensions(axis: 2)
+        }
+        let leftPad = max(0, winLength - hopLength)
+        input = padded(input, widths: [[0, 0], [leftPad, 0], [0, 0]])
+        let spec = MLX.conv1d(input, forwardBasis.asType(input.dtype), stride: hopLength, padding: 0)
+        let frequencies = spec.dim(2) / 2
+        let real = spec[0..., 0..., 0..<frequencies]
+        let imag = spec[0..., 0..., frequencies..<(frequencies * 2)]
+        return MLX.sqrt(real * real + imag * imag)
+    }
+}
+
+private final class LTXMelSTFT: Module {
+    @ModuleInfo(key: "stft_fn") var stftFn: LTXSTFTFn
+    @ModuleInfo(key: "mel_basis") var melBasis: MLXArray
+
+    init(filterLength: Int = 1024, hopLength: Int = 60, winLength: Int = 1024, melChannels: Int = 128) {
+        self._stftFn.wrappedValue = LTXSTFTFn(
+            filterLength: filterLength,
+            hopLength: hopLength,
+            winLength: winLength
+        )
+        self._melBasis.wrappedValue = MLXArray.zeros([melChannels, filterLength / 2 + 1])
+    }
+
+    func melSpectrogram(_ y: MLXArray) -> MLXArray {
+        let magnitude = stftFn.magnitude(y)
+        let basis = melBasis.asType(magnitude.dtype)
+        let mel = MLX.matmul(magnitude, basis.transposed())
+        return MLX.log(MLX.maximum(mel, MLXArray(1e-5).asType(mel.dtype)))
+    }
+}
+
+private final class LTXVocoderWithBWE: LTXAudioVocoderBase {
+    @ModuleInfo(key: "vocoder") var vocoder: LTXVocoder
+    @ModuleInfo(key: "bwe_generator") var bweGenerator: LTXVocoder
+    @ModuleInfo(key: "mel_stft") var melSTFT: LTXMelSTFT
+    let inputSamplingRate: Int
+    let hopLength: Int
+    let resampler: LTXSincUpsample1d
+
+    convenience init(config: LTXBWEVocoderRuntimeConfig) {
+        self.init(
+            inputSamplingRate: config.inputSamplingRate,
+            outputSamplingRate: config.outputSamplingRate,
+            hopLength: config.hopLength,
+            filterLength: config.filterLength,
+            melChannels: config.melChannels,
+            baseVocoder: config.baseVocoder,
+            bandwidthExtensionVocoder: config.bandwidthExtensionVocoder
+        )
+    }
+
+    init(
+        inputSamplingRate: Int = LTXAudioSampleRate,
+        outputSamplingRate: Int = 48_000,
+        hopLength: Int = 60,
+        filterLength: Int = 1024,
+        melChannels: Int = 128,
+        baseVocoder: LTXVocoderArchitectureConfig = .defaultBWEBase,
+        bandwidthExtensionVocoder: LTXVocoderArchitectureConfig = .defaultBWEGenerator
+    ) {
+        self.inputSamplingRate = inputSamplingRate
+        self.hopLength = hopLength
+        self._vocoder.wrappedValue = LTXVocoder(architecture: baseVocoder, outputSamplingRate: inputSamplingRate)
+        self._bweGenerator.wrappedValue = LTXVocoder(
+            architecture: bandwidthExtensionVocoder,
+            outputSamplingRate: outputSamplingRate
+        )
+        self._melSTFT.wrappedValue = LTXMelSTFT(
+            filterLength: filterLength,
+            hopLength: hopLength,
+            winLength: filterLength,
+            melChannels: melChannels
+        )
+        self.resampler = LTXSincUpsample1d(
+            ratio: max(1, outputSamplingRate / inputSamplingRate),
+            windowType: "hann"
+        )
+        super.init(outputSamplingRate: outputSamplingRate)
+    }
+
+    override func callAsFunction(_ mel: MLXArray) -> MLXArray {
+        let inputDType = mel.dtype
+        var lowRate = vocoder(mel.asType(.float32))
+        let lowRateLength = lowRate.dim(2)
+        let outputLength = lowRateLength * outputSamplingRate / inputSamplingRate
+        saveLTXAVDebugAudio(lowRate, suffix: "bwe_low_rate", sampleRate: inputSamplingRate)
+
+        let remainder = lowRateLength % hopLength
+        if remainder != 0 {
+            lowRate = padded(lowRate, widths: [[0, 0], [0, 0], [0, hopLength - remainder]])
+        }
+
+        let batch = lowRate.dim(0)
+        let channels = lowRate.dim(1)
+        let flattened = lowRate.reshaped(batch * channels, lowRate.dim(2))
+        let computedMel = melSTFT.melSpectrogram(flattened)
+            .reshaped(batch, channels, -1, melSTFT.melBasis.dim(0))
+        saveLTXAVDebugArray(computedMel, suffix: "bwe_computed_mel")
+        let residual = bweGenerator(computedMel)
+        saveLTXAVDebugAudio(residual, suffix: "bwe_residual", sampleRate: outputSamplingRate)
+        let skip = resampler(lowRate.transposed(0, 2, 1)).transposed(0, 2, 1)
+        saveLTXAVDebugAudio(skip, suffix: "bwe_skip", sampleRate: outputSamplingRate)
+
+        let mixedLength = min(residual.dim(2), skip.dim(2))
+        var mixed = residual[0..., 0..., 0..<mixedLength] + skip[0..., 0..., 0..<mixedLength]
+        mixed = MLX.clip(mixed, min: MLXArray(-1.0).asType(mixed.dtype), max: MLXArray(1.0).asType(mixed.dtype))
+        saveLTXAVDebugAudio(mixed, suffix: "bwe_mixed", sampleRate: outputSamplingRate)
+
+        let cropLength = min(outputLength, mixed.dim(2))
+        mixed = mixed[0..., 0..., 0..<cropLength]
+        if cropLength < outputLength {
+            mixed = padded(mixed, widths: [[0, 0], [0, 0], [0, outputLength - cropLength]])
+        }
+        return mixed.asType(inputDType)
+    }
+}
+
+func mapVocoderWeight(
     key: String,
     value: MLXArray,
-    dtype: DType
+    dtype: DType,
+    sourceLayout: LTXVocoderWeightLayout = .pytorch,
+    targetFlavor: LTXVocoderFlavor = .legacy
 ) -> [(String, MLXArray)] {
     guard key.hasPrefix("vocoder.") else { return [] }
-    let mapped = String(key.dropFirst("vocoder.".count))
+    var mapped = String(key.dropFirst("vocoder.".count))
+    if targetFlavor == .bandwidthExtension {
+        if mapped.hasPrefix("vocoder.") {
+            mapped = String(mapped.dropFirst("vocoder.".count))
+        }
+        if !mapped.hasPrefix("bwe_generator.") && !mapped.hasPrefix("mel_stft.") {
+            mapped = "vocoder." + mapped
+        }
+    }
+    mapped = mapped.replacingOccurrences(of: ".downsample.lowpass.filter", with: ".downsample.filter")
 
     var casted = value
-    if mapped.hasSuffix("weight"), casted.ndim == 3 {
-        if mapped.contains("ups.") {
-            casted = casted.transposed(1, 2, 0)
-        } else {
+    if sourceLayout == .pytorch {
+        if mapped.hasSuffix("weight"), casted.ndim == 3 {
+            if mapped.contains("ups.") {
+                casted = casted.transposed(1, 2, 0)
+            } else {
+                casted = casted.transposed(0, 2, 1)
+            }
+        } else if casted.ndim == 3,
+                  mapped.hasSuffix("filter")
+                    || mapped.hasSuffix("forward_basis")
+                    || mapped.hasSuffix("inverse_basis") {
             casted = casted.transposed(0, 2, 1)
         }
     }

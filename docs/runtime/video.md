@@ -9,19 +9,51 @@ This page covers the native video-generation path exposed through `mere.run vide
 
 ## Model family
 
-- `video-ltx-av`
+- `video-ltx-av`: default LTX root for the faster distilled lane and the legacy
+  unified AV lane.
+- `video-ltx23-av-mlx`: LTX 2.3 MLX split checkpoint for the high-quality
+  `--variant unified-av` lane.
 
 ## Typical workflows
 
-### Generate video
+### Fast visual draft
+
+The default `distilled` lane is the speed path. It generates video-only MP4s
+and is the right first pass for prompt, camera, subject, and composition checks.
 
 ```bash
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant unified-av \
-  --model-root ~/Library/Application\ Support/MereRun/models/video-ltx-av \
+  --variant distilled \
+  --model video-ltx-av \
+  --num-frames 65 \
   --output ./clip.mp4
 ```
+
+### Synchronized AV quality render
+
+For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma
+3 companion:
+
+```bash
+swift run mere.run model pull video-ltx23-av-mlx
+swift run mere.run video generate \
+  "dialogue with clean background music" \
+  --variant unified-av \
+  --model video-ltx23-av-mlx \
+  --duration 15 \
+  --fps 24 \
+  --output ./ltx23.mp4
+```
+
+Use `--duration` rather than hand-pairing `--num-frames` and `--fps` for
+representative unified AV tests. LTX 2.3 expects 24 fps timing; for example,
+15 seconds resolves to 361 frames at 24 fps because LTX frame counts must
+satisfy `8n+1`.
+
+The older `video-ltx-av --variant unified-av` path still exists for compatibility,
+but `video-ltx23-av-mlx --variant unified-av` is the current quality path when
+dialogue, score, and SFX matter.
 
 ### Export latents
 
@@ -31,22 +63,25 @@ swift run mere.run video export-latents \
   --output ./latents.npz
 ```
 
+`video export-latents` still targets the distilled video-only latent path.
+
 ## Runtime entrypoints
 
 ### CLI
 
-- `Sources/MereRunCLI/Commands/VideoGenerateCommand.swift`
-- `Sources/MereRunCLI/Commands/VideoExportLatentsCommand.swift`
+- `Sources/MereRunCLI/Commands/VideoCommand.swift`
 
 ### Runtime
 
 - `Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift`
+- `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
+- `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 
-## Important note on code shape
+## Source Reading Notes
 
-The LTX runtime is still the largest major runtime file in the repo. It is not
-an architecture mess anymore, but it still contains more low-level video-model
-logic than the other family entrypoints.
+The LTX runtime has more low-level model, media, and checkpoint-layout code
+than most other runtime families in this repo. Start from the public generation
+flow before reading the lower-level model definitions.
 
 The best reading order is:
 

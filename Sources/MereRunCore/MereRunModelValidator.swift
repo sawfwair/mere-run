@@ -130,7 +130,10 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .aceStep || spec?.validationKind == .magentaRT2 || spec?.validationKind == .ltxVideo {
+        } else if spec?.validationKind == .aceStep
+            || spec?.validationKind == .magentaRT2
+            || spec?.validationKind == .ltxVideo
+            || spec?.validationKind == .ltxVideo23MLX {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -497,6 +500,7 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.gemma4Turbo.rawValue
             || modelId == ModelResolver.ModelID.gemma4TwelveB.rawValue
             || modelId == ModelResolver.ModelID.gemma4TwelveB4Bit.rawValue
+            || modelId == ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
             || modelId == ModelResolver.ModelID.gemma4VisionTwelveB.rawValue {
             return .gemma
         }

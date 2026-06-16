@@ -43,7 +43,7 @@ Examples:
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
-- video: `video-ltx-av`
+- video: `video-ltx-av`, `video-ltx23-av-mlx`
 
 The public runtime resolves these IDs directly, so docs and examples should use
 the canonical names shown by `mere.run model list`.
