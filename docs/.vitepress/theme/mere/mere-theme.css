@@ -1,0 +1,796 @@
+:root {
+  --mere-canvas: oklch(97.2% 0.013 92);
+  --mere-surface: oklch(99% 0.008 95);
+  --mere-surface-raised: oklch(96.2% 0.016 105);
+  --mere-surface-muted: oklch(93.4% 0.021 118);
+  --mere-ink: oklch(22% 0.025 132);
+  --mere-ink-soft: oklch(38% 0.031 145);
+  --mere-ink-muted: oklch(52% 0.028 145);
+  --mere-line: oklch(84% 0.025 118);
+  --mere-line-strong: oklch(74% 0.04 126);
+  --mere-green: oklch(47% 0.11 155);
+  --mere-green-bright: oklch(68% 0.12 155);
+  --mere-blue: oklch(50% 0.12 230);
+  --mere-plum: oklch(46% 0.11 315);
+  --mere-copper: oklch(56% 0.12 55);
+  --mere-warning: oklch(62% 0.12 76);
+  --mere-danger: oklch(56% 0.15 28);
+  --mere-focus: oklch(62% 0.13 210);
+  --mere-shadow: 0 18px 48px color-mix(in oklch, var(--mere-ink) 11%, transparent);
+  --mere-shadow-soft: 0 10px 32px color-mix(in oklch, var(--mere-ink) 8%, transparent);
+
+  --vp-c-bg: var(--mere-canvas);
+  --vp-c-bg-alt: var(--mere-surface-raised);
+  --vp-c-bg-elv: var(--mere-surface);
+  --vp-c-bg-soft: var(--mere-surface-muted);
+  --vp-c-text-1: var(--mere-ink);
+  --vp-c-text-2: var(--mere-ink-soft);
+  --vp-c-text-3: var(--mere-ink-muted);
+  --vp-c-border: var(--mere-line);
+  --vp-c-divider: color-mix(in oklch, var(--mere-line) 72%, transparent);
+  --vp-c-gutter: var(--mere-line);
+  --vp-c-brand-1: var(--mere-green);
+  --vp-c-brand-2: oklch(42% 0.12 155);
+  --vp-c-brand-3: var(--mere-green-bright);
+  --vp-c-brand-soft: color-mix(in oklch, var(--mere-green) 14%, transparent);
+  --vp-c-tip-1: var(--mere-green);
+  --vp-c-tip-soft: color-mix(in oklch, var(--mere-green) 13%, transparent);
+  --vp-c-warning-1: var(--mere-warning);
+  --vp-c-warning-soft: color-mix(in oklch, var(--mere-warning) 14%, transparent);
+  --vp-c-danger-1: var(--mere-danger);
+  --vp-c-danger-soft: color-mix(in oklch, var(--mere-danger) 12%, transparent);
+  --vp-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+  --vp-nav-height: 68px;
+  --vp-layout-max-width: 1480px;
+  --vp-code-block-bg: oklch(20% 0.022 148);
+  --vp-code-line-highlight-color: color-mix(in oklch, var(--mere-green) 18%, transparent);
+  --vp-home-hero-name-color: var(--mere-ink);
+  --vp-home-hero-name-background: none;
+  --vp-home-hero-image-background-image: none;
+  --vp-home-hero-image-filter: none;
+}
+
+.dark {
+  --mere-canvas: oklch(18% 0.018 142);
+  --mere-surface: oklch(22% 0.02 145);
+  --mere-surface-raised: oklch(25% 0.024 148);
+  --mere-surface-muted: oklch(28% 0.026 150);
+  --mere-ink: oklch(92% 0.018 122);
+  --mere-ink-soft: oklch(78% 0.025 135);
+  --mere-ink-muted: oklch(65% 0.027 145);
+  --mere-line: oklch(36% 0.032 148);
+  --mere-line-strong: oklch(46% 0.045 150);
+  --mere-green: oklch(74% 0.11 155);
+  --mere-green-bright: oklch(82% 0.105 155);
+  --mere-blue: oklch(72% 0.1 225);
+  --mere-plum: oklch(72% 0.11 315);
+  --mere-copper: oklch(75% 0.1 62);
+  --mere-warning: oklch(78% 0.11 76);
+  --mere-danger: oklch(71% 0.13 30);
+  --mere-focus: oklch(76% 0.11 210);
+  --mere-shadow: 0 18px 48px color-mix(in oklch, oklch(6% 0.01 145) 46%, transparent);
+  --mere-shadow-soft: 0 10px 32px color-mix(in oklch, oklch(6% 0.01 145) 36%, transparent);
+
+  --vp-c-bg: var(--mere-canvas);
+  --vp-c-bg-alt: var(--mere-surface-raised);
+  --vp-c-bg-elv: var(--mere-surface);
+  --vp-c-bg-soft: var(--mere-surface-muted);
+  --vp-c-text-1: var(--mere-ink);
+  --vp-c-text-2: var(--mere-ink-soft);
+  --vp-c-text-3: var(--mere-ink-muted);
+  --vp-c-border: var(--mere-line);
+  --vp-c-divider: color-mix(in oklch, var(--mere-line) 76%, transparent);
+  --vp-c-brand-1: var(--mere-green);
+  --vp-c-brand-2: var(--mere-green-bright);
+  --vp-c-brand-3: oklch(64% 0.1 155);
+  --vp-c-brand-soft: color-mix(in oklch, var(--mere-green) 16%, transparent);
+  --vp-code-block-bg: oklch(14% 0.018 148);
+  --vp-home-hero-name-color: var(--mere-ink);
+}
+
+html {
+  background: var(--mere-canvas);
+  scroll-padding-top: calc(var(--vp-nav-height) + 24px);
+}
+
+body {
+  color: var(--mere-ink);
+  background:
+    linear-gradient(to right, color-mix(in oklch, var(--mere-line) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--mere-line) 24%, transparent) 1px, transparent 1px),
+    linear-gradient(145deg, var(--mere-canvas), color-mix(in oklch, var(--mere-green) 5%, var(--mere-canvas)) 48%, var(--mere-canvas));
+  background-attachment: fixed;
+  background-size: 56px 56px, 56px 56px, auto;
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--mere-green) 30%, transparent);
+  color: var(--mere-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--mere-focus);
+  outline-offset: 3px;
+}
+
+.VPNav {
+  border-bottom: 1px solid color-mix(in oklch, var(--mere-line) 66%, transparent);
+  background: color-mix(in oklch, var(--mere-canvas) 94%, var(--mere-surface));
+}
+
+.VPNavBar.has-sidebar .content,
+.VPNavBar.has-sidebar .curtain::before,
+.VPNavBar:not(.has-sidebar) .content,
+.VPNavBar:not(.has-sidebar) .curtain::before {
+  background: color-mix(in oklch, var(--mere-canvas) 94%, var(--mere-surface));
+}
+
+.VPNavBarTitle .title {
+  color: var(--mere-ink);
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.mere-nav-mark {
+  display: inline-block;
+  margin-right: 10px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--mere-green);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--mere-copper) 42%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--mere-green) 12%, transparent);
+}
+
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .button {
+  color: var(--mere-ink-soft);
+  font-weight: 640;
+}
+
+.VPNavBarMenuLink.active,
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuGroup .button:hover {
+  color: var(--mere-ink);
+}
+
+.VPNavBarSearch .DocSearch-Button {
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  background: var(--mere-surface);
+}
+
+.VPSidebar {
+  border-right: 1px solid color-mix(in oklch, var(--mere-line) 70%, transparent);
+  background: color-mix(in oklch, var(--mere-surface-raised) 72%, var(--mere-canvas));
+}
+
+.VPSidebarItem.level-0 > .item > .link > .text {
+  color: var(--mere-ink);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.VPSidebarItem .link {
+  border-radius: 7px;
+}
+
+.VPSidebarItem .link:hover,
+.VPSidebarItem.is-active > .item > .link {
+  background: color-mix(in oklch, var(--mere-green) 10%, transparent);
+  color: var(--mere-ink);
+}
+
+.VPHero {
+  margin-top: 0;
+  padding: 48px 24px 12px;
+}
+
+.VPHero .container {
+  gap: 34px;
+}
+
+.VPHero .main {
+  max-width: 650px;
+}
+
+.VPHero .name {
+  max-width: 680px;
+  color: var(--mere-ink);
+  font-size: 56px;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 0.96;
+}
+
+.VPHero .text {
+  max-width: 640px;
+  color: var(--mere-ink);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.14;
+}
+
+.VPHero .tagline {
+  max-width: 62ch;
+  color: var(--mere-ink-soft);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.VPHero .actions {
+  gap: 10px;
+}
+
+.VPButton {
+  border-radius: 8px !important;
+  font-weight: 720 !important;
+}
+
+.VPButton.brand {
+  border-color: var(--mere-green) !important;
+  background: var(--mere-green) !important;
+  color: oklch(98% 0.01 118) !important;
+  box-shadow: 0 10px 24px color-mix(in oklch, var(--mere-green) 24%, transparent);
+}
+
+.VPButton.brand:hover {
+  border-color: var(--mere-green-bright) !important;
+  background: color-mix(in oklch, var(--mere-green) 86%, var(--mere-green-bright)) !important;
+}
+
+.VPButton.alt {
+  border: 1px solid var(--mere-line) !important;
+  background: var(--mere-surface) !important;
+  color: var(--mere-ink) !important;
+}
+
+.VPButton.alt:hover {
+  border-color: var(--mere-line-strong) !important;
+  background: color-mix(in oklch, var(--mere-surface) 76%, var(--mere-green) 8%) !important;
+}
+
+.VPFeature {
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  background: var(--mere-surface);
+  box-shadow: var(--mere-shadow-soft);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.VPFeature:hover {
+  transform: translateY(-2px);
+  border-color: var(--mere-line-strong);
+  box-shadow: var(--mere-shadow);
+}
+
+.VPFeature .title {
+  color: var(--mere-ink);
+  font-size: 17px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.VPFeature .details {
+  color: var(--mere-ink-soft);
+  line-height: 1.62;
+}
+
+.VPHomeContent {
+  padding-top: 28px;
+}
+
+.VPDoc {
+  padding-top: 42px;
+}
+
+.VPDoc .content-container {
+  border-radius: 8px;
+}
+
+.vp-doc {
+  max-width: 76ch;
+}
+
+.vp-doc h1 {
+  color: var(--mere-ink);
+  font-size: 40px;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+.vp-doc h2 {
+  margin-top: 44px;
+  border-top: 1px solid color-mix(in oklch, var(--mere-line) 72%, transparent);
+  padding-top: 18px;
+  color: var(--mere-ink);
+  font-size: 25px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.vp-doc h3 {
+  margin-top: 30px;
+  color: var(--mere-ink);
+  font-size: 19px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.vp-doc p,
+.vp-doc li {
+  color: var(--mere-ink-soft);
+  line-height: 1.72;
+}
+
+.vp-doc strong {
+  color: var(--mere-ink);
+  font-weight: 760;
+}
+
+.vp-doc a {
+  color: var(--mere-green);
+  font-weight: 630;
+  text-decoration-color: color-mix(in oklch, var(--mere-green) 38%, transparent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.22em;
+}
+
+.vp-doc a:hover {
+  color: color-mix(in oklch, var(--mere-green) 82%, var(--mere-blue));
+  text-decoration-color: currentColor;
+}
+
+.vp-doc blockquote {
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: color-mix(in oklch, var(--mere-surface) 82%, var(--mere-green) 7%);
+}
+
+.vp-doc blockquote > p {
+  color: var(--mere-ink);
+}
+
+.vp-doc table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  background: var(--mere-surface);
+  box-shadow: var(--mere-shadow-soft);
+}
+
+.vp-doc tr {
+  border-top: 1px solid color-mix(in oklch, var(--mere-line) 70%, transparent);
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: color-mix(in oklch, var(--mere-surface-raised) 46%, transparent);
+}
+
+.vp-doc tr:hover {
+  background: color-mix(in oklch, var(--mere-green) 8%, transparent);
+}
+
+.vp-doc th {
+  background: color-mix(in oklch, var(--mere-surface-muted) 76%, var(--mere-surface));
+  color: var(--mere-ink);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vp-doc th,
+.vp-doc td {
+  border: 0;
+  border-right: 1px solid color-mix(in oklch, var(--mere-line) 70%, transparent);
+  padding: 11px 13px;
+  vertical-align: top;
+}
+
+.vp-doc th:last-child,
+.vp-doc td:last-child {
+  border-right: 0;
+}
+
+.vp-doc td {
+  color: var(--mere-ink-soft);
+}
+
+.vp-doc td code,
+.vp-doc table a {
+  white-space: nowrap;
+}
+
+.vp-doc div[class*='language-'] {
+  border: 1px solid color-mix(in oklch, var(--mere-line) 70%, transparent);
+  border-radius: 8px;
+  box-shadow: var(--mere-shadow-soft);
+}
+
+.vp-doc :not(pre) > code {
+  border: 1px solid color-mix(in oklch, var(--mere-line) 78%, transparent);
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--mere-surface-muted) 64%, var(--mere-surface));
+  color: var(--mere-ink);
+  font-size: 0.9em;
+}
+
+.custom-block {
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  background: var(--mere-surface);
+}
+
+.custom-block-title {
+  color: var(--mere-ink);
+  letter-spacing: 0;
+}
+
+.outline-link {
+  border-radius: 7px;
+}
+
+.outline-link:hover,
+.outline-link.active {
+  color: var(--mere-green);
+}
+
+.mere-atlas-map {
+  width: min(520px, 100%);
+}
+
+.mere-atlas-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(to right, color-mix(in oklch, var(--mere-line) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--mere-line) 24%, transparent) 1px, transparent 1px),
+    var(--mere-surface);
+  background-size: 24px 24px, 24px 24px, auto;
+  box-shadow: var(--mere-shadow);
+}
+
+.mere-atlas-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--mere-ink-muted);
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mere-atlas-core {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  margin: 16px auto 14px;
+  min-height: 64px;
+  width: min(330px, 100%);
+  border: 1px solid color-mix(in oklch, var(--mere-line-strong) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--mere-surface) 78%, var(--mere-green) 7%);
+  color: var(--mere-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--mere-surface) 70%, transparent);
+}
+
+.mere-atlas-core-label {
+  font-size: 28px;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.mere-atlas-core-dot {
+  color: var(--mere-green);
+  font-size: 30px;
+  font-weight: 820;
+}
+
+.mere-atlas-planes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mere-atlas-plane {
+  display: flex;
+  min-height: 126px;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  padding: 12px;
+  background: color-mix(in oklch, var(--mere-surface) 84%, var(--plane-accent) 7%);
+  color: var(--mere-ink);
+  text-decoration: none;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mere-atlas-plane:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--plane-accent) 80%, var(--mere-line));
+  background: color-mix(in oklch, var(--mere-surface) 74%, var(--plane-accent) 12%);
+}
+
+.mere-atlas-plane.is-green {
+  --plane-accent: var(--mere-green);
+}
+
+.mere-atlas-plane.is-blue {
+  --plane-accent: var(--mere-blue);
+}
+
+.mere-atlas-plane.is-plum {
+  --plane-accent: var(--mere-plum);
+}
+
+.mere-atlas-plane.is-copper {
+  --plane-accent: var(--mere-copper);
+}
+
+.mere-atlas-plane-name {
+  color: var(--mere-ink);
+  font-size: 15px;
+  font-weight: 780;
+}
+
+.mere-atlas-plane-signal {
+  margin-top: 6px;
+  color: var(--mere-ink-soft);
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.mere-atlas-plane-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.mere-atlas-plane-items span {
+  border: 1px solid color-mix(in oklch, var(--plane-accent) 36%, var(--mere-line));
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: color-mix(in oklch, var(--mere-ink) 84%, var(--plane-accent));
+  font-family: var(--vp-font-family-mono);
+  font-size: 10px;
+}
+
+.mere-doc-signal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 24px;
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  padding: 13px 14px;
+  background: color-mix(in oklch, var(--mere-surface) 82%, var(--mere-green) 5%);
+  box-shadow: var(--mere-shadow-soft);
+}
+
+.mere-doc-signal-label {
+  display: inline-flex;
+  margin-bottom: 4px;
+  color: var(--mere-green);
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mere-doc-signal p {
+  margin: 0;
+  color: var(--mere-ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mere-doc-signal-links {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mere-doc-signal-links a,
+.mere-doc-signal-links span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid var(--mere-line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--mere-surface);
+  color: var(--mere-ink-soft);
+  font-size: 12px;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.mere-doc-signal-links a:hover {
+  border-color: var(--mere-green);
+  color: var(--mere-ink);
+}
+
+.mere-docs-network {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  border: 1px solid var(--mere-line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--mere-surface);
+}
+
+.mere-docs-network-kicker {
+  color: var(--mere-green);
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mere-docs-network a {
+  border-radius: 6px;
+  padding: 5px 6px;
+  color: var(--mere-ink-soft);
+  font-size: 13px;
+  font-weight: 640;
+  text-decoration: none;
+}
+
+.mere-docs-network a:hover {
+  background: color-mix(in oklch, var(--mere-green) 10%, transparent);
+  color: var(--mere-ink);
+}
+
+@media (max-width: 960px) {
+  .VPHero {
+    padding-top: 48px;
+  }
+
+  .VPHero .name {
+    font-size: 42px;
+  }
+
+  .VPHero .text {
+    font-size: 23px;
+  }
+
+  .mere-doc-signal {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mere-doc-signal-links {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    background-size: 40px 40px, 40px 40px, auto;
+  }
+
+  .VPHero {
+    padding-top: 28px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .VPHero.has-image .image,
+  .VPHero.has-image .image-container {
+    height: auto;
+  }
+
+  .VPHero.has-image .image {
+    margin-bottom: 8px;
+  }
+
+  .VPHero .container {
+    gap: 18px;
+  }
+
+  .VPHero .name {
+    font-size: 32px;
+  }
+
+  .VPHero .text {
+    font-size: 20px;
+  }
+
+  .VPHero .actions {
+    justify-content: flex-start;
+  }
+
+  .VPHero .actions .VPButton {
+    min-height: 40px;
+    padding: 0 15px;
+  }
+
+  .mere-atlas-map {
+    width: min(342px, 100%);
+  }
+
+  .mere-atlas-frame {
+    padding: 10px;
+  }
+
+  .mere-atlas-core {
+    margin: 10px auto;
+    min-height: 52px;
+  }
+
+  .mere-atlas-core-label,
+  .mere-atlas-core-dot {
+    font-size: 24px;
+  }
+
+  .mere-atlas-planes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .mere-atlas-topline {
+    align-items: center;
+    flex-direction: row;
+    gap: 4px;
+    font-size: 9px;
+  }
+
+  .mere-atlas-plane {
+    min-height: 88px;
+    padding: 9px;
+  }
+
+  .mere-atlas-plane-name {
+    font-size: 13px;
+  }
+
+  .mere-atlas-plane-signal {
+    font-size: 11px;
+    line-height: 1.32;
+  }
+
+  .mere-atlas-plane-items {
+    display: none;
+  }
+
+  .vp-doc h1 {
+    font-size: 32px;
+  }
+
+  .vp-doc h2 {
+    font-size: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
