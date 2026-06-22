@@ -104,6 +104,9 @@ public enum MereRunModelValidator {
                 return spec.validationKind != .codegenGGUF
                     && spec.validationKind != .deepseekV4FlashIMatrixGGUF
                     && spec.validationKind != .magentaRT2
+                    && spec.validationKind != .woosh
+                    && spec.validationKind != .wooshClap
+                    && spec.validationKind != .wooshSynchformer
             }
         }()
         if !hasRootMarker && !usesMFluxZImage && requiresRootMarker {
@@ -132,6 +135,9 @@ public enum MereRunModelValidator {
             tokenizerDir = nil
         } else if spec?.validationKind == .aceStep
             || spec?.validationKind == .magentaRT2
+            || spec?.validationKind == .woosh
+            || spec?.validationKind == .wooshClap
+            || spec?.validationKind == .wooshSynchformer
             || spec?.validationKind == .ltxVideo
             || spec?.validationKind == .ltxVideo23MLX {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
@@ -363,6 +369,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr.")
             case .music where engine != .aceStep && engine != .magentaRT2:
                 warnings.append("Manifest engine mismatch: family=music expects ace-step or magenta-rt2.")
+            case .sfx where engine != .woosh:
+                warnings.append("Manifest engine mismatch: family=sfx expects woosh.")
             case .video where engine != .ltxVideo:
                 warnings.append("Manifest engine mismatch: family=video expects ltx-video.")
             case .psi where engine != .psiChat:
@@ -437,7 +445,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .aceStep?, .magentaRT2?, .ltxVideo?:
+            case .qwen3Coder?, .aceStep?, .magentaRT2?, .woosh?, .ltxVideo?:
                 return true
             default:
                 return false
@@ -492,6 +500,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("text-code-") { return .code }
         if modelId.hasPrefix("vision-ocr-") { return .ocr }
         if modelId.hasPrefix("music-") { return .music }
+        if modelId.hasPrefix("sfx-") { return .sfx }
         if modelId.hasPrefix("video-") { return .video }
         if modelId.hasPrefix("text-chat-psi-") { return .psi }
         if modelId == ModelResolver.ModelID.gemma4.rawValue

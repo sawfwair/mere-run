@@ -77,6 +77,7 @@ Key subdirectories:
 - `LightOnOCR/`: OCR runtime
 - `VLM/`: vision-language model helpers
 - `ACEStep/`: music generation pipeline
+- `Woosh/`: sound-effect generation pipeline
 - `LTX/`: video generation pipeline
 - `LoRA/`: LoRA loading and application support
 - `Support/`: manifests, model resolution, model paths, and Hub snapshot helpers

@@ -296,6 +296,7 @@ targets.append(contentsOf: [
       "SAM3/README.md",
       "Support/README.md",
       "VLM/README.md",
+      "Woosh/README.md",
       "ZImageI2L/README.md",
       "ZImageI2L/Model/README.md",
       "ZImageTurbo/README.md",

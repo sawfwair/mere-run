@@ -11,6 +11,7 @@ public struct ModelResolver {
     public enum ModelID: String, CaseIterable, Hashable, Sendable {
         case kleinNano = "image-klein-nano"
         case kleinMax = "image-klein-max"
+        case klein9B = "image-klein-9b"
         case kleinBase = "image-klein-base"
         case kleinShared = "image-klein-shared"
         case bonsaiBinary = "image-bonsai-binary"
@@ -52,6 +53,12 @@ public struct ModelResolver {
         case aceStepXLTurboLM4B = "music-acestep-xl-turbo-lm4b"
         case magentaRT2Small = "music-magenta-rt2-small"
         case magentaRT2Base = "music-magenta-rt2-base"
+        case wooshDFlow = "sfx-woosh-dflow"
+        case wooshFlow = "sfx-woosh-flow"
+        case wooshClap = "sfx-woosh-clap"
+        case wooshSynchformer = "sfx-woosh-synchformer"
+        case wooshVFlow8s = "sfx-woosh-vflow-8s"
+        case wooshDVFlow8s = "sfx-woosh-dvflow-8s"
         case ltxVideoAV = "video-ltx-av"
         case ltxVideo23AVMLX = "video-ltx23-av-mlx"
     }

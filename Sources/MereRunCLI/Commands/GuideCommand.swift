@@ -347,6 +347,16 @@ enum GuideRegistry {
             resourceName: "music-analyze.md"
         ),
         GuideTopic(
+            topic: "sfx-generate",
+            title: "SFX Generate",
+            commandPaths: [["sfx", "generate"]],
+            models: [
+                "sfx-woosh-dflow",
+                "sfx-woosh-flow",
+            ],
+            resourceName: "sfx-generate.md"
+        ),
+        GuideTopic(
             topic: "video-generate",
             title: "Video Generate",
             commandPaths: [["video", "generate"]],

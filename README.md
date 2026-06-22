@@ -24,7 +24,7 @@ The public OSS repo currently supports:
 - local text chat, code generation, embeddings, and PII anonymization
 - local speech synthesis, transcription, and voice-profile management
 - local vision captioning, inspection, grounding, segmentation, tracking, live camera tracking, and OCR
-- native ACEStep music generation and LTX video generation
+- native ACEStep music generation, Woosh sound-effect generation, and LTX video generation
 - Hugging Face-backed model pulls that resolve into a shared local model store
 - offline command cookbooks through `mere.run guide`
 - a local OpenAI-compatible API surface for chat, embeddings, image generation,
@@ -417,6 +417,27 @@ swift run mere.run music realtime \
   --output ./live.wav \
   --no-play
 
+# Generate a Foley / sound-effect WAV with Woosh
+swift run mere.run model pull sfx-woosh-dflow
+swift run mere.run model pull sfx-woosh-flow
+swift run mere.run sfx generate \
+  "metal wrench dropping onto concrete, bright clang and brief ring" \
+  --model sfx-woosh-dflow \
+  --duration 5 \
+  --output ./wrench-clang.wav
+swift run mere.run sfx ae encode ./wrench-clang.wav -o ./wrench-clang-latents.npy
+swift run mere.run sfx ae decode ./wrench-clang-latents.npy -o ./wrench-clang-roundtrip.wav
+swift run mere.run sfx clap score \
+  "metal wrench dropping onto concrete" \
+  ./wrench-clang.wav
+swift run mere.run model pull sfx-woosh-dvflow-8s
+swift run mere.run model pull sfx-woosh-synchformer
+swift run mere.run sfx video generate \
+  "footsteps echoing in a hallway" \
+  ./silent-hallway.mp4 \
+  --model sfx-woosh-dvflow-8s \
+  --output ./hallway-footsteps.wav
+
 # Generate a fast video-only draft
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
@@ -460,6 +481,7 @@ The public CLI is modality-first:
 - `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
+- `mere.run sfx generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
@@ -560,6 +582,7 @@ Core guides:
 - [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day
 - [`docs/testing.md`](./docs/testing.md): validation layers, smoke runs, and troubleshooting
 - [`docs/runtime/vision.md`](./docs/runtime/vision.md): native SAM 3.1 segmentation and tracking details
+- [`docs/runtime/sfx.md`](./docs/runtime/sfx.md): native Woosh SFX generation, CLAP scoring, and V2A feature-conditioned generation details
 
 Configuration and model management:
 

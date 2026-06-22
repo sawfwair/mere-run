@@ -94,6 +94,7 @@ enum ModelInventory {
         if id.hasPrefix("vision-segment-") { return "vision-segment" }
         if id.hasPrefix("vision-ground-") { return "vision-ground" }
         if id.hasPrefix("music-") { return "music" }
+        if id.hasPrefix("sfx-") { return "sfx" }
         if id.hasPrefix("video-") { return "video" }
         return "other"
     }

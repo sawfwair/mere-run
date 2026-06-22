@@ -163,6 +163,22 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    private func writeMinimalValidWooshDFlowModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .wooshDFlow, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+
+        let checkpoints = root.appendingPathComponent("checkpoints", isDirectory: true)
+        for component in ["Woosh-DFlow", "Woosh-AE", "TextConditionerA"] {
+            let componentDir = checkpoints.appendingPathComponent(component, isDirectory: true)
+            try TestFileSystem.createDirectory(componentDir)
+            try TestFileSystem.writeFile(componentDir.appendingPathComponent("config.yaml"), contents: Data("{}".utf8))
+            try TestFileSystem.writeFile(componentDir.appendingPathComponent("weights.safetensors"), contents: Data())
+        }
+        let tokenizerDir = checkpoints.appendingPathComponent("TextConditionerA/tokenizer", isDirectory: true)
+        try TestFileSystem.createDirectory(tokenizerDir)
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+    }
+
     private func writeMinimalValidLTX23MLXModel(at root: URL) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(
@@ -223,6 +239,25 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.engine, .magentaRT2)
         XCTAssertEqual(report.manifest?.family, .music)
         XCTAssertEqual(report.manifest?.tier, .small)
+    }
+
+    func testWooshDFlowRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.wooshDFlow.rawValue, isDirectory: true)
+        try writeMinimalValidWooshDFlowModel(at: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.wooshDFlow.rawValue
+        )
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertFalse(report.warnings.contains { $0.contains("model root marker") })
+        XCTAssertFalse(report.errors.contains { $0.contains("text_encoder/config.json") })
+        XCTAssertEqual(report.manifest?.engine, .woosh)
+        XCTAssertEqual(report.manifest?.family, .sfx)
     }
 
     func testMagentaRT2MissingRuntimeAssetFailsValidation() throws {

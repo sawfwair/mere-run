@@ -2211,7 +2211,7 @@ actor CodeGenServer {
             let generator = Ideogram4Generator()
             defer { generator.unload() }
             _ = try await generator.generate(request, progressHandler: nil)
-        case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .video, .psi, .privacy, .deepseek, nil:
+        case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
                 "model \(resolved.modelID) is not an image generation model"

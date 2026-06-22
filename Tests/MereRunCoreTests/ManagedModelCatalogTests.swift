@@ -468,6 +468,92 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
+    func testWooshDFlowSpecUsesFocusedHuggingFaceMirrorLayout() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.wooshDFlow.rawValue))
+
+        XCTAssertEqual(spec.category, .sfx)
+        XCTAssertEqual(spec.hubFallback?.repoId, WooshResources.huggingFaceMirrorRepoId)
+        XCTAssertEqual(spec.validationKind, .woosh)
+        XCTAssertEqual(spec.defaultCLICommands, ["sfx generate"])
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("checkpoints/Woosh-DFlow/*") == true)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("checkpoints/Woosh-VFlow-8s/*") == false)
+        XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, "checkpoints/TextConditionerA/tokenizer")
+        XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.repoId, WooshResources.robertaTokenizerRepoId)
+    }
+
+    func testWooshFlowSpecUsesOriginalFlowCheckpointLayout() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.wooshFlow.rawValue))
+
+        XCTAssertEqual(spec.category, .sfx)
+        XCTAssertEqual(spec.hubFallback?.repoId, WooshResources.huggingFaceMirrorRepoId)
+        XCTAssertEqual(spec.validationKind, .woosh)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("checkpoints/Woosh-Flow/*") == true)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("checkpoints/Woosh-DFlow/*") == false)
+        XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, "checkpoints/TextConditionerA/tokenizer")
+    }
+
+    func testWooshDFlowRootValidationRequiresT2AComponentsAndTokenizer() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.wooshDFlow.rawValue))
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalWooshDFlowRoot(at: root)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(
+            at: root.appendingPathComponent("checkpoints/TextConditionerA/tokenizer/tokenizer.json")
+        )
+        try FileManager.default.removeItem(
+            at: root.appendingPathComponent("checkpoints/TextConditionerA/tokenizer/vocab.json")
+        )
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["tokenizer.json"]
+        )
+    }
+
+    func testWooshFlowRootValidationRequiresOriginalFlowComponents() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.wooshFlow.rawValue))
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalWooshRoot(at: root, generatorComponent: "Woosh-Flow")
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(
+            at: root.appendingPathComponent("checkpoints/Woosh-Flow/weights.safetensors")
+        )
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["weights.safetensors"]
+        )
+    }
+
+    func testWooshSynchformerSpecUsesCompanionSafetensorsSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.wooshSynchformer.rawValue))
+
+        XCTAssertEqual(spec.category, .sfx)
+        XCTAssertEqual(spec.hubFallback?.repoId, WooshResources.synchformerRepoId)
+        XCTAssertEqual(spec.validationKind, .wooshSynchformer)
+        XCTAssertEqual(spec.defaultCLICommands, ["sfx video generate"])
+        XCTAssertEqual(spec.hubFallback?.patterns, [WooshResources.synchformerFilename])
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            [WooshResources.synchformerFilename]
+        )
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent(WooshResources.synchformerFilename).path,
+            contents: Data()
+        ))
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+    }
+
     func testLTX23MLXSpecUsesDgrauetSplitSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue))
 
@@ -667,6 +753,24 @@ final class ManagedModelCatalogTests: XCTestCase {
             "spectrostream_encoder.mlxfn",
         ] {
             XCTAssertTrue(FileManager.default.createFile(atPath: spectrostream.appendingPathComponent(file).path, contents: Data()))
+        }
+    }
+
+    private func writeMinimalWooshDFlowRoot(at root: URL) throws {
+        try writeMinimalWooshRoot(at: root, generatorComponent: "Woosh-DFlow")
+    }
+
+    private func writeMinimalWooshRoot(at root: URL, generatorComponent: String) throws {
+        for component in [generatorComponent, "Woosh-AE", "TextConditionerA"] {
+            let dir = root.appendingPathComponent("checkpoints/\(component)", isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            XCTAssertTrue(FileManager.default.createFile(atPath: dir.appendingPathComponent("config.yaml").path, contents: Data()))
+            XCTAssertTrue(FileManager.default.createFile(atPath: dir.appendingPathComponent("weights.safetensors").path, contents: Data()))
+        }
+        let tokenizer = root.appendingPathComponent("checkpoints/TextConditionerA/tokenizer", isDirectory: true)
+        try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
+        for file in ["tokenizer_config.json", "tokenizer.json", "vocab.json", "merges.txt"] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: tokenizer.appendingPathComponent(file).path, contents: Data()))
         }
     }
 
