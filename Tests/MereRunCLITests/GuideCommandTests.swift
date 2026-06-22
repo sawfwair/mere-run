@@ -26,6 +26,14 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(entry.topic, "music-analyze")
     }
 
+    func testGuideSFXGenerateParsesAndResolves() throws {
+        let command = try GuideCommand.parse(["sfx", "generate"])
+        let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
+
+        XCTAssertEqual(command.commandPath, ["sfx", "generate"])
+        XCTAssertEqual(entry.topic, "sfx-generate")
+    }
+
     func testGuideMusicGenerateModelFocusParsesAndRenders() throws {
         let command = try GuideCommand.parse([
             "music",
@@ -127,6 +135,7 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertTrue(rendered.contains("Topic"))
         XCTAssertTrue(rendered.contains("image-generate"))
         XCTAssertTrue(rendered.contains("music generate"))
+        XCTAssertTrue(rendered.contains("sfx generate"))
         XCTAssertTrue(rendered.contains("Read one with: mere.run guide <command path>"))
     }
 

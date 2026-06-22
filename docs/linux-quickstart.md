@@ -143,7 +143,7 @@ matching host.
 
 The current arm64 CUDA smoke pass has been validated on an NVIDIA GB10 Spark
 host after installing the package and pulling public managed models. MLX-backed
-image, speech, vision, music, video, embedding, anonymization, and dense Gemma
+image, speech, vision, music, SFX, video, embedding, anonymization, and dense Gemma
 chat paths are expected to run there with the packaged CUDA setup. The packaged
 Linux CUDA build also carries the matching `llama-cli`; `mere.run text code`
 uses that subprocess on Linux so GGUF coding models do not share a process with

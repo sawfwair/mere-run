@@ -55,6 +55,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen3Coder: return .code
             case .lightOnOCR: return .ocr
             case .aceStep, .magentaRT2: return .music
+            case .woosh: return .sfx
             case .ltxVideo: return .video
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
@@ -114,6 +115,8 @@ public enum QuantizedModelManifestWriter {
                     return [.visionOCR]
                 case .aceStep, .magentaRT2:
                     return [.musicGeneration]
+                case .woosh:
+                    return [.soundEffectGeneration]
                 case .ltxVideo:
                     return [.videoGeneration]
                 case .psiChat:
@@ -182,7 +185,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .samSegmentation, .falconPerception:
                 break
-            case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter, .qwen3Coder, .lightOnOCR, .psiChat, .deepseekV4Flash:
+            case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter, .qwen3Coder, .lightOnOCR, .woosh, .psiChat, .deepseekV4Flash:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)

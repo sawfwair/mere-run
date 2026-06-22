@@ -195,6 +195,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                "image-klein-9b",
+                "Image, large artistic quality",
+                "Installs the gated FLUX.2 Klein 9B image model for higher-capacity prompt and reference-image workflows.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
                 "image-klein-base",
                 "Image training base",
                 "Installs the FLUX.2 Klein base layout used by image-training and compatibility workflows.",
@@ -486,6 +493,48 @@ public enum ManagedModelCapabilityCatalog {
                 ModelResolver.ModelID.magentaRT2Base.rawValue,
                 "Magenta RealTime 2 base",
                 "Streams higher-quality Magenta RT2 music on Pro/Max-class Apple Silicon.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                ModelResolver.ModelID.wooshDFlow.rawValue,
+                "Woosh DFlow",
+                "Generates Foley and sound effects from text prompts with Sony Research Woosh.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.wooshFlow.rawValue,
+                "Woosh Flow",
+                "Generates Foley and sound effects from text prompts with Sony Research Woosh's original Flow model.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.wooshClap.rawValue,
+                "Woosh CLAP",
+                "Embeds and scores sound effects against text with Sony Research Woosh-CLAP.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.wooshSynchformer.rawValue,
+                "Woosh Synchformer",
+                "Extracts video synchronization features for Sony Research Woosh V2A generation.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.wooshVFlow8s.rawValue,
+                "Woosh VFlow 8s",
+                "Generates 8-second sound effects from video with Sony Research Woosh VFlow.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                ModelResolver.ModelID.wooshDVFlow8s.rawValue,
+                "Woosh DVFlow 8s",
+                "Generates 8-second sound effects from video with Sony Research Woosh distilled VFlow.",
                 minimum: 32,
                 recommended: 64
             ),

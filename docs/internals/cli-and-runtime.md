@@ -24,7 +24,7 @@ Almost every command eventually passes through the same model-resolution layer:
 - `ModelResolver.swift`
 
 That shared path is what keeps the command surface coherent across image, text,
-speech, vision, music, and video.
+speech, vision, music, SFX, and video.
 
 ## CLI design conventions
 
@@ -39,6 +39,7 @@ Commands are grouped by user intent:
 - speech
 - vision
 - music
+- sfx
 - video
 - model
 - status

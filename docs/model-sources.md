@@ -32,6 +32,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
 | Vision | `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
 | Music | `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
+| SFX | `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s` |
 | Video | `video-ltx-av`, `video-ltx23-av-mlx` |
 
 Some legacy/local IDs remain in the catalog so existing installs and explicit
@@ -243,9 +244,9 @@ swift run mere.run model list
 swift run mere.run model info image-klein-max
 ```
 
-## Music And Video Layouts
+## Music, SFX, And Video Layouts
 
-Two retained surfaces have more structure than a flat model root.
+Some retained surfaces have more structure than a flat model root.
 
 ### `music-acestep`, `music-acestep-xl-turbo`, and `music-acestep-xl-turbo-lm4b`
 
@@ -301,6 +302,59 @@ Raw `checkpoints/*.safetensors` files are not a complete `mere.run` layout.
 `mere.run music generate --model music-magenta-rt2-small` renders an offline
 WAV. `mere.run music realtime --model music-magenta-rt2-small` plays on the
 default macOS audio device and can capture to WAV with `--output`.
+
+### `sfx-woosh-dflow`
+
+The Woosh DFlow model root is:
+
+```text
+.../models/sfx-woosh-dflow
+└── checkpoints/
+    ├── Woosh-DFlow/
+    ├── Woosh-AE/
+    └── TextConditionerA/
+        └── tokenizer/
+```
+
+The managed pull uses the `AEmotionStudio/woosh-models` Hugging Face mirror for
+Sony Research Woosh v1.0.0 weights and mounts `FacebookAI/roberta-large`
+tokenizer files under `checkpoints/TextConditionerA/tokenizer/`. The native
+runtime exposes the text-to-SFX distilled DFlow path through
+`mere.run sfx generate`.
+
+### `sfx-woosh-flow`
+
+The Woosh original Flow model root is:
+
+```text
+.../models/sfx-woosh-flow
+└── checkpoints/
+    ├── Woosh-Flow/
+    ├── Woosh-AE/
+    └── TextConditionerA/
+        └── tokenizer/
+```
+
+The managed pull uses the same mirror and tokenizer mount as
+`sfx-woosh-dflow`. The native runtime exposes the original text-to-SFX Flow
+checkpoint through `mere.run sfx generate --model sfx-woosh-flow`; it generally
+needs more denoise steps than the distilled model.
+
+### Woosh CLAP and V2A
+
+`sfx-woosh-clap` installs `checkpoints/Woosh-CLAP/` plus the mounted
+RoBERTa tokenizer for native text/audio scoring through
+`mere.run sfx clap score`.
+
+`sfx-woosh-dvflow-8s` and `sfx-woosh-vflow-8s` install the distilled and
+original video-to-audio checkpoint stacks from `AEmotionStudio/woosh-models`.
+Both include `checkpoints/Woosh-AE/` and `checkpoints/TextConditionerV/`.
+
+`sfx-woosh-synchformer` installs the companion
+`mmaudio_synchformer_fp16.safetensors` visual extractor from
+`Kijai/MMAudio_safetensors`. `mere.run sfx video generate` uses it when the
+input is a raw video file; `.npy` inputs can still provide precomputed
+Synchformer `synch_out` features directly.
 
 ### `video-ltx-av`
 

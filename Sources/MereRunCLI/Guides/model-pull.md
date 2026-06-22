@@ -44,6 +44,10 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
   mere.run model pull music-acestep
 MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
   mere.run model pull music-magenta-rt2-small
+MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
+  mere.run model pull sfx-woosh-dflow
+MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
+  mere.run model pull sfx-woosh-flow
 ```
 
 ## Iteration Tips

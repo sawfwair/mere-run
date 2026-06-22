@@ -120,7 +120,7 @@ Segmentation and tracking runtime:
   - `Sources/MereRunCore/SAM3/SAM31VideoTracker.swift`
   - `Sources/MereRunCore/SAM3/SAM31CameraCapture.swift`
 
-## Music and video
+## Music, SFX, and video
 
 Music generation:
 
@@ -129,6 +129,15 @@ Music generation:
 - Read next:
   - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Prompting.swift`
   - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Generation.swift`
+
+Sound-effect generation:
+
+- CLI: `Sources/MereRunCLI/Commands/SFXGenerateCommand.swift`
+- Runtime root: `Sources/MereRunCore/Woosh/WooshGenerator.swift`
+- Read next:
+  - `Sources/MereRunCore/Woosh/WooshDiT.swift`
+  - `Sources/MereRunCore/Woosh/WooshRobertaTextEncoder.swift`
+  - `Sources/MereRunCore/Woosh/WooshVocosDecoder.swift`
 
 Video generation:
 

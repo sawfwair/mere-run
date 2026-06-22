@@ -365,15 +365,21 @@ public actor HubSnapshot {
     }
 
     private func accessToken() -> String? {
+        // Precedence: explicit option > environment > persisted config file.
         if let token = options.accessToken {
             return token
         }
         let env = ProcessInfo.processInfo.environment
-        return env["HF_TOKEN"] ?? env["HUGGING_FACE_HUB_TOKEN"]
+        if let token = env["HF_TOKEN"] ?? env["HUGGING_FACE_HUB_TOKEN"], !token.isEmpty {
+            return token
+        }
+        return MereRunConfig.load().hfToken
     }
 
     private func hostURL() -> URL {
+        // Precedence: HF_ENDPOINT env > persisted config > huggingface.co
         let endpoint = ProcessInfo.processInfo.environment["HF_ENDPOINT"]
+            ?? MereRunConfig.load().hfEndpoint
         if let endpoint, let url = URL(string: endpoint), url.scheme != nil, url.host != nil {
             return url
         }

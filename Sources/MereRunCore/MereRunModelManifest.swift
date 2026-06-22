@@ -50,6 +50,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case aceStep = "ace-step"
         /// Magenta RealTime 2 streaming music family.
         case magentaRT2 = "magenta-rt2"
+        /// Sony Research Woosh sound-effect generation family.
+        case woosh = "woosh"
         /// LTX video family.
         case ltxVideo = "ltx-video"
         /// Psi agent chat family.
@@ -75,6 +77,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case code
         case ocr
         case music
+        case sfx
         case video
         case psi
         case deepseek
@@ -130,6 +133,9 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case visionTracking = "vision_tracking"
         case visionGrounding = "vision_grounding"
         case visionDetection = "vision_detection"
+        case soundEffectGeneration = "sound_effect_generation"
+        case soundEffectEmbedding = "sound_effect_embedding"
+        case videoToAudioGeneration = "video_to_audio_generation"
     }
 
     public enum ComponentRef: Codable, Hashable, Sendable {
@@ -540,6 +546,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.txt2img, .referenceEdit, .loraInference],
                 components: kleinHybridComponents,
                 upstreamRepoId: "black-forest-labs/FLUX.2-klein-4B",
+                createdAt: createdAt
+            )
+        case .klein9B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 4, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: kleinHybridComponents,
+                upstreamRepoId: "black-forest-labs/FLUX.2-klein-9B",
                 createdAt: createdAt
             )
         case .kleinShared:
@@ -1118,6 +1138,74 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.musicGeneration],
                 components: nil,
                 upstreamRepoId: "google/magenta-realtime-2@010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc",
+                createdAt: createdAt
+            )
+        case .wooshDFlow, .wooshFlow, .wooshVFlow8s, .wooshDVFlow8s:
+            let isDFlow = modelID == .wooshDFlow
+            let isVideoFlow = modelID == .wooshVFlow8s || modelID == .wooshDVFlow8s
+            let isDistilledVideoFlow = modelID == .wooshDVFlow8s
+            let transformerName = if modelID == .wooshFlow {
+                "Woosh-Flow"
+            } else if modelID == .wooshVFlow8s {
+                "Woosh-VFlow-8s"
+            } else if modelID == .wooshDVFlow8s {
+                "Woosh-DVFlow-8s"
+            } else {
+                "Woosh-DFlow"
+            }
+            let textConditionerName = isVideoFlow ? "TextConditionerV" : "TextConditionerA"
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: (isDFlow || isDistilledVideoFlow) ? .distilled : .standard,
+                precision: .fp32,
+                defaults: Defaults(
+                    steps: (isDFlow || isDistilledVideoFlow) ? 4 : 32,
+                    cfg: isDistilledVideoFlow ? 3.0 : 4.5
+                ),
+                supports: isVideoFlow ? [.videoToAudioGeneration] : [.soundEffectGeneration],
+                components: Components(
+                    tokenizer: .local(path: "checkpoints/\(textConditionerName)/tokenizer"),
+                    textEncoder: .local(path: "checkpoints/\(textConditionerName)"),
+                    transformer: .local(path: "checkpoints/\(transformerName)"),
+                    vae: .local(path: "checkpoints/Woosh-AE"),
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+                createdAt: createdAt
+            )
+        case .wooshClap:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.soundEffectEmbedding],
+                components: Components(
+                    tokenizer: .local(path: "checkpoints/Woosh-CLAP/tokenizer"),
+                    textEncoder: .local(path: "checkpoints/Woosh-CLAP"),
+                    transformer: nil,
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+                createdAt: createdAt
+            )
+        case .wooshSynchformer:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp16,
+                supports: [.videoToAudioGeneration],
+                components: nil,
+                upstreamRepoId: WooshResources.synchformerRepoId,
                 createdAt: createdAt
             )
         case .ltxVideoAV, .ltxVideo23AVMLX:

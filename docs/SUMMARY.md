@@ -17,6 +17,7 @@
   - [Speech Runtime](./runtime/speech.md)
   - [Vision Runtime](./runtime/vision.md)
   - [Music Runtime](./runtime/music.md)
+  - [SFX Runtime](./runtime/sfx.md)
   - [Video Runtime](./runtime/video.md)
   - [Model Management](./runtime/model-management.md)
   - [Local API Server](./runtime/api-server.md)

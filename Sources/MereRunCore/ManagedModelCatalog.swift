@@ -13,6 +13,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
     case music = "music"
+    case sfx = "sfx"
     case video = "video"
 }
 
@@ -45,6 +46,9 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case falconPerception
     case aceStep
     case magentaRT2
+    case woosh
+    case wooshClap
+    case wooshSynchformer
     case ltxVideo
     case ltxVideo23MLX
     case hfTextChat
@@ -176,6 +180,45 @@ public enum ManagedModelCatalog {
         "resources/spectrostream/quantizer.safetensors",
         "resources/spectrostream/spectrostream_encoder.mlxfn",
     ]
+    private static let wooshDFlowSnapshotPatterns = [
+        "README.md",
+        "checkpoints/Woosh-DFlow/*",
+        "checkpoints/Woosh-AE/*",
+        "checkpoints/TextConditionerA/*",
+    ]
+    private static let wooshFlowSnapshotPatterns = [
+        "README.md",
+        "checkpoints/Woosh-Flow/*",
+        "checkpoints/Woosh-AE/*",
+        "checkpoints/TextConditionerA/*",
+    ]
+    private static let wooshCLAPSnapshotPatterns = [
+        "README.md",
+        "checkpoints/Woosh-CLAP/*",
+    ]
+    private static let wooshSynchformerSnapshotPatterns = [
+        WooshResources.synchformerFilename,
+    ]
+    private static let wooshVFlow8sSnapshotPatterns = [
+        "README.md",
+        "checkpoints/Woosh-VFlow-8s/*",
+        "checkpoints/Woosh-AE/*",
+        "checkpoints/TextConditionerV/*",
+    ]
+    private static let wooshDVFlow8sSnapshotPatterns = [
+        "README.md",
+        "checkpoints/Woosh-DVFlow-8s/*",
+        "checkpoints/Woosh-AE/*",
+        "checkpoints/TextConditionerV/*",
+    ]
+    private static let wooshRobertaTokenizerPatterns = [
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "vocab.json",
+        "merges.txt",
+    ]
     private static let ltx23MLXUpstreamRepoId = "dgrauet/ltx-2.3-mlx"
     private static let ltx23MLXSnapshotPatterns = [
         "config.json",
@@ -229,6 +272,23 @@ public enum ManagedModelCatalog {
                 patterns: diffusersImageSnapshotPatterns
             ),
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-4B",
+            validationKind: .flux2Klein,
+            runtimeAutoDownloadAllowed: false,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            // FLUX.2 [klein] 9B — gated, non-commercial. 9B flow + 8B Qwen3 text embedder,
+            // step-distilled to 4 steps, native single/multi-reference editing. Raw BFL
+            // diffusers format (same loader path as klein-max). Requires HF_TOKEN with the
+            // gated license accepted at huggingface.co/black-forest-labs/FLUX.2-klein-9B.
+            id: "image-klein-9b",
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "black-forest-labs/FLUX.2-klein-9B",
+                patterns: diffusersImageSnapshotPatterns
+            ),
+            upstreamRepoId: "black-forest-labs/FLUX.2-klein-9B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
@@ -944,6 +1004,146 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music generate", "music realtime"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.wooshDFlow.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: WooshResources.huggingFaceMirrorRepoId,
+                revision: "main",
+                patterns: wooshDFlowSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "checkpoints/TextConditionerA/tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: WooshResources.robertaTokenizerRepoId,
+                        revision: "main",
+                        patterns: wooshRobertaTokenizerPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+            upstreamRevision: WooshResources.upstreamRelease,
+            validationKind: .woosh,
+            estimatedDownloadBytes: 5 * 1_073_741_824,
+            defaultCLICommands: ["sfx generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.wooshFlow.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: WooshResources.huggingFaceMirrorRepoId,
+                revision: "main",
+                patterns: wooshFlowSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "checkpoints/TextConditionerA/tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: WooshResources.robertaTokenizerRepoId,
+                        revision: "main",
+                        patterns: wooshRobertaTokenizerPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+            upstreamRevision: WooshResources.upstreamRelease,
+            validationKind: .woosh,
+            estimatedDownloadBytes: 5 * 1_073_741_824,
+            defaultCLICommands: ["sfx generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.wooshClap.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: WooshResources.huggingFaceMirrorRepoId,
+                revision: "main",
+                patterns: wooshCLAPSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "checkpoints/Woosh-CLAP/tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: WooshResources.robertaTokenizerRepoId,
+                        revision: "main",
+                        patterns: wooshRobertaTokenizerPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+            upstreamRevision: WooshResources.upstreamRelease,
+            validationKind: .wooshClap,
+            estimatedDownloadBytes: 2 * 1_073_741_824,
+            defaultCLICommands: ["sfx clap"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.wooshSynchformer.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: WooshResources.synchformerRepoId,
+                revision: "main",
+                patterns: wooshSynchformerSnapshotPatterns
+            ),
+            upstreamRepoId: WooshResources.synchformerRepoId,
+            upstreamRevision: "main",
+            validationKind: .wooshSynchformer,
+            estimatedDownloadBytes: 475 * 1_048_576,
+            defaultCLICommands: ["sfx video generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.wooshVFlow8s.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: WooshResources.huggingFaceMirrorRepoId,
+                revision: "main",
+                patterns: wooshVFlow8sSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "checkpoints/TextConditionerV/tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: WooshResources.robertaTokenizerRepoId,
+                        revision: "main",
+                        patterns: wooshRobertaTokenizerPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+            upstreamRevision: WooshResources.upstreamRelease,
+            validationKind: .woosh,
+            estimatedDownloadBytes: 6 * 1_073_741_824,
+            defaultCLICommands: ["sfx video generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.wooshDVFlow8s.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: WooshResources.huggingFaceMirrorRepoId,
+                revision: "main",
+                patterns: wooshDVFlow8sSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "checkpoints/TextConditionerV/tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: WooshResources.robertaTokenizerRepoId,
+                        revision: "main",
+                        patterns: wooshRobertaTokenizerPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
+            upstreamRevision: WooshResources.upstreamRelease,
+            validationKind: .woosh,
+            estimatedDownloadBytes: 6 * 1_073_741_824,
+            defaultCLICommands: ["sfx video generate"]
+        ),
+        ManagedModelSpec(
             id: "video-ltx-av",
             category: .video,
             installShape: .structuredRoot,
@@ -1127,6 +1327,18 @@ public extension ManagedModelSpec {
             return Self.missingACEStepPaths(modelID: id, in: rootURL, fileManager: fileManager)
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
+        case .woosh:
+            let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
+            let variant = WooshVariant.resolve(model: id, rootURL: checkpointsRoot, fileManager: fileManager) ?? .dflow
+            return WooshModelResources(checkpointsRootURL: checkpointsRoot, variant: variant)
+                .missingFiles(fileManager: fileManager)
+        case .wooshClap:
+            let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
+            return WooshCLAPResources(checkpointsRootURL: checkpointsRoot)
+                .missingFiles(fileManager: fileManager)
+        case .wooshSynchformer:
+            return WooshSynchformerResources(rootURL: rootURL)
+                .missingFiles(fileManager: fileManager)
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23MLX:

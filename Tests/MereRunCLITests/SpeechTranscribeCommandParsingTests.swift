@@ -68,10 +68,12 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
             "speech",
             "vision",
             "music",
+            "sfx",
             "video",
             "model",
             "status",
             "api",
+            "config",
             "open-webui",
             "setup",
             "agent",
@@ -85,5 +87,8 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
 
         let videoNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(videoNames, Set(["generate", "export-latents"]))
+
+        let sfxNames = Set(SFX.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertEqual(sfxNames, Set(["ae", "clap", "condition", "generate", "video"]))
     }
 }

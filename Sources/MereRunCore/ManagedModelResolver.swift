@@ -385,7 +385,15 @@ public enum ManagedModelResolver {
         fileManager: FileManager
     ) throws -> MereRunModelManifest? {
         try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
-        try materializeSnapshotEntries(from: snapshotURL, to: modelDir, fileManager: fileManager)
+        let mountedDirectories = materializedDirectories(for: mountedSnapshots.map { $0.0.destinationPath })
+        let mountedDestinationPaths = Set(mountedSnapshots.map { normalizedRelativePath($0.0.destinationPath) })
+        try materializeSnapshotEntries(
+            from: snapshotURL,
+            to: modelDir,
+            fileManager: fileManager,
+            materializedDirectoryPaths: mountedDirectories,
+            excludedRelativePaths: mountedDestinationPaths
+        )
 
         for (mounted, mountedSnapshotURL) in mountedSnapshots {
             let destinationURL = modelDir.appendingPathComponent(mounted.destinationPath, isDirectory: true)
@@ -399,17 +407,80 @@ public enum ManagedModelResolver {
     private static func materializeSnapshotEntries(
         from snapshotURL: URL,
         to destinationRoot: URL,
-        fileManager: FileManager
+        fileManager: FileManager,
+        relativePath: String = "",
+        materializedDirectoryPaths: Set<String> = [],
+        excludedRelativePaths: Set<String> = []
     ) throws {
         let entries = try fileManager.contentsOfDirectory(
             at: snapshotURL,
-            includingPropertiesForKeys: nil,
+            includingPropertiesForKeys: [.isDirectoryKey],
             options: []
         )
         for entry in entries where entry.lastPathComponent != MereRunModelManifest.filename {
+            let entryRelativePath = relativePath.isEmpty
+                ? entry.lastPathComponent
+                : "\(relativePath)/\(entry.lastPathComponent)"
+            if isExcludedRelativePath(entryRelativePath, excludedRelativePaths: excludedRelativePaths) {
+                continue
+            }
+
             let linkURL = destinationRoot.appendingPathComponent(entry.lastPathComponent)
+            let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            if isDirectory && shouldMaterializeDirectory(entryRelativePath, materializedDirectoryPaths: materializedDirectoryPaths) {
+                try fileManager.createDirectory(at: linkURL, withIntermediateDirectories: true)
+                try materializeSnapshotEntries(
+                    from: entry,
+                    to: linkURL,
+                    fileManager: fileManager,
+                    relativePath: entryRelativePath,
+                    materializedDirectoryPaths: materializedDirectoryPaths,
+                    excludedRelativePaths: excludedRelativePaths
+                )
+                continue
+            }
+
+            if fileManager.fileExists(atPath: linkURL.path) {
+                try fileManager.removeItem(at: linkURL)
+            }
             try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: entry)
         }
+    }
+
+    private static func materializedDirectories(for mountedDestinationPaths: [String]) -> Set<String> {
+        var directories = Set<String>()
+        for destinationPath in mountedDestinationPaths {
+            let components = normalizedRelativePath(destinationPath)
+                .split(separator: "/")
+                .map(String.init)
+            guard !components.isEmpty else { continue }
+            var current: [String] = []
+            for component in components {
+                current.append(component)
+                directories.insert(current.joined(separator: "/"))
+            }
+        }
+        return directories
+    }
+
+    private static func shouldMaterializeDirectory(
+        _ relativePath: String,
+        materializedDirectoryPaths: Set<String>
+    ) -> Bool {
+        materializedDirectoryPaths.contains(relativePath)
+            || materializedDirectoryPaths.contains(where: { $0.hasPrefix("\(relativePath)/") })
+    }
+
+    private static func isExcludedRelativePath(
+        _ relativePath: String,
+        excludedRelativePaths: Set<String>
+    ) -> Bool {
+        excludedRelativePaths.contains(relativePath)
+            || excludedRelativePaths.contains(where: { relativePath.hasPrefix("\($0)/") })
+    }
+
+    private static func normalizedRelativePath(_ path: String) -> String {
+        path.split(separator: "/").joined(separator: "/")
     }
 
     private static func installManagedAliasesIfNeeded(

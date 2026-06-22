@@ -2,7 +2,7 @@
 
 `mere.run` is the public command-line interface for the OSS `mere.run`
 package. It exposes a modality-first command tree for image, text, speech,
-vision, music, video, model management, local status snapshots, and local API
+vision, music, SFX, video, model management, local status snapshots, and local API
 serving.
 
 If you are looking for the broader docs set, start at [mere.run Documentation](/).
@@ -35,6 +35,7 @@ Public tree:
 - `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
+- `mere.run sfx generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
 - `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
@@ -77,6 +78,7 @@ are:
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
+- SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
 - Video: `video-ltx-av`, `video-ltx23-av-mlx`
 
 For subsystem-specific implementation guides, see:
@@ -86,6 +88,7 @@ For subsystem-specific implementation guides, see:
 - [Speech Runtime](./runtime/speech.md)
 - [Vision Runtime](./runtime/vision.md)
 - [Music Runtime](./runtime/music.md)
+- [SFX Runtime](./runtime/sfx.md)
 - [Video Runtime](./runtime/video.md)
 
 ## Common workflows
@@ -160,6 +163,17 @@ swift run mere.run music realtime \
   --duration 4 \
   --output ./live.wav \
   --no-play
+```
+
+### Generate sound effects
+
+```bash
+swift run mere.run model pull sfx-woosh-dflow
+swift run mere.run sfx generate \
+  "metal wrench dropping onto concrete, bright clang and brief ring" \
+  --model sfx-woosh-dflow \
+  --duration 5 \
+  --output ./wrench-clang.wav
 ```
 
 ### Generate video
@@ -746,6 +760,83 @@ swift run mere.run music realtime \
   --model music-magenta-rt2-small \
   --duration 30 \
   --interactive
+```
+
+### `mere.run sfx generate`
+
+Generate a mono WAV sound effect from a text prompt. The default model uses the
+native Sony Research Woosh DFlow path; the original Woosh Flow checkpoint is
+also available as `sfx-woosh-flow`.
+
+```bash
+swift run mere.run sfx generate "<prompt>" [options]
+```
+
+Key options:
+
+- `--model`: `sfx-woosh-dflow`, `sfx-woosh-flow`, or a local Woosh checkpoints root
+- `--output`
+- `--duration`
+- `--steps`
+- `--cfg`
+- `--renoise`
+- `--seed`
+- `--quiet`
+
+Examples:
+
+```bash
+swift run mere.run sfx generate \
+  "metal wrench dropping onto concrete, bright clang and brief ring" \
+  --model sfx-woosh-dflow \
+  --duration 5 \
+  --steps 4 \
+  --cfg 4.5 \
+  --output ./wrench-clang.wav
+```
+
+### `mere.run sfx ae`
+
+Encode audio into normalized Woosh-AE latents or decode those latents back to a
+mono WAV.
+
+```bash
+swift run mere.run sfx ae encode ./input.wav -o ./input-latents.npy
+swift run mere.run sfx ae decode ./input-latents.npy -o ./input-roundtrip.wav
+```
+
+### `mere.run sfx condition text`
+
+Export Woosh text-conditioning tensors for a prompt. The output safetensors file
+contains `embeddings` and `mask` arrays.
+
+```bash
+swift run mere.run sfx condition text "glass breaking" -o ./glass-condition.safetensors
+```
+
+### `mere.run sfx clap score`
+
+Score a text prompt against an audio file with the native Woosh-CLAP text and
+PaSST audio towers. The command prints JSON to stdout.
+
+```bash
+swift run mere.run sfx clap score "glass breaking" ./glass.wav
+```
+
+### `mere.run sfx video generate`
+
+Generate a mono WAV sound effect from a raw video file or precomputed
+Synchformer video features. `.npy` feature inputs must have shape
+`[frames, 768]` or `[1, frames, 768]`.
+
+```bash
+swift run mere.run model pull sfx-woosh-synchformer
+swift run mere.run sfx video generate \
+  "footsteps echoing in a hallway" \
+  ./silent-hallway.mp4 \
+  --model sfx-woosh-dvflow-8s \
+  --duration 8 \
+  --output ./hallway-footsteps.wav
 ```
 
 ### `mere.run video generate`

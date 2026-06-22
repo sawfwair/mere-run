@@ -141,6 +141,7 @@ The public CLI is modality-first:
 - `mere.run speech ...`
 - `mere.run vision ...`
 - `mere.run music ...`
+- `mere.run sfx ...`
 - `mere.run video ...`
 - `mere.run model ...`
 - `mere.run status`
