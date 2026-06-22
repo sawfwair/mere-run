@@ -6,7 +6,9 @@ import MereLayout from './MereLayout.vue'
 import {
   defaultMereDocsThemeConfig,
   provideMereDocsThemeConfig,
+  resolveMereProductDocsKeyColor,
   type MereAtlasPlane,
+  type MereDocsKeyColorInput,
   type MereDocsThemeUserConfig,
 } from './config.js'
 import './mere-theme.css'
@@ -18,6 +20,7 @@ export interface MereProductDocsThemeOptions {
   productDomain: string
   docsUrl: string
   productHref?: string
+  keyColor?: MereDocsKeyColorInput
   corePrefix?: string
   coreSuffix?: string
   guideHref?: string
@@ -80,6 +83,7 @@ export function createMereProductDocsTheme(options: MereProductDocsThemeOptions)
   ]
 
   return createMereDocsTheme({
+    keyColor: resolveMereProductDocsKeyColor(options.productName, options.productDomain, options.keyColor),
     atlas: {
       eyebrowLeft: options.docsUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''),
       eyebrowRight: 'docs online',
