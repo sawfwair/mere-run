@@ -277,18 +277,19 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
-            // FLUX.2 [klein] 9B — gated, non-commercial. 9B flow + 8B Qwen3 text embedder,
-            // step-distilled to 4 steps, native single/multi-reference editing. Raw BFL
-            // diffusers format (same loader path as klein-max). Requires HF_TOKEN with the
-            // gated license accepted at huggingface.co/black-forest-labs/FLUX.2-klein-9B.
+            // FLUX.2 [klein] 9B — 9B flow + 8B Qwen3 text embedder, step-distilled to 4 steps,
+            // native single/multi-reference editing. bf16 diffusers format (same loader path as
+            // klein-max). Pulled from the mlx-community mirror, which is UNGATED (gated:false) —
+            // no HF token required — unlike black-forest-labs/FLUX.2-klein-9B which is gated.
+            // diffusersImageSnapshotPatterns skips the redundant single-file root checkpoint.
             id: "image-klein-9b",
             category: .image,
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
-                repoId: "black-forest-labs/FLUX.2-klein-9B",
+                repoId: "mlx-community/FLUX.2-klein-9B",
                 patterns: diffusersImageSnapshotPatterns
             ),
-            upstreamRepoId: "black-forest-labs/FLUX.2-klein-9B",
+            upstreamRepoId: "mlx-community/FLUX.2-klein-9B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]

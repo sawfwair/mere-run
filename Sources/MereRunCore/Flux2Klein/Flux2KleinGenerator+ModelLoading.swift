@@ -499,6 +499,13 @@ extension Flux2KleinGenerator {
         let singleFileURL = url.appendingPathComponent("model.safetensors")
 
         let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            // The Qwen3 text encoder used as an embedder only needs hidden states; the
+            // language-model output head (lm_head.*) is not part of the encoder and ships
+            // in some checkpoints (e.g. FLUX.2-klein-9B's 8B Qwen3 embedder). Drop it so
+            // Module.update(verify: .noUnusedKeys) doesn't reject the load.
+            if key == "lm_head" || key.hasPrefix("lm_head.") || key.hasPrefix("model.lm_head") {
+                return []
+            }
             var mappedKey = key
             if key.hasPrefix("model.") {
                 mappedKey = key.replacingOccurrences(of: "model.", with: "encoder.")
