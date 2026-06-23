@@ -2169,11 +2169,11 @@ actor CodeGenServer {
         }
         let resolved = try resolveImageModel(plan.modelID)
         let effectiveSteps = plan.steps
-            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .ideogram)
+            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram)
                 ? (resolved.manifest.defaults?.steps ?? 4)
                 : 4)
         let effectiveCFG = plan.guidanceScale
-            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .ideogram)
+            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram)
                 ? (resolved.manifest.defaults?.cfg ?? 1.0)
                 : 1.0)
         let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
@@ -2205,6 +2205,10 @@ actor CodeGenServer {
             _ = try await ZImageTurboGenerator().generate(request, progressHandler: nil)
         case .hidream:
             let generator = HiDreamO1Generator()
+            defer { generator.unload() }
+            _ = try await generator.generate(request, progressHandler: nil)
+        case .krea:
+            let generator = Krea2Generator()
             defer { generator.unload() }
             _ = try await generator.generate(request, progressHandler: nil)
         case .ideogram:

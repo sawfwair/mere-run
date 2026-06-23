@@ -28,6 +28,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case bonsaiImage
     case zimageTurbo
     case hidreamO1
+    case krea2
     case ideogram4SDNQ
     case gemma4
     case gemma4Unified
@@ -459,6 +460,22 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: Krea2Resources.modelId,
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Krea2Resources.upstreamRepoId,
+                revision: Krea2Resources.upstreamRevision,
+                patterns: Krea2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Krea2Resources.upstreamRepoId,
+            upstreamRevision: Krea2Resources.upstreamRevision,
+            validationKind: .krea2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Krea2Resources.estimatedDownloadBytes,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -1289,6 +1306,8 @@ public extension ManagedModelSpec {
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hidreamO1:
             return HiDreamO1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .krea2:
+            return Krea2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .ideogram4SDNQ:
             return Ideogram4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:

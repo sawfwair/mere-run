@@ -20,6 +20,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case zimageTurbo = "zimage-turbo"
         /// HiDream O1 unified pixel transformer family.
         case hidreamO1 = "hidream-o1"
+        /// Krea 2 text-to-image family.
+        case krea2 = "krea-2"
         /// Ideogram 4 text-to-image family.
         case ideogram4 = "ideogram-4"
         /// Gemma 4 family via the native Swift runtime.
@@ -64,6 +66,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case klein
         case zimage
         case hidream
+        case krea
         case ideogram
         case gemma
         case liquid
@@ -934,6 +937,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     scheduler: nil
                 ),
                 upstreamRepoId: "HiDream-ai/HiDream-O1-Image-Dev",
+                createdAt: createdAt
+            )
+        case .krea2Turbo:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .krea2,
+                family: .krea,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 8, cfg: 0.0, sigmaShift: Double(Krea2SampleBuilder.defaultMu)),
+                supports: [.txt2img],
+                components: defaultComponents,
+                upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .ideogram4SDNQUInt4:

@@ -24,6 +24,8 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("image-klein-") { return .klein }
             if id.hasPrefix("image-zimage-") { return .zimage }
             if id.hasPrefix("image-hidream-") { return .hidream }
+            if id.hasPrefix("image-krea2-") { return .krea }
+            if id.hasPrefix("image-ideogram4-") { return .ideogram }
             if id.hasPrefix("vision-segment-") { return .sam }
             if id.hasPrefix("vision-ground-") { return .falcon }
             return nil
@@ -42,6 +44,7 @@ public enum QuantizedModelManifestWriter {
             case .flux2Klein: return .klein
             case .zimageTurbo: return .zimage
             case .hidreamO1: return .hidream
+            case .krea2: return .krea
             case .ideogram4: return .ideogram
             case .gemma4: return .gemma
             case .lfm2: return .liquid
@@ -89,6 +92,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img, .img2img, .loraInference]
                 case .hidreamO1:
                     return [.txt2img, .referenceEdit, .subjectPersonalization]
+                case .krea2:
+                    return [.txt2img]
                 case .ideogram4:
                     return [.txt2img]
                 case .gemma4:
@@ -175,6 +180,12 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
             case .hidreamO1:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 28, cfg: 0.0)
+            case .krea2:
+                manifest.defaults = MereRunModelManifest.Defaults(
+                    steps: 8,
+                    cfg: 0.0,
+                    sigmaShift: Double(Krea2SampleBuilder.defaultMu)
+                )
             case .ideogram4:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 20, cfg: 7.0)
             case .gemma4:

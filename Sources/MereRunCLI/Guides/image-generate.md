@@ -13,6 +13,7 @@ Use one installed image model:
 - `image-bonsai-binary`, `image-bonsai-ternary`
 - `image-ideogram4-sdnq-uint4`
 - `image-hidream-o1`, `image-hidream-o1-dev`
+- `image-krea2-turbo`
 
 ## Install And Check
 
@@ -21,6 +22,7 @@ mere.run model capabilities
 mere.run model pull image-zimage-nano
 mere.run model pull image-bonsai-binary
 mere.run model pull image-bonsai-ternary
+mere.run model pull image-krea2-turbo
 mere.run image generate --help
 mere.run guide image generate --model image-zimage-nano
 ```
@@ -56,6 +58,7 @@ mere.run guide image generate --model image-zimage-nano
 - For FLUX.2 Klein, use explicit visual composition and relationships: foreground, background, lens/framing, color palette, and what must be absent.
 - For Ideogram 4 SDNQ, use `--structured-prompt` when a short prompt needs stronger object, spatial, lighting, camera, or text-render control. The adapter converts the prompt into a long JSON caption and raises the prompt token budget to 2048.
 - For Bonsai binary or ternary, start with four steps at 512 or 1024 square; the manifest applies its native FlowMatch sigma shift.
+- For Krea 2 Turbo, start with the managed default: 1024 square, 8 steps, CFG 0.0, and no reference or input image.
 - Use `--input` plus `--strength 0.25` to preserve layout; use `0.65` or higher for stronger reinterpretation.
 
 ## Examples
@@ -89,6 +92,15 @@ mere.run image generate \
 
 ```bash
 mere.run image generate \
+  --model image-krea2-turbo \
+  --prompt "a cinematic product photo of a translucent portable speaker, crisp reflections" \
+  --width 1024 --height 1024 \
+  --steps 8 \
+  --output ./speaker.png
+```
+
+```bash
+mere.run image generate \
   --model image-ideogram4-sdnq-uint4 \
   --prompt "a knight and a white horse in a meadow, remove the helmet, make it sunny" \
   --structured-prompt \
@@ -108,10 +120,13 @@ mere.run image generate \
 - Missing model: run `mere.run model pull <model-id>` or pass a local model root with `--model`.
 - Negative prompt has no effect: confirm `--cfg` is greater than `1.0`.
 - Input image ignored: lower dimensions may be easier to condition; also reduce or raise `--strength` depending on whether the output is too close or too different.
-- Out of memory: choose a smaller model, reduce width/height, or use a nano tier.
+- Unsupported mode on Krea 2 Turbo: use plain text-to-image; reference images, input images, and LoRA are not wired for that family yet.
+- Out of memory: choose a smaller model, reduce width/height, or use a nano tier. Krea 2 Turbo is a large BF16 component install and is best treated as a 96 GB+ Apple Silicon path.
 
 ## Sources
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/ImageGenerateCommand.swift
 - https://huggingface.co/docs/diffusers/api/pipelines/z_image
 - https://docs.bfl.ai/guides/prompting_guide_flux2_klein
+- https://huggingface.co/krea/Krea-2-Turbo
+- https://github.com/krea-ai/krea-2

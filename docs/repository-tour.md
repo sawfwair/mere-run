@@ -71,6 +71,7 @@ Key subdirectories:
 - `Flux2Klein/`: Klein image-family runtime
 - `ZImageTurbo/`: ZImage image-family runtime
 - `HiDreamO1/`: HiDream O1 image-family runtime
+- `Krea2/`: Krea 2 Turbo image-family runtime
 - `QwenImageEdit/`: image editing flow
 - `Gemma4/`, `Q35/`, `LFM2/`, `Psi/`, `MeBot/`: text/chat model families
 - `Embeddings/`: embedding-generation support

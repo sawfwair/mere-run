@@ -266,6 +266,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                Krea2Resources.modelId,
+                "Image, Krea 2 Turbo",
+                "Runs the Krea 2 Turbo 8-step text-to-image model through the native Swift MLX image runtime.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 Ideogram4Resources.modelId,
                 "Image, Ideogram 4 typography",
                 "Installs the SDNQ uint4 Ideogram 4 text-to-image stack with dedicated positive and unconditional transformers.",

@@ -231,6 +231,12 @@ swift run mere.run image generate \
   --model image-bonsai-binary \
   --prompt "a tiny bonsai tree in a sunlit greenhouse" \
   --output ./bonsai.png
+
+swift run mere.run image generate \
+  --model image-krea2-turbo \
+  --prompt "a cinematic product photo of a translucent portable speaker, crisp reflections" \
+  --steps 8 \
+  --output ./speaker.png
 ```
 
 ### Text chat

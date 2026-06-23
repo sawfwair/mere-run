@@ -143,17 +143,13 @@ extension QwenImageEditVAE {
     public static func weightMapper(key: String, value: MLXArray) -> [(String, MLXArray)] {
         var mappedKey = key
 
-        // Convert snake_case to camelCase for module keys
+        // AutoencoderKL3D keeps the public Qwen module keys in their source
+        // snake_case form. Only the top-level quant conv slots are camelCase
+        // because `quant_conv`/`post_quant_conv` would collide with Swift
+        // naming conventions.
         mappedKey = mappedKey
-            .replacingOccurrences(of: "conv_in", with: "convIn")
-            .replacingOccurrences(of: "conv_out", with: "convOut")
-            .replacingOccurrences(of: "norm_out", with: "normOut")
-            .replacingOccurrences(of: "mid_block", with: "midBlock")
-            .replacingOccurrences(of: "up_blocks", with: "upBlocks")
-            .replacingOccurrences(of: "down_blocks", with: "downBlocks")
-            .replacingOccurrences(of: "conv_shortcut", with: "convShortcut")
-            .replacingOccurrences(of: "time_conv", with: "timeConv")
-            .replacingOccurrences(of: "to_qkv", with: "toQKV")
+            .replacingOccurrences(of: "post_quant_conv", with: "postQuantConv")
+            .replacingOccurrences(of: "quant_conv", with: "quantConv")
 
         // resample.1.* -> resample.0.* (PyTorch has [Upsample, Conv], we only have Conv at index 0)
         if mappedKey.contains(".resample.1.") {
@@ -169,8 +165,8 @@ extension QwenImageEditVAE {
                 // No transpose needed - our CausalConv3d stores in PyTorch format
                 mappedValue = value
             } else if value.ndim == 4 {
-                // 4D conv weight: [O, I, kH, kW] -> [kH, kW, I, O] for MLX Conv2d
-                mappedValue = value.transposed(2, 3, 1, 0)
+                // 4D conv weight: [O, I, kH, kW] -> [O, kH, kW, I] for MLX Conv2d
+                mappedValue = HFSafetensorsWeightsLoader.convWeightOIHWToOHWI(value)
             }
         }
 

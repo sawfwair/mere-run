@@ -10,6 +10,15 @@ private func requireConv2d(_ module: Any, context: String) -> Conv2d {
     return conv
 }
 
+private func qwenAsymmetricDownsamplePad(_ x: MLXArray) -> MLXArray {
+    padded(x, widths: [
+        [0, 0],  // batch
+        [0, 1],  // height: bottom-only zero pad before stride-2 conv
+        [0, 1],  // width: right-only zero pad before stride-2 conv
+        [0, 0]   // channels
+    ])
+}
+
 // MARK: - Configuration
 
 public struct VAE3DConfig {
@@ -53,36 +62,35 @@ public struct VAE3DConfig {
 
 // MARK: - 3D Spatial Norm
 
-/// RMS-style normalization over spatial dimensions [B, C, T, H, W] -> normalizes over T, H, W
+/// Qwen image RMS normalization over channels for [B, C, T, H, W].
 private final class VAE3DSpatialNorm: Module {
     @ModuleInfo(key: "gamma") var gamma: MLXArray
     let eps: Float
 
-    init(channels: Int, eps: Float = 1e-6) {
+    init(channels: Int, eps: Float = 1e-12) {
         self.eps = eps
         self._gamma.wrappedValue = MLXArray.ones([channels, 1, 1, 1])
         super.init()
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        // x: [B, C, T, H, W] in NCTHW format
-        // Normalize over T, H, W (axes 2, 3, 4)
-        let variance = x.square().mean(axes: [2, 3, 4], keepDims: true)
-        let normalized = x * rsqrt(variance + eps)
-        // gamma: [C, 1, 1, 1] broadcasts to [1, C, 1, 1, 1]
-        return normalized * gamma
+        let dtype = x.dtype
+        let xFloat = x.asType(.float32)
+        let variance = xFloat.square().mean(axis: 1, keepDims: true)
+        let normalized = xFloat * rsqrt(variance + eps)
+        return (normalized * gamma.asType(.float32)).asType(dtype)
     }
 }
 
 // MARK: - CausalConv3d
 
-/// 3D convolution with causal (replicate) padding in time dimension
+/// 3D convolution with causal zero padding in the time dimension.
 private final class CausalConv3d: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
     @ModuleInfo(key: "bias") var bias: MLXArray?
 
     let stride: (Int, Int, Int)
-    let padding: (Int, Int, Int)  // spatial padding only, temporal handled separately
+    let padding: (Int, Int, Int)
     let temporalPadding: Int
     let hasBias: Bool
 
@@ -96,7 +104,7 @@ private final class CausalConv3d: Module {
     ) {
         self.stride = stride
         self.padding = padding
-        self.temporalPadding = kernelSize.0 - 1  // causal: pad (k-1) on left
+        self.temporalPadding = padding.0 * 2
         self.hasBias = bias
 
         // Weight: [out_ch, in_ch, kT, kH, kW]
@@ -110,12 +118,18 @@ private final class CausalConv3d: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if x.dim(2) == 1 && stride.0 == 1 {
+            return callSingleFrame(x)
+        }
+
         var hidden = x  // [B, C, T, H, W]
 
-        // Causal padding: replicate first frame
+        // Qwen's causal conv pads missing history with zeros.
         if temporalPadding > 0 {
-            let firstFrame = hidden[0..., 0..., 0..<1, 0..., 0...]
-            let padFrames = tiled(firstFrame, repetitions: [1, 1, temporalPadding, 1, 1])
+            let padFrames = MLX.zeros(
+                [hidden.dim(0), hidden.dim(1), temporalPadding, hidden.dim(3), hidden.dim(4)],
+                dtype: hidden.dtype
+            )
             hidden = concatenated([padFrames, hidden], axis: 2)
         }
 
@@ -138,6 +152,35 @@ private final class CausalConv3d: Module {
         }
 
         return hidden
+    }
+
+    private func callSingleFrame(_ x: MLXArray) -> MLXArray {
+        let batch = x.dim(0)
+        let temporalIndex = weight.dim(2) - 1
+
+        var frame = x[0..., 0..., 0, 0..., 0...].transposed(0, 2, 3, 1)
+        if padding.1 > 0 || padding.2 > 0 {
+            frame = padded(frame, widths: [
+                [0, 0],
+                [padding.1, padding.1],
+                [padding.2, padding.2],
+                [0, 0]
+            ])
+        }
+
+        let kernel = weight[0..., 0..., temporalIndex, 0..., 0...].transposed(0, 2, 3, 1)
+        var hidden = MLX.conv2d(
+            frame,
+            kernel,
+            stride: .init((stride.1, stride.2)),
+            padding: 0
+        )
+        if let b = bias {
+            hidden = hidden + b
+        }
+        let outHeight = hidden.dim(1)
+        let outWidth = hidden.dim(2)
+        return hidden.transposed(0, 3, 1, 2).reshaped(batch, hidden.dim(3), 1, outHeight, outWidth)
     }
 }
 
@@ -262,26 +305,23 @@ private final class VAE3DAttention: Module {
     }
 }
 
-/// 2D spatial norm for attention (channels-last: [B, H, W, C])
+/// Qwen image RMS normalization for attention in channels-last form [B, H, W, C].
 private final class VAE3DSpatialNorm2D: Module {
     @ModuleInfo(key: "gamma") var gamma: MLXArray
     let eps: Float
 
-    init(channels: Int, eps: Float = 1e-6) {
+    init(channels: Int, eps: Float = 1e-12) {
         self.eps = eps
-        // gamma shape [C, 1, 1] for broadcasting over [B, H, W, C] -> need [1, 1, C]
         self._gamma.wrappedValue = MLXArray.ones([channels, 1, 1])
         super.init()
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        // x: [B, H, W, C] (channels-last)
-        // Compute variance over H, W dimensions (axes 1, 2)
-        let variance = x.square().mean(axes: [1, 2], keepDims: true)
-        let normalized = x * rsqrt(variance + eps)
-        // gamma is [C, 1, 1] from weights, needs to broadcast to [1, 1, C] for channels-last
-        // The loaded gamma will be transposed in the weight mapper
-        return normalized * gamma.transposed(2, 1, 0)
+        let dtype = x.dtype
+        let xFloat = x.asType(.float32)
+        let variance = xFloat.square().mean(axis: -1, keepDims: true)
+        let normalized = xFloat * rsqrt(variance + eps)
+        return (normalized * gamma.asType(.float32).transposed(2, 1, 0)).asType(dtype)
     }
 }
 
@@ -508,7 +548,8 @@ private final class VAE3DDecoder: Module {
         for block in upBlocks {
             hidden = block(hidden)
         }
-        hidden = silu(normOut(hidden))
+        let normalized = normOut(hidden)
+        hidden = silu(normalized)
         hidden = convOut(hidden)
         return hidden
     }
@@ -529,7 +570,7 @@ private final class VAE3DDownsampler: Module {
         self.hasTimeConv = temporalDownsample
 
         // resample.1 is the conv (resample.0 is nn.AvgPool in PyTorch, we do stride conv)
-        let conv = Conv2d(inputChannels: inChannels, outputChannels: inChannels, kernelSize: 3, stride: 2, padding: 1)
+        let conv = Conv2d(inputChannels: inChannels, outputChannels: inChannels, kernelSize: 3, stride: 2)
         self._resample.wrappedValue = [conv]
 
         if hasTimeConv {
@@ -539,7 +580,7 @@ private final class VAE3DDownsampler: Module {
                 outputChannels: inChannels,
                 kernelSize: (3, 1, 1),
                 stride: (2, 1, 1),
-                padding: (1, 0, 0)
+                padding: (0, 0, 0)
             )
         }
         super.init()
@@ -561,6 +602,7 @@ private final class VAE3DDownsampler: Module {
 
         // Reshape to [B*T, H, W, C] for channels-last 2D operations
         hidden = hidden.transposed(0, 2, 3, 4, 1).reshaped(b * newT, currentH, currentW, c)
+        hidden = qwenAsymmetricDownsamplePad(hidden)
 
         // Apply conv (resample.1) - Conv2d expects [B, H, W, C]
         let conv = requireConv2d(resample[0], context: "VAE3DDownsampler.resample[0]")
@@ -638,7 +680,7 @@ private final class VAE3DEncoderDownsampleBlock: Module {
         self.channels = channels
         self.hasTimeConv = temporalDownsample
 
-        let conv = Conv2d(inputChannels: channels, outputChannels: channels, kernelSize: 3, stride: 2, padding: 1)
+        let conv = Conv2d(inputChannels: channels, outputChannels: channels, kernelSize: 3, stride: 2)
         self._resample.wrappedValue = [conv]
 
         if temporalDownsample {
@@ -647,7 +689,7 @@ private final class VAE3DEncoderDownsampleBlock: Module {
                 outputChannels: channels,
                 kernelSize: (3, 1, 1),
                 stride: (2, 1, 1),
-                padding: (1, 0, 0)
+                padding: (0, 0, 0)
             )
         }
         super.init()
@@ -668,6 +710,7 @@ private final class VAE3DEncoderDownsampleBlock: Module {
 
         // Reshape to channels-last for Conv2d
         hidden = hidden.transposed(0, 2, 3, 4, 1).reshaped(b * newT, currentH, currentW, c)
+        hidden = qwenAsymmetricDownsamplePad(hidden)
 
         let conv = requireConv2d(resample[0], context: "VAE3DEncoderDownsampleBlock.resample[0]")
         hidden = conv(hidden)
@@ -775,11 +818,25 @@ private final class VAE3DEncoder: Module {
 public final class AutoencoderKL3D: Module {
     public let config: VAE3DConfig
     @ModuleInfo(key: "encoder") private var encoder: VAE3DEncoder
+    @ModuleInfo(key: "quantConv") private var quantConv: CausalConv3d
+    @ModuleInfo(key: "postQuantConv") private var postQuantConv: CausalConv3d
     @ModuleInfo(key: "decoder") private var decoder: VAE3DDecoder
 
     public init(config: VAE3DConfig = .init()) {
         self.config = config
         self._encoder.wrappedValue = VAE3DEncoder(config: config)
+        self._quantConv.wrappedValue = CausalConv3d(
+            inputChannels: config.latentChannels * 2,
+            outputChannels: config.latentChannels * 2,
+            kernelSize: (1, 1, 1),
+            padding: (0, 0, 0)
+        )
+        self._postQuantConv.wrappedValue = CausalConv3d(
+            inputChannels: config.latentChannels,
+            outputChannels: config.latentChannels,
+            kernelSize: (1, 1, 1),
+            padding: (0, 0, 0)
+        )
         self._decoder.wrappedValue = VAE3DDecoder(config: config)
         super.init()
     }
@@ -788,7 +845,7 @@ public final class AutoencoderKL3D: Module {
     /// - Parameter images: [B, C, T, H, W] in [-1, 1] range
     /// - Returns: [B, latent_channels, T/temporalScale, H/spatialScale, W/spatialScale] latent representation
     public func encode(_ images: MLXArray) -> MLXArray {
-        let encoded = encoder(images)
+        let encoded = quantConv(encoder(images))
         // Take first half of channels (mean), ignore logvar
         let mean = encoded[0..., 0..<config.latentChannels, 0..., 0..., 0...]
         // Scale latents
@@ -819,7 +876,8 @@ public final class AutoencoderKL3D: Module {
         if config.shiftFactor != 0 {
             x = x + MLXArray(config.shiftFactor)
         }
-        return decoder(x)
+        let postQuantized = postQuantConv(x)
+        return decoder(postQuantized)
     }
 
     /// Decode single image (convenience)
@@ -854,14 +912,12 @@ private func conv3d(
     // Transpose weight: [O, I, kD, kH, kW] -> [O, kD, kH, kW, I]
     let wT = weight.transposed(0, 2, 3, 4, 1)
 
-    // MLX conv_general - padding is 0 (we handle padding manually in CausalConv3d)
-    let result = convGeneral(
+    // MLX conv3d - padding is 0 (we handle padding manually in CausalConv3d)
+    let result = MLX.conv3d(
         xT,
         wT,
-        strides: .array(stride),
+        stride: .init(stride),
         padding: 0,
-        kernelDilation: 1,
-        inputDilation: 1,
         groups: groups
     )
 

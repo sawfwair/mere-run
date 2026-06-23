@@ -343,6 +343,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
             case .hidream where engine != .hidreamO1:
                 warnings.append("Manifest engine mismatch: family=hidream expects hidream-o1.")
+            case .krea where engine != .krea2:
+                warnings.append("Manifest engine mismatch: family=krea expects krea-2.")
             case .ideogram where engine != .ideogram4:
                 warnings.append("Manifest engine mismatch: family=ideogram expects ideogram-4.")
             case .gemma where engine != .gemma4:
@@ -490,6 +492,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("image-hidream-") { return .hidream }
+        if modelId.hasPrefix("image-krea2-") { return .krea }
         if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
@@ -633,6 +636,7 @@ public enum MereRunModelValidator {
     }
 
     private static func hasAnyWeightFiles(in directory: URL, fileManager: FileManager) -> Bool {
+        let directory = directory.resolvingSymlinksInPath()
         guard let children = try? fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -653,6 +657,7 @@ public enum MereRunModelValidator {
     }
 
     private static func containsIncompleteFiles(in rootURL: URL, fileManager: FileManager) -> Bool {
+        let rootURL = rootURL.resolvingSymlinksInPath()
         guard let e = fileManager.enumerator(
             at: rootURL,
             includingPropertiesForKeys: [.isRegularFileKey],
