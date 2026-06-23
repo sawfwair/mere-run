@@ -138,6 +138,7 @@ struct VideoGenerate: AsyncParsableCommand {
         Examples:
           swift run mere.run video generate "a cinematic drone flythrough over snowy mountains" --num-frames 65
           swift run mere.run video generate "woman walking in neon rain" --image frame.png
+          swift run mere.run video generate "a car drives from dawn into sunset" --image start.png --end-image end.png
           swift run mere.run video generate "dialogue with clean background music" --variant unified-av --model video-ltx23-av-mlx --duration 15 --fps 24
         """
     )
@@ -181,6 +182,12 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("image-strength")], help: "Image conditioning strength in [0, 1].")
     var imageStrength: Float = 1.0
 
+    @Option(name: [.customLong("end-image")], help: "Optional end keyframe path; conditions the last frame so the clip interpolates a directed start->end motion. Requires --image.")
+    var endImage: String?
+
+    @Option(name: [.customLong("end-image-strength")], help: "End keyframe conditioning strength in [0, 1].")
+    var endImageStrength: Float = 1.0
+
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
@@ -209,6 +216,12 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         guard (0...1).contains(imageStrength) else {
             throw ValidationError("--image-strength must be between 0 and 1")
+        }
+        guard (0...1).contains(endImageStrength) else {
+            throw ValidationError("--end-image-strength must be between 0 and 1")
+        }
+        if endImage != nil, image == nil {
+            throw ValidationError("--end-image requires --image (the start keyframe)")
         }
 
         let resolvedWidth = max(64, (width / 64) * 64)
@@ -248,6 +261,17 @@ struct VideoGenerate: AsyncParsableCommand {
             sourceImageURL = nil
         }
 
+        let endImageURL: URL?
+        if let endImage, !endImage.isEmpty {
+            let url = URL(fileURLWithPath: endImage).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("End image file not found: \(url.path)")
+            }
+            endImageURL = url
+        } else {
+            endImageURL = nil
+        }
+
         let resolvedModelRoot = try await resolveVideoModelRoot(
             explicitModelRoot: modelRoot,
             requestedModel: model,
@@ -264,6 +288,8 @@ struct VideoGenerate: AsyncParsableCommand {
             variant: variant,
             sourceImageURL: sourceImageURL,
             imageStrength: imageStrength,
+            endImageURL: endImageURL,
+            endImageStrength: endImageStrength,
             modelRoot: resolvedModelRoot,
             outputURL: outputURL
         )
@@ -279,6 +305,8 @@ struct VideoGenerate: AsyncParsableCommand {
         variant: LTXVideoVariant,
         sourceImageURL: URL?,
         imageStrength: Float,
+        endImageURL: URL?,
+        endImageStrength: Float,
         modelRoot: String,
         outputURL: URL
     ) async throws {
@@ -313,7 +341,9 @@ struct VideoGenerate: AsyncParsableCommand {
                         fps: fps,
                         seed: seed,
                         sourceImageURL: sourceImageURL,
-                        imageStrength: imageStrength
+                        imageStrength: imageStrength,
+                        endImageURL: endImageURL,
+                        endImageStrength: endImageStrength
                     )
                 )
                 await generator.unload()
@@ -356,7 +386,9 @@ struct VideoGenerate: AsyncParsableCommand {
                         fps: fps,
                         seed: seed,
                         sourceImageURL: sourceImageURL,
-                        imageStrength: imageStrength
+                        imageStrength: imageStrength,
+                        endImageURL: endImageURL,
+                        endImageStrength: endImageStrength
                     )
                 )
                 await generator.unload()

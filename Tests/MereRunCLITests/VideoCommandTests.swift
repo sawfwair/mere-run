@@ -31,7 +31,39 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNil(cmd.duration)
         XCTAssertEqual(cmd.fps, 24)
         XCTAssertEqual(cmd.imageStrength, 1.0)
+        XCTAssertNil(cmd.endImage)
+        XCTAssertEqual(cmd.endImageStrength, 1.0)
         XCTAssertNil(cmd.modelRoot)
+    }
+
+    func testVideoGenerateParsesStartAndEndKeyframes() throws {
+        let cmd = try VideoGenerate.parse([
+            "a flower opens from bud to bloom",
+            "--image", "/tmp/start.png",
+            "--image-strength", "0.85",
+            "--end-image", "/tmp/end.png",
+            "--end-image-strength", "0.7",
+        ])
+
+        XCTAssertEqual(cmd.image, "/tmp/start.png")
+        XCTAssertEqual(cmd.imageStrength, 0.85, accuracy: 0.0001)
+        XCTAssertEqual(cmd.endImage, "/tmp/end.png")
+        XCTAssertEqual(cmd.endImageStrength, 0.7, accuracy: 0.0001)
+    }
+
+    func testVideoGenerateRejectsEndImageWithoutStartImage() async throws {
+        let cmd = try VideoGenerate.parse([
+            "a car drives from dawn into sunset",
+            "--end-image", "/tmp/end.png",
+        ])
+
+        do {
+            try await cmd.run()
+            XCTFail("Expected --end-image without --image to fail validation.")
+        } catch {
+            let message = "\(error) \(error.localizedDescription)"
+            XCTAssertTrue(message.contains("--end-image requires --image"))
+        }
     }
 
     func testVideoGenerateParsesDurationOverride() throws {

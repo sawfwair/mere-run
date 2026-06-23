@@ -30,6 +30,27 @@ swift run mere.run video generate \
   --output ./clip.mp4
 ```
 
+### Directed image-to-video
+
+Use `--image` to anchor the first latent frame. Add `--end-image` when the clip
+should move toward a specific final keyframe.
+
+```bash
+swift run mere.run video generate \
+  "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
+  --variant distilled \
+  --model video-ltx23-av-mlx \
+  --image ./car-start.png \
+  --image-strength 0.9 \
+  --end-image ./car-end.png \
+  --end-image-strength 0.85 \
+  --num-frames 65 \
+  --output ./car-start-to-end.mp4
+```
+
+`--end-image` requires `--image`; the start conditioning wins if very short
+clips make the start and end latent conditioning windows overlap.
+
 ### Synchronized AV quality render
 
 For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma

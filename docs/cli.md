@@ -861,6 +861,8 @@ Key options:
 - `--seed`
 - `--image`
 - `--image-strength`
+- `--end-image`
+- `--end-image-strength`
 - `--quiet`
 
 Environment:
@@ -893,6 +895,15 @@ swift run mere.run video generate \
   --duration 15 \
   --fps 24 \
   --output ./dialogue-score-sfx.mp4
+
+swift run mere.run video generate \
+  "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
+  --variant distilled \
+  --model video-ltx23-av-mlx \
+  --image ./car-start.png \
+  --end-image ./car-end.png \
+  --num-frames 65 \
+  --output ./car-start-to-end.mp4
 ```
 
 ### `mere.run video export-latents`
