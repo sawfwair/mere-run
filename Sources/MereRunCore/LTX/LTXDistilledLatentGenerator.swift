@@ -15,6 +15,8 @@ public struct LTXDistilledLatentGenerationOptions: Sendable {
     public let sourceImageURL: URL?
     public let imageStrength: Float
     public let imageFrameIndex: Int
+    public let endImageURL: URL?
+    public let endImageStrength: Float
 
     public init(
         prompt: String,
@@ -26,7 +28,9 @@ public struct LTXDistilledLatentGenerationOptions: Sendable {
         maxTextLength: Int = 1024,
         sourceImageURL: URL? = nil,
         imageStrength: Float = 1.0,
-        imageFrameIndex: Int = 0
+        imageFrameIndex: Int = 0,
+        endImageURL: URL? = nil,
+        endImageStrength: Float = 1.0
     ) {
         self.prompt = prompt
         self.width = width
@@ -38,6 +42,8 @@ public struct LTXDistilledLatentGenerationOptions: Sendable {
         self.sourceImageURL = sourceImageURL
         self.imageStrength = imageStrength
         self.imageFrameIndex = imageFrameIndex
+        self.endImageURL = endImageURL
+        self.endImageStrength = endImageStrength
     }
 }
 
@@ -349,6 +355,7 @@ public actor LTXDistilledLatentGenerator {
         var stage1ConditioningState: LTXLatentConditioningState?
         var stage2ConditioningState: LTXLatentConditioningState?
         var stage2ConditioningLatent: MLXArray?
+        var stage2EndConditioningLatent: MLXArray?
 
         var latents: MLXArray
         if isImageToVideo {
@@ -381,11 +388,34 @@ public actor LTXDistilledLatentGenerator {
             let stage2ImageLatent = encoder.encode(image: stage2Image)
             stage2ConditioningLatent = stage2ImageLatent
 
+            // Optional end keyframe -> conditions the tail latent frame so the clip
+            // interpolates a directed start->end motion.
+            var stage1EndImageLatent: MLXArray?
+            if let endImageURL = options.endImageURL {
+                let stage1EndImage = try loadImageForEncoding(
+                    url: endImageURL,
+                    width: options.width / 2,
+                    height: options.height / 2,
+                    dtype: modelDType
+                )
+                stage1EndImageLatent = encoder.encode(image: stage1EndImage)
+                let stage2EndImage = try loadImageForEncoding(
+                    url: endImageURL,
+                    width: options.width,
+                    height: options.height,
+                    dtype: modelDType
+                )
+                stage2EndConditioningLatent = encoder.encode(image: stage2EndImage)
+            }
+
             var state1 = applyLatentConditioning(
                 baseLatent: MLX.zeros([1, 128, latentFrames, stage1H, stage1W], dtype: modelDType),
                 conditionedLatent: stage1ImageLatent,
                 frameIndex: options.imageFrameIndex,
-                strength: options.imageStrength
+                strength: options.imageStrength,
+                endConditionedLatent: stage1EndImageLatent,
+                endFrameIndex: -1,
+                endStrength: options.endImageStrength
             )
             let stage1Noise = MLXRandom.normal(state1.latent.shape).asType(modelDType)
             let stage1Sigma = MLXArray(STAGE1Sigmas[0]).asType(modelDType)
@@ -474,7 +504,10 @@ public actor LTXDistilledLatentGenerator {
                 baseLatent: latents,
                 conditionedLatent: $0,
                 frameIndex: options.imageFrameIndex,
-                strength: options.imageStrength
+                strength: options.imageStrength,
+                endConditionedLatent: stage2EndConditioningLatent,
+                endFrameIndex: -1,
+                endStrength: options.endImageStrength
             )
         }) {
             let noise = MLXRandom.normal(latents.shape).asType(modelDType)
@@ -1028,7 +1061,10 @@ private func applyLatentConditioning(
     baseLatent: MLXArray,
     conditionedLatent: MLXArray,
     frameIndex: Int,
-    strength: Float
+    strength: Float,
+    endConditionedLatent: MLXArray? = nil,
+    endFrameIndex: Int = -1,
+    endStrength: Float = 1.0
 ) -> LTXLatentConditioningState {
     let b = baseLatent.dim(0)
     let c = baseLatent.dim(1)
@@ -1040,6 +1076,17 @@ private func applyLatentConditioning(
 
     let condEnd = min(frameIndex + condFrames, f)
     let oneMinusStrength = MLXArray(1.0 - strength).asType(dtype)
+
+    // Optional end keyframe: condition a second image at the tail of the clip so
+    // LTX interpolates a directed start->end motion. Defaults to the last latent
+    // frame(s). Start conditioning takes precedence on any overlap.
+    let endCondFrames = endConditionedLatent?.dim(2) ?? 0
+    let endStart = endConditionedLatent != nil
+        ? (endFrameIndex >= 0 ? endFrameIndex : max(0, f - endCondFrames))
+        : f
+    let endStop = min(endStart + endCondFrames, f)
+    let oneMinusEndStrength = MLXArray(1.0 - endStrength).asType(dtype)
+
     var latentFrames: [MLXArray] = []
     var cleanFrames: [MLXArray] = []
     var maskFrames: [MLXArray] = []
@@ -1054,6 +1101,12 @@ private func applyLatentConditioning(
             latentFrames.append(condSlice)
             cleanFrames.append(condSlice)
             maskFrames.append(MLX.full([b, 1, 1, 1, 1], values: oneMinusStrength))
+        } else if let endLatent = endConditionedLatent, frame >= endStart, frame < endStop {
+            let condIdx = frame - endStart
+            let condSlice = endLatent[0..., 0..., condIdx..<condIdx + 1, 0..., 0...]
+            latentFrames.append(condSlice)
+            cleanFrames.append(condSlice)
+            maskFrames.append(MLX.full([b, 1, 1, 1, 1], values: oneMinusEndStrength))
         } else {
             latentFrames.append(baseLatent[0..., 0..., frame..<frame + 1, 0..., 0...])
             cleanFrames.append(MLX.zeros([b, c, 1, h, w], dtype: dtype))
@@ -2760,6 +2813,8 @@ public struct LTXUnifiedAVGenerationOptions: Sendable {
     public let sourceImageURL: URL?
     public let imageStrength: Float
     public let imageFrameIndex: Int
+    public let endImageURL: URL?
+    public let endImageStrength: Float
 
     public init(
         prompt: String,
@@ -2771,7 +2826,9 @@ public struct LTXUnifiedAVGenerationOptions: Sendable {
         maxTextLength: Int = 1024,
         sourceImageURL: URL? = nil,
         imageStrength: Float = 1.0,
-        imageFrameIndex: Int = 0
+        imageFrameIndex: Int = 0,
+        endImageURL: URL? = nil,
+        endImageStrength: Float = 1.0
     ) {
         self.prompt = prompt
         self.width = width
@@ -2783,6 +2840,8 @@ public struct LTXUnifiedAVGenerationOptions: Sendable {
         self.sourceImageURL = sourceImageURL
         self.imageStrength = imageStrength
         self.imageFrameIndex = imageFrameIndex
+        self.endImageURL = endImageURL
+        self.endImageStrength = endImageStrength
     }
 }
 
@@ -3237,6 +3296,7 @@ public actor LTXUnifiedAVGenerator {
         var stage1ConditioningState: LTXLatentConditioningState?
         var stage2ConditioningState: LTXLatentConditioningState?
         var stage2ConditioningLatent: MLXArray?
+        var stage2EndConditioningLatent: MLXArray?
 
         var videoLatents: MLXArray
         if isImageToVideo {
@@ -3269,11 +3329,34 @@ public actor LTXUnifiedAVGenerator {
             let stage2ImageLatent = encoder.encode(image: stage2Image)
             stage2ConditioningLatent = stage2ImageLatent
 
+            // Optional end keyframe -> conditions the tail latent frame so the clip
+            // interpolates a directed start->end motion.
+            var stage1EndImageLatent: MLXArray?
+            if let endImageURL = options.endImageURL {
+                let stage1EndImage = try loadImageForEncoding(
+                    url: endImageURL,
+                    width: options.width / 2,
+                    height: options.height / 2,
+                    dtype: modelDType
+                )
+                stage1EndImageLatent = encoder.encode(image: stage1EndImage)
+                let stage2EndImage = try loadImageForEncoding(
+                    url: endImageURL,
+                    width: options.width,
+                    height: options.height,
+                    dtype: modelDType
+                )
+                stage2EndConditioningLatent = encoder.encode(image: stage2EndImage)
+            }
+
             var state1 = applyLatentConditioning(
                 baseLatent: MLX.zeros([1, 128, latentFrames, stage1H, stage1W], dtype: modelDType),
                 conditionedLatent: stage1ImageLatent,
                 frameIndex: options.imageFrameIndex,
-                strength: options.imageStrength
+                strength: options.imageStrength,
+                endConditionedLatent: stage1EndImageLatent,
+                endFrameIndex: -1,
+                endStrength: options.endImageStrength
             )
             let stage1Noise = MLXRandom.normal(state1.latent.shape).asType(modelDType)
             let stage1Sigma = MLXArray(STAGE1Sigmas[0]).asType(modelDType)
@@ -3353,7 +3436,10 @@ public actor LTXUnifiedAVGenerator {
                 baseLatent: videoLatents,
                 conditionedLatent: $0,
                 frameIndex: options.imageFrameIndex,
-                strength: options.imageStrength
+                strength: options.imageStrength,
+                endConditionedLatent: stage2EndConditioningLatent,
+                endFrameIndex: -1,
+                endStrength: options.endImageStrength
             )
         }) {
             let noise = MLXRandom.normal(videoLatents.shape).asType(modelDType)

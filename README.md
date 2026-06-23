@@ -453,6 +453,16 @@ swift run mere.run video generate \
   --num-frames 65 \
   --output ./clip.mp4
 
+# Anchor the first and last keyframes for directed image-to-video
+swift run mere.run video generate \
+  "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
+  --variant distilled \
+  --model video-ltx23-av-mlx \
+  --image ./car-start.png \
+  --end-image ./car-end.png \
+  --num-frames 65 \
+  --output ./clip-directed.mp4
+
 # Generate synchronized LTX 2.3 audio/video
 swift run mere.run model pull video-ltx23-av-mlx
 swift run mere.run video generate \

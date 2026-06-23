@@ -36,12 +36,16 @@ mere.run video generate --help
 - `--seed`: deterministic generation.
 - `--image`: source image for image-to-video.
 - `--image-strength`: image conditioning strength from `0` to `1`.
+- `--end-image`: optional ending keyframe; requires `--image`.
+- `--end-image-strength`: ending keyframe conditioning strength from `0` to `1`.
 - `--quiet`, `-q`: suppress diagnostics.
 
 ## Prompting Patterns
 
 - Describe subject, motion, camera movement, environment, lighting, and style.
 - For image-to-video, prompt the motion you want, not only what is already visible.
+- For directed image-to-video, pass `--image` and `--end-image` so the first
+  and last latent frames are both anchored.
 - Keep early drafts short: `--num-frames 65` at `24` fps is a fast test.
 - Use `video-ltx23-av-mlx --variant unified-av --fps 24` for representative
   LTX 2.3 dialogue, score, and SFX checks.
@@ -79,6 +83,16 @@ mere.run video generate \
   --output ./product-spin.mp4
 ```
 
+```bash
+mere.run video generate \
+  "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
+  --image ./car-start.png \
+  --image-strength 0.9 \
+  --end-image ./car-end.png \
+  --end-image-strength 0.85 \
+  --output ./car-start-to-end.mp4
+```
+
 ## Iteration Tips
 
 - Lock seed after motion is promising.
@@ -93,6 +107,7 @@ mere.run video generate \
 - Frame count adjusted: expected, LTX uses `8n+1`.
 - Slow motion with normal audio: keep unified AV renders at `--fps 24`.
 - Empty or poor image-to-video: verify `--image` exists and try a higher `--image-strength`.
+- End keyframe rejected: `--end-image` requires a starting `--image`.
 
 ## Sources
 

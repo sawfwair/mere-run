@@ -11,6 +11,8 @@ The format is based on Keep a Changelog.
 - added native Krea 2 Turbo text-to-image support through the managed
   `image-krea2-turbo` model, including component-only Hugging Face pulls,
   split-transformer validation, Swift MLX MMDiT sampling, docs, and tests.
+- added `mere.run video generate --end-image` and `--end-image-strength` for
+  LTX start-to-end keyframe conditioning.
 
 ## 0.16.0 - 2026-06-16
 
