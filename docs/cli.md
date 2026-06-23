@@ -182,7 +182,7 @@ swift run mere.run sfx generate \
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant unified-av \
-  --model-root ~/Library/Application\ Support/MereRun/models/video-ltx-av \
+  --model-root ~/Library/Application\ Support/MereRun/models/video-ltx23-av-mlx \
   --output ./clip.mp4
 ```
 
@@ -881,7 +881,7 @@ Examples:
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant distilled \
-  --model video-ltx-av \
+  --model video-ltx23-av-mlx \
   --num-frames 65
 
 swift run mere.run video generate \

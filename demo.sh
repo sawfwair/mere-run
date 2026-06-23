@@ -166,7 +166,7 @@ log "Saved: $OUT/music_epic.wav"
 step "8/9  VIDEO — Cinematic scene"
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if mere.run model pull video-ltx-av 2>/dev/null; then
+if mere.run model pull video-ltx23-av-mlx 2>/dev/null; then
   mere.run video generate \
     "EXT./INT. 1950s AMERICAN ROADSIDE DINER – NIGHT – CINEMATIC ESTABLISHING SHOT. The camera begins outside on a rain-slicked asphalt street, glowing red neon EAT and OPEN signs reflecting in deep puddles. A slow, steady dolly push moves the camera toward the large plate-glass window of the diner, rain beading and streaking down the glass. Through the window, warm amber tungsten light reveals a long polished chrome counter, red vinyl stools, and a single customer in a wool overcoat hunched over a coffee cup. A waitress in a mint-green uniform with a white apron pours coffee from a glass pot, steam curling into the light. A Wurlitzer jukebox glows softly in the corner with shifting amber and ruby tones. Cigarette smoke drifts in slow lazy curls through the warm light. The camera continues its push, transitioning through the glass into the diner interior, depth of field shifting as the foreground rain blur dissolves and the chrome counter and red booths sharpen into focus. The shot holds a shallow depth of field, anamorphic lens flares pulling soft horizontal streaks from the neon and polished chrome. 35mm Kodak Portra film grain, slightly desaturated palette except for the warm tungsten interior and the saturated reds and ambers of the neon." \
     --variant unified-av \

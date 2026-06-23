@@ -442,7 +442,7 @@ swift run mere.run sfx video generate \
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant distilled \
-  --model video-ltx-av \
+  --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4
 

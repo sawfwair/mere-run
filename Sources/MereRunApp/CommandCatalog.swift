@@ -780,7 +780,7 @@ enum CommandCatalog {
             inputKind: .image,
             outputKind: .file("mp4"),
             defaultPrompt: "a cinematic drone flythrough over snowy mountains",
-            defaultModel: "video-ltx-av"
+            defaultModel: "video-ltx23-av-mlx"
         ),
         CommandTemplate(
             id: .videoExportLatents,
