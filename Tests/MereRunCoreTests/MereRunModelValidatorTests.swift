@@ -78,6 +78,38 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidKrea2Model(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .krea2Turbo, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("model_index.json"), contents: Data("{}".utf8))
+
+        let tokenizerDir = root.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoderDir = root.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformerDir = root.appendingPathComponent("transformer", isDirectory: true)
+        let vaeDir = root.appendingPathComponent("vae", isDirectory: true)
+        let schedulerDir = root.appendingPathComponent("scheduler", isDirectory: true)
+
+        for directory in [tokenizerDir, textEncoderDir, transformerDir, vaeDir, schedulerDir] {
+            try TestFileSystem.createDirectory(directory)
+        }
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(tokenizerDir.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(textEncoderDir.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(textEncoderDir.appendingPathComponent("model.safetensors"), contents: Data())
+        try TestFileSystem.writeFile(transformerDir.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(
+            transformerDir.appendingPathComponent("diffusion_pytorch_model.safetensors.index.json"),
+            contents: Data("{}".utf8)
+        )
+        try TestFileSystem.writeFile(
+            transformerDir.appendingPathComponent("diffusion_pytorch_model-00001-of-00003.safetensors"),
+            contents: Data()
+        )
+        try TestFileSystem.writeFile(vaeDir.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(vaeDir.appendingPathComponent("diffusion_pytorch_model.safetensors"), contents: Data())
+        try TestFileSystem.writeFile(schedulerDir.appendingPathComponent("scheduler_config.json"), contents: Data("{}".utf8))
+    }
+
     private func writeMinimalValidSAM31Model(at root: URL) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: .visionSegmentSAM31, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -394,6 +426,47 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.engine, .hidreamO1)
         XCTAssertEqual(report.manifest?.defaults?.steps, 50)
         XCTAssertEqual(report.manifest?.defaults?.cfg, 5.0)
+    }
+
+    func testKrea2TurboRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(Krea2Resources.modelId, isDirectory: true)
+        try writeMinimalValidKrea2Model(at: root)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Krea2Resources.modelId)
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .krea)
+        XCTAssertEqual(report.manifest?.engine, .krea2)
+        XCTAssertEqual(report.manifest?.defaults?.steps, 8)
+        XCTAssertEqual(report.manifest?.defaults?.cfg, 0.0)
+        XCTAssertEqual(report.manifest?.defaults?.sigmaShift, Double(Krea2SampleBuilder.defaultMu))
+    }
+
+    func testKrea2TurboSymlinkedComponentLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let snapshot = temp.appendingPathComponent("snapshot", isDirectory: true)
+        try writeMinimalValidKrea2Model(at: snapshot)
+
+        let root = temp.appendingPathComponent(Krea2Resources.modelId, isDirectory: true)
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: .krea2Turbo, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("model_index.json"), contents: Data("{}".utf8))
+
+        for component in ["tokenizer", "text_encoder", "transformer", "vae", "scheduler"] {
+            try FileManager.default.createSymbolicLink(
+                at: root.appendingPathComponent(component, isDirectory: true),
+                withDestinationURL: snapshot.appendingPathComponent(component, isDirectory: true)
+            )
+        }
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Krea2Resources.modelId)
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertTrue(report.errors.isEmpty)
     }
 
     func testGemma4MaxChatOnlyRootLayoutPassesValidation() throws {

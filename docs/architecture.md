@@ -44,6 +44,16 @@ Qwen image editing:
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
+Krea 2 Turbo generation:
+
+- Runtime entrypoint: `Sources/MereRunCore/Krea2/Krea2Generator.swift`
+- Read next:
+  - `Sources/MereRunCore/Krea2/Krea2Resources.swift`
+  - `Sources/MereRunCore/Krea2/Krea2Configs.swift`
+  - `Sources/MereRunCore/Krea2/Krea2Model.swift`
+  - `Sources/MereRunCore/Krea2/Krea2ModelLoader.swift`
+  - `Sources/MereRunCore/Krea2/Krea2SampleBuilder.swift`
+
 Shared text encoder stack used by image models:
 
 - Public entrypoint:

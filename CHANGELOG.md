@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added native Krea 2 Turbo text-to-image support through the managed
+  `image-krea2-turbo` model, including component-only Hugging Face pulls,
+  split-transformer validation, Swift MLX MMDiT sampling, docs, and tests.
+
 ## 0.16.0 - 2026-06-16
 
 ### Added

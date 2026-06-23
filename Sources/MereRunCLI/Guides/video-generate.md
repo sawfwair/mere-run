@@ -8,17 +8,16 @@ Generate an MP4 video from text, optionally anchored by a source image, with nat
 
 Managed ids:
 
-- `video-ltx-av`: default LTX root used by the faster distilled lane and the
-  legacy unified AV lane.
-- `video-ltx23-av-mlx`: LTX 2.3 MLX split root for the high-quality
-  synchronized `--variant unified-av` lane.
+- `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split root — the recommended model
+  for both the distilled and the high-quality synchronized `--variant unified-av` lanes.
+- `video-ltx-av`: legacy merged LTX root. Superseded by LTX 2.3; only still required by
+  `video export-latents`. Not recommended for `video generate`.
 
 You can also pass a local LTX model root with `--model-root`.
 
 ## Install And Check
 
 ```bash
-mere.run model pull video-ltx-av
 mere.run model pull video-ltx23-av-mlx
 mere.run video generate --help
 ```

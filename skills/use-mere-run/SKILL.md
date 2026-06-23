@@ -56,7 +56,7 @@ Use `model capabilities` as the recommendation source before large downloads. Co
 - Speech: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`, `speech-asr-qwen3`, `speech-asr-parakeet`
 - Vision: `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception`
 - Music: `music-acestep`
-- Video: `video-ltx-av`
+- Video: `video-ltx23-av-mlx`
 
 Avoid local-path-only IDs for first-time users unless they already have the model files.
 

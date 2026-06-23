@@ -149,7 +149,7 @@ struct VideoGenerate: AsyncParsableCommand {
     var output: String?
 
     @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LTX model root.")
-    var model: String = ModelResolver.ModelID.ltxVideoAV.rawValue
+    var model: String = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
 
     @Option(name: [.customLong("variant")], help: "Native LTX lane: distilled for faster video-only drafts, unified-av for synchronized audio/video.")
     var variant: LTXVideoVariant = .distilled

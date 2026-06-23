@@ -65,6 +65,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-zimage-nano",
             "image-zimage-base",
             "image-zimage-max",
+            "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
         ]
 
@@ -142,6 +143,51 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("unconditional_transformer/diffusion_pytorch_model.safetensors"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("quantization_manifest.json"), true)
+    }
+
+    func testKrea2TurboUsesComponentHubSourceWithoutRootTurboCheckpoint() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Krea2Resources.modelId))
+        let patterns = try XCTUnwrap(spec.hubFallback?.patterns)
+
+        XCTAssertEqual(spec.hubFallback?.repoId, Krea2Resources.upstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Krea2Resources.upstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Krea2Resources.upstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Krea2Resources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .krea2)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Krea2Resources.estimatedDownloadBytes)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model.safetensors.index.json"))
+        XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model-*.safetensors"))
+        XCTAssertTrue(patterns.contains("text_encoder/model.safetensors"))
+        XCTAssertFalse(patterns.contains("turbo.safetensors"))
+        XCTAssertFalse(patterns.contains("*.safetensors"))
+        XCTAssertFalse(patterns.contains("transformer/*"))
+    }
+
+    func testKrea2TurboAcceptsSymlinkedComponentInstallRoot() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Krea2Resources.modelId))
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let snapshot = temp.appendingPathComponent("snapshot", isDirectory: true)
+        try writeMinimalKrea2Root(at: snapshot)
+
+        let root = temp.appendingPathComponent(Krea2Resources.modelId, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: .krea2Turbo, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model_index.json").path,
+            contents: Data("{}".utf8)
+        ))
+        for component in ["tokenizer", "text_encoder", "transformer", "vae", "scheduler"] {
+            try FileManager.default.createSymbolicLink(
+                at: root.appendingPathComponent(component, isDirectory: true),
+                withDestinationURL: snapshot.appendingPathComponent(component, isDirectory: true)
+            )
+        }
+
+        XCTAssertTrue(spec.missingPaths(in: root, fileManager: .default).isEmpty)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
     }
 
     func testGemma4TurboUsesNVFP4HubSource() throws {
@@ -702,6 +748,40 @@ final class ManagedModelCatalogTests: XCTestCase {
             atPath: scheduler.appendingPathComponent("scheduler_config.json").path,
             contents: Data("{}".utf8)
         ))
+    }
+
+    private func writeMinimalKrea2Root(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: .krea2Turbo, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model_index.json").path,
+            contents: Data("{}".utf8)
+        ))
+
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        let textEncoder = root.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformer = root.appendingPathComponent("transformer", isDirectory: true)
+        let vae = root.appendingPathComponent("vae", isDirectory: true)
+        let scheduler = root.appendingPathComponent("scheduler", isDirectory: true)
+        for directory in [tokenizer, textEncoder, transformer, vae, scheduler] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        for file in [
+            tokenizer.appendingPathComponent("tokenizer.json"),
+            tokenizer.appendingPathComponent("tokenizer_config.json"),
+            textEncoder.appendingPathComponent("config.json"),
+            textEncoder.appendingPathComponent("model.safetensors"),
+            transformer.appendingPathComponent("config.json"),
+            transformer.appendingPathComponent("diffusion_pytorch_model.safetensors.index.json"),
+            transformer.appendingPathComponent("diffusion_pytorch_model-00001-of-00003.safetensors"),
+            vae.appendingPathComponent("config.json"),
+            vae.appendingPathComponent("diffusion_pytorch_model.safetensors"),
+            scheduler.appendingPathComponent("scheduler_config.json"),
+        ] {
+            let contents = file.pathExtension == "json" ? Data("{}".utf8) : Data()
+            XCTAssertTrue(FileManager.default.createFile(atPath: file.path, contents: contents))
+        }
     }
 
     private func writeMinimalACEStepRoot(at root: URL, turboSubdirectory: String) throws {

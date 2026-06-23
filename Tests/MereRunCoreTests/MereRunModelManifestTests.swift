@@ -132,6 +132,25 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "HiDream-ai/HiDream-O1-Image")
     }
 
+    func testKrea2TurboTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .krea2Turbo, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Krea2Resources.modelId)
+        XCTAssertEqual(manifest.engine, .krea2)
+        XCTAssertEqual(manifest.family, .krea)
+        XCTAssertEqual(manifest.tier, .turbo)
+        XCTAssertEqual(manifest.variant, .distilled)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 8)
+        XCTAssertEqual(manifest.defaults?.cfg, 0.0)
+        XCTAssertEqual(manifest.defaults?.sigmaShift, Double(Krea2SampleBuilder.defaultMu))
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img]))
+        XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer"))
+        XCTAssertEqual(manifest.components?.textEncoder, .local(path: "text_encoder"))
+        XCTAssertEqual(manifest.components?.vae, .local(path: "vae"))
+        XCTAssertEqual(manifest.upstreamRepoId, "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)")
+    }
+
     func testIdeogram4TemplateHasExpectedSDNQMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .ideogram4SDNQUInt4, createdAt: Date(timeIntervalSince1970: 0))
 

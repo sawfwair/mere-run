@@ -9,10 +9,10 @@ This page covers the native video-generation path exposed through `mere.run vide
 
 ## Model family
 
-- `video-ltx-av`: default LTX root for the faster distilled lane and the legacy
-  unified AV lane.
-- `video-ltx23-av-mlx`: LTX 2.3 MLX split checkpoint for the high-quality
-  `--variant unified-av` lane.
+- `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split checkpoint — recommended for
+  both the distilled draft lane and the high-quality `--variant unified-av` lane.
+- `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
+  by `video export-latents`; not recommended for `video generate`.
 
 ## Typical workflows
 
@@ -25,7 +25,7 @@ and is the right first pass for prompt, camera, subject, and composition checks.
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant distilled \
-  --model video-ltx-av \
+  --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4
 ```
@@ -51,9 +51,9 @@ representative unified AV tests. LTX 2.3 expects 24 fps timing; for example,
 15 seconds resolves to 361 frames at 24 fps because LTX frame counts must
 satisfy `8n+1`.
 
-The older `video-ltx-av --variant unified-av` path still exists for compatibility,
-but `video-ltx23-av-mlx --variant unified-av` is the current quality path when
-dialogue, score, and SFX matter.
+`video-ltx23-av-mlx --variant unified-av` is the default and the current quality path
+when dialogue, score, and SFX matter. The older `video-ltx-av` merged root is legacy
+(retained only for `video export-latents`).
 
 ### Export latents
 

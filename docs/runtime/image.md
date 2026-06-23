@@ -17,6 +17,7 @@ The public image families are:
 - `image-bonsai-ternary`: PrismML Bonsai ternary FLUX.2 Klein deployment
 - `image-zimage-*`: ZImage image family
 - `image-hidream-o1*`: HiDream O1 unified pixel-transformer family
+- `image-krea2-turbo`: Krea 2 Turbo text-to-image family
 - `image-ideogram4-sdnq-uint4`: Ideogram 4 SDNQ uint4 text-to-image family
 
 Common managed IDs:
@@ -31,6 +32,7 @@ Common managed IDs:
 - `image-zimage-max`
 - `image-hidream-o1-dev`
 - `image-hidream-o1`
+- `image-krea2-turbo`
 - `image-ideogram4-sdnq-uint4`
 
 ## Typical workflows
@@ -112,6 +114,25 @@ MERERUN_RUN_E2E=installed MERERUN_E2E_HIDREAM=1 ./scripts/check.sh
 MERERUN_RUN_E2E=installed MERERUN_E2E_HIDREAM_FULL=1 ./scripts/check.sh
 ```
 
+### Krea 2 Turbo
+
+`image-krea2-turbo` maps to `krea/Krea-2-Turbo` and uses the native Swift MLX
+runtime for Krea's distilled 8-step text-to-image model. The managed pull uses
+the split Diffusers component layout and deliberately skips the root
+`turbo.safetensors` duplicate transformer file. Text-to-image generation is
+wired through `image generate`; image-to-image, reference inputs, and LoRA are
+not supported for this family yet.
+
+```bash
+swift run mere.run model pull image-krea2-turbo
+swift run mere.run image generate \
+  --model image-krea2-turbo \
+  --prompt "a cinematic product photo of a translucent portable speaker, crisp reflections" \
+  --width 1024 --height 1024 \
+  --steps 8 \
+  --output ./speaker.png
+```
+
 ### Ideogram 4 SDNQ
 
 `image-ideogram4-sdnq-uint4` maps to `WaveCut/ideogram-4-sdnq-uint4`. The
@@ -170,6 +191,15 @@ swift run mere.run image validate --family klein --test pipeline
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1ImagePreprocessor.swift`
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1TokenizerAndTemplate.swift`
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1Scheduler.swift`
+
+### Krea 2 family
+
+- `Sources/MereRunCore/Krea2/Krea2Generator.swift`
+- `Sources/MereRunCore/Krea2/Krea2Resources.swift`
+- `Sources/MereRunCore/Krea2/Krea2Configs.swift`
+- `Sources/MereRunCore/Krea2/Krea2Model.swift`
+- `Sources/MereRunCore/Krea2/Krea2ModelLoader.swift`
+- `Sources/MereRunCore/Krea2/Krea2SampleBuilder.swift`
 
 ### Image editing support
 
