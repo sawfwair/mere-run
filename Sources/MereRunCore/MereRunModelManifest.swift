@@ -939,6 +939,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "HiDream-ai/HiDream-O1-Image-Dev",
                 createdAt: createdAt
             )
+        case .krea2Raw:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .krea2,
+                family: .krea,
+                tier: .max,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 52, cfg: 3.5, sigmaShift: Double(Krea2SampleBuilder.defaultMu)),
+                supports: [.txt2img, .loraTraining],
+                components: defaultComponents,
+                upstreamRepoId: "\(Krea2RawResources.upstreamRepoId)@\(Krea2RawResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .krea2Turbo:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -948,7 +962,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 variant: .distilled,
                 precision: .bf16,
                 defaults: Defaults(steps: 8, cfg: 0.0, sigmaShift: Double(Krea2SampleBuilder.defaultMu)),
-                supports: [.txt2img],
+                supports: [.txt2img, .loraInference],
                 components: defaultComponents,
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt

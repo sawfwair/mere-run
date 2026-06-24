@@ -17,6 +17,7 @@ Public tree:
 
 - `mere.run guide`
 - `mere.run image generate`
+- `mere.run image train-lora`
 - `mere.run image validate`
 - `mere.run text chat`
 - `mere.run text code`
@@ -67,7 +68,8 @@ are:
 
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
-  `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-turbo`,
+  `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`,
+  `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
@@ -241,6 +243,53 @@ swift run mere.run image generate \
   --ref-image ./subject.png \
   --output ./portrait.png
 ```
+
+### `mere.run image train-lora`
+
+Train a local text-to-image LoRA adapter. Krea 2 LoRAs are trained on
+`image-krea2-raw` and can be used with `image-krea2-turbo` for fast inference.
+
+```bash
+swift run mere.run model pull image-krea2-raw
+swift run mere.run model pull image-krea2-turbo
+swift run mere.run image train-lora \
+  --data ./style-dataset \
+  --output ./style-krea2.safetensors \
+  --training-steps 1000 \
+  --rank 16
+swift run mere.run image generate \
+  --model image-krea2-turbo \
+  --prompt "a studio portrait in the trained style" \
+  --lora ./style-krea2.safetensors \
+  --output ./style-preview.png
+```
+
+Dataset folders use image files with matching `.txt` captions:
+
+```text
+style-dataset/
+  001.png
+  001.txt
+  002.jpg
+  002.txt
+```
+
+Key options:
+
+- `--data`: dataset directory with image + caption pairs
+- `--output`: output `.safetensors` adapter path
+- `--model`: Raw/base model id or local model path; defaults to `image-krea2-raw`
+- `--width`, `--height`: fixed training resolution; must be divisible by 16
+- `--training-steps`, `--steps`
+- `--batch-size`
+- `--learning-rate`, `--lr`
+- `--rank`, `--alpha`
+- `--max-text-length`
+- `--scheduler-steps`
+- `--caption-dropout`
+- `--lite`: train only attention Q/V layers to reduce memory
+- `--exclude-preview-images`
+- `--quiet`
 
 ### `mere.run image validate`
 

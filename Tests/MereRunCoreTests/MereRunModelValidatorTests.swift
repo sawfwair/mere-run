@@ -78,9 +78,12 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
-    private func writeMinimalValidKrea2Model(at root: URL) throws {
+    private func writeMinimalValidKrea2Model(
+        at root: URL,
+        id: ModelResolver.ModelID = .krea2Turbo
+    ) throws {
         try TestFileSystem.createDirectory(root)
-        try MereRunModelManifest.template(for: .krea2Turbo, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
         try TestFileSystem.writeFile(root.appendingPathComponent("model_index.json"), contents: Data("{}".utf8))
 
         let tokenizerDir = root.appendingPathComponent("tokenizer", isDirectory: true)
@@ -443,6 +446,24 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.defaults?.steps, 8)
         XCTAssertEqual(report.manifest?.defaults?.cfg, 0.0)
         XCTAssertEqual(report.manifest?.defaults?.sigmaShift, Double(Krea2SampleBuilder.defaultMu))
+    }
+
+    func testKrea2RawRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(Krea2RawResources.modelId, isDirectory: true)
+        try writeMinimalValidKrea2Model(at: root, id: .krea2Raw)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Krea2RawResources.modelId)
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .krea)
+        XCTAssertEqual(report.manifest?.engine, .krea2)
+        XCTAssertEqual(report.manifest?.variant, .base)
+        XCTAssertEqual(report.manifest?.defaults?.steps, 52)
+        XCTAssertEqual(report.manifest?.defaults?.cfg, 3.5)
+        XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.txt2img, .loraTraining]))
     }
 
     func testKrea2TurboSymlinkedComponentLayoutPassesValidation() throws {

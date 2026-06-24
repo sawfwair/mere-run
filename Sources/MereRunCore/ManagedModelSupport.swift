@@ -266,9 +266,16 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                Krea2RawResources.modelId,
+                "Image training, Krea 2 Raw",
+                "Installs the Krea 2 Raw base checkpoint for LoRA training and post-training workflows.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 Krea2Resources.modelId,
                 "Image, Krea 2 Turbo",
-                "Runs the Krea 2 Turbo 8-step text-to-image model through the native Swift MLX image runtime.",
+                "Runs the Krea 2 Turbo 8-step text-to-image model and Raw-trained LoRAs through the native Swift MLX image runtime.",
                 minimum: 96,
                 recommended: 128
             ),

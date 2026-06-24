@@ -6,6 +6,7 @@ struct Image: ParsableCommand {
         abstract: "Generate and validate image models.",
         subcommands: [
             ImageGenerate.self,
+            ImageTrainLoRA.self,
             ImageValidate.self,
         ]
     )

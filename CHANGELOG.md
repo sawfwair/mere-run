@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added `mere.run image train-lora` for native Krea 2 Raw LoRA training,
+  including managed `image-krea2-raw` pulls, Krea transformer LoRA injection,
+  training manifests/metrics, and Krea 2 Turbo LoRA inference via
+  `image generate --lora`.
 - added native Krea 2 Turbo text-to-image support through the managed
   `image-krea2-turbo` model, including component-only Hugging Face pulls,
   split-transformer validation, Swift MLX MMDiT sampling, docs, and tests.

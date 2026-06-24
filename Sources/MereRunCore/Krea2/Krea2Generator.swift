@@ -26,6 +26,14 @@ public final class Krea2Generator: ImageGenerator {
     private var textEncoder: QwenEncoder?
     private var tokenizer: QwenTokenizer?
     private var vae: QwenImageEditVAE?
+    private var currentLoRA: LoRA?
+    private var transformerLoRALayers: [String: TrainableLoRALayer]?
+    private var transformerLoRARank: Int?
+
+    private static let loraDebugEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_LORA_DEBUG"]?.lowercased()
+        return raw == "1" || raw == "true" || raw == "yes"
+    }()
 
     public init() {}
 
@@ -40,6 +48,9 @@ public final class Krea2Generator: ImageGenerator {
         textEncoder = nil
         tokenizer = nil
         vae = nil
+        currentLoRA = nil
+        transformerLoRALayers = nil
+        transformerLoRARank = nil
         clearGPUMemory()
     }
 
@@ -56,9 +67,6 @@ public final class Krea2Generator: ImageGenerator {
         }
         guard request.inputImage == nil else {
             throw Krea2GeneratorError.unsupportedMode("image-to-image")
-        }
-        guard request.lora == nil else {
-            throw Krea2GeneratorError.unsupportedMode("LoRA")
         }
 
         let rootURL = try resolveModelRoot(request)
@@ -78,6 +86,13 @@ public final class Krea2Generator: ImageGenerator {
             }
             loadedModelPath = rootURL.path
         }
+
+        try await applyLoRAIfNeeded(
+            request.lora,
+            resources: resources,
+            configuration: configs?.transformer,
+            progressHandler: progressHandler
+        )
 
         guard let configs, let transformer, let textEncoder, let tokenizer, let vae else {
             throw Krea2GeneratorError.modelsNotLoaded
@@ -187,6 +202,107 @@ public final class Krea2Generator: ImageGenerator {
         progressHandler?(GenerationProgress(stage: .loadingVAE, stepIndex: 0, totalSteps: 1))
         vae = try Krea2ModelLoader.loadVAE(from: resources, configuration: loadedConfigs.vae)
         progressHandler?(GenerationProgress(stage: .loadingVAE, stepIndex: 1, totalSteps: 1))
+    }
+
+    private func applyLoRAIfNeeded(
+        _ lora: LoRA?,
+        resources: Krea2Resources,
+        configuration: Krea2TransformerConfiguration?,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) async throws {
+        guard lora != currentLoRA else { return }
+
+        if lora == nil {
+            if let transformerLoRALayers {
+                for layer in transformerLoRALayers.values {
+                    layer.isActive = false
+                }
+            }
+            currentLoRA = nil
+            return
+        }
+
+        guard let lora else { return }
+        guard let configuration else {
+            throw Krea2GeneratorError.modelsNotLoaded
+        }
+
+        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 0, totalSteps: 2))
+        let loraURL = try await LoRAWeightLoader.resolveURL(for: lora)
+        let loraWeights = try LoRAWeightLoader.load(from: loraURL)
+        let targetRank = loraWeights.rank
+
+        if let existingRank = transformerLoRARank, existingRank != targetRank {
+            transformer = try Krea2ModelLoader.loadTransformer(
+                from: resources,
+                configuration: configuration,
+                progressHandler: nil
+            )
+            transformerLoRALayers = nil
+            transformerLoRARank = nil
+            currentLoRA = nil
+        }
+
+        guard let transformer else {
+            throw Krea2GeneratorError.modelsNotLoaded
+        }
+
+        if transformerLoRALayers == nil {
+            if Self.loraDebugEnabled {
+                FileHandle.standardError.write(
+                    Data("[Krea2 LoRA] Injecting with rank=\(targetRank), alpha=\(loraWeights.alpha)\n".utf8)
+                )
+            }
+            transformerLoRALayers = try Krea2LoRAInjector.inject(
+                into: transformer,
+                rank: targetRank,
+                alpha: loraWeights.alpha,
+                targetSuffixes: Krea2LoRAInjector.defaultTargetSuffixes,
+                zeroInitUp: true
+            )
+            transformerLoRARank = targetRank
+            if let transformerLoRALayers {
+                for layer in transformerLoRALayers.values {
+                    layer.isActive = false
+                }
+            }
+        }
+
+        guard let layers = transformerLoRALayers else {
+            throw LoRAError.invalidFormat("Failed to inject Krea 2 LoRA layers.")
+        }
+
+        let updatedCount = Krea2LoRAInjector.applyWeights(
+            loraWeights,
+            to: layers,
+            debug: Self.loraDebugEnabled
+        )
+        for (path, layer) in layers {
+            layer.isActive = loraWeights.weights[path] != nil
+        }
+        guard updatedCount > 0 else {
+            throw LoRAError.invalidFormat("No matching Krea 2 transformer layers found for this LoRA.")
+        }
+
+        let userScale = Self.loraScale(for: lora)
+        if userScale != 1 {
+            let scale = MLXArray(userScale)
+            for layer in layers.values where layer.isActive {
+                layer.loraDown = layer.loraDown * scale
+            }
+        }
+
+        currentLoRA = lora
+        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 2, totalSteps: 2))
+    }
+
+    private static func loraScale(for lora: LoRA) -> Float {
+        switch lora {
+        case .local(_, let scale):
+            return Float(scale)
+        case .remote(_, let scale):
+            return Float(scale)
+        }
     }
 
     private func encodePrompt(

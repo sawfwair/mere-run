@@ -463,6 +463,22 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
+            id: Krea2RawResources.modelId,
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Krea2RawResources.upstreamRepoId,
+                revision: Krea2RawResources.upstreamRevision,
+                patterns: Krea2RawResources.snapshotPatterns
+            ),
+            upstreamRepoId: Krea2RawResources.upstreamRepoId,
+            upstreamRevision: Krea2RawResources.upstreamRevision,
+            validationKind: .krea2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Krea2RawResources.estimatedDownloadBytes,
+            defaultCLICommands: ["image train-lora"]
+        ),
+        ManagedModelSpec(
             id: Krea2Resources.modelId,
             category: .image,
             installShape: .directoryRoot,
