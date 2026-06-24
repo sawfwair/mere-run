@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.17.0 - 2026-06-23
+
 ### Added
 
 - added `mere.run image train-lora` for native Krea 2 Raw LoRA training,
