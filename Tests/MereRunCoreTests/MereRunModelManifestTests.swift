@@ -144,11 +144,30 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.defaults?.steps, 8)
         XCTAssertEqual(manifest.defaults?.cfg, 0.0)
         XCTAssertEqual(manifest.defaults?.sigmaShift, Double(Krea2SampleBuilder.defaultMu))
-        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img]))
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img, .loraInference]))
         XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer"))
         XCTAssertEqual(manifest.components?.textEncoder, .local(path: "text_encoder"))
         XCTAssertEqual(manifest.components?.vae, .local(path: "vae"))
         XCTAssertEqual(manifest.upstreamRepoId, "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)")
+    }
+
+    func testKrea2RawTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .krea2Raw, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Krea2RawResources.modelId)
+        XCTAssertEqual(manifest.engine, .krea2)
+        XCTAssertEqual(manifest.family, .krea)
+        XCTAssertEqual(manifest.tier, .max)
+        XCTAssertEqual(manifest.variant, .base)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 52)
+        XCTAssertEqual(manifest.defaults?.cfg, 3.5)
+        XCTAssertEqual(manifest.defaults?.sigmaShift, Double(Krea2SampleBuilder.defaultMu))
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img, .loraTraining]))
+        XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer"))
+        XCTAssertEqual(manifest.components?.textEncoder, .local(path: "text_encoder"))
+        XCTAssertEqual(manifest.components?.vae, .local(path: "vae"))
+        XCTAssertEqual(manifest.upstreamRepoId, "\(Krea2RawResources.upstreamRepoId)@\(Krea2RawResources.upstreamRevision)")
     }
 
     func testIdeogram4TemplateHasExpectedSDNQMetadata() throws {

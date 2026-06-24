@@ -22,7 +22,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 | Category | Hugging Face pull IDs |
 | --- | --- |
-| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-turbo`, `image-ideogram4-sdnq-uint4` |
+| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`, `image-krea2-turbo`, `image-ideogram4-sdnq-uint4` |
 | Text chat | `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
 | Vision chat | `vision-chat-gemma4-12b` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
@@ -161,8 +161,10 @@ Both checkpoints are large BF16 unified-transformer roots, about 33 GiB on disk
 each before filesystem compression effects. Expect high unified-memory pressure
 and prefer one-step smokes before full-quality 28/50 step runs.
 
-`image-krea2-turbo` maps to Krea's public Krea 2 Turbo checkpoint:
+`image-krea2-raw` and `image-krea2-turbo` map to Krea's public Krea 2
+checkpoints:
 
+- `krea/Krea-2-Raw`
 - `krea/Krea-2-Turbo`
 
 Managed or local roots are expected to contain the component Diffusers layout:
@@ -179,19 +181,22 @@ Managed or local roots are expected to contain the component Diffusers layout:
 - `vae/diffusion_pytorch_model.safetensors`
 - `scheduler/scheduler_config.json`
 
-Krea also publishes a root-level `turbo.safetensors` transformer copy. The
-managed pull intentionally excludes that file and pulls the split transformer
-component instead, so the model store does not download the same 26 GiB payload
-twice.
+Krea also publishes root-level `raw.safetensors` and `turbo.safetensors`
+transformer copies for the official codebase. Managed pulls intentionally
+exclude those files and pull the split transformer component instead, so the
+model store does not download the same large transformer payload twice.
 
 The native Swift runtime follows the public Krea 2 sampler shape: Qwen3-VL text
 conditioning with the Krea system prefix, layer-selected hidden-state fusion,
 single-stream MMDiT denoising, 16-pixel image-token alignment, FlowMatch Euler
-steps, and Qwen Image VAE decoding. The wired public mode is text-to-image;
-reference images, image-to-image, and LoRA are not supported for this family yet.
+steps, and Qwen Image VAE decoding. The wired public generation mode is
+text-to-image with optional LoRA adapters; reference images and image-to-image
+are not supported for this family yet. LoRA training uses `image-krea2-raw`;
+inference uses `image-krea2-turbo`.
 
 Runtime defaults come from the managed manifest:
 
+- `image-krea2-raw`: 52 steps, CFG 3.5, FlowMatch shift/mu 1.15
 - `image-krea2-turbo`: 8 steps, CFG 0.0, FlowMatch shift/mu 1.15
 
 The component install is about 36 GiB before filesystem compression effects.

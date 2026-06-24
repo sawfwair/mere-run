@@ -65,6 +65,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-zimage-nano",
             "image-zimage-base",
             "image-zimage-max",
+            "image-krea2-raw",
             "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
         ]
@@ -160,6 +161,26 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model-*.safetensors"))
         XCTAssertTrue(patterns.contains("text_encoder/model.safetensors"))
         XCTAssertFalse(patterns.contains("turbo.safetensors"))
+        XCTAssertFalse(patterns.contains("*.safetensors"))
+        XCTAssertFalse(patterns.contains("transformer/*"))
+    }
+
+    func testKrea2RawUsesComponentHubSourceWithoutRootRawCheckpoint() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Krea2RawResources.modelId))
+        let patterns = try XCTUnwrap(spec.hubFallback?.patterns)
+
+        XCTAssertEqual(spec.hubFallback?.repoId, Krea2RawResources.upstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Krea2RawResources.upstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Krea2RawResources.upstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Krea2RawResources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .krea2)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Krea2RawResources.estimatedDownloadBytes)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.defaultCLICommands, ["image train-lora"])
+        XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model.safetensors.index.json"))
+        XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model-*.safetensors"))
+        XCTAssertTrue(patterns.contains("text_encoder/model.safetensors"))
+        XCTAssertFalse(patterns.contains("raw.safetensors"))
         XCTAssertFalse(patterns.contains("*.safetensors"))
         XCTAssertFalse(patterns.contains("transformer/*"))
     }

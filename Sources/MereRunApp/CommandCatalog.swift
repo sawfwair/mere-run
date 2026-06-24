@@ -27,6 +27,7 @@ enum CommandTemplateID: String, CaseIterable {
     case modelRemove
     case modelRepairManifests
     case imageGenerate
+    case imageTrainLoRA
     case imageValidate
     case textChat
     case textCode
@@ -54,6 +55,7 @@ enum CommandTemplateID: String, CaseIterable {
 enum CommandInputKind: Equatable {
     case none
     case file([UTType])
+    case directory
     case image
     case audio
     case video
@@ -62,6 +64,7 @@ enum CommandInputKind: Equatable {
         switch self {
         case .none: return "Input"
         case .file: return "File"
+        case .directory: return "Directory"
         case .image: return "Image"
         case .audio: return "Audio"
         case .video: return "Video"
@@ -70,7 +73,7 @@ enum CommandInputKind: Equatable {
 
     var allowedTypes: [UTType] {
         switch self {
-        case .none: return []
+        case .none, .directory: return []
         case .file(let types): return types
         case .image: return [.image]
         case .audio: return [.audio]
@@ -200,6 +203,8 @@ struct CommandTemplate: Identifiable, Equatable {
         case .imageValidate:
             draft.backend = "all"
             draft.variant = "zimage"
+        case .imageTrainLoRA:
+            draft.steps = 1000
         case .videoGenerate:
             draft.width = 768
             draft.height = 512
@@ -343,6 +348,14 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.inputPath.isBlank {
                 args += ["--input", draft.inputPath, "--strength", format(draft.strength)]
             }
+            if draft.quiet { args.append("--quiet") }
+
+        case .imageTrainLoRA:
+            args = ["image", "train-lora", "--data", draft.inputPath, "--output", draft.outputPath]
+            args += ["--width", String(draft.width), "--height", String(draft.height)]
+            args += ["--training-steps", String(draft.steps)]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if draft.quiet { args.append("--quiet") }
 
         case .imageValidate:
@@ -585,6 +598,16 @@ enum CommandCatalog {
             outputKind: .file("png"),
             defaultPrompt: "a ceramic coffee mug in soft morning light",
             defaultModel: "image-zimage-nano"
+        ),
+        CommandTemplate(
+            id: .imageTrainLoRA,
+            category: .image,
+            title: "Train LoRA",
+            subtitle: "Train Krea 2 Raw adapters",
+            systemImage: "slider.horizontal.3",
+            inputKind: .directory,
+            outputKind: .file("safetensors"),
+            defaultModel: "image-krea2-raw"
         ),
         CommandTemplate(
             id: .imageValidate,

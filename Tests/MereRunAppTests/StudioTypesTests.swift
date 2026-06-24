@@ -55,6 +55,33 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(request.expectedOutputURL?.pathExtension, "png")
     }
 
+    func testImageTrainLoRATemplateBuildsTrainingCommand() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageTrainLoRA))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/krea-dataset"
+        draft.outputPath = "/tmp/krea-style.safetensors"
+        draft.width = 768
+        draft.height = 768
+        draft.steps = 1200
+        draft.seed = "7"
+
+        XCTAssertEqual(template.inputKind, .directory)
+        XCTAssertEqual(template.defaultModel, "image-krea2-raw")
+        XCTAssertEqual(
+            template.arguments(from: draft),
+            [
+                "image", "train-lora",
+                "--data", "/tmp/krea-dataset",
+                "--output", "/tmp/krea-style.safetensors",
+                "--width", "768",
+                "--height", "768",
+                "--training-steps", "1200",
+                "--model", "image-krea2-raw",
+                "--seed", "7",
+            ]
+        )
+    }
+
     func testReadImageVariantsResolveToDistinctTemplates() throws {
         var draft = StudioDraft()
         draft.reset(for: .readImage)

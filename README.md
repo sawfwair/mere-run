@@ -18,9 +18,9 @@ mere.run is a Swift package, CLI, and optional macOS studio for local-first infe
 
 The public OSS repo currently supports:
 
-- local image generation across Klein, ZImage, HiDream O1, Krea 2 Turbo, and
+- local image generation across Klein, ZImage, HiDream O1, Krea 2, and
   Ideogram 4 families, including image-to-image, HiDream reference images,
-  LoRA input, and deterministic image validation
+  Krea 2 Raw LoRA training, LoRA input, and deterministic image validation
 - local text chat, code generation, embeddings, and PII anonymization
 - local speech synthesis, transcription, and voice-profile management
 - local vision captioning, inspection, grounding, segmentation, tracking, live camera tracking, and OCR
@@ -243,6 +243,14 @@ swift run mere.run image generate \
   --prompt "a cinematic product photo of a translucent portable speaker, crisp reflections" \
   --steps 8 \
   --output ./speaker.png
+
+# Train Krea 2 LoRAs on Raw, then run them on Turbo.
+swift run mere.run image train-lora \
+  --model image-krea2-raw \
+  --data ./style-dataset \
+  --output ./style-krea2.safetensors \
+  --training-steps 1000 \
+  --lite
 
 # Run local chat
 swift run mere.run text chat \
@@ -480,6 +488,7 @@ The public CLI is modality-first:
 
 - `mere.run guide`
 - `mere.run image generate`
+- `mere.run image train-lora`
 - `mere.run image validate`
 - `mere.run text chat`
 - `mere.run text code`

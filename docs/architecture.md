@@ -44,11 +44,14 @@ Qwen image editing:
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
-Krea 2 Turbo generation:
+Krea 2 generation and LoRA training:
 
 - Runtime entrypoint: `Sources/MereRunCore/Krea2/Krea2Generator.swift`
 - Read next:
+  - `Sources/MereRunCore/Krea2/Krea2RawResources.swift`
   - `Sources/MereRunCore/Krea2/Krea2Resources.swift`
+  - `Sources/MereRunCore/Krea2/Krea2LoRAInjector.swift`
+  - `Sources/MereRunCore/Krea2/Krea2LoRATrainer.swift`
   - `Sources/MereRunCore/Krea2/Krea2Configs.swift`
   - `Sources/MereRunCore/Krea2/Krea2Model.swift`
   - `Sources/MereRunCore/Krea2/Krea2ModelLoader.swift`

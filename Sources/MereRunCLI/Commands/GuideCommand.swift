@@ -188,8 +188,19 @@ enum GuideRegistry {
                 "image-klein-base",
                 "image-bonsai-binary",
                 "image-bonsai-ternary",
+                "image-krea2-turbo",
             ],
             resourceName: "image-generate.md"
+        ),
+        GuideTopic(
+            topic: "image-train-lora",
+            title: "Image Train LoRA",
+            commandPaths: [["image", "train-lora"]],
+            models: [
+                "image-krea2-raw",
+                "image-krea2-turbo",
+            ],
+            resourceName: "image-train-lora.md"
         ),
         GuideTopic(
             topic: "image-validate",

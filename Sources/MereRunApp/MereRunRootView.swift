@@ -234,7 +234,9 @@ private struct CommandEditor: View {
                     PathField(
                         path: $controller.draft.inputPath,
                         placeholder: "Choose \(controller.selectedTemplate.inputKind.title.lowercased())",
-                        mode: .openFile(controller.selectedTemplate.inputKind.allowedTypes)
+                        mode: controller.selectedTemplate.inputKind == .directory
+                            ? .openDirectory
+                            : .openFile(controller.selectedTemplate.inputKind.allowedTypes)
                     )
                 }
             }
@@ -269,6 +271,9 @@ private struct CommandEditor: View {
         case .imageGenerate:
             DimensionsGrid()
             GenerationOptions()
+        case .imageTrainLoRA:
+            DimensionsGrid()
+            LoRATrainingOptions()
         case .imageValidate:
             ImageValidationOptions()
         case .textChat, .textCode, .textEmbed, .textAnonymize, .visionInspect, .visionCaption, .visionOCR:
@@ -632,6 +637,24 @@ private struct GenerationOptions: View {
                     NumberField(title: "CFG", value: $controller.draft.cfgScale)
                     NumberField(title: "Strength", value: $controller.draft.strength)
                 }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .font(MereRunTheme.bodyFont)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct LoRATrainingOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Training") {
+            VStack(spacing: 10) {
+                NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...100_000, step: 100)
                 TextField("Seed", text: $controller.draft.seed)
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
