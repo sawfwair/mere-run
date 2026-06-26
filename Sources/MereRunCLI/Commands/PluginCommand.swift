@@ -276,26 +276,26 @@ enum PluginCatalogClient {
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
         let semaphore = DispatchSemaphore(value: 0)
-        var result: Result<(Data, URLResponse), Error>?
+        let result = PluginCatalogRequestResult()
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
             if let error {
-                result = .failure(error)
+                result.store(.failure(error))
                 return
             }
             guard let data, let response else {
-                result = .failure(ValidationError("Plugin catalog request returned no response."))
+                result.store(.failure(ValidationError("Plugin catalog request returned no response.")))
                 return
             }
-            result = .success((data, response))
+            result.store(.success((data, response)))
         }
         task.resume()
         semaphore.wait()
 
-        guard let result else {
+        guard let storedResult = result.load() else {
             throw ValidationError("Plugin catalog request did not complete.")
         }
-        let (data, response) = try result.get()
+        let (data, response) = try storedResult.get()
         if let httpResponse = response as? HTTPURLResponse,
            !(200..<300).contains(httpResponse.statusCode) {
             throw ValidationError("Plugin catalog request failed with HTTP \(httpResponse.statusCode): \(url.absoluteString)")
@@ -304,6 +304,23 @@ enum PluginCatalogClient {
             throw ValidationError("Plugin catalog response was empty: \(url.absoluteString)")
         }
         return data
+    }
+}
+
+final class PluginCatalogRequestResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var result: Result<(Data, URLResponse), Error>?
+
+    func store(_ newResult: Result<(Data, URLResponse), Error>) {
+        lock.lock()
+        result = newResult
+        lock.unlock()
+    }
+
+    func load() -> Result<(Data, URLResponse), Error>? {
+        lock.lock()
+        defer { lock.unlock() }
+        return result
     }
 }
 
