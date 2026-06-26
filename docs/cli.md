@@ -43,6 +43,7 @@ Public tree:
 - `mere.run status`
 - `mere.run api serve`
 - `mere.run open-webui quickstart`
+- `mere.run plugin { list, info, install, doctor }`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`
 
@@ -195,9 +196,43 @@ swift run mere.run video generate \
 swift run mere.run api serve --engine text-chat-gemma4
 ```
 
+### Install a companion plugin
+
+Official companion plugins are distributed outside the Swift package. The CLI
+reads the live catalog from `sawfwair/mere-plugins`, prints the exact install
+command by default, and only executes it when `--yes` is present.
+
+```bash
+swift run mere.run plugin list
+swift run mere.run plugin info mere-runpod
+swift run mere.run plugin install mere-runpod
+swift run mere.run plugin install mere-runpod --yes
+swift run mere.run plugin doctor mere-runpod
+```
+
 ## Command reference
 
 Model installation in the OSS repo is explicit. `mere.run model pull` uses cataloged Hugging Face snapshots only; local-path-only models must be supplied with command-specific `--model` or `--model-root` options. See [`configuration.md`](./configuration.md) and [`model-sources.md`](./model-sources.md).
+
+### `mere.run plugin`
+
+Discover and install official companion plugins from the live plugin catalog.
+Plugins are separate executables, not code loaded into the `mere.run` process.
+
+```bash
+swift run mere.run plugin list
+swift run mere.run plugin info mere-runpod
+swift run mere.run plugin install mere-runpod --yes
+swift run mere.run plugin doctor mere-runpod
+```
+
+Key options:
+
+- `--catalog-url`: plugin catalog URL or local JSON path
+- `--json`: emit catalog or plugin metadata as JSON
+- `--channel`: install channel, defaulting to the catalog default
+- `--yes`: execute the install command; omitted means dry-run preview
+- `--force`: pass `--force` to `pipx install`
 
 ### `mere.run image generate`
 

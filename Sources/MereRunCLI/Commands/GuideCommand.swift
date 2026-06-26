@@ -416,6 +416,19 @@ enum GuideRegistry {
             resourceName: "open-webui.md"
         ),
         GuideTopic(
+            topic: "plugin",
+            title: "Plugin",
+            commandPaths: [
+                ["plugin"],
+                ["plugin", "list"],
+                ["plugin", "info"],
+                ["plugin", "install"],
+                ["plugin", "doctor"],
+            ],
+            models: [],
+            resourceName: "plugin.md"
+        ),
+        GuideTopic(
             topic: "status",
             title: "Status",
             commandPaths: [["status"]],

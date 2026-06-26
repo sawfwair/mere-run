@@ -513,6 +513,7 @@ The public CLI is modality-first:
 - `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
+- `mere.run plugin { list, info, install, doctor }`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`
 

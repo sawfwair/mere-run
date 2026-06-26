@@ -75,6 +75,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
             "api",
             "config",
             "open-webui",
+            "plugin",
             "setup",
             "agent",
         ]))
