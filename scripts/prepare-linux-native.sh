@@ -27,6 +27,12 @@ Environment:
   MERERUN_LINUX_ACCEL         Native acceleration mode. Set to cuda to build
                               llama.cpp with GGML_CUDA=ON and run an optional
                               mlx-swift CMake CUDA smoke. Default: cpu.
+  MERERUN_NATIVE_BUILD_JOBS   Override CMake build parallelism. Defaults to
+                              nproc. Useful in containers where nproc reports
+                              the physical host instead of the rented worker.
+  MERERUN_CUDA_ARCHITECTURES  Optional CMake CUDA architecture list for llama.cpp
+                              and mlx-swift CUDA builds, for example
+                              "86-real;90-virtual".
   MERERUN_LLAMA_GPU_LAYERS    Override llama.cpp GPU offload layers on Linux.
                               Defaults to all layers when MERERUN_LINUX_ACCEL=cuda
                               and 0 otherwise.
@@ -49,6 +55,10 @@ Environment:
   MERERUN_SKIP_MLX_CUDA_SMOKE=1
                               Skip the mlx-swift CMake CUDA smoke when
                               MERERUN_LINUX_ACCEL=cuda.
+  MERERUN_SKIP_MLX_CUDA_EXAMPLE=1
+                              Build the mlx-swift CUDA bridge but skip running
+                              the GPU example. Use this for CPU-only release
+                              builders with CUDA development packages.
   MERERUN_MLX_SWIFT_LINKAGE=cuda-prebuilt
                               Package.swift mode that consumes CMake-built
                               mlx-swift CUDA artifacts instead of SwiftPM mlx.
@@ -111,6 +121,51 @@ require_tool() {
     echo "[prepare-linux-native] error: required tool not found in PATH: $tool" >&2
     exit 127
   fi
+}
+
+native_build_jobs() {
+  local jobs="${MERERUN_NATIVE_BUILD_JOBS:-${MERERUN_BUILD_JOBS:-}}"
+  if [[ -z "$jobs" ]]; then
+    jobs="$(nproc)"
+  fi
+  if ! [[ "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[prepare-linux-native] error: MERERUN_NATIVE_BUILD_JOBS must be a positive integer." >&2
+    exit 64
+  fi
+  printf '%s\n' "$jobs"
+}
+
+require_cmake_at_least() {
+  local minimum_major="$1"
+  local minimum_minor="$2"
+  local minimum_patch="$3"
+  require_tool cmake
+
+  local version
+  version="$(cmake --version | awk '/^cmake version / { print $3; exit }')"
+  local major minor patch
+  IFS=. read -r major minor patch <<<"$version"
+  patch="${patch%%[^0-9]*}"
+  major="${major:-0}"
+  minor="${minor:-0}"
+  patch="${patch:-0}"
+
+  if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
+    echo "[prepare-linux-native] error: could not parse cmake version: $version" >&2
+    exit 64
+  fi
+  if (( major > minimum_major )); then
+    return
+  fi
+  if (( major == minimum_major && minor > minimum_minor )); then
+    return
+  fi
+  if (( major == minimum_major && minor == minimum_minor && patch >= minimum_patch )); then
+    return
+  fi
+
+  echo "[prepare-linux-native] error: MERERUN_LINUX_ACCEL=cuda requires cmake >= ${minimum_major}.${minimum_minor}.${minimum_patch}; found $version." >&2
+  exit 64
 }
 
 cuda_target_names=(sbsa-linux aarch64-linux x86_64-linux)
@@ -302,6 +357,9 @@ case "$linux_accel" in
 esac
 if [[ "$check_only" != "1" ]]; then
   configure_linux_arm64_bf16_toolchain "$arch" "prepare-linux-native"
+  if [[ "$linux_accel" == "cuda" ]]; then
+    require_cmake_at_least 3 25 0
+  fi
 fi
 
 stage_ds4() {
@@ -384,13 +442,22 @@ build_llama() {
     cmake_args+=(
       -DGGML_CUDA=ON
     )
+    if [[ -n "${MERERUN_CUDA_ARCHITECTURES:-}" ]]; then
+      echo "[prepare-linux-native] using CUDA architectures: $MERERUN_CUDA_ARCHITECTURES"
+      cmake_args+=(
+        "-DCMAKE_CUDA_ARCHITECTURES=$MERERUN_CUDA_ARCHITECTURES"
+      )
+    fi
   fi
 
   echo "[prepare-linux-native] configuring llama.cpp"
   cmake -S "$llama_src" -B "$llama_build" "${cmake_args[@]}"
 
   echo "[prepare-linux-native] building llama.cpp"
-  cmake --build "$llama_build" --config Release --parallel "$(nproc)"
+  local build_jobs
+  build_jobs="$(native_build_jobs)"
+  echo "[prepare-linux-native] using $build_jobs native build jobs"
+  cmake --build "$llama_build" --config Release --parallel "$build_jobs"
 
   echo "[prepare-linux-native] installing llama.cpp into $llama_prefix"
   cmake --install "$llama_build"
@@ -398,8 +465,8 @@ build_llama() {
 }
 
 patch_mlx_swift_for_linux() {
-  if [[ "${MERERUN_SKIP_MLX_SWIFT_PATCH:-0}" == "1" || "$linux_accel" == "cuda" ]]; then
-    echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix; CUDA builds use the CMake prebuilt bridge."
+  if [[ "${MERERUN_SKIP_MLX_SWIFT_PATCH:-0}" == "1" ]]; then
+    echo "[prepare-linux-native] skipping SwiftPM Linux package fixes by request."
     return
   fi
 
@@ -407,17 +474,21 @@ patch_mlx_swift_for_linux() {
   echo "[prepare-linux-native] resolving Swift package dependencies"
   swift package resolve
 
-  local package_file="$mlx_swift_checkout/Package.swift"
-  if [[ ! -f "$package_file" ]]; then
-    echo "[prepare-linux-native] error: expected mlx-swift checkout at $mlx_swift_checkout" >&2
-    exit 68
-  fi
+  if [[ "$linux_accel" == "cuda" ]]; then
+    echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix; CUDA builds use the CMake prebuilt bridge."
+  else
+    local package_file="$mlx_swift_checkout/Package.swift"
+    if [[ ! -f "$package_file" ]]; then
+      echo "[prepare-linux-native] error: expected mlx-swift checkout at $mlx_swift_checkout" >&2
+      exit 68
+    fi
 
-  if grep -Fq '"mlx-c/mlx/c/fast.cpp",  // Exclude on Linux - calls metal_kernel unconditionally' "$package_file"; then
-    sed -i '/"mlx-c\/mlx\/c\/fast.cpp",  \/\/ Exclude on Linux - calls metal_kernel unconditionally/d' "$package_file"
-  fi
-  if grep -Fq '"MLXFast.swift",' "$package_file"; then
-    sed -i '/"MLXFast.swift",/d;/"MLXFastKernel.swift",/d' "$package_file"
+    if grep -Fq '"mlx-c/mlx/c/fast.cpp",  // Exclude on Linux - calls metal_kernel unconditionally' "$package_file"; then
+      sed -i '/"mlx-c\/mlx\/c\/fast.cpp",  \/\/ Exclude on Linux - calls metal_kernel unconditionally/d' "$package_file"
+    fi
+    if grep -Fq '"MLXFast.swift",' "$package_file"; then
+      sed -i '/"MLXFast.swift",/d;/"MLXFastKernel.swift",/d' "$package_file"
+    fi
   fi
 
   local numerics_header="$swift_numerics_checkout/Sources/_NumericsShims/include/_NumericsShims.h"
@@ -429,7 +500,7 @@ patch_mlx_swift_for_linux() {
     sed -i 's/#if !arch(wasm32)/#if !arch(wasm32) \&\& !(os(Linux) \&\& arch(x86_64))/' "$numerics_float16"
   fi
 
-  echo "[prepare-linux-native] mlx-swift SwiftPM package fix applied."
+  echo "[prepare-linux-native] SwiftPM Linux package fixes applied."
 }
 
 smoke_mlx_swift_cuda() {
@@ -507,6 +578,12 @@ smoke_mlx_swift_cuda() {
     -DMLX_BUILD_CUDA=ON
     -DMLX_C_BUILD_EXAMPLES=OFF
   )
+  if [[ -n "${MERERUN_CUDA_ARCHITECTURES:-}" ]]; then
+    echo "[prepare-linux-native] using CUDA architectures: $MERERUN_CUDA_ARCHITECTURES"
+    mlx_cmake_args+=(
+      "-DCMAKE_CUDA_ARCHITECTURES=$MERERUN_CUDA_ARCHITECTURES"
+    )
+  fi
   detect_cuda_dependency_defaults
   if [[ -n "${CUDNN_INCLUDE_PATH:-}" ]]; then
     mlx_cmake_args+=("-DCUDNN_INCLUDE_PATH=$CUDNN_INCLUDE_PATH")
@@ -556,12 +633,19 @@ smoke_mlx_swift_cuda() {
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
 
   echo "[prepare-linux-native] building mlx-swift CUDA smoke"
-  cmake --build "$mlx_cmake_build" --parallel "$(nproc)"
+  local build_jobs
+  build_jobs="$(native_build_jobs)"
+  echo "[prepare-linux-native] using $build_jobs native build jobs"
+  cmake --build "$mlx_cmake_build" --parallel "$build_jobs"
 
   local example="$mlx_cmake_build/example1"
   if [[ -x "$example" ]]; then
-    echo "[prepare-linux-native] running mlx-swift CUDA smoke example"
-    "$example" --device gpu
+    if [[ "${MERERUN_SKIP_MLX_CUDA_EXAMPLE:-0}" == "1" ]]; then
+      echo "[prepare-linux-native] skipping mlx-swift CUDA GPU example by request."
+    else
+      echo "[prepare-linux-native] running mlx-swift CUDA smoke example"
+      "$example" --device gpu
+    fi
   else
     echo "[prepare-linux-native] warning: mlx-swift CUDA build finished but example1 was not produced; CUDA is not wired into SwiftPM package consumption yet." >&2
   fi
@@ -580,6 +664,7 @@ mlx_swift_cuda_link_flags() {
   local local_openblas_root="$native_root/deps/apt-root"
   local cudnn_library_path="${CUDNN_LIBRARY_PATH:-}"
   local cuda_library_path="${CUDA_LIBRARY_PATH:-}"
+  local cuda_stub_library_path="${CUDA_STUB_LIBRARY_PATH:-}"
   local flags=()
 
   flags+=("-L" "$mlx_cmake_build/_deps/mlx-c-build")
@@ -642,9 +727,32 @@ mlx_swift_cuda_link_flags() {
       fi
     done
   fi
+  if [[ -z "$cuda_stub_library_path" &&
+        ( -z "$cuda_library_path" || ! -f "$cuda_library_path/libcuda.so" ) ]]; then
+    local cuda_stub_candidates=()
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cuda_stub_candidates+=("$cuda_root/lib64/stubs")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cuda_stub_candidates+=("$cuda_root/targets/$cuda_target/lib/stubs")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cuda_stub_candidates[@]}"; do
+      if [[ -f "$candidate/libcuda.so" ]]; then
+        cuda_stub_library_path="$candidate"
+        break
+      fi
+    done
+  fi
   if [[ -n "$cuda_library_path" ]]; then
     flags+=("-L" "$cuda_library_path")
-    flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
+    if [[ "$(basename "$cuda_library_path")" != "stubs" ]]; then
+      flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
+    fi
+  fi
+  if [[ -n "$cuda_stub_library_path" && "$cuda_stub_library_path" != "$cuda_library_path" ]]; then
+    flags+=("-L" "$cuda_stub_library_path")
   fi
   if [[ -d /usr/lib/$deb_multiarch ]]; then
     flags+=("-L" "/usr/lib/$deb_multiarch")

@@ -80,10 +80,11 @@ The installer copies `mere.run` and its colocated runtime assets to
 
 Linux release artifacts are headless CLI-only. The default release workflow
 publishes portable tarballs and Debian packages for x86_64/amd64 Ubuntu-style
-hosts. Linux arm64 is CUDA-only for release packaging and requires a real arm64
-CUDA host or self-hosted runner; CPU arm64 packages are just local smoke-test
-artifacts. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for
-the current validation boundary, CUDA notes, and first commands:
+hosts, plus x86_64 CUDA artifacts for remote GPU workers such as RunPod. Linux
+arm64 is CUDA-only for release packaging and requires a real arm64 CUDA host or
+self-hosted runner; CPU arm64 packages are just local smoke-test artifacts. See
+the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the current
+validation boundary, CUDA notes, and first commands:
 
 ```bash
 tag=v0.17.0
@@ -98,15 +99,21 @@ cd "mere-run-${tag}-linux-x86_64"
 # Debian package
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_amd64.deb" -o mere-run.deb
 sudo apt install ./mere-run.deb
+
+# CUDA portable tarball for x86_64 GPU workers
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64-cuda.tar.gz" -o mere-run-linux-cuda.tar.gz
 ```
 
 Linux packages install the `mere.run` CLI plus colocated runtime assets; they do
-not include the macOS SwiftUI studio or DMG layout. On Linux arm64, if a distro
-Clang shadows Swift's bundled Clang and cannot compile MLX bf16 headers, the
-Linux scripts select a bf16-capable C++ driver or report the `CXX` override to
-use. Linux arm64 release packages should be built with CUDA enabled on a host
-with the CUDA Toolkit headers, CUDA CCCL headers, cuDNN, and NCCL installed.
-CUDA `.deb` artifacts declare the linked CUDA 13 runtime/JIT packages
+not include the macOS SwiftUI studio or DMG layout. The hosted x86_64 CUDA lane
+builds the CUDA package on a CPU-only GitHub runner with CUDA development
+packages and skips only the GPU execution example; runtime CUDA smoke still
+belongs on a real GPU host. On Linux arm64, if a distro Clang shadows Swift's
+bundled Clang and cannot compile MLX bf16 headers, the Linux scripts select a
+bf16-capable C++ driver or report the `CXX` override to use. Linux arm64 release
+packages should be built with CUDA enabled on a host with the CUDA Toolkit
+headers, CUDA CCCL headers, cuDNN, and NCCL installed. CUDA `.deb` artifacts
+declare the linked CUDA 13 runtime/JIT packages
 (`cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
 `libcublas-13-0`, `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`) by default. The
 installed launcher also exports the resolved CUDA CCCL include root through
@@ -114,7 +121,8 @@ installed launcher also exports the resolved CUDA CCCL include root through
 during NVRTC JIT compilation:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.17.0
+MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
+  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
 ```
 
 Current CUDA validation should be treated as limited to the exact hosts that
@@ -160,6 +168,15 @@ To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
 scripts/package-linux.sh --version 0.17.0
+ls dist/linux/
+```
+
+To build the x86_64 CUDA release package on a CUDA development host or CPU-only
+builder with CUDA development packages:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
+  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 

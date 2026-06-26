@@ -2,19 +2,23 @@
 
 This page is for installing the released headless `mere.run` CLI on Linux.
 The default published release path is x86_64/amd64 Linux packages on GitHub
-Releases. Linux arm64 packages are CUDA-only and must be built on a real arm64
+Releases. The release workflow also publishes x86_64 CUDA artifacts for GPU
+workers. Linux arm64 packages are CUDA-only and must be built on a real arm64
 CUDA host or self-hosted runner.
 
 The macOS path remains the primary hands-on development and runtime validation
 environment for this repo. The Linux release path is real, but intentionally
-narrow: CLI-only packages, Ubuntu-style hosts, CPU-oriented x86 CI fixtures,
-and CUDA-gated arm64 package work.
+narrow: CLI-only packages, Ubuntu-style hosts, x86_64 CPU and CUDA package
+manifests, and CUDA-gated arm64 package work.
 
 ## Current validation boundary
 
 - Published default Linux release packages are built for x86_64/amd64 hosts.
 - The release workflow validates the portable tarball, Debian package, runtime
   library bundling, and package manifests on Ubuntu x86_64 in GitHub Actions.
+- The x86_64 CUDA release lane builds on hosted CPU runners with CUDA
+  development packages and skips only the GPU execution example. Treat it as a
+  build artifact lane; runtime smoke still requires a real CUDA GPU host.
 - Linux packages do not include `MereRun.app`, the SwiftUI studio, the macOS
   installer UI, or the DMG layout.
 - Linux arm64 package builds must use `MERERUN_LINUX_ACCEL=cuda`; CPU arm64
@@ -72,6 +76,24 @@ roots, and target-specific include directories, then adds that `cuda/std` root
 to `CPATH` and `MERERUN_CUDA_CCCL_INCLUDE_PATH`. MLX CUDA kernels use that
 explicit path while JIT-compiling in the installed package.
 
+## Install the x86_64 CUDA tarball
+
+Use this artifact for GPU worker images, remote trainers, and other x86_64 CUDA
+hosts:
+
+```bash
+tag=v0.17.0
+curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64-cuda.tar.gz" -o mere-run-linux-cuda.tar.gz
+tar -xzf mere-run-linux-cuda.tar.gz
+cd "mere-run-${tag}-linux-x86_64-cuda"
+./install.sh
+mere.run --version
+mere.run status
+```
+
+The CUDA tarball is the right build pack for companion remote-runner plugins.
+It is not a source/bootstrap archive and should not compile on paid GPU time.
+
 ## First commands
 
 After installing:
@@ -103,6 +125,33 @@ If the binaries are not on `PATH`, point the CLI at explicit locations:
 export MERERUN_FFMPEG=/usr/bin/ffmpeg
 export MERERUN_FFPROBE=/usr/bin/ffprobe
 ```
+
+## Linux x86_64 CUDA package path
+
+The standard release workflow builds x86_64 CUDA artifacts on hosted Linux using
+CUDA development packages and `MERERUN_SKIP_MLX_CUDA_EXAMPLE=1`. To reproduce
+that build locally on a Linux x86_64 CUDA development host:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
+  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+ls dist/linux/
+```
+
+On rented GPU builders, keep paid compile time down by setting
+`MERERUN_NATIVE_BUILD_JOBS` to the worker's real vCPU count and
+`MERERUN_CUDA_ARCHITECTURES` to the target build policy. For example, an RTX
+A4000 builder that should also ship forward-compatible H100 PTX can use:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda \
+MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
+MERERUN_NATIVE_BUILD_JOBS=14 \
+MERERUN_CUDA_ARCHITECTURES="86-real;90-virtual" \
+  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+```
+
+Run a real GPU smoke on the target runtime class before widening support claims.
 
 ## Linux arm64 CUDA package path
 
@@ -158,6 +207,16 @@ Install the package layer first:
 ```bash
 sudo apt-get update
 sudo apt-get install -y cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
+```
+
+CUDA package builds also require CMake 3.25 or newer because the CUDA bridge
+build follows upstream `mlx-swift`. On Ubuntu 22.04/Jammy images, install a
+newer CMake before running the CUDA package path:
+
+```bash
+sudo apt-get install -y python3-pip
+sudo python3 -m pip install --upgrade "cmake>=3.25,<4"
+cmake --version
 ```
 
 On Linux arm64, older distro Clang packages can shadow Swift's bundled Clang and

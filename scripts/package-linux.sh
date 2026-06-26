@@ -21,6 +21,7 @@ Build Linux release artifacts for the headless mere.run CLI.
 Options:
   --version VERSION       Package version. Default: MERERUN_RELEASE_VERSION or git describe.
   --output-dir DIR        Artifact output directory. Default: dist/linux
+  --artifact-suffix NAME  Append NAME to tar/deb artifact names, e.g. cuda.
   --configuration NAME    Swift configuration: release or debug. Default: release
   --skip-build            Reuse an existing .build/<configuration>/mere.run binary.
   --skip-native           Do not run scripts/prepare-linux-native.sh before building.
@@ -29,10 +30,14 @@ Options:
 
 Environment:
   MERERUN_RELEASE_VERSION       Default package version override.
+  MERERUN_PACKAGE_ARTIFACT_SUFFIX
+                                Default artifact suffix. Empty by default.
   MERERUN_BUNDLE_SWIFT_LIBS     Copy libswift*/Foundation runtime .so dependencies
                                 reported by ldd into payload lib/. Default: 1.
   MERERUN_PACKAGE_LINUX_DEPS    Override Debian Depends field.
   MERERUN_LINUX_ACCEL           Passed through to prepare-linux-native.sh (cpu/cuda).
+  MERERUN_NATIVE_BUILD_JOBS     Passed through to prepare-linux-native.sh.
+  MERERUN_CUDA_ARCHITECTURES    Passed through to prepare-linux-native.sh.
   CUDA_LIBRARY_PATH             Optional CUDA toolkit library directory for
                                 SwiftPM MLX CUDA linking. Linux SBSA and lib64
                                 defaults are detected when unset.
@@ -50,6 +55,7 @@ source "$repo_root/scripts/linux-arm64-bf16-toolchain.sh"
 
 configuration="release"
 output_dir="dist/linux"
+artifact_suffix="${MERERUN_PACKAGE_ARTIFACT_SUFFIX:-}"
 version="${MERERUN_RELEASE_VERSION:-}"
 do_build=1
 do_native=1
@@ -63,6 +69,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output-dir)
       output_dir="${2:?missing value for --output-dir}"
+      shift 2
+      ;;
+    --artifact-suffix)
+      artifact_suffix="${2:?missing value for --artifact-suffix}"
       shift 2
       ;;
     --configuration)
@@ -134,6 +144,15 @@ if [[ -z "$version" ]]; then
   fi
 fi
 
+artifact_suffix_part=""
+if [[ -n "$artifact_suffix" ]]; then
+  if [[ ! "$artifact_suffix" =~ ^[a-z0-9][a-z0-9.+-]*$ ]]; then
+    echo "[package-linux] error: --artifact-suffix must be Debian-safe: lowercase letters, digits, '.', '+', or '-', starting with a letter or digit." >&2
+    exit 64
+  fi
+  artifact_suffix_part="-$artifact_suffix"
+fi
+
 # Debian versions cannot include arbitrary git-describe punctuation. Keep the
 # human tag for tar names, and use a policy-safe version for .deb metadata.
 deb_version="${version#v}"
@@ -192,6 +211,7 @@ mlx_swift_cuda_link_flags() {
   local local_openblas_root="$native_root/deps/apt-root"
   local cudnn_library_path="${CUDNN_LIBRARY_PATH:-}"
   local cuda_library_path="${CUDA_LIBRARY_PATH:-}"
+  local cuda_stub_library_path="${CUDA_STUB_LIBRARY_PATH:-}"
   local flags=()
 
   flags+=("-L" "$mlx_cmake_build/_deps/mlx-c-build")
@@ -254,9 +274,32 @@ mlx_swift_cuda_link_flags() {
       fi
     done
   fi
+  if [[ -z "$cuda_stub_library_path" &&
+        ( -z "$cuda_library_path" || ! -f "$cuda_library_path/libcuda.so" ) ]]; then
+    local cuda_stub_candidates=()
+    local cuda_root
+    while IFS= read -r cuda_root; do
+      cuda_stub_candidates+=("$cuda_root/lib64/stubs")
+      local cuda_target
+      for cuda_target in "${cuda_target_names[@]}"; do
+        cuda_stub_candidates+=("$cuda_root/targets/$cuda_target/lib/stubs")
+      done
+    done < <(cuda_toolkit_root_candidates)
+    for candidate in "${cuda_stub_candidates[@]}"; do
+      if [[ -f "$candidate/libcuda.so" ]]; then
+        cuda_stub_library_path="$candidate"
+        break
+      fi
+    done
+  fi
   if [[ -n "$cuda_library_path" ]]; then
     flags+=("-L" "$cuda_library_path")
-    flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
+    if [[ "$(basename "$cuda_library_path")" != "stubs" ]]; then
+      flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
+    fi
+  fi
+  if [[ -n "$cuda_stub_library_path" && "$cuda_stub_library_path" != "$cuda_library_path" ]]; then
+    flags+=("-L" "$cuda_stub_library_path")
   fi
   if [[ -d /usr/lib/$deb_multiarch ]]; then
     flags+=("-L" "/usr/lib/$deb_multiarch")
@@ -341,7 +384,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-payload_name="mere-run-${version}-linux-${platform_arch}"
+payload_name="mere-run-${version}-linux-${platform_arch}${artifact_suffix_part}"
 payload_dir="$staging/$payload_name"
 mkdir -p "$payload_dir"
 
@@ -484,8 +527,9 @@ if (( do_deb )); then
     fi
     depends="${MERERUN_PACKAGE_LINUX_DEPS:-$default_depends}"
     installed_size="$(du -sk "$deb_root/usr" | awk '{print $1}')"
+    deb_package_name="mere-run${artifact_suffix_part}"
     cat >"$deb_root/DEBIAN/control" <<CONTROL
-Package: mere-run
+Package: $deb_package_name
 Version: $deb_version
 Section: science
 Priority: optional
@@ -501,8 +545,8 @@ Description: Local-first inference CLI
 CONTROL
 
     chmod 0755 "$deb_root/DEBIAN"
-    dpkg-deb --root-owner-group --build "$deb_root" "$output_root/mere-run_${deb_version}_${deb_arch}.deb"
-    echo "[package-linux] wrote $output_dir/mere-run_${deb_version}_${deb_arch}.deb"
+    dpkg-deb --root-owner-group --build "$deb_root" "$output_root/${deb_package_name}_${deb_version}_${deb_arch}.deb"
+    echo "[package-linux] wrote $output_dir/${deb_package_name}_${deb_version}_${deb_arch}.deb"
   else
     echo "[package-linux] warning: dpkg-deb not found; skipping .deb package." >&2
   fi

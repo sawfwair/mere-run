@@ -56,6 +56,10 @@ sudo apt-get update
 sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
 ```
 
+CUDA package builders need CMake 3.25 or newer for the upstream `mlx-swift`
+CUDA bridge. Ubuntu 22.04/Jammy's default CMake is too old, so upgrade it
+before CUDA packaging with `python3 -m pip install --upgrade "cmake>=3.25,<4"`.
+
 Media probing and conversion should use `ffmpeg` and `ffprobe` from `PATH`.
 When tests or runners need explicit binaries, set:
 
@@ -94,6 +98,16 @@ dpkg-deb --info dist/linux/mere-run_*_*.deb
 dpkg-deb --contents dist/linux/mere-run_*_*.deb | grep 'usr/bin/mere.run'
 ```
 
+The x86_64 CUDA release artifact uses a suffix and can be built on a CPU-only
+Linux builder with CUDA development packages:
+
+```bash
+MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
+  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+tar -tzf dist/linux/mere-run-*-linux-x86_64-cuda.tar.gz | grep '/.mererun-linux-cuda$'
+dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
+```
+
 On Linux arm64, use CUDA for the package check:
 
 ```bash
@@ -101,12 +115,14 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.17.0
 ```
 
 The `linux-release` workflow runs the hosted package and manifest boundary for
-x86_64 on Ubuntu 22.04 in the Swift 6.0 container. Its arm64 CUDA lane is
-optional and targets a self-hosted runner labeled `self-hosted`, `linux`,
-`arm64`, and `cuda`; enable it manually with `build_arm64_cuda` or on release
-events with the `MERERUN_RELEASE_ARM64_CUDA=1` repository variable. Manual
-workflow runs upload Actions artifacts only; published GitHub Release events
-also upload the available Linux assets and checksum manifest to the release.
+x86_64 CPU and x86_64 CUDA artifacts on Ubuntu 22.04 in the Swift 6.0 container.
+The hosted CUDA lane builds against CUDA development packages and skips only the
+GPU execution example. Its arm64 CUDA lane is optional and targets a self-hosted
+runner labeled `self-hosted`, `linux`, `arm64`, and `cuda`; enable it manually
+with `build_arm64_cuda` or on release events with the
+`MERERUN_RELEASE_ARM64_CUDA=1` repository variable. Manual workflow runs upload
+Actions artifacts only; published GitHub Release events also upload the
+available Linux assets and checksum manifest to the release.
 
 MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
 covers pure Swift image, WAV, and FFT behavior in the normal test suite.
