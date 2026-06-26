@@ -290,7 +290,7 @@ final class QwenVisionTower: Module {
     // Add interpolated position embeddings
     let gridThw = grid.map { (t: $0.temporal, h: $0.height, w: $0.width) }
     let posEmbeds = fastPosEmbedInterpolate(gridThw: gridThw, posEmbed: posEmbed)
-    hiddenStates = hiddenStates + posEmbeds
+    hiddenStates = hiddenStates + posEmbeds.asType(hiddenStates.dtype)
 
     // Compute rotary position embeddings
     let rotaryPosEmb = computeQwen3RotaryPosEmb(gridThw: gridThw)

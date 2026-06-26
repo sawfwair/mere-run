@@ -128,6 +128,10 @@ public enum ManagedModelCatalog {
         "vae/*",
         "scheduler/*",
     ]
+    private static let kleinBase9BTransformerSnapshotPatterns = [
+        "model_index.json",
+        "transformer/*",
+    ]
     private static let kleinNanoSnapshotPatterns = [
         "model_index.json",
         "scheduler/scheduler_config.json",
@@ -307,6 +311,55 @@ public enum ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            // FLUX.2 [klein] Base 9B — undistilled bf16 9B transformer for LoRA/fine-tuning.
+            // BFL publishes the base transformer separately from reusable 9B text/VAE
+            // components in common training recipes, so mount the shared components from the
+            // ungated mlx-community mirror while keeping the gated Base 9B transformer source
+            // explicit.
+            id: "image-klein-base-9b",
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "black-forest-labs/FLUX.2-klein-base-9B",
+                patterns: kleinBase9BTransformerSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "text_encoder",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "mlx-community/FLUX.2-klein-9B",
+                        patterns: ["text_encoder/*"]
+                    )
+                ),
+                MountedHubFallbackConfig(
+                    destinationPath: "tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "mlx-community/FLUX.2-klein-9B",
+                        patterns: ["tokenizer/*"]
+                    )
+                ),
+                MountedHubFallbackConfig(
+                    destinationPath: "vae",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "mlx-community/FLUX.2-klein-9B",
+                        patterns: ["vae/*"]
+                    )
+                ),
+                MountedHubFallbackConfig(
+                    destinationPath: "scheduler",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "mlx-community/FLUX.2-klein-9B",
+                        patterns: ["scheduler/*"]
+                    )
+                ),
+            ],
+            upstreamRepoId: "black-forest-labs/FLUX.2-klein-base-9B",
+            validationKind: .flux2Klein,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 48 * 1_073_741_824,
+            defaultCLICommands: ["image generate", "image train-lora"]
         ),
         ManagedModelSpec(
             id: "image-klein-shared",
@@ -825,6 +878,41 @@ public enum ManagedModelCatalog {
             upstreamRevision: OpenAIPrivacyFilterCatalog.defaultRevision,
             validationKind: .privacyFilter,
             defaultCLICommands: ["text anonymize"]
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.infinityParser2FlashModelId,
+            category: .visionOCR,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.infinityParser2FlashModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.infinityParser2FlashUpstreamRepoId,
+            upstreamRevision: Q35Resources.infinityParser2FlashUpstreamRevision,
+            validationKind: .q35,
+            estimatedDownloadBytes: 5 * 1_073_741_824,
+            defaultCLICommands: ["vision ocr"]
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.infinityParser2ProModelId,
+            category: .visionOCR,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.infinityParser2ProModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.infinityParser2ProUpstreamRepoId,
+            upstreamRevision: Q35Resources.infinityParser2ProUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 131 * 1_073_741_824,
+            defaultCLICommands: ["vision ocr"]
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.infinityParser2ProInt8ModelId,
+            category: .visionOCR,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.infinityParser2ProInt8ModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.infinityParser2ProInt8UpstreamRepoId,
+            upstreamRevision: Q35Resources.infinityParser2ProInt8UpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 38 * 1_073_741_824,
+            defaultCLICommands: ["vision ocr"]
         ),
         ManagedModelSpec(
             id: "vision-ocr-lighton",

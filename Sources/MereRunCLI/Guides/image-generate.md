@@ -38,8 +38,13 @@ mere.run guide image generate --model image-zimage-nano
 - `--steps`, `-s`: denoise steps. Start with the model default, increase for quality checks.
 - `--seed`: deterministic repeatability.
 - `--model`, `-m`: model id or local model root.
-- `--input`, `-i`: source image for image-to-image.
-- `--strength`, `--str`: image-to-image change strength from `0.0` to `1.0`.
+- `--input`, `-i`: source image for image-to-image. For FLUX.2 Klein, this is
+  treated as a single reference image.
+- `--ref-image`: repeatable reference image for FLUX.2 Klein or HiDream O1
+  editing/personalization.
+- `--strength`, `--str`: image-to-image/reference change strength from `0.0` to
+  `1.0`. FLUX.2 Klein `--ref-image` defaults to a clean reference unless
+  strength is set.
 - `--max-sequence-length`: prompt token budget.
 - `--structured-prompt`, `--json-prompt`: expand the prompt into a structured JSON caption with a local text chat model before generation.
 - `--structured-prompt-model`: text chat model id for the adapter. Defaults to `text-chat-gemma4-12b-4bit`.
@@ -55,7 +60,9 @@ mere.run guide image generate --model image-zimage-nano
 - Lead with subject, action, environment, material, lighting, camera or medium, and style constraints.
 - For product or inspection images, prefer concrete nouns over mood words: size, surface, label text, angle, background.
 - For Z-Image, keep prompts compact and descriptive. Iterate seed, dimensions, and input strength before piling on adjectives.
-- For FLUX.2 Klein, use explicit visual composition and relationships: foreground, background, lens/framing, color palette, and what must be absent.
+- For FLUX.2 Klein, use explicit visual composition and relationships: foreground, background, lens/framing, color palette, and what must be absent. Use
+  `--ref-image` for card anatomy, product identity, or edit guidance. `--input`
+  is accepted as a single-reference shorthand for Klein.
 - For Ideogram 4 SDNQ, use `--structured-prompt` when a short prompt needs stronger object, spatial, lighting, camera, or text-render control. The adapter converts the prompt into a long JSON caption and raises the prompt token budget to 2048.
 - For Bonsai binary or ternary, start with four steps at 512 or 1024 square; the manifest applies its native FlowMatch sigma shift.
 - For Krea 2 Turbo, start with the managed default: 1024 square, 8 steps, CFG 0.0, and no reference or input image. Raw-trained Krea 2 LoRAs can be loaded with `--lora`.

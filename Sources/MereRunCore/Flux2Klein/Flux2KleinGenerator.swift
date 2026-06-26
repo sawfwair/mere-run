@@ -22,7 +22,7 @@ public actor Flux2KleinGenerator: ImageGenerator {
     var currentLoRA: LoRA?
     var currentTextLoRA: LoRA?
     var transformerLoRALayers: [String: TrainableLoRALayer]?
-    var transformerLoRARank: Int?
+    var transformerLoRARankSignature: String?
     var compiledTransformer: (@Sendable ([MLXArray]) -> [MLXArray])?
     var compiledTransformerNeedsWarmup: Bool = true
 
@@ -43,7 +43,7 @@ public actor Flux2KleinGenerator: ImageGenerator {
         loadedQuantization = nil
         currentLoRA = nil
         transformerLoRALayers = nil
-        transformerLoRARank = nil
+        transformerLoRARankSignature = nil
         currentTextLoRA = nil
         compiledTransformer = nil
 

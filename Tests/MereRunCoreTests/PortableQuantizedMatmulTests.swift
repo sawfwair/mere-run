@@ -4,6 +4,42 @@ import XCTest
 @testable import MereRunCore
 
 final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
+    func testQ35SwitchLinearDenseExpertPathTransposesWeights() throws {
+        let weight = MLXArray([
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
+            -1.0, 0.5, 2.0,
+            0.0, -2.0, 1.0,
+        ] as [Float], [2, 2, 3])
+        let x = MLXArray([
+            0.5, 1.0, -1.0,
+            2.0, -0.5, 1.5,
+        ] as [Float], [1, 2, 3])
+        let indices = MLXArray([0, 1] as [Int32], [1, 2, 1])
+
+        let layer = Q35SwitchLinear(
+            inputDims: 3,
+            outputDims: 2,
+            numExperts: 2,
+            groupSize: 64,
+            bits: 4,
+            quantized: false,
+            bias: false
+        )
+        try layer.update(parameters: ModuleParameters.unflattened([("weight", weight)]), verify: .none)
+
+        let expected = MLX.gatherMM(
+            x.reshaped([2, 1, 3]),
+            weight.swappedAxes(-1, -2),
+            rhsIndices: MLXArray([0, 1] as [Int32], [2]),
+            sortedIndices: false
+        ).reshaped([1, 2, 1, 2])
+
+        let actual = layer(x, indices: indices)
+        let maxDiff = MLX.max(MLX.abs(expected.asType(.float32) - actual.asType(.float32))).item(Float.self)
+        XCTAssertLessThan(maxDiff, 0.0001)
+    }
+
     func testQ35SwitchLinearInfersMixedPrecisionExpertBits() throws {
         let weightValues = (0..<384).map { Float($0 % 19) / 18.0 - 0.5 }
         let denseWeight = MLXArray(weightValues, [3, 4, 32])

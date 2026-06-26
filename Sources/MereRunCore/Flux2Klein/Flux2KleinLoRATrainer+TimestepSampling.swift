@@ -16,7 +16,7 @@ extension Flux2KleinLoRATrainer {
         var weights: [Float]
 
         switch strategy {
-        case .uniform:
+        case .uniform, .shift:
             weights = [Float](repeating: 1.0 / Float(numSteps), count: numSteps)
 
         case .bellCurve:
@@ -80,7 +80,8 @@ extension Flux2KleinLoRATrainer {
     /// Always uses mu=1.0 and terminal stretch (mflux trains all FLUX.2 models this way).
     static func computeTrainingSigmas(
         numSteps: Int,
-        numTrainTimesteps: Int
+        numTrainTimesteps: Int,
+        imageSeqLen: Int? = nil
     ) -> [Float] {
         guard numSteps > 0 else { return [] }
         guard numSteps > 1 else { return [1.0] }
@@ -95,8 +96,9 @@ extension Flux2KleinLoRATrainer {
             return t / maxT
         }
 
-        // Apply time shift with mu=1.0 (mflux uses this for all FLUX.2 models)
-        let mu: Float = 1.0
+        // Apply time shift. ai-toolkit `timestep_type: shift` uses a dynamic mu based on
+        // image sequence length; the default keeps mflux's fixed mu=1.0 behavior.
+        let mu = imageSeqLen.map(dynamicShiftMu(imageSeqLen:)) ?? 1.0
         let expMu = exp(mu)
         let sigmasShifted = sigmasLinear.map { sigma -> Float in
             guard sigma > 0 else { return 0 }
@@ -111,6 +113,17 @@ extension Flux2KleinLoRATrainer {
         }
         let scaleFactor = lastOms / (1.0 - shiftTerminal)
         return oneMinusSigmas.map { 1.0 - ($0 / scaleFactor) }
+    }
+
+    private static func dynamicShiftMu(imageSeqLen: Int) -> Float {
+        let baseSeqLen: Float = 256
+        let maxSeqLen: Float = 4096
+        let baseShift: Float = 0.5
+        let maxShift: Float = 1.16
+        let slope = (maxShift - baseShift) / (maxSeqLen - baseSeqLen)
+        let intercept = baseShift - slope * baseSeqLen
+        let seqLen = min(max(Float(imageSeqLen), baseSeqLen), maxSeqLen)
+        return slope * seqLen + intercept
     }
 
     /// Compute per-timestep *loss* weights (mean-normalized) used by ai-toolkit when
@@ -176,4 +189,3 @@ extension Flux2KleinLoRATrainer {
         return effectiveHigh - 1
     }
 }
-

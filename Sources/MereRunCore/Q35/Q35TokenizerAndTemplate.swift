@@ -18,8 +18,26 @@ public struct Q35TokenizerAndTemplate {
         tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         includeThinking: Bool = true,
-        maxLength: Int
+        maxLength: Int,
+        imageTokenCounts: [Int] = []
     ) throws -> [Int] {
+        if !imageTokenCounts.isEmpty {
+            var encoded = tokenizer.encodeText(
+                Self.renderPrompt(
+                    messages: messages,
+                    tools: tools,
+                    addGenerationPrompt: addGenerationPrompt,
+                    includeThinking: includeThinking,
+                    imageTokenCounts: imageTokenCounts
+                )
+            )
+            let targetLength = min(maxLength, tokenizer.maxLength)
+            if encoded.count > targetLength {
+                encoded = Array(encoded.suffix(targetLength))
+            }
+            return encoded
+        }
+
         let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
         return try tokenizer.encodeChatTemplate(
             messages: Self.renderMessages(messages),
@@ -82,9 +100,11 @@ public struct Q35TokenizerAndTemplate {
         messages: [ChatMessage],
         tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
-        includeThinking: Bool = true
+        includeThinking: Bool = true,
+        imageTokenCounts: [Int] = []
     ) -> String {
         var prompt = ""
+        var imageIndex = 0
 
         if let tools, !tools.isEmpty {
             prompt += "<|im_start|>system\n"
@@ -104,7 +124,11 @@ public struct Q35TokenizerAndTemplate {
             prompt += "<|im_start|>\(role)\n"
 
             if message.role != .system, let imageURL = message.imageUrl, !imageURL.isEmpty {
-                prompt += "<|vision_start|><|image_pad|><|vision_end|>\n"
+                let imageTokenCount = imageIndex < imageTokenCounts.count ? max(1, imageTokenCounts[imageIndex]) : 1
+                prompt += "<|vision_start|>"
+                prompt += String(repeating: "<|image_pad|>", count: imageTokenCount)
+                prompt += "<|vision_end|>"
+                imageIndex += 1
             }
 
             if !message.content.isEmpty {

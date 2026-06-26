@@ -20,6 +20,8 @@ public enum Flux2TimestepSamplingStrategy: String, Sendable {
     case styleFocused
     /// Logit-normal distribution (OneTrainer default for FLUX.2) - concentrates on mid-range timesteps
     case logitNormal
+    /// Uniform sampling with dynamic FlowMatch sigma shift (ai-toolkit `timestep_type: shift`)
+    case shift
 }
 
 /// Timestep loss weighting strategy (multiplies per-step loss by a timestep-dependent weight).
@@ -121,6 +123,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
     public var loraAlpha: Float
     public var loraTargetSuffixes: [String]?
     public var loraTargetRanks: [String: Int]?
+    public var loraTargetRankSuffixes: [String: Int]?
     public var datasetRoot: String?
 
     /// Probability of dropping caption during training (0.0-1.0).
@@ -160,6 +163,9 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
 
     /// Use disk-backed cache for encoded data to reduce peak memory usage.
     public var lowRam: Bool
+
+    /// Recompute transformer block activations during backprop to reduce peak memory.
+    public var gradientCheckpointing: Bool
     
     /// Benchmark mode: if set, measure these steps (after warmup) and then exit without saving.
     public var benchmarkSteps: Int?
@@ -202,6 +208,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
         loraAlpha: Float = 1.0,
         loraTargetSuffixes: [String]? = nil,
         loraTargetRanks: [String: Int]? = nil,
+        loraTargetRankSuffixes: [String: Int]? = nil,
         datasetRoot: String? = nil,
         captionDropout: Float = 0.05,
         saveDType: DType = .float16,
@@ -216,6 +223,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
         progressive: Bool = false,
         useCompile: Bool = true,
         lowRam: Bool = false,
+        gradientCheckpointing: Bool = false,
         benchmarkSteps: Int? = nil,
         benchmarkWarmupSteps: Int = 5,
         adamBeta1: Float = 0.9,
@@ -241,6 +249,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
         self.loraAlpha = loraAlpha
         self.loraTargetSuffixes = loraTargetSuffixes
         self.loraTargetRanks = loraTargetRanks
+        self.loraTargetRankSuffixes = loraTargetRankSuffixes
         self.datasetRoot = datasetRoot
         self.captionDropout = captionDropout
         self.saveDType = saveDType
@@ -255,6 +264,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
         self.progressive = progressive
         self.useCompile = useCompile
         self.lowRam = lowRam
+        self.gradientCheckpointing = gradientCheckpointing
         self.benchmarkSteps = benchmarkSteps
         self.benchmarkWarmupSteps = benchmarkWarmupSteps
         self.adamBeta1 = adamBeta1
@@ -398,6 +408,7 @@ public enum Flux2KleinLoRATrainer {
             }
         }
         let serializedTargetRanks = Self.serializedLoRATargetRanks(config.loraTargetRanks)
+        let serializedTargetRankSuffixes = Self.serializedLoRATargetRanks(config.loraTargetRankSuffixes)
         let configFingerprintInput: String = [
             "model:\(modelURL.path)",
             "variant:\(modelManifest.variant?.rawValue ?? "")",
@@ -414,6 +425,7 @@ public enum Flux2KleinLoRATrainer {
             "checkpoint_interval:\(config.checkpointInterval.map { "\($0)" } ?? "")",
             "sample_interval:\(config.sampleInterval.map { "\($0)" } ?? "")",
             "progressive:\(config.progressive)",
+            "gradient_checkpointing:\(config.gradientCheckpointing)",
             "low_ram:\(config.lowRam)",
             "timestep_sampling:\(config.timestepSampling.rawValue)",
             "timestep_loss_weighting:\(config.timestepLossWeighting.rawValue)",
@@ -422,6 +434,7 @@ public enum Flux2KleinLoRATrainer {
             "timestep_high:\(config.timestepHigh.map { "\($0)" } ?? "")",
             "lora_target_suffixes:\((config.loraTargetSuffixes ?? Flux2LoRAInjector.defaultTargetSuffixes).joined(separator: ","))",
             "lora_target_ranks:\(serializedTargetRanks)",
+            "lora_target_rank_suffixes:\(serializedTargetRankSuffixes)",
             "edit_mode:\(hasEditExamples)",
         ].joined(separator: "\n")
         let configFingerprint = LoRATrainingFingerprint.sha256Hex(configFingerprintInput)
@@ -616,6 +629,7 @@ public enum Flux2KleinLoRATrainer {
             "checkpoint_interval": config.checkpointInterval.map { "\($0)" } ?? "",
             "sample_interval": config.sampleInterval.map { "\($0)" } ?? "",
             "progressive": "\(config.progressive)",
+            "gradient_checkpointing": "\(config.gradientCheckpointing)",
             "low_ram": "\(config.lowRam)",
             "timestep_sampling": config.timestepSampling.rawValue,
             "timestep_loss_weighting": config.timestepLossWeighting.rawValue,
@@ -624,6 +638,7 @@ public enum Flux2KleinLoRATrainer {
             "timestep_high": config.timestepHigh.map { "\($0)" } ?? "",
             "lora_target_suffixes": (config.loraTargetSuffixes ?? Flux2LoRAInjector.defaultTargetSuffixes).joined(separator: ","),
             "lora_target_ranks": serializedTargetRanks,
+            "lora_target_rank_suffixes": serializedTargetRankSuffixes,
             "edit_mode": "\(hasEditExamples)",
             "config_fingerprint": configFingerprint,
         ]
@@ -771,12 +786,21 @@ public enum Flux2KleinLoRATrainer {
         ))
 
         // 4) Inject LoRA wrappers (zero-init B matrix like ai-toolkit/kohya)
+        let targetSuffixes = config.loraTargetSuffixes ?? Flux2LoRAInjector.defaultTargetSuffixes
+        let resolvedTargetRanks = try config.loraTargetRanks ?? config.loraTargetRankSuffixes.map { targetRankSuffixes in
+            try Flux2LoRAInjector.resolveTargetRanks(
+                in: transformer,
+                defaultRank: config.loraRank,
+                targetSuffixes: targetSuffixes,
+                targetRankSuffixes: targetRankSuffixes
+            )
+        }
         let loraLayers = try Flux2LoRAInjector.inject(
             into: transformer,
             rank: config.loraRank,
             alpha: config.loraAlpha,
-            targetSuffixes: config.loraTargetSuffixes ?? Flux2LoRAInjector.defaultTargetSuffixes,
-            targetRanks: config.loraTargetRanks,
+            targetSuffixes: targetSuffixes,
+            targetRanks: resolvedTargetRanks,
             zeroInitUp: true
         )
 
@@ -903,6 +927,7 @@ public enum Flux2KleinLoRATrainer {
             guard let module = layer as? Module else { continue }
             try module.unfreeze(recursive: false, keys: ["loraDown", "loraUp"], strict: true)
         }
+        transformer.gradientCheckpointing = config.gradientCheckpointing
 
         MLX.eval(transformer)
         progressHandler?(Flux2KleinLoRATrainingProgress(stage: .injectingLoRA(layerCount: loraLayers.count), fraction: 1))
@@ -927,15 +952,6 @@ public enum Flux2KleinLoRATrainer {
         let timestepWeights = computeTimestepWeights(
             numSteps: config.schedulerSteps,
             strategy: config.timestepSampling
-        )
-
-        // Training sigmas with time shift applied (matches inference scheduler).
-        // Image seq len = (height/16) * (width/16) for sigma shift calculation.
-        // Use manifest variant to determine distilled vs base model.
-        // Build training sigmas matching mflux (mu=1.0, terminal stretch for all FLUX.2)
-        let trainingSigmaValues = computeTrainingSigmas(
-            numSteps: config.schedulerSteps,
-            numTrainTimesteps: 1000
         )
 
         // Optional timestep loss weighting (ai-toolkit `timestep_type: weighted`).
@@ -1022,6 +1038,11 @@ public enum Flux2KleinLoRATrainer {
                 remainingSkippedSteps = 0
 
                 let seqLen = phase.seqLen
+                let trainingSigmaValues = computeTrainingSigmas(
+                    numSteps: config.schedulerSteps,
+                    numTrainTimesteps: 1000,
+                    imageSeqLen: config.timestepSampling == .shift ? seqLen : nil
+                )
                 let prepared = phase.prepared
                 let phaseCache = phase.cache
                 let preparedCount = phase.preparedCount
@@ -1426,6 +1447,7 @@ public enum Flux2KleinLoRATrainer {
                                 metadata: [
                                     "format": "mererun.flux2.lora",
                                     "base_model": "flux2-klein",
+                                    "model_variant": modelManifest.variant?.rawValue ?? "",
                                     "step": "\(step)",
                                     "total_steps": "\(config.trainingSteps)",
                                     "seed": "\(effectiveSeed)",
@@ -1525,10 +1547,12 @@ public enum Flux2KleinLoRATrainer {
                                         "max_resolution": config.maxResolution.map { "\($0)" } ?? "",
                                         "resolution_buckets": resolutionBucketSummary,
                                         "use_compile": "\(config.useCompile)",
+                                        "gradient_checkpointing": "\(config.gradientCheckpointing)",
                                         "low_ram": "\(config.lowRam)",
                                         "edit_mode": "\(hasEditExamples)",
                                         "lora_target_suffixes": config.loraTargetSuffixes?.joined(separator: ",") ?? "",
                                         "lora_target_ranks": serializedTargetRanks,
+                                        "lora_target_rank_suffixes": serializedTargetRankSuffixes,
                                         "adam_beta1": "\(config.adamBeta1)",
                                         "adam_beta2": "\(config.adamBeta2)",
                                         "adam_eps": "\(config.adamEps)",
@@ -1640,6 +1664,7 @@ public enum Flux2KleinLoRATrainer {
                         metadata: [
                             "format": "mererun.flux2.lora",
                             "base_model": "flux2-klein",
+                            "model_variant": modelManifest.variant?.rawValue ?? "",
                             "step": "\(currentStep)",
                             "total_steps": "\(config.trainingSteps)",
                             "cancelled": "true",
@@ -1687,6 +1712,7 @@ public enum Flux2KleinLoRATrainer {
                             metadata: [
                                 "format": "mererun.flux2.lora",
                                 "base_model": "flux2-klein",
+                                "model_variant": modelManifest.variant?.rawValue ?? "",
                                 "ema_decay": "\(config.emaDecay)",
                                 "cancelled": "true",
                             ]
@@ -1751,10 +1777,12 @@ public enum Flux2KleinLoRATrainer {
                             "max_resolution": config.maxResolution.map { "\($0)" } ?? "",
                             "resolution_buckets": resolutionBucketSummary,
                             "use_compile": "\(config.useCompile)",
+                            "gradient_checkpointing": "\(config.gradientCheckpointing)",
                             "low_ram": "\(config.lowRam)",
                             "edit_mode": "\(hasEditExamples)",
                             "lora_target_suffixes": config.loraTargetSuffixes?.joined(separator: ",") ?? "",
                             "lora_target_ranks": serializedTargetRanks,
+                            "lora_target_rank_suffixes": serializedTargetRankSuffixes,
                             "adam_beta1": "\(config.adamBeta1)",
                             "adam_beta2": "\(config.adamBeta2)",
                             "adam_eps": "\(config.adamEps)",
@@ -1852,6 +1880,7 @@ public enum Flux2KleinLoRATrainer {
             metadata: [
                 "format": "mererun.flux2.lora",
                 "base_model": "flux2-klein",
+                "model_variant": modelManifest.variant?.rawValue ?? "",
                 "step": "\(config.trainingSteps)",
                 "total_steps": "\(config.trainingSteps)",
                 "seed": "\(effectiveSeed)",
@@ -1899,6 +1928,7 @@ public enum Flux2KleinLoRATrainer {
                 metadata: [
                     "format": "mererun.flux2.lora",
                     "base_model": "flux2-klein",
+                    "model_variant": modelManifest.variant?.rawValue ?? "",
                     "ema_decay": "\(config.emaDecay)",
                 ]
             )
@@ -1960,10 +1990,12 @@ public enum Flux2KleinLoRATrainer {
                 "max_resolution": config.maxResolution.map { "\($0)" } ?? "",
                 "resolution_buckets": resolutionBucketSummary,
                 "use_compile": "\(config.useCompile)",
+                "gradient_checkpointing": "\(config.gradientCheckpointing)",
                 "low_ram": "\(config.lowRam)",
                 "edit_mode": "\(hasEditExamples)",
                 "lora_target_suffixes": config.loraTargetSuffixes?.joined(separator: ",") ?? "",
                 "lora_target_ranks": serializedTargetRanks,
+                "lora_target_rank_suffixes": serializedTargetRankSuffixes,
                 "adam_beta1": "\(config.adamBeta1)",
                 "adam_beta2": "\(config.adamBeta2)",
                 "adam_eps": "\(config.adamEps)",

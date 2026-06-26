@@ -113,8 +113,8 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         self.numAttentionHeads = try container.decode(Int.self, forKey: .numAttentionHeads)
         self.numKeyValueHeads = try container.decode(Int.self, forKey: .numKeyValueHeads)
         self.headDim = try container.decode(Int.self, forKey: .headDim)
-        self.numExperts = try container.decode(Int.self, forKey: .numExperts)
-        self.numExpertsPerTok = try container.decode(Int.self, forKey: .numExpertsPerTok)
+        self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
+        self.numExpertsPerTok = try container.decodeIfPresent(Int.self, forKey: .numExpertsPerTok) ?? 0
         self.layerTypes = try container.decode([String].self, forKey: .layerTypes)
         self.mlpOnlyLayers = try container.decodeIfPresent([Int].self, forKey: .mlpOnlyLayers) ?? []
         self.linearNumValueHeads = try container.decode(Int.self, forKey: .linearNumValueHeads)
@@ -163,6 +163,10 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         try container.encodeIfPresent(eosTokenId, forKey: .eosTokenId)
         try container.encode(ropeParameters, forKey: .ropeParameters)
     }
+
+    public var usesMoE: Bool {
+        numExperts > 0 && numExpertsPerTok > 0
+    }
 }
 
 public struct Q35VisionConfig: Codable, Sendable, Hashable {
@@ -181,6 +185,7 @@ public struct Q35VisionConfig: Codable, Sendable, Hashable {
     public let fullAttentionBlockIndexes: [Int]?
     public let windowSize: Int?
     public let inChannels: Int
+    public let patchEmbedBias: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
@@ -198,6 +203,7 @@ public struct Q35VisionConfig: Codable, Sendable, Hashable {
         case fullAttentionBlockIndexes = "fullatt_block_indexes"
         case windowSize = "window_size"
         case inChannels = "in_channels"
+        case patchEmbedBias = "patch_embed_bias"
     }
 }
 
@@ -241,10 +247,8 @@ public struct Q35Config: Codable, Sendable, Hashable {
         self.textConfig = try container.decode(Q35TextConfig.self, forKey: .textConfig)
         self.visionConfig = try container.decodeIfPresent(Q35VisionConfig.self, forKey: .visionConfig)
 
-        if let direct = try container.decodeIfPresent([Int].self, forKey: .eosTokenId) {
+        if let direct = try Self.decodeTokenIDsIfPresent(in: container, forKey: .eosTokenId) {
             self.eosTokenIds = direct
-        } else if let single = try container.decodeIfPresent(Int.self, forKey: .eosTokenId) {
-            self.eosTokenIds = [single]
         } else if let nested = textConfig.eosTokenId {
             self.eosTokenIds = [nested]
         } else {
@@ -256,6 +260,27 @@ public struct Q35Config: Codable, Sendable, Hashable {
         } else {
             self.quantization = try container.decodeIfPresent(Q35QuantizationConfig.self, forKey: .quantizationConfig)
         }
+    }
+
+    private static func decodeTokenIDsIfPresent(
+        in container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> [Int]? {
+        guard container.contains(key) else { return nil }
+        if try container.decodeNil(forKey: key) { return nil }
+        if let single = try? container.decode(Int.self, forKey: key) {
+            return [single]
+        }
+        if let ids = try? container.decode([Int].self, forKey: key) {
+            return ids
+        }
+        throw DecodingError.typeMismatch(
+            [Int].self,
+            DecodingError.Context(
+                codingPath: container.codingPath + [key],
+                debugDescription: "Expected eos_token_id to be either an integer or an array of integers."
+            )
+        )
     }
 
     public func encode(to encoder: Encoder) throws {

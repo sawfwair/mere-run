@@ -355,19 +355,18 @@ public actor Gemma4Generator: ChatGenerator {
             repetitionPenalty: 1.05,
             repetitionContextSize: 64
         )
-        if imageBatch == nil {
-            // Text-only generation must never emit multimodal placeholder tokens.
-            // A corrupted or degenerate decode otherwise surfaces them as token salad.
-            generationConfig.bannedTokens = [
-                loadedConfig.imageTokenId,
-                loadedConfig.audioTokenId,
-                loadedConfig.videoTokenId,
-                loadedConfig.boiTokenId,
-                loadedConfig.boaTokenId,
-                loadedConfig.eoiTokenId,
-                loadedConfig.eoaTokenId,
-            ].compactMap { $0 }
-        }
+        // Multimodal marker IDs are prompt-only control tokens. They can appear
+        // in VLM prefill, but assistant decode must never emit them as content.
+        generationConfig.bannedTokens = Self.multimodalDecodeBannedTokens(
+            imageTokenId: loadedConfig.imageTokenId,
+            audioTokenId: loadedConfig.audioTokenId,
+            videoTokenId: loadedConfig.videoTokenId,
+            boiTokenId: loadedConfig.boiTokenId,
+            boaTokenId: loadedConfig.boaTokenId,
+            eoiTokenId: loadedConfig.eoiTokenId,
+            eoaTokenId: loadedConfig.eoaTokenId,
+            excluding: eosSet
+        )
 
         let usePrefixKVCache = imageBatch == nil
         let prefixSeed = usePrefixKVCache ? prefixKVCacheSeed(
@@ -522,6 +521,33 @@ public actor Gemma4Generator: ChatGenerator {
         }
 
         return Gemma4KVCacheQuantization()
+    }
+
+    nonisolated static func multimodalDecodeBannedTokens(
+        imageTokenId: Int?,
+        audioTokenId: Int?,
+        videoTokenId: Int?,
+        boiTokenId: Int?,
+        boaTokenId: Int?,
+        eoiTokenId: Int?,
+        eoaTokenId: Int?,
+        excluding excludedTokens: Set<Int>
+    ) -> [Int] {
+        var seen = Set<Int>()
+        var result: [Int] = []
+        for token in [
+            imageTokenId,
+            audioTokenId,
+            videoTokenId,
+            boiTokenId,
+            boaTokenId,
+            eoiTokenId,
+            eoaTokenId,
+        ].compactMap({ $0 }) {
+            guard !excludedTokens.contains(token), seen.insert(token).inserted else { continue }
+            result.append(token)
+        }
+        return result
     }
 
     private func shouldDeferQuantizationUntilDecode(_ quantization: Gemma4KVCacheQuantization) -> Bool {

@@ -26,16 +26,40 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static let q36NanoModelId = "text-chat-q36-nano"
+    public static let infinityParser2FlashModelId = "vision-ocr-infinity-flash"
+    public static let infinityParser2ProModelId = "vision-ocr-infinity-pro"
+    public static let infinityParser2ProInt8ModelId = "vision-ocr-infinity-pro-int8"
     public static let defaultModelId = q36NanoModelId
 
     public static let q36NanoUpstreamRepoId = "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"
     public static let q36NanoUpstreamRevision = "63d520640ca7461f31ba66104612135770090340"
+    public static let infinityParser2FlashUpstreamRepoId = "infly/Infinity-Parser2-Flash"
+    public static let infinityParser2FlashUpstreamRevision = "30f02aca5ee7c32d22a962cbece5c19611147c9e"
+    public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
+    public static let infinityParser2ProUpstreamRevision = "1d070df7db5acca0ffa75596229070a047704f89"
+    public static let infinityParser2ProInt8UpstreamRepoId = "Sawfwair/Infinity-Parser2-Pro-Int8"
+    public static let infinityParser2ProInt8UpstreamRevision = "main"
 
     private static let profilesByModelId: [String: Profile] = [
         q36NanoModelId: Profile(
             modelId: q36NanoModelId,
             upstreamRepoId: q36NanoUpstreamRepoId,
             upstreamRevision: q36NanoUpstreamRevision
+        ),
+        infinityParser2FlashModelId: Profile(
+            modelId: infinityParser2FlashModelId,
+            upstreamRepoId: infinityParser2FlashUpstreamRepoId,
+            upstreamRevision: infinityParser2FlashUpstreamRevision
+        ),
+        infinityParser2ProModelId: Profile(
+            modelId: infinityParser2ProModelId,
+            upstreamRepoId: infinityParser2ProUpstreamRepoId,
+            upstreamRevision: infinityParser2ProUpstreamRevision
+        ),
+        infinityParser2ProInt8ModelId: Profile(
+            modelId: infinityParser2ProInt8ModelId,
+            upstreamRepoId: infinityParser2ProInt8UpstreamRepoId,
+            upstreamRevision: infinityParser2ProInt8UpstreamRevision
         ),
     ]
 

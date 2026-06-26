@@ -202,6 +202,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                "image-klein-base-9b",
+                "Image LoRA training base",
+                "Installs the undistilled FLUX.2 Klein Base 9B checkpoint for higher-capacity LoRA training and research workflows.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 "image-klein-base",
                 "Image training base",
                 "Installs the FLUX.2 Klein base layout used by image-training and compatibility workflows.",
@@ -460,6 +467,27 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 8,
                 recommended: 16,
                 setup: true
+            ),
+            descriptor(
+                Q35Resources.infinityParser2FlashModelId,
+                "Infinity-Parser2 Flash OCR",
+                "Parses document images with the native Qwen-family Infinity-Parser2 Flash runtime.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
+                Q35Resources.infinityParser2ProModelId,
+                "Infinity-Parser2 Pro OCR",
+                "Runs the heavyweight native Infinity-Parser2 Pro eval model for document parsing.",
+                minimum: 128,
+                recommended: 192
+            ),
+            descriptor(
+                Q35Resources.infinityParser2ProInt8ModelId,
+                "Infinity-Parser2 Pro int8 OCR",
+                "Runs the quantized native Infinity-Parser2 Pro model for quality-focused OCR evals.",
+                minimum: 64,
+                recommended: 96
             ),
             descriptor(
                 "vision-segment-sam31",

@@ -49,17 +49,26 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Model path or canonical model id (default: image-zimage-nano).")
     var model: String?
 
-    @Option(name: [.customShort("i"), .long], help: "Input image path (enables image-to-image).")
+    @Option(
+        name: [.customShort("i"), .long],
+        help: "Input image path for image-to-image. For FLUX.2 Klein, this is treated as a single reference image."
+    )
     var input: String?
 
-    @Option(name: [.customLong("ref-image")], help: "Reference image path for HiDream O1 editing/personalization. Repeat for multiple references.")
+    @Option(
+        name: [.customLong("ref-image")],
+        help: "Reference image path for FLUX.2 Klein or HiDream O1 editing/personalization. Repeat for multiple references."
+    )
     var referenceImages: [String] = []
 
     @Flag(name: [.customLong("keep-original-aspect")], help: "For one HiDream reference image, preserve the original aspect ratio.")
     var keepOriginalAspect: Bool = false
 
-    @Option(name: [.customLong("strength"), .customLong("str")], help: "Image-to-image strength 0.0–1.0 (default: 0.75).")
-    var strength: Double = 0.75
+    @Option(
+        name: [.customLong("strength"), .customLong("str")],
+        help: "Image-to-image/reference change strength 0.0–1.0. Defaults to 0.75 for --input and 0.0 for Klein --ref-image."
+    )
+    var strength: Double?
 
     @Option(name: [.customLong("max-sequence-length")], help: "Max text sequence length.")
     var maxSequenceLength: Int = 512
@@ -100,7 +109,7 @@ struct ImageGenerate: AsyncParsableCommand {
         guard width > 0, height > 0 else {
             throw ValidationError("--width/--height must be > 0")
         }
-        guard (0.0...1.0).contains(strength) else {
+        if let strength, !(0.0...1.0).contains(strength) {
             throw ValidationError("--strength must be between 0.0 and 1.0")
         }
 
@@ -172,6 +181,12 @@ struct ImageGenerate: AsyncParsableCommand {
         }
 
         let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
+        let conditioning = Self.resolveConditioningInputs(
+            family: manifest.family,
+            inputImage: inputURL,
+            referenceImages: referenceImageURLs,
+            strength: strength
+        )
         let effectiveSteps = steps
             ?? ((manifest.family == .hidream || manifest.family == .krea || manifest.family == .ideogram)
                 ? (manifest.defaults?.steps ?? 4)
@@ -198,7 +213,7 @@ struct ImageGenerate: AsyncParsableCommand {
                     CLIStderr.write("[structured-prompt] \(message)\n")
                 }
             }
-            effectivePrompt = try await StructuredImagePromptAdapter.expand(
+            effectivePrompt = try await Self.expandStructuredPromptWithFallback(
                 prompt: prompt,
                 modelID: structuredPromptModel,
                 modelRoot: structuredPromptModelRoot,
@@ -225,7 +240,8 @@ struct ImageGenerate: AsyncParsableCommand {
         let request = GenerationRequest(
             prompt: effectivePrompt,
             negativePrompt: negativePrompt,
-            referenceImages: referenceImageURLs,
+            referenceImages: conditioning.referenceImages,
+            referenceStrength: conditioning.referenceStrength,
             width: width,
             height: height,
             steps: effectiveSteps,
@@ -236,8 +252,8 @@ struct ImageGenerate: AsyncParsableCommand {
             maxSequenceLength: effectiveMaxSequenceLength,
             lora: loraConfig,
             enhancePrompt: false,
-            inputImage: inputURL,
-            strength: strength,
+            inputImage: conditioning.inputImage,
+            strength: conditioning.strength,
             keepOriginalAspect: keepOriginalAspect,
             useBetaSigmas: false,
             sigmaShift: effectiveSigmaShift
@@ -274,5 +290,95 @@ struct ImageGenerate: AsyncParsableCommand {
 
         // stdout: machine-readable path (easy for scripts)
         print(result.outputURL.path)
+    }
+
+    static func expandStructuredPromptWithFallback(
+        prompt: String,
+        modelID: String,
+        modelRoot: String?,
+        maxTokens: Int,
+        progressHandler: (@Sendable (String) -> Void)?
+    ) async throws -> String {
+        do {
+            return try await StructuredImagePromptAdapter.expand(
+                prompt: prompt,
+                modelID: modelID,
+                modelRoot: modelRoot,
+                maxTokens: maxTokens,
+                progressHandler: progressHandler
+            )
+        } catch {
+            guard isStructuredPromptOutputFailure(error) else {
+                throw error
+            }
+            progressHandler?("adapter output rejected; trying Gemma text fallback")
+        }
+
+        let defaultModelID = StructuredImagePromptAdapter.defaultModelID
+        if modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != defaultModelID {
+            do {
+                return try await StructuredImagePromptAdapter.expand(
+                    prompt: prompt,
+                    modelID: defaultModelID,
+                    modelRoot: nil,
+                    maxTokens: maxTokens,
+                    progressHandler: progressHandler
+                )
+            } catch {
+                progressHandler?("Gemma text fallback unavailable; using deterministic structured prompt")
+            }
+        } else {
+            progressHandler?("using deterministic structured prompt fallback")
+        }
+
+        return try StructuredImagePromptAdapter.deterministicCaptionJSON(for: prompt)
+    }
+
+    private static func isStructuredPromptOutputFailure(_ error: Error) -> Bool {
+        guard let adapterError = error as? StructuredImagePromptAdapterError else { return false }
+        switch adapterError {
+        case .invalidCaptionJSON:
+            return true
+        case .invalidMaxTokens, .invalidModelRoot:
+            return false
+        }
+    }
+
+    struct ConditioningInputs: Equatable {
+        var inputImage: URL?
+        var referenceImages: [URL]
+        var strength: Double
+        var referenceStrength: Double
+    }
+
+    static func resolveConditioningInputs(
+        family: MereRunModelManifest.Family?,
+        inputImage: URL?,
+        referenceImages: [URL],
+        strength: Double?
+    ) -> ConditioningInputs {
+        let explicitStrength = strength
+        let defaultInputStrength = 0.75
+
+        guard family == .klein else {
+            return ConditioningInputs(
+                inputImage: inputImage,
+                referenceImages: referenceImages,
+                strength: explicitStrength ?? defaultInputStrength,
+                referenceStrength: 0.0
+            )
+        }
+
+        var resolvedReferences = referenceImages
+        if let inputImage {
+            resolvedReferences.insert(inputImage, at: 0)
+        }
+
+        return ConditioningInputs(
+            inputImage: nil,
+            referenceImages: resolvedReferences,
+            strength: explicitStrength ?? defaultInputStrength,
+            referenceStrength: explicitStrength ?? (inputImage == nil ? 0.0 : defaultInputStrength)
+        )
     }
 }

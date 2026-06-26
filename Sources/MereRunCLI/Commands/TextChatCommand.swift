@@ -37,6 +37,9 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("p"), .long], help: "User prompt.")
     var prompt: String
 
+    @Option(name: [.long], help: "Optional image path for vision-capable chat models such as vision-chat-gemma4-12b.")
+    var image: String?
+
     @Option(name: [.customShort("s"), .customLong("system")], help: "System prompt.")
     var systemPrompt: String?
 
@@ -138,11 +141,27 @@ struct TextChat: AsyncParsableCommand {
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
+        let imageReference: String?
+        if let image, !image.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let trimmedImage = image.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedImage.lowercased().hasPrefix("data:image/") {
+                imageReference = trimmedImage
+            } else {
+                let imageURL = URL(fileURLWithPath: trimmedImage).standardizedFileURL
+                guard FileManager.default.fileExists(atPath: imageURL.path) else {
+                    throw ValidationError("Image file not found: \(imageURL.path)")
+                }
+                imageReference = imageURL.path
+            }
+        } else {
+            imageReference = nil
+        }
+
         var messages: [ChatMessage] = []
         if let systemPrompt, !systemPrompt.isEmpty {
             messages.append(ChatMessage(role: .system, content: systemPrompt))
         }
-        messages.append(ChatMessage(role: .user, content: prompt))
+        messages.append(ChatMessage(role: .user, content: prompt, imageUrl: imageReference))
 
         let toolDefs: [ToolDefinition]? = try tools.flatMap { raw in
             let names = raw.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }

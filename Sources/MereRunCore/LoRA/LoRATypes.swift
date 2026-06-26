@@ -5,15 +5,18 @@ public struct LoRAWeights: @unchecked Sendable {
     public let weights: [String: (down: MLXArray, up: MLXArray)]
     public let rank: Int
     public let alpha: Float
+    public let targetRanks: [String: Int]
 
     public init(
         weights: [String: (down: MLXArray, up: MLXArray)],
         rank: Int,
-        alpha: Float? = nil
+        alpha: Float? = nil,
+        targetRanks: [String: Int] = [:]
     ) {
         self.weights = weights
         self.rank = rank
         self.alpha = alpha ?? Float(rank)
+        self.targetRanks = targetRanks
     }
 
     public var effectiveScale: Float {
@@ -38,4 +41,3 @@ public enum LoRAError: Error, LocalizedError {
         }
     }
 }
-

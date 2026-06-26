@@ -298,12 +298,14 @@ extension Flux2KleinGenerator {
         // 7. Apply BatchNorm inverse transform (denormalization)
         // mflux: latents = packed * sqrt(var + eps) + mean
         // mflux Flux2BatchNormStats uses eps = 0.0001 (1e-4), NOT PyTorch default 1e-5
-        let bnEps: Float = 1e-4
-        let bnStd = MLX.sqrt(bnVar.reshaped([1, -1, 1, 1]) + bnEps)
-        let bnMeanReshaped = bnMean.reshaped([1, -1, 1, 1])
-        let denormalizedLatents = packedLatents * bnStd + bnMeanReshaped
+        let denormalizedLatents = Flux2KleinBatchNorm.denormalizePackedLatents(
+            packedLatents,
+            mean: bnMean,
+            variance: bnVar
+        )
 
         if let debugLog {
+            let bnStd = Flux2KleinBatchNorm.std(mean: bnMean, variance: bnVar)
             debugLog("=== BatchNorm Denormalization ===")
             debugLog("BN mean range: [\(bnMean.min().item(Float.self)), \(bnMean.max().item(Float.self))]")
             debugLog("BN std range: [\(bnStd.min().item(Float.self)), \(bnStd.max().item(Float.self))]")
@@ -498,10 +500,11 @@ extension Flux2KleinGenerator {
         // Decode does: packed * bnStd + bnMean
         // Encode should do: (packed - bnMean) / bnStd
         // mflux Flux2BatchNormStats uses eps = 0.0001 (1e-4)
-        let bnEps: Float = 1e-4
-        let bnStd = MLX.sqrt(bnVar.reshaped([1, -1, 1, 1]) + bnEps)
-        let bnMeanReshaped = bnMean.reshaped([1, -1, 1, 1])
-        let normalizedPacked = (patchified - bnMeanReshaped) / bnStd
+        let normalizedPacked = Flux2KleinBatchNorm.normalizePackedLatents(
+            patchified,
+            mean: bnMean,
+            variance: bnVar
+        )
 
         // 8. Reshape to sequence format: [1, 128, H/16, W/16] -> [1, seqLen, 128]
         let seqLatent = normalizedPacked

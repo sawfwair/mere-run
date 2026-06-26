@@ -11,8 +11,7 @@ public struct GenerationConfig: Sendable {
     public var topP: Float
     public var repetitionPenalty: Float?
     public var repetitionContextSize: Int
-    /// Token ids that must never be sampled (e.g. multimodal special tokens
-    /// during text-only generation). Applied as a -inf logit mask.
+    /// Token ids that must never be sampled. Applied as a -inf logit mask.
     public var bannedTokens: [Int]
 
     public init(

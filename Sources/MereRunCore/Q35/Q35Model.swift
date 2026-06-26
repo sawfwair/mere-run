@@ -68,9 +68,9 @@ public enum Q35LayerCache: @unchecked Sendable {
 final class Q35DecoderLayer: Module {
     @ModuleInfo(key: "linear_attn") var linearAttention: Q35LinearAttention
     @ModuleInfo(key: "self_attn") var selfAttention: Q35FullAttention
-    @ModuleInfo(key: "mlp") var mlp: Q35MoE
-    @ModuleInfo(key: "input_layernorm") var inputLayerNorm: RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: RMSNorm
+    @ModuleInfo(key: "mlp") var mlp: Q35FeedForward
+    @ModuleInfo(key: "input_layernorm") var inputLayerNorm: Q35RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: Q35RMSNorm
 
     let layerType: Q35AttentionLayerType
     let isMLPOnly: Bool
@@ -82,9 +82,9 @@ final class Q35DecoderLayer: Module {
 
         self._linearAttention.wrappedValue = Q35LinearAttention(config: config)
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
-        self._mlp.wrappedValue = Q35MoE(config: config)
-        self._inputLayerNorm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
-        self._postAttentionLayerNorm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._mlp.wrappedValue = Q35FeedForward(config: config)
+        self._inputLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
 
         super.init()
     }
@@ -92,7 +92,8 @@ final class Q35DecoderLayer: Module {
     func callAsFunction(
         _ x: MLXArray,
         fullMask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: Q35LayerCache?
+        cache: Q35LayerCache?,
+        positionIds: MLXArray? = nil
     ) -> MLXArray {
         var h = x
         if !isMLPOnly {
@@ -114,7 +115,7 @@ final class Q35DecoderLayer: Module {
                 } else {
                     fullCache = nil
                 }
-                attentionOut = selfAttention(normed, mask: fullMask, cache: fullCache)
+                attentionOut = selfAttention(normed, mask: fullMask, cache: fullCache, positionIds: positionIds)
             }
             h = x + attentionOut
         }
@@ -127,7 +128,7 @@ final class Q35DecoderLayer: Module {
 final class Q35Transformer: Module {
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo(key: "layers") var layers: [Q35DecoderLayer]
-    @ModuleInfo(key: "norm") var norm: RMSNorm
+    @ModuleInfo(key: "norm") var norm: Q35RMSNorm
 
     init(config: Q35Config) {
         let text = config.textConfig
@@ -138,7 +139,7 @@ final class Q35Transformer: Module {
         self._layers.wrappedValue = (0..<text.numHiddenLayers).map { index in
             Q35DecoderLayer(config: config, layerIndex: index)
         }
-        self._norm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._norm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         super.init()
     }
 
@@ -163,7 +164,8 @@ final class Q35Transformer: Module {
     func callAsFunction(
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
-        inputEmbeddings: MLXArray? = nil
+        inputEmbeddings: MLXArray? = nil,
+        positionIds: MLXArray? = nil
     ) -> MLXArray {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
 
@@ -174,7 +176,8 @@ final class Q35Transformer: Module {
             hidden = layer(
                 hidden,
                 fullMask: fullMask,
-                cache: layerCache
+                cache: layerCache,
+                positionIds: positionIds
             )
         }
 
@@ -189,18 +192,20 @@ struct Q35ForwardOutput {
 
 public final class Q35Model: Module, @unchecked Sendable {
     @ModuleInfo(key: "model") var model: Q35Transformer
-    @ModuleInfo(key: "lm_head") var lmHead: Linear
+    @ModuleInfo(key: "lm_head") var lmHead: Linear?
 
     public let config: Q35Config
 
     public init(config: Q35Config) {
         self.config = config
         self._model.wrappedValue = Q35Transformer(config: config)
-        self._lmHead.wrappedValue = Linear(
-            config.textConfig.hiddenSize,
-            config.textConfig.vocabSize,
-            bias: false
-        )
+        self._lmHead.wrappedValue = config.tieWordEmbeddings
+            ? nil
+            : Linear(
+                config.textConfig.hiddenSize,
+                config.textConfig.vocabSize,
+                bias: false
+            )
         super.init()
     }
 
@@ -209,23 +214,35 @@ public final class Q35Model: Module, @unchecked Sendable {
     }
 
     func logits(from hidden: MLXArray) -> MLXArray {
-        lmHead(hidden)
+        lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
     }
 
     func forward(
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
-        inputEmbeddings: MLXArray? = nil
+        inputEmbeddings: MLXArray? = nil,
+        positionIds: MLXArray? = nil
     ) -> Q35ForwardOutput {
-        let hidden = model(inputIds, cache: cache, inputEmbeddings: inputEmbeddings)
-        return Q35ForwardOutput(hidden: hidden, logits: lmHead(hidden))
+        let hidden = model(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings,
+            positionIds: positionIds
+        )
+        return Q35ForwardOutput(hidden: hidden, logits: logits(from: hidden))
     }
 
     public func callAsFunction(
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
-        inputEmbeddings: MLXArray? = nil
+        inputEmbeddings: MLXArray? = nil,
+        positionIds: MLXArray? = nil
     ) -> MLXArray {
-        forward(inputIds, cache: cache, inputEmbeddings: inputEmbeddings).logits
+        forward(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings,
+            positionIds: positionIds
+        ).logits
     }
 }

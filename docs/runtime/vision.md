@@ -49,6 +49,18 @@ Segmentation and tracking run natively through the Swift/MLX SAM 3.1 stack in
 swift run mere.run vision caption ./image.png
 ```
 
+For dataset captioning, use a domain prompt file and focus terms when the
+generic captioner would miss the training objective:
+
+```bash
+swift run mere.run vision caption ./cards/*.jpg \
+  --output-dir ./captions \
+  --prompt-file ./card-caption-prompt.txt \
+  --focus "full card border" "printed title text" "visible gag" \
+  --trigger-token cardstyle \
+  --temperature 0.1
+```
+
 ### Inspect an image with a question
 
 ```bash
@@ -130,6 +142,16 @@ The tracking JSON includes:
 
 ```bash
 swift run mere.run vision ocr ./page.png --backend lighton
+swift run mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
+```
+
+For an external Infinity-Parser2 parity eval against an already-running vLLM server:
+
+```bash
+swift run mere.run vision ocr ./page.png \
+  --backend infinity \
+  --infinity-runtime external \
+  --infinity-api-url http://127.0.0.1:8000/v1/chat/completions
 ```
 
 ## Runtime entrypoints
@@ -150,6 +172,9 @@ swift run mere.run vision ocr ./page.png --backend lighton
 - `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Loading.swift`
 - `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Inference.swift`
 - `Sources/MereRunCore/LightOnOCR/LightOnOCRSupport.swift`
+- `Sources/MereRunCore/Q35/Q35Generator.swift`
+- `Sources/MereRunCore/Q35/Q35Model.swift`
+- `Sources/MereRunCore/Q35/Q35VisionTower.swift`
 
 ### Vision-language support
 
@@ -188,6 +213,17 @@ swift run mere.run vision ocr ./page.png --backend lighton
 3. the input image is normalized into the expected tensor form
 4. OCR inference runs
 5. text is emitted without internal bring-up logs on stdout
+
+LightOnOCR uses the dedicated LightOn runtime and remains the default `vision ocr`
+backend. Native Infinity-Parser2 uses the Q35 text runtime plus the Qwen-family
+vision tower, with `vision-ocr-infinity-flash` as the default Infinity model,
+`vision-ocr-infinity-pro-int8` as the quality-focused Pro eval option, and
+`vision-ocr-infinity-pro` as the full BF16 heavyweight compatibility target.
+
+GLM-OCR remains an external CLI adapter that shells out to `glmocr`. Infinity can
+also run as an external parity adapter through `--infinity-runtime external`,
+which shells out to the `parser` executable from `infinity_parser2` and can
+target an upstream Transformers, vLLM engine, or vLLM server run.
 
 ## How segmentation and tracking work
 

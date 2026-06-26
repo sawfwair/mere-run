@@ -22,7 +22,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 | Category | Hugging Face pull IDs |
 | --- | --- |
-| Image | `image-klein-nano`, `image-klein-base`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`, `image-krea2-turbo`, `image-ideogram4-sdnq-uint4` |
+| Image | `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`, `image-krea2-turbo`, `image-ideogram4-sdnq-uint4` |
 | Text chat | `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
 | Vision chat | `vision-chat-gemma4-12b` |
 | Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
@@ -30,7 +30,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Text anonymize | `text-anonymize-privacy-filter` |
 | Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
 | Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
-| Vision | `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
+| Vision | `vision-ocr-lighton`, `vision-ocr-infinity-flash`, `vision-ocr-infinity-pro-int8`, `vision-ocr-infinity-pro`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
 | Music | `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
 | SFX | `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s` |
 | Video | `video-ltx-av`, `video-ltx23-av-mlx` |

@@ -128,10 +128,11 @@ extension Flux2KleinGeneratoriOS {
         let patchified = patchifyLatents(cleanLatent, height: patchedHeight * 2, width: patchedWidth * 2)
 
         // Apply BatchNorm normalization
-        let bnEps: Float = 1e-4
-        let bnStd = MLX.sqrt(bnVar.reshaped([1, -1, 1, 1]) + bnEps)
-        let bnMeanReshaped = bnMean.reshaped([1, -1, 1, 1])
-        let normalizedPacked = (patchified - bnMeanReshaped) / bnStd
+        let normalizedPacked = Flux2KleinBatchNorm.normalizePackedLatents(
+            patchified,
+            mean: bnMean,
+            variance: bnVar
+        )
 
         // Reshape to sequence format
         let seqLatent = normalizedPacked

@@ -210,7 +210,7 @@ extension Flux2KleinGenerator {
         loadedQuantization = transformerQuantization
         currentLoRA = nil
         transformerLoRALayers = nil
-        transformerLoRARank = nil
+        transformerLoRARankSignature = nil
         compiledTransformer = nil
         compiledTransformerNeedsWarmup = true
     }
@@ -237,15 +237,18 @@ extension Flux2KleinGenerator {
         progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 0, totalSteps: 1))
         let loraWeights = try await LoRAWeightLoader.load(from: lora)
         let targetRank = loraWeights.rank
+        let targetRanks = loraWeights.targetRanks.isEmpty ? nil : loraWeights.targetRanks
+        let targetRankSignature = Self.loraRankSignature(defaultRank: targetRank, targetRanks: targetRanks)
 
         if transformerLoRALayers == nil {
             transformerLoRALayers = try Flux2LoRAInjector.inject(
                 into: transformer!,
                 rank: targetRank,
                 alpha: loraWeights.alpha,
+                targetRanks: targetRanks,
                 zeroInitUp: true
             )
-            transformerLoRARank = targetRank
+            transformerLoRARankSignature = targetRankSignature
             if let layers = transformerLoRALayers {
                 for layer in layers.values {
                     layer.isActive = false
@@ -255,15 +258,16 @@ extension Flux2KleinGenerator {
             // Module structure changed; invalidate compilation.
             compiledTransformer = nil
             compiledTransformerNeedsWarmup = true
-        } else if transformerLoRARank != targetRank {
+        } else if transformerLoRARankSignature != targetRankSignature {
             transformerLoRALayers = try Flux2LoRAInjector.inject(
                 into: transformer!,
                 rank: targetRank,
                 alpha: loraWeights.alpha,
+                targetRanks: targetRanks,
                 zeroInitUp: true,
                 allowReinjection: true
             )
-            transformerLoRARank = targetRank
+            transformerLoRARankSignature = targetRankSignature
             if let layers = transformerLoRALayers {
                 for layer in layers.values {
                     layer.isActive = false
@@ -316,6 +320,16 @@ extension Flux2KleinGenerator {
         case .remote(_, let scale):
             return Float(scale)
         }
+    }
+
+    private static func loraRankSignature(defaultRank: Int, targetRanks: [String: Int]?) -> String {
+        guard let targetRanks, !targetRanks.isEmpty else {
+            return "default:\(defaultRank)"
+        }
+        return targetRanks
+            .sorted { lhs, rhs in lhs.key < rhs.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ";")
     }
 
     private static let noMatchingTransformerLayersMessage = "No matching transformer layers found for this LoRA."
@@ -449,6 +463,12 @@ extension Flux2KleinGenerator {
         // mflux uses to_out.X but we use to_out.0.X (array) for transformer_blocks only.
         // single_transformer_blocks uses to_out as single Linear (no array).
         let mfluxKeyMapper: (String) -> String = { key in
+            if key.hasPrefix("time_guidance_embed.linear_") {
+                return key.replacingOccurrences(
+                    of: "time_guidance_embed.linear_",
+                    with: "time_guidance_embed.timestep_embedder.linear_"
+                )
+            }
             if key.hasPrefix("transformer_blocks.") && key.contains(".attn.to_out.") && !key.contains(".to_out.0.") {
                 return key.replacingOccurrences(of: ".attn.to_out.", with: ".attn.to_out.0.")
             }

@@ -27,6 +27,16 @@ private struct Q35BatchedDecodeResult {
     let decodeSeconds: Double
 }
 
+private struct Q35VisionReplacement {
+    let embeddings: MLXArray
+    let gridTHW: (Int, Int, Int)
+}
+
+private struct Q35MRoPEPositionData {
+    let positionIds: MLXArray
+    let ropeDelta: Int
+}
+
 private final class Q35BatchedDecodeRow: @unchecked Sendable {
     let id: UUID
     let eosSet: Set<Int>
@@ -35,6 +45,7 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
     let progressHandler: (@Sendable (ChatProgress) -> Void)?
     let decodeStart: Date
     let prefillTokenCount: Int
+    let mropeRopeDelta: Int?
     let continuation: CheckedContinuation<Q35BatchedDecodeResult, Error>
 
     var logits: MLXArray
@@ -51,6 +62,7 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
         generationConfig: GenerationConfig,
         tokenBudget: Int,
         prefillTokenCount: Int,
+        mropeRopeDelta: Int?,
         repetitionHistory: [Int],
         progressHandler: (@Sendable (ChatProgress) -> Void)?,
         continuation: CheckedContinuation<Q35BatchedDecodeResult, Error>
@@ -62,6 +74,7 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
         self.generationConfig = generationConfig
         self.tokenBudget = tokenBudget
         self.prefillTokenCount = prefillTokenCount
+        self.mropeRopeDelta = mropeRopeDelta
         self.repetitionHistory = repetitionHistory
         self.progressHandler = progressHandler
         self.continuation = continuation
@@ -92,6 +105,8 @@ public actor Q35Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
+    public static let qwen3VLMinPixels = 2_048
+    public static let qwen3VLMaxPixels = 16_777_216
 
     private var model: Q35Model?
     private var tokenizerAndTemplate: Q35TokenizerAndTemplate?
@@ -104,6 +119,8 @@ public actor Q35Generator: ChatGenerator {
     private let modelId: String
     private let prefixKVCacheEnabled: Bool
     private let continuousBatchingEnabled: Bool
+    private let visionMinPixels: Int
+    private let visionMaxPixels: Int
 
     private var prefixKVCache: [Q35PrefixKVCacheKey: Q35PrefixKVCacheEntry] = [:]
     private var prefixKVCacheHits = 0
@@ -124,11 +141,49 @@ public actor Q35Generator: ChatGenerator {
     public init(
         modelId: String = Q35Resources.defaultModelId,
         prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFIX_KV_CACHE"] == "1",
-        continuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1"
+        continuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
+        visionMinPixels: Int = Q35Generator.qwen3VLMinPixels,
+        visionMaxPixels: Int = Q35Generator.qwen3VLMaxPixels
     ) {
         self.modelId = modelId
         self.prefixKVCacheEnabled = prefixKVCacheEnabled
         self.continuousBatchingEnabled = continuousBatchingEnabled
+        self.visionMinPixels = visionMinPixels
+        self.visionMaxPixels = visionMaxPixels
+    }
+
+    static func qwen3VLTargetSize(
+        originalWidth width: Int,
+        originalHeight height: Int,
+        patchSize: Int,
+        temporalPatchSize: Int,
+        spatialMergeSize: Int,
+        minPixels: Int = Q35Generator.qwen3VLMinPixels,
+        maxPixels: Int = Q35Generator.qwen3VLMaxPixels
+    ) -> (width: Int, height: Int) {
+        let factor = max(1, patchSize * max(1, spatialMergeSize))
+        let temporalFactor = max(1, temporalPatchSize)
+        let frames = 1
+
+        func roundedToFactor(_ value: Int) -> Int {
+            max(factor, Int((Double(value) / Double(factor)).rounded()) * factor)
+        }
+
+        var targetHeight = roundedToFactor(height)
+        var targetWidth = roundedToFactor(width)
+        let temporalPaddedFrames = Int(ceil(Double(frames) / Double(temporalFactor))) * temporalFactor
+
+        if temporalPaddedFrames * targetHeight * targetWidth > maxPixels {
+            let beta = sqrt(Double(frames * height * width) / Double(maxPixels))
+            targetHeight = max(factor, Int(floor(Double(height) / beta / Double(factor))) * factor)
+            targetWidth = max(factor, Int(floor(Double(width) / beta / Double(factor))) * factor)
+        } else if temporalPaddedFrames * targetHeight * targetWidth < minPixels {
+            let beta = sqrt(Double(minPixels) / Double(frames * height * width))
+            targetHeight = Int(ceil(Double(height) * beta / Double(factor))) * factor
+            targetWidth = Int(ceil(Double(width) * beta / Double(factor))) * factor
+        }
+
+        return (targetWidth, targetHeight)
     }
 
     public func chat(
@@ -253,32 +308,12 @@ public actor Q35Generator: ChatGenerator {
         let groupSize = config.quantization?.groupSize ?? 64
         let bits = config.quantization?.bits ?? 4
 
-        if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
-            try HFSafetensorsWeightsLoader.applyQuantizedWeights(
-                indexURL: resources.modelIndexURL,
-                to: q35Model,
-                groupSize: groupSize,
-                bits: bits,
-                keyMapper: { key in
-                    if key.hasPrefix("language_model.") {
-                        return String(key.dropFirst("language_model.".count))
-                    }
-                    return "__unused__.\(key)"
-                }
-            )
-        } else {
-            let arrays = try MLX.loadArrays(url: resources.modelWeightsURL)
-            let filtered = arrays.filter { $0.key.hasPrefix("language_model.") }
-            try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
-                filtered,
-                to: q35Model,
-                groupSize: groupSize,
-                bits: bits,
-                keyMapper: { key in
-                    String(key.dropFirst("language_model.".count))
-                }
-            )
-        }
+        try loadTextWeights(
+            into: q35Model,
+            from: resources,
+            groupSize: groupSize,
+            bits: bits
+        )
 
         let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
         let mtpURL = normalizedRoot.appendingPathComponent("mtp.safetensors")
@@ -345,13 +380,30 @@ public actor Q35Generator: ChatGenerator {
             loadedConfig.textConfig.maxPositionEmbeddings
         )
         let prefillStart = Date()
+        let imageURLs = collectImageURLs(from: messages)
+        var visionReplacements: [Q35VisionReplacement] = []
+
+        if !imageURLs.isEmpty {
+            progressHandler?(ChatProgress(stage: .encoding, message: "Encoding images"))
+            guard visionTower != nil else {
+                throw Q35Error.generationFailed("Model \(modelId) does not include a vision tower; use text-only prompts.")
+            }
+            try ensureVisionWeightsLoaded(progressHandler: progressHandler)
+            if let visionTower {
+                visionReplacements = try buildVisionReplacements(
+                    imageURLs: imageURLs,
+                    visionTower: visionTower
+                )
+            }
+        }
 
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: messages,
             tools: request.tools,
             addGenerationPrompt: true,
             includeThinking: request.showThinking,
-            maxLength: effectiveContext
+            maxLength: effectiveContext,
+            imageTokenCounts: visionReplacements.map { max(1, $0.embeddings.dim(0)) }
         )
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
@@ -362,16 +414,16 @@ public actor Q35Generator: ChatGenerator {
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
             topP: Float(request.topP),
-            repetitionPenalty: 1.05,
+            repetitionPenalty: nil,
             repetitionContextSize: 64
         )
 
         var layerCaches = makeLayerCaches(config: loadedConfig)
         let promptInput = MLXArray(promptTokens.map { Int32($0) }).reshaped(1, promptTokens.count)
 
-        let imageURLs = collectImageURLs(from: messages)
         var prefillOutput: Q35PrefillOutput
         var prefillLength = promptTokens.count
+        var mropeRopeDelta: Int?
 
         if imageURLs.isEmpty {
             let prefixSeed = prefixKVCacheSeed(
@@ -401,20 +453,8 @@ public actor Q35Generator: ChatGenerator {
                 progressHandler: progressHandler
             )
         } else {
-            progressHandler?(ChatProgress(stage: .encoding, message: "Encoding images"))
-            guard visionTower != nil else {
-                throw Q35Error.generationFailed("Model \(modelId) does not include a vision tower; use text-only prompts.")
-            }
-            try ensureVisionWeightsLoaded(progressHandler: progressHandler)
-
-            if let visionTower,
-               let imageTokenId = loadedConfig.imageTokenId ?? tokenizerAndTemplate.tokenizer.imageTokenId {
-                let replacements = try buildVisionReplacements(
-                    imageURLs: imageURLs,
-                    visionTower: visionTower
-                )
-
-                if replacements.isEmpty {
+            if let imageTokenId = loadedConfig.imageTokenId ?? tokenizerAndTemplate.tokenizer.imageTokenId {
+                if visionReplacements.isEmpty {
                     prefillOutput = try await chunkedPrefill(
                         model: model,
                         promptTokens: promptTokens,
@@ -427,17 +467,29 @@ public actor Q35Generator: ChatGenerator {
                         hiddenStates: promptEmbeddings,
                         inputIds: promptInput,
                         imageTokenId: imageTokenId,
-                        replacements: replacements
+                        replacements: visionReplacements
                     )
+                    let positionData = try buildMRoPEPositionData(
+                        inputIds: promptInput,
+                        imageTokenId: imageTokenId,
+                        replacements: visionReplacements,
+                        spatialMergeSize: visionTower?.spatialMergeSize ?? 1
+                    )
+                    var positionIds = positionData?.positionIds
 
                     if promptEmbeddings.dim(1) > effectiveContext {
                         promptEmbeddings = promptEmbeddings[0..., (promptEmbeddings.dim(1) - effectiveContext)..., 0...]
+                        if let currentPositionIds = positionIds {
+                            positionIds = currentPositionIds[0..., 0..., (currentPositionIds.dim(2) - effectiveContext)...]
+                        }
                     }
                     prefillLength = promptEmbeddings.dim(1)
+                    mropeRopeDelta = positionData?.ropeDelta
                     prefillOutput = try await chunkedPrefillEmbeddings(
                         model: model,
                         inputEmbeddings: promptEmbeddings,
                         cache: layerCaches,
+                        positionIds: positionIds,
                         progressHandler: progressHandler
                     )
                 }
@@ -466,6 +518,7 @@ public actor Q35Generator: ChatGenerator {
             generationConfig: generationConfig,
             tokenBudget: tokenBudget,
             prefillTokenCount: prefillLength,
+            mropeRopeDelta: mropeRopeDelta,
             promptTokens: promptTokens,
             maxContextTokens: effectiveContext,
             progressHandler: progressHandler
@@ -546,6 +599,7 @@ public actor Q35Generator: ChatGenerator {
         generationConfig: GenerationConfig,
         tokenBudget: Int,
         prefillTokenCount: Int,
+        mropeRopeDelta: Int?,
         promptTokens: [Int],
         maxContextTokens: Int,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
@@ -559,7 +613,7 @@ public actor Q35Generator: ChatGenerator {
             let speculationMTP = Self.shouldSpeculate(
                 promptTokenCount: promptTokens.count,
                 maxContextTokens: maxContextTokens
-            ) ? mtpModel : nil
+            ) && mropeRopeDelta == nil ? mtpModel : nil
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -571,6 +625,7 @@ public actor Q35Generator: ChatGenerator {
                 generationConfig: generationConfig,
                 tokenBudget: tokenBudget,
                 prefillTokenCount: prefillTokenCount,
+                mropeRopeDelta: mropeRopeDelta,
                 promptTokens: promptTokens,
                 progressHandler: progressHandler
             )
@@ -588,6 +643,7 @@ public actor Q35Generator: ChatGenerator {
                     generationConfig: generationConfig,
                     tokenBudget: tokenBudget,
                     prefillTokenCount: prefillTokenCount,
+                    mropeRopeDelta: mropeRopeDelta,
                     repetitionHistory: promptTokens,
                     progressHandler: progressHandler,
                     continuation: continuation
@@ -613,6 +669,7 @@ public actor Q35Generator: ChatGenerator {
         generationConfig: GenerationConfig,
         tokenBudget: Int,
         prefillTokenCount: Int,
+        mropeRopeDelta: Int?,
         promptTokens: [Int],
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
@@ -819,7 +876,11 @@ public actor Q35Generator: ChatGenerator {
             }
 
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            let output = model.forward(nextInput, cache: layerCaches)
+            let output = model.forward(
+                nextInput,
+                cache: layerCaches,
+                positionIds: decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
+            )
             logits = output.logits
             previousHidden = lastTokenHidden(output.hidden)
             MLX.eval(logits)
@@ -952,6 +1013,35 @@ public actor Q35Generator: ChatGenerator {
         }.min() ?? (row.prefillTokenCount + row.generatedTokens.count)
     }
 
+    private func decodePositionIds(
+        layerCaches: [Q35LayerCache?],
+        tokenCount: Int,
+        ropeDelta: Int?
+    ) -> MLXArray? {
+        guard let ropeDelta, tokenCount > 0 else { return nil }
+        let offset = layerCaches.compactMap { cache in
+            if case .full(let kv)? = cache {
+                return kv.offset
+            }
+            return nil
+        }.min() ?? 0
+        let positions = (0..<tokenCount).map { Int32(offset + ropeDelta + $0) }
+        let values = positions + positions + positions
+        return MLXArray(values, [3, 1, tokenCount])
+    }
+
+    private func batchedDecodePositionIds(rows: [Q35BatchedDecodeRow]) -> MLXArray? {
+        guard rows.contains(where: { $0.mropeRopeDelta != nil }) else { return nil }
+        var values: [Int32] = []
+        values.reserveCapacity(rows.count * 3)
+        for _ in 0..<3 {
+            for row in rows {
+                values.append(Int32(decodePosition(row) + (row.mropeRopeDelta ?? 0)))
+            }
+        }
+        return MLXArray(values, [3, rows.count, 1])
+    }
+
     private func decodeOneStep(
         rows: [Q35BatchedDecodeRow],
         model: Q35Model,
@@ -985,7 +1075,11 @@ public actor Q35Generator: ChatGenerator {
            let batchedCaches = makeBatchedLayerCaches(continuingRows.map(\.layerCaches)) {
             let nextInput = MLXArray(continuingRows.compactMap { $0.generatedTokens.last }.map(Int32.init))
                 .reshaped(continuingRows.count, 1)
-            let batchedLogits = model(nextInput, cache: batchedCaches)
+            let batchedLogits = model(
+                nextInput,
+                cache: batchedCaches,
+                positionIds: batchedDecodePositionIds(rows: continuingRows)
+            )
             MLX.eval(batchedLogits)
             guard let splitCaches = splitBatchedLayerCaches(batchedCaches, rowCount: continuingRows.count) else {
                 throw Q35Error.generationFailed("Qwen-family batched decode could not split merged cache rows.")
@@ -1008,7 +1102,15 @@ public actor Q35Generator: ChatGenerator {
         for row in continuingRows {
             guard let next = row.generatedTokens.last else { continue }
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            row.logits = model(nextInput, cache: row.layerCaches)
+            row.logits = model(
+                nextInput,
+                cache: row.layerCaches,
+                positionIds: decodePositionIds(
+                    layerCaches: row.layerCaches,
+                    tokenCount: 1,
+                    ropeDelta: row.mropeRopeDelta
+                )
+            )
             MLX.eval(row.logits)
             singleDecodeSteps += 1
         }
@@ -1166,6 +1268,7 @@ public actor Q35Generator: ChatGenerator {
         model: Q35Model,
         inputEmbeddings: MLXArray,
         cache: [Q35LayerCache?],
+        positionIds: MLXArray? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
         let tokenCount = inputEmbeddings.dim(1)
@@ -1184,7 +1287,13 @@ public actor Q35Generator: ChatGenerator {
             }
             let chunkEmbeddings = inputEmbeddings[0..., processed..<end, 0...]
             let chunkInput = MLXArray.zeros([1, end - processed], dtype: .int32)
-            let output = model.forward(chunkInput, cache: cache, inputEmbeddings: chunkEmbeddings)
+            let chunkPositionIds = positionIds?[0..., 0..., processed..<end]
+            let output = model.forward(
+                chunkInput,
+                cache: cache,
+                inputEmbeddings: chunkEmbeddings,
+                positionIds: chunkPositionIds
+            )
             MLX.eval(output.logits)
             MLX.eval(output.hidden)
             logits = output.logits
@@ -1311,6 +1420,141 @@ public actor Q35Generator: ChatGenerator {
         caches.map { $0?.fork() }
     }
 
+    private func loadTextWeights(
+        into q35Model: Q35Model,
+        from resources: Q35Resources,
+        groupSize: Int,
+        bits: Int
+    ) throws {
+        let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            guard let mapped = Self.mapTextWeightKey(key) else { return [] }
+            if q35Model.config.tieWordEmbeddings, mapped == "lm_head.weight" {
+                return []
+            }
+            if let splitExperts = Self.splitMappedExpertGateUpWeight(mapped, value) {
+                return splitExperts
+            }
+            let normalizedMapped = Self.normalizeMappedExpertWeightKey(mapped)
+            if normalizedMapped.hasSuffix(".linear_attn.conv1d.weight"), value.ndim == 3 {
+                let transposed = value.transposed(0, 2, 1)
+                return [(normalizedMapped, transposed.reshaped(-1).reshaped(transposed.shape))]
+            }
+            return [(normalizedMapped, value)]
+        }
+        let keyMapper: (String) -> String = { key in
+            guard let mapped = Self.mapTextWeightKey(key) else { return "__unused__.\(key)" }
+            if q35Model.config.tieWordEmbeddings, mapped == "lm_head.weight" {
+                return "__unused__.\(key)"
+            }
+            return Self.normalizeMappedExpertWeightKey(mapped)
+        }
+        let quantizedMapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            guard !key.hasPrefix("__unused__.") else { return [] }
+            if key.hasSuffix(".linear_attn.conv1d.weight"), value.ndim == 3 {
+                let transposed = value.transposed(0, 2, 1)
+                return [(key, transposed.reshaped(-1).reshaped(transposed.shape))]
+            }
+            return [(key, value)]
+        }
+
+        if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
+            if try Self.indexContainsQuantizedWeights(resources.modelIndexURL) {
+                try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+                    indexURL: resources.modelIndexURL,
+                    to: q35Model,
+                    groupSize: groupSize,
+                    bits: bits,
+                    keyMapper: keyMapper,
+                    mapper: quantizedMapper
+                )
+            } else {
+                try HFSafetensorsWeightsLoader.applyShardedWeights(
+                    indexURL: resources.modelIndexURL,
+                    to: q35Model,
+                    dtype: .bfloat16,
+                    verify: .none,
+                    mapper: mapper
+                )
+            }
+            return
+        }
+
+        let arrays = try MLX.loadArrays(url: resources.modelWeightsURL)
+        if HFSafetensorsWeightsLoader.isQuantized(arrays) {
+            try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
+                arrays,
+                to: q35Model,
+                groupSize: groupSize,
+                bits: bits,
+                keyMapper: keyMapper,
+                mapper: quantizedMapper
+            )
+        } else {
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: resources.modelWeightsURL,
+                to: q35Model,
+                dtype: .bfloat16,
+                verify: .none,
+                include: { Self.mapTextWeightKey($0) != nil },
+                mapper: mapper,
+                batchSize: 32
+            )
+        }
+    }
+
+    private static func mapTextWeightKey(_ key: String) -> String? {
+        if key.hasPrefix("lm_head.") {
+            return key
+        }
+        if key.hasPrefix("model.language_model.") {
+            return mapLanguageModelWeightSuffix(String(key.dropFirst("model.language_model.".count)))
+        }
+        if key.hasPrefix("language_model.") {
+            return mapLanguageModelWeightSuffix(String(key.dropFirst("language_model.".count)))
+        }
+        return nil
+    }
+
+    private static func mapLanguageModelWeightSuffix(_ suffix: String) -> String {
+        if suffix.hasPrefix("model.") || suffix.hasPrefix("lm_head.") {
+            return suffix
+        }
+        return "model.\(suffix)"
+    }
+
+    private static func normalizeMappedExpertWeightKey(_ key: String) -> String {
+        let expertDownSuffix = ".mlp.experts.down_proj"
+        if key.hasSuffix(expertDownSuffix) {
+            return String(key.dropLast(expertDownSuffix.count)) + ".mlp.switch_mlp.down_proj.weight"
+        }
+        return key
+    }
+
+    private static func splitMappedExpertGateUpWeight(_ key: String, _ value: MLXArray) -> [(String, MLXArray)]? {
+        let expertGateUpSuffix = ".mlp.experts.gate_up_proj"
+        guard key.hasSuffix(expertGateUpSuffix), value.ndim == 3 else {
+            return nil
+        }
+
+        let fusedDim = value.dim(1)
+        guard fusedDim > 0, fusedDim.isMultiple(of: 2) else {
+            return nil
+        }
+
+        let intermediate = fusedDim / 2
+        let base = String(key.dropLast(expertGateUpSuffix.count)) + ".mlp.switch_mlp"
+        return [
+            ("\(base).gate_proj.weight", value[0..., 0..<intermediate, 0...]),
+            ("\(base).up_proj.weight", value[0..., intermediate..., 0...]),
+        ]
+    }
+
+    private static func indexContainsQuantizedWeights(_ indexURL: URL) throws -> Bool {
+        let data = try Data(contentsOf: indexURL)
+        let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+        return index.weightMap.keys.contains { $0.hasSuffix(".scales") }
+    }
+
     private func resolveModelRoot(
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
@@ -1387,8 +1631,8 @@ public actor Q35Generator: ChatGenerator {
     private func buildVisionReplacements(
         imageURLs: [String],
         visionTower: Q35VisionTower
-    ) throws -> [MLXArray] {
-        var replacements: [MLXArray] = []
+    ) throws -> [Q35VisionReplacement] {
+        var replacements: [Q35VisionReplacement] = []
         replacements.reserveCapacity(imageURLs.count)
 
         for imageURL in imageURLs {
@@ -1401,17 +1645,116 @@ public actor Q35Generator: ChatGenerator {
                 pixelValues: prepared.tensor,
                 gridTHW: prepared.gridTHW
             )
-            replacements.append(embeds)
+            replacements.append(Q35VisionReplacement(embeddings: embeds, gridTHW: prepared.gridTHW))
         }
 
         return replacements
+    }
+
+    private func buildMRoPEPositionData(
+        inputIds: MLXArray,
+        imageTokenId: Int,
+        replacements: [Q35VisionReplacement],
+        spatialMergeSize: Int
+    ) throws -> Q35MRoPEPositionData? {
+        guard !replacements.isEmpty else { return nil }
+
+        let seqLen = inputIds.dim(1)
+        let tokenArray = inputIds.asType(.int32)
+        MLX.eval(tokenArray)
+        let tokenValues = tokenArray.asArray(Int32.self)
+
+        var axes = Array(repeating: [Int](), count: 3)
+        for axis in axes.indices {
+            axes[axis].reserveCapacity(seqLen)
+        }
+
+        let mergeSize = max(1, spatialMergeSize)
+        var cursor = 0
+        var currentPosition = 0
+        var replacementIndex = 0
+
+        func appendText(count: Int) {
+            guard count > 0 else { return }
+            for offset in 0..<count {
+                let position = currentPosition + offset
+                for axis in axes.indices {
+                    axes[axis].append(position)
+                }
+            }
+            currentPosition += count
+        }
+
+        func appendVision(startPosition: Int, gridTHW: (Int, Int, Int)) -> Int {
+            let gridT = max(1, gridTHW.0)
+            let gridH = max(1, gridTHW.1 / mergeSize)
+            let gridW = max(1, gridTHW.2 / mergeSize)
+            for t in 0..<gridT {
+                for h in 0..<gridH {
+                    for w in 0..<gridW {
+                        axes[0].append(startPosition + t)
+                        axes[1].append(startPosition + h)
+                        axes[2].append(startPosition + w)
+                    }
+                }
+            }
+            return max(gridH, gridW)
+        }
+
+        while cursor < seqLen {
+            if tokenValues[cursor] != Int32(imageTokenId) {
+                let textStart = cursor
+                while cursor < seqLen, tokenValues[cursor] != Int32(imageTokenId) {
+                    cursor += 1
+                }
+                appendText(count: cursor - textStart)
+                continue
+            }
+
+            let runStart = cursor
+            while cursor < seqLen, tokenValues[cursor] == Int32(imageTokenId) {
+                cursor += 1
+            }
+            let runLength = cursor - runStart
+            guard replacementIndex < replacements.count else {
+                throw Q35Error.generationFailed("Qwen-family M-RoPE found more image-token runs than encoded images.")
+            }
+
+            let replacement = replacements[replacementIndex]
+            guard runLength == replacement.embeddings.dim(0) else {
+                throw Q35Error.generationFailed(
+                    "Qwen-family image-token span mismatch: prompt has \(runLength) placeholders, vision tower produced \(replacement.embeddings.dim(0)) tokens."
+                )
+            }
+
+            currentPosition += appendVision(
+                startPosition: currentPosition,
+                gridTHW: replacement.gridTHW
+            )
+            replacementIndex += 1
+        }
+
+        guard replacementIndex == replacements.count else {
+            throw Q35Error.generationFailed("Qwen-family M-RoPE received encoded images without matching image-token runs.")
+        }
+        guard axes.allSatisfy({ $0.count == seqLen }) else {
+            throw Q35Error.generationFailed("Qwen-family M-RoPE position length did not match prompt length.")
+        }
+
+        let maxPosition = axes.flatMap { $0 }.max() ?? (seqLen - 1)
+        let ropeDelta = maxPosition + 1 - seqLen
+        let values = axes.flatMap { $0.map(Int32.init) }
+        return Q35MRoPEPositionData(
+            positionIds: MLXArray(values, [3, 1, seqLen]),
+            ropeDelta: ropeDelta
+        )
     }
 
     private func insertVisionEmbeddings(
         hiddenStates: MLXArray,
         inputIds: MLXArray,
         imageTokenId: Int,
-        replacements: [MLXArray]
+        replacements: [Q35VisionReplacement]
     ) -> MLXArray {
         guard !replacements.isEmpty else { return hiddenStates }
 
@@ -1427,25 +1770,35 @@ public actor Q35Generator: ChatGenerator {
         }
 
         guard !positions.isEmpty else { return hiddenStates }
-        let pairCount = min(positions.count, replacements.count)
+
+        var runs: [(start: Int, end: Int)] = []
+        for position in positions {
+            if let last = runs.last, last.end == position {
+                runs[runs.count - 1] = (start: last.start, end: position + 1)
+            } else {
+                runs.append((start: position, end: position + 1))
+            }
+        }
+
+        let pairCount = min(runs.count, replacements.count)
 
         var parts: [MLXArray] = []
         parts.reserveCapacity(pairCount * 2 + 1)
 
         var cursor = 0
         for pairIndex in 0..<pairCount {
-            let position = positions[pairIndex]
-            if position > cursor {
-                parts.append(hiddenStates[0..., cursor..<position, 0...])
+            let run = runs[pairIndex]
+            if run.start > cursor {
+                parts.append(hiddenStates[0..., cursor..<run.start, 0...])
             }
 
-            var replacement = replacements[pairIndex]
+            var replacement = replacements[pairIndex].embeddings
             if replacement.dtype != hiddenStates.dtype {
                 replacement = replacement.asType(hiddenStates.dtype)
             }
             parts.append(replacement.expandedDimensions(axis: 0))
 
-            cursor = position + 1
+            cursor = run.end
         }
 
         if cursor < seqLen {
@@ -1467,21 +1820,31 @@ public actor Q35Generator: ChatGenerator {
         spatialMergeSize: Int
     ) throws -> (tensor: MLXArray, gridTHW: (Int, Int, Int)) {
         let image = try loadImage(from: imageRef)
-        let divisor = max(1, patchSize * max(1, spatialMergeSize))
-
-        let targetWidth = max(divisor, (image.width / divisor) * divisor)
-        let targetHeight = max(divisor, (image.height / divisor) * divisor)
-
-        let pixels = try QwenImageIO.resizedPixelArray(
-            from: image,
-            width: targetWidth,
-            height: targetHeight,
-            addBatchDimension: true,
-            dtype: .float16
+        let target = Self.qwen3VLTargetSize(
+            originalWidth: image.width,
+            originalHeight: image.height,
+            patchSize: patchSize,
+            temporalPatchSize: visionTower?.temporalPatchSize ?? 2,
+            spatialMergeSize: spatialMergeSize,
+            minPixels: visionMinPixels,
+            maxPixels: visionMaxPixels
         )
-        let normalized = (pixels - 0.5) / 0.5
-        let gridTHW = (1, targetHeight / patchSize, targetWidth / patchSize)
-        return (normalized, gridTHW)
+        let resized = try MediaImageIO.resized(
+            image,
+            width: target.width,
+            height: target.height
+        )
+        let floats = MediaImageIO.rgbCHWFloat(resized, normalizedToMinusOneToOne: true)
+        let pixels = MLXArray(
+            floats,
+            [1, 3, resized.height, resized.width]
+        )
+        let gridTHW = (
+            1,
+            resized.height / patchSize,
+            resized.width / patchSize
+        )
+        return (pixels, gridTHW)
     }
 
     private func loadImage(from imageRef: String) throws -> MediaImage {

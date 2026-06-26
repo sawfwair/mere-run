@@ -13,14 +13,16 @@ final class Q35RMSNormGated: Module {
     }
 
     func callAsFunction(_ hiddenStates: MLXArray, gate: MLXArray?) -> MLXArray {
+        let dtype = hiddenStates.dtype
+        let hidden32 = hiddenStates.asType(.float32)
+        let variance = (hidden32 * hidden32).mean(axis: -1, keepDims: true)
         let scale = weight.reshaped([1, 1, 1, hiddenStates.dim(hiddenStates.ndim - 1)])
-        let variance = (hiddenStates * hiddenStates).mean(axis: -1, keepDims: true)
-        var normalized = hiddenStates / MLX.sqrt(variance + MLXArray(eps).asType(variance.dtype))
+        var normalized = (hidden32 * rsqrt(variance + MLXArray(eps))).asType(dtype)
         normalized = normalized * scale
         if let gate {
-            normalized = q35Swiglu(gate, normalized)
+            normalized = normalized * MLXNN.silu(gate.asType(.float32))
         }
-        return normalized
+        return normalized.asType(dtype)
     }
 }
 
@@ -31,15 +33,15 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
 
 @inline(__always)
 private func q35RmsNormNoWeight(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
-    let variance = (x * x).mean(axis: -1, keepDims: true)
-    return x / MLX.sqrt(variance + MLXArray(eps).asType(variance.dtype))
+    let squaredSum = (x * x).sum(axis: -1, keepDims: true)
+    return x * rsqrt(squaredSum + MLXArray(eps).asType(x.dtype))
 }
 
 @inline(__always)
 private func q35ComputeG(aLog: MLXArray, a: MLXArray, dtBias: MLXArray) -> MLXArray {
-    let dt = softplus(a + dtBias.reshaped(1, 1, dtBias.dim(0)))
+    let dt = softplus(a.asType(.float32) + dtBias.asType(.float32).reshaped(1, 1, dtBias.dim(0)))
     let decayBase = MLX.exp(aLog.asType(.float32)).reshaped(1, 1, dtBias.dim(0))
-    return MLX.exp(-decayBase * dt.asType(.float32)).asType(a.dtype)
+    return MLX.exp(-decayBase * dt)
 }
 
 private func q35GatedDeltaUpdate(
@@ -58,12 +60,15 @@ private func q35GatedDeltaUpdate(
     let batch = q.dim(0)
     let sequence = q.dim(1)
     let keyHeadDim = q.dim(3)
+    let outputDType = q.dtype
 
-    let beta = MLX.sigmoid(b)
+    let beta = MLX.sigmoid(b).asType(.float32)
     let g = q35ComputeG(aLog: aLog, a: a, dtBias: dtBias)
 
-    var qExpanded = q
-    var kExpanded = k
+    let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
+    var qExpanded = q.asType(.float32) * MLXArray(invScale)
+    var kExpanded = k.asType(.float32)
+    let v32 = v.asType(.float32)
     let repeatFactor = max(1, numValueHeads / max(1, numKeyHeads))
     if repeatFactor > 1 {
         qExpanded = MLX.repeated(qExpanded, count: repeatFactor, axis: 2)
@@ -71,14 +76,15 @@ private func q35GatedDeltaUpdate(
     }
 
     var recurrent = state
-        ?? MLXArray.zeros([batch, numValueHeads, valueHeadDim, keyHeadDim], dtype: q.dtype)
+        .map { $0.asType(.float32) }
+        ?? MLXArray.zeros([batch, numValueHeads, valueHeadDim, keyHeadDim], dtype: .float32)
     var outputs: [MLXArray] = []
     outputs.reserveCapacity(sequence)
 
     for t in 0..<sequence {
         let qStep = qExpanded[0..., t, 0..., 0...]
         let kStep = kExpanded[0..., t, 0..., 0...]
-        let vStep = v[0..., t, 0..., 0...]
+        let vStep = v32[0..., t, 0..., 0...]
         let gStep = g[0..., t, 0...]
         let betaStep = beta[0..., t, 0...]
 
@@ -102,7 +108,7 @@ private func q35GatedDeltaUpdate(
         y = MLX.stacked(outputs, axis: 1)
     }
 
-    return (y, recurrent)
+    return (y.asType(outputDType), recurrent)
 }
 
 public final class Q35LinearCache: @unchecked Sendable {
@@ -284,9 +290,8 @@ final class Q35LinearAttention: Module {
         var k = kConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
         let v = vConv.reshaped(batch, sequence, numValueHeads, valueHeadDim)
 
-        let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
-        q = q35RmsNormNoWeight(q) * MLXArray(invScale * invScale).asType(q.dtype)
-        k = q35RmsNormNoWeight(k) * MLXArray(invScale).asType(k.dtype)
+        q = q35RmsNormNoWeight(q)
+        k = q35RmsNormNoWeight(k)
 
         let (updated, state) = q35GatedDeltaUpdate(
             q: q,

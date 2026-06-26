@@ -40,6 +40,76 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.cfgScale, 1.0)
     }
 
+    func testParsesOptionalImageStrength() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a brass camera",
+            "--strength", "0.35",
+        ])
+
+        XCTAssertEqual(cmd.strength, 0.35)
+    }
+
+    func testKleinTreatsInputAsReferenceImage() {
+        let inputURL = URL(fileURLWithPath: "/tmp/source.png")
+        let resolved = ImageGenerate.resolveConditioningInputs(
+            family: .klein,
+            inputImage: inputURL,
+            referenceImages: [],
+            strength: nil
+        )
+
+        XCTAssertNil(resolved.inputImage)
+        XCTAssertEqual(resolved.referenceImages, [inputURL])
+        XCTAssertEqual(resolved.strength, 0.75)
+        XCTAssertEqual(resolved.referenceStrength, 0.75)
+    }
+
+    func testKleinReferenceImagesDefaultToCleanReferenceStrength() {
+        let refURL = URL(fileURLWithPath: "/tmp/ref.png")
+        let resolved = ImageGenerate.resolveConditioningInputs(
+            family: .klein,
+            inputImage: nil,
+            referenceImages: [refURL],
+            strength: nil
+        )
+
+        XCTAssertNil(resolved.inputImage)
+        XCTAssertEqual(resolved.referenceImages, [refURL])
+        XCTAssertEqual(resolved.strength, 0.75)
+        XCTAssertEqual(resolved.referenceStrength, 0.0)
+    }
+
+    func testKleinReferenceImagesHonorExplicitStrength() {
+        let refURL = URL(fileURLWithPath: "/tmp/ref.png")
+        let resolved = ImageGenerate.resolveConditioningInputs(
+            family: .klein,
+            inputImage: nil,
+            referenceImages: [refURL],
+            strength: 0.35
+        )
+
+        XCTAssertNil(resolved.inputImage)
+        XCTAssertEqual(resolved.referenceImages, [refURL])
+        XCTAssertEqual(resolved.strength, 0.35)
+        XCTAssertEqual(resolved.referenceStrength, 0.35)
+    }
+
+    func testNonKleinPreservesInputImageSemantics() {
+        let inputURL = URL(fileURLWithPath: "/tmp/source.png")
+        let refURL = URL(fileURLWithPath: "/tmp/ref.png")
+        let resolved = ImageGenerate.resolveConditioningInputs(
+            family: .hidream,
+            inputImage: inputURL,
+            referenceImages: [refURL],
+            strength: nil
+        )
+
+        XCTAssertEqual(resolved.inputImage, inputURL)
+        XCTAssertEqual(resolved.referenceImages, [refURL])
+        XCTAssertEqual(resolved.strength, 0.75)
+        XCTAssertEqual(resolved.referenceStrength, 0.0)
+    }
+
     func testParsesStructuredPromptOptions() throws {
         let cmd = try ImageGenerate.parse([
             "--prompt", "a knight and a white horse",
@@ -142,17 +212,28 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(caption.textRender.last?.font, "unspecified")
     }
 
-    func testStructuredPromptAdapterSalvagesGemmaNonsenseTail() throws {
-        let normalized = try StructuredImagePromptAdapter.normalizedCaptionJSON(
+    func testStructuredPromptAdapterRejectsGemmaSpecialTokenSpill() {
+        XCTAssertThrowsError(try StructuredImagePromptAdapter.normalizedCaptionJSON(
             from: Self.gemmaNonsenseTailStructuredCaptionJSON,
             fallbackPrompt: "a cafe sign reads 'TOKENS: FREE TODAY' and 'ask for Dewane'"
+        )) { error in
+            guard case StructuredImagePromptAdapterError.invalidCaptionJSON(let detail) = error else {
+                return XCTFail("Expected invalidCaptionJSON, got \(error)")
+            }
+            XCTAssertTrue(detail.contains("multimodal special tokens"))
+        }
+    }
+
+    func testStructuredPromptAdapterBuildsDeterministicFallbackJSON() throws {
+        let json = try StructuredImagePromptAdapter.deterministicCaptionJSON(
+            for: "a cafe sign reads 'TOKENS: FREE TODAY'"
         )
 
-        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(normalized)
-        XCTAssertEqual(caption.shortDescription, "A hand-painted cafe sign.")
-        XCTAssertEqual(caption.backgroundSetting, "quiet sidewalk cafe")
-        XCTAssertEqual(caption.textRender.map(\.text), ["TOKENS: FREE TODAY", "ask for Dewane"])
-        XCTAssertFalse(normalized.contains("<audio|>"))
+        let caption = try StructuredImagePromptAdapter.validateCaptionJSON(json)
+        XCTAssertEqual(caption.shortDescription, "a cafe sign reads 'TOKENS: FREE TODAY'")
+        XCTAssertEqual(caption.objects.first?.description, "a cafe sign reads 'TOKENS: FREE TODAY'")
+        XCTAssertEqual(caption.textRender.map(\.text), ["TOKENS: FREE TODAY"])
+        XCTAssertFalse(StructuredImagePromptAdapter.containsGeneratedSpecialTokenSpill(json))
     }
 
     func testQuotedStringsExtraction() {

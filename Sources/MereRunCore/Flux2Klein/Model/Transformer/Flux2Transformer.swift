@@ -405,6 +405,7 @@ final class Flux2TransformerBlock: Module {
 
     let hiddenSize: Int
     let eps: Float
+    private var checkpointedForward: (([MLXArray]) -> [MLXArray])?
 
     init(config: Flux2TransformerConfiguration) {
         self.hiddenSize = config.hiddenSize
@@ -451,6 +452,76 @@ final class Flux2TransformerBlock: Module {
     }
 
     func callAsFunction(
+        hiddenStates: MLXArray,
+        encoderHiddenStates: MLXArray,
+        modImg: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
+        modTxt: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
+        rotaryEmb: (MLXArray, MLXArray)
+    ) -> (MLXArray, MLXArray) {
+        forward(
+            hiddenStates: hiddenStates,
+            encoderHiddenStates: encoderHiddenStates,
+            modImg: modImg,
+            modTxt: modTxt,
+            rotaryEmb: rotaryEmb
+        )
+    }
+
+    func checkpointed(
+        hiddenStates: MLXArray,
+        encoderHiddenStates: MLXArray,
+        modImg: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
+        modTxt: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
+        rotaryEmb: (MLXArray, MLXArray)
+    ) -> (MLXArray, MLXArray) {
+        if checkpointedForward == nil {
+            checkpointedForward = checkpoint(model: self) { block, inputs in
+                let modImg = (
+                    (inputs[2], inputs[3], inputs[4]),
+                    (inputs[5], inputs[6], inputs[7])
+                )
+                let modTxt = (
+                    (inputs[8], inputs[9], inputs[10]),
+                    (inputs[11], inputs[12], inputs[13])
+                )
+                let outputs = block.forward(
+                    hiddenStates: inputs[0],
+                    encoderHiddenStates: inputs[1],
+                    modImg: modImg,
+                    modTxt: modTxt,
+                    rotaryEmb: (inputs[14], inputs[15])
+                )
+                return [outputs.0, outputs.1]
+            }
+        }
+        guard let checkpointedForward else {
+            preconditionFailure("Checkpointed FLUX.2 transformer block was not initialized.")
+        }
+
+        let ((shiftMsaImg, scaleMsaImg, gateMsaImg), (shiftMlpImg, scaleMlpImg, gateMlpImg)) = modImg
+        let ((shiftMsaTxt, scaleMsaTxt, gateMsaTxt), (shiftMlpTxt, scaleMlpTxt, gateMlpTxt)) = modTxt
+        let outputs = checkpointedForward([
+            hiddenStates,
+            encoderHiddenStates,
+            shiftMsaImg,
+            scaleMsaImg,
+            gateMsaImg,
+            shiftMlpImg,
+            scaleMlpImg,
+            gateMlpImg,
+            shiftMsaTxt,
+            scaleMsaTxt,
+            gateMsaTxt,
+            shiftMlpTxt,
+            scaleMlpTxt,
+            gateMlpTxt,
+            rotaryEmb.0,
+            rotaryEmb.1,
+        ])
+        return (outputs[0], outputs[1])
+    }
+
+    private func forward(
         hiddenStates: MLXArray,
         encoderHiddenStates: MLXArray,
         modImg: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
@@ -595,6 +666,7 @@ final class Flux2SingleTransformerBlock: Module {
     @ModuleInfo(key: "attn") var attn: Flux2ParallelSelfAttention
     @ModuleInfo(key: "norm") var norm: LayerNorm
     let eps: Float
+    private var checkpointedForward: (([MLXArray]) -> [MLXArray])?
 
     init(config: Flux2TransformerConfiguration) {
         self.eps = config.eps
@@ -625,6 +697,38 @@ final class Flux2SingleTransformerBlock: Module {
     }
 
     func callAsFunction(
+        _ x: MLXArray,
+        mod: (MLXArray, MLXArray, MLXArray),
+        rotaryEmb: (MLXArray, MLXArray)
+    ) -> MLXArray {
+        forward(x, mod: mod, rotaryEmb: rotaryEmb)
+    }
+
+    func checkpointed(
+        _ x: MLXArray,
+        mod: (MLXArray, MLXArray, MLXArray),
+        rotaryEmb: (MLXArray, MLXArray)
+    ) -> MLXArray {
+        if checkpointedForward == nil {
+            checkpointedForward = checkpoint(model: self) { block, inputs in
+                [
+                    block.forward(
+                        inputs[0],
+                        mod: (inputs[1], inputs[2], inputs[3]),
+                        rotaryEmb: (inputs[4], inputs[5])
+                    ),
+                ]
+            }
+        }
+        guard let checkpointedForward else {
+            preconditionFailure("Checkpointed FLUX.2 single transformer block was not initialized.")
+        }
+
+        let (shift, scale, gate) = mod
+        return checkpointedForward([x, shift, scale, gate, rotaryEmb.0, rotaryEmb.1])[0]
+    }
+
+    private func forward(
         _ x: MLXArray,
         mod: (MLXArray, MLXArray, MLXArray),
         rotaryEmb: (MLXArray, MLXArray)
@@ -702,6 +806,7 @@ public final class Flux2Transformer2DModel: Module {
     private var cachedImgIdsId: ObjectIdentifier?
     private var cachedTxtIdsId: ObjectIdentifier?
     private var cachedRotary: (MLXArray, MLXArray)?
+    public var gradientCheckpointing = false
     private static let compileEnabled: Bool = {
         guard let raw = ProcessInfo.processInfo.environment["MERERUN_FLUX2_COMPILE"]?.lowercased() else {
             return false
@@ -823,13 +928,23 @@ public final class Flux2Transformer2DModel: Module {
 
         // Joint transformer blocks
         for block in transformerBlocks {
-            (txt, img) = block(
-                hiddenStates: img,
-                encoderHiddenStates: txt,
-                modImg: modImgParams,
-                modTxt: modTxtParams,
-                rotaryEmb: concatRotary
-            )
+            if gradientCheckpointing {
+                (txt, img) = block.checkpointed(
+                    hiddenStates: img,
+                    encoderHiddenStates: txt,
+                    modImg: modImgParams,
+                    modTxt: modTxtParams,
+                    rotaryEmb: concatRotary
+                )
+            } else {
+                (txt, img) = block(
+                    hiddenStates: img,
+                    encoderHiddenStates: txt,
+                    modImg: modImgParams,
+                    modTxt: modTxtParams,
+                    rotaryEmb: concatRotary
+                )
+            }
         }
 
         // Concatenate for single stream: [txt, img] (text first, then image)
@@ -840,7 +955,11 @@ public final class Flux2Transformer2DModel: Module {
 
         // Single transformer blocks
         for block in singleTransformerBlocks {
-            combined = block(combined, mod: singleModParams, rotaryEmb: concatRotary)
+            if gradientCheckpointing {
+                combined = block.checkpointed(combined, mod: singleModParams, rotaryEmb: concatRotary)
+            } else {
+                combined = block(combined, mod: singleModParams, rotaryEmb: concatRotary)
+            }
         }
 
         // Extract image part (text is first, image is after)

@@ -59,6 +59,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         let expectedPullableImageIDs = [
             "image-klein-nano",
             "image-klein-base",
+            "image-klein-base-9b",
             "image-klein-max",
             "image-bonsai-binary",
             "image-bonsai-ternary",
@@ -108,6 +109,23 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(missing.contains { $0.hasSuffix("text_encoder/model.safetensors.index.json") })
         XCTAssertTrue(missing.contains { $0.hasSuffix("transformer/diffusion_pytorch_model.safetensors.index.json") })
         XCTAssertTrue(missing.contains { $0.hasSuffix("vae/diffusion_pytorch_model.safetensors") })
+    }
+
+    func testKleinBase9BUsesGatedBaseTransformerAndMountedSharedComponents() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-base-9b"))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "black-forest-labs/FLUX.2-klein-base-9B")
+        XCTAssertEqual(spec.hubFallback?.patterns, ["model_index.json", "transformer/*"])
+        XCTAssertEqual(spec.upstreamRepoId, "black-forest-labs/FLUX.2-klein-base-9B")
+        XCTAssertEqual(spec.defaultCLICommands, ["image generate", "image train-lora"])
+
+        let mounted = Dictionary(uniqueKeysWithValues: spec.mountedHubFallbacks.map {
+            ($0.destinationPath, $0.hubFallback.repoId)
+        })
+        XCTAssertEqual(mounted["text_encoder"], "mlx-community/FLUX.2-klein-9B")
+        XCTAssertEqual(mounted["tokenizer"], "mlx-community/FLUX.2-klein-9B")
+        XCTAssertEqual(mounted["vae"], "mlx-community/FLUX.2-klein-9B")
+        XCTAssertEqual(mounted["scheduler"], "mlx-community/FLUX.2-klein-9B")
     }
 
     func testBonsaiTernaryUsesPrismMLHubSource() throws {
@@ -271,6 +289,39 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRepoId, "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit")
         XCTAssertEqual(spec.validationKind, .q35)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
+    }
+
+    func testInfinityParser2FlashUsesNativeQ35VisionOCRSpec() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2FlashModelId))
+
+        XCTAssertEqual(spec.category, .visionOCR)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.infinityParser2FlashUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.infinityParser2FlashUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.defaultCLICommands, ["vision ocr"])
+    }
+
+    func testInfinityParser2ProRequiresExplicitPull() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2ProModelId))
+
+        XCTAssertEqual(spec.category, .visionOCR)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.infinityParser2ProUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.infinityParser2ProUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+    }
+
+    func testInfinityParser2ProInt8RequiresExplicitPull() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2ProInt8ModelId))
+
+        XCTAssertEqual(spec.category, .visionOCR)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.infinityParser2ProInt8UpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.infinityParser2ProInt8UpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 38 * 1_073_741_824)
+        XCTAssertEqual(spec.defaultCLICommands, ["vision ocr"])
     }
 
     func testQ36NanoGGUFUsesUpstreamFilePath() throws {

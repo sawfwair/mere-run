@@ -62,10 +62,11 @@ extension Flux2KleinLoRATrainer {
 
         let patchified = patchifyLatents(cleanLatent, height: patchedHeight * 2, width: patchedWidth * 2)
 
-        let bnEps: Float = 1e-4
-        let bnStd = MLX.sqrt(bnVar.reshaped([1, -1, 1, 1]) + bnEps)
-        let bnMeanReshaped = bnMean.reshaped([1, -1, 1, 1])
-        let normalizedPacked = (patchified - bnMeanReshaped) / bnStd
+        let normalizedPacked = Flux2KleinBatchNorm.normalizePackedLatents(
+            patchified,
+            mean: bnMean,
+            variance: bnVar
+        )
 
         return normalizedPacked
             .transposed(0, 2, 3, 1)

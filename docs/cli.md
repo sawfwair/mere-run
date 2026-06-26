@@ -67,7 +67,7 @@ See [`model-sources.md`](./model-sources.md) for the full source story,
 including which IDs are pullable from Hugging Face. The most common managed IDs
 are:
 
-- Images: `image-klein-nano`, `image-klein-base`, `image-klein-max`,
+- Images: `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`,
   `image-krea2-turbo`,
@@ -78,7 +78,8 @@ are:
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
-- Vision OCR: `vision-ocr-lighton`
+- Vision OCR: `vision-ocr-lighton`, `vision-ocr-infinity-flash`,
+  `vision-ocr-infinity-pro-int8`, `vision-ocr-infinity-pro`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
@@ -250,10 +251,11 @@ Key options:
 - `--width`, `--height`
 - `--steps`: override the model-specific step default
 - `--cfg`: override the model-specific CFG default
-- `--input`: image-to-image source
-- `--ref-image`: repeatable HiDream O1 reference image
+- `--input`: image-to-image source. For FLUX.2 Klein, this is treated as a
+  single reference image.
+- `--ref-image`: repeatable FLUX.2 Klein or HiDream O1 reference image
 - `--keep-original-aspect`: preserve one HiDream reference image's aspect ratio
-- `--strength`: image-to-image strength
+- `--strength`: image-to-image/reference change strength
 - `--structured-prompt`, `--json-prompt`: expand the prompt into a structured JSON caption with a local text chat model before image generation
 - `--structured-prompt-model`: text chat model id for the adapter; defaults to `text-chat-gemma4-12b-4bit`
 - `--structured-prompt-output`: write the generated structured JSON caption to a file
@@ -277,12 +279,19 @@ swift run mere.run image generate \
   --prompt "put this subject in a studio portrait" \
   --ref-image ./subject.png \
   --output ./portrait.png
+swift run mere.run image generate \
+  --model image-klein-base \
+  --prompt "a trading card character with the same sticker layout" \
+  --ref-image ./card-reference.png \
+  --output ./card.png
 ```
 
 ### `mere.run image train-lora`
 
 Train a local text-to-image LoRA adapter. Krea 2 LoRAs are trained on
 `image-krea2-raw` and can be used with `image-krea2-turbo` for fast inference.
+FLUX.2 Klein LoRAs are trained on a Klein base model selected with `--model`
+and can be used with Klein generation via `image generate --lora`.
 
 ```bash
 swift run mere.run model pull image-krea2-raw
@@ -296,6 +305,25 @@ swift run mere.run image generate \
   --model image-krea2-turbo \
   --prompt "a studio portrait in the trained style" \
   --lora ./style-krea2.safetensors \
+  --output ./style-preview.png
+```
+
+For Klein Base 9B training, use the undistilled BF16 `image-klein-base-9b`
+model id or a local equivalent model root:
+
+```bash
+swift run mere.run model pull image-klein-base-9b
+swift run mere.run image train-lora \
+  --model image-klein-base-9b \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --training-steps 1500 \
+  --rank 16 \
+  --checkpoint-interval 250
+swift run mere.run image generate \
+  --model image-klein-base-9b \
+  --prompt "a studio portrait in the trained style" \
+  --lora ./style-klein.safetensors \
   --output ./style-preview.png
 ```
 
@@ -324,6 +352,7 @@ Key options:
 - `--caption-dropout`
 - `--lite`: train only attention Q/V layers to reduce memory
 - `--exclude-preview-images`
+- `--checkpoint-interval`: save intermediate Klein LoRA adapters every N steps
 - `--quiet`
 
 ### `mere.run image validate`
@@ -535,7 +564,17 @@ Generate captions for one or more images.
 ```bash
 swift run mere.run vision caption ./images/*.png
 swift run mere.run vision caption ./images/*.png --output-dir ./captions
+swift run mere.run vision caption ./cards/*.jpg \
+  --output-dir ./captions \
+  --prompt-file ./card-caption-prompt.txt \
+  --focus "full card border" "printed title text" \
+  --trigger-token cardstyle
 ```
+
+- `--prompt`: caption instruction
+- `--prompt-file`: read reusable caption instructions from a UTF-8 text file
+- `--focus`: visible details the captioner should prioritize
+- `--trigger-token`: prefix each saved caption with an exact LoRA trigger token
 
 ### `mere.run vision inspect`
 
@@ -669,8 +708,20 @@ swift run mere.run vision ocr <images...> [options]
 
 Key options:
 
-- `--backend`: `lighton`, `glm`, or `compare`
-- `--model`: path to the LightOn OCR root when using the LightOn backend
+- `--backend`: `lighton`, `glm`, or `infinity`
+- `--compare`: compare LightOn against the selected secondary backend; defaults
+  to GLM when `--backend lighton`
+- `--model`: managed id or path to the LightOn OCR root when using the LightOn backend
+- `--glmocr-cli`, `--glm-config`
+- `--infinity-runtime`: `native` or `external`; native uses the Swift Q35 runtime
+- `--infinity-model`: native managed model id or local path; upstream model or
+  server id when `--infinity-runtime external`
+- `--infinity-parser-cli`: path to the Infinity-Parser2 `parser` executable for
+  external runs
+- `--infinity-backend`: external `vllm-server`, `vllm-engine`, or `transformers`
+- `--infinity-api-url`, `--infinity-api-key`: external vLLM server settings
+- `--infinity-task`: `doc2json`, `doc2md`, or `custom`
+- `--infinity-output-format`: `md` or `json`
 - `--max-tokens`
 - `--quiet`
 
@@ -678,8 +729,13 @@ Examples:
 
 ```bash
 swift run mere.run model pull vision-ocr-lighton
+swift run mere.run model pull vision-ocr-infinity-flash
+swift run mere.run model pull vision-ocr-infinity-pro-int8
 swift run mere.run vision ocr ./page.png --backend lighton --model ~/Library/Application\ Support/MereRun/models/vision-ocr-lighton
 swift run mere.run vision ocr ./page.png --backend glm
+swift run mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
+swift run mere.run vision ocr ./page.png --compare --backend infinity
+swift run mere.run vision ocr ./page.png --backend infinity --infinity-runtime external --infinity-api-url http://127.0.0.1:8000/v1/chat/completions
 ```
 
 ### `mere.run music analyze`
