@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added `mere.run plugin { list, info, install, doctor }` for live official
+  companion-plugin catalog discovery, `pipx` install previews, opt-in
+  execution, and post-install manifest verification.
+
 ## 0.17.0 - 2026-06-23
 
 ### Added
