@@ -11,6 +11,31 @@ The format is based on Keep a Changelog.
 - added `mere.run plugin { list, info, install, doctor }` for live official
   companion-plugin catalog discovery, `pipx` install previews, opt-in
   execution, and post-install manifest verification.
+- added `vision caption --prompt-file`, `--focus`, and `--trigger-token` for
+  domain-aware dataset captions and deterministic LoRA trigger prefixes.
+- added FLUX.2 Klein support to `image train-lora` when `--model` resolves to a
+  Klein base model, reusing the native Swift Klein LoRA trainer.
+- added `image train-lora --checkpoint-interval` for FLUX.2 Klein so
+  intermediate adapters can be compared instead of relying only on the final
+  LoRA checkpoint.
+- added the `image-klein-base-9b` managed model id for the undistilled BF16
+  FLUX.2 Klein Base 9B LoRA-training target.
+- added native `vision ocr --backend infinity` support for Infinity-Parser2,
+  with managed `vision-ocr-infinity-flash` and explicit-pull
+  `vision-ocr-infinity-pro` model IDs, plus `--infinity-runtime external` for
+  upstream parser/vLLM parity checks.
+- added `vision-ocr-infinity-pro-int8` as an explicit-pull native Infinity
+  Pro OCR option for quality-focused evals while keeping LightOnOCR as the
+  default `vision ocr` backend.
+
+### Fixed
+
+- fixed `image generate --input` for FLUX.2 Klein by routing the input through
+  Klein reference-image conditioning, and clarified `--ref-image` support in
+  CLI help and docs.
+- fixed mflux-format FLUX.2 Klein transformer loading by mapping
+  `time_guidance_embed.linear_*` weights into the native Swift transformer's
+  nested timestep embedder path.
 
 ## 0.17.0 - 2026-06-23
 

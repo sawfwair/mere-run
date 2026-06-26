@@ -133,9 +133,12 @@ final class QwenVisionAttention: Module {
   }
 
   private func applyRotary(_ tensor: MLXArray, cos: MLXArray, sin: MLXArray) -> MLXArray {
-    let cosPrepared = cos[.newAxis, .newAxis, 0..., 0...]
-    let sinPrepared = sin[.newAxis, .newAxis, 0..., 0...]
-    return (tensor * cosPrepared) + (rotateHalf(tensor) * sinPrepared)
+    let dtype = tensor.dtype
+    let tensor32 = tensor.asType(.float32)
+    let cosPrepared = cos[.newAxis, .newAxis, 0..., 0...].asType(.float32)
+    let sinPrepared = sin[.newAxis, .newAxis, 0..., 0...].asType(.float32)
+    let rotated = (tensor32 * cosPrepared) + (rotateHalf(tensor32) * sinPrepared)
+    return rotated.asType(dtype)
   }
 
   private func rotateHalf(_ tensor: MLXArray) -> MLXArray {

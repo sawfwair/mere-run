@@ -26,6 +26,7 @@ Common managed IDs:
 
 - `image-klein-nano`
 - `image-klein-base`
+- `image-klein-base-9b`
 - `image-klein-max`
 - `image-bonsai-binary`
 - `image-bonsai-ternary`
@@ -49,6 +50,32 @@ swift run mere.run image generate \
   --output ./mug.png
 ```
 
+### Klein generation and LoRA training
+
+Klein models run through the native Swift FLUX.2 Klein runtime. Base Klein
+models can also train LoRA adapters with `image train-lora`. For serious Klein
+LoRA training, use the undistilled BF16 `image-klein-base-9b` model id or a
+local equivalent model root, then use the saved adapter with Klein
+`image generate --lora`. The loader accepts mflux-format Klein transformer
+shards and maps their time-guidance weights into the Swift transformer module
+layout.
+
+```bash
+swift run mere.run model pull image-klein-base-9b
+swift run mere.run image train-lora \
+  --model image-klein-base-9b \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --training-steps 1500 \
+  --rank 16 \
+  --checkpoint-interval 250
+swift run mere.run image generate \
+  --model image-klein-base-9b \
+  --prompt "a ceramic mug in the trained style" \
+  --lora ./style-klein.safetensors \
+  --output ./style-klein.png
+```
+
 ### Bonsai binary and ternary
 
 `image-bonsai-binary` and `image-bonsai-ternary` map to PrismML's Apple Silicon
@@ -69,7 +96,7 @@ swift run mere.run image generate \
   --output ./bonsai.png
 ```
 
-### Image-to-image
+### Image-to-image and Klein references
 
 ```bash
 swift run mere.run image generate \
@@ -77,6 +104,19 @@ swift run mere.run image generate \
   --input ./photo.png \
   --strength 0.6 \
   --output ./sketch.png
+```
+
+For FLUX.2 Klein, `--input` is treated as a single reference image and is routed
+through the same reference-image pipeline as `--ref-image`. Use `--ref-image`
+directly when you want repeatable Klein references, or when you want the clean
+default reference conditioning.
+
+```bash
+swift run mere.run image generate \
+  --model image-klein-base \
+  --prompt "a vertical gross-out trading card with the same sticker anatomy" \
+  --ref-image ./card-reference.png \
+  --output ./card.png
 ```
 
 ### HiDream O1 references

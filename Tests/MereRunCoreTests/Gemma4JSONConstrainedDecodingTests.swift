@@ -106,4 +106,19 @@ final class Gemma4JSONConstrainedDecodingTests: XCTestCase {
         let token = sampleToken(logits: logits, config: config, previousTokens: [])
         XCTAssertNotEqual(token, 1)
     }
+
+    func testGemma4MultimodalDecodeBanIncludesVisionPromptTokens() {
+        let banned = Gemma4Generator.multimodalDecodeBannedTokens(
+            imageTokenId: 10,
+            audioTokenId: 11,
+            videoTokenId: 12,
+            boiTokenId: 13,
+            boaTokenId: 14,
+            eoiTokenId: 15,
+            eoaTokenId: 16,
+            excluding: [15]
+        )
+
+        XCTAssertEqual(banned, [10, 11, 12, 13, 14, 16])
+    }
 }

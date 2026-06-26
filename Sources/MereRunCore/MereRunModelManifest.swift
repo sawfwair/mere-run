@@ -565,6 +565,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "black-forest-labs/FLUX.2-klein-9B",
                 createdAt: createdAt
             )
+        case .kleinBase9B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 50, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference, .loraTraining],
+                components: kleinHybridComponents,
+                upstreamRepoId: "black-forest-labs/FLUX.2-klein-base-9B",
+                createdAt: createdAt
+            )
         case .kleinShared:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -802,6 +816,29 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: q35TextComponents,
                 upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF@main",
+                createdAt: createdAt
+            )
+        case .infinityParser2Flash, .infinityParser2Pro, .infinityParser2ProInt8:
+            let isPro = modelID != .infinityParser2Flash
+            let isProInt8 = modelID == .infinityParser2ProInt8
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .ocr,
+                tier: isPro ? .max : .nano,
+                variant: .standard,
+                precision: isProInt8 ? .int8 : .bf16,
+                quantization: isProInt8
+                    ? Quantization(bits: 8, groupSize: 64, scheme: "mlx-quantized-linear")
+                    : nil,
+                defaults: nil,
+                supports: [.chat, .visionChat, .visionOCR],
+                components: q35TextComponents,
+                upstreamRepoId: isProInt8
+                    ? "\(Q35Resources.infinityParser2ProInt8UpstreamRepoId)@\(Q35Resources.infinityParser2ProInt8UpstreamRevision)"
+                    : isPro
+                    ? "\(Q35Resources.infinityParser2ProUpstreamRepoId)@\(Q35Resources.infinityParser2ProUpstreamRevision)"
+                    : "\(Q35Resources.infinityParser2FlashUpstreamRepoId)@\(Q35Resources.infinityParser2FlashUpstreamRevision)",
                 createdAt: createdAt
             )
         case .deepseekV4Flash:

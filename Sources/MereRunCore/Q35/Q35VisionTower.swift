@@ -25,6 +25,7 @@ public final class Q35VisionTower: Module {
 
         let spatialMerge = max(1, vision.spatialMergeSize ?? 2)
         let useLearnedPosEmbed = (vision.numPositionEmbeddings ?? 0) > 0
+        let inferredPatchEmbedBias = config.modelType.hasPrefix("qwen3_5")
         let qwenVisionConfig = QwenVisionConfiguration(
             depth: vision.depth,
             embedDim: vision.hiddenSize,
@@ -39,7 +40,7 @@ public final class Q35VisionTower: Module {
             outHiddenDim: vision.outHiddenSize,
             windowSize: vision.windowSize ?? 112,
             fullAttentionBlockIndices: vision.fullAttentionBlockIndexes ?? [],
-            patchEmbedBias: false,
+            patchEmbedBias: vision.patchEmbedBias ?? inferredPatchEmbedBias,
             numPositionEmbeddings: vision.numPositionEmbeddings,
             useLearnedPosEmbed: useLearnedPosEmbed,
             deepstackVisualIndexes: vision.deepstackVisualIndexes ?? []
@@ -108,7 +109,11 @@ public final class Q35VisionTower: Module {
 
     private static func mapVisionWeight(_ rawKey: String, _ value: MLXArray) -> [(String, MLXArray)] {
         var key = rawKey
-        if key.hasPrefix("vision_tower.") {
+        if key.hasPrefix("model.vision_tower.") {
+            key = "visionTower." + String(key.dropFirst("model.vision_tower.".count))
+        } else if key.hasPrefix("model.visual.") {
+            key = "visionTower." + String(key.dropFirst("model.visual.".count))
+        } else if key.hasPrefix("vision_tower.") {
             key = "visionTower." + String(key.dropFirst("vision_tower.".count))
         } else if key.hasPrefix("visual.") {
             key = "visionTower." + String(key.dropFirst("visual.".count))
@@ -124,6 +129,10 @@ public final class Q35VisionTower: Module {
         key = key.replacingOccurrences(of: ".patch_merger.norm.", with: ".patch_merger.ln_q.")
         key = key.replacingOccurrences(of: ".deepstack_merger_list.", with: ".deepstack_merger_list.")
         key = key.replacingOccurrences(of: ".norm.", with: ".ln_q.")
+
+        if key == "visionTower.patch_embed.proj.weight", value.ndim == 5 {
+            return [(key, value.transposed(0, 2, 3, 4, 1))]
+        }
 
         return [(key, value)]
     }

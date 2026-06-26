@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXNN
 import Cmlx
 
 // MARK: - Internal Helpers (copied from mlx-swift Cmlx+Util.swift)
@@ -87,6 +88,42 @@ public func checkpoint(
         defer { mlx_vector_array_free(outputs) }
 
         return mlx_vector_array_values(outputs)
+    }
+}
+
+/// Wraps a module function to use gradient checkpointing with respect to both
+/// module trainable parameters and the function inputs.
+public func checkpoint<Model: Module>(
+    model: Model,
+    _ f: @escaping (Model, [MLXArray]) -> [MLXArray]
+) -> ([MLXArray]) -> [MLXArray] {
+    let parameterKeys = model.trainableParameters().flattened().map(\.0)
+    guard !parameterKeys.isEmpty else {
+        return checkpoint { [unowned model] inputs in
+            f(model, inputs)
+        }
+    }
+
+    let parameterCount = parameterKeys.count
+    let checkpointed = checkpoint { [unowned model] inputs in
+        precondition(
+            inputs.count >= parameterCount,
+            "Checkpointed module call received fewer inputs than trainable parameters."
+        )
+        let parameterPairs = parameterKeys.enumerated().map { index, key in
+            (key, inputs[index])
+        }
+        model.update(parameters: ModuleParameters.unflattened(parameterPairs))
+        return f(model, Array(inputs.dropFirst(parameterCount)))
+    }
+
+    return { [unowned model] inputs in
+        let parameters = model.trainableParameters().flattened()
+        precondition(
+            parameters.count == parameterCount,
+            "Checkpointed module trainable parameter structure changed after initialization."
+        )
+        return checkpointed(parameters.map(\.1) + inputs)
     }
 }
 

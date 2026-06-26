@@ -104,6 +104,54 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "tiiuae/Falcon-Perception")
     }
 
+    func testInfinityParser2FlashTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .infinityParser2Flash, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Q35Resources.infinityParser2FlashModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .ocr)
+        XCTAssertEqual(manifest.tier, .nano)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .visionChat, .visionOCR]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.infinityParser2FlashUpstreamRepoId)@\(Q35Resources.infinityParser2FlashUpstreamRevision)"
+        )
+    }
+
+    func testInfinityParser2ProTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .infinityParser2Pro, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Q35Resources.infinityParser2ProModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .ocr)
+        XCTAssertEqual(manifest.tier, .max)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .visionChat, .visionOCR]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.infinityParser2ProUpstreamRepoId)@\(Q35Resources.infinityParser2ProUpstreamRevision)"
+        )
+    }
+
+    func testInfinityParser2ProInt8TemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .infinityParser2ProInt8, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Q35Resources.infinityParser2ProInt8ModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .ocr)
+        XCTAssertEqual(manifest.tier, .max)
+        XCTAssertEqual(manifest.precision, .int8)
+        XCTAssertEqual(manifest.quantization?.bits, 8)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-quantized-linear")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .visionChat, .visionOCR]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.infinityParser2ProInt8UpstreamRepoId)@\(Q35Resources.infinityParser2ProInt8UpstreamRevision)"
+        )
+    }
+
     func testHiDreamO1DevTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .hidreamO1Dev, createdAt: Date(timeIntervalSince1970: 0))
 

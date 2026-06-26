@@ -104,6 +104,48 @@ final class ManagedModelResolverTests: XCTestCase {
         XCTAssertTrue(spec.isManagedRootComplete(install, fileManager: .default))
     }
 
+    func testMaterializedInstallRootMountsSnapshotSubdirectoriesIntoComponentDirectories() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let baseSnapshot = root.appendingPathComponent("hub/base-9b", isDirectory: true)
+        try makeFile(baseSnapshot.appendingPathComponent("model_index.json"))
+        try makeFile(baseSnapshot.appendingPathComponent("transformer/config.json"))
+        try makeFile(baseSnapshot.appendingPathComponent("transformer/diffusion_pytorch_model.safetensors.index.json"))
+
+        let sharedSnapshot = root.appendingPathComponent("hub/shared-9b", isDirectory: true)
+        try makeFile(sharedSnapshot.appendingPathComponent("tokenizer/tokenizer_config.json"))
+        try makeFile(sharedSnapshot.appendingPathComponent("text_encoder/config.json"))
+        try makeFile(sharedSnapshot.appendingPathComponent("text_encoder/model.safetensors.index.json"))
+        try makeFile(sharedSnapshot.appendingPathComponent("vae/config.json"))
+        try makeFile(sharedSnapshot.appendingPathComponent("vae/diffusion_pytorch_model.safetensors"))
+        try makeFile(sharedSnapshot.appendingPathComponent("scheduler/scheduler_config.json"))
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-base-9b"))
+        let install = root.appendingPathComponent("models/image-klein-base-9b", isDirectory: true)
+        let mountedSnapshots = spec.mountedHubFallbacks.map { ($0, sharedSnapshot) }
+
+        let manifest = try ManagedModelResolver.materializeManagedInstallRoot(
+            for: spec,
+            snapshotURL: baseSnapshot,
+            mountedSnapshots: mountedSnapshots,
+            modelDir: install,
+            fileManager: .default
+        )
+
+        XCTAssertEqual(manifest?.id, "image-klein-base-9b")
+        let mountedTextConfig = install.appendingPathComponent("text_encoder/config.json")
+        XCTAssertEqual(
+            URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(atPath: mountedTextConfig.path))
+                .standardizedFileURL.path,
+            sharedSnapshot.appendingPathComponent("text_encoder/config.json").standardizedFileURL.path
+        )
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: install.appendingPathComponent("text_encoder/text_encoder/config.json").path
+        ))
+        XCTAssertTrue(spec.isManagedRootComplete(install, fileManager: .default))
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-resolver-\(UUID().uuidString)", isDirectory: true)
@@ -111,13 +153,15 @@ final class ManagedModelResolverTests: XCTestCase {
         return url
     }
 
+    private func makeFile(_ url: URL, contents: String = "{}") throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data(contents.utf8)))
+    }
+
     private func writeMinimalGemma4Snapshot(at root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         for file in ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"] {
-            XCTAssertTrue(FileManager.default.createFile(
-                atPath: root.appendingPathComponent(file).path,
-                contents: Data("{}".utf8)
-            ))
+            try makeFile(root.appendingPathComponent(file))
         }
     }
 }

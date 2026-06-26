@@ -121,15 +121,15 @@ final class Q35MTPMoE: Module {
 final class Q35MTPDecoderLayer: Module {
     @ModuleInfo(key: "self_attn") var selfAttention: Q35FullAttention
     @ModuleInfo(key: "mlp") var mlp: Q35MTPMoE
-    @ModuleInfo(key: "input_layernorm") var inputLayerNorm: RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: RMSNorm
+    @ModuleInfo(key: "input_layernorm") var inputLayerNorm: Q35RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: Q35RMSNorm
 
     init(config: Q35Config) {
         let text = config.textConfig
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
         self._mlp.wrappedValue = Q35MTPMoE(config: config)
-        self._inputLayerNorm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
-        self._postAttentionLayerNorm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._inputLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         super.init()
     }
 
@@ -144,19 +144,19 @@ final class Q35MTPDecoderLayer: Module {
 }
 
 final class Q35MTPModel: Module {
-    @ModuleInfo(key: "pre_fc_norm_embedding") var preFCNormEmbedding: RMSNorm
-    @ModuleInfo(key: "pre_fc_norm_hidden") var preFCNormHidden: RMSNorm
+    @ModuleInfo(key: "pre_fc_norm_embedding") var preFCNormEmbedding: Q35RMSNorm
+    @ModuleInfo(key: "pre_fc_norm_hidden") var preFCNormHidden: Q35RMSNorm
     @ModuleInfo(key: "fc") var fc: Linear
     @ModuleInfo(key: "layers") var layers: [Q35MTPDecoderLayer]
-    @ModuleInfo(key: "norm") var norm: RMSNorm
+    @ModuleInfo(key: "norm") var norm: Q35RMSNorm
 
     init(config: Q35Config) {
         let text = config.textConfig
-        self._preFCNormEmbedding.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
-        self._preFCNormHidden.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._preFCNormEmbedding.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._preFCNormHidden.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         self._fc.wrappedValue = Linear(text.hiddenSize * 2, text.hiddenSize, bias: false)
         self._layers.wrappedValue = [Q35MTPDecoderLayer(config: config)]
-        self._norm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._norm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         super.init()
     }
 

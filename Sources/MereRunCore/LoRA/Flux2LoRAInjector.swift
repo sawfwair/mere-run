@@ -149,6 +149,38 @@ public enum Flux2LoRAInjector {
         return loraLayers
     }
 
+    public static func resolveTargetRanks(
+        in transformer: Flux2Transformer2DModel,
+        defaultRank: Int,
+        targetSuffixes: [String] = defaultTargetSuffixes,
+        targetRankSuffixes: [String: Int]
+    ) throws -> [String: Int] {
+        guard defaultRank >= 1 else {
+            throw Flux2LoRAInjectionError.invalidRank(defaultRank)
+        }
+        for rank in targetRankSuffixes.values where rank < 1 {
+            throw Flux2LoRAInjectionError.invalidRank(rank)
+        }
+
+        let rankedSuffixes = targetRankSuffixes.keys.sorted { lhs, rhs in lhs.count > rhs.count }
+        let leafModules = transformer.leafModules().flattened()
+        var resolved: [String: Int] = [:]
+
+        for (path, module) in leafModules {
+            guard module is Linear || module is QuantizedLinear else { continue }
+            if let suffix = rankedSuffixes.first(where: { path.hasSuffix($0) }) {
+                resolved[path] = targetRankSuffixes[suffix]
+            } else if targetSuffixes.contains(where: { path.hasSuffix($0) }) {
+                resolved[path] = defaultRank
+            }
+        }
+
+        guard !resolved.isEmpty else {
+            throw Flux2LoRAInjectionError.noMatchingLayers
+        }
+        return resolved
+    }
+
     private static func applyModuleReplacements(
         _ replacements: [String: Module],
         leafModules: [(String, Module)],

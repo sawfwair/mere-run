@@ -104,6 +104,12 @@ extension Flux2KleinLoRATrainer {
         }
 
         let mfluxKeyMapper: (String) -> String = { key in
+            if key.hasPrefix("time_guidance_embed.linear_") {
+                return key.replacingOccurrences(
+                    of: "time_guidance_embed.linear_",
+                    with: "time_guidance_embed.timestep_embedder.linear_"
+                )
+            }
             if key.hasPrefix("transformer_blocks.") && key.contains(".attn.to_out.") && !key.contains(".to_out.0.") {
                 return key.replacingOccurrences(of: ".attn.to_out.", with: ".attn.to_out.0.")
             }
@@ -132,6 +138,11 @@ extension Flux2KleinLoRATrainer {
         let singleFileURL = url.appendingPathComponent("model.safetensors")
 
         let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
+            // The text encoder is used for hidden states only; some Qwen3 checkpoints
+            // include a language-model output head that is not part of QwenTextEncoder.
+            if key == "lm_head" || key.hasPrefix("lm_head.") || key.hasPrefix("model.lm_head") {
+                return []
+            }
             var mappedKey = key
             if key.hasPrefix("model.") {
                 mappedKey = key.replacingOccurrences(of: "model.", with: "encoder.")
@@ -142,6 +153,9 @@ extension Flux2KleinLoRATrainer {
         }
 
         let keyMapper: (String) -> String = { key in
+            if key == "lm_head" || key.hasPrefix("lm_head.") || key.hasPrefix("model.lm_head") {
+                return "__unused__." + key
+            }
             if key.hasPrefix("model.") {
                 return "encoder." + String(key.dropFirst("model.".count))
             }
@@ -199,4 +213,3 @@ extension Flux2KleinLoRATrainer {
         )
     }
 }
-

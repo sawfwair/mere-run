@@ -74,6 +74,11 @@ enum StructuredImagePromptAdapter {
     }
 
     static func normalizedCaptionJSON(from rawJSON: String, fallbackPrompt: String) throws -> String {
+        guard !containsGeneratedSpecialTokenSpill(rawJSON) else {
+            throw StructuredImagePromptAdapterError.invalidCaptionJSON(
+                "Output contained generated multimodal special tokens."
+            )
+        }
         let candidate = cleanedJSONCandidate(from: rawJSON)
         do {
             return try normalizedCaptionJSONCandidate(candidate, fallbackPrompt: fallbackPrompt)
@@ -147,6 +152,34 @@ enum StructuredImagePromptAdapter {
             context: caption.context,
             artisticStyle: caption.artisticStyle
         )
+    }
+
+    static func deterministicCaptionJSON(for prompt: String) throws -> String {
+        let description = prompt.nonEmpty ?? "Requested image"
+        let caption = StructuredImageCaption(
+            shortDescription: description,
+            objects: [StructuredImageObject.defaultObject(description: description)],
+            backgroundSetting: "Background consistent with the requested image.",
+            lighting: .defaultLighting(description: nil),
+            aesthetics: .defaultAesthetics(description: nil),
+            photographicCharacteristics: .defaultPhotographicCharacteristics(description: nil),
+            styleMedium: "photograph",
+            textRender: [],
+            context: "Text-to-image generation prompt.",
+            artisticStyle: "natural realism"
+        )
+        return try encodeCaptionJSON(ensuringTextRender(caption, prompt: prompt))
+    }
+
+    static func containsGeneratedSpecialTokenSpill(_ response: String) -> Bool {
+        let patterns = [
+            #"<\|?(?:image|audio|video)[^>]{0,64}>"#,
+            #"<(?:start|end)_of_(?:image|audio|video)>"#,
+            #"<(?:boi|eoi|boa|eoa|bov|eov)\|?>"#,
+        ]
+        return patterns.contains { pattern in
+            response.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        }
     }
 
     /// Extracts double-, curly-, and single-quoted strings. Single quotes must sit on

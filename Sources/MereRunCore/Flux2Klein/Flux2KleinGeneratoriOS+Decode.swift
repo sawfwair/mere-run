@@ -50,10 +50,11 @@ extension Flux2KleinGeneratoriOS {
             .transposed(0, 3, 1, 2)
 
         // Apply BatchNorm denormalization
-        let bnEps: Float = 1e-4
-        let bnStd = MLX.sqrt(bnVar.reshaped([1, -1, 1, 1]) + bnEps)
-        let bnMeanReshaped = bnMean.reshaped([1, -1, 1, 1])
-        let denormalizedLatents = packedLatents * bnStd + bnMeanReshaped
+        let denormalizedLatents = Flux2KleinBatchNorm.denormalizePackedLatents(
+            packedLatents,
+            mean: bnMean,
+            variance: bnVar
+        )
 
         // Unpatchify
         let unpatchedLatents = unpatchifyPackedLatents(

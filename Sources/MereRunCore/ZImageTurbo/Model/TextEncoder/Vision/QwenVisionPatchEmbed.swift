@@ -43,11 +43,11 @@ final class QwenVisionPatchEmbed: Module {
       "Patch volume mismatch: expected \(patchVolume), got \(patches.dim(1))"
     )
 
-    let targetType = patches.dtype
+    let targetType = projection.weight.dtype
     let reshapedWeight = projection.weight.transposed(0, 4, 1, 2, 3)
     let kernel = reshapedWeight.reshaped(embedDim, patchVolume)
     let transposed = kernel.transposed(1, 0)
-    var projected = MLX.matmul(patches, transposed)
+    var projected = MLX.matmul(patches.asType(targetType), transposed)
 
     // Add bias if present
     if let bias = projection.bias {

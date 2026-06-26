@@ -84,7 +84,7 @@ final class Q35SwitchLinear: Module {
         } else {
             output = gatherMM(
                 flatX,
-                weight,
+                weight.swappedAxes(-1, -2),
                 rhsIndices: flatIndices,
                 sortedIndices: false
             )
@@ -185,6 +185,81 @@ final class Q35MLP: Module {
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
         downProj(q35Swiglu(gateProj(x), upProj(x)))
+    }
+}
+
+final class Q35FeedForward: Module {
+    @ModuleInfo(key: "gate") var gate: Linear?
+    @ModuleInfo(key: "switch_mlp") var switchMLP: Q35SwitchGLU?
+    @ModuleInfo(key: "shared_expert") var sharedExpert: Q35MLP?
+    @ModuleInfo(key: "shared_expert_gate") var sharedExpertGate: Linear?
+    @ModuleInfo(key: "gate_proj") var gateProj: Linear?
+    @ModuleInfo(key: "up_proj") var upProj: Linear?
+    @ModuleInfo(key: "down_proj") var downProj: Linear?
+
+    private let topK: Int
+    private let normTopKProb: Bool
+    private let usesMoE: Bool
+
+    init(config: Q35Config) {
+        let text = config.textConfig
+        self.usesMoE = text.usesMoE
+        self.topK = max(1, text.numExpertsPerTok)
+        self.normTopKProb = true
+
+        if text.usesMoE {
+            self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
+            self._switchMLP.wrappedValue = Q35SwitchGLU(config: config)
+            self._sharedExpert.wrappedValue = Q35MLP(
+                hiddenSize: text.hiddenSize,
+                intermediateSize: text.sharedExpertIntermediateSize
+            )
+            self._sharedExpertGate.wrappedValue = Linear(text.hiddenSize, 1, bias: false)
+            self._gateProj.wrappedValue = nil
+            self._upProj.wrappedValue = nil
+            self._downProj.wrappedValue = nil
+        } else {
+            self._gate.wrappedValue = nil
+            self._switchMLP.wrappedValue = nil
+            self._sharedExpert.wrappedValue = nil
+            self._sharedExpertGate.wrappedValue = nil
+            self._gateProj.wrappedValue = Linear(text.hiddenSize, text.intermediateSize, bias: false)
+            self._upProj.wrappedValue = Linear(text.hiddenSize, text.intermediateSize, bias: false)
+            self._downProj.wrappedValue = Linear(text.intermediateSize, text.hiddenSize, bias: false)
+        }
+
+        super.init()
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if usesMoE,
+           let gate,
+           let switchMLP,
+           let sharedExpert,
+           let sharedExpertGate {
+            var scores = softmax(gate(x), axis: -1)
+
+            let kth = topK - 1
+            let indices = argPartition(-scores, kth: kth, axis: -1)[.ellipsis, 0..<topK]
+            scores = takeAlong(scores, indices, axis: -1)
+
+            if normTopKProb, topK > 1 {
+                scores = scores / scores.sum(axis: -1, keepDims: true)
+            }
+
+            let switched = switchMLP(x, indices: indices)
+            var routed = switched * MLX.expandedDimensions(scores, axis: scores.ndim)
+            routed = routed.sum(axis: -2)
+
+            let shared = sharedExpert(x)
+            let gatedShared = MLX.sigmoid(sharedExpertGate(x)) * shared
+            return routed + gatedShared
+        }
+
+        guard let gateProj, let upProj, let downProj else {
+            return x
+        }
+        return downProj(q35Swiglu(gateProj(x), upProj(x)))
     }
 }
 

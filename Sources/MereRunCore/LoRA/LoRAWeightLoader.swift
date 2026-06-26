@@ -97,10 +97,11 @@ public enum LoRAWeightLoader {
             throw LoRAError.noWeightPairs
         }
 
-        let rank = inferRank(from: loraWeights)
+        let targetRanks = inferTargetRanks(from: loraWeights)
+        let rank = targetRanks.sorted { lhs, rhs in lhs.key < rhs.key }.first?.value ?? 16
         let alpha = loadAlpha(from: url, metadata: metadata, fallback: Float(rank))
 
-        return LoRAWeights(weights: loraWeights, rank: rank, alpha: alpha)
+        return LoRAWeights(weights: loraWeights, rank: rank, alpha: alpha, targetRanks: targetRanks)
     }
 
     private static func resolveKeyPair(_ key: String) -> (downKey: String, upKey: String, baseKey: String)? {
@@ -144,14 +145,21 @@ public enum LoRAWeightLoader {
         return base
     }
 
-    private static func inferRank(from weights: [String: (down: MLXArray, up: MLXArray)]) -> Int {
-        for (_, pair) in weights {
+    private static func inferTargetRanks(from weights: [String: (down: MLXArray, up: MLXArray)]) -> [String: Int] {
+        var ranks: [String: Int] = [:]
+        ranks.reserveCapacity(weights.count)
+        for (path, pair) in weights {
             let downShape = pair.down.shape
             if downShape.count == 2 {
-                return min(downShape[0], downShape[1])
+                ranks[path] = downShape[0]
+                continue
+            }
+            let upShape = pair.up.shape
+            if upShape.count == 2 {
+                ranks[path] = upShape[1]
             }
         }
-        return 16
+        return ranks
     }
 
     private static func loadAlpha(

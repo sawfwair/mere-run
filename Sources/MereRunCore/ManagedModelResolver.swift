@@ -397,11 +397,29 @@ public enum ManagedModelResolver {
 
         for (mounted, mountedSnapshotURL) in mountedSnapshots {
             let destinationURL = modelDir.appendingPathComponent(mounted.destinationPath, isDirectory: true)
+            let sourceURL = mountedSnapshotSourceURL(
+                snapshotURL: mountedSnapshotURL,
+                destinationPath: mounted.destinationPath,
+                fileManager: fileManager
+            )
             try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true)
-            try materializeSnapshotEntries(from: mountedSnapshotURL, to: destinationURL, fileManager: fileManager)
+            try materializeSnapshotEntries(from: sourceURL, to: destinationURL, fileManager: fileManager)
         }
 
         return try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
+    }
+
+    private static func mountedSnapshotSourceURL(
+        snapshotURL: URL,
+        destinationPath: String,
+        fileManager: FileManager
+    ) -> URL {
+        let exactSourceURL = snapshotURL.appendingPathComponent(destinationPath, isDirectory: true)
+        var isDirectory: ObjCBool = false
+        if fileManager.fileExists(atPath: exactSourceURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            return exactSourceURL
+        }
+        return snapshotURL
     }
 
     private static func materializeSnapshotEntries(

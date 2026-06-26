@@ -5,6 +5,8 @@ import MereRunCore
 // MARK: - Vision Caption Command
 
 struct VisionCaption: AsyncParsableCommand {
+    static let defaultPrompt = "Write a short, concrete caption describing the image for LoRA training. Avoid fluff."
+
     static let configuration = CommandConfiguration(
         commandName: "caption",
         abstract: "Generate training-friendly captions for images.",
@@ -25,7 +27,23 @@ struct VisionCaption: AsyncParsableCommand {
     var outputDir: String?
 
     @Option(name: [.long], help: "Caption instruction/prompt (short is best for LoRA).")
-    var prompt: String = "Write a short, concrete caption describing the image for LoRA training. Avoid fluff."
+    var prompt: String?
+
+    @Option(name: [.customLong("prompt-file")], help: "Read caption instructions from a UTF-8 text file.")
+    var promptFile: String?
+
+    @Option(
+        name: [.customLong("focus")],
+        parsing: .upToNextOption,
+        help: "Visible details the caption should prioritize, e.g. --focus \"card border\" \"printed title\"."
+    )
+    var focus: [String] = []
+
+    @Option(
+        name: [.customLong("trigger-token")],
+        help: "Prefix each saved caption with this exact LoRA trigger token."
+    )
+    var triggerToken: String?
 
     @Option(name: [.long], help: "Max new tokens to generate.")
     var maxTokens: Int = 96
@@ -70,6 +88,7 @@ struct VisionCaption: AsyncParsableCommand {
 
         let captioner = try QwenVLCaptioner(modelRoot: modelURL)
         let config = QwenVLCaptioner.ModelConfig(maxNewTokens: maxTokens, temperature: temperature, topP: topP)
+        let instruction = try resolvedPromptInstruction()
 
         for path in images {
             let imageURL = URL(fileURLWithPath: path).standardizedFileURL
@@ -77,16 +96,67 @@ struct VisionCaption: AsyncParsableCommand {
                 throw ValidationError("Image not found: \(imageURL.path)")
             }
 
-            let caption = try captioner.caption(imageURL: imageURL, prompt: prompt, config: config)
+            let caption = try captioner.caption(imageURL: imageURL, prompt: instruction, config: config)
             let captionURL: URL = {
                 if let outDirURL {
                     return outDirURL.appendingPathComponent(imageURL.deletingPathExtension().lastPathComponent + ".txt")
                 }
                 return imageURL.deletingPathExtension().appendingPathExtension("txt")
             }()
-            let out = caption.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
-            try out.data(using: .utf8)?.write(to: captionURL)
+            let out = Self.captionOutput(caption, triggerToken: triggerToken) + "\n"
+            try Data(out.utf8).write(to: captionURL)
             print("\(imageURL.path) -> \(captionURL.path)")
         }
+    }
+
+    func resolvedPromptInstruction() throws -> String {
+        let basePrompt: String
+        if let promptFile {
+            let url = URL(fileURLWithPath: promptFile).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Prompt file not found: \(url.path)")
+            }
+            basePrompt = try String(contentsOf: url, encoding: .utf8)
+        } else {
+            basePrompt = prompt ?? Self.defaultPrompt
+        }
+
+        var parts = [basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)]
+        if let prompt = prompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+           promptFile != nil,
+           !prompt.isEmpty {
+            parts.append("Additional instruction: \(prompt)")
+        }
+
+        let focusTerms = focus
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !focusTerms.isEmpty {
+            parts.append("Pay special attention to these visible details: \(focusTerms.joined(separator: "; ")).")
+        }
+
+        if let triggerToken = triggerToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !triggerToken.isEmpty {
+            parts.append("Do not invent hidden details. The exact trigger token \(triggerToken) will be added separately.")
+        }
+
+        return parts
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
+
+    static func captionOutput(_ caption: String, triggerToken: String?) -> String {
+        let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let token = triggerToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty else {
+            return trimmed
+        }
+        guard !trimmed.isEmpty else {
+            return token
+        }
+        if trimmed.lowercased().hasPrefix(token.lowercased()) {
+            return trimmed
+        }
+        return "\(token) \(trimmed)"
     }
 }

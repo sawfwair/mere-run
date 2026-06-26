@@ -15,6 +15,31 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(rendered.hasSuffix("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
     }
 
+    func testQ35TemplateExpandsImagePadCount() {
+        let rendered = Q35TokenizerAndTemplate.renderPrompt(
+            messages: [ChatMessage(role: .user, content: "Read it.", imageUrl: "/tmp/page.png")],
+            addGenerationPrompt: true,
+            includeThinking: false,
+            imageTokenCounts: [3]
+        )
+
+        XCTAssertTrue(rendered.contains("<|vision_start|><|image_pad|><|image_pad|><|image_pad|><|vision_end|>"))
+    }
+
+    func testQ35Qwen3VLTargetSizeUsesInfinityParserPixelBudget() {
+        let target = Q35Generator.qwen3VLTargetSize(
+            originalWidth: 2_108,
+            originalHeight: 1_094,
+            patchSize: 16,
+            temporalPatchSize: 2,
+            spatialMergeSize: 2
+        )
+
+        XCTAssertEqual(target.width, 2_112)
+        XCTAssertEqual(target.height, 1_088)
+        XCTAssertEqual((target.width / 16) * (target.height / 16) / 4, 2_244)
+    }
+
     func testQ35TemplateLeavesThinkingOpenWhenRequested() {
         let rendered = Q35TokenizerAndTemplate.renderPrompt(
             messages: [ChatMessage(role: .user, content: "Explain.")],
@@ -249,6 +274,85 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertNil(config.visionConfig)
         XCTAssertEqual(config.textConfig.mlpOnlyLayers, [])
         XCTAssertEqual(config.textConfig.numExperts, 256)
+    }
+
+    func testQ35ConfigAllowsDenseInfinityParser2FlashLayout() throws {
+        var configObject = makeBaseConfig()
+        configObject["model_type"] = "qwen3_5"
+        configObject["architectures"] = ["Qwen3_5ForConditionalGeneration"]
+        configObject["eos_token_id"] = 248_046
+        configObject["image_token_id"] = 248_056
+        configObject["vision_start_token_id"] = 248_053
+        configObject["vision_end_token_id"] = 248_054
+        if var textConfig = configObject["text_config"] as? [String: Any] {
+            textConfig["model_type"] = "qwen3_5_text"
+            textConfig["hidden_size"] = 2048
+            textConfig["num_hidden_layers"] = 24
+            textConfig["intermediate_size"] = 6144
+            textConfig["num_attention_heads"] = 8
+            textConfig["head_dim"] = 256
+            textConfig.removeValue(forKey: "num_experts")
+            textConfig.removeValue(forKey: "num_experts_per_tok")
+            textConfig.removeValue(forKey: "moe_intermediate_size")
+            textConfig.removeValue(forKey: "shared_expert_intermediate_size")
+            configObject["text_config"] = textConfig
+        }
+        if var visionConfig = configObject["vision_config"] as? [String: Any] {
+            visionConfig["model_type"] = "qwen3_5"
+            visionConfig["hidden_size"] = 1024
+            visionConfig["intermediate_size"] = 4096
+            visionConfig["out_hidden_size"] = 2048
+            visionConfig["patch_size"] = 16
+            visionConfig["spatial_merge_size"] = 2
+            visionConfig["num_position_embeddings"] = 2304
+            configObject["vision_config"] = visionConfig
+        }
+
+        let config = try decodeConfig(configObject)
+
+        XCTAssertEqual(config.modelType, "qwen3_5")
+        XCTAssertEqual(config.eosTokenIds, [248_046])
+        XCTAssertEqual(config.imageTokenId, 248_056)
+        XCTAssertFalse(config.textConfig.usesMoE)
+        XCTAssertEqual(config.textConfig.numExperts, 0)
+        XCTAssertEqual(config.textConfig.numExpertsPerTok, 0)
+        XCTAssertEqual(config.visionConfig?.patchSize, 16)
+        XCTAssertEqual(config.visionConfig?.spatialMergeSize, 2)
+    }
+
+    func testQ35DenseFeedForwardRuntimeProducesLogits() throws {
+        var configObject = makeTinyRuntimeConfig(layerTypes: ["full_attention"])
+        if var textConfig = configObject["text_config"] as? [String: Any] {
+            textConfig.removeValue(forKey: "num_experts")
+            textConfig.removeValue(forKey: "num_experts_per_tok")
+            textConfig.removeValue(forKey: "moe_intermediate_size")
+            textConfig.removeValue(forKey: "shared_expert_intermediate_size")
+            textConfig["intermediate_size"] = 8
+            configObject["text_config"] = textConfig
+        }
+        let config = try decodeConfig(configObject)
+        let model = Q35Model(config: config)
+        let input = MLXArray([Int32(1), Int32(2)]).reshaped(1, 2)
+        let output = model.forward(input, cache: makeLayerCaches(config: config))
+        MLX.eval(output.logits)
+
+        XCTAssertFalse(config.textConfig.usesMoE)
+        XCTAssertEqual(output.logits.shape, [1, 2, config.textConfig.vocabSize])
+        XCTAssertTrue(MLX.max(MLX.abs(output.logits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testQ35TiedEmbeddingsRuntimeProducesLogits() throws {
+        var configObject = makeTinyRuntimeConfig(layerTypes: ["full_attention"])
+        configObject["tie_word_embeddings"] = true
+        let config = try decodeConfig(configObject)
+        let model = Q35Model(config: config)
+        let input = MLXArray([Int32(1), Int32(2)]).reshaped(1, 2)
+        let output = model.forward(input, cache: makeLayerCaches(config: config))
+        MLX.eval(output.logits)
+
+        XCTAssertTrue(config.tieWordEmbeddings)
+        XCTAssertEqual(output.logits.shape, [1, 2, config.textConfig.vocabSize])
+        XCTAssertTrue(MLX.max(MLX.abs(output.logits.asType(.float32))).item(Float.self).isFinite)
     }
 
     private func mergeLayerCaches(_ rowCaches: [[Q35LayerCache?]]) -> [Q35LayerCache?]? {
