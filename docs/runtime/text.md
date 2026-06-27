@@ -20,6 +20,7 @@ embeddings, and PII anonymization.
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q36-nano`
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
+- `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot`
 - `text-chat-psi-agent`
@@ -68,6 +69,11 @@ equally recommended:
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use
 `--model text-chat-lfm25-a1b-8bit` for CLI chat or `api serve --engine text-chat-lfm2`.
+
+`text-agent-ornith-9b` installs an Ornith 1.0 9B OptiQ MLX snapshot and runs
+through the native Qwen-family runtime. Use `text chat --model text-agent-ornith-9b`
+or `api serve --engine text-chat-q36 --model text-agent-ornith-9b` for coding-agent
+smoke tests.
 
 ### Local code generation
 

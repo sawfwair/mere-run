@@ -10,7 +10,8 @@ No model is required to print readiness. Optional model pulls/configuration
 should use the recommended setup-agent tier; on 96 GB+ Apple Silicon Macs that
 is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory
 or comparison alternatives. `text-code-north-mini` is available for native
-GGUF coding-agent experiments.
+GGUF coding-agent experiments, and `text-agent-ornith-9b` is available for
+native Qwen-family MLX/OptiQ coding-agent experiments.
 
 ## Install And Check
 
@@ -36,6 +37,8 @@ mere.run agent onboard --help
 - Use `--configure-pi --model <id>` when Pi should call a local mere.run API provider.
 - For North Mini Code, pull `text-code-north-mini`, start `api serve --engine text-code`,
   then use `--configure-pi --model text-code-north-mini --host <host> --port <port>`.
+- For Ornith, pull `text-agent-ornith-9b`, start `api serve --engine text-chat-q36 --model text-agent-ornith-9b`,
+  then use `--configure-pi --model text-agent-ornith-9b --host <host> --port <port>`.
 
 ## Examples
 
@@ -50,6 +53,11 @@ mere.run agent onboard --install-pi --configure-pi --model text-agent-deepseek-v
 ```bash
 mere.run model pull text-code-north-mini
 mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080
+```
+
+```bash
+mere.run model pull text-agent-ornith-9b
+mere.run agent onboard --configure-pi --model text-agent-ornith-9b --port 8080
 ```
 
 ## Iteration Tips

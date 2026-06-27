@@ -101,6 +101,26 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
+    func testOrnith9BIsSupportedOnTwentyFourGBAndStartableThroughQ35() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith9BModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 24 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(on: machine)
+                .first { $0.id == Q35Resources.ornith9BModelId }
+        )
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
+    }
+
     func testUnsupportedRuntimeIsRejected() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
         let machine = MereRunMachineProfile(

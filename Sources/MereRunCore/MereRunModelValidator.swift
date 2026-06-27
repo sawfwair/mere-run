@@ -365,8 +365,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding.")
             case .privacy where engine != .openAIPrivacyFilter:
                 warnings.append("Manifest engine mismatch: family=privacy expects openai-privacy-filter.")
-            case .code where engine != .qwen3Coder && engine != .northMiniCode:
-                warnings.append("Manifest engine mismatch: family=code expects qwen3-coder or north-mini-code.")
+            case .code where engine != .qwen3Coder && engine != .northMiniCode && engine != .qwen35HybridMoE:
+                warnings.append("Manifest engine mismatch: family=code expects qwen3-coder, north-mini-code, or qwen3.5-hybrid-moe.")
             case .ocr where engine != .lightOnOCR && engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr or qwen3.5-hybrid-moe.")
             case .music where engine != .aceStep && engine != .magentaRT2:

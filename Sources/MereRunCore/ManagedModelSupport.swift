@@ -375,6 +375,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                Q35Resources.ornith9BModelId,
+                "Ornith 1.0 9B OptiQ",
+                "Runs DeepReinforce's Ornith 1.0 9B agentic coding model through the native Qwen-family MLX runtime.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 LFM2Resources.defaultModelId,
                 "LFM2.5 A1B 8-bit",
                 "Runs the LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot through the native Swift LFM2 runtime.",

@@ -13,7 +13,8 @@ Supported engines:
 - `text-code`: GGUF code models such as `text-code-qwen3` and `text-code-north-mini`.
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
-- `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`.
+- `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
+  and also serves Qwen-family agent experiments such as `text-agent-ornith-9b`.
 - `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
@@ -158,6 +159,11 @@ mere.run api serve --engine text-chat-gemma4 --model vision-chat-gemma4-12b --po
 ```bash
 mere.run model pull text-chat-lfm25-a1b-8bit
 mere.run api serve --engine text-chat-lfm2 --port 11434
+```
+
+```bash
+mere.run model pull text-agent-ornith-9b
+mere.run api serve --engine text-chat-q36 --model text-agent-ornith-9b --port 11434
 ```
 
 ```bash

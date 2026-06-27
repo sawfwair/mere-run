@@ -27,6 +27,8 @@ The format is based on Keep a Changelog.
 - added `vision-ocr-infinity-pro-int8` as an explicit-pull native Infinity
   Pro OCR option for quality-focused evals while keeping LightOnOCR as the
   default `vision ocr` backend.
+- added `text-agent-ornith-9b` as an experimental native Qwen-family MLX/OptiQ
+  coding-agent target backed by the pinned public Ornith 1.0 9B snapshot.
 
 ### Fixed
 

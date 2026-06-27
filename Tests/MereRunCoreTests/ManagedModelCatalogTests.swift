@@ -291,6 +291,19 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
     }
 
+    func testOrnith9BUsesNativeQ35OptiQHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith9BModelId))
+
+        XCTAssertEqual(spec.category, .textCode)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.ornith9BUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.ornith9BUpstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.ornith9BUpstreamRepoId)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith9BEstimatedDownloadBytes)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("optiq_metadata.json"), true)
+    }
+
     func testInfinityParser2FlashUsesNativeQ35VisionOCRSpec() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2FlashModelId))
 
