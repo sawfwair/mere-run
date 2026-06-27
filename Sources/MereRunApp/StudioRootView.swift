@@ -12,6 +12,9 @@ struct StudioRootView: View {
     @State private var showOptions = false
     @State private var showModels = false
     @State private var selectedLibraryID: UUID?
+    /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
+    /// not-yet-sent conversation (so the library has no empty row until the first message).
+    @State private var activeConversationID: UUID?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var studioError: String?
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
@@ -24,6 +27,21 @@ struct StudioRootView: View {
         // Fall back to the most recent run for the active mode so switching modes never
         // leaves an unrelated mode's output on the canvas.
         return library.items.first { $0.mode == mode }
+    }
+
+    private var activeConversationItem: StudioLibraryItem? {
+        guard let activeConversationID else { return nil }
+        return library.items.first { $0.id == activeConversationID && $0.isConversation }
+    }
+
+    private var activeConversationLiveText: String? {
+        guard let activeConversationID else { return nil }
+        return controller.conversationLiveText[activeConversationID]
+    }
+
+    private var activeConversationRunning: Bool {
+        guard let activeConversationID else { return false }
+        return controller.runningConversationIDs.contains(activeConversationID)
     }
 
     private var readiness: ModelReadinessState {
@@ -123,6 +141,9 @@ struct StudioRootView: View {
                 StudioCanvas(
                     mode: mode,
                     item: selectedItem,
+                    conversationItem: activeConversationItem,
+                    conversationLiveText: activeConversationLiveText,
+                    isConversationRunning: activeConversationRunning,
                     isRunning: controller.isRunning,
                     status: displayStatus,
                     readiness: readiness,
@@ -133,7 +154,10 @@ struct StudioRootView: View {
                     onOpen: openSelectedOutput,
                     onReveal: revealSelectedOutput,
                     onPullModel: pullModel,
-                    onShowDetails: { showAdvanced = true }
+                    onShowDetails: { showAdvanced = true },
+                    onNewChat: startNewConversation,
+                    onCopy: copyToClipboard,
+                    onRetry: retryLastTurn
                 )
 
                 StudioPromptBar(
@@ -143,6 +167,7 @@ struct StudioRootView: View {
                     isRunning: controller.isRunning,
                     queuedCount: controller.queuedRunCount,
                     readiness: readiness,
+                    sendBlocked: mode.isConversational && activeConversationRunning,
                     onRun: runStudioCommand,
                     onStop: controller.cancel,
                     onAttach: chooseAttachment
@@ -216,8 +241,30 @@ struct StudioRootView: View {
             nextDraft.reset(for: newMode)
             draft = nextDraft
             studioError = nil
-            selectedLibraryID = library.items.first { $0.mode == newMode }?.id
+            if newMode.isConversational {
+                // Open the most recent thread for this mode (or a fresh one) and reuse its
+                // system/model so follow-ups match; the composer starts empty.
+                let latest = library.items.first { $0.mode == newMode && $0.isConversation }
+                activeConversationID = latest?.id
+                selectedLibraryID = latest?.id
+                if let latest { applyConversationSettings(from: latest, to: &draft) }
+                draft.prompt = ""
+            } else {
+                activeConversationID = nil
+                selectedLibraryID = library.items.first { $0.mode == newMode }?.id
+            }
             controller.checkReadiness(for: newMode, draft: nextDraft)
+        }
+        .onChange(of: selectedLibraryID) { _, id in
+            // Selecting a thread of the current conversation mode opens it in the canvas.
+            guard mode.isConversational,
+                  let id,
+                  let item = library.items.first(where: { $0.id == id }),
+                  item.isConversation, item.mode == mode,
+                  id != activeConversationID else { return }
+            activeConversationID = id
+            applyConversationSettings(from: item, to: &draft)
+            draft.prompt = ""
         }
         .onChange(of: draft.model) { _, _ in
             studioError = nil
@@ -248,8 +295,26 @@ struct StudioRootView: View {
             studioError = nil
             refreshReadiness()
         }
-        .onChange(of: controller.lastRunResult) { _, result in
-            guard let result else { return }
+        .onReceive(controller.runCompletions) { result in
+            // Subscribe to the lossless completion stream, not lastRunResult: two runs finishing
+            // in the same runloop turn would coalesce through onChange and drop one.
+
+            // Conversation turns append the assistant reply to the thread instead of taking the
+            // single-shot completion path.
+            if let conversationID = result.conversationID {
+                library.appendAssistant(
+                    conversationID: conversationID,
+                    content: conversationReplyContent(for: result),
+                    exitCode: result.exitCode
+                )
+                // Only follow selection if this is the thread the user is currently viewing — a
+                // background turn completing must not yank selection away from the foreground.
+                if mode.isConversational, activeConversationID == conversationID {
+                    selectedLibraryID = conversationID
+                }
+                refreshReadiness()
+                return
+            }
 
             let completedLibraryItem = result.requestID != nil
             if let requestID = result.requestID {
@@ -275,12 +340,15 @@ struct StudioRootView: View {
             }
         }
         .onChange(of: controller.activeRunRequestID) { _, requestID in
-            guard let requestID else { return }
+            // Conversation turns use a per-turn request id with no matching library row, so the
+            // guard keeps the thread selected instead of deselecting it.
+            guard let requestID, library.items.contains(where: { $0.id == requestID }) else { return }
             library.markRunning(id: requestID)
             selectedLibraryID = requestID
         }
         .onChange(of: controller.lastOutputURL) { _, outputURL in
-            guard let requestID = controller.activeRunRequestID, let outputURL else { return }
+            guard let requestID = controller.activeRunRequestID, let outputURL,
+                  library.items.contains(where: { $0.id == requestID }) else { return }
             library.updateOutput(id: requestID, outputURL: outputURL)
             selectedLibraryID = requestID
         }
@@ -304,6 +372,11 @@ struct StudioRootView: View {
             return
         }
 
+        if mode.isConversational {
+            sendConversationTurn()
+            return
+        }
+
         do {
             let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
             let preview = controller
@@ -315,6 +388,102 @@ struct StudioRootView: View {
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Sends one chat/code turn: appends the user message to the thread (creating it on the first
+    /// turn), serializes history into the prompt, and runs it routed back to the conversation.
+    private func sendConversationTurn() {
+        let content = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+
+        let conversationID = activeConversationID ?? UUID()
+        // One in-flight turn per thread keeps turns ordered.
+        guard !controller.runningConversationIDs.contains(conversationID) else { return }
+
+        let systemPrompt = draft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = draft.model.isBlank ? nil : draft.model
+        let item = library.appendUser(
+            conversationID: conversationID,
+            mode: mode,
+            model: model,
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
+            content: content
+        )
+
+        let rendered = ConversationTranscript.render(
+            messages: item.messages ?? [],
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+        )
+
+        do {
+            var runDraft = draft
+            runDraft.prompt = rendered.prompt
+            let request = try StudioCommandAdapter.makeRequest(
+                mode: mode, draft: runDraft, conversationID: conversationID
+            )
+            controller.run(studio: request)
+            activeConversationID = conversationID
+            selectedLibraryID = conversationID
+            draft.prompt = ""
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    private func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    /// Re-runs the latest turn: drops the last assistant reply (if any) and re-sends the thread
+    /// ending at the last user message, reusing the thread's own system prompt and model.
+    private func retryLastTurn() {
+        guard let conversationID = activeConversationID,
+              !controller.runningConversationIDs.contains(conversationID) else { return }
+        library.dropLastAssistant(conversationID: conversationID)
+        guard let item = library.items.first(where: { $0.id == conversationID }),
+              item.messages?.last?.role == .user else { return }
+
+        let systemPrompt = item.systemPrompt
+        let rendered = ConversationTranscript.render(
+            messages: item.messages ?? [],
+            systemPrompt: systemPrompt
+        )
+        do {
+            var runDraft = draft
+            runDraft.prompt = rendered.prompt
+            runDraft.secondaryText = systemPrompt ?? ""
+            if let model = item.model, !model.isBlank { runDraft.model = model }
+            let request = try StudioCommandAdapter.makeRequest(
+                mode: item.mode, draft: runDraft, conversationID: conversationID
+            )
+            controller.run(studio: request)
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).
+    private func startNewConversation() {
+        activeConversationID = nil
+        selectedLibraryID = nil
+        studioError = nil
+        var fresh = StudioDraft()
+        fresh.reset(for: mode)
+        fresh.prompt = ""
+        draft = fresh
+    }
+
+    private func applyConversationSettings(from item: StudioLibraryItem, to draft: inout StudioDraft) {
+        if let systemPrompt = item.systemPrompt { draft.secondaryText = systemPrompt }
+        if let model = item.model, !model.isBlank { draft.model = model }
+    }
+
+    private func conversationReplyContent(for result: MereRunRunResult) -> String {
+        let text = result.outputText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !text.isEmpty { return text }
+        return result.exitCode == 0 ? "(No output.)" : "Run failed (exit code \(result.exitCode))."
     }
 
     private func pullModel() {
@@ -598,6 +767,9 @@ private struct StudioInlineBanner: View {
 private struct StudioCanvas: View {
     let mode: StudioMode
     let item: StudioLibraryItem?
+    let conversationItem: StudioLibraryItem?
+    let conversationLiveText: String?
+    let isConversationRunning: Bool
     let isRunning: Bool
     let status: String
     let readiness: ModelReadinessState
@@ -609,6 +781,9 @@ private struct StudioCanvas: View {
     let onReveal: () -> Void
     let onPullModel: () -> Void
     let onShowDetails: () -> Void
+    let onNewChat: () -> Void
+    let onCopy: (String) -> Void
+    let onRetry: () -> Void
 
     private var visibleLiveOutputText: String? {
         guard isRunning else { return nil }
@@ -628,7 +803,18 @@ private struct StudioCanvas: View {
 
     var body: some View {
         ZStack {
-            if let item {
+            if mode.isConversational {
+                StudioConversationView(
+                    item: conversationItem,
+                    liveText: conversationLiveText,
+                    isRunning: isConversationRunning,
+                    mode: mode,
+                    onNewChat: onNewChat,
+                    onCopy: onCopy,
+                    onRetry: onRetry
+                )
+                .transition(.opacity)
+            } else if let item {
                 StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal)
                     .padding(32)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -637,7 +823,7 @@ private struct StudioCanvas: View {
                     .padding(32)
             }
 
-            if isRunning && visibleLiveOutputText == nil {
+            if isRunning && visibleLiveOutputText == nil && !mode.isConversational {
                 StudioRunningOverlay(status: status, progress: progress, recentLogs: recentLogLines)
                     .transition(.opacity)
             }
@@ -1041,6 +1227,7 @@ private struct StudioPromptBar: View {
     let isRunning: Bool
     let queuedCount: Int
     let readiness: ModelReadinessState
+    var sendBlocked: Bool = false
     let onRun: () -> Void
     let onStop: () -> Void
     let onAttach: () -> Void
@@ -1122,8 +1309,8 @@ private struct StudioPromptBar: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(readiness.blocksRun)
-                .help(runButtonHelp)
+                .disabled(readiness.blocksRun || sendBlocked)
+                .help(sendBlocked ? "Waiting for the current reply…" : runButtonHelp)
                 .accessibilityLabel(isRunning ? "Queue run" : "Run")
                 .keyboardShortcut(.return, modifiers: .command)
             }

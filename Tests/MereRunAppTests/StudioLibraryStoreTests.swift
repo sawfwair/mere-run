@@ -127,6 +127,84 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    func testConversationAppendsBuildOrderedThreadAndPersist() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: "text-chat-gemma4",
+            systemPrompt: "You are helpful.", content: "hi"
+        )
+        store.appendAssistant(conversationID: conversationID, content: "hello", exitCode: 0)
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: "text-chat-gemma4",
+            systemPrompt: "You are helpful.", content: "and now?"
+        )
+
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(reloaded.items.count, 1)
+        let item = try XCTUnwrap(reloaded.items.first)
+        XCTAssertEqual(item.messages?.map(\.role), [.user, .assistant, .user])
+        XCTAssertEqual(item.messages?.map(\.content), ["hi", "hello", "and now?"])
+        XCTAssertEqual(item.systemPrompt, "You are helpful.")
+        XCTAssertEqual(item.model, "text-chat-gemma4")
+        XCTAssertEqual(item.displayTitle, "hi")
+    }
+
+    func testFailedAssistantTurnIsMarkedButThreadKept() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi"
+        )
+        store.appendAssistant(conversationID: conversationID, content: "boom", exitCode: 1)
+
+        XCTAssertEqual(store.items.count, 1)
+        let item = try XCTUnwrap(store.items.first)
+        XCTAssertEqual(item.status, .failed)
+        XCTAssertEqual(item.messages?.last?.failed, true)
+    }
+
+    func testAppendAssistantOnUnknownConversationIsNoOp() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        store.appendAssistant(conversationID: UUID(), content: "orphan", exitCode: 0)
+        XCTAssertTrue(store.items.isEmpty)
+    }
+
+    func testDropLastAssistantEnablesRetry() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi"
+        )
+        store.appendAssistant(conversationID: conversationID, content: "wrong", exitCode: 0)
+        store.dropLastAssistant(conversationID: conversationID)
+
+        XCTAssertEqual(store.items.first?.messages?.map(\.role), [.user])
+    }
+
+    func testLoadKeepsValidRowsWhenOneIsCorrupt() throws {
+        let url = try temporaryLibraryURL()
+        let good = """
+        {"id":"\(UUID().uuidString)","mode":"chat","prompt":"keep me",\
+        "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z",\
+        "status":"completed","commandPreview":"mere.run text chat"}
+        """
+        let bad = #"{"mode":"chat","prompt":"missing required fields"}"#
+        let json = "[\(good),\(bad)]"
+        try XCTUnwrap(json.data(using: .utf8)).write(to: url)
+
+        let store = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.prompt, "keep me")
+        // The file is intact (not moved to corrupt-recovery) since the array itself parsed.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
     private func temporaryLibraryURL() throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-app-tests-\(UUID().uuidString)", isDirectory: true)

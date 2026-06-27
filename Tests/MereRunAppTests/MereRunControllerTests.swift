@@ -1,4 +1,5 @@
 @testable import MereRunApp
+import Combine
 import Foundation
 import XCTest
 
@@ -245,6 +246,197 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.queuedRunCount, 0)
         XCTAssertEqual(runner.starts.count, 3)
         XCTAssertEqual(runner.starts[2].configuration.arguments, ["third"])
+    }
+
+    func testQueuedConversationTurnIsTrackedInFlightAtSubmission() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String, _ conversationID: UUID) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(
+                mode: .chat, templateID: .custom, template: template, draft: draft,
+                conversationID: conversationID
+            )
+        }
+        let queued = UUID()
+        XCTAssertTrue(controller.run(studio: request("a", UUID())))
+        XCTAssertTrue(controller.run(studio: request("b", UUID())))
+        XCTAssertTrue(controller.run(studio: request("c", queued)))
+        // The third turn queues behind the cap but is still tracked in-flight, so a second send
+        // into that thread is blocked and a pending bubble can show.
+        XCTAssertEqual(controller.queuedRunCount, 1)
+        XCTAssertTrue(controller.runningConversationIDs.contains(queued))
+    }
+
+    func testConcurrentCompletionsAreAllDeliveredLosslessly() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var received: [UUID] = []
+        let cancellable = controller.runCompletions.sink { result in
+            if let conversationID = result.conversationID { received.append(conversationID) }
+        }
+        defer { cancellable.cancel() }
+        func request(_ conversationID: UUID) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = "x"
+            return StudioRunRequest(
+                mode: .chat, templateID: .custom, template: template, draft: draft,
+                conversationID: conversationID
+            )
+        }
+        let first = UUID()
+        let second = UUID()
+        XCTAssertTrue(controller.run(studio: request(first)))
+        XCTAssertTrue(controller.run(studio: request(second)))
+
+        // Both finish back-to-back; the lossless stream must deliver both (lastRunResult alone
+        // would coalesce to the latter).
+        runner.starts[0].termination(0)
+        runner.starts[1].termination(0)
+        for _ in 0..<6 { await Task.yield() }
+        XCTAssertEqual(Set(received), [first, second])
+    }
+
+    func testFailedConversationTurnReplyIsThinkStripped() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "x"
+        let conversationID = UUID()
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+        XCTAssertTrue(controller.run(studio: request))
+        runner.starts[0].stdout("<think>oops</think>partial reply")
+        await Task.yield()
+        runner.starts[0].termination(1)
+        await Task.yield()
+        await Task.yield()
+        // Even on failure the reply is think-stripped (no leak into the next turn's prompt).
+        XCTAssertEqual(controller.lastRunResult?.exitCode, 1)
+        XCTAssertEqual(controller.lastRunResult?.outputText, "partial reply")
+    }
+
+    func testConversationIDFlowsToResultAndTracksInFlight() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        let conversationID = UUID()
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(controller.runningConversationIDs.contains(conversationID))
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(controller.lastRunResult?.conversationID, conversationID)
+        XCTAssertFalse(controller.runningConversationIDs.contains(conversationID))
+    }
+
+    func testQueuedConversationTurnStillCarriesConversationID() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String, _ conversationID: UUID) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(
+                mode: .chat, templateID: .custom, template: template, draft: draft,
+                conversationID: conversationID
+            )
+        }
+        let queuedConversation = UUID()
+        // Fill the concurrency cap, then a third turn queues.
+        XCTAssertTrue(controller.run(studio: request("a", UUID())))
+        XCTAssertTrue(controller.run(studio: request("b", UUID())))
+        XCTAssertTrue(controller.run(studio: request("c", queuedConversation)))
+        XCTAssertEqual(controller.queuedRunCount, 1)
+
+        // Freeing a slot dequeues the third turn — it must still carry its conversation id.
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(runner.starts.count, 3)
+        XCTAssertTrue(controller.runningConversationIDs.contains(queuedConversation))
+
+        runner.starts[2].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(controller.lastRunResult?.conversationID, queuedConversation)
+    }
+
+    func testConversationReplyKeepsFullOutputBeyondConsoleBuffer() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let conversationID = UUID()
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+        XCTAssertTrue(controller.run(studio: request))
+
+        // A reply far larger than the 32 KB console buffer must survive in full for the thread.
+        let head = String(repeating: "A", count: 40_000)
+        let tail = "TAIL-MARKER"
+        runner.starts[0].stdout(head + tail)
+        await Task.yield()
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        let captured = try XCTUnwrap(controller.lastRunResult?.outputText)
+        XCTAssertEqual(controller.lastRunResult?.conversationID, conversationID)
+        XCTAssertGreaterThan(captured.count, 39_000)
+        XCTAssertTrue(captured.hasSuffix(tail))
+        XCTAssertTrue(captured.hasPrefix("A"))
+    }
+
+    func testConversationReplyStripsThinkTagsLiveAndFinal() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let conversationID = UUID()
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+        XCTAssertTrue(controller.run(studio: request))
+
+        runner.starts[0].stdout("<think>deliberating</think>Final answer.")
+        await Task.yield()
+        // Live, think-stripped text is published for the streaming bubble.
+        XCTAssertEqual(controller.conversationLiveText[conversationID], "Final answer.")
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(controller.lastRunResult?.outputText, "Final answer.")
+        // Cleared once finalized so the bubble switches to the persisted message.
+        XCTAssertNil(controller.conversationLiveText[conversationID])
     }
 
     func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {

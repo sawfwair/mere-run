@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Combine
 import Foundation
 import UserNotifications
 
@@ -384,6 +385,9 @@ struct MereRunRunResult: Identifiable, Equatable {
     let outputURL: URL?
     let outputText: String?
     let completedAt: Date
+    /// When this run was a chat/code turn, the conversation it belongs to (so completion routes
+    /// to the thread rather than the legacy single-result path).
+    let conversationID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -393,7 +397,8 @@ struct MereRunRunResult: Identifiable, Equatable {
         exitCode: Int32,
         outputURL: URL?,
         outputText: String?,
-        completedAt: Date = Date()
+        completedAt: Date = Date(),
+        conversationID: UUID? = nil
     ) {
         self.id = id
         self.requestID = requestID
@@ -403,6 +408,7 @@ struct MereRunRunResult: Identifiable, Equatable {
         self.outputURL = outputURL
         self.outputText = outputText
         self.completedAt = completedAt
+        self.conversationID = conversationID
     }
 }
 
@@ -432,7 +438,18 @@ final class MereRunController: ObservableObject {
     @Published var resolvedCLI = ""
     @Published var lastOutputURL: URL?
     @Published var lastRunResult: MereRunRunResult?
+    /// Lossless completion stream. `lastRunResult` coalesces — two runs finishing in the same
+    /// runloop turn would deliver only the latest via onChange — so must-deliver side effects
+    /// (appending a chat reply, completing a library row) subscribe here and get every result.
+    let runCompletions = PassthroughSubject<MereRunRunResult, Never>()
     @Published private(set) var activeRunRequestID: UUID?
+    /// Conversation ids with a turn currently in flight. Tracked across ALL sessions (not just
+    /// the foreground one) so the UI can disable a thread's composer and stream into the right
+    /// thread even when a different conversation is in the foreground.
+    @Published private(set) var runningConversationIDs: Set<UUID> = []
+    /// Live, think-stripped assistant text per in-flight conversation, so a streaming bubble can
+    /// render even for a background conversation (the foreground-only liveOutputText cannot).
+    @Published private(set) var conversationLiveText: [UUID: String] = [:]
     @Published private(set) var queuedRunCount = 0
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
     @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
@@ -502,6 +519,9 @@ final class MereRunController: ObservableObject {
     private static let stderrBufferByteLimit = 32 * 1024
     private static let outputDetectionLineLimit = 40
     private static let logLineLimit = 1200
+    /// Min growth in a conversation reply before the live think-stripped text is re-published,
+    /// bounding per-chunk re-strip cost. The final reply is always published in full on finish.
+    private static let liveStripGranularity = 80
     /// Conservative cap on simultaneous runs. ML inference is memory-heavy, so this stays small;
     /// it is the single knob for how many runs may execute at once before further ones queue.
     static let maxConcurrentRuns = 2
@@ -678,6 +698,7 @@ final class MereRunController: ObservableObject {
         let template: CommandTemplate
         let draft: CommandDraft
         let requestID: UUID?
+        var conversationID: UUID? = nil
     }
 
     /// All mutable state for a single in-flight run, isolated so concurrent runs never clobber
@@ -692,6 +713,12 @@ final class MereRunController: ObservableObject {
         var process: MereRunRunningProcess?
         var stdoutBuffer = ""
         var stderrBuffer = ""
+        /// Unbounded stdout accumulator for conversation turns only (chat/code), so a long reply
+        /// is captured in full — `stdoutBuffer` is capped at 32 KB for the console.
+        var fullOutput = ""
+        /// Length of `fullOutput` at the last live think-strip; used to throttle re-stripping the
+        /// whole accumulator on every chunk (it would otherwise be O(n²) over a long reply).
+        var lastLiveStripLength = 0
         var logs: [LogLine] = []
         var liveOutputText = ""
         var currentProgress: StudioRunProgress?
@@ -710,12 +737,23 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
+        // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
+        // queues behind the concurrency cap still blocks a second send into the same thread and
+        // shows a pending bubble. Idempotent with the insert in startRun; cleared on every exit.
+        if let conversationID = request.conversationID {
+            runningConversationIDs.insert(conversationID)
+        }
         guard sessions.count < Self.maxConcurrentRuns, queuedRuns.isEmpty else {
             enqueue(request)
             return true
         }
 
-        return startRun(RunSpec(template: request.template, draft: request.draft, requestID: request.id))
+        return startRun(RunSpec(
+            template: request.template,
+            draft: request.draft,
+            requestID: request.id,
+            conversationID: request.conversationID
+        ))
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
@@ -908,9 +946,14 @@ final class MereRunController: ObservableObject {
         }
 
         sessions.append(session)
+        if let conversationID = spec.conversationID {
+            runningConversationIDs.insert(conversationID)
+        }
         setForeground(session)
         append(display, stream: .system, to: session)
-        startOutputWatch(for: session)
+        if spec.conversationID == nil {
+            startOutputWatch(for: session)
+        }
 
         do {
             session.process = try processRunner.start(
@@ -1076,9 +1119,26 @@ final class MereRunController: ObservableObject {
         session.exitCode = exitCode
         session.currentProgress = nil
 
-        let detectedOutput = detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
-        let outputText = capturedResultText(for: session, exitCode: exitCode)
+        // Conversation replies are prose, not artifacts — never run output-file detection on them
+        // (a path-like substring in a reply must not become a bogus lastOutputURL/status).
+        let detectedOutput = session.spec.conversationID == nil
+            ? detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
+            : nil
+        // Conversation turns finalize from the unbounded, think-stripped accumulator so long
+        // replies are not clipped by the 32 KB console buffer; other modes use the buffer.
+        let outputText: String?
+        if session.spec.conversationID != nil {
+            // Strip reasoning for conversation turns on EVERY exit path (not just success) so
+            // <think> blocks and STDERR never leak into the next turn's replayed prompt; use the
+            // full accumulator, not the capped console buffer.
+            outputText = ConversationTranscript.stripThinkTags(session.fullOutput.replacingOccurrences(of: "\0", with: ""))
+        } else {
+            outputText = capturedResultText(for: session, exitCode: exitCode)
+        }
         if let detectedOutput { session.lastOutputURL = detectedOutput }
+        if let conversationID = session.spec.conversationID {
+            conversationLiveText[conversationID] = nil
+        }
 
         if exitCode == 0 {
             session.status = detectedOutput == nil ? "Completed" : "Completed: \(detectedOutput!.lastPathComponent)"
@@ -1108,14 +1168,21 @@ final class MereRunController: ObservableObject {
             activeRunRequestID = nil
         }
 
-        lastRunResult = MereRunRunResult(
+        if let conversationID = session.spec.conversationID {
+            runningConversationIDs.remove(conversationID)
+        }
+
+        let result = MereRunRunResult(
             requestID: session.spec.requestID,
             templateID: session.spec.template.id,
             commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: detectedOutput,
-            outputText: outputText
+            outputText: outputText,
+            conversationID: session.spec.conversationID
         )
+        lastRunResult = result
+        runCompletions.send(result)
 
         sessions.removeAll { $0.id == session.id }
         startNextQueuedRun()
@@ -1123,14 +1190,20 @@ final class MereRunController: ObservableObject {
 
     private func finishPreflightFailure(session: RunSession, exitCode: Int32, outputText: String?) {
         lastExitCode = exitCode
-        lastRunResult = MereRunRunResult(
+        if let conversationID = session.spec.conversationID {
+            runningConversationIDs.remove(conversationID)
+        }
+        let result = MereRunRunResult(
             requestID: session.spec.requestID,
             templateID: session.spec.template.id,
             commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: nil,
-            outputText: outputText
+            outputText: outputText,
+            conversationID: session.spec.conversationID
         )
+        lastRunResult = result
+        runCompletions.send(result)
         startNextQueuedRun()
     }
 
@@ -1144,7 +1217,12 @@ final class MereRunController: ObservableObject {
         guard sessions.count < Self.maxConcurrentRuns, !queuedRuns.isEmpty else { return }
         let next = queuedRuns.removeFirst()
         queuedRunCount = queuedRuns.count
-        _ = startRun(RunSpec(template: next.template, draft: next.draft, requestID: next.id))
+        _ = startRun(RunSpec(
+            template: next.template,
+            draft: next.draft,
+            requestID: next.id,
+            conversationID: next.conversationID
+        ))
     }
 
     private func startOutputWatch(for session: RunSession) {
@@ -1229,7 +1307,25 @@ final class MereRunController: ObservableObject {
             session.stdoutBuffer += text
             session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
             session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            publishDetectedOutputIfNeeded(for: session)
+            if let conversationID = session.spec.conversationID {
+                // Conversation turns accumulate the full (untrimmed) reply and publish a live,
+                // think-stripped view so a streaming bubble renders even when backgrounded. The
+                // streaming variant hides an in-progress (unclosed) reasoning block. Re-stripping
+                // the whole accumulator on every chunk is O(n²), so throttle to ~every 80 chars of
+                // growth; finishRun always publishes the complete, fully-stripped reply.
+                session.fullOutput += text
+                // Publish immediately on the first chunk (fast first render), then throttle.
+                if session.lastLiveStripLength == 0
+                    || session.fullOutput.count - session.lastLiveStripLength >= Self.liveStripGranularity {
+                    session.lastLiveStripLength = session.fullOutput.count
+                    conversationLiveText[conversationID] = ConversationTranscript.stripThinkTags(
+                        session.fullOutput.replacingOccurrences(of: "\0", with: ""),
+                        streaming: true
+                    )
+                }
+            } else {
+                publishDetectedOutputIfNeeded(for: session)
+            }
         } else if stream == .stderr {
             session.stderrBuffer += text
             session.stderrBuffer = Self.trimmed(session.stderrBuffer, toByteLimit: Self.stderrBufferByteLimit)

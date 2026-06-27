@@ -34,8 +34,11 @@ final class StudioLibraryStore: ObservableObject {
             }
 
             let data = try Data(contentsOf: libraryURL)
-            items = try JSONDecoder.mereRunApp.decode([StudioLibraryItem].self, from: data)
-                .sorted { $0.createdAt > $1.createdAt }
+            // Decode leniently per row: one un-decodable entry (e.g. written by a newer/older
+            // build) must not discard the entire history. Only a top-level parse failure (not an
+            // array at all) falls through to corrupt-file recovery.
+            let rows = try JSONDecoder.mereRunApp.decode([FailableDecodable<StudioLibraryItem>].self, from: data)
+            items = rows.compactMap(\.value).sorted { $0.createdAt > $1.createdAt }
         } catch {
             items = []
             recoverCorruptLibrary()
@@ -109,6 +112,75 @@ final class StudioLibraryStore: ObservableObject {
         save()
     }
 
+    /// Appends a user turn to a chat/code conversation, creating the thread item lazily on the
+    /// first message (so a "New chat" that is never sent leaves no empty row). System prompt and
+    /// model are captured on the item so later turns and retries replay with the same settings.
+    @discardableResult
+    func appendUser(
+        conversationID: UUID,
+        mode: StudioMode,
+        model: String?,
+        systemPrompt: String?,
+        content: String
+    ) -> StudioLibraryItem {
+        if let index = items.firstIndex(where: { $0.id == conversationID }) {
+            var item = items[index]
+            item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content)]
+            item.status = .running
+            item.updatedAt = Date()
+            items[index] = item
+            save()
+            return item
+        }
+
+        let item = StudioLibraryItem(
+            id: conversationID,
+            mode: mode,
+            prompt: "",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            status: .running,
+            exitCode: nil,
+            commandPreview: mode == .code ? "mere.run text code" : "mere.run text chat",
+            outputText: nil,
+            messages: [StudioMessage(role: .user, content: content)],
+            systemPrompt: systemPrompt,
+            model: model
+        )
+        items.insert(item, at: 0)
+        save()
+        return item
+    }
+
+    /// Appends the assistant reply for the latest turn. A non-zero exit marks the message failed
+    /// but keeps the thread so the user can retry.
+    func appendAssistant(conversationID: UUID, content: String, exitCode: Int32) {
+        guard let index = items.firstIndex(where: { $0.id == conversationID }) else { return }
+        var item = items[index]
+        var messages = item.messages ?? []
+        messages.append(StudioMessage(role: .assistant, content: content, failed: exitCode != 0))
+        item.messages = messages
+        item.status = exitCode == 0 ? .completed : .failed
+        item.exitCode = exitCode
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+    }
+
+    /// Drops the last assistant message of a thread (used by retry before re-running the turn).
+    func dropLastAssistant(conversationID: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == conversationID }) else { return }
+        var item = items[index]
+        guard var messages = item.messages, messages.last?.role == .assistant else { return }
+        messages.removeLast()
+        item.messages = messages
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+    }
+
     func delete(id: UUID) {
         items.removeAll { $0.id == id }
         save()
@@ -164,6 +236,17 @@ final class StudioLibraryStore: ObservableObject {
             .appendingPathExtension("corrupt-\(DateFormatter.mereRunTimestamp.string(from: Date()))")
             .appendingPathExtension("json")
         try? fileManager.moveItem(at: libraryURL, to: recoveryURL)
+    }
+}
+
+/// Decodes `T` if possible, otherwise resolves to nil instead of throwing — lets an array decode
+/// skip individual bad elements without losing the rest.
+private struct FailableDecodable<T: Decodable>: Decodable {
+    let value: T?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        value = try? container.decode(T.self)
     }
 }
 
