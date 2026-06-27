@@ -76,6 +76,9 @@ the adapter to learn.
   `image-klein-9b`.
 - `--lora-rank-preset flux2-style-128`: expand FLUX.2 transformer targets to
   rank `128` with alpha `64`.
+- `--lora-target-mode`: choose `suffix` for the default FLUX.2 allowlist or
+  `transformer-linear-walk` to train every transformer Linear/QuantizedLinear
+  layer.
 - `--lora-target-ranks`: custom FLUX.2 target suffix ranks, for example
   `.attn.to_q=128,.ff.linear_in=64`.
 - Klein-only recipe controls: `--timestep-sampling`, `--timestep-loss-weighting`,

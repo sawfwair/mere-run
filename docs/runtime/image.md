@@ -59,6 +59,9 @@ local equivalent model root, then use the saved adapter with Klein
 `image generate --lora`. The loader accepts mflux-format Klein transformer
 shards and maps their time-guidance weights into the Swift transformer module
 layout.
+Use `--lora-target-mode transformer-linear-walk` when you want an ai-toolkit-style
+comparison that trains every transformer Linear/QuantizedLinear layer instead
+of the default suffix allowlist.
 
 ```bash
 swift run mere.run model pull image-klein-base-9b

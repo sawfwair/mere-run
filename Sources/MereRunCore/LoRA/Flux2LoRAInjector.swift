@@ -20,6 +20,11 @@ public enum Flux2LoRAInjectionError: Error, LocalizedError {
 }
 
 public enum Flux2LoRAInjector {
+    public enum TargetMode: String, Sendable {
+        case suffix
+        case transformerLinearWalk = "transformer-linear-walk"
+    }
+
     public static let defaultTargetSuffixes: [String] = [
         // Joint blocks - attention
         ".attn.to_q",
@@ -46,6 +51,7 @@ public enum Flux2LoRAInjector {
         into transformer: Flux2Transformer2DModel,
         rank: Int,
         alpha: Float? = nil,
+        targetMode: TargetMode = .suffix,
         targetSuffixes: [String] = defaultTargetSuffixes,
         targetRanks: [String: Int]? = nil,
         zeroInitUp: Bool = false,
@@ -60,8 +66,14 @@ public enum Flux2LoRAInjector {
             }
         }
 
-        let shouldTarget: (String) -> Bool = { path in
-            targetSuffixes.contains { path.hasSuffix($0) }
+        let shouldTarget: (String, Module) -> Bool = { path, module in
+            guard module is Linear || module is QuantizedLinear else { return false }
+            switch targetMode {
+            case .suffix:
+                return targetSuffixes.contains { path.hasSuffix($0) }
+            case .transformerLinearWalk:
+                return true
+            }
         }
 
         let leafModules = transformer.leafModules().flattened()
@@ -74,7 +86,7 @@ public enum Flux2LoRAInjector {
                     guard let explicitRank = targetRanks[path] else { return 0 }
                     return explicitRank
                 }
-                guard shouldTarget(path) else { return 0 }
+                guard shouldTarget(path, module) else { return 0 }
                 return rank
             }()
             guard resolvedRank > 0 else { continue }

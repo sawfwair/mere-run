@@ -353,6 +353,7 @@ Key options:
 - `--lite`: train only attention Q/V layers to reduce memory
 - `--exclude-preview-images`
 - `--checkpoint-interval`: save intermediate Klein LoRA adapters every N steps
+- `--lora-target-mode`: `suffix` or `transformer-linear-walk`
 - `--quiet`
 
 ### `mere.run image validate`
