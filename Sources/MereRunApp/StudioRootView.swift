@@ -762,6 +762,7 @@ private struct StudioTopBar: View {
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 14)
+        .background(VisualEffectBackground())
     }
 
     private var serverStatusDetail: String {
