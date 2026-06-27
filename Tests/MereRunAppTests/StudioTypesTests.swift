@@ -120,17 +120,20 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(request.draft.model, "speech-asr-parakeet")
     }
 
-    func testReadImageBlocksUnmanagedAutoDownloadUntilCataloged() {
+    func testReadImageInspectAndCaptionAreNotGated() {
         var draft = StudioDraft()
         draft.reset(for: .readImage)
-        let expectedMessage = "Inspect uses an automatic vision-language model download "
-            + "that is not listed in the managed capability catalog yet."
 
-        XCTAssertEqual(
-            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
-            .unavailable(expectedMessage)
-        )
+        // Inspect/caption use a vision-language model the CLI auto-downloads on demand, so
+        // they are not gated by the managed capability catalog (the run proceeds and the
+        // CLI fetches the model itself).
+        draft.readImageAction = .inspect
+        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft))
 
+        draft.readImageAction = .caption
+        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft))
+
+        // OCR has a managed default model, so it remains readiness-gated.
         draft.readImageAction = .ocr
         XCTAssertEqual(
             StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
@@ -138,22 +141,68 @@ final class StudioTypesTests: XCTestCase {
         )
     }
 
-    func testReadImageUnavailableActionCannotBeBypassedWithModelOverride() throws {
+    func testReadImageModelOverrideGatesOnThatManagedModel() throws {
         var draft = StudioDraft()
         draft.reset(for: .readImage)
+        draft.readImageAction = .inspect
         draft.model = "vision-ocr-lighton"
-        let expectedMessage = "Inspect uses an automatic vision-language model download "
-            + "that is not listed in the managed capability catalog yet."
 
+        // Naming an explicit managed model gates the run on that model and makes it pullable.
         XCTAssertEqual(
             StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
-            .unavailable(expectedMessage)
+            .managedModel("vision-ocr-lighton")
         )
-        XCTAssertNil(try StudioCommandAdapter.pullRequest(for: .readImage, draft: draft))
+        let request = try XCTUnwrap(StudioCommandAdapter.pullRequest(for: .readImage, draft: draft))
+        XCTAssertEqual(request.draft.model, "vision-ocr-lighton")
     }
 
     func testUnknownReadinessBlocksRuns() {
         XCTAssertTrue(ModelReadinessState.unknown("Could not check models.").blocksRun)
+    }
+
+    func testStudioProgressParserParsesPercentBytesAndSpeed() {
+        let bytes = StudioProgressParser.parse("[image-zimage-nano] 45%  1.2 GB / 3.4 GB")
+        XCTAssertEqual(bytes?.label, "image-zimage-nano")
+        XCTAssertEqual(bytes?.fractionCompleted ?? -1, 0.45, accuracy: 0.001)
+        XCTAssertEqual(bytes?.detail, "1.2 GB / 3.4 GB")
+
+        let speed = StudioProgressParser.parse("[m] 10%  (45 MB/s)")
+        XCTAssertEqual(speed?.fractionCompleted ?? -1, 0.10, accuracy: 0.001)
+
+        // Non-progress lines are not misclassified.
+        XCTAssertNil(StudioProgressParser.parse("just a normal log line"))
+        XCTAssertNil(StudioProgressParser.parse("[info] starting up"))
+    }
+
+    func testSfxStudioModeBuildsGenerateCommand() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .sfx)
+        draft.prompt = "thunder clap"
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .sfx, draft: draft)
+        XCTAssertEqual(request.templateID, .sfxGenerate)
+        let args = request.template.arguments(from: request.draft)
+        XCTAssertEqual(Array(args.prefix(2)), ["sfx", "generate"])
+        XCTAssertTrue(args.contains("thunder clap"))
+        XCTAssertTrue(args.contains("--duration"))
+    }
+
+    func testSpeechCloneFlagsBuildWhenCloneMode() {
+        guard let template = CommandCatalog.template(id: .speechSynthesize) else {
+            return XCTFail("missing speechSynthesize template")
+        }
+        var draft = template.defaultDraft()
+        draft.prompt = "hello"
+        draft.voiceMode = "clone"
+        draft.refAudioPath = "/tmp/voice.wav"
+        draft.saveProfileName = "narrator"
+
+        let args = template.arguments(from: draft)
+        XCTAssertTrue(args.contains("--mode"))
+        XCTAssertTrue(args.contains("clone"))
+        XCTAssertTrue(args.contains("--ref-audio"))
+        XCTAssertTrue(args.contains("/tmp/voice.wav"))
+        XCTAssertTrue(args.contains("--save-profile"))
     }
 
     func testStudioModelInventoryParserFindsDownloadedRows() {

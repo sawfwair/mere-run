@@ -14,10 +14,16 @@ struct StudioRootView: View {
     @State private var selectedLibraryID: UUID?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var studioError: String?
+    @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
+    @State private var showWelcome = false
 
     private var selectedItem: StudioLibraryItem? {
-        guard let selectedLibraryID else { return library.items.first }
-        return library.items.first { $0.id == selectedLibraryID }
+        if let selectedLibraryID, let found = library.items.first(where: { $0.id == selectedLibraryID }) {
+            return found
+        }
+        // Fall back to the most recent run for the active mode so switching modes never
+        // leaves an unrelated mode's output on the canvas.
+        return library.items.first { $0.mode == mode }
     }
 
     private var readiness: ModelReadinessState {
@@ -75,7 +81,14 @@ struct StudioRootView: View {
                 StudioLibraryPanel(
                     items: library.items,
                     selectedID: $selectedLibraryID,
-                    isVisible: $showLibrary
+                    isVisible: $showLibrary,
+                    onDelete: { id in
+                        library.delete(id: id)
+                        if selectedLibraryID == id { selectedLibraryID = nil }
+                    },
+                    onRename: { id, title in
+                        library.rename(id: id, title: title)
+                    }
                 )
                 .frame(width: 292)
 
@@ -97,6 +110,16 @@ struct StudioRootView: View {
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.45))
 
+                if let persistenceError = library.lastPersistenceError {
+                    StudioInlineBanner(
+                        text: "Run history not saved: \(persistenceError)",
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: MereRunTheme.yellow
+                    )
+                    .padding(.horizontal, 24)
+                    .padding(.top, 10)
+                }
+
                 StudioCanvas(
                     mode: mode,
                     item: selectedItem,
@@ -106,6 +129,7 @@ struct StudioRootView: View {
                     error: studioError,
                     logs: controller.logs,
                     liveOutputText: controller.liveOutputText,
+                    progress: controller.currentProgress,
                     onOpen: openSelectedOutput,
                     onReveal: revealSelectedOutput,
                     onPullModel: pullModel,
@@ -127,6 +151,14 @@ struct StudioRootView: View {
                 .padding(.bottom, 22)
             }
             .frame(minWidth: 680)
+            .dropDestination(for: URL.self) { urls, _ in
+                guard !mode.acceptedTypes.isEmpty, let url = urls.first(where: \.isFileURL) else {
+                    return false
+                }
+                draft.inputPath = url.path
+                studioError = nil
+                return true
+            }
 
             if showAdvanced {
                 Divider()
@@ -158,15 +190,33 @@ struct StudioRootView: View {
             StudioModelsSheet(onModelsChanged: refreshReadiness)
                 .environmentObject(controller)
         }
+        .sheet(isPresented: $showWelcome) {
+            StudioWelcomeSheet(
+                resolvedCLI: controller.resolvedCLI,
+                onBrowseModels: {
+                    hasCompletedWelcome = true
+                    showWelcome = false
+                    showModels = true
+                },
+                onDone: {
+                    hasCompletedWelcome = true
+                    showWelcome = false
+                }
+            )
+        }
         .onAppear {
             draft.reset(for: mode)
             controller.checkReadiness(for: mode, draft: draft)
+            if !hasCompletedWelcome {
+                showWelcome = true
+            }
         }
         .onChange(of: mode) { _, newMode in
             var nextDraft = StudioDraft()
             nextDraft.reset(for: newMode)
             draft = nextDraft
             studioError = nil
+            selectedLibraryID = library.items.first { $0.mode == newMode }?.id
             controller.checkReadiness(for: newMode, draft: nextDraft)
         }
         .onChange(of: draft.model) { _, _ in
@@ -516,6 +566,35 @@ private struct StudioStatusPill: View {
     }
 }
 
+private struct StudioInlineBanner: View {
+    let text: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+            Text(text)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(tint.opacity(0.12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+                }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct StudioCanvas: View {
     let mode: StudioMode
     let item: StudioLibraryItem?
@@ -525,6 +604,7 @@ private struct StudioCanvas: View {
     let error: String?
     let logs: [LogLine]
     let liveOutputText: String
+    let progress: StudioRunProgress?
     let onOpen: () -> Void
     let onReveal: () -> Void
     let onPullModel: () -> Void
@@ -558,7 +638,7 @@ private struct StudioCanvas: View {
             }
 
             if isRunning && visibleLiveOutputText == nil {
-                StudioRunningOverlay(status: status, recentLogs: recentLogLines)
+                StudioRunningOverlay(status: status, progress: progress, recentLogs: recentLogLines)
                     .transition(.opacity)
             }
 
@@ -611,14 +691,42 @@ private struct StudioEmptyState: View {
 
 private struct StudioRunningOverlay: View {
     let status: String
+    let progress: StudioRunProgress?
     let recentLogs: [String]
 
     var body: some View {
         VStack(spacing: 14) {
-            ProgressView()
-                .controlSize(.large)
-            Text(status)
+            if let progress, let fraction = progress.fractionCompleted {
+                VStack(spacing: 6) {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(MereRunTheme.accent)
+                        .frame(width: 320)
+                    HStack {
+                        Text(progress.label)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(Int((fraction * 100).rounded()))%")
+                    }
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .frame(width: 320)
+                    if let detail = progress.detail {
+                        Text(detail)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+            } else {
+                ProgressView()
+                    .controlSize(.large)
+            }
+            Text(progress?.detail != nil && progress?.fractionCompleted == nil
+                ? "\(status) · \(progress?.detail ?? "")"
+                : status)
                 .font(.system(size: 18, weight: .semibold))
+                .multilineTextAlignment(.center)
             if !recentLogs.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(recentLogs.enumerated()), id: \.offset) { _, line in
@@ -730,7 +838,7 @@ private struct StudioOutputView: View {
                     Button {
                         onReveal()
                     } label: {
-                        Image(systemName: "finder")
+                        Image(systemName: "magnifyingglass")
                     }
                     .buttonStyle(.bordered)
                     .help("Reveal in Finder")
@@ -751,6 +859,10 @@ private struct StudioOutputView: View {
                     fallbackSystemImage: iconName(for: url)
                 )
                 .padding(22)
+            case .audio:
+                StudioAudioPlayerView(url: url)
+            case .video:
+                StudioVideoPlayerView(url: url)
             case .text:
                 StudioTextFilePreview(url: url)
             case .other:
@@ -960,6 +1072,7 @@ private struct StudioPromptBar: View {
                 .buttonStyle(.plain)
                 .disabled(mode.acceptedTypes.isEmpty)
                 .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
+                .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
 
                 if mode == .listen {
                     Text(mode.promptPlaceholder)
@@ -982,6 +1095,7 @@ private struct StudioPromptBar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Options")
+                .accessibilityLabel("Options")
 
                 if isRunning {
                     Button(action: onStop) {
@@ -992,6 +1106,7 @@ private struct StudioPromptBar: View {
                     }
                     .buttonStyle(.plain)
                     .help("Stop current run")
+                    .accessibilityLabel("Stop current run")
                 }
 
                 Button {
@@ -1009,6 +1124,7 @@ private struct StudioPromptBar: View {
                 .buttonStyle(.plain)
                 .disabled(readiness.blocksRun)
                 .help(runButtonHelp)
+                .accessibilityLabel(isRunning ? "Queue run" : "Run")
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 14)
@@ -1037,6 +1153,84 @@ private struct StudioPromptBar: View {
             return queueLabel
         }
         return "Run"
+    }
+}
+
+private struct StudioWelcomeSheet: View {
+    let resolvedCLI: String
+    let onBrowseModels: () -> Void
+    let onDone: () -> Void
+
+    private let highlights: [(String, String, String)] = [
+        ("photo", "Create locally", "Images, video, music, sound effects, and speech — all on-device."),
+        ("bubble.left.and.bubble.right", "Chat & code", "Run local language models for chat, code, OCR, and vision."),
+        ("lock.shield", "Private by default", "Nothing leaves your Mac. The app drives the public mere.run CLI underneath.")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Welcome to mere.run")
+                    .font(.system(size: 26, weight: .bold))
+                Text("Create anything. Locally.")
+                    .font(MereRunTheme.bodyFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(Array(highlights.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: item.0)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(MereRunTheme.accent)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.1)
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(item.2)
+                                .font(MereRunTheme.captionFont)
+                                .foregroundStyle(MereRunTheme.textMuted)
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "terminal")
+                    .foregroundStyle(MereRunTheme.accent)
+                Text(resolvedCLI)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+            }
+            .padding(10)
+            .merePanel()
+
+            Text("First, download a model for the mode you want. Models open the catalog where you can pull and manage local models.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+
+            HStack(spacing: 10) {
+                Button {
+                    onBrowseModels()
+                } label: {
+                    Label("Browse models", systemImage: "shippingbox")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+
+                Button("Get started") {
+                    onDone()
+                }
+                .buttonStyle(.bordered)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 460)
+        .background(MereRunTheme.background)
+        .foregroundStyle(MereRunTheme.textPrimary)
     }
 }
 
@@ -1092,18 +1286,18 @@ private struct StudioOptionsSheet: View {
                 }
             }
 
-            if [.createImage, .music].contains(mode) {
+            if [.createImage, .music, .sfx].contains(mode) {
                 Stepper("Steps \(draft.steps)", value: $draft.steps, in: 1...80, step: 1)
             }
 
-            if mode == .music {
+            if [.music, .sfx].contains(mode) {
                 TextField("Duration seconds", value: $draft.durationSeconds, format: .number)
                     .textFieldStyle(.plain)
                     .padding(10)
                     .merePanel()
             }
 
-            if [.createImage, .music, .video].contains(mode) {
+            if [.createImage, .music, .video, .sfx].contains(mode) {
                 TextField("Seed", text: $draft.seed)
                     .textFieldStyle(.plain)
                     .padding(10)
@@ -1151,61 +1345,137 @@ private struct StudioLibraryPanel: View {
     let items: [StudioLibraryItem]
     @Binding var selectedID: UUID?
     @Binding var isVisible: Bool
+    let onDelete: (UUID) -> Void
+    let onRename: (UUID, String) -> Void
+
+    @State private var searchText = ""
+    @State private var renamingID: UUID?
+    @State private var renameText = ""
+
+    private var filteredItems: [StudioLibraryItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return items }
+        return items.filter { item in
+            item.displayTitle.lowercased().contains(query)
+                || item.mode.title.lowercased().contains(query)
+                || item.prompt.lowercased().contains(query)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Library")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text("\(items.count) local runs")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                }
-                Spacer()
-                Button {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        isVisible = false
-                    }
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(18)
+            header
 
             Divider()
                 .overlay(MereRunTheme.border.opacity(0.55))
 
-            if items.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "rectangle.stack")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(MereRunTheme.textMuted)
-                    Text("Runs you create will land here.")
-                        .font(MereRunTheme.bodyFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(22)
+            searchField
+
+            if filteredItems.isEmpty {
+                emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(items) { item in
-                            StudioLibraryRow(
-                                item: item,
-                                isSelected: selectedID == item.id
-                            ) {
-                                selectedID = item.id
-                            }
-                        }
-                    }
-                    .padding(12)
-                }
+                list
             }
         }
         .background(MereRunTheme.background)
+        .alert("Rename run", isPresented: renameBinding) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                if let renamingID { onRename(renamingID, renameText) }
+                renamingID = nil
+            }
+            Button("Cancel", role: .cancel) { renamingID = nil }
+        }
+    }
+
+    private var renameBinding: Binding<Bool> {
+        Binding(get: { renamingID != nil }, set: { if !$0 { renamingID = nil } })
+    }
+
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Library")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("\(items.count) local runs")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            Spacer()
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    isVisible = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hide library")
+        }
+        .padding(18)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(MereRunTheme.textMuted)
+            TextField("Search runs", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(MereRunTheme.bodyFont)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(10)
+        .merePanel()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "rectangle.stack")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textMuted)
+            Text(items.isEmpty ? "Runs you create will land here." : "No matching runs.")
+                .font(MereRunTheme.bodyFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(22)
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                ForEach(filteredItems) { item in
+                    StudioLibraryRow(
+                        item: item,
+                        isSelected: selectedID == item.id
+                    ) {
+                        selectedID = item.id
+                    }
+                    .contextMenu {
+                        Button("Rename") {
+                            renameText = item.displayTitle
+                            renamingID = item.id
+                        }
+                        Button("Delete", role: .destructive) {
+                            onDelete(item.id)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+        }
     }
 }
 

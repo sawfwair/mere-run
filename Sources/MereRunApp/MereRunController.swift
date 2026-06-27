@@ -1,5 +1,47 @@
 import AppKit
+import AVFoundation
 import Foundation
+import UserNotifications
+
+/// Decodes a byte stream into UTF-8 incrementally, retaining any incomplete trailing
+/// multibyte sequence until the next read so codepoints split across pipe reads are
+/// never dropped. Each stream owns its own decoder; the readability queue is serial
+/// per file handle, so no locking is required within a single stream.
+private final class IncrementalUTF8Decoder: @unchecked Sendable {
+    private var buffer = Data()
+    private static let lossyFlushThreshold = 1 << 20
+
+    func push(_ data: Data) -> String? {
+        buffer.append(data)
+        guard !buffer.isEmpty else { return nil }
+
+        // A well-formed UTF-8 stream only fails to decode when the final codepoint is
+        // truncated (at most 3 trailing bytes). Trim up to 3 bytes to find the boundary.
+        let maxBackoff = min(3, buffer.count)
+        for back in 0...maxBackoff {
+            let length = buffer.count - back
+            guard length > 0 else { break }
+            if let decoded = String(data: buffer.prefix(length), encoding: .utf8) {
+                buffer.removeFirst(length)
+                return decoded.isEmpty ? nil : decoded
+            }
+        }
+
+        // Genuinely malformed mid-stream bytes (should not happen from the CLI): avoid
+        // unbounded buffering by flushing lossily once the backlog grows too large.
+        if buffer.count > Self.lossyFlushThreshold {
+            return flush()
+        }
+        return nil
+    }
+
+    func flush() -> String? {
+        guard !buffer.isEmpty else { return nil }
+        let decoded = String(decoding: buffer, as: UTF8.self)
+        buffer.removeAll(keepingCapacity: false)
+        return decoded.isEmpty ? nil : decoded
+    }
+}
 
 enum LogStream {
     case system
@@ -38,7 +80,7 @@ enum MereRunLaunch: Equatable {
     var sourceDescription: String {
         switch self {
         case .executable(let url):
-            if Bundle.main.resourceURL.map({ url.path.hasPrefix($0.path) }) == true {
+            if CLIResolver.isBundledExecutable(url) {
                 return "Bundled CLI"
             }
             return url.path
@@ -104,10 +146,23 @@ enum CLIResolver {
 
     private static func bundledCandidates() -> [URL] {
         let resourceURL = Bundle.main.resourceURL
+        let helpersURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers", isDirectory: true)
         return [
+            helpersURL.appendingPathComponent("mere.run"),
             resourceURL?.appendingPathComponent("mere.run/mere.run"),
             resourceURL?.appendingPathComponent("mere.run"),
         ].compactMap { $0 }
+    }
+
+    /// True when `url` points inside the app bundle's helper or resource payload, used to
+    /// label the resolved CLI as "Bundled CLI" regardless of the (Helpers vs Resources) layout.
+    static func isBundledExecutable(_ url: URL) -> Bool {
+        let roots = [
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers", isDirectory: true).path,
+            Bundle.main.resourceURL?.path,
+        ].compactMap { $0 }
+        return roots.contains { url.path.hasPrefix($0) }
     }
 
     private static func siblingCandidates() -> [URL] {
@@ -264,16 +319,25 @@ private final class FoundationMereRunProcessRunner: MereRunProcessRunning {
             stderrPipe: stderrPipe
         )
 
+        let stdoutDecoder = IncrementalUTF8Decoder()
+        let stderrDecoder = IncrementalUTF8Decoder()
+
         stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            stdout(text)
+            if data.isEmpty {
+                if let tail = stdoutDecoder.flush() { stdout(tail) }
+                return
+            }
+            if let text = stdoutDecoder.push(data) { stdout(text) }
         }
 
         stderrPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            stderr(text)
+            if data.isEmpty {
+                if let tail = stderrDecoder.flush() { stderr(tail) }
+                return
+            }
+            if let text = stderrDecoder.push(data) { stderr(text) }
         }
 
         try process.run()
@@ -377,6 +441,14 @@ final class MereRunController: ObservableObject {
         didSet { UserDefaults.standard.set(workingDirectory, forKey: Keys.workingDirectory) }
     }
     @Published private(set) var liveOutputText = ""
+    @Published private(set) var currentProgress: StudioRunProgress?
+    @Published private(set) var cliVersion: String?
+
+    /// The app's own version, read from the bundle for the version handshake display.
+    var appVersion: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return short ?? "dev"
+    }
 
     private enum Keys {
         static let cliPath = "mererun.app.cliPath"
@@ -460,6 +532,18 @@ final class MereRunController: ObservableObject {
     func installCodexSkills() {
         let outcome = CodexSkillInstaller.installBundledSkillsIfAvailable()
         handleSkillInstall(outcome)
+    }
+
+    /// Stores (or clears) the Hugging Face token via the CLI's `config` store so gated/private
+    /// model pulls can authenticate. Returns whether the command succeeded.
+    @discardableResult
+    func saveHuggingFaceToken(_ token: String) async -> Bool {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let args = trimmed.isEmpty
+            ? ["config", "unset", "hf-token"]
+            : ["config", "set", "hf-token", trimmed]
+        let result = await utilityCommandResult(args: args)
+        return result.exitCode == 0
     }
 
     func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
@@ -702,6 +786,9 @@ final class MereRunController: ObservableObject {
     @discardableResult
     private func startRun(requestID: UUID?) -> Bool {
         guard !isRunning else { return false }
+        if let shortCircuit = ensureCameraAccess(requestID: requestID) {
+            return shortCircuit
+        }
         refreshResolvedCLI()
 
         let launch = CLIResolver.resolve(customPath: cliPath)
@@ -724,6 +811,7 @@ final class MereRunController: ObservableObject {
         stdoutBuffer.removeAll(keepingCapacity: true)
         stderrBuffer.removeAll(keepingCapacity: true)
         liveOutputText = ""
+        currentProgress = nil
         lastOutputURL = nil
         lastExitCode = nil
 
@@ -788,6 +876,86 @@ final class MereRunController: ObservableObject {
         append("Termination requested.", stream: .system)
     }
 
+    /// Terminates every child process the app launched (active run, queued utility, and
+    /// readiness probes, including a long-lived `api serve`). Called on app termination so
+    /// child CLIs are never orphaned.
+    func terminateAllProcesses() {
+        currentProcess?.terminate()
+        for process in utilityProcesses.values {
+            process.terminate()
+        }
+        for process in readinessProcesses.values {
+            process.terminate()
+        }
+    }
+
+    private func requiresCameraAccess(_ templateID: CommandTemplateID) -> Bool {
+        templateID == .visionTrackLive
+    }
+
+    /// Returns `nil` when the run may proceed (no camera needed, or already authorized).
+    /// Returns a `Bool` to short-circuit `startRun` when access is pending (async request
+    /// will retry) or denied. The CLI captures the camera as a child of this app bundle,
+    /// so TCC attributes access here and the usage string lives in the app's Info.plist.
+    private func ensureCameraAccess(requestID: UUID?) -> Bool? {
+        guard requiresCameraAccess(selectedTemplate.id) else { return nil }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            return nil
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if granted {
+                        _ = self.startRun(requestID: requestID)
+                    } else {
+                        self.reportCameraDenied()
+                    }
+                }
+            }
+            return false
+        default:
+            reportCameraDenied()
+            return false
+        }
+    }
+
+    private func reportCameraDenied() {
+        status = "Camera access denied"
+        append(
+            "Camera access is required for live tracking. Enable it in "
+                + "System Settings → Privacy & Security → Camera.",
+            stream: .stderr
+        )
+    }
+
+    /// Posts a local notification when a run finishes while the app is backgrounded, so
+    /// users can leave a multi-minute pull or render running. No-op for non-bundle (dev) launches.
+    private func notifyCompletionIfNeeded(success: Bool, summary: String) {
+        // NSApp is nil outside a running NSApplication (e.g. unit tests); guard before use.
+        guard Bundle.main.bundleIdentifier != nil, NSApp != nil, !NSApp.isActive else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = success ? "Run complete" : "Run failed"
+            content.body = summary
+            content.sound = .default
+            UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            )
+        }
+    }
+
+    /// Reads the bundled/resolved CLI version for the app↔CLI version handshake display.
+    func refreshCLIVersion() {
+        Task { @MainActor in
+            let result = await utilityCommandResult(args: ["--version"])
+            guard result.exitCode == 0 else { return }
+            let version = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            cliVersion = version.isEmpty ? nil : version
+        }
+    }
+
     func openLastOutput() {
         guard let lastOutputURL else { return }
         NSWorkspace.shared.open(lastOutputURL)
@@ -802,6 +970,7 @@ final class MereRunController: ObservableObject {
         currentProcess = nil
         isRunning = false
         stopOutputWatch()
+        currentProgress = nil
         lastExitCode = exitCode
 
         let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
@@ -815,6 +984,13 @@ final class MereRunController: ObservableObject {
             status = "Exited \(exitCode)"
             append("Exited with code \(exitCode).", stream: .system)
         }
+
+        notifyCompletionIfNeeded(
+            success: exitCode == 0,
+            summary: exitCode == 0
+                ? (detectedOutput?.lastPathComponent ?? "Completed")
+                : "Exited with code \(exitCode)"
+        )
 
         if let activeRunTemplateID {
             lastRunResult = MereRunRunResult(
@@ -927,7 +1103,7 @@ final class MereRunController: ObservableObject {
     private func displayDescription(for launch: MereRunLaunch) -> String {
         let description = launch.sourceDescription
         guard case .executable(let url) = launch,
-              Bundle.main.resourceURL.map({ url.path.hasPrefix($0.path) }) == true,
+              CLIResolver.isBundledExecutable(url),
               let installedURL = CLIResolver.existingInstalledCLI() else {
             return description
         }
@@ -958,6 +1134,12 @@ final class MereRunController: ObservableObject {
         for line in normalized {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
+            // Collapse repeated carriage-return progress updates into one structured value
+            // instead of flooding the log with hundreds of lines.
+            if let progress = StudioProgressParser.parse(trimmed) {
+                currentProgress = progress
+                continue
+            }
             logs.append(LogLine(stream: stream, text: trimmed))
         }
 
@@ -1134,7 +1316,7 @@ extension Array where Element == String {
         var masked = self
         var index = masked.startIndex
         while index < masked.endIndex {
-            if masked[index] == "--api-key" {
+            if masked[index] == "--api-key" || masked[index] == "hf-token" {
                 let valueIndex = masked.index(after: index)
                 if valueIndex < masked.endIndex {
                     masked[valueIndex] = "••••••••"

@@ -17,6 +17,30 @@ jobs:
       - name: Run package checks
         run: ./scripts/check.sh
 
+  macos-app-bundle:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.4'
+      - name: Build app bundle (ad-hoc)
+        run: ./scripts/build_mere_run_app.sh debug
+      - name: Verify bundle structure
+        run: |
+          set -euo pipefail
+          bundle="$(swift build --show-bin-path)/MereRun.app"
+          test -x "${bundle}/Contents/MacOS/mere.run.app"
+          test -x "${bundle}/Contents/Helpers/mere.run"
+          # Executable code must not live under Contents/Resources (notarization rule).
+          if find "${bundle}/Contents/Resources" -type f -perm -111 \
+              ! -name "*.icns" | grep -q .; then
+            echo "Executable files found under Contents/Resources" >&2
+            exit 1
+          fi
+          /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "${bundle}/Contents/Info.plist"
+          codesign --verify --strict --verbose=2 "$bundle"
+
   linux-cli-compatibility-docs:
     runs-on: ubuntu-latest
     steps:

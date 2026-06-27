@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Hardened-runtime entitlements for the notarized (non-sandboxed) Developer ID build.
+	  Mac App Store / App Sandbox is intentionally out of scope for this OSS distribution.
+
+	  - allow-jit / allow-unsigned-executable-memory: the bundled CLI runs MLX/Metal and
+	    llama.cpp inference which JIT-compile and use executable memory.
+	  - disable-library-validation: the app spawns the bundled CLI (separate Mach-O) which
+	    loads its co-located llama.framework, mlx bundle, and the vendored ds4-server.
+	  - device.camera / device.audio-input: required under the hardened runtime for the
+	    `vision track-live` (camera) and future `music realtime` (microphone) capture paths,
+	    in addition to the NSCameraUsageDescription / NSMicrophoneUsageDescription strings.
+	-->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

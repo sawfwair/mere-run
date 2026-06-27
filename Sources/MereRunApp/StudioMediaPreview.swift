@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 
 enum StudioOutputFileKind: Equatable {
     case image
+    case audio
+    case video
     case text
     case other
 
@@ -12,6 +14,12 @@ enum StudioOutputFileKind: Equatable {
         let pathExtension = url.pathExtension.lowercased()
         if knownImageExtensions.contains(pathExtension) {
             return .image
+        }
+        if knownAudioExtensions.contains(pathExtension) {
+            return .audio
+        }
+        if knownVideoExtensions.contains(pathExtension) {
+            return .video
         }
         if knownTextExtensions.contains(pathExtension) {
             return .text
@@ -23,6 +31,12 @@ enum StudioOutputFileKind: Equatable {
         if type.conforms(to: .image) {
             return .image
         }
+        if type.conforms(to: .audio) {
+            return .audio
+        }
+        if type.conforms(to: .movie) || type.conforms(to: .video) || type.conforms(to: .audiovisualContent) {
+            return .video
+        }
         if type.conforms(to: .text) || type.conforms(to: .sourceCode) {
             return .text
         }
@@ -31,6 +45,14 @@ enum StudioOutputFileKind: Equatable {
 
     private static let knownImageExtensions: Set<String> = [
         "apng", "avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "png", "tif", "tiff", "webp"
+    ]
+
+    private static let knownAudioExtensions: Set<String> = [
+        "aac", "aif", "aiff", "caf", "flac", "m4a", "mp3", "ogg", "opus", "wav"
+    ]
+
+    private static let knownVideoExtensions: Set<String> = [
+        "m4v", "mov", "mp4", "webm"
     ]
 
     private static let knownTextExtensions: Set<String> = [

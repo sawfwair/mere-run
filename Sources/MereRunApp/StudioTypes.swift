@@ -13,6 +13,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
     case track
     case music
     case video
+    case sfx
 
     var id: String { rawValue }
 
@@ -29,6 +30,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return "Track"
         case .music: return "Music"
         case .video: return "Video"
+        case .sfx: return "Sound FX"
         }
     }
 
@@ -45,6 +47,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return "Follow objects through video"
         case .music: return "Prompt to song"
         case .video: return "Prompt to clip"
+        case .sfx: return "Prompt to sound effect"
         }
     }
 
@@ -61,6 +64,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return "point.topleft.down.curvedto.point.bottomright.up"
         case .music: return "music.note"
         case .video: return "film"
+        case .sfx: return "speaker.wave.2"
         }
     }
 
@@ -77,6 +81,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return .visionTrack
         case .music: return .musicGenerate
         case .video: return .videoGenerate
+        case .sfx: return .sfxGenerate
         }
     }
 
@@ -117,6 +122,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return "What should mere.run track?"
         case .music: return "Describe the song..."
         case .video: return "Describe the video..."
+        case .sfx: return "Describe the sound..."
         }
     }
 
@@ -133,6 +139,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return "Follow motion through time."
         case .music: return "Score the moment."
         case .video: return "Make the frame move."
+        case .sfx: return "Design a sound."
         }
     }
 
@@ -149,6 +156,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .track: return "Attach a video and name the subject to follow."
         case .music: return "Describe the sound, add lyrics if needed, and create audio."
         case .video: return "Describe a shot, optionally attach a starting image, and create a clip."
+        case .sfx: return "Describe a sound effect and render a WAV."
         }
     }
 }
@@ -331,6 +339,13 @@ enum StudioCommandAdapter {
             draft.width = studioDraft.width
             draft.height = studioDraft.height
             draft.seed = studioDraft.seed
+
+        case .sfx:
+            draft.prompt = prompt
+            draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.durationSeconds = studioDraft.durationSeconds
+            draft.steps = studioDraft.steps
+            draft.seed = studioDraft.seed
         }
 
         return StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft)
@@ -358,25 +373,14 @@ enum StudioCommandAdapter {
     }
 
     static func capabilityRequirement(for mode: StudioMode, draft: StudioDraft) -> StudioCapabilityRequirement? {
-        if mode == .readImage {
-            switch draft.readImageAction {
-            case .inspect, .caption:
-                return .unavailable(unmanagedVisionLanguageMessage(for: draft.readImageAction))
-            case .ocr:
-                break
-            }
-        }
-
+        // Read Image actions inspect/caption use a vision-language model the CLI
+        // auto-downloads on demand, so they are not gated by the managed catalog; only
+        // actions with a managed default model (OCR) require a readiness check.
         if let modelID = managedCapabilityModelID(for: mode, draft: draft) {
             return .managedModel(modelID)
         }
 
         return nil
-    }
-
-    private static func unmanagedVisionLanguageMessage(for action: StudioReadImageAction) -> String {
-        "\(action.title) uses an automatic vision-language model download "
-            + "that is not listed in the managed capability catalog yet."
     }
 
     private static func templateID(for mode: StudioMode, draft: StudioDraft) -> CommandTemplateID {
@@ -446,8 +450,10 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var exitCode: Int32?
     var commandPreview: String
     var outputText: String?
+    var customTitle: String?
 
     var displayTitle: String {
+        if let customTitle, !customTitle.isBlank { return customTitle }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         return mode.title
@@ -629,6 +635,53 @@ private struct CapabilityBuilder {
     private static func firstInteger(in text: String) -> Int? {
         let digits = text.drop { !$0.isNumber }.prefix { $0.isNumber }
         return Int(digits)
+    }
+}
+
+/// A parsed progress update emitted by long-running CLI commands (e.g. `model pull`).
+struct StudioRunProgress: Equatable {
+    let label: String
+    /// 0...1 when a percentage is known; nil for indeterminate (bytes-only) progress.
+    let fractionCompleted: Double?
+    /// Human-readable detail such as "1.2 GB / 3.4 GB" or "(45 MB/s)" or "extracting…".
+    let detail: String?
+}
+
+/// Parses the carriage-return progress lines the CLI writes for downloads/extraction, e.g.
+/// `[image-zimage-nano] 45%  1.2 GB / 3.4 GB` or `[image-zimage-nano] 45%  (45 MB/s)`.
+enum StudioProgressParser {
+    static func parse(_ rawLine: String) -> StudioRunProgress? {
+        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard line.hasPrefix("["), let close = line.firstIndex(of: "]") else { return nil }
+        let label = String(line[line.index(after: line.startIndex)..<close])
+            .trimmingCharacters(in: .whitespaces)
+        guard !label.isEmpty else { return nil }
+
+        var rest = String(line[line.index(after: close)...]).trimmingCharacters(in: .whitespaces)
+        guard !rest.isEmpty else { return nil }
+
+        var fraction: Double?
+        let tokens = rest.split(separator: " ").map(String.init)
+        if let first = tokens.first, first.hasSuffix("%"), let pct = Int(first.dropLast()) {
+            fraction = Double(min(100, max(0, pct))) / 100.0
+            rest = tokens.dropFirst().joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        }
+
+        let collapsed = rest
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        let detail = collapsed.isEmpty ? nil : collapsed
+
+        let looksLikeProgress = fraction != nil
+            || collapsed.contains("/")
+            || collapsed.lowercased().contains("extracting")
+            || collapsed.range(
+                of: #"\b\d+(\.\d+)?\s?(B|KB|MB|GB|TB)\b"#,
+                options: .regularExpression
+            ) != nil
+        guard looksLikeProgress else { return nil }
+
+        return StudioRunProgress(label: label, fractionCompleted: fraction, detail: detail)
     }
 }
 

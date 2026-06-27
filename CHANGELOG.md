@@ -8,6 +8,21 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- macOS Studio app: inline audio/video playback (AVKit / AVAudioPlayer) for
+  generated speech, music, sound effects, and video; determinate download and
+  generation progress with bytes, speed, and percentage; drag-and-drop file
+  attachment; a searchable run library with rename and delete; and a first-run
+  welcome flow.
+- macOS Studio app: a `Sound FX` mode plus Advanced templates wrapping
+  `sfx generate` and `sfx video`; voice-cloning controls for `speech synthesize`
+  (mode / profile / reference audio / save-profile); a Hugging Face token field
+  backed by `config set hf-token`; run-completion notifications; a real Run/Help
+  menu; and an app↔CLI version display.
+- macOS Studio app: hardened-runtime entitlements, Info.plist camera/microphone
+  usage strings with a runtime camera-permission gate for `vision track-live`,
+  a notarization-safe bundle layout (executable code moved out of
+  `Contents/Resources`), and `scripts/package-macos.sh` plus a `macos-release`
+  workflow that build, Developer ID-sign, notarize, staple, and publish the DMG.
 - added `mere.run plugin { list, info, install, doctor }` for live official
   companion-plugin catalog discovery, `pipx` install previews, opt-in
   execution, and post-install manifest verification.
@@ -32,6 +47,12 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- macOS Studio app: Read Image inspect/caption are no longer blocked (the CLI
+  auto-downloads the vision-language model); child CLI processes (including a
+  long-lived `api serve`) are terminated on app quit instead of orphaned;
+  partial UTF-8 output split across pipe reads is no longer dropped; the invalid
+  `finder` SF Symbol is replaced; a window minimum size prevents prompt-bar
+  clipping; and library persistence failures are surfaced instead of swallowed.
 - fixed `image generate --input` for FLUX.2 Klein by routing the input through
   Klein reference-image conditioning, and clarified `--ref-image` support in
   CLI help and docs.
