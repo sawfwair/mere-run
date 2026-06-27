@@ -482,23 +482,29 @@ final class MereRunController: ObservableObject {
     private let processRunner: MereRunProcessRunning
     private let fileSystem: MereRunFileProbing
     private let cliResolve: (String) -> MereRunLaunch
-    private var currentProcess: MereRunRunningProcess?
     private var utilityProcesses: [UUID: MereRunRunningProcess] = [:]
     private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
     private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
-    private var stdoutBuffer = ""
-    private var stderrBuffer = ""
-    private var activeRunTemplateID: CommandTemplateID?
-    private var activeRunPreview = ""
-    /// The expected `--output` location of the run currently in flight. Captured from the run's
-    /// snapshot so live output detection never reads the editing state, which may have moved on.
-    private var activeExpectedOutput: URL?
-    private var outputWatchTask: Task<Void, Never>?
+    /// Runs currently in flight, each with its own isolated process, buffers, logs, progress
+    /// and output. Up to `maxConcurrentRuns` run at once; the rest wait in `queuedRuns`.
+    private var sessions: [RunSession] = []
+    /// The session whose live state mirrors into the published console fields (the run the
+    /// single-pane console/canvas currently shows). Background sessions still complete into the
+    /// library by request id. Persists past completion so the last run's result stays visible.
+    private var foregroundSessionID: UUID?
     private var queuedRuns: [StudioRunRequest] = []
+
+    private var foregroundSession: RunSession? {
+        sessions.first { $0.id == foregroundSessionID }
+    }
 
     private static let stdoutBufferByteLimit = 32 * 1024
     private static let stderrBufferByteLimit = 32 * 1024
     private static let outputDetectionLineLimit = 40
+    private static let logLineLimit = 1200
+    /// Conservative cap on simultaneous runs. ML inference is memory-heavy, so this stays small;
+    /// it is the single knob for how many runs may execute at once before further ones queue.
+    static let maxConcurrentRuns = 2
 
     private struct ReadinessRequest: Equatable {
         let modelID: String
@@ -674,9 +680,37 @@ final class MereRunController: ObservableObject {
         let requestID: UUID?
     }
 
+    /// All mutable state for a single in-flight run, isolated so concurrent runs never clobber
+    /// each other's process, buffers, logs, progress or output. `@MainActor` (so it is Sendable
+    /// and can be captured by the process callbacks); every field is touched only on the main actor.
+    @MainActor
+    private final class RunSession: Identifiable {
+        let id = UUID()
+        let spec: RunSpec
+        let preview: String
+        let expectedOutput: URL?
+        var process: MereRunRunningProcess?
+        var stdoutBuffer = ""
+        var stderrBuffer = ""
+        var logs: [LogLine] = []
+        var liveOutputText = ""
+        var currentProgress: StudioRunProgress?
+        var lastOutputURL: URL?
+        var exitCode: Int32?
+        var status: String
+        var outputWatchTask: Task<Void, Never>?
+
+        init(spec: RunSpec, preview: String, expectedOutput: URL?, status: String) {
+            self.spec = spec
+            self.preview = preview
+            self.expectedOutput = expectedOutput
+            self.status = status
+        }
+    }
+
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
-        if isRunning || !queuedRuns.isEmpty {
+        guard sessions.count < Self.maxConcurrentRuns, queuedRuns.isEmpty else {
             enqueue(request)
             return true
         }
@@ -840,12 +874,13 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run() -> Bool {
-        startRun(RunSpec(template: selectedTemplate, draft: draft, requestID: nil))
+        guard sessions.count < Self.maxConcurrentRuns else { return false }
+        return startRun(RunSpec(template: selectedTemplate, draft: draft, requestID: nil))
     }
 
     @discardableResult
     private func startRun(_ spec: RunSpec) -> Bool {
-        guard !isRunning else { return false }
+        guard sessions.count < Self.maxConcurrentRuns else { return false }
         if let shortCircuit = ensureCameraAccess(spec: spec) {
             return shortCircuit
         }
@@ -855,99 +890,100 @@ final class MereRunController: ObservableObject {
         let args = commandArguments(template: spec.template, draft: spec.draft)
         let display = launch.displayCommand(for: args)
         let expectedOutput = expectedOutputURL(template: spec.template, draft: spec.draft)
-        activeRunTemplateID = spec.template.id
-        activeRunPreview = display
-        activeRunRequestID = spec.requestID
-        activeExpectedOutput = expectedOutput
+        let initialStatus = spec.template.id == .modelPull ? "Downloading model" : "Running"
+        let session = RunSession(spec: spec, preview: display, expectedOutput: expectedOutput, status: initialStatus)
 
         if let message = spec.template.validationMessage(for: spec.draft) {
             append(message, stream: .system)
             status = message
-            lastExitCode = 64
-            finishPreflightFailure(exitCode: 64, outputText: message)
+            finishPreflightFailure(session: session, exitCode: 64, outputText: message)
             return false
         }
 
-        logs.removeAll()
-        stdoutBuffer.removeAll(keepingCapacity: true)
-        stderrBuffer.removeAll(keepingCapacity: true)
-        liveOutputText = ""
-        currentProgress = nil
-        lastOutputURL = nil
-        lastExitCode = nil
-
-        guard prepareOutputLocation(template: spec.template, draft: spec.draft) else {
-            lastExitCode = -1
-            finishPreflightFailure(exitCode: -1, outputText: capturedResultText(exitCode: -1) ?? status)
+        if let prepError = prepareOutputLocation(template: spec.template, draft: spec.draft) {
+            append(prepError, stream: .stderr)
+            status = "Output path unavailable"
+            finishPreflightFailure(session: session, exitCode: -1, outputText: prepError)
             return false
         }
 
-        status = spec.template.id == .modelPull ? "Downloading model" : "Running"
-        isRunning = true
-
-        append(display, stream: .system)
-        startOutputWatch(expectedOutput: expectedOutput)
+        sessions.append(session)
+        setForeground(session)
+        append(display, stream: .system, to: session)
+        startOutputWatch(for: session)
 
         do {
-            currentProcess = try processRunner.start(
+            session.process = try processRunner.start(
                 configuration: processConfiguration(
                     launch: launch,
                     args: args,
                     environmentTemplateID: spec.template.id,
                     environmentDraft: spec.draft
                 ),
-                stdout: { [weak self] text in
+                stdout: { [weak self, weak session] text in
                     Task { @MainActor in
-                        self?.append(text, stream: .stdout)
+                        guard let self, let session else { return }
+                        self.append(text, stream: .stdout, to: session)
                     }
                 },
-                stderr: { [weak self] text in
+                stderr: { [weak self, weak session] text in
                     Task { @MainActor in
-                        self?.append(text, stream: .stderr)
+                        guard let self, let session else { return }
+                        self.append(text, stream: .stderr, to: session)
                     }
                 },
-                termination: { [weak self] code in
+                termination: { [weak self, weak session] code in
                     Task { @MainActor in
-                        self?.finishRun(exitCode: code, expectedOutput: expectedOutput)
+                        guard let self, let session else { return }
+                        self.finishRun(session: session, exitCode: code)
                     }
                 }
             )
         } catch {
-            isRunning = false
-            status = "Failed to start"
-            append(error.localizedDescription, stream: .stderr)
-            if let activeRunTemplateID {
-                lastRunResult = MereRunRunResult(
-                    requestID: activeRunRequestID,
-                    templateID: activeRunTemplateID,
-                    commandPreview: activeRunPreview,
-                    exitCode: -1,
-                    outputURL: nil,
-                    outputText: capturedResultText(exitCode: -1)
-                )
-            }
-            activeRunTemplateID = nil
-            activeRunPreview = ""
-            activeRunRequestID = nil
-            activeExpectedOutput = nil
-            stopOutputWatch()
-            startNextQueuedRun()
+            append(error.localizedDescription, stream: .stderr, to: session)
+            finishRun(session: session, exitCode: -1)
             return false
         }
         return true
     }
 
     func cancel() {
-        guard isRunning else { return }
-        currentProcess?.terminate()
-        append("Termination requested.", stream: .system)
+        guard let session = foregroundSession, session.process != nil else { return }
+        session.process?.terminate()
+        append("Termination requested.", stream: .system, to: session)
+    }
+
+    /// Resets the published console fields to reflect `session` as the run the single-pane
+    /// console/canvas shows. Background sessions keep their own state and complete into the library.
+    private func setForeground(_ session: RunSession) {
+        foregroundSessionID = session.id
+        logs = session.logs
+        liveOutputText = session.liveOutputText
+        currentProgress = session.currentProgress
+        status = session.status
+        activeRunRequestID = session.spec.requestID
+        lastOutputURL = session.lastOutputURL
+        lastExitCode = session.exitCode
+        isRunning = session.exitCode == nil
+    }
+
+    /// Mirrors `session`'s live state into the published console fields while it is the foreground.
+    private func mirrorForeground(_ session: RunSession) {
+        guard session.id == foregroundSessionID else { return }
+        logs = session.logs
+        liveOutputText = session.liveOutputText
+        currentProgress = session.currentProgress
+        status = session.status
+        if let url = session.lastOutputURL { lastOutputURL = url }
     }
 
     /// Terminates every child process the app launched (active run, queued utility, and
     /// readiness probes, including a long-lived `api serve`). Called on app termination so
     /// child CLIs are never orphaned.
     func terminateAllProcesses() {
-        currentProcess?.terminate()
+        for session in sessions {
+            session.process?.terminate()
+        }
         for process in utilityProcesses.values {
             process.terminate()
         }
@@ -1033,23 +1069,23 @@ final class MereRunController: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([lastOutputURL])
     }
 
-    private func finishRun(exitCode: Int32, expectedOutput: URL?) {
-        currentProcess = nil
-        isRunning = false
-        stopOutputWatch()
-        currentProgress = nil
-        lastExitCode = exitCode
+    private func finishRun(session: RunSession, exitCode: Int32) {
+        session.outputWatchTask?.cancel()
+        session.outputWatchTask = nil
+        session.process = nil
+        session.exitCode = exitCode
+        session.currentProgress = nil
 
-        let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
-        let outputText = capturedResultText(exitCode: exitCode)
-        lastOutputURL = detectedOutput
+        let detectedOutput = detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
+        let outputText = capturedResultText(for: session, exitCode: exitCode)
+        if let detectedOutput { session.lastOutputURL = detectedOutput }
 
         if exitCode == 0 {
-            status = detectedOutput == nil ? "Completed" : "Completed: \(detectedOutput!.lastPathComponent)"
-            append("Completed with exit code 0.", stream: .system)
+            session.status = detectedOutput == nil ? "Completed" : "Completed: \(detectedOutput!.lastPathComponent)"
+            session.logs.append(LogLine(stream: .system, text: "Completed with exit code 0."))
         } else {
-            status = "Exited \(exitCode)"
-            append("Exited with code \(exitCode).", stream: .system)
+            session.status = "Exited \(exitCode)"
+            session.logs.append(LogLine(stream: .system, text: "Exited with code \(exitCode)."))
         }
 
         notifyCompletionIfNeeded(
@@ -1059,38 +1095,42 @@ final class MereRunController: ObservableObject {
                 : "Exited with code \(exitCode)"
         )
 
-        if let activeRunTemplateID {
-            lastRunResult = MereRunRunResult(
-                requestID: activeRunRequestID,
-                templateID: activeRunTemplateID,
-                commandPreview: activeRunPreview,
-                exitCode: exitCode,
-                outputURL: detectedOutput,
-                outputText: outputText
-            )
+        // Every run — foreground or background — publishes its result so the library (keyed by
+        // request id) records it. Only the foreground updates the shared console fields.
+        if session.id == foregroundSessionID {
+            logs = session.logs
+            liveOutputText = session.liveOutputText
+            currentProgress = nil
+            status = session.status
+            lastExitCode = exitCode
+            if let detectedOutput { lastOutputURL = detectedOutput }
+            isRunning = false
+            activeRunRequestID = nil
         }
-        activeRunTemplateID = nil
-        activeRunPreview = ""
-        activeRunRequestID = nil
-        activeExpectedOutput = nil
+
+        lastRunResult = MereRunRunResult(
+            requestID: session.spec.requestID,
+            templateID: session.spec.template.id,
+            commandPreview: session.preview,
+            exitCode: exitCode,
+            outputURL: detectedOutput,
+            outputText: outputText
+        )
+
+        sessions.removeAll { $0.id == session.id }
         startNextQueuedRun()
     }
 
-    private func finishPreflightFailure(exitCode: Int32, outputText: String?) {
-        guard let templateID = activeRunTemplateID else { return }
+    private func finishPreflightFailure(session: RunSession, exitCode: Int32, outputText: String?) {
+        lastExitCode = exitCode
         lastRunResult = MereRunRunResult(
-            requestID: activeRunRequestID,
-            templateID: templateID,
-            commandPreview: activeRunPreview,
+            requestID: session.spec.requestID,
+            templateID: session.spec.template.id,
+            commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: nil,
             outputText: outputText
         )
-        activeRunTemplateID = nil
-        activeRunPreview = ""
-        activeRunRequestID = nil
-        activeExpectedOutput = nil
-        stopOutputWatch()
         startNextQueuedRun()
     }
 
@@ -1101,35 +1141,34 @@ final class MereRunController: ObservableObject {
     }
 
     private func startNextQueuedRun() {
-        guard !isRunning, currentProcess == nil, !queuedRuns.isEmpty else { return }
+        guard sessions.count < Self.maxConcurrentRuns, !queuedRuns.isEmpty else { return }
         let next = queuedRuns.removeFirst()
         queuedRunCount = queuedRuns.count
         _ = startRun(RunSpec(template: next.template, draft: next.draft, requestID: next.id))
     }
 
-    private func startOutputWatch(expectedOutput: URL?) {
-        stopOutputWatch()
-        outputWatchTask = Task { [weak self] in
+    private func startOutputWatch(for session: RunSession) {
+        session.outputWatchTask = Task { [weak self, weak session] in
             while !Task.isCancelled {
                 await MainActor.run {
-                    self?.publishDetectedOutputIfNeeded(expectedOutput: expectedOutput)
+                    guard let self, let session else { return }
+                    self.publishDetectedOutputIfNeeded(for: session)
                 }
                 try? await Task.sleep(for: .milliseconds(350))
             }
         }
     }
 
-    private func stopOutputWatch() {
-        outputWatchTask?.cancel()
-        outputWatchTask = nil
-    }
-
-    private func publishDetectedOutputIfNeeded(expectedOutput: URL?) {
-        guard isRunning else { return }
-        let detectedOutput = detectOutputURL(expected: expectedOutput, stdout: stdoutBuffer)
-        guard let detectedOutput, detectedOutput != lastOutputURL else { return }
-        lastOutputURL = detectedOutput
-        status = "Generated: \(detectedOutput.lastPathComponent)"
+    private func publishDetectedOutputIfNeeded(for session: RunSession) {
+        guard session.exitCode == nil else { return }
+        let detectedOutput = detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
+        guard let detectedOutput, detectedOutput != session.lastOutputURL else { return }
+        session.lastOutputURL = detectedOutput
+        session.status = "Generated: \(detectedOutput.lastPathComponent)"
+        if session.id == foregroundSessionID {
+            lastOutputURL = detectedOutput
+            status = session.status
+        }
     }
 
     private func handleCLIInstall(_ outcome: CLIBootstrapInstallOutcome) {
@@ -1183,15 +1222,17 @@ final class MereRunController: ObservableObject {
         readinessProcesses[mode] = nil
     }
 
-    private func append(_ text: String, stream: LogStream) {
+    /// Appends a run's output to its session, mirroring into the published console fields when
+    /// that session is the foreground one.
+    private func append(_ text: String, stream: LogStream, to session: RunSession) {
         if stream == .stdout {
-            stdoutBuffer += text
-            trimStdoutBuffer()
-            liveOutputText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            publishDetectedOutputIfNeeded(expectedOutput: activeExpectedOutput)
+            session.stdoutBuffer += text
+            session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
+            session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
+            publishDetectedOutputIfNeeded(for: session)
         } else if stream == .stderr {
-            stderrBuffer += text
-            trimStderrBuffer()
+            session.stderrBuffer += text
+            session.stderrBuffer = Self.trimmed(session.stderrBuffer, toByteLimit: Self.stderrBufferByteLimit)
         }
 
         let normalized = text
@@ -1204,44 +1245,46 @@ final class MereRunController: ObservableObject {
             // Collapse repeated carriage-return progress updates into one structured value
             // instead of flooding the log with hundreds of lines.
             if let progress = StudioProgressParser.parse(trimmed) {
-                currentProgress = progress
+                session.currentProgress = progress
                 continue
             }
+            session.logs.append(LogLine(stream: stream, text: trimmed))
+        }
+
+        if session.logs.count > Self.logLineLimit {
+            session.logs.removeFirst(session.logs.count - Self.logLineLimit)
+        }
+        mirrorForeground(session)
+    }
+
+    /// Appends a controller-level message (install, camera, queue notices) directly to the
+    /// foreground console; these are not tied to any one run's session.
+    private func append(_ text: String, stream: LogStream) {
+        for line in text.replacingOccurrences(of: "\r", with: "\n").components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
             logs.append(LogLine(stream: stream, text: trimmed))
         }
-
-        if logs.count > 1200 {
-            logs.removeFirst(logs.count - 1200)
+        if logs.count > Self.logLineLimit {
+            logs.removeFirst(logs.count - Self.logLineLimit)
         }
     }
 
-    private func trimStdoutBuffer() {
-        guard stdoutBuffer.utf8.count > Self.stdoutBufferByteLimit else { return }
-        stdoutBuffer = String(decoding: stdoutBuffer.utf8.suffix(Self.stdoutBufferByteLimit), as: UTF8.self)
+    private static func trimmed(_ buffer: String, toByteLimit limit: Int) -> String {
+        guard buffer.utf8.count > limit else { return buffer }
+        return String(decoding: buffer.utf8.suffix(limit), as: UTF8.self)
     }
 
-    private func trimStderrBuffer() {
-        guard stderrBuffer.utf8.count > Self.stderrBufferByteLimit else { return }
-        stderrBuffer = String(decoding: stderrBuffer.utf8.suffix(Self.stderrBufferByteLimit), as: UTF8.self)
-    }
-
-    private func capturedStdoutText() -> String? {
-        let trimmed = stdoutBuffer
+    private func nonEmptyTrimmed(_ buffer: String) -> String? {
+        let trimmed = buffer
             .replacingOccurrences(of: "\0", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func capturedStderrText() -> String? {
-        let trimmed = stderrBuffer
-            .replacingOccurrences(of: "\0", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func capturedResultText(exitCode: Int32) -> String? {
-        let stdout = capturedStdoutText()
-        guard exitCode != 0, let stderr = capturedStderrText() else {
+    private func capturedResultText(for session: RunSession, exitCode: Int32) -> String? {
+        let stdout = nonEmptyTrimmed(session.stdoutBuffer)
+        guard exitCode != 0, let stderr = nonEmptyTrimmed(session.stderrBuffer) else {
             return stdout
         }
 
@@ -1258,9 +1301,11 @@ final class MereRunController: ObservableObject {
         return URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
     }
 
-    private func prepareOutputLocation(template: CommandTemplate, draft: CommandDraft) -> Bool {
+    /// Ensures the run's output directory exists. Returns `nil` on success, or a diagnostic
+    /// message when the directory could not be created (so the caller can surface it per run).
+    private func prepareOutputLocation(template: CommandTemplate, draft: CommandDraft) -> String? {
         guard !draft.outputPath.isBlank else {
-            return true
+            return nil
         }
 
         let outputURL = URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
@@ -1271,16 +1316,14 @@ final class MereRunController: ObservableObject {
         case .directory:
             directoryURL = outputURL
         case .none:
-            return true
+            return nil
         }
 
         do {
             try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            return true
+            return nil
         } catch {
-            status = "Output path unavailable"
-            append("Could not create output directory \(directoryURL.path): \(error.localizedDescription)", stream: .stderr)
-            return false
+            return "Could not create output directory \(directoryURL.path): \(error.localizedDescription)"
         }
     }
 

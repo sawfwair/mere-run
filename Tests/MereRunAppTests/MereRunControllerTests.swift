@@ -207,44 +207,76 @@ final class MereRunControllerTests: XCTestCase {
         )
     }
 
-    func testStudioRunsQueueBehindActiveProcess() async throws {
+    func testStudioRunsExecuteConcurrentlyUpToCapThenQueue() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
-        var firstDraft = template.defaultDraft()
-        firstDraft.extraArguments = "first"
-        var secondDraft = template.defaultDraft()
-        secondDraft.extraArguments = "second"
-        let first = StudioRunRequest(mode: .chat, templateID: .custom, template: template, draft: firstDraft)
-        let second = StudioRunRequest(mode: .code, templateID: .custom, template: template, draft: secondDraft)
+        func request(_ arg: String, mode: StudioMode) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(mode: mode, templateID: .custom, template: template, draft: draft)
+        }
+        XCTAssertEqual(MereRunController.maxConcurrentRuns, 2)
+        let first = request("first", mode: .chat)
+        let second = request("second", mode: .code)
+        let third = request("third", mode: .chat)
 
+        // Up to maxConcurrentRuns run at once; the foreground follows the latest started.
         XCTAssertTrue(controller.run(studio: first))
-        XCTAssertTrue(controller.isRunning)
-        XCTAssertEqual(controller.activeRunRequestID, first.id)
-        XCTAssertEqual(runner.starts.count, 1)
-
         XCTAssertTrue(controller.run(studio: second))
-        XCTAssertEqual(controller.queuedRunCount, 1)
-        XCTAssertEqual(runner.starts.count, 1)
+        XCTAssertEqual(runner.starts.count, 2)
+        XCTAssertEqual(controller.queuedRunCount, 0)
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertEqual(controller.activeRunRequestID, second.id)
 
+        // A run beyond the cap queues.
+        XCTAssertTrue(controller.run(studio: third))
+        XCTAssertEqual(runner.starts.count, 2)
+        XCTAssertEqual(controller.queuedRunCount, 1)
+
+        // A background run completing still publishes its result (the library keys by request id)
+        // and frees a slot, so the queued run starts.
         runner.starts[0].termination(0)
         await Task.yield()
         await Task.yield()
 
         XCTAssertEqual(controller.lastRunResult?.requestID, first.id)
-        XCTAssertEqual(controller.activeRunRequestID, second.id)
         XCTAssertEqual(controller.queuedRunCount, 0)
+        XCTAssertEqual(runner.starts.count, 3)
+        XCTAssertEqual(runner.starts[2].configuration.arguments, ["third"])
+    }
+
+    func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(mode: .chat, templateID: .custom, template: template, draft: draft)
+        }
+        let background = request("background")
+        let foreground = request("foreground")
+
+        XCTAssertTrue(controller.run(studio: background))   // starts[0]
+        XCTAssertTrue(controller.run(studio: foreground))   // starts[1], now the foreground
         XCTAssertEqual(runner.starts.count, 2)
-        XCTAssertEqual(runner.starts[1].configuration.arguments, ["second"])
 
-        runner.starts[1].termination(0)
+        runner.starts[0].stdout("background-only-line\n")
+        runner.starts[1].stdout("foreground-line\n")
+        await Task.yield()
+
+        // The console shows only the foreground run's output; the background run's is isolated.
+        XCTAssertTrue(controller.logs.contains { $0.text == "foreground-line" })
+        XCTAssertFalse(controller.logs.contains { $0.text == "background-only-line" })
+
+        // The background run still publishes its own result, keyed by its request id.
+        runner.starts[0].termination(0)
         await Task.yield()
         await Task.yield()
-
-        XCTAssertFalse(controller.isRunning)
-        XCTAssertNil(controller.activeRunRequestID)
-        XCTAssertEqual(controller.lastRunResult?.requestID, second.id)
+        XCTAssertEqual(controller.lastRunResult?.requestID, background.id)
     }
 
     func testStudioRunDoesNotClobberEditingState() throws {
