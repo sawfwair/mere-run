@@ -80,6 +80,32 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
     }
 
+    func testStudioServerStatusParsesSnapshot() {
+        let json = """
+        {"server":{"url":"http://127.0.0.1:8080","health":"ok","loadedModels":["text-chat-gemma4"]},\
+        "knownModelCount":40,\
+        "installedModels":[{"id":"a","category":"text","size":"1 GB"},{"id":"b","category":"image","size":"2 GB"}]}
+        """
+        let status = StudioServerStatus.parse(jsonStdout: "probing...\n" + json + "\n")
+        XCTAssertEqual(status?.health, "ok")
+        XCTAssertEqual(status?.loadedModels, ["text-chat-gemma4"])
+        XCTAssertEqual(status?.installedCount, 2)
+        XCTAssertEqual(status?.isReachable, true)
+    }
+
+    func testStudioServerStatusReturnsNilForNonJSON() {
+        XCTAssertNil(StudioServerStatus.parse(jsonStdout: "connection refused"))
+    }
+
+    func testStudioVoiceProfileParsesTabSeparatedList() {
+        let out = "11111111-1111-1111-1111-111111111111\tNarrator\t2026-06-01\n"
+            + "22222222-2222-2222-2222-222222222222\tHero\t2026-06-02\n"
+        let profiles = StudioVoiceProfile.parse(listOutput: out)
+        XCTAssertEqual(profiles.count, 2)
+        XCTAssertEqual(profiles.first?.name, "Narrator")
+        XCTAssertEqual(profiles.last?.id, "22222222-2222-2222-2222-222222222222")
+    }
+
     private func assertPair(_ args: [String], _ flag: String, _ value: String,
                             file: StaticString = #filePath, line: UInt = #line) {
         guard let index = args.firstIndex(of: flag), index + 1 < args.count else {

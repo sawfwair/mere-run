@@ -1154,6 +1154,8 @@ struct MereRunSettingsView: View {
     @EnvironmentObject private var controller: MereRunController
     @State private var hfToken = ""
     @State private var hfStatus: String?
+    @State private var hfEndpoint = ""
+    @State private var hfEndpointStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -1196,6 +1198,31 @@ struct MereRunSettingsView: View {
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                 }
+            }
+            EditorSection("Hugging Face endpoint") {
+                HStack(spacing: 10) {
+                    TextField("https://huggingface.co (override mirror)", text: $hfEndpoint)
+                        .textFieldStyle(.plain)
+                        .font(MereRunTheme.bodyFont)
+                        .padding(10)
+                        .merePanel()
+                    Button("Save") {
+                        Task {
+                            let ok = await controller.saveHuggingFaceEndpoint(hfEndpoint)
+                            hfEndpointStatus = ok ? "Saved" : "Could not save endpoint"
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(MereRunTheme.accent)
+                }
+                if let hfEndpointStatus {
+                    Text(hfEndpointStatus)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+            }
+            .task {
+                hfEndpoint = await controller.loadHuggingFaceEndpoint()
             }
             EditorSection("Runtime server") {
                 HStack(spacing: 10) {

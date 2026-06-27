@@ -11,6 +11,7 @@ struct StudioRootView: View {
     @State private var showAdvanced = false
     @State private var showOptions = false
     @State private var showModels = false
+    @State private var showHelp = false
     @State private var selectedLibraryID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
@@ -122,7 +123,9 @@ struct StudioRootView: View {
                     readiness: readiness,
                     modeCapabilities: modeCapabilities,
                     resolvedCLI: controller.resolvedCLI,
-                    onShowModels: { showModels = true }
+                    serverStatus: controller.serverStatus,
+                    onShowModels: { showModels = true },
+                    onShowHelp: { showHelp = true }
                 )
 
                 Divider()
@@ -228,6 +231,19 @@ struct StudioRootView: View {
                     showWelcome = false
                 }
             )
+        }
+        .sheet(isPresented: $showHelp) {
+            StudioHelpSheet()
+                .environmentObject(controller)
+                .frame(width: 720, height: 560)
+        }
+        .task {
+            // Poll the local server status for the top-bar pill. status has a 1s probe timeout,
+            // so a modest cadence keeps the pill live without hammering the CLI.
+            while !Task.isCancelled {
+                await controller.refreshServerStatus()
+                try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
+            }
         }
         .onAppear {
             draft.reset(for: mode)
@@ -562,7 +578,9 @@ private struct StudioTopBar: View {
     let readiness: ModelReadinessState
     let modeCapabilities: [StudioMode: StudioModelCapability]
     let resolvedCLI: String
+    let serverStatus: StudioServerStatus?
     let onShowModels: () -> Void
+    let onShowHelp: () -> Void
 
     var body: some View {
         VStack(spacing: 14) {
@@ -589,6 +607,13 @@ private struct StudioTopBar: View {
                 Spacer()
 
                 StudioStatusPill(
+                    title: "Server",
+                    detail: serverStatusDetail,
+                    systemImage: serverStatus?.isReachable == true ? "bolt.horizontal.circle" : "circle.dashed",
+                    color: serverStatusColor
+                )
+
+                StudioStatusPill(
                     title: readiness.title,
                     detail: readiness.message,
                     systemImage: readinessStatusImage,
@@ -606,6 +631,13 @@ private struct StudioTopBar: View {
                     onShowModels()
                 } label: {
                     Label("Models", systemImage: "shippingbox")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    onShowHelp()
+                } label: {
+                    Label("Help", systemImage: "questionmark.circle")
                 }
                 .buttonStyle(.bordered)
 
@@ -639,6 +671,20 @@ private struct StudioTopBar: View {
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 14)
+    }
+
+    private var serverStatusDetail: String {
+        guard let serverStatus else { return "checking…" }
+        if serverStatus.isReachable {
+            let model = serverStatus.loadedModelSummary.map { " · \($0)" } ?? ""
+            return "up\(model) · \(serverStatus.installedCount) installed"
+        }
+        return "offline · \(serverStatus.installedCount) installed"
+    }
+
+    private var serverStatusColor: Color {
+        guard let serverStatus else { return MereRunTheme.textMuted }
+        return serverStatus.isReachable ? MereRunTheme.green : MereRunTheme.textMuted
     }
 
     private var readinessStatusImage: String {

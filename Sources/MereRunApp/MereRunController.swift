@@ -450,6 +450,8 @@ final class MereRunController: ObservableObject {
     /// Live, think-stripped assistant text per in-flight conversation, so a streaming bubble can
     /// render even for a background conversation (the foreground-only liveOutputText cannot).
     @Published private(set) var conversationLiveText: [UUID: String] = [:]
+    /// Latest parsed `status --json` snapshot for the Studio status pill (nil until first probe).
+    @Published private(set) var serverStatus: StudioServerStatus?
     @Published private(set) var queuedRunCount = 0
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
     @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
@@ -623,6 +625,55 @@ final class MereRunController: ObservableObject {
             : ["config", "set", "hf-token", trimmed]
         let result = await utilityCommandResult(args: args)
         return result.exitCode == 0
+    }
+
+    /// Probes the configured local API server and publishes the parsed snapshot for the status pill.
+    func refreshServerStatus() async {
+        var args = ["status", "--json", "--host", runtimeHost, "--port", String(runtimePort)]
+        if !runtimeAPIKey.isBlank { args += ["--api-key", runtimeAPIKey] }
+        let result = await utilityCommandResult(args: args)
+        serverStatus = StudioServerStatus.parse(jsonStdout: result.stdout)
+    }
+
+    /// The persisted Hugging Face endpoint (config key hf-endpoint), or "" if unset.
+    func loadHuggingFaceEndpoint() async -> String {
+        let result = await utilityCommandResult(args: ["config", "get", "hf-endpoint", "--reveal"], masksSecrets: false)
+        guard result.exitCode == 0 else { return "" }
+        let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        // `config get` prints "(unset)" style text when missing; treat any non-URL as empty.
+        return value.hasPrefix("http") ? value : ""
+    }
+
+    func saveHuggingFaceEndpoint(_ endpoint: String) async -> Bool {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let args = trimmed.isEmpty
+            ? ["config", "unset", "hf-endpoint"]
+            : ["config", "set", "hf-endpoint", trimmed]
+        let result = await utilityCommandResult(args: args)
+        return result.exitCode == 0
+    }
+
+    /// Lists saved voice-clone profiles via `speech profile list` (tab-separated id/name/updated).
+    func loadVoiceProfiles() async -> [StudioVoiceProfile] {
+        let result = await utilityCommandResult(args: ["speech", "profile", "list"])
+        guard result.exitCode == 0 else { return [] }
+        return StudioVoiceProfile.parse(listOutput: result.stdout)
+    }
+
+    /// Offline guide topics for the in-app help panel (`guide --list --json`).
+    func loadGuideTopics() async -> [StudioGuideTopic] {
+        let result = await utilityCommandResult(args: ["guide", "--list", "--json"])
+        guard result.exitCode == 0 else { return [] }
+        return StudioGuideTopic.parse(listJSON: result.stdout)
+    }
+
+    /// Markdown content for one guide topic (`guide <command-path> --json`).
+    func loadGuideContent(commandPath: [String]) async -> String {
+        let result = await utilityCommandResult(args: ["guide"] + commandPath + ["--json"])
+        guard result.exitCode == 0 else {
+            return result.stderr.isBlank ? "No guide is available for this topic." : result.stderr
+        }
+        return StudioGuideTopic.parseContent(payloadJSON: result.stdout) ?? result.stdout
     }
 
     func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
