@@ -231,6 +231,9 @@ struct StudioRunRequest: Identifiable, Equatable {
     let template: CommandTemplate
     let draft: CommandDraft
     let createdAt: Date
+    /// The conversation this run is a turn of, when chat/code. The run's `id` is a per-turn id;
+    /// `conversationID` routes completion back to the owning thread.
+    let conversationID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -238,7 +241,8 @@ struct StudioRunRequest: Identifiable, Equatable {
         templateID: CommandTemplateID,
         template: CommandTemplate,
         draft: CommandDraft,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        conversationID: UUID? = nil
     ) {
         self.id = id
         self.mode = mode
@@ -246,6 +250,7 @@ struct StudioRunRequest: Identifiable, Equatable {
         self.template = template
         self.draft = draft
         self.createdAt = createdAt
+        self.conversationID = conversationID
     }
 
     var expectedOutputURL: URL? {

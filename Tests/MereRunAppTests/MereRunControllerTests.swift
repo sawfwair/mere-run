@@ -247,6 +247,63 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(runner.starts[2].configuration.arguments, ["third"])
     }
 
+    func testConversationIDFlowsToResultAndTracksInFlight() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        let conversationID = UUID()
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(controller.runningConversationIDs.contains(conversationID))
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(controller.lastRunResult?.conversationID, conversationID)
+        XCTAssertFalse(controller.runningConversationIDs.contains(conversationID))
+    }
+
+    func testQueuedConversationTurnStillCarriesConversationID() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String, _ conversationID: UUID) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(
+                mode: .chat, templateID: .custom, template: template, draft: draft,
+                conversationID: conversationID
+            )
+        }
+        let queuedConversation = UUID()
+        // Fill the concurrency cap, then a third turn queues.
+        XCTAssertTrue(controller.run(studio: request("a", UUID())))
+        XCTAssertTrue(controller.run(studio: request("b", UUID())))
+        XCTAssertTrue(controller.run(studio: request("c", queuedConversation)))
+        XCTAssertEqual(controller.queuedRunCount, 1)
+
+        // Freeing a slot dequeues the third turn — it must still carry its conversation id.
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(runner.starts.count, 3)
+        XCTAssertTrue(controller.runningConversationIDs.contains(queuedConversation))
+
+        runner.starts[2].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(controller.lastRunResult?.conversationID, queuedConversation)
+    }
+
     func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

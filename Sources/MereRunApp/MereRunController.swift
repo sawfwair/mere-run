@@ -384,6 +384,9 @@ struct MereRunRunResult: Identifiable, Equatable {
     let outputURL: URL?
     let outputText: String?
     let completedAt: Date
+    /// When this run was a chat/code turn, the conversation it belongs to (so completion routes
+    /// to the thread rather than the legacy single-result path).
+    let conversationID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -393,7 +396,8 @@ struct MereRunRunResult: Identifiable, Equatable {
         exitCode: Int32,
         outputURL: URL?,
         outputText: String?,
-        completedAt: Date = Date()
+        completedAt: Date = Date(),
+        conversationID: UUID? = nil
     ) {
         self.id = id
         self.requestID = requestID
@@ -403,6 +407,7 @@ struct MereRunRunResult: Identifiable, Equatable {
         self.outputURL = outputURL
         self.outputText = outputText
         self.completedAt = completedAt
+        self.conversationID = conversationID
     }
 }
 
@@ -433,6 +438,10 @@ final class MereRunController: ObservableObject {
     @Published var lastOutputURL: URL?
     @Published var lastRunResult: MereRunRunResult?
     @Published private(set) var activeRunRequestID: UUID?
+    /// Conversation ids with a turn currently in flight. Tracked across ALL sessions (not just
+    /// the foreground one) so the UI can disable a thread's composer and stream into the right
+    /// thread even when a different conversation is in the foreground.
+    @Published private(set) var runningConversationIDs: Set<UUID> = []
     @Published private(set) var queuedRunCount = 0
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
     @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
@@ -678,6 +687,7 @@ final class MereRunController: ObservableObject {
         let template: CommandTemplate
         let draft: CommandDraft
         let requestID: UUID?
+        var conversationID: UUID? = nil
     }
 
     /// All mutable state for a single in-flight run, isolated so concurrent runs never clobber
@@ -715,7 +725,12 @@ final class MereRunController: ObservableObject {
             return true
         }
 
-        return startRun(RunSpec(template: request.template, draft: request.draft, requestID: request.id))
+        return startRun(RunSpec(
+            template: request.template,
+            draft: request.draft,
+            requestID: request.id,
+            conversationID: request.conversationID
+        ))
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
@@ -908,6 +923,9 @@ final class MereRunController: ObservableObject {
         }
 
         sessions.append(session)
+        if let conversationID = spec.conversationID {
+            runningConversationIDs.insert(conversationID)
+        }
         setForeground(session)
         append(display, stream: .system, to: session)
         startOutputWatch(for: session)
@@ -1108,13 +1126,18 @@ final class MereRunController: ObservableObject {
             activeRunRequestID = nil
         }
 
+        if let conversationID = session.spec.conversationID {
+            runningConversationIDs.remove(conversationID)
+        }
+
         lastRunResult = MereRunRunResult(
             requestID: session.spec.requestID,
             templateID: session.spec.template.id,
             commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: detectedOutput,
-            outputText: outputText
+            outputText: outputText,
+            conversationID: session.spec.conversationID
         )
 
         sessions.removeAll { $0.id == session.id }
@@ -1123,13 +1146,17 @@ final class MereRunController: ObservableObject {
 
     private func finishPreflightFailure(session: RunSession, exitCode: Int32, outputText: String?) {
         lastExitCode = exitCode
+        if let conversationID = session.spec.conversationID {
+            runningConversationIDs.remove(conversationID)
+        }
         lastRunResult = MereRunRunResult(
             requestID: session.spec.requestID,
             templateID: session.spec.template.id,
             commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: nil,
-            outputText: outputText
+            outputText: outputText,
+            conversationID: session.spec.conversationID
         )
         startNextQueuedRun()
     }
@@ -1144,7 +1171,12 @@ final class MereRunController: ObservableObject {
         guard sessions.count < Self.maxConcurrentRuns, !queuedRuns.isEmpty else { return }
         let next = queuedRuns.removeFirst()
         queuedRunCount = queuedRuns.count
-        _ = startRun(RunSpec(template: next.template, draft: next.draft, requestID: next.id))
+        _ = startRun(RunSpec(
+            template: next.template,
+            draft: next.draft,
+            requestID: next.id,
+            conversationID: next.conversationID
+        ))
     }
 
     private func startOutputWatch(for session: RunSession) {
