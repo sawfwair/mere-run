@@ -34,8 +34,11 @@ final class StudioLibraryStore: ObservableObject {
             }
 
             let data = try Data(contentsOf: libraryURL)
-            items = try JSONDecoder.mereRunApp.decode([StudioLibraryItem].self, from: data)
-                .sorted { $0.createdAt > $1.createdAt }
+            // Decode leniently per row: one un-decodable entry (e.g. written by a newer/older
+            // build) must not discard the entire history. Only a top-level parse failure (not an
+            // array at all) falls through to corrupt-file recovery.
+            let rows = try JSONDecoder.mereRunApp.decode([FailableDecodable<StudioLibraryItem>].self, from: data)
+            items = rows.compactMap(\.value).sorted { $0.createdAt > $1.createdAt }
         } catch {
             items = []
             recoverCorruptLibrary()
@@ -233,6 +236,17 @@ final class StudioLibraryStore: ObservableObject {
             .appendingPathExtension("corrupt-\(DateFormatter.mereRunTimestamp.string(from: Date()))")
             .appendingPathExtension("json")
         try? fileManager.moveItem(at: libraryURL, to: recoveryURL)
+    }
+}
+
+/// Decodes `T` if possible, otherwise resolves to nil instead of throwing — lets an array decode
+/// skip individual bad elements without losing the rest.
+private struct FailableDecodable<T: Decodable>: Decodable {
+    let value: T?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        value = try? container.decode(T.self)
     }
 }
 

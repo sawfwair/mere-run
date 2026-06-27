@@ -187,6 +187,24 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.messages?.map(\.role), [.user])
     }
 
+    func testLoadKeepsValidRowsWhenOneIsCorrupt() throws {
+        let url = try temporaryLibraryURL()
+        let good = """
+        {"id":"\(UUID().uuidString)","mode":"chat","prompt":"keep me",\
+        "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z",\
+        "status":"completed","commandPreview":"mere.run text chat"}
+        """
+        let bad = #"{"mode":"chat","prompt":"missing required fields"}"#
+        let json = "[\(good),\(bad)]"
+        try XCTUnwrap(json.data(using: .utf8)).write(to: url)
+
+        let store = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.prompt, "keep me")
+        // The file is intact (not moved to corrupt-recovery) since the array itself parsed.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
     private func temporaryLibraryURL() throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-app-tests-\(UUID().uuidString)", isDirectory: true)

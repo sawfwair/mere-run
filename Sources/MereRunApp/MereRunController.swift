@@ -519,6 +519,9 @@ final class MereRunController: ObservableObject {
     private static let stderrBufferByteLimit = 32 * 1024
     private static let outputDetectionLineLimit = 40
     private static let logLineLimit = 1200
+    /// Min growth in a conversation reply before the live think-stripped text is re-published,
+    /// bounding per-chunk re-strip cost. The final reply is always published in full on finish.
+    private static let liveStripGranularity = 80
     /// Conservative cap on simultaneous runs. ML inference is memory-heavy, so this stays small;
     /// it is the single knob for how many runs may execute at once before further ones queue.
     static let maxConcurrentRuns = 2
@@ -713,6 +716,9 @@ final class MereRunController: ObservableObject {
         /// Unbounded stdout accumulator for conversation turns only (chat/code), so a long reply
         /// is captured in full — `stdoutBuffer` is capped at 32 KB for the console.
         var fullOutput = ""
+        /// Length of `fullOutput` at the last live think-strip; used to throttle re-stripping the
+        /// whole accumulator on every chunk (it would otherwise be O(n²) over a long reply).
+        var lastLiveStripLength = 0
         var logs: [LogLine] = []
         var liveOutputText = ""
         var currentProgress: StudioRunProgress?
@@ -1304,12 +1310,19 @@ final class MereRunController: ObservableObject {
             if let conversationID = session.spec.conversationID {
                 // Conversation turns accumulate the full (untrimmed) reply and publish a live,
                 // think-stripped view so a streaming bubble renders even when backgrounded. The
-                // streaming variant hides an in-progress (unclosed) reasoning block.
+                // streaming variant hides an in-progress (unclosed) reasoning block. Re-stripping
+                // the whole accumulator on every chunk is O(n²), so throttle to ~every 80 chars of
+                // growth; finishRun always publishes the complete, fully-stripped reply.
                 session.fullOutput += text
-                conversationLiveText[conversationID] = ConversationTranscript.stripThinkTags(
-                    session.fullOutput.replacingOccurrences(of: "\0", with: ""),
-                    streaming: true
-                )
+                // Publish immediately on the first chunk (fast first render), then throttle.
+                if session.lastLiveStripLength == 0
+                    || session.fullOutput.count - session.lastLiveStripLength >= Self.liveStripGranularity {
+                    session.lastLiveStripLength = session.fullOutput.count
+                    conversationLiveText[conversationID] = ConversationTranscript.stripThinkTags(
+                        session.fullOutput.replacingOccurrences(of: "\0", with: ""),
+                        streaming: true
+                    )
+                }
             } else {
                 publishDetectedOutputIfNeeded(for: session)
             }
