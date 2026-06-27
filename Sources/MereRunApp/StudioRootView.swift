@@ -440,12 +440,15 @@ struct StudioRootView: View {
 
         let systemPrompt = draft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = draft.model.isBlank ? nil : draft.model
+        // Vision chat attaches an image to this turn (chat only); persist it so edit/retry resend it.
+        let turnImage = (mode == .chat && !draft.inputPath.isBlank) ? draft.inputPath : nil
         let item = library.appendUser(
             conversationID: conversationID,
             mode: mode,
             model: model,
             systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
-            content: content
+            content: content,
+            imagePath: turnImage
         )
 
         let rendered = ConversationTranscript.render(
@@ -494,6 +497,8 @@ struct StudioRootView: View {
             var runDraft = draft
             runDraft.prompt = rendered.prompt
             runDraft.secondaryText = systemPrompt ?? ""
+            // Re-attach the image the last user turn carried (or none), not the cleared composer's.
+            runDraft.inputPath = item.messages?.last?.imagePath ?? ""
             if let model = item.model, !model.isBlank { runDraft.model = model }
             let request = try StudioCommandAdapter.makeRequest(
                 mode: item.mode, draft: runDraft, conversationID: conversationID
@@ -526,7 +531,8 @@ struct StudioRootView: View {
     }
 
     /// When Advanced opens, pre-select the template for the active Studio mode and carry over what
-    /// the composer already holds, so Advanced deepens the current task instead of resetting it.
+    /// the composer already holds — including the shared depth fields — so Advanced deepens the
+    /// current task without silently reverting edits.
     private func syncAdvancedToStudio() {
         if let template = CommandCatalog.template(id: mode.defaultTemplateID) {
             controller.select(template)
@@ -534,6 +540,18 @@ struct StudioRootView: View {
         controller.draft.prompt = draft.prompt
         if !draft.model.isBlank { controller.draft.model = draft.model }
         if !draft.inputPath.isBlank { controller.draft.inputPath = draft.inputPath }
+        // Shared schema depth (WS-3.5): keep the two surfaces aligned after live edits, not only
+        // at defaults.
+        controller.draft.temperature = draft.temperature
+        controller.draft.maxTokens = draft.maxTokens
+        controller.draft.cfgScale = draft.cfgScale
+        controller.draft.strength = draft.strength
+        controller.draft.language = draft.language
+        controller.draft.backend = draft.backend
+        controller.draft.timestamps = draft.timestamps
+        controller.draft.fps = draft.fps
+        controller.draft.numFrames = draft.numFrames
+        controller.draft.variant = draft.variant
     }
 
     /// Edits a prior user turn: truncates the thread at that message and loads its text back into
@@ -541,8 +559,17 @@ struct StudioRootView: View {
     private func editMessage(_ messageID: UUID) {
         guard let conversationID = activeConversationID,
               !controller.runningConversationIDs.contains(conversationID) else { return }
-        if let content = library.truncate(conversationID: conversationID, removingFrom: messageID) {
-            draft.prompt = content
+        if let removed = library.truncate(conversationID: conversationID, removingFrom: messageID) {
+            draft.prompt = removed.content
+            // Restore the turn's attached image so re-sending re-runs vision chat as before.
+            if mode == .chat { draft.inputPath = removed.imagePath ?? "" }
+        }
+        // Editing the first turn empties the thread — drop the now-empty row and act like a new chat.
+        if let item = library.items.first(where: { $0.id == conversationID }),
+           item.messages?.isEmpty ?? true {
+            library.delete(id: conversationID)
+            activeConversationID = nil
+            selectedLibraryID = nil
         }
     }
 

@@ -351,6 +351,23 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--ref-audio"))
     }
 
+    func testSpeakCloneWithoutSourceFailsValidation() {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        draft.voiceMode = "clone"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft))
+    }
+
+    func testSpeakCloneWithProfilePassesValidation() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        draft.voiceMode = "clone"
+        draft.voiceProfile = "narrator-id"
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft))
+    }
+
     func testChatSchemaExposesTemperatureAndMaxTokens() throws {
         var draft = StudioDraft()
         draft.reset(for: .chat)

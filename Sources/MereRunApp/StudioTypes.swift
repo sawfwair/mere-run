@@ -535,6 +535,13 @@ enum StudioCommandAdapter {
             throw StudioCommandError.missingInput(mode.acceptedTypes.first == .audio ? "audio" : mode.acceptedTypes.first == .movie ? "video" : "image")
         }
 
+        // Clone voice needs a source the CLI accepts; otherwise `speech synthesize` hard-fails with
+        // "Clone mode requires --profile or --ref-audio." Validate it up front instead.
+        if mode == .speak, draft.voiceMode == "clone",
+           draft.voiceProfile.isBlank, draft.refAudioPath.isBlank {
+            throw StudioCommandError.missingPrompt("A saved voice profile or reference audio")
+        }
+
         let promptRequired: Bool
         switch mode {
         case .listen:
@@ -572,19 +579,24 @@ struct StudioMessage: Codable, Identifiable, Equatable {
     var createdAt: Date
     /// True for an assistant turn whose run exited non-zero; the thread is kept either way.
     var failed: Bool
+    /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
+    /// older persisted threads decode unchanged.
+    var imagePath: String?
 
     init(
         id: UUID = UUID(),
         role: StudioMessageRole,
         content: String,
         createdAt: Date = Date(),
-        failed: Bool = false
+        failed: Bool = false,
+        imagePath: String? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.failed = failed
+        self.imagePath = imagePath
     }
 }
 
