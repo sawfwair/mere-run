@@ -70,4 +70,22 @@ enum ConversationTranscript {
         // Content plus an approximation of the "User: "/"Assistant: " label and separator.
         message.content.count + 12
     }
+
+    /// Removes model reasoning blocks from an assistant reply. With `--stream` the CLI emits
+    /// `<think>…</think>` reasoning inline (it only strips it on the non-stream path), so the app
+    /// must strip it before storing/replaying — otherwise reasoning leaks into the next turn's
+    /// prompt. Complete blocks are removed; a trailing unclosed block (still streaming) is hidden.
+    static func stripThinkTags(_ text: String) -> String {
+        var result = text.replacingOccurrences(
+            of: "<think>[\\s\\S]*?</think>",
+            with: "",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: "<think>[\\s\\S]*$",
+            with: "",
+            options: .regularExpression
+        )
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

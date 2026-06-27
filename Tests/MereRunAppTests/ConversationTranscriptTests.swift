@@ -36,6 +36,25 @@ final class ConversationTranscriptTests: XCTestCase {
         XCTAssertFalse(rendered.includedMessageIDs.contains(oldest.id))
     }
 
+    func testStripThinkTagsRemovesCompleteBlock() {
+        let text = "<think>reasoning here</think>The answer is 42."
+        XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "The answer is 42.")
+    }
+
+    func testStripThinkTagsRemovesMultilineAndMultipleBlocks() {
+        let text = "<think>line1\nline2</think>Hello<think>more</think> world"
+        XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "Hello world")
+    }
+
+    func testStripThinkTagsHidesTrailingUnclosedBlock() {
+        let text = "Partial answer <think>still reasoning..."
+        XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "Partial answer")
+    }
+
+    func testStripThinkTagsLeavesPlainTextUntouched() {
+        XCTAssertEqual(ConversationTranscript.stripThinkTags("just text"), "just text")
+    }
+
     func testSystemPromptIsReservedAgainstTheBudget() {
         let messages = [
             StudioMessage(role: .user, content: String(repeating: "x", count: 60)),

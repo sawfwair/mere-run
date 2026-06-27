@@ -442,6 +442,9 @@ final class MereRunController: ObservableObject {
     /// the foreground one) so the UI can disable a thread's composer and stream into the right
     /// thread even when a different conversation is in the foreground.
     @Published private(set) var runningConversationIDs: Set<UUID> = []
+    /// Live, think-stripped assistant text per in-flight conversation, so a streaming bubble can
+    /// render even for a background conversation (the foreground-only liveOutputText cannot).
+    @Published private(set) var conversationLiveText: [UUID: String] = [:]
     @Published private(set) var queuedRunCount = 0
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
     @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
@@ -702,6 +705,9 @@ final class MereRunController: ObservableObject {
         var process: MereRunRunningProcess?
         var stdoutBuffer = ""
         var stderrBuffer = ""
+        /// Unbounded stdout accumulator for conversation turns only (chat/code), so a long reply
+        /// is captured in full — `stdoutBuffer` is capped at 32 KB for the console.
+        var fullOutput = ""
         var logs: [LogLine] = []
         var liveOutputText = ""
         var currentProgress: StudioRunProgress?
@@ -1095,8 +1101,18 @@ final class MereRunController: ObservableObject {
         session.currentProgress = nil
 
         let detectedOutput = detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
-        let outputText = capturedResultText(for: session, exitCode: exitCode)
+        // Conversation turns finalize from the unbounded, think-stripped accumulator so long
+        // replies are not clipped by the 32 KB console buffer; other modes use the buffer.
+        let outputText: String?
+        if session.spec.conversationID != nil, exitCode == 0 {
+            outputText = ConversationTranscript.stripThinkTags(session.fullOutput.replacingOccurrences(of: "\0", with: ""))
+        } else {
+            outputText = capturedResultText(for: session, exitCode: exitCode)
+        }
         if let detectedOutput { session.lastOutputURL = detectedOutput }
+        if let conversationID = session.spec.conversationID {
+            conversationLiveText[conversationID] = nil
+        }
 
         if exitCode == 0 {
             session.status = detectedOutput == nil ? "Completed" : "Completed: \(detectedOutput!.lastPathComponent)"
@@ -1262,6 +1278,13 @@ final class MereRunController: ObservableObject {
             session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
             session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
             publishDetectedOutputIfNeeded(for: session)
+            // Conversation turns accumulate the full (untrimmed) reply and publish a live,
+            // think-stripped view so a streaming bubble renders even when backgrounded.
+            if let conversationID = session.spec.conversationID {
+                session.fullOutput += text
+                conversationLiveText[conversationID] =
+                    ConversationTranscript.stripThinkTags(session.fullOutput.replacingOccurrences(of: "\0", with: ""))
+            }
         } else if stream == .stderr {
             session.stderrBuffer += text
             session.stderrBuffer = Self.trimmed(session.stderrBuffer, toByteLimit: Self.stderrBufferByteLimit)

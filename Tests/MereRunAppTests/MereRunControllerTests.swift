@@ -304,6 +304,63 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.lastRunResult?.conversationID, queuedConversation)
     }
 
+    func testConversationReplyKeepsFullOutputBeyondConsoleBuffer() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let conversationID = UUID()
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+        XCTAssertTrue(controller.run(studio: request))
+
+        // A reply far larger than the 32 KB console buffer must survive in full for the thread.
+        let head = String(repeating: "A", count: 40_000)
+        let tail = "TAIL-MARKER"
+        runner.starts[0].stdout(head + tail)
+        await Task.yield()
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        let captured = try XCTUnwrap(controller.lastRunResult?.outputText)
+        XCTAssertEqual(controller.lastRunResult?.conversationID, conversationID)
+        XCTAssertGreaterThan(captured.count, 39_000)
+        XCTAssertTrue(captured.hasSuffix(tail))
+        XCTAssertTrue(captured.hasPrefix("A"))
+    }
+
+    func testConversationReplyStripsThinkTagsLiveAndFinal() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let conversationID = UUID()
+        let request = StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft,
+            conversationID: conversationID
+        )
+        XCTAssertTrue(controller.run(studio: request))
+
+        runner.starts[0].stdout("<think>deliberating</think>Final answer.")
+        await Task.yield()
+        // Live, think-stripped text is published for the streaming bubble.
+        XCTAssertEqual(controller.conversationLiveText[conversationID], "Final answer.")
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(controller.lastRunResult?.outputText, "Final answer.")
+        // Cleared once finalized so the bubble switches to the persisted message.
+        XCTAssertNil(controller.conversationLiveText[conversationID])
+    }
+
     func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
