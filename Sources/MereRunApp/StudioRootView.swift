@@ -155,7 +155,9 @@ struct StudioRootView: View {
                     onReveal: revealSelectedOutput,
                     onPullModel: pullModel,
                     onShowDetails: { showAdvanced = true },
-                    onNewChat: startNewConversation
+                    onNewChat: startNewConversation,
+                    onCopy: copyToClipboard,
+                    onRetry: retryLastTurn
                 )
 
                 StudioPromptBar(
@@ -423,6 +425,40 @@ struct StudioRootView: View {
             activeConversationID = conversationID
             selectedLibraryID = conversationID
             draft.prompt = ""
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    private func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    /// Re-runs the latest turn: drops the last assistant reply (if any) and re-sends the thread
+    /// ending at the last user message, reusing the thread's own system prompt and model.
+    private func retryLastTurn() {
+        guard let conversationID = activeConversationID,
+              !controller.runningConversationIDs.contains(conversationID) else { return }
+        library.dropLastAssistant(conversationID: conversationID)
+        guard let item = library.items.first(where: { $0.id == conversationID }),
+              item.messages?.last?.role == .user else { return }
+
+        let systemPrompt = item.systemPrompt
+        let rendered = ConversationTranscript.render(
+            messages: item.messages ?? [],
+            systemPrompt: systemPrompt
+        )
+        do {
+            var runDraft = draft
+            runDraft.prompt = rendered.prompt
+            runDraft.secondaryText = systemPrompt ?? ""
+            if let model = item.model, !model.isBlank { runDraft.model = model }
+            let request = try StudioCommandAdapter.makeRequest(
+                mode: item.mode, draft: runDraft, conversationID: conversationID
+            )
+            controller.run(studio: request)
         } catch {
             studioError = error.localizedDescription
         }
@@ -746,6 +782,8 @@ private struct StudioCanvas: View {
     let onPullModel: () -> Void
     let onShowDetails: () -> Void
     let onNewChat: () -> Void
+    let onCopy: (String) -> Void
+    let onRetry: () -> Void
 
     private var visibleLiveOutputText: String? {
         guard isRunning else { return nil }
@@ -771,7 +809,9 @@ private struct StudioCanvas: View {
                     liveText: conversationLiveText,
                     isRunning: isConversationRunning,
                     mode: mode,
-                    onNewChat: onNewChat
+                    onNewChat: onNewChat,
+                    onCopy: onCopy,
+                    onRetry: onRetry
                 )
                 .transition(.opacity)
             } else if let item {

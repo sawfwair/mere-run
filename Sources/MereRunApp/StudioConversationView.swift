@@ -9,6 +9,8 @@ struct StudioConversationView: View {
     let isRunning: Bool
     let mode: StudioMode
     let onNewChat: () -> Void
+    let onCopy: (String) -> Void
+    let onRetry: () -> Void
 
     private static let streamingBubbleID = "studio.conversation.streaming"
 
@@ -57,7 +59,9 @@ struct StudioConversationView: View {
                                 role: message.role,
                                 content: message.content,
                                 failed: message.failed,
-                                monospaced: mode == .code && message.role == .assistant
+                                monospaced: mode == .code && message.role == .assistant,
+                                onCopy: message.content.isEmpty ? nil : { onCopy(message.content) },
+                                onRetry: retryAction(for: message)
                             )
                             .id(message.id)
                         }
@@ -84,6 +88,12 @@ struct StudioConversationView: View {
         }
     }
 
+    /// Retry is offered only on the final assistant turn, and only when idle.
+    private func retryAction(for message: StudioMessage) -> (() -> Void)? {
+        guard !isRunning, message.role == .assistant, message.id == messages.last?.id else { return nil }
+        return onRetry
+    }
+
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.15)) {
             if isRunning {
@@ -101,6 +111,8 @@ private struct StudioMessageBubble: View {
     var failed: Bool = false
     var isStreaming: Bool = false
     var monospaced: Bool = false
+    var onCopy: (() -> Void)?
+    var onRetry: (() -> Void)?
 
     private var isUser: Bool { role == .user }
 
@@ -116,6 +128,23 @@ private struct StudioMessageBubble: View {
                     Label("This turn failed", systemImage: "exclamationmark.triangle")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.red)
+                }
+                if !isStreaming, onCopy != nil || onRetry != nil {
+                    HStack(spacing: 14) {
+                        if let onCopy {
+                            Button(action: onCopy) { Label("Copy", systemImage: "doc.on.doc") }
+                                .buttonStyle(.plain)
+                                .help("Copy message")
+                        }
+                        if let onRetry {
+                            Button(action: onRetry) { Label("Retry", systemImage: "arrow.clockwise") }
+                                .buttonStyle(.plain)
+                                .help("Regenerate this reply")
+                        }
+                    }
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .padding(.top, 2)
                 }
             }
             .padding(14)
