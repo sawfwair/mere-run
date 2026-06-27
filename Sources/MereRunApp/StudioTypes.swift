@@ -438,6 +438,36 @@ enum StudioLibraryStatus: String, Codable, Equatable {
     case failed
 }
 
+enum StudioMessageRole: String, Codable, Equatable {
+    case user
+    case assistant
+}
+
+/// One turn in a chat/code conversation. The app owns conversation history (the CLI is
+/// stateless per invocation), so these are persisted in the owning `StudioLibraryItem`.
+struct StudioMessage: Codable, Identifiable, Equatable {
+    let id: UUID
+    var role: StudioMessageRole
+    var content: String
+    var createdAt: Date
+    /// True for an assistant turn whose run exited non-zero; the thread is kept either way.
+    var failed: Bool
+
+    init(
+        id: UUID = UUID(),
+        role: StudioMessageRole,
+        content: String,
+        createdAt: Date = Date(),
+        failed: Bool = false
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.createdAt = createdAt
+        self.failed = failed
+    }
+}
+
 struct StudioLibraryItem: Codable, Identifiable, Equatable {
     let id: UUID
     var mode: StudioMode
@@ -451,12 +481,25 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var commandPreview: String
     var outputText: String?
     var customTitle: String?
+    // Conversation channel — non-nil only for .chat / .code threads. Optional + additive so
+    // legacy library.json rows (which lack these keys) decode unchanged with nil.
+    var messages: [StudioMessage]? = nil
+    var systemPrompt: String? = nil
+    var model: String? = nil
 
     var displayTitle: String {
         if let customTitle, !customTitle.isBlank { return customTitle }
+        if let firstUser = messages?.first(where: { $0.role == .user })?.content,
+           !firstUser.isBlank {
+            return firstUser
+        }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         return mode.title
+    }
+
+    var isConversation: Bool {
+        messages != nil
     }
 }
 

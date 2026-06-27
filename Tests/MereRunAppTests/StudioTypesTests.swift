@@ -202,6 +202,49 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(StudioResultParser.outputPaths(fromStdout: stdout).isEmpty)
     }
 
+    func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
+        let legacy = StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: "hello there",
+            inputURL: nil, outputURL: nil, createdAt: Date(), updatedAt: Date(),
+            status: .completed, exitCode: 0, commandPreview: "mere.run text chat",
+            outputText: "hi"
+        )
+        let data = try JSONEncoder().encode(legacy)
+        // Nil optionals are omitted, so the encoded form matches a pre-conversation row.
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertFalse(json.contains("messages"))
+        XCTAssertFalse(json.contains("systemPrompt"))
+
+        let decoded = try JSONDecoder().decode(StudioLibraryItem.self, from: data)
+        XCTAssertNil(decoded.messages)
+        XCTAssertFalse(decoded.isConversation)
+        XCTAssertEqual(decoded.displayTitle, "hello there")
+    }
+
+    func testConversationItemRoundTripsAndTitlesFromFirstUserMessage() throws {
+        let messages = [
+            StudioMessage(role: .user, content: "what is swift?"),
+            StudioMessage(role: .assistant, content: "A language."),
+        ]
+        var item = StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: "",
+            inputURL: nil, outputURL: nil, createdAt: Date(), updatedAt: Date(),
+            status: .completed, exitCode: 0, commandPreview: "mere.run text chat",
+            outputText: nil
+        )
+        item.messages = messages
+        item.systemPrompt = "You are helpful."
+        item.model = "text-chat-gemma4"
+
+        let data = try JSONEncoder().encode(item)
+        let decoded = try JSONDecoder().decode(StudioLibraryItem.self, from: data)
+        XCTAssertEqual(decoded.messages, messages)
+        XCTAssertEqual(decoded.systemPrompt, "You are helpful.")
+        XCTAssertEqual(decoded.model, "text-chat-gemma4")
+        XCTAssertTrue(decoded.isConversation)
+        XCTAssertEqual(decoded.displayTitle, "what is swift?")
+    }
+
     func testSfxStudioModeBuildsGenerateCommand() throws {
         var draft = StudioDraft()
         draft.reset(for: .sfx)
