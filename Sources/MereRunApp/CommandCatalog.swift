@@ -47,10 +47,21 @@ enum CommandTemplateID: String, CaseIterable {
     case visionTrack
     case visionTrackLive
     case musicGenerate
+    case musicAnalyze
+    case musicRealtime
     case videoGenerate
     case videoExportLatents
     case sfxGenerate
     case sfxVideo
+    case sfxAEEncode
+    case sfxAEDecode
+    case sfxClapScore
+    case sfxConditionText
+    case modelBenchmark
+    case pluginList
+    case pluginInstall
+    case pluginDoctor
+    case openWebui
     case apiServe
     case custom
 }
@@ -128,6 +139,12 @@ struct CommandDraft: Equatable {
     var refAudioPath = ""
     var refText = ""
     var saveProfileName = ""
+    // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
+    var imagePath = ""
+    var tools = ""
+    var toolLoop = false
+    var allowShellExec = false
+    var sandboxDir = ""
     var setupMode = "agent"
     var agentModel = "tier"
     var quiet = false
@@ -378,8 +395,13 @@ struct CommandTemplate: Identifiable, Equatable {
         case .textChat:
             args = ["text", "chat", "--prompt", draft.prompt]
             if !draft.secondaryText.isBlank { args += ["--system", draft.secondaryText] }
+            if !draft.imagePath.isBlank { args += ["--image", draft.imagePath] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.tools.isBlank { args += ["--tools", draft.tools] }
+            if draft.toolLoop { args.append("--tool-loop") }
+            if draft.allowShellExec { args.append("--allow-shell-exec") }
+            if !draft.sandboxDir.isBlank { args += ["--sandbox-dir", draft.sandboxDir] }
             if draft.stream { args.append("--stream") }
             if draft.all { args.append("--thinking") }
             if draft.force { args.append("--stats") }
@@ -532,6 +554,66 @@ struct CommandTemplate: Identifiable, Equatable {
             args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if draft.quiet { args.append("--quiet") }
+
+        case .musicAnalyze:
+            args = ["music", "analyze", draft.inputPath]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.all { args.append("--include-raw-lm") }
+            if draft.quiet { args.append("--quiet") }
+
+        case .musicRealtime:
+            args = ["music", "realtime", draft.prompt]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--duration", format(draft.durationSeconds)]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            // GUI subprocesses have no audio device contract or stdin TTY, so capture to the
+            // output WAV without live playback; interactive steering stays CLI-only.
+            args.append("--no-play")
+            if draft.quiet { args.append("--quiet") }
+
+        case .sfxAEEncode:
+            args = ["sfx", "ae", "encode", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .sfxAEDecode:
+            args = ["sfx", "ae", "decode", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .sfxClapScore:
+            args = ["sfx", "clap", "score", draft.prompt, draft.inputPath]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .sfxConditionText:
+            args = ["sfx", "condition", "text", draft.prompt]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .modelBenchmark:
+            args = ["model", "benchmark", "q36-mtp"]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.all { args.append("--json") }
+
+        case .pluginList:
+            args = ["plugin", "list"]
+            if draft.all { args.append("--json") }
+
+        case .pluginInstall:
+            args = ["plugin", "install", draft.prompt]
+            if draft.force { args.append("--yes") }
+
+        case .pluginDoctor:
+            args = ["plugin", "doctor", draft.prompt]
+
+        case .openWebui:
+            args = ["open-webui", "quickstart", "--host", draft.host, "--port", String(draft.port)]
+            if !draft.model.isBlank { args += ["--text-model", draft.model] }
+            if !draft.apiKey.isBlank { args += ["--api-key", draft.apiKey] }
 
         case .apiServe:
             args = ["api", "serve", "--host", draft.host, "--port", String(draft.port), "--engine", draft.engine]
@@ -870,6 +952,104 @@ enum CommandCatalog {
             inputKind: .video,
             outputKind: .file("wav"),
             defaultPrompt: "footsteps on gravel"
+        ),
+        CommandTemplate(
+            id: .musicAnalyze,
+            category: .media,
+            title: "Analyze music",
+            subtitle: "ACE-Step audio understanding (JSON)",
+            systemImage: "waveform.badge.magnifyingglass",
+            inputKind: .audio,
+            defaultModel: "music-acestep"
+        ),
+        CommandTemplate(
+            id: .musicRealtime,
+            category: .media,
+            title: "Realtime music",
+            subtitle: "Magenta RT2 capture to WAV",
+            systemImage: "dot.radiowaves.left.and.right",
+            promptLabel: "Prompt",
+            outputKind: .file("wav"),
+            defaultPrompt: "warm ambient pads with a slow build"
+        ),
+        CommandTemplate(
+            id: .sfxAEEncode,
+            category: .sfx,
+            title: "Autoencoder · encode",
+            subtitle: "Audio → Woosh latents (.npy)",
+            systemImage: "arrow.down.doc",
+            inputKind: .audio,
+            outputKind: .file("npy")
+        ),
+        CommandTemplate(
+            id: .sfxAEDecode,
+            category: .sfx,
+            title: "Autoencoder · decode",
+            subtitle: "Woosh latents (.npy) → audio",
+            systemImage: "arrow.up.doc",
+            inputKind: .file([.data]),
+            outputKind: .file("wav")
+        ),
+        CommandTemplate(
+            id: .sfxClapScore,
+            category: .sfx,
+            title: "CLAP score",
+            subtitle: "Score audio against a prompt (JSON)",
+            systemImage: "checkmark.seal",
+            promptLabel: "Prompt",
+            inputKind: .audio,
+            defaultPrompt: "a heavy wooden door creaking open"
+        ),
+        CommandTemplate(
+            id: .sfxConditionText,
+            category: .sfx,
+            title: "Conditioning · text",
+            subtitle: "Export Woosh conditioning tensors",
+            systemImage: "function",
+            promptLabel: "Prompt",
+            outputKind: .file("safetensors"),
+            defaultPrompt: "a heavy wooden door creaking open"
+        ),
+        CommandTemplate(
+            id: .modelBenchmark,
+            category: .models,
+            title: "Benchmark",
+            subtitle: "Focused Qwen3.6 MTP benchmark",
+            systemImage: "speedometer",
+            defaultModel: "text-chat-q36-nano"
+        ),
+        CommandTemplate(
+            id: .pluginList,
+            category: .server,
+            title: "Plugins",
+            subtitle: "List official companion plugins",
+            systemImage: "puzzlepiece.extension"
+        ),
+        CommandTemplate(
+            id: .pluginInstall,
+            category: .server,
+            title: "Install plugin",
+            subtitle: "Install an official plugin by id",
+            systemImage: "square.and.arrow.down",
+            promptLabel: "Plugin id",
+            defaultPrompt: "mere-runpod"
+        ),
+        CommandTemplate(
+            id: .pluginDoctor,
+            category: .server,
+            title: "Plugin doctor",
+            subtitle: "Run an installed plugin's doctor",
+            systemImage: "stethoscope",
+            promptLabel: "Plugin id",
+            defaultPrompt: "mere-runpod"
+        ),
+        CommandTemplate(
+            id: .openWebui,
+            category: .server,
+            title: "Open WebUI",
+            subtitle: "Start the Open WebUI companion",
+            systemImage: "globe",
+            defaultModel: "text-chat-gemma4-12b"
         ),
         CommandTemplate(
             id: .apiServe,

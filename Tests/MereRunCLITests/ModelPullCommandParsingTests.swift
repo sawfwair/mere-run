@@ -1,4 +1,5 @@
 import XCTest
+import MereRunCore
 @testable import MereRunCLI
 
 final class ModelPullCommandParsingTests: XCTestCase {
@@ -15,6 +16,49 @@ final class ModelPullCommandParsingTests: XCTestCase {
     func testModelCommandExposesCapabilities() {
         let commandNames = Set(Model.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("capabilities"))
+    }
+
+    func testModelCapabilitiesParsesJsonRecommendationFlags() throws {
+        let cmd = try ModelCapabilities.parse(["--recommended", "--json"])
+
+        XCTAssertTrue(cmd.recommended)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testModelCapabilitiesJsonIncludesMachineChatRecommendation() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M1 Max",
+            isAppleSiliconMac: true
+        )
+        let bands = ManagedModelCapabilityCatalog.recommendedChatBandReports(on: machine)
+        let payload = ModelCapabilitiesOutput(
+            machine: .init(machine),
+            chatBands: bands.map { .init($0, machine: machine) },
+            recommendedChatModel: bands
+                .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
+                .map { .init($0, machine: machine) },
+            setupAgent: MereRunAgentModelCatalog
+                .recommendation(for: .tier, on: machine)
+                .map(ModelCapabilitiesSetupAgent.init),
+            recommendedSetupModels: ManagedModelCapabilityCatalog
+                .recommendedSetupReports(on: machine)
+                .map(ModelCapabilitiesModel.init),
+            unavailableRecommendedModelIDs: [],
+            models: []
+        )
+
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(ModelCapabilitiesOutput.self, from: data)
+
+        XCTAssertEqual(decoded.machine.unifiedMemoryGB, 32)
+        XCTAssertEqual(decoded.recommendedChatModel?.modelID, "text-chat-q36-nano")
+        XCTAssertEqual(decoded.recommendedChatModel?.alternateModelIDs, [
+            "text-chat-gemma4-turbo",
+            "text-chat-gemma4-12b-4bit",
+        ])
+        XCTAssertTrue(decoded.recommendedChatModel?.currentMachine == true)
+        XCTAssertEqual(decoded.setupAgent?.id, "text-chat-q36-nano")
     }
 
     func testInstallValidationErrorIncludesRetryWithoutUsage() {

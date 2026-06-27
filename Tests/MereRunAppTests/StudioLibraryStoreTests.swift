@@ -187,6 +187,37 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.messages?.map(\.role), [.user])
     }
 
+    func testTruncateRemovesFromMessageAndReturnsUserContent() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "one")
+        store.appendAssistant(conversationID: conversationID, content: "a1", exitCode: 0)
+        store.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "two")
+        store.appendAssistant(conversationID: conversationID, content: "a2", exitCode: 0)
+
+        let messages = try XCTUnwrap(store.items.first?.messages)
+        let secondTurnID = try XCTUnwrap(messages.first { $0.content == "two" }?.id)
+        let removed = store.truncate(conversationID: conversationID, removingFrom: secondTurnID)
+
+        XCTAssertEqual(removed?.content, "two")
+        XCTAssertEqual(store.items.first?.messages?.map(\.content), ["one", "a1"])
+    }
+
+    func testAppendUserStoresImageForVisionTurnAndTruncateReturnsIt() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil,
+            content: "what is this?", imagePath: "/tmp/photo.png"
+        )
+        let messageID = try XCTUnwrap(store.items.first?.messages?.first?.id)
+        let removed = store.truncate(conversationID: conversationID, removingFrom: messageID)
+        XCTAssertEqual(removed?.imagePath, "/tmp/photo.png")
+        XCTAssertEqual(store.items.first?.messages?.isEmpty, true)
+    }
+
     func testLoadKeepsValidRowsWhenOneIsCorrupt() throws {
         let url = try temporaryLibraryURL()
         let good = """

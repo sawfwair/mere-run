@@ -121,11 +121,12 @@ final class StudioLibraryStore: ObservableObject {
         mode: StudioMode,
         model: String?,
         systemPrompt: String?,
-        content: String
+        content: String,
+        imagePath: String? = nil
     ) -> StudioLibraryItem {
         if let index = items.firstIndex(where: { $0.id == conversationID }) {
             var item = items[index]
-            item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content)]
+            item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: imagePath)]
             item.status = .running
             item.updatedAt = Date()
             items[index] = item
@@ -145,7 +146,7 @@ final class StudioLibraryStore: ObservableObject {
             exitCode: nil,
             commandPreview: mode == .code ? "mere.run text code" : "mere.run text chat",
             outputText: nil,
-            messages: [StudioMessage(role: .user, content: content)],
+            messages: [StudioMessage(role: .user, content: content, imagePath: imagePath)],
             systemPrompt: systemPrompt,
             model: model
         )
@@ -167,6 +168,23 @@ final class StudioLibraryStore: ObservableObject {
         item.updatedAt = Date()
         items[index] = item
         save()
+    }
+
+    /// Truncates a thread at `messageID` (removing it and everything after). Returns the removed
+    /// message when it was a user turn, so the composer can be repopulated (text + image) for editing.
+    @discardableResult
+    func truncate(conversationID: UUID, removingFrom messageID: UUID) -> StudioMessage? {
+        guard let index = items.firstIndex(where: { $0.id == conversationID }),
+              var messages = items[index].messages,
+              let messageIndex = messages.firstIndex(where: { $0.id == messageID }) else { return nil }
+        let removed = messages[messageIndex]
+        messages.removeSubrange(messageIndex...)
+        var item = items[index]
+        item.messages = messages
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+        return removed.role == .user ? removed : nil
     }
 
     /// Drops the last assistant message of a thread (used by retry before re-running the turn).

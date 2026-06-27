@@ -11,6 +11,7 @@ struct StudioConversationView: View {
     let onNewChat: () -> Void
     let onCopy: (String) -> Void
     let onRetry: () -> Void
+    let onEdit: (UUID) -> Void
 
     private static let streamingBubbleID = "studio.conversation.streaming"
 
@@ -83,7 +84,8 @@ struct StudioConversationView: View {
                                 failed: message.failed,
                                 monospaced: mode == .code && message.role == .assistant,
                                 onCopy: message.content.isEmpty ? nil : { onCopy(message.content) },
-                                onRetry: retryAction(for: message)
+                                onRetry: retryAction(for: message),
+                                onEdit: editAction(for: message)
                             )
                             .id(message.id)
                         }
@@ -116,6 +118,12 @@ struct StudioConversationView: View {
         return onRetry
     }
 
+    /// Edit is offered on user turns when idle (truncates the thread back to that turn).
+    private func editAction(for message: StudioMessage) -> (() -> Void)? {
+        guard !isRunning, message.role == .user else { return nil }
+        return { onEdit(message.id) }
+    }
+
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.15)) {
             if isRunning {
@@ -135,6 +143,7 @@ private struct StudioMessageBubble: View {
     var monospaced: Bool = false
     var onCopy: (() -> Void)?
     var onRetry: (() -> Void)?
+    var onEdit: (() -> Void)?
 
     private var isUser: Bool { role == .user }
 
@@ -151,12 +160,17 @@ private struct StudioMessageBubble: View {
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.red)
                 }
-                if !isStreaming, onCopy != nil || onRetry != nil {
+                if !isStreaming, onCopy != nil || onRetry != nil || onEdit != nil {
                     HStack(spacing: 14) {
                         if let onCopy {
                             Button(action: onCopy) { Label("Copy", systemImage: "doc.on.doc") }
                                 .buttonStyle(.plain)
                                 .help("Copy message")
+                        }
+                        if let onEdit {
+                            Button(action: onEdit) { Label("Edit", systemImage: "pencil") }
+                                .buttonStyle(.plain)
+                                .help("Edit and re-run from this turn")
                         }
                         if let onRetry {
                             Button(action: onRetry) { Label("Retry", systemImage: "arrow.clockwise") }

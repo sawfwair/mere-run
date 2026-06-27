@@ -92,7 +92,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     var acceptedTypes: [UTType] {
         switch self {
-        case .createImage, .readImage, .findObjects, .segment:
+        case .createImage, .readImage, .findObjects, .segment, .chat:
             return [.image]
         case .listen:
             return [.audio]
@@ -201,8 +201,27 @@ struct StudioDraft: Codable, Equatable {
     var seed = ""
     var durationSeconds = 10.0
     var readImageAction: StudioReadImageAction = .inspect
+    // Speak voice cloning (Studio surface). "style" uses the voice description; "clone" uses a
+    // saved profile or reference audio.
+    var voiceMode = "style"
+    var voiceProfile = ""
+    var refAudioPath = ""
+    var saveProfileName = ""
+    // Advanced depth shared with the Advanced surface (see StudioOptionSchema). Defaults are
+    // seeded from the matching template's CommandDraft so the two surfaces never drift.
+    var temperature = 0.7
+    var maxTokens = 2048
+    var cfgScale = 1.0
+    var strength = 0.75
+    var language = "auto"
+    var timestamps = true
+    var backend = "auto"
+    var fps = 24
+    var numFrames = 65
+    var variant = "distilled"
 
     mutating func reset(for mode: StudioMode) {
+        let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
         prompt = modeDefaultPrompt(mode)
         secondaryText = modeDefaultSecondaryText(mode)
         inputPath = ""
@@ -213,6 +232,20 @@ struct StudioDraft: Codable, Equatable {
         seed = ""
         durationSeconds = 10
         readImageAction = .inspect
+        voiceMode = "style"
+        voiceProfile = ""
+        refAudioPath = ""
+        saveProfileName = ""
+        temperature = base?.temperature ?? 0.7
+        maxTokens = base?.maxTokens ?? 2048
+        cfgScale = base?.cfgScale ?? 1.0
+        strength = base?.strength ?? 0.75
+        language = base?.language ?? "auto"
+        timestamps = base?.timestamps ?? true
+        backend = base?.backend ?? "auto"
+        fps = base?.fps ?? 24
+        numFrames = base?.numFrames ?? 65
+        variant = base?.variant ?? "distilled"
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -226,6 +259,54 @@ struct StudioDraft: Codable, Equatable {
 
     private func modeDefaultSecondaryText(_ mode: StudioMode) -> String {
         CommandCatalog.template(id: mode.defaultTemplateID)?.defaultSecondaryText ?? ""
+    }
+}
+
+/// One advanced option for a Studio mode: a label plus a typed control bound to a `StudioDraft`
+/// key path. This is the single source of truth for the depth controls — the Studio sheet renders
+/// it, and the adapter maps the same fields to the identical CLI flags the Advanced surface emits.
+struct StudioOptionField: Identifiable {
+    let id: String
+    let label: String
+    let control: Control
+
+    enum Control {
+        case int(WritableKeyPath<StudioDraft, Int>, range: ClosedRange<Int>, step: Int)
+        case double(WritableKeyPath<StudioDraft, Double>)
+        case bool(WritableKeyPath<StudioDraft, Bool>)
+        case text(WritableKeyPath<StudioDraft, String>, placeholder: String)
+    }
+}
+
+enum StudioOptionSchema {
+    static func fields(for mode: StudioMode) -> [StudioOptionField] {
+        switch mode {
+        case .chat, .code:
+            return [
+                StudioOptionField(id: "temperature", label: "Temperature", control: .double(\.temperature)),
+                StudioOptionField(id: "maxTokens", label: "Max tokens", control: .int(\.maxTokens, range: 1...32_768, step: 64)),
+            ]
+        case .createImage:
+            return [
+                StudioOptionField(id: "cfg", label: "CFG scale", control: .double(\.cfgScale)),
+                StudioOptionField(id: "strength", label: "Img2img strength", control: .double(\.strength)),
+            ]
+        case .listen:
+            return [
+                StudioOptionField(id: "language", label: "Language", control: .text(\.language, placeholder: "auto")),
+                StudioOptionField(id: "backend", label: "Backend", control: .text(\.backend, placeholder: "auto")),
+                StudioOptionField(id: "timestamps", label: "Timestamps", control: .bool(\.timestamps)),
+            ]
+        case .video:
+            return [
+                StudioOptionField(id: "variant", label: "Variant", control: .text(\.variant, placeholder: "distilled")),
+                StudioOptionField(id: "fps", label: "Frames per second", control: .int(\.fps, range: 1...60, step: 1)),
+                StudioOptionField(id: "numFrames", label: "Frames", control: .int(\.numFrames, range: 1...600, step: 1)),
+                StudioOptionField(id: "strength", label: "Image strength", control: .double(\.strength)),
+            ]
+        default:
+            return []
+        }
     }
 }
 
@@ -313,23 +394,38 @@ enum StudioCommandAdapter {
             draft.height = studioDraft.height
             draft.steps = studioDraft.steps
             draft.seed = studioDraft.seed
+            draft.cfgScale = studioDraft.cfgScale
+            draft.strength = studioDraft.strength
 
         case .chat, .code:
             draft.prompt = prompt
             draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.temperature = studioDraft.temperature
+            draft.maxTokens = studioDraft.maxTokens
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }
+            // Vision chat: a single attached image rides with this turn (chat only, not code).
+            if mode == .chat, !studioDraft.inputPath.isBlank { draft.imagePath = studioDraft.inputPath }
 
         case .speak:
             draft.prompt = prompt
             draft.secondaryText = secondary.isEmpty ? draft.secondaryText : secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.voiceMode = studioDraft.voiceMode
+            if studioDraft.voiceMode == "clone" {
+                draft.voiceProfile = studioDraft.voiceProfile
+                draft.refAudioPath = studioDraft.refAudioPath
+                draft.saveProfileName = studioDraft.saveProfileName
+            }
 
         case .listen:
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.language = studioDraft.language
+            draft.backend = studioDraft.backend
+            draft.timestamps = studioDraft.timestamps
 
         case .readImage:
             draft.inputPath = studioDraft.inputPath
@@ -356,6 +452,10 @@ enum StudioCommandAdapter {
             draft.width = studioDraft.width
             draft.height = studioDraft.height
             draft.seed = studioDraft.seed
+            draft.variant = studioDraft.variant
+            draft.fps = studioDraft.fps
+            draft.numFrames = studioDraft.numFrames
+            draft.strength = studioDraft.strength
 
         case .sfx:
             draft.prompt = prompt
@@ -435,6 +535,13 @@ enum StudioCommandAdapter {
             throw StudioCommandError.missingInput(mode.acceptedTypes.first == .audio ? "audio" : mode.acceptedTypes.first == .movie ? "video" : "image")
         }
 
+        // Clone voice needs a source the CLI accepts; otherwise `speech synthesize` hard-fails with
+        // "Clone mode requires --profile or --ref-audio." Validate it up front instead.
+        if mode == .speak, draft.voiceMode == "clone",
+           draft.voiceProfile.isBlank, draft.refAudioPath.isBlank {
+            throw StudioCommandError.missingPrompt("A saved voice profile or reference audio")
+        }
+
         let promptRequired: Bool
         switch mode {
         case .listen:
@@ -472,19 +579,24 @@ struct StudioMessage: Codable, Identifiable, Equatable {
     var createdAt: Date
     /// True for an assistant turn whose run exited non-zero; the thread is kept either way.
     var failed: Bool
+    /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
+    /// older persisted threads decode unchanged.
+    var imagePath: String?
 
     init(
         id: UUID = UUID(),
         role: StudioMessageRole,
         content: String,
         createdAt: Date = Date(),
-        failed: Bool = false
+        failed: Bool = false,
+        imagePath: String? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.failed = failed
+        self.imagePath = imagePath
     }
 }
 
@@ -807,5 +919,104 @@ enum ModelReadinessParser {
         }
 
         return .unknown("Run model capabilities or configure model sources to check \(modelID).")
+    }
+}
+
+/// A parsed snapshot of `mere.run status --json` for the Studio status pill.
+struct StudioServerStatus: Equatable {
+    let health: String
+    let loadedModels: [String]
+    let installedCount: Int
+
+    var isReachable: Bool {
+        let normalized = health.lowercased()
+        return normalized == "ok" || normalized == "up" || normalized == "healthy"
+            || normalized == "reachable" || !loadedModels.isEmpty
+    }
+
+    var loadedModelSummary: String? {
+        loadedModels.first
+    }
+
+    static func parse(jsonStdout: String) -> StudioServerStatus? {
+        guard let data = jsonObjectData(in: jsonStdout) else { return nil }
+        struct Snapshot: Decodable {
+            struct Server: Decodable {
+                let health: String?
+                let loadedModels: [String]?
+            }
+            struct InstalledModel: Decodable { let id: String }
+            let server: Server?
+            let installedModels: [InstalledModel]?
+        }
+        guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return nil }
+        return StudioServerStatus(
+            health: snapshot.server?.health ?? "unknown",
+            loadedModels: snapshot.server?.loadedModels ?? [],
+            installedCount: snapshot.installedModels?.count ?? 0
+        )
+    }
+
+    /// The CLI may emit diagnostics around the JSON; isolate the top-level object.
+    private static func jsonObjectData(in text: String) -> Data? {
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              start < end else { return nil }
+        return String(text[start...end]).data(using: .utf8)
+    }
+}
+
+/// One offline `guide` topic from `guide --list --json`, with the command path used to fetch it.
+struct StudioGuideTopic: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let commandPath: [String]
+
+    static func parse(listJSON: String) -> [StudioGuideTopic] {
+        guard let data = jsonArrayData(in: listJSON) else { return [] }
+        struct Item: Decodable { let topic: String; let title: String; let commands: [String] }
+        guard let items = try? JSONDecoder().decode([Item].self, from: data) else { return [] }
+        return items.map { item in
+            let path = (item.commands.first ?? item.topic).split(separator: " ").map(String.init)
+            return StudioGuideTopic(id: item.topic, title: item.title, commandPath: path)
+        }
+    }
+
+    static func parseContent(payloadJSON: String) -> String? {
+        guard let data = jsonObjectData(in: payloadJSON) else { return nil }
+        struct Payload: Decodable { let content: String }
+        return (try? JSONDecoder().decode(Payload.self, from: data))?.content
+    }
+
+    private static func jsonArrayData(in text: String) -> Data? {
+        guard let start = text.firstIndex(of: "["),
+              let end = text.lastIndex(of: "]"),
+              start < end else { return nil }
+        return String(text[start...end]).data(using: .utf8)
+    }
+
+    private static func jsonObjectData(in text: String) -> Data? {
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              start < end else { return nil }
+        return String(text[start...end]).data(using: .utf8)
+    }
+}
+
+/// A saved voice-clone profile from `speech profile list` (tab-separated id/name/updatedAt).
+struct StudioVoiceProfile: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let updatedAt: String
+
+    static func parse(listOutput: String) -> [StudioVoiceProfile] {
+        listOutput.components(separatedBy: .newlines).compactMap { line in
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 2 else { return nil }
+            let id = parts[0].trimmingCharacters(in: .whitespaces)
+            let name = parts[1].trimmingCharacters(in: .whitespaces)
+            guard !id.isEmpty, !name.isEmpty else { return nil }
+            return StudioVoiceProfile(id: id, name: name, updatedAt: parts.count > 2 ? parts[2] : "")
+        }
     }
 }

@@ -11,6 +11,10 @@ struct StudioRootView: View {
     @State private var showAdvanced = false
     @State private var showOptions = false
     @State private var showModels = false
+    @State private var showHelp = false
+    @State private var advancedWidth: CGFloat = 560
+    @State private var advancedDragStartWidth: CGFloat?
+    @State private var advancedDetached = false
     @State private var selectedLibraryID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
@@ -122,7 +126,9 @@ struct StudioRootView: View {
                     readiness: readiness,
                     modeCapabilities: modeCapabilities,
                     resolvedCLI: controller.resolvedCLI,
-                    onShowModels: { showModels = true }
+                    serverStatus: controller.serverStatus,
+                    onShowModels: { showModels = true },
+                    onShowHelp: { showHelp = true }
                 )
 
                 Divider()
@@ -157,7 +163,8 @@ struct StudioRootView: View {
                     onShowDetails: { showAdvanced = true },
                     onNewChat: startNewConversation,
                     onCopy: copyToClipboard,
-                    onRetry: retryLastTurn
+                    onRetry: retryLastTurn,
+                    onEdit: editMessage
                 )
 
                 StudioPromptBar(
@@ -186,10 +193,9 @@ struct StudioRootView: View {
             }
 
             if showAdvanced {
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.55))
-                AdvancedControlSurface()
-                    .frame(width: 560)
+                advancedResizeHandle
+                AdvancedControlSurface(docked: true, onDetach: { advancedDetached = true })
+                    .frame(width: advancedWidth)
             }
         }
         .background {
@@ -229,12 +235,44 @@ struct StudioRootView: View {
                 }
             )
         }
+        .sheet(isPresented: $showHelp) {
+            StudioHelpSheet()
+                .environmentObject(controller)
+                .frame(width: 720, height: 560)
+        }
+        .sheet(isPresented: $advancedDetached) {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Advanced — full control surface")
+                        .font(MereRunTheme.sectionFont)
+                    Spacer()
+                    Button("Dock") { advancedDetached = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(16)
+                Divider().overlay(MereRunTheme.border.opacity(0.5))
+                AdvancedControlSurface(docked: false)
+            }
+            .frame(width: 1_260, height: 780)
+            .environmentObject(controller)
+        }
+        .task {
+            // Poll the local server status for the top-bar pill. status has a 1s probe timeout,
+            // so a modest cadence keeps the pill live without hammering the CLI.
+            while !Task.isCancelled {
+                await controller.refreshServerStatus()
+                try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
+            }
+        }
         .onAppear {
             draft.reset(for: mode)
             controller.checkReadiness(for: mode, draft: draft)
             if !hasCompletedWelcome {
                 showWelcome = true
             }
+        }
+        .onChange(of: showAdvanced) { _, isShown in
+            if isShown { syncAdvancedToStudio() }
         }
         .onChange(of: mode) { _, newMode in
             var nextDraft = StudioDraft()
@@ -402,12 +440,15 @@ struct StudioRootView: View {
 
         let systemPrompt = draft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = draft.model.isBlank ? nil : draft.model
+        // Vision chat attaches an image to this turn (chat only); persist it so edit/retry resend it.
+        let turnImage = (mode == .chat && !draft.inputPath.isBlank) ? draft.inputPath : nil
         let item = library.appendUser(
             conversationID: conversationID,
             mode: mode,
             model: model,
             systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
-            content: content
+            content: content,
+            imagePath: turnImage
         )
 
         let rendered = ConversationTranscript.render(
@@ -425,6 +466,8 @@ struct StudioRootView: View {
             activeConversationID = conversationID
             selectedLibraryID = conversationID
             draft.prompt = ""
+            // The image rode with this turn; clear it so the next turn doesn't resend it.
+            draft.inputPath = ""
         } catch {
             studioError = error.localizedDescription
         }
@@ -454,6 +497,8 @@ struct StudioRootView: View {
             var runDraft = draft
             runDraft.prompt = rendered.prompt
             runDraft.secondaryText = systemPrompt ?? ""
+            // Re-attach the image the last user turn carried (or none), not the cleared composer's.
+            runDraft.inputPath = item.messages?.last?.imagePath ?? ""
             if let model = item.model, !model.isBlank { runDraft.model = model }
             let request = try StudioCommandAdapter.makeRequest(
                 mode: item.mode, draft: runDraft, conversationID: conversationID
@@ -461,6 +506,70 @@ struct StudioRootView: View {
             controller.run(studio: request)
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    /// A draggable divider that resizes the docked Advanced column. The panel is on the right, so
+    /// dragging left widens it; width is clamped to a usable range.
+    private var advancedResizeHandle: some View {
+        Rectangle()
+            .fill(MereRunTheme.border.opacity(0.55))
+            .frame(width: 5)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        let base = advancedDragStartWidth ?? advancedWidth
+                        if advancedDragStartWidth == nil { advancedDragStartWidth = base }
+                        advancedWidth = min(max(base - value.translation.width, 360), 860)
+                    }
+                    .onEnded { _ in advancedDragStartWidth = nil }
+            )
+    }
+
+    /// When Advanced opens, pre-select the template for the active Studio mode and carry over what
+    /// the composer already holds — including the shared depth fields — so Advanced deepens the
+    /// current task without silently reverting edits.
+    private func syncAdvancedToStudio() {
+        if let template = CommandCatalog.template(id: mode.defaultTemplateID) {
+            controller.select(template)
+        }
+        controller.draft.prompt = draft.prompt
+        if !draft.model.isBlank { controller.draft.model = draft.model }
+        if !draft.inputPath.isBlank { controller.draft.inputPath = draft.inputPath }
+        // Shared schema depth (WS-3.5): keep the two surfaces aligned after live edits, not only
+        // at defaults.
+        controller.draft.temperature = draft.temperature
+        controller.draft.maxTokens = draft.maxTokens
+        controller.draft.cfgScale = draft.cfgScale
+        controller.draft.strength = draft.strength
+        controller.draft.language = draft.language
+        controller.draft.backend = draft.backend
+        controller.draft.timestamps = draft.timestamps
+        controller.draft.fps = draft.fps
+        controller.draft.numFrames = draft.numFrames
+        controller.draft.variant = draft.variant
+    }
+
+    /// Edits a prior user turn: truncates the thread at that message and loads its text back into
+    /// the composer, so sending re-runs the conversation from that point.
+    private func editMessage(_ messageID: UUID) {
+        guard let conversationID = activeConversationID,
+              !controller.runningConversationIDs.contains(conversationID) else { return }
+        if let removed = library.truncate(conversationID: conversationID, removingFrom: messageID) {
+            draft.prompt = removed.content
+            // Restore the turn's attached image so re-sending re-runs vision chat as before.
+            if mode == .chat { draft.inputPath = removed.imagePath ?? "" }
+        }
+        // Editing the first turn empties the thread — drop the now-empty row and act like a new chat.
+        if let item = library.items.first(where: { $0.id == conversationID }),
+           item.messages?.isEmpty ?? true {
+            library.delete(id: conversationID)
+            activeConversationID = nil
+            selectedLibraryID = nil
         }
     }
 
@@ -560,7 +669,9 @@ private struct StudioTopBar: View {
     let readiness: ModelReadinessState
     let modeCapabilities: [StudioMode: StudioModelCapability]
     let resolvedCLI: String
+    let serverStatus: StudioServerStatus?
     let onShowModels: () -> Void
+    let onShowHelp: () -> Void
 
     var body: some View {
         VStack(spacing: 14) {
@@ -587,6 +698,13 @@ private struct StudioTopBar: View {
                 Spacer()
 
                 StudioStatusPill(
+                    title: "Server",
+                    detail: serverStatusDetail,
+                    systemImage: serverStatus?.isReachable == true ? "bolt.horizontal.circle" : "circle.dashed",
+                    color: serverStatusColor
+                )
+
+                StudioStatusPill(
                     title: readiness.title,
                     detail: readiness.message,
                     systemImage: readinessStatusImage,
@@ -604,6 +722,13 @@ private struct StudioTopBar: View {
                     onShowModels()
                 } label: {
                     Label("Models", systemImage: "shippingbox")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    onShowHelp()
+                } label: {
+                    Label("Help", systemImage: "questionmark.circle")
                 }
                 .buttonStyle(.bordered)
 
@@ -637,6 +762,20 @@ private struct StudioTopBar: View {
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 14)
+    }
+
+    private var serverStatusDetail: String {
+        guard let serverStatus else { return "checking…" }
+        if serverStatus.isReachable {
+            let model = serverStatus.loadedModelSummary.map { " · \($0)" } ?? ""
+            return "up\(model) · \(serverStatus.installedCount) installed"
+        }
+        return "offline · \(serverStatus.installedCount) installed"
+    }
+
+    private var serverStatusColor: Color {
+        guard let serverStatus else { return MereRunTheme.textMuted }
+        return serverStatus.isReachable ? MereRunTheme.green : MereRunTheme.textMuted
     }
 
     private var readinessStatusImage: String {
@@ -784,6 +923,7 @@ private struct StudioCanvas: View {
     let onNewChat: () -> Void
     let onCopy: (String) -> Void
     let onRetry: () -> Void
+    let onEdit: (UUID) -> Void
 
     private var visibleLiveOutputText: String? {
         guard isRunning else { return nil }
@@ -811,7 +951,8 @@ private struct StudioCanvas: View {
                     mode: mode,
                     onNewChat: onNewChat,
                     onCopy: onCopy,
-                    onRetry: onRetry
+                    onRetry: onRetry,
+                    onEdit: onEdit
                 )
                 .transition(.opacity)
             } else if let item {
@@ -1426,6 +1567,7 @@ private struct StudioOptionsSheet: View {
     @Binding var draft: StudioDraft
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.dismiss) private var dismiss
+    @State private var voiceProfiles: [StudioVoiceProfile] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -1466,6 +1608,37 @@ private struct StudioOptionsSheet: View {
                 .padding(10)
                 .merePanel()
 
+            if mode == .speak {
+                Picker("Voice", selection: $draft.voiceMode) {
+                    Text("Style").tag("style")
+                    Text("Clone").tag("clone")
+                }
+                .pickerStyle(.segmented)
+
+                if draft.voiceMode == "clone" {
+                    Picker("Profile", selection: $draft.voiceProfile) {
+                        Text("None").tag("")
+                        ForEach(voiceProfiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        Text(draft.refAudioPath.isEmpty
+                            ? "No reference audio"
+                            : URL(fileURLWithPath: draft.refAudioPath).lastPathComponent)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("Reference audio…") { chooseReferenceAudio() }
+                    }
+                    TextField("Save as profile (optional)", text: $draft.saveProfileName)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+            }
+
             if [.createImage, .video].contains(mode) {
                 HStack(spacing: 10) {
                     Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
@@ -1491,11 +1664,66 @@ private struct StudioOptionsSheet: View {
                     .merePanel()
             }
 
+            if !StudioOptionSchema.fields(for: mode).isEmpty {
+                Divider().overlay(MereRunTheme.border.opacity(0.4))
+                ForEach(StudioOptionSchema.fields(for: mode)) { field in
+                    optionRow(field)
+                }
+            }
+
             Spacer()
         }
         .padding(22)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        .task {
+            if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
+        }
+    }
+
+    /// Renders one schema field as the appropriate control, bound through the draft key path.
+    @ViewBuilder
+    private func optionRow(_ field: StudioOptionField) -> some View {
+        switch field.control {
+        case let .int(keyPath, range, step):
+            Stepper("\(field.label): \(draft[keyPath: keyPath])", value: binding(keyPath), in: range, step: step)
+        case let .double(keyPath):
+            HStack {
+                Text(field.label)
+                Spacer()
+                TextField(field.label, value: binding(keyPath), format: .number)
+                    .textFieldStyle(.plain)
+                    .frame(width: 90)
+                    .padding(8)
+                    .merePanel()
+            }
+        case let .bool(keyPath):
+            Toggle(field.label, isOn: binding(keyPath))
+        case let .text(keyPath, placeholder):
+            HStack {
+                Text(field.label)
+                Spacer()
+                TextField(placeholder, text: binding(keyPath))
+                    .textFieldStyle(.plain)
+                    .frame(width: 170)
+                    .padding(8)
+                    .merePanel()
+            }
+        }
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<StudioDraft, Value>) -> Binding<Value> {
+        Binding(get: { draft[keyPath: keyPath] }, set: { draft[keyPath: keyPath] = $0 })
+    }
+
+    private func chooseReferenceAudio() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            draft.refAudioPath = url.path
+        }
     }
 
     private func readImageActionUnavailableMessage(_ action: StudioReadImageAction) -> String? {

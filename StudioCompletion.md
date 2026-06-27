@@ -24,8 +24,12 @@ Already landed in this branch (do **not** re-plan these — they are done and va
 - **Phase 2 — Media & progress (complete).** Inline AVKit video + AVAudioPlayer audio,
   determinate progress (bytes/speed/%), drag-and-drop, library search/delete/rename,
   mode-scoped canvas selection.
-- **Phase 3 — partial.** `sfx` Studio mode + Advanced sfx templates; voice-cloning flags on
-  `speech synthesize` (Advanced).
+- **Phase 3 — Conversational depth & CLI parity (complete).** WS-2: multi-turn chat/code with
+  edit-and-rerun, vision-chat image attach, agentic tool-loop flags, Studio voice-clone UI.
+  WS-3: music analyze/realtime + full sfx family + plugin/open-webui/benchmark Advanced templates,
+  `config` HF-endpoint in Settings, live `status --json` pill, guide-powered help panel,
+  schema-driven Studio option depth (no drift with Advanced), responsive resizable/detachable
+  Advanced panel.
 - **Phase 4 — partial.** Completion notifications, app↔CLI version handshake, HF-token
   setting, library-error banner, accessibility labels, Run/Help menu, first-run welcome.
 
@@ -63,21 +67,21 @@ deep feature work that assumes concurrency and reliable results.
 
 | ID | Task | Effort | Acceptance |
 |----|------|--------|------------|
-| 2.1 | ✅ **Multi-turn chat/code (done)** — app-side conversation model (ordered turns per thread; the CLI is stateless), user/assistant bubbles in the canvas, persistent composer, "New chat", per-message copy + last-turn retry; re-send accumulated system+turns each run with context-window budgeting surfaced via a trim banner. Adversarially reviewed (lossless concurrent completion delivery, queued-turn tracking, think-tag stripping, failed-turn isolation, lenient library decode). _Edit-message is the remaining sub-item, deferred._ | L | Chat/code keep context across turns with a message-history UI; long conversations truncate visibly, not silently. |
-| 2.2 | **Vision chat** — image attachment for vision-capable chat models (CLI `--image`) in Studio. | M | An image can be attached to a chat turn and is sent via `--image`. |
-| 2.3 | **Agentic tool loop (Advanced)** — surface `--tools`/`--tool-loop`/`--allow-shell-exec`/`--sandbox-dir`/`--thinking` for `text chat`. | M | Tool-loop flags are reachable and correctly built in the Advanced editor. |
-| 2.4 | **Studio voice-clone UI** — a profile picker listing saved profiles (`speech profile list`), style/clone toggle, reference-audio attach with save-as-profile, wired into the Speak mode (the Advanced flags already exist). | M | Voice cloning is reachable end-to-end from the Speak mode. |
+| 2.1 | ✅ **Multi-turn chat/code + edit (done)** — app-side conversation model (ordered turns per thread; the CLI is stateless), user/assistant bubbles in the canvas, persistent composer, "New chat", per-message copy + last-turn retry; **edit a prior user turn** (truncates the thread back to that turn via `store.truncate` and reloads its text into the composer to re-run); re-send accumulated system+turns each run with context-window budgeting surfaced via a trim banner. Adversarially reviewed. | L | Chat/code keep context across turns with a message-history UI; long conversations truncate visibly, not silently. |
+| 2.2 | ✅ **Vision chat (done)** — image attachment for vision-capable chat models (CLI `--image`) in Studio chat; the image rides with one turn and is cleared after sending. | M | An image can be attached to a chat turn and is sent via `--image`. |
+| 2.3 | ✅ **Agentic tool loop (done, Advanced)** — `--tools`/`--tool-loop`/`--allow-shell-exec`/`--sandbox-dir`/`--thinking` surfaced for `text chat` in the Advanced editor. | M | Tool-loop flags are reachable and correctly built in the Advanced editor. |
+| 2.4 | ✅ **Studio voice-clone UI (done)** — Speak mode gains a Style/Clone picker; Clone mode shows a profile picker from `speech profile list`, a reference-audio chooser, and a save-as-profile field, mapped to `--mode/--profile/--ref-audio/--save-profile`. | M | Voice cloning is reachable end-to-end from the Speak mode. |
 
 ### WS-3 — CLI feature parity (Phase 3) · L
 
 | ID | Task | Effort | Acceptance |
 |----|------|--------|------------|
-| 3.1 | **`music analyze`** (Advanced, audio→JSON) and **`music realtime`** scoped as a dedicated interactive experience (live audio + control panel). | L | `music analyze` runs from Advanced; `music realtime` has a documented interactive surface. |
-| 3.2 | **`sfx ae` / `sfx clap` / `sfx condition`** as Advanced templates. | M | The full sfx family is reachable from Advanced. |
-| 3.3 | **`config`** (HF endpoint, other keys) surfaced in Settings (HF token already done); **`status --json`** as a live status pill in the Studio top bar (server up?, loaded model, installed count). | M | Status pill reflects `status --json`; config values are editable in Settings with masking. |
-| 3.4 | **`plugin`** (list/install/doctor), **`open-webui` quickstart**, **`model benchmark`** as Advanced templates; wire **`guide`** into a help panel. | M | Each command is invokable from the GUI; guide powers in-app help. |
-| 3.5 | **Shared per-mode option schema** rendered in both Studio and Advanced (single source of truth) — chat temperature/max-tokens, image CFG/strength, transcription language/timestamps/backend, video duration/fps/frames/variant/end-image. | L | Studio options expose real depth; no drift between surfaces (schema-driven). |
-| 3.6 | **Responsive Advanced panel** — single resizable column when docked vs full 3-pane detached; pre-select the template matching the active Studio mode and share draft state. | L | The 1210px panel no longer scrolls inside the rail; "Advanced" deepens the current task. |
+| 3.1 | ✅ **`music analyze` + `music realtime` (done)** — Advanced templates (realtime runs `--no-play` since the GUI has no audio device/stdin TTY; interactive playback stays CLI-only). | L | `music analyze` runs from Advanced; `music realtime` has a documented surface. |
+| 3.2 | ✅ **`sfx ae` / `sfx clap` / `sfx condition` (done)** — Advanced templates (ae encode/decode, clap score, condition text). | M | The full sfx family is reachable from Advanced. |
+| 3.3 | ✅ **`config` + status pill (done)** — Settings gains a Hugging Face endpoint field (`config get/set hf-endpoint`) beside the masked token; a Studio top-bar pill polls `status --json` every 20s and shows reachability, loaded model, and installed count. | M | Status pill reflects `status --json`; config values are editable in Settings with masking. |
+| 3.4 | ✅ **`plugin`/`open-webui`/`benchmark` + guide help (done)** — plugin list/install/doctor, open-webui quickstart, and model benchmark as Advanced templates; a "Help" button opens a guide-powered panel (`guide --list --json` + per-topic Markdown). | M | Each command is invokable from the GUI; guide powers in-app help. |
+| 3.5 | ✅ **Shared per-mode option schema (done)** — `StudioOptionSchema` is the single source of truth (chat temperature/max-tokens, image CFG/strength, transcription language/backend/timestamps, video variant/fps/frames/strength); the Studio sheet renders it generically and the adapter maps every field to the same CLI flag the Advanced surface emits. Defaults are seeded from the template's `CommandDraft` to avoid drift. (Video "duration"/"end-image" omitted — no such CLI flags; frames+fps define duration.) | L | Studio options expose real depth; no drift between surfaces (schema-driven). |
+| 3.6 | ✅ **Responsive Advanced panel (done)** — docked shows a single resizable column (compact template Menu + scrollable editor; drag handle 360–860pt) instead of a horizontally-scrolling 1210px three-pane; a detach button opens the full three-pane in a large sheet; opening Advanced pre-selects the active Studio mode's template and carries over the composer's prompt/model/input. | L | The 1210px panel no longer scrolls inside the rail; "Advanced" deepens the current task. |
 
 ### WS-4 — Native polish & accessibility (Phase 4) · L
 

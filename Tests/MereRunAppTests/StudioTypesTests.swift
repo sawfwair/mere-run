@@ -34,6 +34,87 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(chatTemplate.arguments(from: draft).contains("--stream"))
     }
 
+    func testChatBuildsVisionAndToolLoopFlags() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        var draft = template.defaultDraft()
+        draft.imagePath = "/tmp/in.png"
+        draft.tools = "write_file,shell_exec"
+        draft.toolLoop = true
+        draft.allowShellExec = true
+        draft.sandboxDir = "/tmp/box"
+        let args = template.arguments(from: draft)
+        assertPair(args, "--image", "/tmp/in.png")
+        assertPair(args, "--tools", "write_file,shell_exec")
+        assertPair(args, "--sandbox-dir", "/tmp/box")
+        XCTAssertTrue(args.contains("--tool-loop"))
+        XCTAssertTrue(args.contains("--allow-shell-exec"))
+    }
+
+    func testChatOmitsVisionAndToolFlagsByDefault() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        let args = template.arguments(from: template.defaultDraft())
+        XCTAssertFalse(args.contains("--image"))
+        XCTAssertFalse(args.contains("--tools"))
+        XCTAssertFalse(args.contains("--tool-loop"))
+        XCTAssertFalse(args.contains("--allow-shell-exec"))
+    }
+
+    func testNewAdvancedTemplatesBuildExpectedCommands() throws {
+        func args(_ id: CommandTemplateID, _ mutate: (inout CommandDraft) -> Void = { _ in }) throws -> [String] {
+            let template = try XCTUnwrap(CommandCatalog.template(id: id))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            return template.arguments(from: draft)
+        }
+        XCTAssertEqual(try args(.musicAnalyze) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "analyze", "/a.wav"])
+        XCTAssertEqual(try args(.musicRealtime).prefix(2).map { $0 }, ["music", "realtime"])
+        XCTAssertTrue(try args(.musicRealtime).contains("--no-play"))
+        XCTAssertEqual(try args(.sfxAEEncode) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "ae", "encode"])
+        XCTAssertEqual(try args(.sfxAEDecode) { $0.inputPath = "/a.npy" }.prefix(3).map { $0 }, ["sfx", "ae", "decode"])
+        XCTAssertEqual(try args(.sfxClapScore) { $0.prompt = "door"; $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "clap", "score"])
+        XCTAssertEqual(try args(.sfxConditionText) { $0.prompt = "door" }.prefix(3).map { $0 }, ["sfx", "condition", "text"])
+        XCTAssertEqual(try args(.modelBenchmark).prefix(3).map { $0 }, ["model", "benchmark", "q36-mtp"])
+        XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
+        XCTAssertEqual(try args(.pluginInstall) { $0.prompt = "mere-runpod"; $0.force = true }, ["plugin", "install", "mere-runpod", "--yes"])
+        XCTAssertEqual(try args(.pluginDoctor) { $0.prompt = "mere-runpod" }, ["plugin", "doctor", "mere-runpod"])
+        XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
+    }
+
+    func testStudioServerStatusParsesSnapshot() {
+        let json = """
+        {"server":{"url":"http://127.0.0.1:8080","health":"ok","loadedModels":["text-chat-gemma4"]},\
+        "knownModelCount":40,\
+        "installedModels":[{"id":"a","category":"text","size":"1 GB"},{"id":"b","category":"image","size":"2 GB"}]}
+        """
+        let status = StudioServerStatus.parse(jsonStdout: "probing...\n" + json + "\n")
+        XCTAssertEqual(status?.health, "ok")
+        XCTAssertEqual(status?.loadedModels, ["text-chat-gemma4"])
+        XCTAssertEqual(status?.installedCount, 2)
+        XCTAssertEqual(status?.isReachable, true)
+    }
+
+    func testStudioServerStatusReturnsNilForNonJSON() {
+        XCTAssertNil(StudioServerStatus.parse(jsonStdout: "connection refused"))
+    }
+
+    func testStudioVoiceProfileParsesTabSeparatedList() {
+        let out = "11111111-1111-1111-1111-111111111111\tNarrator\t2026-06-01\n"
+            + "22222222-2222-2222-2222-222222222222\tHero\t2026-06-02\n"
+        let profiles = StudioVoiceProfile.parse(listOutput: out)
+        XCTAssertEqual(profiles.count, 2)
+        XCTAssertEqual(profiles.first?.name, "Narrator")
+        XCTAssertEqual(profiles.last?.id, "22222222-2222-2222-2222-222222222222")
+    }
+
+    private func assertPair(_ args: [String], _ flag: String, _ value: String,
+                            file: StaticString = #filePath, line: UInt = #line) {
+        guard let index = args.firstIndex(of: flag), index + 1 < args.count else {
+            XCTFail("flag \(flag) not found in \(args)", file: file, line: line)
+            return
+        }
+        XCTAssertEqual(args[index + 1], value, file: file, line: line)
+    }
+
     func testStudioRunRequestBuildsImageCommandWithDefaultOutput() throws {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
@@ -223,6 +304,129 @@ final class StudioTypesTests: XCTestCase {
         draft.prompt = "hello"
         let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
         XCTAssertNil(request.conversationID)
+    }
+
+    func testChatConversationRequestAttachesImage() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "what is this?"
+        draft.inputPath = "/tmp/pic.png"
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID())
+        XCTAssertEqual(request.draft.imagePath, "/tmp/pic.png")
+        assertPair(request.template.arguments(from: request.draft), "--image", "/tmp/pic.png")
+    }
+
+    func testCodeConversationRequestIgnoresImage() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .code)
+        draft.prompt = "hi"
+        draft.inputPath = "/tmp/pic.png"
+        let request = try StudioCommandAdapter.makeRequest(mode: .code, draft: draft, conversationID: UUID())
+        XCTAssertTrue(request.draft.imagePath.isEmpty)
+    }
+
+    func testSpeakCloneRequestMapsProfileAndReferenceAudio() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        draft.voiceMode = "clone"
+        draft.voiceProfile = "narrator-id"
+        draft.refAudioPath = "/tmp/ref.wav"
+        draft.saveProfileName = "Narrator"
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--mode", "clone")
+        assertPair(args, "--profile", "narrator-id")
+        assertPair(args, "--ref-audio", "/tmp/ref.wav")
+        assertPair(args, "--save-profile", "Narrator")
+    }
+
+    func testSpeakStyleRequestOmitsCloneFlags() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        XCTAssertFalse(args.contains("--profile"))
+        XCTAssertFalse(args.contains("--ref-audio"))
+    }
+
+    func testSpeakCloneWithoutSourceFailsValidation() {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        draft.voiceMode = "clone"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft))
+    }
+
+    func testSpeakCloneWithProfilePassesValidation() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        draft.voiceMode = "clone"
+        draft.voiceProfile = "narrator-id"
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft))
+    }
+
+    func testChatSchemaExposesTemperatureAndMaxTokens() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "hi"
+        draft.temperature = 0.3
+        draft.maxTokens = 1234
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--temperature", "0.3")
+        assertPair(args, "--max-tokens", "1234")
+    }
+
+    func testImageSchemaExposesCfgAndStrength() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a cat"
+        draft.inputPath = "/tmp/base.png"
+        draft.cfgScale = 6.5
+        draft.strength = 0.4
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--cfg", "6.5")
+        assertPair(args, "--strength", "0.4")
+    }
+
+    func testListenSchemaExposesLanguageBackendTimestamps() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .listen)
+        draft.inputPath = "/tmp/a.wav"
+        draft.language = "es"
+        draft.backend = "mlx"
+        draft.timestamps = false
+        let request = try StudioCommandAdapter.makeRequest(mode: .listen, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--language", "es")
+        assertPair(args, "--backend", "mlx")
+        XCTAssertTrue(args.contains("--no-timestamps"))
+    }
+
+    func testVideoSchemaExposesVariantFpsFrames() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a wave"
+        draft.variant = "full"
+        draft.fps = 30
+        draft.numFrames = 120
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--variant", "full")
+        assertPair(args, "--fps", "30")
+        assertPair(args, "--num-frames", "120")
+    }
+
+    func testSchemaDefaultsMatchTemplateDraftSoSurfacesDoNotDrift() {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        let base = CommandCatalog.template(id: StudioMode.chat.defaultTemplateID)?.defaultDraft()
+        XCTAssertEqual(draft.temperature, base?.temperature)
+        XCTAssertEqual(draft.maxTokens, base?.maxTokens)
     }
 
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
