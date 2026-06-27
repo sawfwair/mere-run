@@ -268,6 +268,14 @@ protocol MereRunProcessRunning: AnyObject {
     ) throws -> MereRunRunningProcess
 }
 
+/// A seam over filesystem existence checks so run-output detection can be unit-tested without
+/// touching the real disk. `FileManager` is the production implementation.
+protocol MereRunFileProbing {
+    func fileExists(atPath path: String) -> Bool
+}
+
+extension FileManager: MereRunFileProbing {}
+
 private final class FoundationRunningProcess: MereRunRunningProcess, @unchecked Sendable {
     private let process: Process
     private let stdoutPipe: Pipe
@@ -472,6 +480,8 @@ final class MereRunController: ObservableObject {
     }
 
     private let processRunner: MereRunProcessRunning
+    private let fileSystem: MereRunFileProbing
+    private let cliResolve: (String) -> MereRunLaunch
     private var currentProcess: MereRunRunningProcess?
     private var utilityProcesses: [UUID: MereRunRunningProcess] = [:]
     private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
@@ -511,9 +521,13 @@ final class MereRunController: ObservableObject {
 
     init(
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
+        fileSystem: MereRunFileProbing = FileManager.default,
+        cliResolver: @escaping (String) -> MereRunLaunch = { CLIResolver.resolve(customPath: $0) },
         resolvesCLIOnInit: Bool = true
     ) {
         self.processRunner = processRunner
+        self.fileSystem = fileSystem
+        self.cliResolve = cliResolver
         let initial = CommandCatalog.templates.first!
         selectedTemplate = initial
         draft = initial.defaultDraft()
@@ -558,7 +572,7 @@ final class MereRunController: ObservableObject {
     }
 
     func refreshResolvedCLI() {
-        let launch = CLIResolver.resolve(customPath: cliPath)
+        let launch = cliResolve(cliPath)
         resolvedCLI = displayDescription(for: launch)
     }
 
@@ -595,13 +609,13 @@ final class MereRunController: ObservableObject {
     }
 
     func commandPreview(template: CommandTemplate, draft: CommandDraft, masksSecrets: Bool) -> String {
-        let launch = CLIResolver.resolve(customPath: cliPath)
+        let launch = cliResolve(cliPath)
         let args = commandArguments(template: template, draft: draft)
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
     }
 
     func utilityCommandResult(args: [String], masksSecrets: Bool = true) async -> MereRunUtilityCommandResult {
-        let launch = CLIResolver.resolve(customPath: cliPath)
+        let launch = cliResolve(cliPath)
         let cliArgs: [String]
         if !modelsRoot.isBlank {
             cliArgs = ["--models-root", NSString(string: modelsRoot).expandingTildeInPath] + args
@@ -722,7 +736,7 @@ final class MereRunController: ObservableObject {
         modelID: String,
         request: ReadinessRequest
     ) {
-        let launch = CLIResolver.resolve(customPath: cliPath)
+        let launch = cliResolve(cliPath)
         let capabilityTemplate = CommandCatalog.template(id: .modelCapabilities) ?? selectedTemplate
         var capabilityDraft = capabilityTemplate.defaultDraft()
         capabilityDraft.all = true
@@ -783,7 +797,7 @@ final class MereRunController: ObservableObject {
         modelID: String,
         request: ReadinessRequest
     ) {
-        let launch = CLIResolver.resolve(customPath: cliPath)
+        let launch = cliResolve(cliPath)
         let modelListTemplate = CommandCatalog.template(id: .modelList) ?? selectedTemplate
         let modelListDraft = modelListTemplate.defaultDraft()
         let args = commandArguments(
@@ -837,7 +851,7 @@ final class MereRunController: ObservableObject {
         }
         refreshResolvedCLI()
 
-        let launch = CLIResolver.resolve(customPath: cliPath)
+        let launch = cliResolve(cliPath)
         let args = commandArguments(template: spec.template, draft: spec.draft)
         let display = launch.displayCommand(for: args)
         let expectedOutput = expectedOutputURL(template: spec.template, draft: spec.draft)
@@ -1270,8 +1284,8 @@ final class MereRunController: ObservableObject {
         }
     }
 
-    private func detectOutputURL(expected: URL?, stdout: String) -> URL? {
-        let fm = FileManager.default
+    func detectOutputURL(expected: URL?, stdout: String) -> URL? {
+        let fm = fileSystem
 
         // 1. The explicit `--output` path the request asked for, once it has landed.
         if let expected, fm.fileExists(atPath: expected.path) {

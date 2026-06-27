@@ -294,6 +294,50 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertNil(controller.runtimeAuthorizationHeader)
     }
 
+    func testDetectOutputURLPrefersStdoutContractPath() {
+        let probe = StubFileProbe()
+        probe.existingPaths = ["/out/render.png"]
+        let controller = MereRunController(
+            processRunner: RecordingProcessRunner(), fileSystem: probe, resolvesCLIOnInit: false
+        )
+        let detected = controller.detectOutputURL(expected: nil, stdout: "loading model\n/out/render.png\n")
+        XCTAssertEqual(detected?.path, "/out/render.png")
+    }
+
+    func testDetectOutputURLResolvesArrowPairRightSide() {
+        let probe = StubFileProbe()
+        probe.existingPaths = ["/out/page.txt"]
+        let controller = MereRunController(
+            processRunner: RecordingProcessRunner(), fileSystem: probe, resolvesCLIOnInit: false
+        )
+        // A whole "in -> out" line is never a path; only the contract parser resolves this.
+        let detected = controller.detectOutputURL(expected: nil, stdout: "/in/page.png -> /out/page.txt\n")
+        XCTAssertEqual(detected?.path, "/out/page.txt")
+    }
+
+    func testDetectOutputURLPrefersExpectedOutputWhenPresent() {
+        let probe = StubFileProbe()
+        probe.existingPaths = ["/want/out.wav", "/other/x.wav"]
+        let controller = MereRunController(
+            processRunner: RecordingProcessRunner(), fileSystem: probe, resolvesCLIOnInit: false
+        )
+        let detected = controller.detectOutputURL(
+            expected: URL(fileURLWithPath: "/want/out.wav"), stdout: "/other/x.wav\n"
+        )
+        XCTAssertEqual(detected?.path, "/want/out.wav")
+    }
+
+    func testCLIResolverInjectionIsUsedForResolution() {
+        let stubLaunch = MereRunLaunch.executable(URL(fileURLWithPath: "/stub/mere.run"))
+        let controller = MereRunController(
+            processRunner: RecordingProcessRunner(),
+            cliResolver: { _ in stubLaunch },
+            resolvesCLIOnInit: false
+        )
+        controller.refreshResolvedCLI()
+        XCTAssertEqual(controller.resolvedCLI, "/stub/mere.run")
+    }
+
     func testRunningStudioRunPublishesOutputBeforeProcessExits() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
@@ -392,4 +436,9 @@ private final class RecordingProcess: MereRunRunningProcess {
     func terminate() {
         terminateCallCount += 1
     }
+}
+
+private final class StubFileProbe: MereRunFileProbing {
+    var existingPaths: Set<String> = []
+    func fileExists(atPath path: String) -> Bool { existingPaths.contains(path) }
 }
