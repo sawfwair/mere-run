@@ -36,8 +36,8 @@ and DMG packaging remain macOS-only.
 
 Linux release packaging follows the same boundary: release artifacts are
 headless CLI tarballs and Debian packages, not app bundles. The hosted release
-workflow publishes x86_64/amd64 artifacts; arm64 package artifacts are CUDA-only
-and require the self-hosted arm64 CUDA lane.
+workflow publishes x86_64/amd64 CPU and CUDA artifacts; arm64 package artifacts
+are CUDA-only and require the self-hosted arm64 CUDA lane.
 
 ## Source tree
 
@@ -145,12 +145,16 @@ Builds Linux release artifacts for the headless CLI on Linux:
 
 - `dist/linux/mere-run-<version>-linux-<arch>.tar.gz`
 - `dist/linux/mere-run_<version>_<deb-arch>.deb`
+- CUDA variants with `--artifact-suffix cuda`, such as
+  `mere-run-<version>-linux-x86_64-cuda.tar.gz`
 - `dist/linux/SHA256SUMS`
 
 The companion `.github/workflows/linux-release.yml` workflow runs the x86_64
-package path in the Swift 6.0 Ubuntu container, verifies the tarball and `.deb`
-manifests, and uploads package artifacts. Its arm64 package lane is CUDA-only
-and targets a self-hosted Linux runner with `arm64` and `cuda` labels.
+CPU and CUDA package paths in the Swift 6.0 Ubuntu container, verifies the
+tarball and `.deb` manifests, and uploads package artifacts. The x86_64 CUDA
+lane builds on hosted CPU runners with CUDA development packages and skips only
+the GPU example. The arm64 package lane is CUDA-only and targets a self-hosted
+Linux runner with `arm64` and `cuda` labels.
 
 ## Vendor artifacts
 

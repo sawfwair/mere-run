@@ -137,16 +137,27 @@ PATH="$fake_bin:$PATH" \
   MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
   bash scripts/package-linux.sh \
     --version 0.0.0+cuda-deps-fixture \
+    --artifact-suffix cuda \
     --configuration release \
     --skip-build \
     --skip-native \
     --output-dir "$cuda_output_dir" >/dev/null
 
-cuda_deb="$cuda_output_dir/mere-run_0.0.0+cuda-deps-fixture_${deb_arch}.deb"
+cuda_tarball="$cuda_output_dir/mere-run-0.0.0+cuda-deps-fixture-linux-${platform_arch}-cuda.tar.gz"
+cuda_deb="$cuda_output_dir/mere-run-cuda_0.0.0+cuda-deps-fixture_${deb_arch}.deb"
+[[ -f "$cuda_tarball" ]]
 [[ -f "$cuda_deb" ]]
+cuda_tarball_listing="$fixture_root/cuda-tarball-listing.txt"
+tar -tzf "$cuda_tarball" >"$cuda_tarball_listing"
+grep -q "/.mererun-linux-cuda$" "$cuda_tarball_listing"
 if ! dpkg-deb --field "$cuda_deb" Depends | grep -q 'libcufft-13-0'; then
   echo "[test-package-linux] expected CUDA .deb dependencies to include libcufft-13-0:" >&2
   dpkg-deb --field "$cuda_deb" Depends >&2
+  exit 1
+fi
+if [[ "$(dpkg-deb --field "$cuda_deb" Package)" != "mere-run-cuda" ]]; then
+  echo "[test-package-linux] expected CUDA .deb package name to be mere-run-cuda:" >&2
+  dpkg-deb --field "$cuda_deb" Package >&2
   exit 1
 fi
 

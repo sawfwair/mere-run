@@ -127,7 +127,9 @@ sudo apt install ./mere-run.deb
 The tarball and `.deb` install the `mere.run` CLI plus colocated runtime assets.
 They do not include `mere.run.app`, SwiftUI studio flows, or the macOS DMG
 layout. The default published Linux release packages are built for
-x86_64/amd64. Linux arm64 packages are CUDA-only and should be built on a real
+x86_64/amd64. Releases also publish an x86_64 CUDA tarball named like
+`mere-run-<tag>-linux-x86_64-cuda.tar.gz` for GPU workers and remote-runner
+build packs. Linux arm64 packages are CUDA-only and should be built on a real
 arm64 CUDA host with `MERERUN_LINUX_ACCEL=cuda`; CPU arm64 packages are local
 smoke artifacts, not useful release targets.
 
