@@ -92,7 +92,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     var acceptedTypes: [UTType] {
         switch self {
-        case .createImage, .readImage, .findObjects, .segment:
+        case .createImage, .readImage, .findObjects, .segment, .chat:
             return [.image]
         case .listen:
             return [.audio]
@@ -321,6 +321,8 @@ enum StudioCommandAdapter {
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }
+            // Vision chat: a single attached image rides with this turn (chat only, not code).
+            if mode == .chat, !studioDraft.inputPath.isBlank { draft.imagePath = studioDraft.inputPath }
 
         case .speak:
             draft.prompt = prompt

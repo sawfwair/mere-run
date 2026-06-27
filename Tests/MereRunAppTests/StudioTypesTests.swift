@@ -280,6 +280,25 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertNil(request.conversationID)
     }
 
+    func testChatConversationRequestAttachesImage() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "what is this?"
+        draft.inputPath = "/tmp/pic.png"
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID())
+        XCTAssertEqual(request.draft.imagePath, "/tmp/pic.png")
+        assertPair(request.template.arguments(from: request.draft), "--image", "/tmp/pic.png")
+    }
+
+    func testCodeConversationRequestIgnoresImage() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .code)
+        draft.prompt = "hi"
+        draft.inputPath = "/tmp/pic.png"
+        let request = try StudioCommandAdapter.makeRequest(mode: .code, draft: draft, conversationID: UUID())
+        XCTAssertTrue(request.draft.imagePath.isEmpty)
+    }
+
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
         let legacy = StudioLibraryItem(
             id: UUID(), mode: .chat, prompt: "hello there",

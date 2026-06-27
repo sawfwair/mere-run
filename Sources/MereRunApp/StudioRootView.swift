@@ -425,6 +425,8 @@ struct StudioRootView: View {
             activeConversationID = conversationID
             selectedLibraryID = conversationID
             draft.prompt = ""
+            // The image rode with this turn; clear it so the next turn doesn't resend it.
+            draft.inputPath = ""
         } catch {
             studioError = error.localizedDescription
         }

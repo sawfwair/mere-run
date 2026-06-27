@@ -728,6 +728,29 @@ private struct TextGenerationOptions: View {
                     Spacer()
                     Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
+
+                if controller.selectedTemplate.id == .textChat {
+                    Divider().overlay(MereRunTheme.border.opacity(0.4))
+                    TextField("Tools (comma-separated: write_file, shell_exec)", text: $controller.draft.tools)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    HStack {
+                        Toggle("Tool loop", isOn: $controller.draft.toolLoop)
+                        Toggle("Allow shell exec", isOn: $controller.draft.allowShellExec)
+                        Spacer()
+                    }
+                    PathField(
+                        path: $controller.draft.sandboxDir,
+                        placeholder: "Tool sandbox directory (optional)",
+                        mode: .openDirectory
+                    )
+                    PathField(
+                        path: $controller.draft.imagePath,
+                        placeholder: "Image for vision chat (optional)",
+                        mode: .openFile([.image])
+                    )
+                }
             }
         }
     }
