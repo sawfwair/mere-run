@@ -351,6 +351,67 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--ref-audio"))
     }
 
+    func testChatSchemaExposesTemperatureAndMaxTokens() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "hi"
+        draft.temperature = 0.3
+        draft.maxTokens = 1234
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--temperature", "0.3")
+        assertPair(args, "--max-tokens", "1234")
+    }
+
+    func testImageSchemaExposesCfgAndStrength() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a cat"
+        draft.inputPath = "/tmp/base.png"
+        draft.cfgScale = 6.5
+        draft.strength = 0.4
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--cfg", "6.5")
+        assertPair(args, "--strength", "0.4")
+    }
+
+    func testListenSchemaExposesLanguageBackendTimestamps() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .listen)
+        draft.inputPath = "/tmp/a.wav"
+        draft.language = "es"
+        draft.backend = "mlx"
+        draft.timestamps = false
+        let request = try StudioCommandAdapter.makeRequest(mode: .listen, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--language", "es")
+        assertPair(args, "--backend", "mlx")
+        XCTAssertTrue(args.contains("--no-timestamps"))
+    }
+
+    func testVideoSchemaExposesVariantFpsFrames() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a wave"
+        draft.variant = "full"
+        draft.fps = 30
+        draft.numFrames = 120
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--variant", "full")
+        assertPair(args, "--fps", "30")
+        assertPair(args, "--num-frames", "120")
+    }
+
+    func testSchemaDefaultsMatchTemplateDraftSoSurfacesDoNotDrift() {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        let base = CommandCatalog.template(id: StudioMode.chat.defaultTemplateID)?.defaultDraft()
+        XCTAssertEqual(draft.temperature, base?.temperature)
+        XCTAssertEqual(draft.maxTokens, base?.maxTokens)
+    }
+
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
         let legacy = StudioLibraryItem(
             id: UUID(), mode: .chat, prompt: "hello there",

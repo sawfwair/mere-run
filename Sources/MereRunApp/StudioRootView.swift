@@ -1637,6 +1637,13 @@ private struct StudioOptionsSheet: View {
                     .merePanel()
             }
 
+            if !StudioOptionSchema.fields(for: mode).isEmpty {
+                Divider().overlay(MereRunTheme.border.opacity(0.4))
+                ForEach(StudioOptionSchema.fields(for: mode)) { field in
+                    optionRow(field)
+                }
+            }
+
             Spacer()
         }
         .padding(22)
@@ -1645,6 +1652,41 @@ private struct StudioOptionsSheet: View {
         .task {
             if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
         }
+    }
+
+    /// Renders one schema field as the appropriate control, bound through the draft key path.
+    @ViewBuilder
+    private func optionRow(_ field: StudioOptionField) -> some View {
+        switch field.control {
+        case let .int(keyPath, range, step):
+            Stepper("\(field.label): \(draft[keyPath: keyPath])", value: binding(keyPath), in: range, step: step)
+        case let .double(keyPath):
+            HStack {
+                Text(field.label)
+                Spacer()
+                TextField(field.label, value: binding(keyPath), format: .number)
+                    .textFieldStyle(.plain)
+                    .frame(width: 90)
+                    .padding(8)
+                    .merePanel()
+            }
+        case let .bool(keyPath):
+            Toggle(field.label, isOn: binding(keyPath))
+        case let .text(keyPath, placeholder):
+            HStack {
+                Text(field.label)
+                Spacer()
+                TextField(placeholder, text: binding(keyPath))
+                    .textFieldStyle(.plain)
+                    .frame(width: 170)
+                    .padding(8)
+                    .merePanel()
+            }
+        }
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<StudioDraft, Value>) -> Binding<Value> {
+        Binding(get: { draft[keyPath: keyPath] }, set: { draft[keyPath: keyPath] = $0 })
     }
 
     private func chooseReferenceAudio() {

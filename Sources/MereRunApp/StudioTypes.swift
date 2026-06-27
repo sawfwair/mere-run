@@ -207,8 +207,21 @@ struct StudioDraft: Codable, Equatable {
     var voiceProfile = ""
     var refAudioPath = ""
     var saveProfileName = ""
+    // Advanced depth shared with the Advanced surface (see StudioOptionSchema). Defaults are
+    // seeded from the matching template's CommandDraft so the two surfaces never drift.
+    var temperature = 0.7
+    var maxTokens = 2048
+    var cfgScale = 1.0
+    var strength = 0.75
+    var language = "auto"
+    var timestamps = true
+    var backend = "auto"
+    var fps = 24
+    var numFrames = 65
+    var variant = "distilled"
 
     mutating func reset(for mode: StudioMode) {
+        let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
         prompt = modeDefaultPrompt(mode)
         secondaryText = modeDefaultSecondaryText(mode)
         inputPath = ""
@@ -223,6 +236,16 @@ struct StudioDraft: Codable, Equatable {
         voiceProfile = ""
         refAudioPath = ""
         saveProfileName = ""
+        temperature = base?.temperature ?? 0.7
+        maxTokens = base?.maxTokens ?? 2048
+        cfgScale = base?.cfgScale ?? 1.0
+        strength = base?.strength ?? 0.75
+        language = base?.language ?? "auto"
+        timestamps = base?.timestamps ?? true
+        backend = base?.backend ?? "auto"
+        fps = base?.fps ?? 24
+        numFrames = base?.numFrames ?? 65
+        variant = base?.variant ?? "distilled"
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -236,6 +259,54 @@ struct StudioDraft: Codable, Equatable {
 
     private func modeDefaultSecondaryText(_ mode: StudioMode) -> String {
         CommandCatalog.template(id: mode.defaultTemplateID)?.defaultSecondaryText ?? ""
+    }
+}
+
+/// One advanced option for a Studio mode: a label plus a typed control bound to a `StudioDraft`
+/// key path. This is the single source of truth for the depth controls — the Studio sheet renders
+/// it, and the adapter maps the same fields to the identical CLI flags the Advanced surface emits.
+struct StudioOptionField: Identifiable {
+    let id: String
+    let label: String
+    let control: Control
+
+    enum Control {
+        case int(WritableKeyPath<StudioDraft, Int>, range: ClosedRange<Int>, step: Int)
+        case double(WritableKeyPath<StudioDraft, Double>)
+        case bool(WritableKeyPath<StudioDraft, Bool>)
+        case text(WritableKeyPath<StudioDraft, String>, placeholder: String)
+    }
+}
+
+enum StudioOptionSchema {
+    static func fields(for mode: StudioMode) -> [StudioOptionField] {
+        switch mode {
+        case .chat, .code:
+            return [
+                StudioOptionField(id: "temperature", label: "Temperature", control: .double(\.temperature)),
+                StudioOptionField(id: "maxTokens", label: "Max tokens", control: .int(\.maxTokens, range: 1...32_768, step: 64)),
+            ]
+        case .createImage:
+            return [
+                StudioOptionField(id: "cfg", label: "CFG scale", control: .double(\.cfgScale)),
+                StudioOptionField(id: "strength", label: "Img2img strength", control: .double(\.strength)),
+            ]
+        case .listen:
+            return [
+                StudioOptionField(id: "language", label: "Language", control: .text(\.language, placeholder: "auto")),
+                StudioOptionField(id: "backend", label: "Backend", control: .text(\.backend, placeholder: "auto")),
+                StudioOptionField(id: "timestamps", label: "Timestamps", control: .bool(\.timestamps)),
+            ]
+        case .video:
+            return [
+                StudioOptionField(id: "variant", label: "Variant", control: .text(\.variant, placeholder: "distilled")),
+                StudioOptionField(id: "fps", label: "Frames per second", control: .int(\.fps, range: 1...60, step: 1)),
+                StudioOptionField(id: "numFrames", label: "Frames", control: .int(\.numFrames, range: 1...600, step: 1)),
+                StudioOptionField(id: "strength", label: "Image strength", control: .double(\.strength)),
+            ]
+        default:
+            return []
+        }
     }
 }
 
@@ -323,11 +394,15 @@ enum StudioCommandAdapter {
             draft.height = studioDraft.height
             draft.steps = studioDraft.steps
             draft.seed = studioDraft.seed
+            draft.cfgScale = studioDraft.cfgScale
+            draft.strength = studioDraft.strength
 
         case .chat, .code:
             draft.prompt = prompt
             draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.temperature = studioDraft.temperature
+            draft.maxTokens = studioDraft.maxTokens
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }
@@ -348,6 +423,9 @@ enum StudioCommandAdapter {
         case .listen:
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.language = studioDraft.language
+            draft.backend = studioDraft.backend
+            draft.timestamps = studioDraft.timestamps
 
         case .readImage:
             draft.inputPath = studioDraft.inputPath
@@ -374,6 +452,10 @@ enum StudioCommandAdapter {
             draft.width = studioDraft.width
             draft.height = studioDraft.height
             draft.seed = studioDraft.seed
+            draft.variant = studioDraft.variant
+            draft.fps = studioDraft.fps
+            draft.numFrames = studioDraft.numFrames
+            draft.strength = studioDraft.strength
 
         case .sfx:
             draft.prompt = prompt
