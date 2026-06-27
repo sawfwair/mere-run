@@ -400,7 +400,7 @@ struct StudioModelsSheet: View {
                 Button {
                     Task { await reveal(row) }
                 } label: {
-                    Label("Finder", systemImage: "finder")
+                    Label("Finder", systemImage: "magnifyingglass")
                 }
                 .buttonStyle(.bordered)
                 .disabled(!row.isInstalled || loadingInfoID != nil)

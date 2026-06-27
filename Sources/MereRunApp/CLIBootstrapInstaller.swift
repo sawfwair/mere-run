@@ -68,13 +68,18 @@ enum CLIBootstrapInstaller {
         fileManager fm: FileManager = .default,
         bundle: Bundle = .main
     ) -> URL? {
-        guard let resourceURL = bundle.resourceURL else {
-            return nil
-        }
+        let candidates = [
+            bundle.bundleURL.appendingPathComponent("Contents/Helpers", isDirectory: true),
+            bundle.resourceURL?.appendingPathComponent("mere.run", isDirectory: true),
+        ].compactMap { $0 }
 
-        let payloadURL = resourceURL.appendingPathComponent("mere.run", isDirectory: true)
-        let binaryURL = payloadURL.appendingPathComponent("mere.run", isDirectory: false)
-        return fm.isExecutableFile(atPath: binaryURL.path) ? payloadURL : nil
+        for payloadURL in candidates {
+            let binaryURL = payloadURL.appendingPathComponent("mere.run", isDirectory: false)
+            if fm.isExecutableFile(atPath: binaryURL.path) {
+                return payloadURL
+            }
+        }
+        return nil
     }
 
     static func preferredAutomaticInstallURL(fileManager fm: FileManager = .default) -> URL {

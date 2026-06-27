@@ -114,22 +114,20 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.modelCapabilitiesByID["image-zimage-nano"]?.minimumUnifiedMemoryGB, 12)
     }
 
-    func testReadinessBlocksUnavailableStudioCapabilityWithoutStartingCLI() {
+    func testReadImageAutoDownloadActionIsReadyWithoutStartingCLI() {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .readImage)
-        let expectedMessage = "Inspect uses an automatic vision-language model download "
-            + "that is not listed in the managed capability catalog yet."
+        draft.readImageAction = .inspect
 
+        // Inspect auto-downloads its vision-language model via the CLI, so it is ready and
+        // needs no managed-model readiness probe (no child CLI launched).
         controller.checkReadiness(for: .readImage, draft: draft)
 
         XCTAssertTrue(runner.starts.isEmpty)
-        XCTAssertEqual(
-            controller.readinessByMode[.readImage],
-            .unsupported(expectedMessage)
-        )
+        XCTAssertEqual(controller.readinessByMode[.readImage], .ready)
     }
 
     func testFailedRunResultIncludesStderrWhenStdoutIsEmpty() async throws {

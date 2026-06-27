@@ -9,7 +9,7 @@ final class StudioMediaPreviewTests: XCTestCase {
         try Data("not really a movie, but still not a text preview".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        XCTAssertEqual(StudioOutputFileKind.classify(url), .other)
+        XCTAssertEqual(StudioOutputFileKind.classify(url), .video)
         XCTAssertNil(StudioTextPreviewReader.previewText(from: url))
     }
 
@@ -32,5 +32,11 @@ final class StudioMediaPreviewTests: XCTestCase {
     func testImagesAreClassifiedWithoutLoadingTheFile() {
         let url = URL(fileURLWithPath: "/tmp/example.png")
         XCTAssertEqual(StudioOutputFileKind.classify(url), .image)
+    }
+
+    func testAudioAndVideoOutputsAreClassifiedForPlayback() {
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/a.wav")), .audio)
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/a.mp3")), .audio)
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/a.mov")), .video)
     }
 }

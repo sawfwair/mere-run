@@ -11,6 +11,7 @@ struct MereRunRootView: View {
             .foregroundStyle(MereRunTheme.textPrimary)
             .onAppear {
                 controller.refreshResolvedCLI()
+                controller.refreshCLIVersion()
             }
     }
 }
@@ -294,6 +295,8 @@ private struct CommandEditor: View {
         case .videoExportLatents:
             DimensionsGrid()
             VideoLatentsOptions()
+        case .sfxGenerate, .sfxVideo:
+            SFXOptions()
         case .apiServe:
             APIOptions()
         case .setup:
@@ -379,7 +382,7 @@ private struct CommandEditor: View {
                 Button {
                     controller.revealLastOutput()
                 } label: {
-                    Image(systemName: "finder")
+                    Image(systemName: "magnifyingglass")
                 }
                 .buttonStyle(.bordered)
                 .help("Reveal in Finder")
@@ -735,10 +738,38 @@ private struct SpeechOptions: View {
 
     var body: some View {
         EditorSection("Speech") {
-            HStack(spacing: 10) {
-                NumberField(title: "Temperature", value: $controller.draft.temperature)
-                Toggle("Stream", isOn: $controller.draft.stream)
-                Toggle("Quiet", isOn: $controller.draft.quiet)
+            VStack(spacing: 10) {
+                Picker("Mode", selection: $controller.draft.voiceMode) {
+                    Text("Style").tag("style")
+                    Text("Clone").tag("clone")
+                }
+                .pickerStyle(.segmented)
+
+                if controller.draft.voiceMode == "clone" {
+                    PathField(
+                        path: $controller.draft.refAudioPath,
+                        placeholder: "Reference audio (clone)",
+                        mode: .openFile([.audio])
+                    )
+                    TextField("Profile id or name", text: $controller.draft.voiceProfile)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Reference transcript (optional)", text: $controller.draft.refText)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Save as profile (optional)", text: $controller.draft.saveProfileName)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+
+                HStack(spacing: 10) {
+                    NumberField(title: "Temperature", value: $controller.draft.temperature)
+                    Toggle("Stream", isOn: $controller.draft.stream)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
             }
         }
     }
@@ -817,6 +848,27 @@ private struct MusicOptions: View {
                 HStack(spacing: 10) {
                     NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
                     NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...80, step: 1)
+                }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct SFXOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Sound FX") {
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
+                    NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...64, step: 1)
+                    NumberField(title: "CFG", value: $controller.draft.cfgScale)
                 }
                 TextField("Seed", text: $controller.draft.seed)
                     .textFieldStyle(.plain)
@@ -1077,11 +1129,19 @@ private struct NumberField: View {
 
 struct MereRunSettingsView: View {
     @EnvironmentObject private var controller: MereRunController
+    @State private var hfToken = ""
+    @State private var hfStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("mere.run")
-                .font(MereRunTheme.titleFont)
+            HStack(alignment: .firstTextBaseline) {
+                Text("mere.run")
+                    .font(MereRunTheme.titleFont)
+                Spacer()
+                Text("App \(controller.appVersion) · CLI \(controller.cliVersion ?? "—")")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
             VStack(spacing: 12) {
                 PathField(path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
                 PathField(path: $controller.modelsRoot, placeholder: "Optional models root", mode: .openDirectory)
@@ -1091,6 +1151,29 @@ struct MereRunSettingsView: View {
             Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+            EditorSection("Hugging Face token") {
+                HStack(spacing: 10) {
+                    SecureField("hf_… (for gated/private model pulls)", text: $hfToken)
+                        .textFieldStyle(.plain)
+                        .font(MereRunTheme.bodyFont)
+                        .padding(10)
+                        .merePanel()
+                    Button("Save") {
+                        Task {
+                            let ok = await controller.saveHuggingFaceToken(hfToken)
+                            hfStatus = ok ? "Saved" : "Could not save token"
+                            if ok { hfToken = "" }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(MereRunTheme.accent)
+                }
+                if let hfStatus {
+                    Text(hfStatus)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+            }
             EditorSection("Install") {
                 HStack(spacing: 10) {
                     Button {

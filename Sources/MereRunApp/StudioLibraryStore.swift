@@ -4,6 +4,8 @@ import Foundation
 @MainActor
 final class StudioLibraryStore: ObservableObject {
     @Published private(set) var items: [StudioLibraryItem] = []
+    /// Last persistence failure, surfaced non-blockingly so silent history loss is detectable.
+    @Published private(set) var lastPersistenceError: String?
 
     let libraryURL: URL
     private let fileManager: FileManager
@@ -107,6 +109,21 @@ final class StudioLibraryStore: ObservableObject {
         save()
     }
 
+    func delete(id: UUID) {
+        items.removeAll { $0.id == id }
+        save()
+    }
+
+    func rename(id: UUID, title: String) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var item = items[index]
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.customTitle = trimmed.isEmpty ? nil : trimmed
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+    }
+
     func upsert(_ item: StudioLibraryItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index] = item
@@ -132,8 +149,11 @@ final class StudioLibraryStore: ObservableObject {
             )
             let data = try JSONEncoder.mereRunApp.encode(items)
             try data.write(to: libraryURL, options: [.atomic])
+            lastPersistenceError = nil
         } catch {
-            // Library persistence should never block local generation.
+            // Persistence must never block local generation, but the failure is surfaced
+            // so the UI can warn that run history may not survive relaunch.
+            lastPersistenceError = error.localizedDescription
         }
     }
 

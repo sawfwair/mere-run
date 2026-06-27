@@ -9,6 +9,7 @@ enum CommandCategory: String, CaseIterable, Identifiable {
     case speech = "Speech"
     case vision = "Vision"
     case media = "Music & Video"
+    case sfx = "Sound FX"
     case server = "Server"
     case custom = "Custom"
 
@@ -48,6 +49,8 @@ enum CommandTemplateID: String, CaseIterable {
     case musicGenerate
     case videoGenerate
     case videoExportLatents
+    case sfxGenerate
+    case sfxVideo
     case apiServe
     case custom
 }
@@ -120,6 +123,11 @@ struct CommandDraft: Equatable {
     var task = "transcribe"
     var language = "auto"
     var timestamps = true
+    var voiceMode = "style"
+    var voiceProfile = ""
+    var refAudioPath = ""
+    var refText = ""
+    var saveProfileName = ""
     var setupMode = "agent"
     var agentModel = "tier"
     var quiet = false
@@ -217,6 +225,9 @@ struct CommandTemplate: Identifiable, Equatable {
         case .musicGenerate:
             draft.steps = 8
             draft.durationSeconds = 10
+        case .sfxGenerate, .sfxVideo:
+            draft.steps = 4
+            draft.durationSeconds = 8
         case .speechTranscribe:
             draft.backend = "auto"
             draft.maxTokens = 448
@@ -402,6 +413,12 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["speech", "synthesize", draft.prompt, "--output", draft.outputPath]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.secondaryText.isBlank { args += ["--voice", draft.secondaryText] }
+            if draft.voiceMode == "clone" { args += ["--mode", "clone"] }
+            if !draft.voiceProfile.isBlank { args += ["--profile", draft.voiceProfile] }
+            if !draft.refAudioPath.isBlank { args += ["--ref-audio", draft.refAudioPath] }
+            if !draft.refText.isBlank { args += ["--ref-text", draft.refText] }
+            if !draft.saveProfileName.isBlank { args += ["--save-profile", draft.saveProfileName] }
+            if !draft.language.isBlank, draft.language != "auto" { args += ["--language", draft.language] }
             args += ["--temperature", format(draft.temperature)]
             if draft.stream { args.append("--stream") }
             if draft.quiet { args.append("--quiet") }
@@ -496,6 +513,23 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--width", String(draft.width), "--height", String(draft.height)]
             args += ["--num-frames", String(draft.numFrames)]
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .sfxGenerate:
+            args = ["sfx", "generate", draft.prompt]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
+            if draft.cfgScale != 1.0 { args += ["--cfg", format(draft.cfgScale)] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .sfxVideo:
+            args = ["sfx", "video", "generate", draft.prompt, draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if draft.quiet { args.append("--quiet") }
 
@@ -815,6 +849,27 @@ enum CommandCatalog {
             outputKind: .file("safetensors"),
             defaultPrompt: "a cinematic drone flythrough over snowy mountains",
             defaultModel: "video-ltx-av"
+        ),
+        CommandTemplate(
+            id: .sfxGenerate,
+            category: .sfx,
+            title: "Generate sound effect",
+            subtitle: "Woosh text-to-audio sound effects",
+            systemImage: "speaker.wave.2",
+            promptLabel: "Prompt",
+            outputKind: .file("wav"),
+            defaultPrompt: "a heavy wooden door creaking open"
+        ),
+        CommandTemplate(
+            id: .sfxVideo,
+            category: .sfx,
+            title: "Video foley",
+            subtitle: "Generate sound effects from a video",
+            systemImage: "video.badge.waveform",
+            promptLabel: "Prompt",
+            inputKind: .video,
+            outputKind: .file("wav"),
+            defaultPrompt: "footsteps on gravel"
         ),
         CommandTemplate(
             id: .apiServe,

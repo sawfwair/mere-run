@@ -57,7 +57,9 @@ The public OSS repo currently supports:
 
 ## Install the latest release
 
-The signed and notarized macOS DMG is published at:
+The `macos-release` workflow builds, Developer ID-signs, and notarizes the DMG (with a
+hardened runtime) and attaches it to each GitHub release. The latest signed build is
+mirrored at:
 
 ```bash
 curl -L https://mere.run/releases/mere-run.dmg -o mere-run.dmg
