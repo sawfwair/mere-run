@@ -110,7 +110,8 @@ struct StudioRootView: View {
                     },
                     onRename: { id, title in
                         library.rename(id: id, title: title)
-                    }
+                    },
+                    onQuickLook: { QuickLookCoordinator.shared.preview($0) }
                 )
                 .frame(width: 292)
 
@@ -158,6 +159,9 @@ struct StudioRootView: View {
                     progress: controller.currentProgress,
                     onOpen: openSelectedOutput,
                     onReveal: revealSelectedOutput,
+                    onQuickLook: {
+                        if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
+                    },
                     onPullModel: pullModel,
                     onShowDetails: { showAdvanced = true },
                     onNewChat: startNewConversation,
@@ -892,6 +896,7 @@ private struct StudioCanvas: View {
     let progress: StudioRunProgress?
     let onOpen: () -> Void
     let onReveal: () -> Void
+    let onQuickLook: () -> Void
     let onPullModel: () -> Void
     let onShowDetails: () -> Void
     let onNewChat: () -> Void
@@ -930,7 +935,7 @@ private struct StudioCanvas: View {
                 )
                 .transition(.opacity)
             } else if let item {
-                StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal)
+                StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal, onQuickLook: onQuickLook)
                     .padding(32)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
@@ -1110,6 +1115,7 @@ private struct StudioOutputView: View {
     let liveOutputText: String?
     let onOpen: () -> Void
     let onReveal: () -> Void
+    let onQuickLook: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
@@ -1137,12 +1143,21 @@ private struct StudioOutputView: View {
                     Button("Open", action: onOpen)
                         .buttonStyle(.bordered)
                     Button {
+                        onQuickLook()
+                    } label: {
+                        Image(systemName: "eye")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Quick Look")
+                    .accessibilityLabel("Quick Look")
+                    Button {
                         onReveal()
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
                     .buttonStyle(.bordered)
                     .help("Reveal in Finder")
+                    .accessibilityLabel("Reveal in Finder")
                 }
             }
         }
@@ -1746,6 +1761,7 @@ private struct StudioLibraryPanel: View {
     @Binding var isVisible: Bool
     let onDelete: (UUID) -> Void
     let onRename: (UUID, String) -> Void
+    let onQuickLook: (URL) -> Void
 
     @State private var searchText = ""
     @State private var renamingID: UUID?
@@ -1863,6 +1879,9 @@ private struct StudioLibraryPanel: View {
                         selectedID = item.id
                     }
                     .contextMenu {
+                        if let url = item.outputURL {
+                            Button("Quick Look") { onQuickLook(url) }
+                        }
                         Button("Rename") {
                             renameText = item.displayTitle
                             renamingID = item.id
@@ -1874,6 +1893,14 @@ private struct StudioLibraryPanel: View {
                 }
             }
             .padding(12)
+        }
+        // Finder-style: space previews the selected run's output (ignored when it has none, so it
+        // never swallows the key destructively).
+        .onKeyPress(.space) {
+            guard let id = selectedID,
+                  let url = items.first(where: { $0.id == id })?.outputURL else { return .ignored }
+            onQuickLook(url)
+            return .handled
         }
     }
 }
