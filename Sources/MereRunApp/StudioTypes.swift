@@ -201,6 +201,12 @@ struct StudioDraft: Codable, Equatable {
     var seed = ""
     var durationSeconds = 10.0
     var readImageAction: StudioReadImageAction = .inspect
+    // Speak voice cloning (Studio surface). "style" uses the voice description; "clone" uses a
+    // saved profile or reference audio.
+    var voiceMode = "style"
+    var voiceProfile = ""
+    var refAudioPath = ""
+    var saveProfileName = ""
 
     mutating func reset(for mode: StudioMode) {
         prompt = modeDefaultPrompt(mode)
@@ -213,6 +219,10 @@ struct StudioDraft: Codable, Equatable {
         seed = ""
         durationSeconds = 10
         readImageAction = .inspect
+        voiceMode = "style"
+        voiceProfile = ""
+        refAudioPath = ""
+        saveProfileName = ""
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -328,6 +338,12 @@ enum StudioCommandAdapter {
             draft.prompt = prompt
             draft.secondaryText = secondary.isEmpty ? draft.secondaryText : secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.voiceMode = studioDraft.voiceMode
+            if studioDraft.voiceMode == "clone" {
+                draft.voiceProfile = studioDraft.voiceProfile
+                draft.refAudioPath = studioDraft.refAudioPath
+                draft.saveProfileName = studioDraft.saveProfileName
+            }
 
         case .listen:
             draft.inputPath = studioDraft.inputPath

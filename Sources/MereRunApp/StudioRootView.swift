@@ -1474,6 +1474,7 @@ private struct StudioOptionsSheet: View {
     @Binding var draft: StudioDraft
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.dismiss) private var dismiss
+    @State private var voiceProfiles: [StudioVoiceProfile] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -1514,6 +1515,37 @@ private struct StudioOptionsSheet: View {
                 .padding(10)
                 .merePanel()
 
+            if mode == .speak {
+                Picker("Voice", selection: $draft.voiceMode) {
+                    Text("Style").tag("style")
+                    Text("Clone").tag("clone")
+                }
+                .pickerStyle(.segmented)
+
+                if draft.voiceMode == "clone" {
+                    Picker("Profile", selection: $draft.voiceProfile) {
+                        Text("None").tag("")
+                        ForEach(voiceProfiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        Text(draft.refAudioPath.isEmpty
+                            ? "No reference audio"
+                            : URL(fileURLWithPath: draft.refAudioPath).lastPathComponent)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("Reference audio…") { chooseReferenceAudio() }
+                    }
+                    TextField("Save as profile (optional)", text: $draft.saveProfileName)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+            }
+
             if [.createImage, .video].contains(mode) {
                 HStack(spacing: 10) {
                     Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
@@ -1544,6 +1576,19 @@ private struct StudioOptionsSheet: View {
         .padding(22)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        .task {
+            if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
+        }
+    }
+
+    private func chooseReferenceAudio() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            draft.refAudioPath = url.path
+        }
     }
 
     private func readImageActionUnavailableMessage(_ action: StudioReadImageAction) -> String? {

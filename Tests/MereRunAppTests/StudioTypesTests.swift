@@ -325,6 +325,32 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(request.draft.imagePath.isEmpty)
     }
 
+    func testSpeakCloneRequestMapsProfileAndReferenceAudio() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        draft.voiceMode = "clone"
+        draft.voiceProfile = "narrator-id"
+        draft.refAudioPath = "/tmp/ref.wav"
+        draft.saveProfileName = "Narrator"
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--mode", "clone")
+        assertPair(args, "--profile", "narrator-id")
+        assertPair(args, "--ref-audio", "/tmp/ref.wav")
+        assertPair(args, "--save-profile", "Narrator")
+    }
+
+    func testSpeakStyleRequestOmitsCloneFlags() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.prompt = "hello world"
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        XCTAssertFalse(args.contains("--profile"))
+        XCTAssertFalse(args.contains("--ref-audio"))
+    }
+
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
         let legacy = StudioLibraryItem(
             id: UUID(), mode: .chat, prompt: "hello there",
