@@ -23,13 +23,36 @@ enum MereRunTheme {
         dark: NSColor(calibratedWhite: 0.0, alpha: 0.28)
     )
 
-    static let titleFont = Font.system(size: 22, weight: .semibold)
-    static let sectionFont = Font.system(size: 12, weight: .semibold)
-    static let bodyFont = Font.system(size: 13, weight: .regular)
-    static let captionFont = Font.system(size: 11, weight: .medium)
-    static let monoFont = Font.system(size: 12, weight: .regular, design: .monospaced)
+    // Relative to Dynamic Type text styles (anchored near the original point sizes) so the whole app
+    // scales with the user's Larger Text setting while keeping the existing token names.
+    static let titleFont = Font.system(.title, weight: .semibold)
+    static let sectionFont = Font.system(.subheadline, weight: .semibold)
+    static let bodyFont = Font.system(.body)
+    static let captionFont = Font.system(.caption, weight: .medium)
+    static let monoFont = Font.system(.callout, design: .monospaced)
 
-    static let cornerRadius: CGFloat = 8
+    /// Consistent spacing scale for padding/stack spacing.
+    enum Spacing {
+        static let xs: CGFloat = 8
+        static let sm: CGFloat = 10
+        static let md: CGFloat = 14
+        static let lg: CGFloat = 18
+        static let xl: CGFloat = 22
+        static let xxl: CGFloat = 28
+        static let xxxl: CGFloat = 32
+    }
+
+    /// Consistent corner-radius scale.
+    enum Radius {
+        static let sm: CGFloat = 6
+        static let base: CGFloat = 8
+        static let md: CGFloat = 9
+        static let lg: CGFloat = 10
+        static let xl: CGFloat = 18
+        static let xxl: CGFloat = 20
+    }
+
+    static let cornerRadius: CGFloat = Radius.base
 
     /// A SwiftUI color that resolves to `light` or `dark` against the current appearance.
     static func dynamic(light: String, dark: String) -> Color {

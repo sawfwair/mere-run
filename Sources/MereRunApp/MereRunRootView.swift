@@ -1264,8 +1264,7 @@ struct MereRunSettingsView: View {
                             if ok { hfToken = "" }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
+                    .buttonStyle(.merePrimary)
                 }
                 if let hfStatus {
                     Text(hfStatus)
@@ -1286,8 +1285,7 @@ struct MereRunSettingsView: View {
                             hfEndpointStatus = ok ? "Saved" : "Could not save endpoint"
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
+                    .buttonStyle(.merePrimary)
                 }
                 if let hfEndpointStatus {
                     Text(hfEndpointStatus)
