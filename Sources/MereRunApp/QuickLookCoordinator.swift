@@ -8,13 +8,20 @@ import QuickLook
 final class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource {
     static let shared = QuickLookCoordinator()
 
-    private var url: URL?
+    private(set) var url: URL?
 
-    /// Shows (or reloads) Quick Look for `url`. No-op if the panel is unavailable.
+    /// Installs this coordinator as the panel's data source (called from the responder-chain
+    /// handshake in MereRunAppDelegate).
+    func install(on panel: QLPreviewPanel) {
+        panel.dataSource = self
+    }
+
+    /// Shows (or reloads) Quick Look for `url`. The panel resolves its data source via the responder
+    /// chain (see MereRunAppDelegate's QLPreviewPanelController methods), so we only stash the URL
+    /// and bring the shared panel forward. No-op if the panel is unavailable.
     func preview(_ url: URL) {
         self.url = url
         guard let panel = QLPreviewPanel.shared() else { return }
-        panel.dataSource = self
         if panel.isVisible {
             panel.reloadData()
         } else {

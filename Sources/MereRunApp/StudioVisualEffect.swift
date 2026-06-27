@@ -5,7 +5,9 @@ import SwiftUI
 /// macOS material/vibrancy (translucent, blurs content behind the window) in both light and dark.
 struct VisualEffectBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .headerView
-    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+    // The window paints an opaque themed background, so behind-window vibrancy would be hidden;
+    // within-window composites the header material against the in-window content instead.
+    var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = PassthroughVisualEffectView()

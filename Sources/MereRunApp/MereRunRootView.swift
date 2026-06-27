@@ -464,7 +464,6 @@ private struct CommandEditor: View {
                 .buttonStyle(.bordered)
                 .help("Reveal in Finder")
                 .accessibilityLabel("Reveal output in Finder")
-                .help("Reveal in Finder")
             }
         }
     }

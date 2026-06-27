@@ -1894,6 +1894,7 @@ private struct StudioLibraryPanel: View {
             }
             .padding(12)
         }
+        .focusable()
         // Finder-style: space previews the selected run's output (ignored when it has none, so it
         // never swallows the key destructively).
         .onKeyPress(.space) {

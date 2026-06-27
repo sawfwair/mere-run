@@ -422,6 +422,7 @@ struct StudioModelsSheet: View {
             HStack(spacing: 8) {
                 TextField("Alias", text: $runtimeAlias)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                    .frame(minWidth: 110)
                 TextField("TTL", text: $runtimeTTL)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 72)
@@ -430,7 +431,7 @@ struct StudioModelsSheet: View {
                     .frame(width: 88)
                 TextField("Max tokens", text: $runtimeMaxTokens)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(width: 96)
+                    .frame(width: 88)
                 TextField("Temp", text: $runtimeTemperature)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 72)
