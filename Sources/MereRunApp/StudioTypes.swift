@@ -17,6 +17,11 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Chat and Code are multi-turn conversations; every other mode is a single-shot run.
+    var isConversational: Bool {
+        self == .chat || self == .code
+    }
+
     var title: String {
         switch self {
         case .createImage: return "Create Image"
@@ -282,7 +287,11 @@ enum StudioCommandError: LocalizedError, Equatable {
 }
 
 enum StudioCommandAdapter {
-    static func makeRequest(mode: StudioMode, draft studioDraft: StudioDraft) throws -> StudioRunRequest {
+    static func makeRequest(
+        mode: StudioMode,
+        draft studioDraft: StudioDraft,
+        conversationID: UUID? = nil
+    ) throws -> StudioRunRequest {
         let templateID = templateID(for: mode, draft: studioDraft)
         guard let template = CommandCatalog.template(id: templateID) else {
             throw StudioCommandError.missingTemplate(templateID)
@@ -309,6 +318,9 @@ enum StudioCommandAdapter {
             draft.prompt = prompt
             draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            // Conversation turns stream so the canvas renders tokens live; the reply is
+            // accumulated and think-stripped app-side.
+            if conversationID != nil { draft.stream = true }
 
         case .speak:
             draft.prompt = prompt
@@ -353,7 +365,10 @@ enum StudioCommandAdapter {
             draft.seed = studioDraft.seed
         }
 
-        return StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft)
+        return StudioRunRequest(
+            mode: mode, templateID: templateID, template: template, draft: draft,
+            conversationID: conversationID
+        )
     }
 
     static func pullRequest(for mode: StudioMode, draft: StudioDraft) throws -> StudioRunRequest? {

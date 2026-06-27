@@ -202,6 +202,29 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(StudioResultParser.outputPaths(fromStdout: stdout).isEmpty)
     }
 
+    func testChatConversationRequestStreamsAndCarriesConversationID() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "User: hi\n\nAssistant: hey\n\nUser: more"
+        draft.secondaryText = "Be terse."
+        let conversationID = UUID()
+        let request = try StudioCommandAdapter.makeRequest(
+            mode: .chat, draft: draft, conversationID: conversationID
+        )
+        XCTAssertEqual(request.conversationID, conversationID)
+        XCTAssertTrue(request.draft.stream)
+        XCTAssertEqual(request.draft.prompt, "User: hi\n\nAssistant: hey\n\nUser: more")
+        XCTAssertEqual(request.draft.secondaryText, "Be terse.")
+    }
+
+    func testChatSingleShotRequestHasNoConversationID() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "hello"
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
+        XCTAssertNil(request.conversationID)
+    }
+
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
         let legacy = StudioLibraryItem(
             id: UUID(), mode: .chat, prompt: "hello there",

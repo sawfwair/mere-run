@@ -1,0 +1,170 @@
+import SwiftUI
+
+/// The chat/code canvas: a scrolling transcript of message bubbles for the active conversation,
+/// plus a live streaming bubble while a turn is in flight. The composer lives in the shared
+/// prompt bar below; this view only renders the thread and a "New chat" affordance.
+struct StudioConversationView: View {
+    let item: StudioLibraryItem?
+    let liveText: String?
+    let isRunning: Bool
+    let mode: StudioMode
+    let onNewChat: () -> Void
+
+    private static let streamingBubbleID = "studio.conversation.streaming"
+
+    private var messages: [StudioMessage] { item?.messages ?? [] }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider().overlay(MereRunTheme.border.opacity(0.4))
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text(item?.displayTitle ?? "New chat")
+                .font(MereRunTheme.sectionFont)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 12)
+            Button(action: onNewChat) {
+                Label("New chat", systemImage: "square.and.pencil")
+                    .font(MereRunTheme.captionFont)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(MereRunTheme.accent)
+            .help("Start a new conversation")
+            .accessibilityLabel("Start a new conversation")
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if messages.isEmpty && !isRunning {
+            StudioConversationEmptyState()
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(messages) { message in
+                            StudioMessageBubble(
+                                role: message.role,
+                                content: message.content,
+                                failed: message.failed,
+                                monospaced: mode == .code && message.role == .assistant
+                            )
+                            .id(message.id)
+                        }
+                        if isRunning {
+                            StudioMessageBubble(
+                                role: .assistant,
+                                content: liveText ?? "",
+                                failed: false,
+                                isStreaming: true,
+                                monospaced: mode == .code
+                            )
+                            .id(Self.streamingBubbleID)
+                        }
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .onChange(of: messages.count) { _, _ in scrollToEnd(proxy) }
+                .onChange(of: liveText) { _, _ in scrollToEnd(proxy) }
+                .onChange(of: isRunning) { _, _ in scrollToEnd(proxy) }
+                .onAppear { scrollToEnd(proxy) }
+            }
+        }
+    }
+
+    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            if isRunning {
+                proxy.scrollTo(Self.streamingBubbleID, anchor: .bottom)
+            } else if let last = messages.last {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+}
+
+private struct StudioMessageBubble: View {
+    let role: StudioMessageRole
+    let content: String
+    var failed: Bool = false
+    var isStreaming: Bool = false
+    var monospaced: Bool = false
+
+    private var isUser: Bool { role == .user }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            if isUser { Spacer(minLength: 64) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(isUser ? "You" : "Assistant")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                bubbleBody
+                if failed {
+                    Label("This turn failed", systemImage: "exclamationmark.triangle")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.red)
+                }
+            }
+            .padding(14)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.cornerRadius)
+                    .fill(isUser ? MereRunTheme.surfaceRaised : MereRunTheme.surface)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.cornerRadius)
+                            .strokeBorder((failed ? MereRunTheme.red : MereRunTheme.border).opacity(0.6), lineWidth: 1)
+                    }
+            }
+            .frame(maxWidth: 620, alignment: .leading)
+            if !isUser { Spacer(minLength: 64) }
+        }
+    }
+
+    @ViewBuilder
+    private var bubbleBody: some View {
+        if isStreaming && content.isEmpty {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Thinking…")
+                    .font(MereRunTheme.bodyFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        } else {
+            Text(content)
+                .font(monospaced ? MereRunTheme.monoFont : MereRunTheme.bodyFont)
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+private struct StudioConversationEmptyState: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
+                .frame(width: 84, height: 84)
+                .background { Circle().fill(MereRunTheme.surfaceRaised) }
+            Text("Start a conversation")
+                .font(.system(size: 22, weight: .semibold))
+            Text("Type a message below. Replies stay on this Mac, and the whole thread is remembered for follow-up turns.")
+                .font(MereRunTheme.bodyFont)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
