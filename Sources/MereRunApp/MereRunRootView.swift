@@ -17,7 +17,24 @@ struct MereRunRootView: View {
 }
 
 struct AdvancedControlSurface: View {
+    /// Docked beside the Studio canvas shows a single resizable column (template picker + editor);
+    /// detached shows the full three-pane (sidebar · editor · console).
+    var docked = false
+    var onDetach: (() -> Void)?
+
     var body: some View {
+        Group {
+            if docked {
+                DockedAdvancedEditor(onDetach: onDetach)
+            } else {
+                fullSurface
+            }
+        }
+        .background(MereRunTheme.background.ignoresSafeArea())
+        .foregroundStyle(MereRunTheme.textPrimary)
+    }
+
+    private var fullSurface: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 CommandSidebar()
@@ -37,8 +54,65 @@ struct AdvancedControlSurface: View {
             }
             .frame(width: 1_210)
         }
-        .background(MereRunTheme.background.ignoresSafeArea())
-        .foregroundStyle(MereRunTheme.textPrimary)
+    }
+}
+
+/// The docked Advanced column: a compact template picker (the sidebar's job, condensed) above the
+/// scrollable editor, so the 560-ish rail never scrolls horizontally. A detach button promotes it
+/// to the full three-pane.
+private struct DockedAdvancedEditor: View {
+    @EnvironmentObject private var controller: MereRunController
+    var onDetach: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Divider().overlay(MereRunTheme.border.opacity(0.5))
+            ScrollView {
+                CommandEditor()
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Menu {
+                ForEach(CommandCategory.allCases) { category in
+                    let templates = CommandCatalog.templates(in: category)
+                    if !templates.isEmpty {
+                        Section(category.rawValue) {
+                            ForEach(templates) { template in
+                                Button(template.title) { controller.select(template) }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: controller.selectedTemplate.systemImage)
+                    Text(controller.selectedTemplate.title)
+                        .font(MereRunTheme.sectionFont)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
+            Spacer(minLength: 0)
+
+            if let onDetach {
+                Button(action: onDetach) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                }
+                .buttonStyle(.plain)
+                .help("Detach to the full control surface")
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
     }
 }
 

@@ -12,6 +12,9 @@ struct StudioRootView: View {
     @State private var showOptions = false
     @State private var showModels = false
     @State private var showHelp = false
+    @State private var advancedWidth: CGFloat = 560
+    @State private var advancedDragStartWidth: CGFloat?
+    @State private var advancedDetached = false
     @State private var selectedLibraryID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
@@ -190,10 +193,9 @@ struct StudioRootView: View {
             }
 
             if showAdvanced {
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.55))
-                AdvancedControlSurface()
-                    .frame(width: 560)
+                advancedResizeHandle
+                AdvancedControlSurface(docked: true, onDetach: { advancedDetached = true })
+                    .frame(width: advancedWidth)
             }
         }
         .background {
@@ -238,6 +240,22 @@ struct StudioRootView: View {
                 .environmentObject(controller)
                 .frame(width: 720, height: 560)
         }
+        .sheet(isPresented: $advancedDetached) {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Advanced — full control surface")
+                        .font(MereRunTheme.sectionFont)
+                    Spacer()
+                    Button("Dock") { advancedDetached = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(16)
+                Divider().overlay(MereRunTheme.border.opacity(0.5))
+                AdvancedControlSurface(docked: false)
+            }
+            .frame(width: 1_260, height: 780)
+            .environmentObject(controller)
+        }
         .task {
             // Poll the local server status for the top-bar pill. status has a 1s probe timeout,
             // so a modest cadence keeps the pill live without hammering the CLI.
@@ -252,6 +270,9 @@ struct StudioRootView: View {
             if !hasCompletedWelcome {
                 showWelcome = true
             }
+        }
+        .onChange(of: showAdvanced) { _, isShown in
+            if isShown { syncAdvancedToStudio() }
         }
         .onChange(of: mode) { _, newMode in
             var nextDraft = StudioDraft()
@@ -481,6 +502,38 @@ struct StudioRootView: View {
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// A draggable divider that resizes the docked Advanced column. The panel is on the right, so
+    /// dragging left widens it; width is clamped to a usable range.
+    private var advancedResizeHandle: some View {
+        Rectangle()
+            .fill(MereRunTheme.border.opacity(0.55))
+            .frame(width: 5)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        let base = advancedDragStartWidth ?? advancedWidth
+                        if advancedDragStartWidth == nil { advancedDragStartWidth = base }
+                        advancedWidth = min(max(base - value.translation.width, 360), 860)
+                    }
+                    .onEnded { _ in advancedDragStartWidth = nil }
+            )
+    }
+
+    /// When Advanced opens, pre-select the template for the active Studio mode and carry over what
+    /// the composer already holds, so Advanced deepens the current task instead of resetting it.
+    private func syncAdvancedToStudio() {
+        if let template = CommandCatalog.template(id: mode.defaultTemplateID) {
+            controller.select(template)
+        }
+        controller.draft.prompt = draft.prompt
+        if !draft.model.isBlank { controller.draft.model = draft.model }
+        if !draft.inputPath.isBlank { controller.draft.inputPath = draft.inputPath }
     }
 
     /// Edits a prior user turn: truncates the thread at that message and loads its text back into
