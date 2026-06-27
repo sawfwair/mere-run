@@ -1219,10 +1219,25 @@ final class MereRunController: ObservableObject {
 
     private func detectOutputURL(expected: URL?, stdout: String) -> URL? {
         let fm = FileManager.default
+
+        // 1. The explicit `--output` path the request asked for, once it has landed.
         if let expected, fm.fileExists(atPath: expected.path) {
             return expected
         }
 
+        // 2. Honor the CLI's stdout contract: media commands print the artifact path as a bare
+        //    line and directory/OCR commands as `input -> output` pairs, most-recent first.
+        //    This is the only path that detects `input -> output` outputs at all (a whole pair
+        //    line never resolves as a file), and it targets the result line rather than guessing.
+        for candidate in StudioResultParser.outputPaths(fromStdout: stdout) {
+            let expanded = NSString(string: candidate).expandingTildeInPath
+            if fm.fileExists(atPath: expanded) {
+                return URL(fileURLWithPath: expanded)
+            }
+        }
+
+        // 3. Fallback for commands without a clean path contract: the last trailing stdout
+        //    line that happens to resolve to an existing file (e.g. a relative path).
         let candidates = stdout
             .components(separatedBy: .newlines)
             .compactMap { line -> String? in

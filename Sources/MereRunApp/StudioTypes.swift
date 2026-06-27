@@ -685,6 +685,39 @@ enum StudioProgressParser {
     }
 }
 
+/// Extracts the output-artifact path a `mere.run` command reports on stdout.
+///
+/// The CLI's contract (AGENTS.md: stdout is machine-readable, stderr is diagnostic) is that
+/// media commands print the artifact path as a bare line, e.g. `/Users/me/out.png`, while the
+/// directory/OCR commands print `input -> output` pairs. Progress and logs go to stderr, so a
+/// media command's stdout is effectively just its result path(s). Transcription prints
+/// transcript text and reports no path here — the explicit `--output` location covers it.
+enum StudioResultParser {
+    /// Output-artifact paths parsed from `stdout`, most-recently-emitted first.
+    static func outputPaths(fromStdout stdout: String) -> [String] {
+        var paths: [String] = []
+        let lines = stdout
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        for line in lines.reversed() {
+            if let separator = line.range(of: " -> ") ?? line.range(of: " → ") {
+                // `input -> output` pair (vision ocr/caption): the artifact is the right side.
+                let rhs = String(line[separator.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if isPathLike(rhs) { paths.append(rhs) }
+            } else if isPathLike(line) {
+                paths.append(line)
+            }
+        }
+        return paths
+    }
+
+    /// True when a line is an absolute or tilde-rooted filesystem path rather than prose.
+    static func isPathLike(_ candidate: String) -> Bool {
+        candidate.hasPrefix("/") || candidate.hasPrefix("~/")
+    }
+}
+
 enum ModelReadinessParser {
     static func state(for modelID: String, modelListOutput: String) -> ModelReadinessState {
         guard !modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
