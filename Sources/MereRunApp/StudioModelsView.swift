@@ -595,10 +595,10 @@ struct StudioModelsSheet: View {
         loadingRuntimeID = row.id
         statusMessage = "\(action.capitalized)ing \(row.id)..."
         do {
-            var request = URLRequest(url: runtimeURL(for: row, action: action))
+            var request = URLRequest(url: controller.runtimeURL(path: "/runtime/models/\(row.id)/\(action)"))
             request.httpMethod = "POST"
-            if !controller.draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                request.setValue("Bearer \(controller.draft.apiKey)", forHTTPHeaderField: "Authorization")
+            if let authorization = controller.runtimeAuthorizationHeader {
+                request.setValue(authorization, forHTTPHeaderField: "Authorization")
             }
             let (_, response) = try await URLSession.shared.data(for: request)
             let http = response as? HTTPURLResponse
@@ -611,17 +611,6 @@ struct StudioModelsSheet: View {
             statusMessage = "Runtime server is not reachable"
         }
         loadingRuntimeID = nil
-    }
-
-    private func runtimeURL(for row: StudioModelInventoryRow, action: String) -> URL {
-        let host = controller.draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
-        let safeHost = host.isEmpty ? "127.0.0.1" : host
-        var components = URLComponents()
-        components.scheme = "http"
-        components.host = safeHost
-        components.port = controller.draft.port
-        components.path = "/runtime/models/\(row.id)/\(action)"
-        return components.url ?? URL(string: "http://127.0.0.1:8080/runtime/models/\(row.id)/\(action)")!
     }
 
     @MainActor

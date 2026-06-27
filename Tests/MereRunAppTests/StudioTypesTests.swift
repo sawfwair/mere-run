@@ -174,6 +174,34 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertNil(StudioProgressParser.parse("[info] starting up"))
     }
 
+    func testStudioResultParserExtractsBarePathFromStdout() {
+        // Media commands print only the artifact path on stdout (diagnostics go to stderr).
+        let stdout = "/Users/me/Documents/render.png\n"
+        XCTAssertEqual(StudioResultParser.outputPaths(fromStdout: stdout), ["/Users/me/Documents/render.png"])
+    }
+
+    func testStudioResultParserReturnsMostRecentPathFirst() {
+        let stdout = "/tmp/first.wav\n/tmp/second.wav\n"
+        XCTAssertEqual(
+            StudioResultParser.outputPaths(fromStdout: stdout),
+            ["/tmp/second.wav", "/tmp/first.wav"]
+        )
+    }
+
+    func testStudioResultParserExtractsRightSideOfArrowPair() {
+        // vision ocr/caption print `input -> output`; the artifact is the right-hand side.
+        let stdout = "/in/page.png -> /out/page.txt\n"
+        XCTAssertEqual(StudioResultParser.outputPaths(fromStdout: stdout), ["/out/page.txt"])
+        let unicodeArrow = "/in/page.png → /out/page.md\n"
+        XCTAssertEqual(StudioResultParser.outputPaths(fromStdout: unicodeArrow), ["/out/page.md"])
+    }
+
+    func testStudioResultParserIgnoresNonPathLines() {
+        // Transcription emits prose on stdout, not a path — nothing should be parsed.
+        let stdout = "This is the transcript of the audio file.\nSecond sentence here.\n"
+        XCTAssertTrue(StudioResultParser.outputPaths(fromStdout: stdout).isEmpty)
+    }
+
     func testSfxStudioModeBuildsGenerateCommand() throws {
         var draft = StudioDraft()
         draft.reset(for: .sfx)
