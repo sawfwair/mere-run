@@ -685,6 +685,7 @@ private struct StudioTopBar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Show library")
+                .accessibilityLabel(showLibrary ? "Hide library" : "Show library")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("mere.run")
@@ -871,6 +872,8 @@ private struct StudioStatusPill: View {
         .frame(height: 38)
         .frame(maxWidth: 210)
         .merePanel(cornerRadius: 18)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(detail)")
     }
 }
 
@@ -1358,6 +1361,8 @@ private struct StudioPromptBar: View {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .buttonStyle(.plain)
+                    .help("Remove attachment")
+                    .accessibilityLabel("Remove attachment")
                 }
                 .padding(.horizontal, 14)
             }
@@ -1424,6 +1429,7 @@ private struct StudioPromptBar: View {
                 .disabled(readiness.blocksRun || sendBlocked)
                 .help(sendBlocked ? "Waiting for the current reply…" : runButtonHelp)
                 .accessibilityLabel(isRunning ? "Queue run" : "Run")
+                .accessibilityHint(accessibilityRunHint)
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 14)
@@ -1452,6 +1458,13 @@ private struct StudioPromptBar: View {
             return queueLabel
         }
         return "Run"
+    }
+
+    /// Spoken explanation of why Run is disabled, so the blocked state is not color-only.
+    private var accessibilityRunHint: String {
+        if sendBlocked { return "Waiting for the current reply to finish" }
+        if readiness.blocksRun { return readiness.message }
+        return ""
     }
 }
 
@@ -1895,6 +1908,9 @@ private struct StudioLibraryRow: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.mode.title), \(item.status.rawValue), \(item.displayTitle)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     @ViewBuilder

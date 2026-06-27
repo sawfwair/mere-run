@@ -109,6 +109,7 @@ private struct DockedAdvancedEditor: View {
                 }
                 .buttonStyle(.plain)
                 .help("Detach to the full control surface")
+                .accessibilityLabel("Detach to the full control surface")
             }
         }
         .padding(.horizontal, 18)
@@ -174,6 +175,8 @@ private struct CommandSidebar: View {
                         .foregroundStyle(MereRunTheme.textMuted)
                     Spacer()
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(controller.isRunning ? "Running: \(controller.status)" : "Status: \(controller.status)")
             }
             .padding(18)
         }
@@ -460,6 +463,8 @@ private struct CommandEditor: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Reveal in Finder")
+                .accessibilityLabel("Reveal output in Finder")
+                .help("Reveal in Finder")
             }
         }
     }
@@ -656,6 +661,7 @@ private struct PathField: View {
             }
             .buttonStyle(.borderless)
             .help(mode == .saveFile ? "Choose output path" : "Choose path")
+            .accessibilityLabel(mode == .saveFile ? "Choose output path" : "Choose path")
         }
         .padding(10)
         .merePanel()
