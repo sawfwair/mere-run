@@ -1174,6 +1174,29 @@ struct MereRunSettingsView: View {
                         .foregroundStyle(MereRunTheme.textMuted)
                 }
             }
+            EditorSection("Runtime server") {
+                HStack(spacing: 10) {
+                    TextField("Host", text: $controller.runtimeHost)
+                        .textFieldStyle(.plain)
+                        .font(MereRunTheme.bodyFont)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Port", value: $controller.runtimePort, format: .number.grouping(.never))
+                        .textFieldStyle(.plain)
+                        .font(MereRunTheme.bodyFont)
+                        .frame(width: 90)
+                        .padding(10)
+                        .merePanel()
+                    SecureField("API key (optional)", text: $controller.runtimeAPIKey)
+                        .textFieldStyle(.plain)
+                        .font(MereRunTheme.bodyFont)
+                        .padding(10)
+                        .merePanel()
+                }
+                Text("Where the Models panel sends load/unload requests for the running runtime (`mere.run api serve`).")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
             EditorSection("Install") {
                 HStack(spacing: 10) {
                     Button {

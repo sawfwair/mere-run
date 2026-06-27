@@ -271,6 +271,29 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.draft.extraArguments, "user-is-editing-this")
     }
 
+    func testRuntimeEndpointIsOwnedNotDerivedFromDraft() {
+        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        controller.runtimeHost = "example.local"
+        controller.runtimePort = 9000
+        controller.runtimeAPIKey = "secret"
+        // The transient command draft must not influence the runtime endpoint.
+        controller.draft.host = "10.0.0.1"
+        controller.draft.port = 1234
+        controller.draft.apiKey = "draft-key"
+
+        let url = controller.runtimeURL(path: "/runtime/models/foo/load")
+        XCTAssertEqual(url.absoluteString, "http://example.local:9000/runtime/models/foo/load")
+        XCTAssertEqual(controller.runtimeAuthorizationHeader, "Bearer secret")
+    }
+
+    func testRuntimeEndpointFallsBackAndOmitsEmptyAuth() {
+        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        controller.runtimeHost = "   "
+        controller.runtimeAPIKey = "  "
+        XCTAssertEqual(controller.runtimeURL(path: "/x").host, "127.0.0.1")
+        XCTAssertNil(controller.runtimeAuthorizationHeader)
+    }
+
     func testRunningStudioRunPublishesOutputBeforeProcessExits() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

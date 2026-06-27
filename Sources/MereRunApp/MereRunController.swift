@@ -440,6 +440,17 @@ final class MereRunController: ObservableObject {
     @Published var workingDirectory: String {
         didSet { UserDefaults.standard.set(workingDirectory, forKey: Keys.workingDirectory) }
     }
+    // The runtime server the Studio talks to for model load/unload. Owned here — and persisted —
+    // rather than derived from a transient command draft, so requests target the actual runtime.
+    @Published var runtimeHost: String {
+        didSet { UserDefaults.standard.set(runtimeHost, forKey: Keys.runtimeHost) }
+    }
+    @Published var runtimePort: Int {
+        didSet { UserDefaults.standard.set(runtimePort, forKey: Keys.runtimePort) }
+    }
+    @Published var runtimeAPIKey: String {
+        didSet { UserDefaults.standard.set(runtimeAPIKey, forKey: Keys.runtimeAPIKey) }
+    }
     @Published private(set) var liveOutputText = ""
     @Published private(set) var currentProgress: StudioRunProgress?
     @Published private(set) var cliVersion: String?
@@ -455,6 +466,9 @@ final class MereRunController: ObservableObject {
         static let modelsRoot = "mererun.app.modelsRoot"
         static let hubCache = "mererun.app.hubCache"
         static let workingDirectory = "mererun.app.workingDirectory"
+        static let runtimeHost = "mererun.app.runtimeHost"
+        static let runtimePort = "mererun.app.runtimePort"
+        static let runtimeAPIKey = "mererun.app.runtimeAPIKey"
     }
 
     private let processRunner: MereRunProcessRunning
@@ -508,6 +522,9 @@ final class MereRunController: ObservableObject {
         hubCache = UserDefaults.standard.string(forKey: Keys.hubCache) ?? ""
         workingDirectory = UserDefaults.standard.string(forKey: Keys.workingDirectory)
             ?? FileManager.default.homeDirectoryForCurrentUser.path
+        runtimeHost = UserDefaults.standard.string(forKey: Keys.runtimeHost) ?? "127.0.0.1"
+        runtimePort = (UserDefaults.standard.object(forKey: Keys.runtimePort) as? Int) ?? 8080
+        runtimeAPIKey = UserDefaults.standard.string(forKey: Keys.runtimeAPIKey) ?? ""
         if resolvesCLIOnInit {
             refreshResolvedCLI()
         }
@@ -519,6 +536,25 @@ final class MereRunController: ObservableObject {
         lastOutputURL = nil
         lastExitCode = nil
         status = "Idle"
+    }
+
+    /// URL on the runtime server (model load/unload) for `path`, built from the owned
+    /// host/port rather than a transient command draft.
+    func runtimeURL(path: String) -> URL {
+        let host = runtimeHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeHost = host.isEmpty ? "127.0.0.1" : host
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = safeHost
+        components.port = runtimePort
+        components.path = path
+        return components.url ?? URL(string: "http://127.0.0.1:8080\(path)")!
+    }
+
+    /// The `Authorization` header value for runtime-server requests, or nil when no key is set.
+    var runtimeAuthorizationHeader: String? {
+        let key = runtimeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return key.isEmpty ? nil : "Bearer \(key)"
     }
 
     func refreshResolvedCLI() {
