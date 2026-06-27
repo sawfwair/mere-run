@@ -39,6 +39,14 @@ Effort key: **S** ≈ 1–2 days · **M** ≈ 3–5 days · **L** ≈ 1–2 week
 
 ### WS-1 — Run engine & CLI contract (Phase 1) · XL
 
+> **✅ Complete** (PR #93). All six items landed: contract-driven output detection
+> (`StudioResultParser`, 1.1), per-run `RunSession` engine with up to `maxConcurrentRuns`
+> concurrent runs and isolated logs (1.2 + 1.4), editing/running decoupled via an immutable
+> `RunSpec` snapshot (1.3), owned runtime-server endpoint (1.5), and injected
+> filesystem/CLI-locator test seams (1.6). The structured `RunResult.swift`/`RunCoordinator.swift`
+> split below was folded into `MereRunController`; a multi-pane UI to *view* background runs
+> (vs. the foreground console) remains a Phase-4 polish item.
+
 The single-run, heuristic-output controller is the structural ceiling. This must precede
 deep feature work that assumes concurrency and reliable results.
 
