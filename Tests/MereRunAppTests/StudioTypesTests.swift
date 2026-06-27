@@ -34,6 +34,61 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(chatTemplate.arguments(from: draft).contains("--stream"))
     }
 
+    func testChatBuildsVisionAndToolLoopFlags() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        var draft = template.defaultDraft()
+        draft.imagePath = "/tmp/in.png"
+        draft.tools = "write_file,shell_exec"
+        draft.toolLoop = true
+        draft.allowShellExec = true
+        draft.sandboxDir = "/tmp/box"
+        let args = template.arguments(from: draft)
+        assertPair(args, "--image", "/tmp/in.png")
+        assertPair(args, "--tools", "write_file,shell_exec")
+        assertPair(args, "--sandbox-dir", "/tmp/box")
+        XCTAssertTrue(args.contains("--tool-loop"))
+        XCTAssertTrue(args.contains("--allow-shell-exec"))
+    }
+
+    func testChatOmitsVisionAndToolFlagsByDefault() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        let args = template.arguments(from: template.defaultDraft())
+        XCTAssertFalse(args.contains("--image"))
+        XCTAssertFalse(args.contains("--tools"))
+        XCTAssertFalse(args.contains("--tool-loop"))
+        XCTAssertFalse(args.contains("--allow-shell-exec"))
+    }
+
+    func testNewAdvancedTemplatesBuildExpectedCommands() throws {
+        func args(_ id: CommandTemplateID, _ mutate: (inout CommandDraft) -> Void = { _ in }) throws -> [String] {
+            let template = try XCTUnwrap(CommandCatalog.template(id: id))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            return template.arguments(from: draft)
+        }
+        XCTAssertEqual(try args(.musicAnalyze) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "analyze", "/a.wav"])
+        XCTAssertEqual(try args(.musicRealtime).prefix(2).map { $0 }, ["music", "realtime"])
+        XCTAssertTrue(try args(.musicRealtime).contains("--no-play"))
+        XCTAssertEqual(try args(.sfxAEEncode) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "ae", "encode"])
+        XCTAssertEqual(try args(.sfxAEDecode) { $0.inputPath = "/a.npy" }.prefix(3).map { $0 }, ["sfx", "ae", "decode"])
+        XCTAssertEqual(try args(.sfxClapScore) { $0.prompt = "door"; $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "clap", "score"])
+        XCTAssertEqual(try args(.sfxConditionText) { $0.prompt = "door" }.prefix(3).map { $0 }, ["sfx", "condition", "text"])
+        XCTAssertEqual(try args(.modelBenchmark).prefix(3).map { $0 }, ["model", "benchmark", "q36-mtp"])
+        XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
+        XCTAssertEqual(try args(.pluginInstall) { $0.prompt = "mere-runpod"; $0.force = true }, ["plugin", "install", "mere-runpod", "--yes"])
+        XCTAssertEqual(try args(.pluginDoctor) { $0.prompt = "mere-runpod" }, ["plugin", "doctor", "mere-runpod"])
+        XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
+    }
+
+    private func assertPair(_ args: [String], _ flag: String, _ value: String,
+                            file: StaticString = #filePath, line: UInt = #line) {
+        guard let index = args.firstIndex(of: flag), index + 1 < args.count else {
+            XCTFail("flag \(flag) not found in \(args)", file: file, line: line)
+            return
+        }
+        XCTAssertEqual(args[index + 1], value, file: file, line: line)
+    }
+
     func testStudioRunRequestBuildsImageCommandWithDefaultOutput() throws {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
