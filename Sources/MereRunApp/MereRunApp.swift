@@ -19,7 +19,6 @@ struct MereRunApp: App {
             MereRunRootView()
                 .environmentObject(controller)
                 .frame(minWidth: 880, minHeight: 600)
-                .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.onTerminate = { [weak controller] in
                         MainActor.assumeIsolated {
@@ -39,7 +38,6 @@ struct MereRunApp: App {
         Settings {
             MereRunSettingsView()
                 .environmentObject(controller)
-                .preferredColorScheme(.dark)
                 .frame(width: 560)
         }
     }

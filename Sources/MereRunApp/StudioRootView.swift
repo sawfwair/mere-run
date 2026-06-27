@@ -1073,7 +1073,7 @@ private struct StudioRunningOverlay: View {
         }
         .padding(28)
         .merePanel(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.28), radius: 28, y: 12)
+        .mereShadow(radius: 28, y: 12)
     }
 }
 
@@ -1117,7 +1117,7 @@ private struct StudioReadinessOverlay: View {
         }
         .padding(28)
         .merePanel(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.3), radius: 30, y: 12)
+        .mereShadow(radius: 30, y: 12)
     }
 
     private var statusImage: String {
@@ -1464,7 +1464,7 @@ private struct StudioPromptBar: View {
                         RoundedRectangle(cornerRadius: 20)
                             .strokeBorder(MereRunTheme.border.opacity(0.75), lineWidth: 1)
                     }
-                    .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
+                    .mereShadow(radius: 20, y: 10)
             }
         }
     }
