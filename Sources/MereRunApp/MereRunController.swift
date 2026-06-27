@@ -466,6 +466,9 @@ final class MereRunController: ObservableObject {
     private var stderrBuffer = ""
     private var activeRunTemplateID: CommandTemplateID?
     private var activeRunPreview = ""
+    /// The expected `--output` location of the run currently in flight. Captured from the run's
+    /// snapshot so live output detection never reads the editing state, which may have moved on.
+    private var activeExpectedOutput: URL?
     private var outputWatchTask: Task<Void, Never>?
     private var queuedRuns: [StudioRunRequest] = []
 
@@ -612,6 +615,15 @@ final class MereRunController: ObservableObject {
         }
     }
 
+    /// A captured snapshot of what to run, decoupled from the live editing state
+    /// (`selectedTemplate`/`draft`). A queued or Studio-initiated run executes from its own
+    /// snapshot, so it never overwrites whatever the user is currently editing in either surface.
+    private struct RunSpec {
+        let template: CommandTemplate
+        let draft: CommandDraft
+        let requestID: UUID?
+    }
+
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
         if isRunning || !queuedRuns.isEmpty {
@@ -619,9 +631,7 @@ final class MereRunController: ObservableObject {
             return true
         }
 
-        selectedTemplate = request.template
-        draft = request.draft
-        return startRun(requestID: request.id)
+        return startRun(RunSpec(template: request.template, draft: request.draft, requestID: request.id))
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
@@ -780,26 +790,27 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run() -> Bool {
-        startRun(requestID: nil)
+        startRun(RunSpec(template: selectedTemplate, draft: draft, requestID: nil))
     }
 
     @discardableResult
-    private func startRun(requestID: UUID?) -> Bool {
+    private func startRun(_ spec: RunSpec) -> Bool {
         guard !isRunning else { return false }
-        if let shortCircuit = ensureCameraAccess(requestID: requestID) {
+        if let shortCircuit = ensureCameraAccess(spec: spec) {
             return shortCircuit
         }
         refreshResolvedCLI()
 
         let launch = CLIResolver.resolve(customPath: cliPath)
-        let args = commandArguments
+        let args = commandArguments(template: spec.template, draft: spec.draft)
         let display = launch.displayCommand(for: args)
-        let expectedOutput = expectedOutputURL()
-        activeRunTemplateID = selectedTemplate.id
+        let expectedOutput = expectedOutputURL(template: spec.template, draft: spec.draft)
+        activeRunTemplateID = spec.template.id
         activeRunPreview = display
-        activeRunRequestID = requestID
+        activeRunRequestID = spec.requestID
+        activeExpectedOutput = expectedOutput
 
-        if let message = selectedTemplate.validationMessage(for: draft) {
+        if let message = spec.template.validationMessage(for: spec.draft) {
             append(message, stream: .system)
             status = message
             lastExitCode = 64
@@ -815,13 +826,13 @@ final class MereRunController: ObservableObject {
         lastOutputURL = nil
         lastExitCode = nil
 
-        guard prepareOutputLocation() else {
+        guard prepareOutputLocation(template: spec.template, draft: spec.draft) else {
             lastExitCode = -1
             finishPreflightFailure(exitCode: -1, outputText: capturedResultText(exitCode: -1) ?? status)
             return false
         }
 
-        status = selectedTemplate.id == .modelPull ? "Downloading model" : "Running"
+        status = spec.template.id == .modelPull ? "Downloading model" : "Running"
         isRunning = true
 
         append(display, stream: .system)
@@ -829,7 +840,12 @@ final class MereRunController: ObservableObject {
 
         do {
             currentProcess = try processRunner.start(
-                configuration: processConfiguration(launch: launch, args: args),
+                configuration: processConfiguration(
+                    launch: launch,
+                    args: args,
+                    environmentTemplateID: spec.template.id,
+                    environmentDraft: spec.draft
+                ),
                 stdout: { [weak self] text in
                     Task { @MainActor in
                         self?.append(text, stream: .stdout)
@@ -863,6 +879,7 @@ final class MereRunController: ObservableObject {
             activeRunTemplateID = nil
             activeRunPreview = ""
             activeRunRequestID = nil
+            activeExpectedOutput = nil
             stopOutputWatch()
             startNextQueuedRun()
             return false
@@ -897,8 +914,8 @@ final class MereRunController: ObservableObject {
     /// Returns a `Bool` to short-circuit `startRun` when access is pending (async request
     /// will retry) or denied. The CLI captures the camera as a child of this app bundle,
     /// so TCC attributes access here and the usage string lives in the app's Info.plist.
-    private func ensureCameraAccess(requestID: UUID?) -> Bool? {
-        guard requiresCameraAccess(selectedTemplate.id) else { return nil }
+    private func ensureCameraAccess(spec: RunSpec) -> Bool? {
+        guard requiresCameraAccess(spec.template.id) else { return nil }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             return nil
@@ -907,7 +924,7 @@ final class MereRunController: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     if granted {
-                        _ = self.startRun(requestID: requestID)
+                        _ = self.startRun(spec)
                     } else {
                         self.reportCameraDenied()
                     }
@@ -1005,6 +1022,7 @@ final class MereRunController: ObservableObject {
         activeRunTemplateID = nil
         activeRunPreview = ""
         activeRunRequestID = nil
+        activeExpectedOutput = nil
         startNextQueuedRun()
     }
 
@@ -1021,6 +1039,7 @@ final class MereRunController: ObservableObject {
         activeRunTemplateID = nil
         activeRunPreview = ""
         activeRunRequestID = nil
+        activeExpectedOutput = nil
         stopOutputWatch()
         startNextQueuedRun()
     }
@@ -1035,9 +1054,7 @@ final class MereRunController: ObservableObject {
         guard !isRunning, currentProcess == nil, !queuedRuns.isEmpty else { return }
         let next = queuedRuns.removeFirst()
         queuedRunCount = queuedRuns.count
-        selectedTemplate = next.template
-        draft = next.draft
-        _ = startRun(requestID: next.id)
+        _ = startRun(RunSpec(template: next.template, draft: next.draft, requestID: next.id))
     }
 
     private func startOutputWatch(expectedOutput: URL?) {
@@ -1121,7 +1138,7 @@ final class MereRunController: ObservableObject {
             stdoutBuffer += text
             trimStdoutBuffer()
             liveOutputText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            publishDetectedOutputIfNeeded(expectedOutput: expectedOutputURL())
+            publishDetectedOutputIfNeeded(expectedOutput: activeExpectedOutput)
         } else if stream == .stderr {
             stderrBuffer += text
             trimStderrBuffer()
@@ -1184,21 +1201,21 @@ final class MereRunController: ObservableObject {
         return stderr
     }
 
-    private func expectedOutputURL() -> URL? {
-        guard selectedTemplate.outputKind != .none, !draft.outputPath.isBlank else {
+    private func expectedOutputURL(template: CommandTemplate, draft: CommandDraft) -> URL? {
+        guard template.outputKind != .none, !draft.outputPath.isBlank else {
             return nil
         }
         return URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
     }
 
-    private func prepareOutputLocation() -> Bool {
+    private func prepareOutputLocation(template: CommandTemplate, draft: CommandDraft) -> Bool {
         guard !draft.outputPath.isBlank else {
             return true
         }
 
         let outputURL = URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
         let directoryURL: URL
-        switch selectedTemplate.outputKind {
+        switch template.outputKind {
         case .file:
             directoryURL = outputURL.deletingLastPathComponent()
         case .directory:

@@ -247,6 +247,30 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.lastRunResult?.requestID, second.id)
     }
 
+    func testStudioRunDoesNotClobberEditingState() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+
+        // The user is editing a template/draft in the Advanced surface.
+        let editing = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var editingDraft = editing.defaultDraft()
+        editingDraft.extraArguments = "user-is-editing-this"
+        controller.selectedTemplate = editing
+        controller.draft = editingDraft
+
+        // A Studio run of a different draft starts from its own snapshot.
+        var runDraft = editing.defaultDraft()
+        runDraft.extraArguments = "studio-run"
+        let request = StudioRunRequest(mode: .chat, templateID: .custom, template: editing, draft: runDraft)
+        XCTAssertTrue(controller.run(studio: request))
+
+        // It runs with the request's arguments...
+        XCTAssertEqual(runner.starts.first?.configuration.arguments, ["studio-run"])
+        // ...while the user's editing state is left untouched.
+        XCTAssertEqual(controller.draft.extraArguments, "user-is-editing-this")
+    }
+
     func testRunningStudioRunPublishesOutputBeforeProcessExits() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
