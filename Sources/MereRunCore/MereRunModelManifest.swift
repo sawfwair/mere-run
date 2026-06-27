@@ -46,6 +46,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case openAIPrivacyFilter = "openai-privacy-filter"
         /// GGUF code generation family.
         case qwen3Coder = "qwen3-coder"
+        /// North Mini Code GGUF family via the native llama.cpp runtime.
+        case northMiniCode = "north-mini-code"
         /// LightOn OCR family.
         case lightOnOCR = "lighton-ocr"
         /// ACE-Step music family.
@@ -801,6 +803,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration],
                 components: nil,
                 upstreamRepoId: "\(AgentModelResources.qwen35NineBRepoId)@\(AgentModelResources.qwen35NineBRevision)",
+                createdAt: createdAt
+            )
+        case .northMiniCode:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .northMiniCode,
+                family: .code,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: nil,
+                upstreamRepoId: "\(NorthMiniCodeResources.upstreamRepoId)"
+                    + "@\(NorthMiniCodeResources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .q36NanoGGUF:

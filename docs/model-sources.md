@@ -25,7 +25,7 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 | Image | `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`, `image-krea2-turbo`, `image-ideogram4-sdnq-uint4` |
 | Text chat | `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
 | Vision chat | `vision-chat-gemma4-12b` |
-| Text code / agents | `text-agent-qwen35-9b`, `text-code-qwen3` |
+| Text code / agents | `text-agent-qwen35-9b`, `text-code-north-mini`, `text-code-qwen3` |
 | Text embed | `text-embed-qwen3-0.6b` |
 | Text anonymize | `text-anonymize-privacy-filter` |
 | Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
@@ -51,6 +51,13 @@ Face sources.
 `text-agent-qwen35-9b` is the low-memory setup-agent model. It uses the public
 Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
 `Qwen3.5-9B-Q4_K_M.gguf`.
+
+`text-code-north-mini` installs the Unsloth GGUF quant of Cohere Labs' North
+Mini Code 1.0 at the pinned catalog revision. North Mini Code is a 30B total /
+3B active coding MoE with a 256K advertised context window; mere.run uses the
+`North-Mini-Code-1.0-UD-Q4_K_M.gguf` file so the model runs through the same
+native Swift/llama.cpp `text code` path as the existing Qwen coder. It requires
+a llama.cpp runtime with `cohere2moe` architecture support.
 
 `text-agent-deepseek-v4-flash` is the preferred managed setup-agent tier on
 96 GB+ Apple Silicon Macs. Smaller Qwen setup agents are lower-memory

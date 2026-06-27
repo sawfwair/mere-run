@@ -152,6 +152,23 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testNorthMiniCodeTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .northMiniCode, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, NorthMiniCodeResources.modelId)
+        XCTAssertEqual(manifest.engine, .northMiniCode)
+        XCTAssertEqual(manifest.family, .code)
+        XCTAssertEqual(manifest.tier, .small)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(NorthMiniCodeResources.upstreamRepoId)@\(NorthMiniCodeResources.upstreamRevision)"
+        )
+    }
+
     func testHiDreamO1DevTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .hidreamO1Dev, createdAt: Date(timeIntervalSince1970: 0))
 

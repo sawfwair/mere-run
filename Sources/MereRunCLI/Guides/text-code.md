@@ -2,16 +2,23 @@
 
 ## Purpose
 
-Run a local GGUF coding assistant for code generation, explanation, patches, and focused technical answers.
+Run a local coding assistant for code generation, explanation, patches, and focused technical answers.
 
 ## Required Models
 
-Default managed id: `text-code-qwen3`. You can also pass a local GGUF model path with `--model`.
+Default `text code` managed id: `text-code-qwen3`. You can also pass a local
+GGUF model path with `--model`.
+
+For lower-memory coding experiments, `text-code-north-mini` installs the
+Unsloth GGUF quant of Cohere Labs' North Mini Code. It runs through the native
+Swift/llama.cpp code path and requires a llama.cpp runtime with `cohere2moe`
+architecture support.
 
 ## Install And Check
 
 ```bash
 mere.run model pull text-code-qwen3
+mere.run model pull text-code-north-mini
 mere.run text code --help
 ```
 
@@ -48,6 +55,12 @@ mere.run text code \
   --prompt "Review this SQL migration for data-loss risks: $(cat migration.sql)"
 ```
 
+```bash
+mere.run text code \
+  --model text-code-north-mini \
+  --prompt "Write a small Swift Result extension with tests."
+```
+
 ## Iteration Tips
 
 - Lower temperature for compiler-sensitive work.
@@ -57,6 +70,8 @@ mere.run text code \
 ## Troubleshooting
 
 - No model found: run `mere.run model pull text-code-qwen3` or pass a GGUF path with `--model`.
+- North Mini Code fails to load: rebuild or update the bundled llama.cpp runtime
+  so it includes `cohere2moe` support.
 - Output rambles: reduce `--max-tokens` and ask for a specific format.
 - Code is stale: paste current symbols and file names instead of relying on model memory.
 
@@ -64,4 +79,5 @@ mere.run text code \
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/TextCodeCommand.swift
 - https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct
+- https://huggingface.co/unsloth/North-Mini-Code-1.0-GGUF
 - https://arxiv.org/abs/2603.00729

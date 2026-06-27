@@ -6,7 +6,11 @@ Summarize this Mac's model capabilities and optionally prepare the Pi coding-age
 
 ## Required Models
 
-No model is required to print readiness. Optional model pulls/configuration should use the recommended setup-agent tier; on 96 GB+ Apple Silicon Macs that is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory or comparison alternatives.
+No model is required to print readiness. Optional model pulls/configuration
+should use the recommended setup-agent tier; on 96 GB+ Apple Silicon Macs that
+is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory
+or comparison alternatives. `text-code-north-mini` is available for native
+GGUF coding-agent experiments.
 
 ## Install And Check
 
@@ -30,6 +34,8 @@ mere.run agent onboard --help
 - Run plain `agent onboard` first; it is informational.
 - Use `--install-pi` before `agent start` if Pi is not already installed.
 - Use `--configure-pi --model <id>` when Pi should call a local mere.run API provider.
+- For North Mini Code, pull `text-code-north-mini`, start `api serve --engine text-code`,
+  then use `--configure-pi --model text-code-north-mini --host <host> --port <port>`.
 
 ## Examples
 
@@ -39,6 +45,11 @@ mere.run agent onboard
 
 ```bash
 mere.run agent onboard --install-pi --configure-pi --model text-agent-deepseek-v4-flash
+```
+
+```bash
+mere.run model pull text-code-north-mini
+mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080
 ```
 
 ## Iteration Tips

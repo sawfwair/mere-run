@@ -76,6 +76,29 @@ final class SetupCommandParsingTests: XCTestCase {
         )
     }
 
+    func testNorthMiniProviderUsesNativeManagedModelID() throws {
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(
+                    on: MereRunMachineProfile(
+                        physicalMemoryBytes: 32 * 1_073_741_824,
+                        processorName: "M4 Pro",
+                        isAppleSiliconMac: true
+                    )
+                )
+                .first { $0.id == NorthMiniCodeResources.modelId }
+        )
+
+        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+
+        XCTAssertEqual(providerModel.id, NorthMiniCodeResources.modelId)
+        XCTAssertEqual(providerModel.contextWindow, NorthMiniCodeResources.runtimeContextLength)
+        XCTAssertEqual(providerModel.maxTokens, NorthMiniCodeResources.maxOutputTokens)
+        XCTAssertFalse(providerModel.reasoning)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textCode)
+    }
+
     func testPiProviderCanBeWrittenToIsolatedHome() throws {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-pi-home-\(UUID().uuidString)", isDirectory: true)

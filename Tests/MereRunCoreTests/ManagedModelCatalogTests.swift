@@ -335,6 +335,23 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .codegenGGUF)
     }
 
+    func testNorthMiniCodeUsesPinnedHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: NorthMiniCodeResources.modelId))
+
+        XCTAssertEqual(spec.category, .textCode)
+        XCTAssertEqual(spec.installShape, .singleFile(relativePath: NorthMiniCodeResources.managedRelativePath))
+        XCTAssertEqual(spec.hubFallback?.repoId, NorthMiniCodeResources.upstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, NorthMiniCodeResources.upstreamRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, [NorthMiniCodeResources.ggufFile])
+        XCTAssertEqual(spec.hubFallback?.filePath, NorthMiniCodeResources.ggufFile)
+        XCTAssertEqual(spec.upstreamRepoId, NorthMiniCodeResources.upstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, NorthMiniCodeResources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .codegenGGUF)
+        XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, NorthMiniCodeResources.estimatedDownloadBytes)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textCode)
+    }
+
     func testLFM2UsesLiquidAIHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId))
 

@@ -693,6 +693,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["api serve", "text code"]
         ),
         ManagedModelSpec(
+            id: NorthMiniCodeResources.modelId,
+            category: .textCode,
+            installShape: .singleFile(relativePath: NorthMiniCodeResources.managedRelativePath),
+            hubFallback: NorthMiniCodeResources.hubFallbackConfig,
+            upstreamRepoId: NorthMiniCodeResources.upstreamRepoId,
+            upstreamRevision: NorthMiniCodeResources.upstreamRevision,
+            validationKind: .codegenGGUF,
+            estimatedDownloadBytes: NorthMiniCodeResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text code", "api serve", "agent start"]
+        ),
+        ManagedModelSpec(
             // GGUF Qwen3.6-35B-A3B: the CUDA default chat model. Routes through
             // llama.cpp (.codegenGGUF) for the GB10-optimized quantized-MoE
             // kernels (~68 tok/s on GB10 vs ~13 for the MLX path). Same model

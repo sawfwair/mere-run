@@ -227,6 +227,7 @@ swift run mere.run model capabilities --recommended
 # 16-23 GB: text-chat-gemma4-12b-4bit
 # 24-95 GB: text-chat-q36-nano
 # 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Q36 for lower-latency CLI chat
+# Coding-agent comparison: text-code-north-mini via native llama.cpp/GGUF
 
 # Choose guided, bring-your-own-agent, or manual setup
 swift run mere.run setup
@@ -234,6 +235,7 @@ swift run mere.run setup
 # Pull a Hugging Face-backed model into the local model store
 swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull text-chat-lfm25-a1b-8bit
+swift run mere.run model pull text-code-north-mini
 
 # Generate an image
 swift run mere.run image generate \

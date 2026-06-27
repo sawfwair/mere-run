@@ -16,6 +16,24 @@ public struct CodeGenResources: Sendable, Hashable {
         filePath: hubGGUFPath
     )
 
+    public static func displayName(for modelId: String) -> String {
+        switch modelId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case NorthMiniCodeResources.modelId:
+            return "North Mini Code"
+        default:
+            return "Qwen3-Coder"
+        }
+    }
+
+    public static func contextSize(for modelId: String) -> UInt32 {
+        switch modelId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case NorthMiniCodeResources.modelId:
+            return UInt32(NorthMiniCodeResources.runtimeContextLength)
+        default:
+            return 32_768
+        }
+    }
+
     public var ggufURL: URL
 
     public init(ggufURL: URL) {

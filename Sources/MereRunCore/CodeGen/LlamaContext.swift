@@ -1,5 +1,10 @@
 #if canImport(llama)
 import Foundation
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 @preconcurrency import llama
 
 public enum LlamaError: Error {
@@ -173,6 +178,17 @@ public final class LlamaContext: @unchecked Sendable {
         }
     }
 
+    /// Format chat messages with the model's embedded GGUF chat template when
+    /// llama.cpp recognizes it, falling back to the legacy Qwen-style prompt.
+    public func chatPrompt(for messages: [ChatMessage]) -> String {
+        queue.sync {
+            if let templated = applyModelChatTemplate(messages) {
+                return templated
+            }
+            return Self.qwenStylePrompt(messages)
+        }
+    }
+
     /// Initialize completion with a prompt.
     public func completionInit(text: String) throws {
         try queue.sync {
@@ -180,6 +196,7 @@ public final class LlamaContext: @unchecked Sendable {
                 throw LlamaError.couldNotInitializeContext
             }
 
+            llama_memory_clear(llama_get_memory(ctx), true)
             tokensList = tokenize(text: text, addBos: true, vocab: v)
             temporaryInvalidCChars = []
 
@@ -193,7 +210,9 @@ public final class LlamaContext: @unchecked Sendable {
                 throw LlamaError.decodeFailed
             }
 
+            let maxGeneratedTokens = nLen
             nCur = Int32(tokensList.count)
+            nLen = nCur + maxGeneratedTokens
             isDone = false
             nDecode = 0
         }
@@ -210,8 +229,10 @@ public final class LlamaContext: @unchecked Sendable {
 
             if llama_vocab_is_eog(v, newTokenId) || nCur >= nLen {
                 isDone = true
-                let bytes = temporaryInvalidCChars + [0]
-                let newTokenStr = String(decoding: bytes.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+                let newTokenStr = String(
+                    decoding: temporaryInvalidCChars.map { UInt8(bitPattern: $0) },
+                    as: UTF8.self
+                )
                 temporaryInvalidCChars.removeAll()
                 return newTokenStr
             }
@@ -232,6 +253,11 @@ public final class LlamaContext: @unchecked Sendable {
                 }
             } else {
                 newTokenStr = ""
+            }
+
+            if Self.isRenderedStopToken(newTokenStr) {
+                isDone = true
+                return ""
             }
 
             // Decode single token using llama_batch_get_one
@@ -301,6 +327,92 @@ public final class LlamaContext: @unchecked Sendable {
             let bufferPointer = UnsafeBufferPointer(start: result, count: Int(nTokens))
             return Array(bufferPointer)
         }
+    }
+
+    private static func isRenderedStopToken(_ token: String) -> Bool {
+        switch token.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "<|END_OF_TURN_TOKEN|>", "<|im_end|>", "</s>", "<|endoftext|>":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func applyModelChatTemplate(_ messages: [ChatMessage]) -> String? {
+        guard let model,
+              let template = llama_model_chat_template(model, nil) else {
+            return nil
+        }
+        var rolePointers: [UnsafeMutablePointer<CChar>] = []
+        var contentPointers: [UnsafeMutablePointer<CChar>] = []
+        rolePointers.reserveCapacity(messages.count)
+        contentPointers.reserveCapacity(messages.count)
+        defer {
+            for pointer in rolePointers { free(pointer) }
+            for pointer in contentPointers { free(pointer) }
+        }
+
+        var chatMessages: [llama_chat_message] = []
+        chatMessages.reserveCapacity(messages.count)
+        for message in messages {
+            guard let role = strdup(message.role.rawValue),
+                  let content = strdup(message.content) else {
+                return nil
+            }
+            rolePointers.append(role)
+            contentPointers.append(content)
+            chatMessages.append(
+                llama_chat_message(
+                    role: UnsafePointer(role),
+                    content: UnsafePointer(content)
+                )
+            )
+        }
+
+        let required = chatMessages.withUnsafeBufferPointer { buffer in
+            llama_chat_apply_template(template, buffer.baseAddress, buffer.count, true, nil, 0)
+        }
+        guard required > 0 else { return nil }
+
+        var output = [CChar](repeating: 0, count: Int(required) + 1)
+        let written = output.withUnsafeMutableBufferPointer { outputBuffer in
+            chatMessages.withUnsafeBufferPointer { chatBuffer in
+                llama_chat_apply_template(
+                    template,
+                    chatBuffer.baseAddress,
+                    chatBuffer.count,
+                    true,
+                    outputBuffer.baseAddress,
+                    Int32(outputBuffer.count)
+                )
+            }
+        }
+        guard written > 0, written < output.count else { return nil }
+        output[Int(written)] = 0
+        return String(
+            decoding: output.prefix(Int(written)).map { UInt8(bitPattern: $0) },
+            as: UTF8.self
+        )
+    }
+
+    private static func qwenStylePrompt(_ messages: [ChatMessage]) -> String {
+        var prompt = ""
+
+        for message in messages {
+            switch message.role {
+            case .system:
+                prompt += "<|im_start|>system\n\(message.content)<|im_end|>\n"
+            case .user:
+                prompt += "<|im_start|>user\n\(message.content)<|im_end|>\n"
+            case .assistant:
+                prompt += "<|im_start|>assistant\n\(message.content)<|im_end|>\n"
+            case .tool:
+                prompt += "<|im_start|>tool\n\(message.content)<|im_end|>\n"
+            }
+        }
+
+        prompt += "<|im_start|>assistant\n"
+        return prompt
     }
 }
 #endif

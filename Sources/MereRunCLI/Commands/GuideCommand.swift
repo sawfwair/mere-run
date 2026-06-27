@@ -232,7 +232,10 @@ enum GuideRegistry {
             topic: "text-code",
             title: "Text Code",
             commandPaths: [["text", "code"]],
-            models: ["text-code-qwen3"],
+            models: [
+                "text-code-qwen3",
+                "text-code-north-mini",
+            ],
             resourceName: "text-code.md"
         ),
         GuideTopic(
@@ -517,6 +520,7 @@ enum GuideRegistry {
             models: [
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
+                "text-code-north-mini",
             ],
             resourceName: "setup.md"
         ),
@@ -527,6 +531,7 @@ enum GuideRegistry {
             models: [
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
+                "text-code-north-mini",
             ],
             resourceName: "agent-onboard.md"
         ),
@@ -544,6 +549,7 @@ enum GuideRegistry {
             models: [
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
+                "text-code-north-mini",
             ],
             resourceName: "agent-start.md"
         ),

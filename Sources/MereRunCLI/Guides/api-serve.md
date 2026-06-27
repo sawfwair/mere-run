@@ -10,7 +10,7 @@ this when another tool, editor, UI, or agent needs to call mere.run over HTTP.
 
 Supported engines:
 
-- `text-code`: default GGUF code model, usually `text-code-qwen3`.
+- `text-code`: GGUF code models such as `text-code-qwen3` and `text-code-north-mini`.
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`.
