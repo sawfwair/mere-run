@@ -28,11 +28,15 @@ enum ConversationTranscript {
         let reserve = systemPrompt?.count ?? 0
         let historyBudget = max(0, budgetChars - reserve)
 
+        // A failed assistant turn produced no valid reply — it stays visible in the thread but is
+        // never replayed into the prompt (it would otherwise inject an error/reasoning as context).
+        let usable = messages.filter { !$0.failed }
+
         // Always keep the latest message; walk backward, including older ones until the next one
         // would exceed the budget.
         var included: [StudioMessage] = []
         var used = 0
-        for message in messages.reversed() {
+        for message in usable.reversed() {
             let cost = renderedCost(message)
             if included.isEmpty || used + cost <= historyBudget {
                 included.append(message)
@@ -47,7 +51,7 @@ enum ConversationTranscript {
         return Rendered(
             prompt: prompt,
             includedMessageIDs: Set(included.map(\.id)),
-            droppedCount: messages.count - included.count,
+            droppedCount: usable.count - included.count,
             approxChars: prompt.count + reserve
         )
     }
@@ -74,18 +78,29 @@ enum ConversationTranscript {
     /// Removes model reasoning blocks from an assistant reply. With `--stream` the CLI emits
     /// `<think>…</think>` reasoning inline (it only strips it on the non-stream path), so the app
     /// must strip it before storing/replaying — otherwise reasoning leaks into the next turn's
-    /// prompt. Complete blocks are removed; a trailing unclosed block (still streaming) is hidden.
-    static func stripThinkTags(_ text: String) -> String {
+    /// prompt.
+    ///
+    /// Complete blocks are always removed, as is a leading orphan `</think>` (some models pre-fill
+    /// the opening tag and emit only the close). A trailing UNCLOSED block is only stripped while
+    /// `streaming` — that is reasoning still in progress. At finalize it is kept: a completed
+    /// reply's leftover `<think>` is almost certainly literal text (e.g. a code reply that
+    /// discusses the tag), and truncating it would lose real content.
+    static func stripThinkTags(_ text: String, streaming: Bool = false) -> String {
         var result = text.replacingOccurrences(
             of: "<think>[\\s\\S]*?</think>",
             with: "",
             options: .regularExpression
         )
-        result = result.replacingOccurrences(
-            of: "<think>[\\s\\S]*$",
-            with: "",
-            options: .regularExpression
-        )
+        if !result.contains("<think>"), let close = result.range(of: "</think>") {
+            result = String(result[close.upperBound...])
+        }
+        if streaming {
+            result = result.replacingOccurrences(
+                of: "<think>[\\s\\S]*$",
+                with: "",
+                options: .regularExpression
+            )
+        }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

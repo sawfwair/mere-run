@@ -165,6 +165,7 @@ struct StudioRootView: View {
                     isRunning: controller.isRunning,
                     queuedCount: controller.queuedRunCount,
                     readiness: readiness,
+                    sendBlocked: mode.isConversational && activeConversationRunning,
                     onRun: runStudioCommand,
                     onStop: controller.cancel,
                     onAttach: chooseAttachment
@@ -292,8 +293,9 @@ struct StudioRootView: View {
             studioError = nil
             refreshReadiness()
         }
-        .onChange(of: controller.lastRunResult) { _, result in
-            guard let result else { return }
+        .onReceive(controller.runCompletions) { result in
+            // Subscribe to the lossless completion stream, not lastRunResult: two runs finishing
+            // in the same runloop turn would coalesce through onChange and drop one.
 
             // Conversation turns append the assistant reply to the thread instead of taking the
             // single-shot completion path.
@@ -303,7 +305,11 @@ struct StudioRootView: View {
                     content: conversationReplyContent(for: result),
                     exitCode: result.exitCode
                 )
-                selectedLibraryID = conversationID
+                // Only follow selection if this is the thread the user is currently viewing — a
+                // background turn completing must not yank selection away from the foreground.
+                if mode.isConversational, activeConversationID == conversationID {
+                    selectedLibraryID = conversationID
+                }
                 refreshReadiness()
                 return
             }
@@ -1181,6 +1187,7 @@ private struct StudioPromptBar: View {
     let isRunning: Bool
     let queuedCount: Int
     let readiness: ModelReadinessState
+    var sendBlocked: Bool = false
     let onRun: () -> Void
     let onStop: () -> Void
     let onAttach: () -> Void
@@ -1262,8 +1269,8 @@ private struct StudioPromptBar: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(readiness.blocksRun)
-                .help(runButtonHelp)
+                .disabled(readiness.blocksRun || sendBlocked)
+                .help(sendBlocked ? "Waiting for the current reply…" : runButtonHelp)
                 .accessibilityLabel(isRunning ? "Queue run" : "Run")
                 .keyboardShortcut(.return, modifiers: .command)
             }

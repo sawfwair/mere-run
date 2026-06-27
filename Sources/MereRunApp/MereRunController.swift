@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Combine
 import Foundation
 import UserNotifications
 
@@ -437,6 +438,10 @@ final class MereRunController: ObservableObject {
     @Published var resolvedCLI = ""
     @Published var lastOutputURL: URL?
     @Published var lastRunResult: MereRunRunResult?
+    /// Lossless completion stream. `lastRunResult` coalesces — two runs finishing in the same
+    /// runloop turn would deliver only the latest via onChange — so must-deliver side effects
+    /// (appending a chat reply, completing a library row) subscribe here and get every result.
+    let runCompletions = PassthroughSubject<MereRunRunResult, Never>()
     @Published private(set) var activeRunRequestID: UUID?
     /// Conversation ids with a turn currently in flight. Tracked across ALL sessions (not just
     /// the foreground one) so the UI can disable a thread's composer and stream into the right
@@ -726,6 +731,12 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
+        // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
+        // queues behind the concurrency cap still blocks a second send into the same thread and
+        // shows a pending bubble. Idempotent with the insert in startRun; cleared on every exit.
+        if let conversationID = request.conversationID {
+            runningConversationIDs.insert(conversationID)
+        }
         guard sessions.count < Self.maxConcurrentRuns, queuedRuns.isEmpty else {
             enqueue(request)
             return true
@@ -934,7 +945,9 @@ final class MereRunController: ObservableObject {
         }
         setForeground(session)
         append(display, stream: .system, to: session)
-        startOutputWatch(for: session)
+        if spec.conversationID == nil {
+            startOutputWatch(for: session)
+        }
 
         do {
             session.process = try processRunner.start(
@@ -1100,11 +1113,18 @@ final class MereRunController: ObservableObject {
         session.exitCode = exitCode
         session.currentProgress = nil
 
-        let detectedOutput = detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
+        // Conversation replies are prose, not artifacts — never run output-file detection on them
+        // (a path-like substring in a reply must not become a bogus lastOutputURL/status).
+        let detectedOutput = session.spec.conversationID == nil
+            ? detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
+            : nil
         // Conversation turns finalize from the unbounded, think-stripped accumulator so long
         // replies are not clipped by the 32 KB console buffer; other modes use the buffer.
         let outputText: String?
-        if session.spec.conversationID != nil, exitCode == 0 {
+        if session.spec.conversationID != nil {
+            // Strip reasoning for conversation turns on EVERY exit path (not just success) so
+            // <think> blocks and STDERR never leak into the next turn's replayed prompt; use the
+            // full accumulator, not the capped console buffer.
             outputText = ConversationTranscript.stripThinkTags(session.fullOutput.replacingOccurrences(of: "\0", with: ""))
         } else {
             outputText = capturedResultText(for: session, exitCode: exitCode)
@@ -1146,7 +1166,7 @@ final class MereRunController: ObservableObject {
             runningConversationIDs.remove(conversationID)
         }
 
-        lastRunResult = MereRunRunResult(
+        let result = MereRunRunResult(
             requestID: session.spec.requestID,
             templateID: session.spec.template.id,
             commandPreview: session.preview,
@@ -1155,6 +1175,8 @@ final class MereRunController: ObservableObject {
             outputText: outputText,
             conversationID: session.spec.conversationID
         )
+        lastRunResult = result
+        runCompletions.send(result)
 
         sessions.removeAll { $0.id == session.id }
         startNextQueuedRun()
@@ -1165,7 +1187,7 @@ final class MereRunController: ObservableObject {
         if let conversationID = session.spec.conversationID {
             runningConversationIDs.remove(conversationID)
         }
-        lastRunResult = MereRunRunResult(
+        let result = MereRunRunResult(
             requestID: session.spec.requestID,
             templateID: session.spec.template.id,
             commandPreview: session.preview,
@@ -1174,6 +1196,8 @@ final class MereRunController: ObservableObject {
             outputText: outputText,
             conversationID: session.spec.conversationID
         )
+        lastRunResult = result
+        runCompletions.send(result)
         startNextQueuedRun()
     }
 
@@ -1277,13 +1301,17 @@ final class MereRunController: ObservableObject {
             session.stdoutBuffer += text
             session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
             session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            publishDetectedOutputIfNeeded(for: session)
-            // Conversation turns accumulate the full (untrimmed) reply and publish a live,
-            // think-stripped view so a streaming bubble renders even when backgrounded.
             if let conversationID = session.spec.conversationID {
+                // Conversation turns accumulate the full (untrimmed) reply and publish a live,
+                // think-stripped view so a streaming bubble renders even when backgrounded. The
+                // streaming variant hides an in-progress (unclosed) reasoning block.
                 session.fullOutput += text
-                conversationLiveText[conversationID] =
-                    ConversationTranscript.stripThinkTags(session.fullOutput.replacingOccurrences(of: "\0", with: ""))
+                conversationLiveText[conversationID] = ConversationTranscript.stripThinkTags(
+                    session.fullOutput.replacingOccurrences(of: "\0", with: ""),
+                    streaming: true
+                )
+            } else {
+                publishDetectedOutputIfNeeded(for: session)
             }
         } else if stream == .stderr {
             session.stderrBuffer += text

@@ -46,9 +46,33 @@ final class ConversationTranscriptTests: XCTestCase {
         XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "Hello world")
     }
 
-    func testStripThinkTagsHidesTrailingUnclosedBlock() {
+    func testStripThinkTagsHidesTrailingUnclosedBlockWhileStreaming() {
         let text = "Partial answer <think>still reasoning..."
-        XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "Partial answer")
+        XCTAssertEqual(ConversationTranscript.stripThinkTags(text, streaming: true), "Partial answer")
+    }
+
+    func testStripThinkTagsKeepsLiteralUnclosedTagAtFinalize() {
+        // A completed code reply discussing the tag must not be truncated.
+        let text = "Use the <think> tag to mark reasoning."
+        XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "Use the <think> tag to mark reasoning.")
+    }
+
+    func testStripThinkTagsRemovesLeadingOrphanClose() {
+        // Some models pre-fill the opening tag and emit only the close.
+        let text = "hidden reasoning here</think>The visible answer."
+        XCTAssertEqual(ConversationTranscript.stripThinkTags(text), "The visible answer.")
+    }
+
+    func testRenderSkipsFailedAssistantTurns() {
+        let messages = [
+            StudioMessage(role: .user, content: "first"),
+            StudioMessage(role: .assistant, content: "boom", failed: true),
+            StudioMessage(role: .user, content: "second"),
+        ]
+        let rendered = ConversationTranscript.render(messages: messages)
+        // The failed assistant turn is never replayed into the prompt.
+        XCTAssertEqual(rendered.prompt, "User: first\n\nUser: second")
+        XCTAssertFalse(rendered.prompt.contains("boom"))
     }
 
     func testStripThinkTagsLeavesPlainTextUntouched() {

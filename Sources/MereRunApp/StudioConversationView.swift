@@ -75,6 +75,7 @@ struct StudioConversationView: View {
                     .padding(24)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .onChange(of: item?.id) { _, _ in scrollToEnd(proxy) }
                 .onChange(of: messages.count) { _, _ in scrollToEnd(proxy) }
                 .onChange(of: liveText) { _, _ in scrollToEnd(proxy) }
                 .onChange(of: isRunning) { _, _ in scrollToEnd(proxy) }
@@ -129,6 +130,16 @@ private struct StudioMessageBubble: View {
             .frame(maxWidth: 620, alignment: .leading)
             if !isUser { Spacer(minLength: 64) }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(isStreaming ? .updatesFrequently : [])
+    }
+
+    private var accessibilityText: String {
+        let speaker = isUser ? "You" : "Assistant"
+        if isStreaming && content.isEmpty { return "\(speaker) is generating a reply" }
+        let suffix = failed ? " (this turn failed)" : ""
+        return "\(speaker): \(content)\(suffix)"
     }
 
     @ViewBuilder
