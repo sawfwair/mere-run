@@ -169,6 +169,23 @@ final class StudioLibraryStore: ObservableObject {
         save()
     }
 
+    /// Truncates a thread at `messageID` (removing it and everything after). Returns the removed
+    /// message's content when it was a user turn, so the composer can be repopulated for editing.
+    @discardableResult
+    func truncate(conversationID: UUID, removingFrom messageID: UUID) -> String? {
+        guard let index = items.firstIndex(where: { $0.id == conversationID }),
+              var messages = items[index].messages,
+              let messageIndex = messages.firstIndex(where: { $0.id == messageID }) else { return nil }
+        let removed = messages[messageIndex]
+        messages.removeSubrange(messageIndex...)
+        var item = items[index]
+        item.messages = messages
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+        return removed.role == .user ? removed.content : nil
+    }
+
     /// Drops the last assistant message of a thread (used by retry before re-running the turn).
     func dropLastAssistant(conversationID: UUID) {
         guard let index = items.firstIndex(where: { $0.id == conversationID }) else { return }

@@ -160,7 +160,8 @@ struct StudioRootView: View {
                     onShowDetails: { showAdvanced = true },
                     onNewChat: startNewConversation,
                     onCopy: copyToClipboard,
-                    onRetry: retryLastTurn
+                    onRetry: retryLastTurn,
+                    onEdit: editMessage
                 )
 
                 StudioPromptBar(
@@ -479,6 +480,16 @@ struct StudioRootView: View {
             controller.run(studio: request)
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    /// Edits a prior user turn: truncates the thread at that message and loads its text back into
+    /// the composer, so sending re-runs the conversation from that point.
+    private func editMessage(_ messageID: UUID) {
+        guard let conversationID = activeConversationID,
+              !controller.runningConversationIDs.contains(conversationID) else { return }
+        if let content = library.truncate(conversationID: conversationID, removingFrom: messageID) {
+            draft.prompt = content
         }
     }
 
@@ -832,6 +843,7 @@ private struct StudioCanvas: View {
     let onNewChat: () -> Void
     let onCopy: (String) -> Void
     let onRetry: () -> Void
+    let onEdit: (UUID) -> Void
 
     private var visibleLiveOutputText: String? {
         guard isRunning else { return nil }
@@ -859,7 +871,8 @@ private struct StudioCanvas: View {
                     mode: mode,
                     onNewChat: onNewChat,
                     onCopy: onCopy,
-                    onRetry: onRetry
+                    onRetry: onRetry,
+                    onEdit: onEdit
                 )
                 .transition(.opacity)
             } else if let item {
