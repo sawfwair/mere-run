@@ -16,13 +16,35 @@ struct StudioConversationView: View {
 
     private var messages: [StudioMessage] { item?.messages ?? [] }
 
+    /// How many earlier turns the next prompt would drop to fit the budget — surfaced so the
+    /// trimming is never silent.
+    private var droppedFromContext: Int {
+        guard !messages.isEmpty else { return 0 }
+        return ConversationTranscript.render(messages: messages, systemPrompt: item?.systemPrompt).droppedCount
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().overlay(MereRunTheme.border.opacity(0.4))
+            if droppedFromContext > 0 { contextTrimBanner }
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var contextTrimBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "scissors")
+            Text("Earlier messages are trimmed from the next prompt to fit the context window (\(droppedFromContext) omitted).")
+            Spacer(minLength: 0)
+        }
+        .font(MereRunTheme.captionFont)
+        .foregroundStyle(MereRunTheme.textMuted)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 8)
+        .background(MereRunTheme.surface.opacity(0.5))
+        .accessibilityElement(children: .combine)
     }
 
     private var header: some View {
