@@ -169,6 +169,25 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testOrnith9BTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .ornith9B, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Q35Resources.ornith9BModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .code)
+        XCTAssertEqual(manifest.tier, .nano)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-optiq-mixed-affine")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.ornith9BUpstreamRepoId)@\(Q35Resources.ornith9BUpstreamRevision)"
+        )
+    }
+
     func testHiDreamO1DevTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .hidreamO1Dev, createdAt: Date(timeIntervalSince1970: 0))
 

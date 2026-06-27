@@ -158,6 +158,7 @@ public enum MereRunAgentModelCatalog {
         [
             qwen35NineB(),
             northMiniCode(),
+            ornith9B(),
             q36Nano(),
             qwen3CoderNext(),
             deepseekV4Flash(),
@@ -197,6 +198,18 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 32,
             servingEngine: .textCode,
             managedModelID: NorthMiniCodeResources.modelId
+        )
+    }
+
+    private static func ornith9B() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Q35Resources.ornith9BModelId,
+            displayName: "Ornith 1.0 9B OptiQ",
+            summary: "Experimental 9B OptiQ MLX coding-agent model for native Qwen-family smoke tests.",
+            minimumUnifiedMemoryGB: 16,
+            recommendedUnifiedMemoryGB: 24,
+            servingEngine: .textChatQ35,
+            managedModelID: Q35Resources.ornith9BModelId
         )
     }
 

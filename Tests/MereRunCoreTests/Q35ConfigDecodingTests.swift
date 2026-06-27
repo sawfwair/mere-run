@@ -40,6 +40,24 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual((target.width / 16) * (target.height / 16) / 4, 2_244)
     }
 
+    func testQ35LinearAttentionConvWeightsKeepMLXLayout() {
+        let mlxLayout = MLXArray.zeros([8, 4, 1])
+        let normalizedMLX = Q35Generator.normalizedLinearAttentionConv1DWeight(mlxLayout)
+        XCTAssertEqual(normalizedMLX.shape, [8, 4, 1])
+
+        let pytorchDepthwiseLayout = MLXArray.zeros([8, 1, 4])
+        let normalizedPyTorch = Q35Generator.normalizedLinearAttentionConv1DWeight(pytorchDepthwiseLayout)
+        XCTAssertEqual(normalizedPyTorch.shape, [8, 4, 1])
+    }
+
+    func testQ35RMSNormOffsetConversionSkipsLinearAttentionGateNorm() {
+        XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.0.input_layernorm.weight"))
+        XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.0.post_attention_layernorm.weight"))
+        XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.3.self_attn.q_norm.weight"))
+        XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.norm.weight"))
+        XCTAssertFalse(Q35Generator.isOffsetRMSNormWeight("model.layers.0.linear_attn.norm.weight"))
+    }
+
     func testQ35TemplateLeavesThinkingOpenWhenRequested() {
         let rendered = Q35TokenizerAndTemplate.renderPrompt(
             messages: [ChatMessage(role: .user, content: "Explain.")],
@@ -318,6 +336,44 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(config.textConfig.numExpertsPerTok, 0)
         XCTAssertEqual(config.visionConfig?.patchSize, 16)
         XCTAssertEqual(config.visionConfig?.spatialMergeSize, 2)
+    }
+
+    func testQ35ConfigAllowsOrnithOptiQQuantizationMetadata() throws {
+        var configObject = makeBaseConfig()
+        configObject["model_type"] = "qwen3_5"
+        configObject["architectures"] = ["Qwen3_5ForConditionalGeneration"]
+        configObject["quantization"] = [
+            "group_size": 64,
+            "bits": 4,
+            "mode": "affine",
+            "language_model.model.layers.0.linear_attn.in_proj_qkv": [
+                "bits": 8,
+                "group_size": 64,
+            ],
+        ]
+        if var textConfig = configObject["text_config"] as? [String: Any] {
+            textConfig["model_type"] = "qwen3_5_text"
+            textConfig["hidden_size"] = 4096
+            textConfig["num_hidden_layers"] = 32
+            textConfig["intermediate_size"] = 12288
+            textConfig["num_attention_heads"] = 16
+            textConfig["num_key_value_heads"] = 4
+            textConfig["head_dim"] = 256
+            textConfig.removeValue(forKey: "num_experts")
+            textConfig.removeValue(forKey: "num_experts_per_tok")
+            textConfig.removeValue(forKey: "moe_intermediate_size")
+            textConfig.removeValue(forKey: "shared_expert_intermediate_size")
+            configObject["text_config"] = textConfig
+        }
+
+        let config = try decodeConfig(configObject)
+
+        XCTAssertEqual(config.modelType, "qwen3_5")
+        XCTAssertEqual(config.quantization?.bits, 4)
+        XCTAssertEqual(config.quantization?.groupSize, 64)
+        XCTAssertEqual(config.quantization?.mode, "affine")
+        XCTAssertFalse(config.textConfig.usesMoE)
+        XCTAssertEqual(config.textConfig.hiddenSize, 4096)
     }
 
     func testQ35DenseFeedForwardRuntimeProducesLogits() throws {

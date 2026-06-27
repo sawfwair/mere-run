@@ -73,7 +73,7 @@ are:
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
-- Text code / agents: `text-agent-qwen35-9b`, `text-code-north-mini`, `text-code-qwen3`
+- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
@@ -406,6 +406,7 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
+swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a compact Swift slugify helper."
 swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
@@ -1489,6 +1490,10 @@ coding model. It is pullable through `model pull`, can be served with
 through the Pi-backed `agent start` path like other `text-code` models once the
 installed llama.cpp runtime supports the `cohere2moe` architecture.
 
+Ornith (`text-agent-ornith-9b`) is available as an experimental native
+MLX/OptiQ coding-agent model. It uses the Qwen-family runtime, so serve it with
+`api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
+
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.
 Pi auto-install uses the published macOS release assets; on Linux, put a `pi`
@@ -1507,6 +1512,7 @@ swift run mere.run agent onboard --pull-recommended
 swift run mere.run agent onboard --install-pi --configure-pi
 swift run mere.run agent onboard --configure-pi --model text-agent-deepseek-v4-flash
 swift run mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080
+swift run mere.run agent onboard --configure-pi --model text-agent-ornith-9b --port 8080
 ```
 
 ### `mere.run agent install-pi`

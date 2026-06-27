@@ -26,6 +26,7 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static let q36NanoModelId = "text-chat-q36-nano"
+    public static let ornith9BModelId = "text-agent-ornith-9b"
     public static let infinityParser2FlashModelId = "vision-ocr-infinity-flash"
     public static let infinityParser2ProModelId = "vision-ocr-infinity-pro"
     public static let infinityParser2ProInt8ModelId = "vision-ocr-infinity-pro-int8"
@@ -33,6 +34,9 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static let q36NanoUpstreamRepoId = "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"
     public static let q36NanoUpstreamRevision = "63d520640ca7461f31ba66104612135770090340"
+    public static let ornith9BUpstreamRepoId = "sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx"
+    public static let ornith9BUpstreamRevision = "4f9f4fc2c10ec17cbeb9dae086a7f1272c904e86"
+    public static let ornith9BEstimatedDownloadBytes: Int64 = 7 * 1_073_741_824
     public static let infinityParser2FlashUpstreamRepoId = "infly/Infinity-Parser2-Flash"
     public static let infinityParser2FlashUpstreamRevision = "30f02aca5ee7c32d22a962cbece5c19611147c9e"
     public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
@@ -45,6 +49,11 @@ public struct Q35Resources: Sendable, Hashable {
             modelId: q36NanoModelId,
             upstreamRepoId: q36NanoUpstreamRepoId,
             upstreamRevision: q36NanoUpstreamRevision
+        ),
+        ornith9BModelId: Profile(
+            modelId: ornith9BModelId,
+            upstreamRepoId: ornith9BUpstreamRepoId,
+            upstreamRevision: ornith9BUpstreamRevision
         ),
         infinityParser2FlashModelId: Profile(
             modelId: infinityParser2FlashModelId,
@@ -79,6 +88,7 @@ public struct Q35Resources: Sendable, Hashable {
         "tokenizer.json",
         "tokenizer_config.json",
         "chat_template.jinja",
+        "optiq_metadata.json",
         "model.safetensors",
         "model.safetensors.index.json",
         "*.safetensors",

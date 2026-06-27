@@ -33,8 +33,8 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
 
 @inline(__always)
 private func q35RmsNormNoWeight(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
-    let squaredSum = (x * x).sum(axis: -1, keepDims: true)
-    return x * rsqrt(squaredSum + MLXArray(eps).asType(x.dtype))
+    let squaredMean = (x * x).mean(axis: -1, keepDims: true)
+    return x * rsqrt(squaredMean + MLXArray(eps).asType(x.dtype))
 }
 
 @inline(__always)
@@ -65,8 +65,7 @@ private func q35GatedDeltaUpdate(
     let beta = MLX.sigmoid(b).asType(.float32)
     let g = q35ComputeG(aLog: aLog, a: a, dtBias: dtBias)
 
-    let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
-    var qExpanded = q.asType(.float32) * MLXArray(invScale)
+    var qExpanded = q.asType(.float32)
     var kExpanded = k.asType(.float32)
     let v32 = v.asType(.float32)
     let repeatFactor = max(1, numValueHeads / max(1, numKeyHeads))
@@ -290,8 +289,9 @@ final class Q35LinearAttention: Module {
         var k = kConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
         let v = vConv.reshaped(batch, sequence, numValueHeads, valueHeadDim)
 
-        q = q35RmsNormNoWeight(q)
-        k = q35RmsNormNoWeight(k)
+        let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
+        q = q35RmsNormNoWeight(q) * MLXArray(invScale * invScale).asType(q.dtype)
+        k = q35RmsNormNoWeight(k) * MLXArray(invScale).asType(k.dtype)
 
         let (updated, state) = q35GatedDeltaUpdate(
             q: q,

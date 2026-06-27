@@ -371,6 +371,20 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.upstreamRepoId, "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)")
     }
 
+    func testOrnithQ35CodeRootLayoutPassesValidationWithoutEngineWarning() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(Q35Resources.ornith9BModelId, isDirectory: true)
+        try writeMinimalValidQ35FamilyModel(at: root, id: .ornith9B)
+
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: Q35Resources.ornith9BModelId)
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.family, .code)
+        XCTAssertFalse(report.warnings.contains { $0.contains("family=code expects") })
+    }
+
     func testLFM2ChatOnlyRootLayoutPassesValidation() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

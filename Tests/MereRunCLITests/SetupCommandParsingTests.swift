@@ -99,6 +99,29 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
+    func testOrnithProviderUsesNativeQ35ManagedModelID() throws {
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(
+                    on: MereRunMachineProfile(
+                        physicalMemoryBytes: 24 * 1_073_741_824,
+                        processorName: "M4 Pro",
+                        isAppleSiliconMac: true
+                    )
+                )
+                .first { $0.id == Q35Resources.ornith9BModelId }
+        )
+
+        let runtime = try SetupAgentRuntime.runtime(for: recommendation)
+        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+
+        XCTAssertEqual(runtime.engine, .textChatQ36)
+        XCTAssertEqual(providerModel.id, Q35Resources.ornith9BModelId)
+        XCTAssertEqual(providerModel.contextWindow, Q35Resources.defaultContextLength)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
+    }
+
     func testPiProviderCanBeWrittenToIsolatedHome() throws {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-pi-home-\(UUID().uuidString)", isDirectory: true)

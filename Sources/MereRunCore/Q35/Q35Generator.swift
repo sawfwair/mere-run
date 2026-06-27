@@ -1436,8 +1436,10 @@ public actor Q35Generator: ChatGenerator {
             }
             let normalizedMapped = Self.normalizeMappedExpertWeightKey(mapped)
             if normalizedMapped.hasSuffix(".linear_attn.conv1d.weight"), value.ndim == 3 {
-                let transposed = value.transposed(0, 2, 1)
-                return [(normalizedMapped, transposed.reshaped(-1).reshaped(transposed.shape))]
+                return [(normalizedMapped, Self.normalizedLinearAttentionConv1DWeight(value))]
+            }
+            if Self.isOffsetRMSNormWeight(normalizedMapped) {
+                return [(normalizedMapped, value - MLXArray(1.0).asType(value.dtype))]
             }
             return [(normalizedMapped, value)]
         }
@@ -1451,8 +1453,10 @@ public actor Q35Generator: ChatGenerator {
         let quantizedMapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
             guard !key.hasPrefix("__unused__.") else { return [] }
             if key.hasSuffix(".linear_attn.conv1d.weight"), value.ndim == 3 {
-                let transposed = value.transposed(0, 2, 1)
-                return [(key, transposed.reshaped(-1).reshaped(transposed.shape))]
+                return [(key, Self.normalizedLinearAttentionConv1DWeight(value))]
+            }
+            if Self.isOffsetRMSNormWeight(key) {
+                return [(key, value - MLXArray(1.0).asType(value.dtype))]
             }
             return [(key, value)]
         }
@@ -1528,6 +1532,22 @@ public actor Q35Generator: ChatGenerator {
             return String(key.dropLast(expertDownSuffix.count)) + ".mlp.switch_mlp.down_proj.weight"
         }
         return key
+    }
+
+    static func normalizedLinearAttentionConv1DWeight(_ value: MLXArray) -> MLXArray {
+        guard value.ndim == 3, value.dim(1) == 1, value.dim(2) > 1 else {
+            return value
+        }
+        let transposed = value.transposed(0, 2, 1)
+        return transposed.reshaped(-1).reshaped(transposed.shape)
+    }
+
+    static func isOffsetRMSNormWeight(_ key: String) -> Bool {
+        key.hasSuffix(".input_layernorm.weight")
+            || key.hasSuffix(".post_attention_layernorm.weight")
+            || key.hasSuffix(".self_attn.q_norm.weight")
+            || key.hasSuffix(".self_attn.k_norm.weight")
+            || key == "model.norm.weight"
     }
 
     private static func splitMappedExpertGateUpWeight(_ key: String, _ value: MLXArray) -> [(String, MLXArray)]? {

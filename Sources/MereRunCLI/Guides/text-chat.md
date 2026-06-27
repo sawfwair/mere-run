@@ -6,11 +6,12 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-agent-ornith-9b`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
 Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
 `text-chat-q36-nano` is the managed Qwen3.6 35B-A3B OptiQ 4-bit MLX snapshot; its upstream repo includes an MTP head that is used only by the adaptive long-context speculative decode path.
+`text-agent-ornith-9b` is the managed Ornith 1.0 9B OptiQ MLX coding-agent experiment; it uses the native Qwen-family runtime rather than the GGUF `text code` command.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
 
 ## Chat Winners By RAM Band
@@ -82,6 +83,13 @@ mere.run text chat \
 
 ```bash
 mere.run text chat \
+  --model text-agent-ornith-9b \
+  --temperature 0.2 \
+  --prompt "Write a compact Swift function with one XCTest for slugifying a model id."
+```
+
+```bash
+mere.run text chat \
   --model text-chat-lfm25-a1b-8bit \
   --prompt "Summarize the tradeoffs of mixture-of-experts chat models."
 ```
@@ -103,5 +111,6 @@ mere.run text chat \
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/TextChatCommand.swift
 - https://ai.google.dev/gemma/docs/core/prompt-structure
 - https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit
+- https://huggingface.co/sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx
 - https://huggingface.co/LiquidAI/LFM2.5-8B-A1B-MLX-8bit
 - https://huggingface.co/google/gemma-4-31B
