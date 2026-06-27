@@ -399,6 +399,14 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                NorthMiniCodeResources.modelId,
+                "North Mini Code Q4",
+                "Runs Cohere's compact 30B-A3B coding model through the native "
+                + "llama.cpp/GGUF code runtime.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
                 "speech-tts-qwen3-nano",
                 "Text to speech",
                 "Synthesizes speech with Qwen3 TTS, including style prompts and voice-design workflows.",

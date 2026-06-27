@@ -26,6 +26,7 @@ embeddings, and PII anonymization.
 
 ### Code
 
+- `text-code-north-mini`
 - `text-code-qwen3`
 
 ### Embeddings
@@ -72,6 +73,18 @@ and runs through the native Swift LFM2 runtime. It is text-only; use
 
 ```bash
 swift run mere.run text code \
+  --prompt "Write a Swift function that reverses a string."
+```
+
+`text-code-qwen3` and `text-code-north-mini` are native `text code` models and
+run GGUF weights through llama.cpp. North Mini Code uses the Unsloth
+`North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant, so it requires a llama.cpp runtime
+with `cohere2moe` architecture support.
+
+```bash
+swift run mere.run model pull text-code-north-mini
+swift run mere.run text code \
+  --model text-code-north-mini \
   --prompt "Write a Swift function that reverses a string."
 ```
 

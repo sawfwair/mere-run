@@ -61,7 +61,7 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains("cuda_toolkit_root_candidates"))
         XCTAssertTrue(script.contains("Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"))
         XCTAssertTrue(script.contains("$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"))
-        XCTAssertTrue(script.contains("19e92c33ef974661e4b1e43dd48be231d07be5ed"))
+        XCTAssertTrue(script.contains("4988f6e866057afd130c1515ecef0c9bab9a15f8"))
         XCTAssertTrue(script.contains("/usr/include/$deb_multiarch"))
         XCTAssertTrue(script.contains("/usr/lib/$deb_multiarch"))
         XCTAssertTrue(script.contains("CUDA_LIBRARY_PATH"))

@@ -365,8 +365,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding.")
             case .privacy where engine != .openAIPrivacyFilter:
                 warnings.append("Manifest engine mismatch: family=privacy expects openai-privacy-filter.")
-            case .code where engine != .qwen3Coder:
-                warnings.append("Manifest engine mismatch: family=code expects qwen3-coder.")
+            case .code where engine != .qwen3Coder && engine != .northMiniCode:
+                warnings.append("Manifest engine mismatch: family=code expects qwen3-coder or north-mini-code.")
             case .ocr where engine != .lightOnOCR && engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr or qwen3.5-hybrid-moe.")
             case .music where engine != .aceStep && engine != .magentaRT2:
@@ -447,7 +447,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .aceStep?, .magentaRT2?, .woosh?, .ltxVideo?:
+            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .woosh?, .ltxVideo?:
                 return true
             default:
                 return false

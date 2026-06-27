@@ -13,7 +13,7 @@ with the new upstream source, version or commit when known, and license data.
 
 - purpose: packaged `llama.cpp` runtime used by `mere.run text code` and `mere.run api serve`
 - upstream project: [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp)
-- pinned upstream commit: `6d957078270f58d4ea14e8c205f5ef4e49be33f3` (`model : fix wavtokenizer embedding notions (#19479)`, 2026-02-11)
+- pinned upstream commit: `4988f6e866057afd130c1515ecef0c9bab9a15f8` (`Add arch support for cohere2-MoE (#24260)`, 2026-06-13)
 - rebuild note: regenerated from a neutral temporary checkout using the upstream `build-xcframework.sh` script; see [`scripts/rebuild_llama_xcframework.sh`](./scripts/rebuild_llama_xcframework.sh)
 - license: MIT
 

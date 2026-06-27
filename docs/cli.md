@@ -73,7 +73,7 @@ are:
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
-- Text code / agents: `text-agent-qwen35-9b`, `text-code-qwen3`
+- Text code / agents: `text-agent-qwen35-9b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
@@ -434,6 +434,15 @@ Examples:
 ```bash
 swift run mere.run text code --prompt "Write a Swift function to reverse a string"
 swift run mere.run text code --model ./Qwen3-Coder-Next-Q4_K_M.gguf --stream --prompt "Implement a trie in Rust"
+```
+
+North Mini Code is managed as `text-code-north-mini` for local coding-agent
+comparisons. It pulls the Unsloth GGUF quant and runs through the same native
+Swift/llama.cpp code path as Qwen:
+
+```bash
+swift run mere.run model pull text-code-north-mini
+swift run mere.run text code --model text-code-north-mini --prompt "Sketch a small Swift Result helper."
 ```
 
 ### `mere.run text embed`
@@ -1474,6 +1483,12 @@ Agent model choices:
 - `tier`: the best supported local tier for this machine, currently 9B, Qwen3.6 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ machines
 - `premier`: `text-agent-deepseek-v4-flash`, the preferred managed 96 GB+ setup-agent tier served by the bundled DS4 engine
 
+North Mini Code (`text-code-north-mini`) is available as a managed native GGUF
+coding model. It is pullable through `model pull`, can be served with
+`api serve --engine text-code --model text-code-north-mini`, and can be started
+through the Pi-backed `agent start` path like other `text-code` models once the
+installed llama.cpp runtime supports the `cohere2moe` architecture.
+
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.
 Pi auto-install uses the published macOS release assets; on Linux, put a `pi`
@@ -1491,6 +1506,7 @@ swift run mere.run agent onboard
 swift run mere.run agent onboard --pull-recommended
 swift run mere.run agent onboard --install-pi --configure-pi
 swift run mere.run agent onboard --configure-pi --model text-agent-deepseek-v4-flash
+swift run mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080
 ```
 
 ### `mere.run agent install-pi`

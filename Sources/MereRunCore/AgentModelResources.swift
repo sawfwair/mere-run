@@ -15,6 +15,25 @@ public struct AgentModelResources: Sendable, Hashable {
     )
 }
 
+public struct NorthMiniCodeResources: Sendable, Hashable {
+    public static let modelId = "text-code-north-mini"
+    public static let upstreamRepoId = "unsloth/North-Mini-Code-1.0-GGUF"
+    public static let upstreamRevision = "e306bb4bf0df610f5471d97a01de2b6e0b24d356"
+    public static let ggufFile = "North-Mini-Code-1.0-UD-Q4_K_M.gguf"
+    public static let managedRelativePath = "\(modelId).gguf"
+    public static let contextLength = 256_000
+    public static let runtimeContextLength = 32_768
+    public static let maxOutputTokens = 4_096
+    public static let estimatedDownloadBytes: Int64 = 19_203_186_784
+
+    public static let hubFallbackConfig = HubFallbackConfig(
+        repoId: upstreamRepoId,
+        revision: upstreamRevision,
+        patterns: [ggufFile],
+        filePath: ggufFile
+    )
+}
+
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
     case textChatQ36 = "text-chat-q36"
@@ -138,6 +157,7 @@ public enum MereRunAgentModelCatalog {
     ) -> [MereRunAgentModelRecommendation] {
         [
             qwen35NineB(),
+            northMiniCode(),
             q36Nano(),
             qwen3CoderNext(),
             deepseekV4Flash(),
@@ -165,6 +185,18 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 32,
             servingEngine: .textChatQ36,
             managedModelID: Q35Resources.q36NanoModelId
+        )
+    }
+
+    private static func northMiniCode() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: NorthMiniCodeResources.modelId,
+            displayName: "North Mini Code 1.0 Q4",
+            summary: "Compact 30B-A3B GGUF coding model for native llama.cpp-backed code sessions.",
+            minimumUnifiedMemoryGB: 24,
+            recommendedUnifiedMemoryGB: 32,
+            servingEngine: .textCode,
+            managedModelID: NorthMiniCodeResources.modelId
         )
     }
 

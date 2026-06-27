@@ -513,7 +513,9 @@ struct SetupAgentRuntime {
             return Q35Resources.defaultContextLength
         case .deepseekV4Flash:
             return DeepseekV4FlashResources.defaultContextLength
-        case .textCode, .sourceConfigured:
+        case .sourceConfigured:
+            return 32768
+        case .textCode:
             return 32768
         }
     }

@@ -28,6 +28,7 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("image-ideogram4-") { return .ideogram }
             if id.hasPrefix("vision-segment-") { return .sam }
             if id.hasPrefix("vision-ground-") { return .falcon }
+            if id.hasPrefix("text-code-north-mini") { return .code }
             return nil
         }
 
@@ -55,7 +56,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen3ASR, .parakeetASR: return .asr
             case .qwen3Embedding: return .embed
             case .openAIPrivacyFilter: return .privacy
-            case .qwen3Coder: return .code
+            case .qwen3Coder, .northMiniCode: return .code
             case .lightOnOCR: return .ocr
             case .aceStep, .magentaRT2: return .music
             case .woosh: return .sfx
@@ -114,7 +115,7 @@ public enum QuantizedModelManifestWriter {
                     return [.textEmbedding]
                 case .openAIPrivacyFilter:
                     return [.textAnonymization]
-                case .qwen3Coder:
+                case .qwen3Coder, .northMiniCode:
                     return [.chat, .codeGeneration]
                 case .lightOnOCR:
                     return [.visionOCR]
@@ -196,7 +197,8 @@ public enum QuantizedModelManifestWriter {
                 break
             case .samSegmentation, .falconPerception:
                 break
-            case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter, .qwen3Coder, .lightOnOCR, .woosh, .psiChat, .deepseekV4Flash:
+            case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter,
+                 .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .psiChat, .deepseekV4Flash:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)

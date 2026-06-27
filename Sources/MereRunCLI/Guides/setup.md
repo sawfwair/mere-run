@@ -6,7 +6,11 @@ Choose a guided, bring-your-own-agent, or manual setup path for a new mere.run i
 
 ## Required Models
 
-No model is required to view the plan. Agent setup selects this machine's supported tier; on 96 GB+ machines that is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash.
+No model is required to view the plan. Agent setup selects this machine's
+supported tier; on 96 GB+ machines that is `text-agent-deepseek-v4-flash`.
+Smaller Qwen agent models are lower-memory or comparison alternatives, not
+upgrades from DeepSeek V4 Flash. `text-code-north-mini` can be pulled for
+native GGUF coding-agent experiments through the same `text-code` runtime.
 
 ## Install And Check
 
@@ -34,6 +38,8 @@ mere.run model capabilities --recommended
 - Use `--mode manual --dry-run` for docs or scripts.
 - Use agent mode only with a supported local runtime and model. Prefer `--agent-model tier` unless the user asks for a smaller comparison model.
 - On Linux, provide Pi with `--pi-path` or put `pi` on PATH; auto-install uses macOS release assets.
+- Use `--agent-model small` for the smallest setup model, or pull
+  `text-code-north-mini` manually when comparing North Mini Code against Qwen.
 
 ## Examples
 

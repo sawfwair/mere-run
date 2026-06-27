@@ -39,7 +39,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
@@ -93,6 +93,8 @@ commands. The small local agent model is `text-agent-qwen35-9b`; hardware-tier
 setup can select Qwen3.6 nano, Qwen3-Coder Next, or DeepSeek V4 Flash. On 96 GB+
 Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed
 setup-agent tier; smaller Qwen agent models are alternatives, not upgrades.
+`text-code-north-mini` can be pulled, inspected, and run through the native
+GGUF code runtime for coding-agent comparisons against `text-code-qwen3`.
 
 ### `mere.run model remove`
 

@@ -81,6 +81,26 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testNorthMiniCodeIsSupportedOnThirtyTwoGBAndStartable() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: NorthMiniCodeResources.modelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(on: machine)
+                .first { $0.id == NorthMiniCodeResources.modelId }
+        )
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textCode)
+    }
+
     func testUnsupportedRuntimeIsRejected() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
         let machine = MereRunMachineProfile(

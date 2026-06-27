@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR_DIR="${ROOT_DIR}/vendor/llama.xcframework"
-LLAMA_CPP_COMMIT="${LLAMA_CPP_COMMIT:-6d957078270f58d4ea14e8c205f5ef4e49be33f3}"
+LLAMA_CPP_COMMIT="${LLAMA_CPP_COMMIT:-4988f6e866057afd130c1515ecef0c9bab9a15f8}"
 LLAMA_CPP_URL="${LLAMA_CPP_URL:-https://github.com/ggml-org/llama.cpp.git}"
 
 require_tool() {

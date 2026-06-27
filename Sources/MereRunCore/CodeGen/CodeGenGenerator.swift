@@ -36,10 +36,10 @@ public actor CodeGenGenerator: ChatGenerator {
         #endif
 
         if loadedModelPath != modelURL.path {
-            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading \(CodeGenResources.displayName(for: modelId))..."))
             llamaContext = try await LlamaContext.createContext(
                 path: modelURL.path,
-                contextSize: 32768,
+                contextSize: CodeGenResources.contextSize(for: modelId),
                 temperature: Float(request.temperature),
                 topP: Float(request.topP)
             )
@@ -59,8 +59,7 @@ public actor CodeGenGenerator: ChatGenerator {
         // Set max tokens
         ctx.setMaxTokens(request.maxTokens)
 
-        // Format prompt with Qwen3 chat template
-        let prompt = formatPrompt(request.messages)
+        let prompt = ctx.chatPrompt(for: request.messages)
 
         progressHandler?(ChatProgress(stage: .generating, message: "Generating..."))
         try ctx.completionInit(text: prompt)
@@ -74,7 +73,7 @@ public actor CodeGenGenerator: ChatGenerator {
 
         let tokensDecoded = ctx.getTokensDecoded()
         return ChatResponse(
-            response: response,
+            response: Self.trimmingRenderedStopSequences(from: response),
             tokensGenerated: tokensDecoded
         )
     }
@@ -100,10 +99,10 @@ public actor CodeGenGenerator: ChatGenerator {
         #endif
 
         if loadedModelPath != modelURL.path {
-            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading \(CodeGenResources.displayName(for: modelId))..."))
             llamaContext = try await LlamaContext.createContext(
                 path: modelURL.path,
-                contextSize: 32768,
+                contextSize: CodeGenResources.contextSize(for: modelId),
                 temperature: Float(request.temperature),
                 topP: Float(request.topP)
             )
@@ -123,8 +122,7 @@ public actor CodeGenGenerator: ChatGenerator {
         // Set max tokens
         ctx.setMaxTokens(request.maxTokens)
 
-        // Format prompt with Qwen3 chat template
-        let prompt = formatPrompt(request.messages)
+        let prompt = ctx.chatPrompt(for: request.messages)
 
         progressHandler?(ChatProgress(stage: .generating, message: "Generating..."))
         try ctx.completionInit(text: prompt)
@@ -138,7 +136,7 @@ public actor CodeGenGenerator: ChatGenerator {
 
         let tokensDecoded = ctx.getTokensDecoded()
         return ChatResponse(
-            response: response,
+            response: Self.trimmingRenderedStopSequences(from: response),
             tokensGenerated: tokensDecoded
         )
     }
@@ -158,8 +156,11 @@ public actor CodeGenGenerator: ChatGenerator {
         }
         #endif
         if loadedModelPath != modelURL.path {
-            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3-Coder..."))
-            llamaContext = try await LlamaContext.createContext(path: modelURL.path)
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading \(CodeGenResources.displayName(for: modelId))..."))
+            llamaContext = try await LlamaContext.createContext(
+                path: modelURL.path,
+                contextSize: CodeGenResources.contextSize(for: modelId)
+            )
             loadedModelPath = modelURL.path
         }
     }
@@ -212,28 +213,27 @@ public actor CodeGenGenerator: ChatGenerator {
         }
     }
 
-    // MARK: - Chat Template
-
-    /// Format messages using Qwen3 chat template.
-    private func formatPrompt(_ messages: [ChatMessage]) -> String {
-        var prompt = ""
-
-        for message in messages {
-            switch message.role {
-            case .system:
-                prompt += "<|im_start|>system\n\(message.content)<|im_end|>\n"
-            case .user:
-                prompt += "<|im_start|>user\n\(message.content)<|im_end|>\n"
-            case .assistant:
-                prompt += "<|im_start|>assistant\n\(message.content)<|im_end|>\n"
-            case .tool:
-                prompt += "<|im_start|>tool\n\(message.content)<|im_end|>\n"
+    private static func trimmingRenderedStopSequences(from response: String) -> String {
+        let stopSequences = [
+            "<|END_OF_TURN_TOKEN|>",
+            "<|im_end|>",
+            "</s>",
+            "<|endoftext|>"
+        ]
+        var firstStopRange: Range<String.Index>?
+        for stopSequence in stopSequences {
+            guard let range = response.range(of: stopSequence) else {
+                continue
             }
+            if let current = firstStopRange, current.lowerBound <= range.lowerBound {
+                continue
+            }
+            firstStopRange = range
         }
 
-        // Add assistant start tag for generation
-        prompt += "<|im_start|>assistant\n"
-        return prompt
+        let trimmed = firstStopRange.map { String(response[..<$0.lowerBound]) } ?? response
+        return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
 }
 #endif
