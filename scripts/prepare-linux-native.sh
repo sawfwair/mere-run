@@ -582,6 +582,7 @@ smoke_mlx_swift_cuda() {
     echo "[prepare-linux-native] using CUDA architectures: $MERERUN_CUDA_ARCHITECTURES"
     mlx_cmake_args+=(
       "-DCMAKE_CUDA_ARCHITECTURES=$MERERUN_CUDA_ARCHITECTURES"
+      "-DMLX_CUDA_ARCHITECTURES=$MERERUN_CUDA_ARCHITECTURES"
     )
   fi
   detect_cuda_dependency_defaults
