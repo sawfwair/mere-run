@@ -135,10 +135,9 @@ struct StudioRootView: View {
                     .overlay(MereRunTheme.border.opacity(0.45))
 
                 if let persistenceError = library.lastPersistenceError {
-                    StudioInlineBanner(
-                        text: "Run history not saved: \(persistenceError)",
-                        systemImage: "exclamationmark.triangle.fill",
-                        tint: MereRunTheme.yellow
+                    MereBanner(
+                        severity: .warning,
+                        text: "Run history not saved: \(persistenceError)"
                     )
                     .padding(.horizontal, 24)
                     .padding(.top, 10)
@@ -872,35 +871,6 @@ private struct StudioStatusPill: View {
         .frame(height: 38)
         .frame(maxWidth: 210)
         .merePanel(cornerRadius: 18)
-    }
-}
-
-private struct StudioInlineBanner: View {
-    let text: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-            Text(text)
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textSecondary)
-                .lineLimit(2)
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(tint.opacity(0.12))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
-                }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

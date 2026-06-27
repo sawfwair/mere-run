@@ -35,17 +35,13 @@ struct StudioConversationView: View {
     }
 
     private var contextTrimBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "scissors")
-            Text("Earlier messages are trimmed from the next prompt to fit the context window (\(droppedFromContext) omitted).")
-            Spacer(minLength: 0)
-        }
-        .font(MereRunTheme.captionFont)
-        .foregroundStyle(MereRunTheme.textMuted)
+        MereBanner(
+            severity: .info,
+            text: "Earlier messages are trimmed from the next prompt to fit the context window (\(droppedFromContext) omitted).",
+            systemImage: "scissors"
+        )
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
-        .background(MereRunTheme.surface.opacity(0.5))
-        .accessibilityElement(children: .combine)
     }
 
     private var header: some View {
