@@ -1246,10 +1246,13 @@ swift run mere.run model benchmark code \
 ```
 
 The command prompts each model once per task, combines the generated Python with
-the task tests, and runs that candidate in a temporary `python3` subprocess with
+the task tests, and runs that candidate in a sandboxed `python3` subprocess with
 a per-candidate timeout. Because scoring executes generated code locally, pass
 `--allow-code-execution` for real runs or `--dry-run` to inspect the plan.
-Use `--models` and `--tasks` to narrow the slice while iterating.
+The default `--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on
+Linux when available. Use `--sandbox none` only for a trusted local smoke where
+timeout and temporary-directory hygiene are enough. Use `--models` and `--tasks`
+to narrow the slice while iterating.
 
 ### `mere.run model benchmark vlm`
 

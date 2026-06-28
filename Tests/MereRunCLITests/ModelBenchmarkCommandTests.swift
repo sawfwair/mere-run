@@ -33,6 +33,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.topP, 1)
         XCTAssertEqual(cmd.executionTimeout, 5)
         XCTAssertEqual(cmd.python, "python3")
+        XCTAssertEqual(cmd.sandbox, .auto)
         XCTAssertTrue(cmd.dryRun)
         XCTAssertFalse(cmd.allowCodeExecution)
         XCTAssertFalse(cmd.json)
@@ -48,6 +49,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--top-p", "0.8",
             "--execution-timeout", "3.5",
             "--python", "/tmp/venv/bin/python",
+            "--sandbox", "none",
             "--dry-run",
             "--allow-code-execution",
             "--json",
@@ -61,10 +63,52 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.topP, 0.8)
         XCTAssertEqual(cmd.executionTimeout, 3.5)
         XCTAssertEqual(cmd.python, "/tmp/venv/bin/python")
+        XCTAssertEqual(cmd.sandbox, .none)
         XCTAssertTrue(cmd.dryRun)
         XCTAssertTrue(cmd.allowCodeExecution)
         XCTAssertTrue(cmd.json)
     }
+
+    func testCodeExecutionSandboxNoneRunsPython() throws {
+        let result = try CodeExecutionSandbox.runPython(
+            program: "print('ok')",
+            python: "python3",
+            mode: .none,
+            timeout: 2
+        )
+
+        XCTAssertTrue(result.passed)
+        XCTAssertEqual(result.backend, .none)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "ok")
+    }
+
+    #if os(macOS)
+    func testCodeExecutionSandboxExecDeniesHomeReads() throws {
+        try CodeExecutionSandbox.preflight(mode: .macOSSandboxExec)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+            .resolvingSymlinksInPath()
+            .path
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        let result = try CodeExecutionSandbox.runPython(
+            program: """
+            import os
+            try:
+                os.listdir('\(home)')
+                raise SystemExit(7)
+            except PermissionError:
+                print('denied')
+            """,
+            python: "python3",
+            mode: .macOSSandboxExec,
+            timeout: 2
+        )
+
+        XCTAssertTrue(result.passed, result.errorSummary ?? "")
+        XCTAssertEqual(result.backend, .macOSSandboxExec)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "denied")
+    }
+    #endif
 
     func testBenchmarkCommandExposesGemma4MTPSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })

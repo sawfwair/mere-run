@@ -157,9 +157,12 @@ The default suite is `humaneval-slice`, currently three public HumanEval tasks:
 
 Each task is prompted once with deterministic sampling by default
 (`--temperature 0 --top-p 1`), the generated Python is combined with the task's
-tests, and the candidate is executed with `python3` in a short-lived temporary
-directory. Because this runs generated code locally, the command requires
-`--allow-code-execution` unless you are using `--dry-run`.
+tests, and the candidate is executed with `python3` inside the selected sandbox
+backend. Because this runs generated code locally, the command requires
+`--allow-code-execution` unless you are using `--dry-run`. The default
+`--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on Linux when
+available. Use `--sandbox none` only for a trusted local smoke where timeout and
+temporary-directory hygiene are enough.
 
 Narrow the run while iterating:
 

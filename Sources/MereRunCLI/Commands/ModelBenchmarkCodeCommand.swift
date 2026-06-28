@@ -32,6 +32,9 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     @Option(name: [.long], help: "Python executable used to run HumanEval slice tests.")
     var python: String = "python3"
 
+    @Option(name: [.long], help: "Sandbox backend for generated-code execution.")
+    var sandbox: CodeExecutionSandboxMode = .auto
+
     @Flag(name: [.long], help: "Print the benchmark plan without loading models or executing generated code.")
     var dryRun: Bool = false
 
@@ -60,6 +63,9 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         guard executionTimeout > 0, executionTimeout.isFinite else {
             throw ValidationError("--execution-timeout must be a positive finite number.")
         }
+        if !dryRun {
+            try CodeExecutionSandbox.preflight(mode: sandbox)
+        }
         if !dryRun && !allowCodeExecution {
             throw ValidationError(
                 "model benchmark code executes generated Python. Re-run with --allow-code-execution."
@@ -79,7 +85,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
-            executionTimeout: executionTimeout
+            executionTimeout: executionTimeout,
+            sandbox: sandbox.rawValue
         )
 
         if dryRun {
@@ -225,9 +232,10 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                 let response = try await generate(request)
                 let generationSeconds = Date().timeIntervalSince(generationStart)
                 let candidate = task.candidateProgram(from: response.response)
-                let execution = try CodeBenchmarkPythonRunner.run(
+                let execution = try CodeExecutionSandbox.runPython(
                     program: task.testProgram(candidateProgram: candidate),
                     python: python,
+                    mode: sandbox,
                     timeout: executionTimeout
                 )
                 caseResults.append(
@@ -237,6 +245,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                         passed: execution.passed,
                         generationSeconds: generationSeconds,
                         executionSeconds: execution.seconds,
+                        sandboxBackend: execution.backend.rawValue,
                         tokensGenerated: response.tokensGenerated,
                         decodeTokensPerSecond: response.decodeTokensPerSecond(elapsed: generationSeconds),
                         error: execution.errorSummary
@@ -250,6 +259,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                         passed: false,
                         generationSeconds: Date().timeIntervalSince(generationStart),
                         executionSeconds: nil,
+                        sandboxBackend: nil,
                         tokensGenerated: 0,
                         decodeTokensPerSecond: nil,
                         error: String(describing: error)
@@ -455,95 +465,6 @@ private struct CodeBenchmarkTask: Encodable {
     ]
 }
 
-private struct CodeBenchmarkPythonRunner {
-    struct Result {
-        let passed: Bool
-        let seconds: Double
-        let timedOut: Bool
-        let status: Int32
-        let stdout: String
-        let stderr: String
-
-        var errorSummary: String? {
-            guard !passed else {
-                return nil
-            }
-            if timedOut {
-                return "Timed out after \(String(format: "%.2f", seconds))s."
-            }
-            let detail = [stderr, stdout]
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first { !$0.isEmpty } ?? "Python exited with status \(status)."
-            return Self.tail(detail)
-        }
-
-        private static func tail(_ text: String, maxCharacters: Int = 800) -> String {
-            guard text.count > maxCharacters else {
-                return text
-            }
-            return String(text.suffix(maxCharacters))
-        }
-    }
-
-    static func run(program: String, python: String, timeout: Double) throws -> Result {
-        let fileManager = FileManager.default
-        let workDir = fileManager.temporaryDirectory
-            .appendingPathComponent("mererun-code-benchmark-\(UUID().uuidString)", isDirectory: true)
-        try fileManager.createDirectory(at: workDir, withIntermediateDirectories: true)
-        defer {
-            try? fileManager.removeItem(at: workDir)
-        }
-
-        let scriptURL = workDir.appendingPathComponent("candidate.py")
-        try program.write(to: scriptURL, atomically: true, encoding: .utf8)
-
-        let process = Process()
-        if python.contains("/") {
-            process.executableURL = URL(fileURLWithPath: python)
-            process.arguments = [scriptURL.path]
-        } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = [python, scriptURL.path]
-        }
-        process.currentDirectoryURL = workDir
-        process.environment = [
-            "PATH": ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
-            "PYTHONIOENCODING": "utf-8",
-            "PYTHONNOUSERSITE": "1",
-        ]
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        let start = Date()
-        try process.run()
-        var timedOut = false
-        while process.isRunning {
-            if Date().timeIntervalSince(start) > timeout {
-                timedOut = true
-                process.terminate()
-                break
-            }
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        process.waitUntilExit()
-        let seconds = Date().timeIntervalSince(start)
-        let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-
-        return Result(
-            passed: !timedOut && process.terminationStatus == 0,
-            seconds: seconds,
-            timedOut: timedOut,
-            status: process.terminationStatus,
-            stdout: stdout,
-            stderr: stderr
-        )
-    }
-}
-
 private struct CodeBenchmarkPlan: Encodable {
     let suite: String
     let models: [String]
@@ -552,6 +473,7 @@ private struct CodeBenchmarkPlan: Encodable {
     let temperature: Double
     let topP: Double
     let executionTimeout: Double
+    let sandbox: String
 }
 
 private struct CodeBenchmarkReport: Encodable {
@@ -572,6 +494,7 @@ private struct CodeBenchmarkReport: Encodable {
             "tasks: \(plan.tasks.joined(separator: ", "))",
             "models: \(plan.models.joined(separator: ", "))",
             "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) max_tokens=\(plan.maxTokens)",
+            "sandbox: \(plan.sandbox)",
             "",
         ]
         guard !models.isEmpty else {
@@ -639,6 +562,7 @@ private struct CodeBenchmarkModelResult: Encodable {
             let timing = [
                 "gen=\(Self.format(result.generationSeconds))s",
                 result.executionSeconds.map { "exec=\(Self.format($0))s" },
+                result.sandboxBackend.map { "sandbox=\($0)" },
                 result.decodeTokensPerSecond.map { "tps=\(Self.format($0))" },
             ]
                 .compactMap { $0 }
@@ -681,6 +605,7 @@ private struct CodeBenchmarkCaseResult: Encodable {
     let passed: Bool
     let generationSeconds: Double
     let executionSeconds: Double?
+    let sandboxBackend: String?
     let tokensGenerated: Int
     let decodeTokensPerSecond: Double?
     let error: String?
