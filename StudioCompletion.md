@@ -103,9 +103,21 @@ deep feature work that assumes concurrency and reliable results.
 
 ### WS-5 — Distribution hardening (Phase 4) · M (+ credential-gated)
 
+> **Signing hardened (code complete).** `build_mere_run_app.sh` now signs inside-out with
+> per-binary entitlements instead of a fragile `codesign --deep` pass: the app exe gets only
+> `device.camera`; the bundled CLI + vendored ds4 inference binaries get
+> `allow-jit`/`allow-unsigned-executable-memory`/`disable-library-validation`/`device.camera` via
+> the new `scripts/MereRunCLI.entitlements`. Dropped the unused `device.audio-input` entitlement +
+> `NSMicrophoneUsageDescription` (nothing records the mic yet) and added Developer-ID Info.plist
+> keys (`LSApplicationCategoryType`, `NSHumanReadableCopyright`, `CFBundleInfoDictionaryVersion`).
+> The private `mere-run-release-tools` (`build_release.sh`/`make_dmg.sh`) was fixed to stop
+> double-signing / stripping the app exe's entitlements (it now defers signing to the public
+> script). Verified locally with an ad-hoc identity (`codesign --verify` valid, correct per-binary
+> entitlements). **Remaining = credential-gated:** an actual Developer-ID signed + notarized run.
+
 | ID | Task | Effort | Acceptance |
 |----|------|--------|------------|
-| 5.1 | **Developer ID signing run** — set `MERERUN_CODESIGN_IDENTITY` in CI; the scripts already sign with `--options runtime` + entitlements. *(Credential-gated.)* | S | `spctl --assess` passes on a downloaded DMG from a clean machine. |
+| 5.1 | **Developer ID signing run** — set `MERERUN_CODESIGN_IDENTITY`; the scripts now sign inside-out with `--options runtime` + correct per-binary entitlements. *(Credential-gated: needs the Developer ID cert.)* | S | `spctl --assess` passes on a downloaded DMG from a clean machine. |
 | 5.2 | **Notarization** — `MACOS_*`/`MERERUN_NOTARY_*` GitHub secrets; `package-macos.sh` already submits + staples. *(Credential-gated.)* | S | `notarytool` accepts the bundle; stapled DMG opens with no Gatekeeper prompt. |
 | 5.3 | **Auto-update** — Sparkle is **out of scope for this OSS repo** (AGENTS.md forbids hosted-service surfaces). Ship the app↔CLI version handshake (done) and document the maintainer-side update channel; if auto-update is wanted, it lives in the distribution layer. | S | Version mismatch is surfaced in-app; update channel documented. |
 | 5.4 | **MetricKit diagnostics** — opt-in `MXCrashDiagnostic` capture + an "Export diagnostics" action bundling logs + app/CLI versions (no remote upload). | M | Users can export a diagnostics bundle for bug reports. |
