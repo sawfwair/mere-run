@@ -13,21 +13,24 @@ struct MereRunCommands: Commands {
         // Single-window studio: remove the default "New" item rather than spawn windows.
         CommandGroup(replacing: .newItem) {}
 
-        // View toggles act on whichever Studio window is key (via focused scene values).
+        // View toggles act on whichever Studio window is key (via focused scene values). When no
+        // Studio window holds focus all three are nil, so the group (and its divider) stay empty.
         CommandGroup(after: .sidebar) {
-            if let showLibrary {
-                Toggle("Show Library", isOn: showLibrary)
-                    .keyboardShortcut("l", modifiers: [.command, .control])
+            if showLibrary != nil || showAdvanced != nil || showModels != nil {
+                if let showLibrary {
+                    Toggle("Show Library", isOn: showLibrary)
+                        .keyboardShortcut("l", modifiers: [.command, .control])
+                }
+                if let showAdvanced {
+                    Toggle("Show Advanced", isOn: showAdvanced)
+                        .keyboardShortcut("e", modifiers: [.command, .control])
+                }
+                if let showModels {
+                    Button("Browse Models…") { showModels.wrappedValue = true }
+                        .keyboardShortcut("m", modifiers: [.command, .shift])
+                }
+                Divider()
             }
-            if let showAdvanced {
-                Toggle("Show Advanced", isOn: showAdvanced)
-                    .keyboardShortcut("e", modifiers: [.command, .control])
-            }
-            if let showModels {
-                Button("Browse Models…") { showModels.wrappedValue = true }
-                    .keyboardShortcut("m", modifiers: [.command, .shift])
-            }
-            Divider()
         }
 
         CommandMenu("Run") {

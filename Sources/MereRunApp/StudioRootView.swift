@@ -182,7 +182,8 @@ struct StudioRootView: View {
                     sendBlocked: mode.isConversational && activeConversationRunning,
                     onRun: runStudioCommand,
                     onStop: controller.cancel,
-                    onAttach: chooseAttachment
+                    onAttach: chooseAttachment,
+                    onPaste: pasteImageFromClipboard
                 )
                 .padding(.horizontal, 24)
                 .padding(.bottom, 22)
@@ -196,7 +197,9 @@ struct StudioRootView: View {
                 studioError = nil
                 return true
             } isTargeted: { targeted in
-                isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
+                }
             }
             .overlay {
                 if isDropTargeted {
@@ -286,6 +289,18 @@ struct StudioRootView: View {
         }
         .onAppear {
             draft.reset(for: mode)
+            // mode may be restored from @SceneStorage (e.g. chat) — onChange(of:mode) doesn't fire
+            // for the initial value, so replicate the conversational setup here to open the latest
+            // thread instead of leaving the canvas blank.
+            if mode.isConversational {
+                let latest = library.items.first { $0.mode == mode && $0.isConversation }
+                activeConversationID = latest?.id
+                selectedLibraryID = latest?.id
+                if let latest { applyConversationSettings(from: latest, to: &draft) }
+                draft.prompt = ""
+            } else {
+                selectedLibraryID = library.items.first { $0.mode == mode }?.id
+            }
             controller.checkReadiness(for: mode, draft: draft)
             if !hasCompletedWelcome {
                 showWelcome = true
@@ -1409,6 +1424,7 @@ private struct StudioPromptBar: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onAttach: () -> Void
+    let onPaste: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
@@ -1440,6 +1456,17 @@ private struct StudioPromptBar: View {
                 .disabled(mode.acceptedTypes.isEmpty)
                 .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
                 .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
+
+                if mode.acceptedTypes.contains(.image) {
+                    Button(action: onPaste) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Paste image from clipboard")
+                    .accessibilityLabel("Paste image from clipboard")
+                }
 
                 if mode == .listen {
                     Text(mode.promptPlaceholder)
