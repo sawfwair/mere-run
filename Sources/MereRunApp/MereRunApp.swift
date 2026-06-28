@@ -1,4 +1,5 @@
 import AppKit
+import Quartz
 import SwiftUI
 
 final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
@@ -6,6 +7,18 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         onTerminate?()
+    }
+
+    // QLPreviewPanelController: the app delegate is the end of the responder chain, so it answers
+    // the panel's control handshake and supplies QuickLookCoordinator as the data source.
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { QuickLookCoordinator.shared.install(on: panel) }
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { panel.dataSource = nil }
     }
 }
 
@@ -19,7 +32,6 @@ struct MereRunApp: App {
             MereRunRootView()
                 .environmentObject(controller)
                 .frame(minWidth: 880, minHeight: 600)
-                .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.onTerminate = { [weak controller] in
                         MainActor.assumeIsolated {
@@ -39,7 +51,6 @@ struct MereRunApp: App {
         Settings {
             MereRunSettingsView()
                 .environmentObject(controller)
-                .preferredColorScheme(.dark)
                 .frame(width: 560)
         }
     }

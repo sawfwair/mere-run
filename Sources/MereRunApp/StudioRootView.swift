@@ -110,7 +110,8 @@ struct StudioRootView: View {
                     },
                     onRename: { id, title in
                         library.rename(id: id, title: title)
-                    }
+                    },
+                    onQuickLook: { QuickLookCoordinator.shared.preview($0) }
                 )
                 .frame(width: 292)
 
@@ -135,10 +136,9 @@ struct StudioRootView: View {
                     .overlay(MereRunTheme.border.opacity(0.45))
 
                 if let persistenceError = library.lastPersistenceError {
-                    StudioInlineBanner(
-                        text: "Run history not saved: \(persistenceError)",
-                        systemImage: "exclamationmark.triangle.fill",
-                        tint: MereRunTheme.yellow
+                    MereBanner(
+                        severity: .warning,
+                        text: "Run history not saved: \(persistenceError)"
                     )
                     .padding(.horizontal, 24)
                     .padding(.top, 10)
@@ -159,6 +159,9 @@ struct StudioRootView: View {
                     progress: controller.currentProgress,
                     onOpen: openSelectedOutput,
                     onReveal: revealSelectedOutput,
+                    onQuickLook: {
+                        if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
+                    },
                     onPullModel: pullModel,
                     onShowDetails: { showAdvanced = true },
                     onNewChat: startNewConversation,
@@ -686,6 +689,7 @@ private struct StudioTopBar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Show library")
+                .accessibilityLabel(showLibrary ? "Hide library" : "Show library")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("mere.run")
@@ -762,6 +766,7 @@ private struct StudioTopBar: View {
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 14)
+        .background(VisualEffectBackground())
     }
 
     private var serverStatusDetail: String {
@@ -871,35 +876,8 @@ private struct StudioStatusPill: View {
         .frame(height: 38)
         .frame(maxWidth: 210)
         .merePanel(cornerRadius: 18)
-    }
-}
-
-private struct StudioInlineBanner: View {
-    let text: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-            Text(text)
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textSecondary)
-                .lineLimit(2)
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(tint.opacity(0.12))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
-                }
-        }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(detail)")
     }
 }
 
@@ -918,6 +896,7 @@ private struct StudioCanvas: View {
     let progress: StudioRunProgress?
     let onOpen: () -> Void
     let onReveal: () -> Void
+    let onQuickLook: () -> Void
     let onPullModel: () -> Void
     let onShowDetails: () -> Void
     let onNewChat: () -> Void
@@ -956,7 +935,7 @@ private struct StudioCanvas: View {
                 )
                 .transition(.opacity)
             } else if let item {
-                StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal)
+                StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal, onQuickLook: onQuickLook)
                     .padding(32)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
@@ -1073,7 +1052,7 @@ private struct StudioRunningOverlay: View {
         }
         .padding(28)
         .merePanel(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.28), radius: 28, y: 12)
+        .mereShadow(radius: 28, y: 12)
     }
 }
 
@@ -1117,7 +1096,7 @@ private struct StudioReadinessOverlay: View {
         }
         .padding(28)
         .merePanel(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.3), radius: 30, y: 12)
+        .mereShadow(radius: 30, y: 12)
     }
 
     private var statusImage: String {
@@ -1136,6 +1115,7 @@ private struct StudioOutputView: View {
     let liveOutputText: String?
     let onOpen: () -> Void
     let onReveal: () -> Void
+    let onQuickLook: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
@@ -1163,12 +1143,21 @@ private struct StudioOutputView: View {
                     Button("Open", action: onOpen)
                         .buttonStyle(.bordered)
                     Button {
+                        onQuickLook()
+                    } label: {
+                        Image(systemName: "eye")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Quick Look")
+                    .accessibilityLabel("Quick Look")
+                    Button {
                         onReveal()
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
                     .buttonStyle(.bordered)
                     .help("Reveal in Finder")
+                    .accessibilityLabel("Reveal in Finder")
                 }
             }
         }
@@ -1387,6 +1376,8 @@ private struct StudioPromptBar: View {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .buttonStyle(.plain)
+                    .help("Remove attachment")
+                    .accessibilityLabel("Remove attachment")
                 }
                 .padding(.horizontal, 14)
             }
@@ -1453,6 +1444,7 @@ private struct StudioPromptBar: View {
                 .disabled(readiness.blocksRun || sendBlocked)
                 .help(sendBlocked ? "Waiting for the current reply…" : runButtonHelp)
                 .accessibilityLabel(isRunning ? "Queue run" : "Run")
+                .accessibilityHint(accessibilityRunHint)
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 14)
@@ -1464,7 +1456,7 @@ private struct StudioPromptBar: View {
                         RoundedRectangle(cornerRadius: 20)
                             .strokeBorder(MereRunTheme.border.opacity(0.75), lineWidth: 1)
                     }
-                    .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
+                    .mereShadow(radius: 20, y: 10)
             }
         }
     }
@@ -1481,6 +1473,13 @@ private struct StudioPromptBar: View {
             return queueLabel
         }
         return "Run"
+    }
+
+    /// Spoken explanation of why Run is disabled, so the blocked state is not color-only.
+    private var accessibilityRunHint: String {
+        if sendBlocked { return "Waiting for the current reply to finish" }
+        if readiness.blocksRun { return readiness.message }
+        return ""
     }
 }
 
@@ -1762,6 +1761,7 @@ private struct StudioLibraryPanel: View {
     @Binding var isVisible: Bool
     let onDelete: (UUID) -> Void
     let onRename: (UUID, String) -> Void
+    let onQuickLook: (URL) -> Void
 
     @State private var searchText = ""
     @State private var renamingID: UUID?
@@ -1879,6 +1879,9 @@ private struct StudioLibraryPanel: View {
                         selectedID = item.id
                     }
                     .contextMenu {
+                        if let url = item.outputURL {
+                            Button("Quick Look") { onQuickLook(url) }
+                        }
                         Button("Rename") {
                             renameText = item.displayTitle
                             renamingID = item.id
@@ -1890,6 +1893,15 @@ private struct StudioLibraryPanel: View {
                 }
             }
             .padding(12)
+        }
+        .focusable()
+        // Finder-style: space previews the selected run's output (ignored when it has none, so it
+        // never swallows the key destructively).
+        .onKeyPress(.space) {
+            guard let id = selectedID,
+                  let url = items.first(where: { $0.id == id })?.outputURL else { return .ignored }
+            onQuickLook(url)
+            return .handled
         }
     }
 }
@@ -1924,6 +1936,9 @@ private struct StudioLibraryRow: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.mode.title), \(item.status.rawValue), \(item.displayTitle)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     @ViewBuilder

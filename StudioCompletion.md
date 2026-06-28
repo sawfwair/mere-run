@@ -30,8 +30,13 @@ Already landed in this branch (do **not** re-plan these — they are done and va
   `config` HF-endpoint in Settings, live `status --json` pill, guide-powered help panel,
   schema-driven Studio option depth (no drift with Advanced), responsive resizable/detachable
   Advanced panel.
-- **Phase 4 — partial.** Completion notifications, app↔CLI version handshake, HF-token
-  setting, library-error banner, accessibility labels, Run/Help menu, first-run welcome.
+- **Phase 4 — mostly done.** Native polish WS-4.1–4.6 complete: real light/dark theme via
+  dynamic tokens, themed control styles + Dynamic-Type fonts + spacing/radius scales,
+  title-bar material/vibrancy, a unified MereBanner, an accessibility labels/values pass, and
+  Quick Look. Earlier: completion notifications, app↔CLI version handshake, HF-token setting,
+  library-error banner, Run/Help menu, first-run welcome. **Remaining:** WS-4.7 (window/menu
+  restore + SceneStorage), WS-4.8 (clipboard paste), and WS-5 (distribution hardening +
+  credential-gated signing/notarization).
 
 Everything below is **remaining**.
 
@@ -87,12 +92,12 @@ deep feature work that assumes concurrency and reliable results.
 
 | ID | Task | Effort | Acceptance |
 |----|------|--------|------------|
-| 4.1 | **Semantic theme tokens + real light theme** — background/content/accent/success/warning/danger/separator backed by asset-catalog `Color(light:dark:)`; remove the forced `.preferredColorScheme(.dark)` once light is real. | L | App renders correctly in light and dark; native controls match. |
-| 4.2 | **Themed control styles** — one `PrimaryButton`/`ToggleStyle`/`Field`; replace `.roundedBorder` in the runtime editor; spacing/radius/type scales on `MereRunTheme`; refactor inline `.system(size:)` and literal paddings. | M | Consistent themed controls app-wide; no native light-on-dark mismatch. |
-| 4.3 | **Material/vibrancy** — `NSVisualEffectView`/`.ultraThinMaterial` for the chromeless title-bar region. | S | The window reads as native macOS depth. |
-| 4.4 | **One error/notification banner component** across all three surfaces; genuine failures (non-zero exit) in red, not warning yellow; size sheets to content. | M | Errors are consistent and correctly colored everywhere. |
-| 4.5 | **Accessibility pass** — `.accessibilityLabel`/`value` on remaining icon controls and status pills (color-only state announced); relative text styles for **Dynamic Type**; full VoiceOver pass through the prompt-first flow. | L | VoiceOver navigates the full flow; UI scales with Dynamic Type. |
-| 4.6 | **Quick Look** (`QLPreviewPanel`/space) for selected outputs and library items. | M | Space-bar Quick Look works on outputs and library rows. |
+| 4.1 | ✅ **Semantic theme tokens + real light theme (done)** — all tokens resolve via a dynamic NSColor provider (light+dark values, same names → zero call-site churn); forced `.preferredColorScheme(.dark)` removed; theme-aware shadow token. SwiftPM-only (no asset catalog). | L | App renders in light and dark; native controls adapt. _(Per-surface visual QA in light is recommended on a real run.)_ |
+| 4.2 | ✅ **Themed control styles (done)** — relative Dynamic-Type font tokens, `MereRunTheme.Spacing`/`Radius` scales, `MerePrimaryButtonStyle` (deterministic contrast) + `mereField()`; the lone `.roundedBorder` replaced. | M | Consistent controls; `roundedBorder` grep clean; native controls adapt. |
+| 4.3 | ✅ **Material/vibrancy (done)** — `VisualEffectBackground` (NSVisualEffectView, `.headerView`/`.behindWindow`, hitTest-nil passthrough) behind the title-bar region. | S | The title region reads as native macOS material. |
+| 4.4 | ✅ **One banner component (done)** — `MereBanner` with Severity (info/warning/error → color+icon+VoiceOver prefix); persistence + context-trim notices migrated; failures already render red (audited); width-only sheets size to content. | M | Single banner type; failures red, warnings yellow. |
+| 4.5 | ✅ **Accessibility pass (done, structural)** — labels/values for status pills, status dot, run-button blocked hint, library rows ("mode, status, title"), and icon-only controls (sidebar/detach/reveal/path/remove-attachment); Dynamic Type via 4.2 relative fonts. | L | Color-only state is announced; UI scales. _(Full manual VoiceOver + Larger-Text walkthrough needs a real run.)_ |
+| 4.6 | ✅ **Quick Look (done)** — `QuickLookCoordinator` (QLPreviewPanel) reachable via an output eye button, a library row context-menu item, and space-bar on the selected row. | M | Space-bar Quick Look works on outputs and library rows. |
 | 4.7 | **Window/menu/restore** — File (New Window, Open…, Reveal Output) + View toggles (Library/Advanced/Models) menus driven by shared UI state; restore window/tab support; persist mode+draft via `SceneStorage`. | M | Standard menus work; relaunch restores the last mode and layout. |
 | 4.8 | **Clipboard paste** — paste-image-from-clipboard for createImage/readImage with a drop-target highlight. | S | Pasting an image populates the attachment. |
 

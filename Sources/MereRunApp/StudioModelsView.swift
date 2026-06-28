@@ -421,15 +421,22 @@ struct StudioModelsSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 TextField("Alias", text: $runtimeAlias)
+                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                    .frame(minWidth: 110)
                 TextField("TTL", text: $runtimeTTL)
+                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 72)
                 TextField("Context", text: $runtimeMaxContext)
+                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 88)
                 TextField("Max tokens", text: $runtimeMaxTokens)
+                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 88)
                 TextField("Temp", text: $runtimeTemperature)
+                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 72)
                 TextField("Top P", text: $runtimeTopP)
+                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
                     .frame(width: 72)
                 Toggle("Pinned", isOn: $runtimePinned)
                     .toggleStyle(.checkbox)
@@ -443,7 +450,6 @@ struct StudioModelsSheet: View {
                 .tint(MereRunTheme.accent)
                 .disabled(!row.isInstalled || loadingRuntimeID != nil)
             }
-            .textFieldStyle(.roundedBorder)
             .font(MereRunTheme.captionFont)
         }
     }
