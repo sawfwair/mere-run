@@ -4,8 +4,43 @@ This repository ships a small number of vendored third-party runtime artifacts
 so a clean checkout can build and run the public `mere.run` package without an
 extra bootstrap step.
 
+It also includes small third-party evaluation fixtures where noted below.
+
 When any vendored artifact changes, update this file in the same pull request
 with the new upstream source, version or commit when known, and license data.
+
+## Evaluation fixtures
+
+### HumanEval slice
+
+- purpose: three public HumanEval tasks embedded in `model benchmark code`
+- upstream project: [`openai/human-eval`](https://github.com/openai/human-eval)
+- included tasks: `HumanEval/0`, `HumanEval/3`, `HumanEval/8`
+- license: MIT
+
+```
+The MIT License
+
+Copyright (c) OpenAI (https://openai.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## Vendored artifacts
 

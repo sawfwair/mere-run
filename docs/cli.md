@@ -1232,6 +1232,25 @@ block verifier; non-greedy forced MTP stays on the exact probabilistic
 speculative path. Use `--mtp-block-size` to test a different greedy draft block
 cap and `--forced-mtp-min-prompt-tokens` to adjust the forced policy threshold.
 
+### `mere.run model benchmark code`
+
+Run a small real coding-eval slice against installed local coding models. The
+default suite is `humaneval-slice`, a three-task HumanEval subset covering
+`HumanEval/0`, `HumanEval/3`, and `HumanEval/8`. The default model comparison is
+`text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`.
+
+```bash
+swift run mere.run model benchmark code \
+  --allow-code-execution \
+  --json
+```
+
+The command prompts each model once per task, combines the generated Python with
+the task tests, and runs that candidate in a temporary `python3` subprocess with
+a per-candidate timeout. Because scoring executes generated code locally, pass
+`--allow-code-execution` for real runs or `--dry-run` to inspect the plan.
+Use `--models` and `--tasks` to narrow the slice while iterating.
+
 ### `mere.run model benchmark vlm`
 
 Run a tiny synthetic VLM smoke, or use `lmms-eval` to compare an installed

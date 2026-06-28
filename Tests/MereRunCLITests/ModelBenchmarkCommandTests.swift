@@ -13,6 +13,59 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("vlm"))
     }
 
+    func testBenchmarkCommandExposesCodeSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("code"))
+    }
+
+    func testCodeBenchmarkRequiresExecutionOptIn() {
+        XCTAssertThrowsError(try ModelBenchmarkCode.parse([]))
+    }
+
+    func testCodeBenchmarkParsesDryRunDefaults() throws {
+        let cmd = try ModelBenchmarkCode.parse(["--dry-run"])
+
+        XCTAssertNil(cmd.models)
+        XCTAssertEqual(cmd.suite, .humanEvalSlice)
+        XCTAssertNil(cmd.tasks)
+        XCTAssertEqual(cmd.maxTokens, 512)
+        XCTAssertEqual(cmd.temperature, 0)
+        XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.executionTimeout, 5)
+        XCTAssertEqual(cmd.python, "python3")
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertFalse(cmd.allowCodeExecution)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testCodeBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkCode.parse([
+            "--models", "text-agent-ornith-9b,text-code-north-mini",
+            "--suite", "humaneval-slice",
+            "--tasks", "HumanEval/0,HumanEval/8",
+            "--max-tokens", "256",
+            "--temperature", "0.2",
+            "--top-p", "0.8",
+            "--execution-timeout", "3.5",
+            "--python", "/tmp/venv/bin/python",
+            "--dry-run",
+            "--allow-code-execution",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.models, "text-agent-ornith-9b,text-code-north-mini")
+        XCTAssertEqual(cmd.suite, .humanEvalSlice)
+        XCTAssertEqual(cmd.tasks, "HumanEval/0,HumanEval/8")
+        XCTAssertEqual(cmd.maxTokens, 256)
+        XCTAssertEqual(cmd.temperature, 0.2)
+        XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.executionTimeout, 3.5)
+        XCTAssertEqual(cmd.python, "/tmp/venv/bin/python")
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertTrue(cmd.allowCodeExecution)
+        XCTAssertTrue(cmd.json)
+    }
+
     func testBenchmarkCommandExposesGemma4MTPSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("gemma4-mtp"))

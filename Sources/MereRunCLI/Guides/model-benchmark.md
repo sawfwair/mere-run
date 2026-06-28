@@ -41,6 +41,14 @@ mere.run model benchmark q36-mtp \
   --json
 ```
 
+Compare the installed coding models on a small HumanEval slice:
+
+```bash
+mere.run model benchmark code \
+  --allow-code-execution \
+  --json
+```
+
 Compare Gemma4 12B vision chat against the existing Qwen3-VL inspect backend:
 
 ```bash
@@ -131,6 +139,41 @@ Use one of:
 
 The fixture prompt is for runtime comparison only; it is not a quality eval.
 
+## Code Benchmark
+
+`model benchmark code` runs a tiny, fixed HumanEval slice against local coding
+models. It is a real functional-code eval slice, not a full pass@k benchmark or
+leaderboard substitute. The default comparison is:
+
+- `text-agent-ornith-9b`: native Q35/MLX OptiQ coding-agent target.
+- `text-code-north-mini`: native llama.cpp/GGUF North Mini Code target.
+- `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline.
+
+The default suite is `humaneval-slice`, currently three public HumanEval tasks:
+
+- `HumanEval/0`
+- `HumanEval/3`
+- `HumanEval/8`
+
+Each task is prompted once with deterministic sampling by default
+(`--temperature 0 --top-p 1`), the generated Python is combined with the task's
+tests, and the candidate is executed with `python3` in a short-lived temporary
+directory. Because this runs generated code locally, the command requires
+`--allow-code-execution` unless you are using `--dry-run`.
+
+Narrow the run while iterating:
+
+```bash
+mere.run model benchmark code \
+  --models text-agent-ornith-9b,text-code-north-mini \
+  --tasks HumanEval/0 \
+  --allow-code-execution
+```
+
+Use `--python` to select a Python interpreter and `--execution-timeout` to
+control the per-candidate subprocess timeout. The command never auto-pulls
+models during scoring; install missing models with `mere.run model pull` first.
+
 ## VLM Benchmark
 
 `model benchmark vlm` writes a tiny deterministic image-question suite to a
@@ -211,6 +254,8 @@ mere.run model benchmark vlm \
 ## Notes
 
 - Pull `text-chat-gemma4-turbo` before running the benchmark.
+- Pull `text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`
+  before running the default code benchmark comparison.
 - Pull `vision-chat-gemma4-12b` before using it in the VLM benchmark.
 - Install `lmms-eval` dependencies in the selected Python environment before
   running external datasets; dataset downloads and licenses are handled by the
@@ -221,6 +266,7 @@ mere.run model benchmark vlm \
 ## Sources
 
 - `Sources/MereRunCLI/Commands/ModelBenchmarkCommand.swift`
+- `Sources/MereRunCLI/Commands/ModelBenchmarkCodeCommand.swift`
 - `Sources/MereRunCLI/Commands/ModelBenchmarkVLMCommand.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4Generator.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4KVQuantization.swift`
