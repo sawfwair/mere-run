@@ -172,6 +172,7 @@ jobs:
       - name: Build Linux x86_64 CUDA packages
         env:
           MERERUN_LINUX_ACCEL: cuda
+          MERERUN_CUDA_ARCHITECTURES: "80"
           MERERUN_SKIP_MLX_CUDA_EXAMPLE: 1
           MERERUN_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
         run: >-
