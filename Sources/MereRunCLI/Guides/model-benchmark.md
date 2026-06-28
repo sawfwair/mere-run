@@ -170,7 +170,9 @@ temporary-directory hygiene are enough. The default generation cap is
 with `reachedMaxTokens`/`capped=true`. Reasoning-model output is split before
 scoring: visible code is executed, while captured `<think>...</think>` content
 is reported as `reasoningCharacters`/`reasoning_chars` and
-`incompleteReasoning`/`reasoning_incomplete`.
+`incompleteReasoning`/`reasoning_incomplete`. A second generated reasoning
+block is reported as `reasoning_reopened=true`; treat it as a loop or
+phase-restart warning, not a correctness failure by itself.
 
 Narrow the run while iterating:
 

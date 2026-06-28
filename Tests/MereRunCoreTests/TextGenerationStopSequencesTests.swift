@@ -71,6 +71,8 @@ final class TextGenerationStopSequencesTests: XCTestCase {
         XCTAssertEqual(split.visibleContent, "Final answer")
         XCTAssertEqual(split.reasoningContent, "first thought\n\nsecond thought")
         XCTAssertFalse(split.hasIncompleteReasoning)
+        XCTAssertEqual(split.reasoningBlockCount, 2)
+        XCTAssertTrue(split.hasReopenedReasoning)
     }
 
     func testReasoningMarkupCapturesIncompleteThinkBlock() {
@@ -79,6 +81,8 @@ final class TextGenerationStopSequencesTests: XCTestCase {
         XCTAssertEqual(split.visibleContent, "before")
         XCTAssertEqual(split.reasoningContent, "still working")
         XCTAssertTrue(split.hasIncompleteReasoning)
+        XCTAssertEqual(split.reasoningBlockCount, 1)
+        XCTAssertFalse(split.hasReopenedReasoning)
     }
 
     func testReasoningMarkupHandlesLeadingOrphanClose() {
@@ -88,6 +92,8 @@ final class TextGenerationStopSequencesTests: XCTestCase {
 
         XCTAssertEqual(split.visibleContent, "The visible answer.")
         XCTAssertEqual(split.reasoningContent, "hidden reasoning")
+        XCTAssertEqual(split.reasoningBlockCount, 1)
+        XCTAssertFalse(split.hasReopenedReasoning)
     }
 
     func testReasoningMarkupKeepsVisibleTextBeforeLateOrphanClose() {
@@ -97,6 +103,19 @@ final class TextGenerationStopSequencesTests: XCTestCase {
 
         XCTAssertEqual(split.visibleContent, "Final answer.")
         XCTAssertEqual(split.reasoningContent, "draft")
+        XCTAssertEqual(split.reasoningBlockCount, 1)
+        XCTAssertFalse(split.hasReopenedReasoning)
+    }
+
+    func testReasoningMarkupFlagsThinkBlockReopenedAfterFinalText() {
+        let split = ChatReasoningMarkup.splitThinkBlocks(
+            in: "<think>draft</think>Final answer.<think>looping again</think>Duplicate answer."
+        )
+
+        XCTAssertEqual(split.visibleContent, "Final answer.Duplicate answer.")
+        XCTAssertEqual(split.reasoningContent, "draft\n\nlooping again")
+        XCTAssertEqual(split.reasoningBlockCount, 2)
+        XCTAssertTrue(split.hasReopenedReasoning)
     }
 
     func testChatResponseSeparatesReasoningWhenThinkingHidden() {
@@ -108,5 +127,7 @@ final class TextGenerationStopSequencesTests: XCTestCase {
 
         XCTAssertEqual(response.response, "Answer")
         XCTAssertEqual(response.reasoningContent, "work")
+        XCTAssertEqual(response.reasoningBlockCount, 1)
+        XCTAssertFalse(response.hasReopenedReasoning)
     }
 }

@@ -63,7 +63,8 @@ The format is based on Keep a Changelog.
   nested timestep embedder path.
 - split `<think>...</think>` model output into preserved reasoning metadata and
   visible response text across native chat responses, API non-streaming output,
-  and code benchmark reports.
+  and code benchmark reports, including reopened-reasoning diagnostics for
+  loop-like model output.
 - fixed MLX CUDA BF16 sigmoid JIT smoke failures by patching the upstream CUDA
   unary kernel path during `scripts/prepare-linux-native.sh`.
 

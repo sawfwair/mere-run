@@ -328,6 +328,8 @@ public struct ChatResponse: Sendable, Hashable {
     public var finishReason: ChatFinishReason?
     public var reasoningContent: String?
     public var hasIncompleteReasoning: Bool
+    public var reasoningBlockCount: Int
+    public var hasReopenedReasoning: Bool
 
     public init(
         response: String,
@@ -337,7 +339,9 @@ public struct ChatResponse: Sendable, Hashable {
         promptTokens: Int? = nil,
         finishReason: ChatFinishReason? = nil,
         reasoningContent: String? = nil,
-        hasIncompleteReasoning: Bool = false
+        hasIncompleteReasoning: Bool = false,
+        reasoningBlockCount: Int = 0,
+        hasReopenedReasoning: Bool = false
     ) {
         self.response = response
         self.tokensGenerated = tokensGenerated
@@ -348,6 +352,8 @@ public struct ChatResponse: Sendable, Hashable {
         let trimmedReasoning = reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.reasoningContent = trimmedReasoning?.nilIfEmpty
         self.hasIncompleteReasoning = hasIncompleteReasoning
+        self.reasoningBlockCount = reasoningBlockCount
+        self.hasReopenedReasoning = hasReopenedReasoning
     }
 
     public init(
@@ -371,7 +377,9 @@ public struct ChatResponse: Sendable, Hashable {
             promptTokens: promptTokens,
             finishReason: finishReason,
             reasoningContent: split.reasoningContent,
-            hasIncompleteReasoning: split.hasIncompleteReasoning
+            hasIncompleteReasoning: split.hasIncompleteReasoning,
+            reasoningBlockCount: split.reasoningBlockCount,
+            hasReopenedReasoning: split.hasReopenedReasoning
         )
     }
 }
@@ -444,16 +452,22 @@ public struct ChatReasoningSplit: Sendable, Hashable {
     public var visibleContent: String
     public var reasoningContent: String?
     public var hasIncompleteReasoning: Bool
+    public var reasoningBlockCount: Int
+    public var hasReopenedReasoning: Bool
 
     public init(
         visibleContent: String,
         reasoningContent: String? = nil,
-        hasIncompleteReasoning: Bool = false
+        hasIncompleteReasoning: Bool = false,
+        reasoningBlockCount: Int = 0,
+        hasReopenedReasoning: Bool = false
     ) {
         self.visibleContent = visibleContent
         let trimmedReasoning = reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.reasoningContent = trimmedReasoning?.nilIfEmpty
         self.hasIncompleteReasoning = hasIncompleteReasoning
+        self.reasoningBlockCount = reasoningBlockCount
+        self.hasReopenedReasoning = hasReopenedReasoning
     }
 }
 
@@ -466,6 +480,7 @@ public enum ChatReasoningMarkup {
         var reasoningParts: [String] = []
         var index = text.startIndex
         var hasIncompleteReasoning = false
+        var reasoningBlockCount = 0
 
         func appendReasoning(_ slice: Substring) {
             let part = String(slice).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -487,6 +502,7 @@ public enum ChatReasoningMarkup {
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                         .isEmpty && reasoningParts.isEmpty
                     if prefixIsOnlyReasoning {
+                        reasoningBlockCount += 1
                         appendReasoning(prefix)
                     } else {
                         visible += prefix
@@ -502,6 +518,7 @@ public enum ChatReasoningMarkup {
             }
 
             visible += text[index..<openRange.lowerBound]
+            reasoningBlockCount += 1
             let reasoningStart = openRange.upperBound
             if let closeRange = text.range(
                 of: closeThinkTag,
@@ -520,7 +537,9 @@ public enum ChatReasoningMarkup {
         return ChatReasoningSplit(
             visibleContent: visible.trimmingCharacters(in: .whitespacesAndNewlines),
             reasoningContent: reasoningParts.joined(separator: "\n\n"),
-            hasIncompleteReasoning: hasIncompleteReasoning
+            hasIncompleteReasoning: hasIncompleteReasoning,
+            reasoningBlockCount: reasoningBlockCount,
+            hasReopenedReasoning: reasoningBlockCount > 1
         )
     }
 }
