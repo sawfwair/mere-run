@@ -42,8 +42,8 @@ public enum HiDreamO1SampleBuilder {
         return predefinedResolutions.min { lhs, rhs in
             let lhsRatio = Double(lhs.width) / Double(lhs.height)
             let rhsRatio = Double(rhs.width) / Double(rhs.height)
-            let lhsDistance = abs(lhsRatio - ratio)
-            let rhsDistance = abs(rhsRatio - ratio)
+            let lhsDistance = Swift.abs(lhsRatio - ratio)
+            let rhsDistance = Swift.abs(rhsRatio - ratio)
             return lhsDistance < rhsDistance
         } ?? predefinedResolutions[0]
     }
