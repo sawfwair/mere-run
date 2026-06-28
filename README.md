@@ -366,6 +366,11 @@ swift run mere.run model benchmark q36-mtp \
   --decode-tokens 32 \
   --json
 
+# Small real coding-eval slice: Ornith vs North Mini vs Qwen3-Coder
+swift run mere.run model benchmark code \
+  --allow-code-execution \
+  --json
+
 # Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend
 swift run mere.run model benchmark vlm --json
 

@@ -13,6 +13,103 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("vlm"))
     }
 
+    func testBenchmarkCommandExposesCodeSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("code"))
+    }
+
+    func testCodeBenchmarkRequiresExecutionOptIn() {
+        XCTAssertThrowsError(try ModelBenchmarkCode.parse([]))
+    }
+
+    func testCodeBenchmarkParsesDryRunDefaults() throws {
+        let cmd = try ModelBenchmarkCode.parse(["--dry-run"])
+
+        XCTAssertNil(cmd.models)
+        XCTAssertEqual(cmd.suite, .humanEvalSlice)
+        XCTAssertNil(cmd.tasks)
+        XCTAssertEqual(cmd.maxTokens, 512)
+        XCTAssertEqual(cmd.temperature, 0)
+        XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.executionTimeout, 5)
+        XCTAssertEqual(cmd.python, "python3")
+        XCTAssertEqual(cmd.sandbox, .auto)
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertFalse(cmd.allowCodeExecution)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testCodeBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkCode.parse([
+            "--models", "text-agent-ornith-9b,text-code-north-mini",
+            "--suite", "humaneval-slice",
+            "--tasks", "HumanEval/0,HumanEval/8",
+            "--max-tokens", "256",
+            "--temperature", "0.2",
+            "--top-p", "0.8",
+            "--execution-timeout", "3.5",
+            "--python", "/tmp/venv/bin/python",
+            "--sandbox", "none",
+            "--dry-run",
+            "--allow-code-execution",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.models, "text-agent-ornith-9b,text-code-north-mini")
+        XCTAssertEqual(cmd.suite, .humanEvalSlice)
+        XCTAssertEqual(cmd.tasks, "HumanEval/0,HumanEval/8")
+        XCTAssertEqual(cmd.maxTokens, 256)
+        XCTAssertEqual(cmd.temperature, 0.2)
+        XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.executionTimeout, 3.5)
+        XCTAssertEqual(cmd.python, "/tmp/venv/bin/python")
+        XCTAssertEqual(cmd.sandbox, .none)
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertTrue(cmd.allowCodeExecution)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testCodeExecutionSandboxNoneRunsPython() throws {
+        let result = try CodeExecutionSandbox.runPython(
+            program: "print('ok')",
+            python: "python3",
+            mode: .none,
+            timeout: 2
+        )
+
+        XCTAssertTrue(result.passed)
+        XCTAssertEqual(result.backend, .none)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "ok")
+    }
+
+    #if os(macOS)
+    func testCodeExecutionSandboxExecDeniesHomeReads() throws {
+        try CodeExecutionSandbox.preflight(mode: .macOSSandboxExec)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+            .resolvingSymlinksInPath()
+            .path
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        let result = try CodeExecutionSandbox.runPython(
+            program: """
+            import os
+            try:
+                os.listdir('\(home)')
+                raise SystemExit(7)
+            except PermissionError:
+                print('denied')
+            """,
+            python: "python3",
+            mode: .macOSSandboxExec,
+            timeout: 2
+        )
+
+        XCTAssertTrue(result.passed, result.errorSummary ?? "")
+        XCTAssertEqual(result.backend, .macOSSandboxExec)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "denied")
+    }
+    #endif
+
     func testBenchmarkCommandExposesGemma4MTPSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("gemma4-mtp"))

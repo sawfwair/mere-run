@@ -12,6 +12,7 @@ struct ModelBenchmark: ParsableCommand {
         commandName: "benchmark",
         abstract: "Run focused local model benchmarks.",
         subcommands: [
+            ModelBenchmarkCode.self,
             ModelBenchmarkGemma4KV.self,
             ModelBenchmarkGemma4MTP.self,
             ModelBenchmarkQ36MTP.self,
