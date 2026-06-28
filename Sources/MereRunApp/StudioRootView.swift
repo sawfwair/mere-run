@@ -5,16 +5,18 @@ import UniformTypeIdentifiers
 struct StudioRootView: View {
     @EnvironmentObject private var controller: MereRunController
     @StateObject private var library = StudioLibraryStore()
-    @State private var mode: StudioMode = .createImage
+    // Persisted per scene so relaunch restores the last mode and panel layout.
+    @SceneStorage("studio.mode") private var mode: StudioMode = .createImage
+    @SceneStorage("studio.showLibrary") private var showLibrary = true
+    @SceneStorage("studio.showAdvanced") private var showAdvanced = false
     @State private var draft = StudioDraft()
-    @State private var showLibrary = true
-    @State private var showAdvanced = false
     @State private var showOptions = false
     @State private var showModels = false
     @State private var showHelp = false
     @State private var advancedWidth: CGFloat = 560
     @State private var advancedDragStartWidth: CGFloat?
     @State private var advancedDetached = false
+    @State private var isDropTargeted = false
     @State private var selectedLibraryID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
@@ -180,7 +182,8 @@ struct StudioRootView: View {
                     sendBlocked: mode.isConversational && activeConversationRunning,
                     onRun: runStudioCommand,
                     onStop: controller.cancel,
-                    onAttach: chooseAttachment
+                    onAttach: chooseAttachment,
+                    onPaste: pasteImageFromClipboard
                 )
                 .padding(.horizontal, 24)
                 .padding(.bottom, 22)
@@ -193,7 +196,21 @@ struct StudioRootView: View {
                 draft.inputPath = url.path
                 studioError = nil
                 return true
+            } isTargeted: { targeted in
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
+                }
             }
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(MereRunTheme.accent, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                        .padding(8)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
 
             if showAdvanced {
                 advancedResizeHandle
@@ -259,6 +276,9 @@ struct StudioRootView: View {
             .frame(width: 1_260, height: 780)
             .environmentObject(controller)
         }
+        .focusedSceneValue(\.showLibrary, $showLibrary)
+        .focusedSceneValue(\.showAdvanced, $showAdvanced)
+        .focusedSceneValue(\.showModels, $showModels)
         .task {
             // Poll the local server status for the top-bar pill. status has a 1s probe timeout,
             // so a modest cadence keeps the pill live without hammering the CLI.
@@ -269,6 +289,18 @@ struct StudioRootView: View {
         }
         .onAppear {
             draft.reset(for: mode)
+            // mode may be restored from @SceneStorage (e.g. chat) — onChange(of:mode) doesn't fire
+            // for the initial value, so replicate the conversational setup here to open the latest
+            // thread instead of leaving the canvas blank.
+            if mode.isConversational {
+                let latest = library.items.first { $0.mode == mode && $0.isConversation }
+                activeConversationID = latest?.id
+                selectedLibraryID = latest?.id
+                if let latest { applyConversationSettings(from: latest, to: &draft) }
+                draft.prompt = ""
+            } else {
+                selectedLibraryID = library.items.first { $0.mode == mode }?.id
+            }
             controller.checkReadiness(for: mode, draft: draft)
             if !hasCompletedWelcome {
                 showWelcome = true
@@ -646,6 +678,37 @@ struct StudioRootView: View {
         if panel.runModal() == .OK, let url = panel.url {
             draft.inputPath = url.path
             studioError = nil
+        }
+    }
+
+    /// Pastes an image from the clipboard into the attachment (Edit ▸ Paste / ⌘V when the canvas,
+    /// not a text field, holds focus). Prefers a pasted image file; otherwise writes the pasted
+    /// bitmap to a temporary PNG. Only acts in modes that accept an image.
+    private func pasteImageFromClipboard() {
+        guard mode.acceptedTypes.contains(.image) else { return }
+        let pasteboard = NSPasteboard.general
+
+        if let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL], let imageURL = urls.first(where: { StudioOutputFileKind.classify($0) == .image }) {
+            draft.inputPath = imageURL.path
+            studioError = nil
+            return
+        }
+
+        guard let image = NSImage(pasteboard: pasteboard), let data = image.pngDataRepresentation() else {
+            studioError = "The clipboard has no image to paste."
+            return
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pasted-\(UUID().uuidString).png")
+        do {
+            try data.write(to: url)
+            draft.inputPath = url.path
+            studioError = nil
+        } catch {
+            studioError = "Could not paste image: \(error.localizedDescription)"
         }
     }
 
@@ -1361,6 +1424,7 @@ private struct StudioPromptBar: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onAttach: () -> Void
+    let onPaste: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
@@ -1392,6 +1456,17 @@ private struct StudioPromptBar: View {
                 .disabled(mode.acceptedTypes.isEmpty)
                 .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
                 .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
+
+                if mode.acceptedTypes.contains(.image) {
+                    Button(action: onPaste) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Paste image from clipboard")
+                    .accessibilityLabel("Paste image from clipboard")
+                }
 
                 if mode == .listen {
                     Text(mode.promptPlaceholder)
@@ -1963,5 +2038,14 @@ private extension String {
         var words = ShellWords.split(self)
         words = words.maskingSecrets()
         return words.shellQuoted()
+    }
+}
+
+private extension NSImage {
+    /// PNG encoding of the image (for persisting a pasted bitmap to a temp file).
+    func pngDataRepresentation() -> Data? {
+        guard let tiff = tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
     }
 }
