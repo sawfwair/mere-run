@@ -5,10 +5,11 @@ import UniformTypeIdentifiers
 struct StudioRootView: View {
     @EnvironmentObject private var controller: MereRunController
     @StateObject private var library = StudioLibraryStore()
-    @State private var mode: StudioMode = .createImage
+    // Persisted per scene so relaunch restores the last mode and panel layout.
+    @SceneStorage("studio.mode") private var mode: StudioMode = .createImage
+    @SceneStorage("studio.showLibrary") private var showLibrary = true
+    @SceneStorage("studio.showAdvanced") private var showAdvanced = false
     @State private var draft = StudioDraft()
-    @State private var showLibrary = true
-    @State private var showAdvanced = false
     @State private var showOptions = false
     @State private var showModels = false
     @State private var showHelp = false
@@ -259,6 +260,9 @@ struct StudioRootView: View {
             .frame(width: 1_260, height: 780)
             .environmentObject(controller)
         }
+        .focusedSceneValue(\.showLibrary, $showLibrary)
+        .focusedSceneValue(\.showAdvanced, $showAdvanced)
+        .focusedSceneValue(\.showModels, $showModels)
         .task {
             // Poll the local server status for the top-bar pill. status has a 1s probe timeout,
             // so a modest cadence keeps the pill live without hammering the CLI.
