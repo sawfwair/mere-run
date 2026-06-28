@@ -86,13 +86,15 @@ struct LlamaCLIProcess {
             guard !trimmed.text.isEmpty else {
                 throw LlamaCLIProcessError.emptyResponse(stderr: Self.tail(result.stderr))
             }
-            progressHandler?(ChatProgress(stage: .generating, message: trimmed.text))
-            return ChatResponse(
-                response: trimmed.text,
+            let response = ChatResponse(
+                generatedText: trimmed.text,
                 tokensGenerated: max(1, rawResponse.split(whereSeparator: { $0.isWhitespace }).count),
+                showThinking: request.showThinking,
                 timing: performance.chatTiming,
                 finishReason: trimmed.matchedSequence == nil ? nil : .stopSequence
             )
+            progressHandler?(ChatProgress(stage: .generating, message: response.response))
+            return response
         }.value
     }
 

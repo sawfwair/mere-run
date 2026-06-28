@@ -360,22 +360,7 @@ struct TextChat: AsyncParsableCommand {
 
     func cleanResponse(_ response: String, showThinking: Bool) -> String {
         guard !showThinking else { return response }
-        var cleaned = response.replacingOccurrences(
-            of: "(?is)<think>.*?</think>",
-            with: "",
-            options: .regularExpression
-        )
-        cleaned = cleaned.replacingOccurrences(
-            of: "(?is)<think>.*\\z",
-            with: "",
-            options: .regularExpression
-        )
-        cleaned = cleaned.replacingOccurrences(
-            of: "(?i)</think>",
-            with: "",
-            options: .regularExpression
-        )
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ChatReasoningMarkup.splitThinkBlocks(in: response).visibleContent
     }
 
     func resolveGemma4KVCacheQuantization(for modelId: String) throws -> Gemma4KVCacheQuantization {

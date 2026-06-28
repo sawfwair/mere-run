@@ -326,6 +326,8 @@ public struct ChatResponse: Sendable, Hashable {
     public var toolCalls: [ToolCall]?
     public var promptTokens: Int?
     public var finishReason: ChatFinishReason?
+    public var reasoningContent: String?
+    public var hasIncompleteReasoning: Bool
 
     public init(
         response: String,
@@ -333,7 +335,9 @@ public struct ChatResponse: Sendable, Hashable {
         timing: ChatTiming? = nil,
         toolCalls: [ToolCall]? = nil,
         promptTokens: Int? = nil,
-        finishReason: ChatFinishReason? = nil
+        finishReason: ChatFinishReason? = nil,
+        reasoningContent: String? = nil,
+        hasIncompleteReasoning: Bool = false
     ) {
         self.response = response
         self.tokensGenerated = tokensGenerated
@@ -341,6 +345,34 @@ public struct ChatResponse: Sendable, Hashable {
         self.toolCalls = toolCalls
         self.promptTokens = promptTokens
         self.finishReason = finishReason
+        let trimmedReasoning = reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.reasoningContent = trimmedReasoning?.nilIfEmpty
+        self.hasIncompleteReasoning = hasIncompleteReasoning
+    }
+
+    public init(
+        generatedText: String,
+        tokensGenerated: Int,
+        showThinking: Bool,
+        timing: ChatTiming? = nil,
+        toolCalls: [ToolCall]? = nil,
+        promptTokens: Int? = nil,
+        finishReason: ChatFinishReason? = nil
+    ) {
+        let split = ChatReasoningMarkup.splitThinkBlocks(in: generatedText)
+        let visibleResponse = showThinking
+            ? generatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            : split.visibleContent
+        self.init(
+            response: visibleResponse,
+            tokensGenerated: tokensGenerated,
+            timing: timing,
+            toolCalls: toolCalls,
+            promptTokens: promptTokens,
+            finishReason: finishReason,
+            reasoningContent: split.reasoningContent,
+            hasIncompleteReasoning: split.hasIncompleteReasoning
+        )
     }
 }
 
@@ -408,6 +440,91 @@ public enum TextGenerationStopSequences {
     }
 }
 
+public struct ChatReasoningSplit: Sendable, Hashable {
+    public var visibleContent: String
+    public var reasoningContent: String?
+    public var hasIncompleteReasoning: Bool
+
+    public init(
+        visibleContent: String,
+        reasoningContent: String? = nil,
+        hasIncompleteReasoning: Bool = false
+    ) {
+        self.visibleContent = visibleContent
+        let trimmedReasoning = reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.reasoningContent = trimmedReasoning?.nilIfEmpty
+        self.hasIncompleteReasoning = hasIncompleteReasoning
+    }
+}
+
+public enum ChatReasoningMarkup {
+    private static let openThinkTag = "<think>"
+    private static let closeThinkTag = "</think>"
+
+    public static func splitThinkBlocks(in text: String) -> ChatReasoningSplit {
+        var visible = ""
+        var reasoningParts: [String] = []
+        var index = text.startIndex
+        var hasIncompleteReasoning = false
+
+        func appendReasoning(_ slice: Substring) {
+            let part = String(slice).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !part.isEmpty {
+                reasoningParts.append(part)
+            }
+        }
+
+        while index < text.endIndex {
+            let remaining = index..<text.endIndex
+            let openRange = text.range(of: openThinkTag, options: .caseInsensitive, range: remaining)
+            let closeRange = text.range(of: closeThinkTag, options: .caseInsensitive, range: remaining)
+
+            if let closeRange {
+                let closeBeforeOpen = openRange.map { closeRange.lowerBound < $0.lowerBound } ?? true
+                if closeBeforeOpen {
+                    let prefix = text[index..<closeRange.lowerBound]
+                    let prefixIsOnlyReasoning = visible
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .isEmpty && reasoningParts.isEmpty
+                    if prefixIsOnlyReasoning {
+                        appendReasoning(prefix)
+                    } else {
+                        visible += prefix
+                    }
+                    index = closeRange.upperBound
+                    continue
+                }
+            }
+
+            guard let openRange else {
+                visible += text[index...]
+                break
+            }
+
+            visible += text[index..<openRange.lowerBound]
+            let reasoningStart = openRange.upperBound
+            if let closeRange = text.range(
+                of: closeThinkTag,
+                options: .caseInsensitive,
+                range: reasoningStart..<text.endIndex
+            ) {
+                appendReasoning(text[reasoningStart..<closeRange.lowerBound])
+                index = closeRange.upperBound
+            } else {
+                appendReasoning(text[reasoningStart..<text.endIndex])
+                hasIncompleteReasoning = true
+                break
+            }
+        }
+
+        return ChatReasoningSplit(
+            visibleContent: visible.trimmingCharacters(in: .whitespacesAndNewlines),
+            reasoningContent: reasoningParts.joined(separator: "\n\n"),
+            hasIncompleteReasoning: hasIncompleteReasoning
+        )
+    }
+}
+
 public enum ChatStage: String, Sendable, Hashable {
     case loadingModel
     case encoding
@@ -429,4 +546,10 @@ public protocol ChatGenerator {
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
 }

@@ -2115,6 +2115,7 @@ actor CodeGenServer {
                     message: OpenAIChatMessage(
                         role: "assistant",
                         content: result.response,
+                        reasoning_content: result.reasoningContent,
                         tool_calls: openAIToolCalls(from: result.toolCalls)
                     ),
                     finish_reason: openAIFinishReason(for: result)
@@ -2679,7 +2680,10 @@ actor CodeGenServer {
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
-                                delta: OpenAIChatDelta(content: result.response),
+                                delta: OpenAIChatDelta(
+                                    content: result.response,
+                                    reasoning_content: result.reasoningContent
+                                ),
                                 finish_reason: nil
                             )
                         ]

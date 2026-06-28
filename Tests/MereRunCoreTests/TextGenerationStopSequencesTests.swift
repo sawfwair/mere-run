@@ -62,4 +62,51 @@ final class TextGenerationStopSequencesTests: XCTestCase {
         XCTAssertEqual(request.stopSequences, ["END"])
         XCTAssertEqual(response.finishReason, .stopSequence)
     }
+
+    func testReasoningMarkupSplitsThinkBlocks() {
+        let split = ChatReasoningMarkup.splitThinkBlocks(
+            in: "<think>first thought</think>Final <think>second thought</think>answer"
+        )
+
+        XCTAssertEqual(split.visibleContent, "Final answer")
+        XCTAssertEqual(split.reasoningContent, "first thought\n\nsecond thought")
+        XCTAssertFalse(split.hasIncompleteReasoning)
+    }
+
+    func testReasoningMarkupCapturesIncompleteThinkBlock() {
+        let split = ChatReasoningMarkup.splitThinkBlocks(in: "before <think>still working")
+
+        XCTAssertEqual(split.visibleContent, "before")
+        XCTAssertEqual(split.reasoningContent, "still working")
+        XCTAssertTrue(split.hasIncompleteReasoning)
+    }
+
+    func testReasoningMarkupHandlesLeadingOrphanClose() {
+        let split = ChatReasoningMarkup.splitThinkBlocks(
+            in: "hidden reasoning</think>The visible answer."
+        )
+
+        XCTAssertEqual(split.visibleContent, "The visible answer.")
+        XCTAssertEqual(split.reasoningContent, "hidden reasoning")
+    }
+
+    func testReasoningMarkupKeepsVisibleTextBeforeLateOrphanClose() {
+        let split = ChatReasoningMarkup.splitThinkBlocks(
+            in: "<think>draft</think>Final answer.</think>"
+        )
+
+        XCTAssertEqual(split.visibleContent, "Final answer.")
+        XCTAssertEqual(split.reasoningContent, "draft")
+    }
+
+    func testChatResponseSeparatesReasoningWhenThinkingHidden() {
+        let response = ChatResponse(
+            generatedText: "<think>work</think>Answer",
+            tokensGenerated: 4,
+            showThinking: false
+        )
+
+        XCTAssertEqual(response.response, "Answer")
+        XCTAssertEqual(response.reasoningContent, "work")
+    }
 }

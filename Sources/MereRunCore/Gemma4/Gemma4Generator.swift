@@ -476,11 +476,14 @@ public actor Gemma4Generator: ChatGenerator {
         )
         lastMTPStats = decodeResult.mtpStats ?? mtpTemplate
         let generated = decodeResult.generatedTokens
+        let decodedRaw = tokenizerAndTemplate.decode(tokens: generated)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let decoded = Self.cleanedResponse(
-            tokenizerAndTemplate.decode(tokens: generated),
+            decodedRaw,
             showThinking: request.showThinking
         )
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let reasoningSplit = ChatReasoningMarkup.splitThinkBlocks(in: decodedRaw)
 
         let toolCalls: [ToolCall]? = hasTools ? {
             let parsed = Gemma4ToolParser.parseToolCalls(decoded)
@@ -501,7 +504,9 @@ public actor Gemma4Generator: ChatGenerator {
                 decodeKVCache: kvCacheQuantization.statusDescription
             ),
             toolCalls: toolCalls,
-            promptTokens: promptTokens.count
+            promptTokens: promptTokens.count,
+            reasoningContent: reasoningSplit.reasoningContent,
+            hasIncompleteReasoning: reasoningSplit.hasIncompleteReasoning
         )
     }
 

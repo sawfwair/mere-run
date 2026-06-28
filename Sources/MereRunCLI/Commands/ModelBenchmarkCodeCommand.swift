@@ -265,6 +265,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                         decodeTokensPerSecond: response.decodeTokensPerSecond(elapsed: generationSeconds),
                         finishReason: response.finishReason?.rawValue,
                         reachedMaxTokens: response.reachedMaxTokens(limit: maxTokens),
+                        reasoningCharacters: response.reasoningContent?.count,
+                        incompleteReasoning: response.hasIncompleteReasoning,
                         error: execution.errorSummary
                     )
                 )
@@ -281,6 +283,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                         decodeTokensPerSecond: nil,
                         finishReason: nil,
                         reachedMaxTokens: false,
+                        reasoningCharacters: nil,
+                        incompleteReasoning: false,
                         error: String(describing: error)
                     )
                 )
@@ -646,6 +650,8 @@ private struct CodeBenchmarkModelResult: Encodable {
                 "tokens=\(result.tokensGenerated)",
                 result.finishReason.map { "finish=\($0)" },
                 result.reachedMaxTokens ? "capped=true" : nil,
+                result.reasoningCharacters.map { "reasoning_chars=\($0)" },
+                result.incompleteReasoning ? "reasoning_incomplete=true" : nil,
             ]
                 .compactMap { $0 }
                 .joined(separator: " ")
@@ -692,6 +698,8 @@ private struct CodeBenchmarkCaseResult: Encodable {
     let decodeTokensPerSecond: Double?
     let finishReason: String?
     let reachedMaxTokens: Bool
+    let reasoningCharacters: Int?
+    let incompleteReasoning: Bool
     let error: String?
 }
 

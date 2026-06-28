@@ -283,6 +283,11 @@ supported fields into `ChatRequest` or return an OpenAI-style
 `metadata`, `user`, and `service_tier` are accepted as request context but do
 not change local generation.
 
+For non-streaming chat responses, native runtimes split `<think>...</think>`
+blocks out of `message.content` and expose them as OpenAI-compatible
+`message.reasoning_content` when present. Streaming responses still emit token
+chunks as they are produced.
+
 Engine compatibility:
 
 - `text-chat-deepseek-v4-flash`: raw-proxies the original request body to

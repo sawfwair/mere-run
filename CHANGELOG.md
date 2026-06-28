@@ -61,6 +61,11 @@ The format is based on Keep a Changelog.
 - fixed mflux-format FLUX.2 Klein transformer loading by mapping
   `time_guidance_embed.linear_*` weights into the native Swift transformer's
   nested timestep embedder path.
+- split `<think>...</think>` model output into preserved reasoning metadata and
+  visible response text across native chat responses, API non-streaming output,
+  and code benchmark reports.
+- fixed MLX CUDA BF16 sigmoid JIT smoke failures by patching the upstream CUDA
+  unary kernel path during `scripts/prepare-linux-native.sh`.
 
 ## 0.17.0 - 2026-06-23
 

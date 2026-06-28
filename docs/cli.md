@@ -1265,9 +1265,11 @@ The default `--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on
 Linux when available. Use `--sandbox none` only for a trusted local smoke where
 timeout and temporary-directory hygiene are enough. The default generation cap is
 `--max-tokens 1024`, and capped cases are reported as `reachedMaxTokens` in JSON
-or `capped=true` in text output. Use `--models` and `--tasks` to narrow the
-slice while iterating. Use `--models text-agent-ornith-35b` for the larger
-Ornith GGUF eval target.
+or `capped=true` in text output. Reasoning blocks are preserved separately as
+`reasoningCharacters`/`reasoning_chars` and
+`incompleteReasoning`/`reasoning_incomplete`, while only visible code is
+executed. Use `--models` and `--tasks` to narrow the slice while iterating. Use
+`--models text-agent-ornith-35b` for the larger Ornith GGUF eval target.
 
 For a larger slice from the official HumanEval data, download and decompress
 `HumanEval.jsonl.gz`, then pass the JSONL file with `--humaneval-file`:

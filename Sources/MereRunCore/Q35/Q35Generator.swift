@@ -540,8 +540,9 @@ public actor Q35Generator: ChatGenerator {
         }() : nil
 
         return ChatResponse(
-            response: decoded,
+            generatedText: decoded,
             tokensGenerated: decodeResult.generatedTokens.count,
+            showThinking: request.showThinking,
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,

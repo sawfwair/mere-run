@@ -167,7 +167,10 @@ backend. Because this runs generated code locally, the command requires
 available. Use `--sandbox none` only for a trusted local smoke where timeout and
 temporary-directory hygiene are enough. The default generation cap is
 `--max-tokens 1024`; JSON and text output flag cases that still reach the cap
-with `reachedMaxTokens`/`capped=true`.
+with `reachedMaxTokens`/`capped=true`. Reasoning-model output is split before
+scoring: visible code is executed, while captured `<think>...</think>` content
+is reported as `reasoningCharacters`/`reasoning_chars` and
+`incompleteReasoning`/`reasoning_incomplete`.
 
 Narrow the run while iterating:
 

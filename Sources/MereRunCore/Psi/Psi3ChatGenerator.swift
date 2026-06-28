@@ -44,8 +44,9 @@ public actor Psi3ChatGenerator: ChatGenerator {
         )
 
         return ChatResponse(
-            response: result.response,
-            tokensGenerated: result.tokensGenerated
+            generatedText: result.response,
+            tokensGenerated: result.tokensGenerated,
+            showThinking: request.showThinking
         )
     }
 
@@ -76,8 +77,9 @@ public actor Psi3ChatGenerator: ChatGenerator {
         )
 
         return ChatResponse(
-            response: result.response,
-            tokensGenerated: result.tokensGenerated
+            generatedText: result.response,
+            tokensGenerated: result.tokensGenerated,
+            showThinking: request.showThinking
         )
     }
 

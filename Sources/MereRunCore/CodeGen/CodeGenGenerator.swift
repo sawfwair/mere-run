@@ -154,8 +154,9 @@ public actor CodeGenGenerator: ChatGenerator {
             finishReason = tokensDecoded >= request.maxTokens ? .length : .stop
         }
         return ChatResponse(
-            response: TextGenerationStopSequences.trimming(response, sequences: stopSequences).text,
+            generatedText: TextGenerationStopSequences.trimming(response, sequences: stopSequences).text,
             tokensGenerated: tokensDecoded,
+            showThinking: request.showThinking,
             finishReason: finishReason
         )
     }
