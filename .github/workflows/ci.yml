@@ -32,6 +32,7 @@ jobs:
           bundle="$(swift build --show-bin-path)/MereRun.app"
           test -x "${bundle}/Contents/MacOS/mere.run.app"
           test -x "${bundle}/Contents/Helpers/mere.run"
+          "${bundle}/Contents/Helpers/mere.run" --version
           # Executable code must not live under Contents/Resources (notarization rule).
           if find "${bundle}/Contents/Resources" -type f -perm -111 \
               ! -name "*.icns" | grep -q .; then

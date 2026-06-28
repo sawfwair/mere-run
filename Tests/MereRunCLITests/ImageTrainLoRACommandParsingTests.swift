@@ -45,6 +45,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.sampleSeed)
         XCTAssertNil(cmd.loraTargetRanks)
         XCTAssertNil(cmd.loraRankPreset)
+        XCTAssertNil(cmd.loraTargetMode)
         XCTAssertNil(cmd.timestepSampling)
         XCTAssertNil(cmd.timestepLossWeighting)
         XCTAssertNil(cmd.lossWeighting)
@@ -128,6 +129,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleSeed, 99)
         XCTAssertEqual(cmd.loraTargetRanks, ".attn.to_q=128,.ff.linear_in=64")
         XCTAssertNil(cmd.loraRankPreset)
+        XCTAssertNil(cmd.loraTargetMode)
         XCTAssertEqual(cmd.timestepSampling, "shift")
         XCTAssertEqual(cmd.timestepLossWeighting, "weighted")
         XCTAssertEqual(cmd.lossWeighting, "minSNR")
@@ -181,5 +183,16 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.progressive)
         XCTAssertEqual(cmd.loraRankPreset, "flux2-style-128")
         XCTAssertNil(cmd.loraTargetRanks)
+    }
+
+    func testTrainLoRAParsesKleinLoRATargetMode() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/br2049",
+            "--output", "/tmp/br2049.safetensors",
+            "--model", "image-klein-base-9b",
+            "--lora-target-mode", "transformer-linear-walk",
+        ])
+
+        XCTAssertEqual(cmd.loraTargetMode, "transformer-linear-walk")
     }
 }

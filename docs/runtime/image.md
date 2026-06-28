@@ -59,6 +59,9 @@ local equivalent model root, then use the saved adapter with Klein
 `image generate --lora`. The loader accepts mflux-format Klein transformer
 shards and maps their time-guidance weights into the Swift transformer module
 layout.
+Use `--lora-target-mode transformer-linear-walk` when you want an ai-toolkit-style
+comparison that trains every transformer Linear/QuantizedLinear layer instead
+of the default suffix allowlist.
 
 ```bash
 swift run mere.run model pull image-klein-base-9b
@@ -175,7 +178,9 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
   --training-steps 1000 \
-  --rank 16
+  --learning-rate 0.0001 \
+  --width 768 --height 768 \
+  --rank 32
 swift run mere.run image generate \
   --model image-krea2-turbo \
   --prompt "a cinematic product photo in the trained style" \
@@ -184,6 +189,13 @@ swift run mere.run image generate \
   --steps 8 \
   --output ./speaker.png
 ```
+
+Krea's published LoRA examples use Diffusers-format `lora_A` / `lora_B`
+adapters trained on Raw, rendered on Turbo at 8 steps, guidance 0.0, and LoRA
+weight 1.0. The native Krea target set matches the published adapter surface:
+264 Linear modules on the full model, including image input, text
+projection/fusion, time embedding/projection, transformer attention/feed-forward
+gates, and final output projection.
 
 The wired Krea generation mode is text-to-image with optional LoRA adapters;
 image-to-image and reference inputs are not wired for this family yet.

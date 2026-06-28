@@ -18,31 +18,81 @@ Override that with `MERERUN_MODELS_DIR` or `--models-root`.
 
 ## Canonical Managed Model IDs
 
-`mere.run model pull` works for catalog entries that have a Hugging Face source:
+This is the authoritative public catalog list. It is kept in sync with
+`ManagedModelCatalog.allSpecs`, and the test suite fails if the table drifts
+from the runtime catalog used by `mere.run model list`,
+`mere.run model capabilities --all`, and `mere.run model pull`.
 
-| Category | Hugging Face pull IDs |
+<!-- managed-model-catalog:start -->
+| Catalog category | Model ID |
 | --- | --- |
-| Image | `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`, `image-krea2-turbo`, `image-ideogram4-sdnq-uint4` |
-| Text chat | `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash` |
-| Vision chat | `vision-chat-gemma4-12b` |
-| Text code / agents | `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-code-north-mini`, `text-code-qwen3` |
-| Text embed | `text-embed-qwen3-0.6b` |
-| Text anonymize | `text-anonymize-privacy-filter` |
-| Speech TTS | `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice` |
-| Speech ASR | `speech-asr-qwen3`, `speech-asr-parakeet` |
-| Vision | `vision-ocr-lighton`, `vision-ocr-infinity-flash`, `vision-ocr-infinity-pro-int8`, `vision-ocr-infinity-pro`, `vision-segment-sam31`, `vision-ground-falcon-perception` |
-| Music | `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base` |
-| SFX | `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s` |
-| Video | `video-ltx-av`, `video-ltx23-av-mlx` |
+| `image` | `image-klein-nano` |
+| `image` | `image-klein-max` |
+| `image` | `image-klein-9b` |
+| `image` | `image-klein-base` |
+| `image` | `image-klein-base-9b` |
+| `image` | `image-klein-shared` |
+| `image` | `image-bonsai-binary` |
+| `image` | `image-bonsai-ternary` |
+| `image` | `image-zimage-nano` |
+| `image` | `image-zimage-max` |
+| `image` | `image-zimage-base` |
+| `image` | `image-hidream-o1` |
+| `image` | `image-hidream-o1-dev` |
+| `image` | `image-krea2-raw` |
+| `image` | `image-krea2-turbo` |
+| `image` | `image-ideogram4-sdnq-uint4` |
+| `text-chat` | `text-chat-mebot` |
+| `text-chat` | `text-chat-psi-agent` |
+| `text-chat` | `text-chat-gemma4` |
+| `text-chat` | `text-chat-gemma4-turbo` |
+| `text-chat` | `text-chat-gemma4-12b` |
+| `text-chat` | `text-chat-gemma4-12b-4bit` |
+| `vision-chat` | `vision-chat-gemma4-12b` |
+| `text-chat` | `text-chat-gemma4-nano` |
+| `text-chat` | `text-chat-gemma4-max` |
+| `text-chat` | `text-chat-q36-nano` |
+| `text-code` | `text-agent-ornith-9b` |
+| `text-code` | `text-agent-qwen35-9b` |
+| `text-code` | `text-code-north-mini` |
+| `text-chat` | `text-chat-q36-nano-gguf` |
+| `text-chat` | `text-agent-deepseek-v4-flash` |
+| `text-chat` | `text-chat-lfm25-a1b-8bit` |
+| `speech-tts` | `speech-tts-qwen3-nano` |
+| `speech-tts` | `speech-tts-qwen3-customvoice` |
+| `speech-asr` | `speech-asr-qwen3` |
+| `speech-asr` | `speech-asr-parakeet` |
+| `text-code` | `text-code-qwen3` |
+| `text-embed` | `text-embed-qwen3-0.6b` |
+| `text-anonymize` | `text-anonymize-privacy-filter` |
+| `vision-ocr` | `vision-ocr-infinity-flash` |
+| `vision-ocr` | `vision-ocr-infinity-pro` |
+| `vision-ocr` | `vision-ocr-infinity-pro-int8` |
+| `vision-ocr` | `vision-ocr-lighton` |
+| `vision-segment` | `vision-segment-sam31` |
+| `vision-ground` | `vision-ground-falcon-perception` |
+| `music` | `music-acestep` |
+| `music` | `music-acestep-xl-turbo` |
+| `music` | `music-acestep-xl-turbo-lm4b` |
+| `music` | `music-magenta-rt2-small` |
+| `music` | `music-magenta-rt2-base` |
+| `sfx` | `sfx-woosh-dflow` |
+| `sfx` | `sfx-woosh-flow` |
+| `sfx` | `sfx-woosh-clap` |
+| `sfx` | `sfx-woosh-synchformer` |
+| `sfx` | `sfx-woosh-vflow-8s` |
+| `sfx` | `sfx-woosh-dvflow-8s` |
+| `video` | `video-ltx-av` |
+| `video` | `video-ltx23-av-mlx` |
+<!-- managed-model-catalog:end -->
 
-Some legacy/local IDs remain in the catalog so existing installs and explicit
-local paths keep working:
+Most catalog IDs have managed Hugging Face sources and can be installed with
+`mere.run model pull`. A small number of legacy/local catalog IDs remain so
+existing installs and explicit local paths keep working:
 
-```text
-image-klein-shared
-text-chat-mebot
-text-chat-psi-agent
-```
+- `image-klein-shared`
+- `text-chat-mebot`
+- `text-chat-psi-agent`
 
 `image-klein-shared` is an internal shared-component install shape, and the
 text-chat IDs listed here remain local-path-only until they have public Hugging
@@ -78,6 +128,11 @@ long enough. Short-context requests decode with the main chat weights. The dense
 but is not a managed native target until the dense Qwen3.6 layer path is
 implemented.
 
+`text-chat-q36-nano-gguf` installs the Unsloth
+`Qwen3.6-35B-A3B-UD-Q4_K_M.gguf` quant. It is the llama.cpp/GGUF companion to
+the Apple Silicon MLX `text-chat-q36-nano` path and is the default chat model
+for Linux CUDA hosts.
+
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id
 enables OpenAI image content parts through `api serve`. Pulling either managed
@@ -88,7 +143,10 @@ and shared KV; raw local model paths and sampled generations fall back to
 baseline decode. `text-chat-gemma4` is the dense bf16 Gemma 4 31B alias and is
 gated for larger machines. On 32 GB Apple Silicon Macs, use
 `text-chat-gemma4-turbo`, which installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE
-snapshot and runs through the native Swift Gemma runtime.
+snapshot and runs through the native Swift Gemma runtime. On smaller supported
+machines, `text-chat-gemma4-12b-4bit` installs the
+`mlx-community/gemma-4-12B-it-4bit` snapshot as the compact managed Gemma 12B
+chat tier.
 
 `text-chat-lfm25-a1b-8bit` uses the public
 `LiquidAI/LFM2.5-8B-A1B-MLX-8bit` snapshot at the pinned catalog revision. It is
@@ -99,6 +157,11 @@ mere.run runs it through the native Swift LFM2 runtime; no Python bridge is used
 Useful environment variables for that path:
 
 - `MERERUN_HUB_CACHE`: override the native Hugging Face snapshot cache path
+
+`image-klein-9b` installs the ungated `mlx-community/FLUX.2-klein-9B` mirror for
+larger distilled Klein generation and reference-image workflows. It is distinct
+from `image-klein-base-9b`, which pulls the undistilled Base 9B transformer plus
+shared 9B components for higher-capacity LoRA training and research workflows.
 
 `image-bonsai-binary` and `image-bonsai-ternary` map to PrismML Apple Silicon
 Bonsai Image snapshots:
@@ -206,6 +269,14 @@ steps, and Qwen Image VAE decoding. The wired public generation mode is
 text-to-image with optional LoRA adapters; reference images and image-to-image
 are not supported for this family yet. LoRA training uses `image-krea2-raw`;
 inference uses `image-krea2-turbo`.
+
+Krea publishes sample LoRA adapters such as
+`krea/Krea-2-LoRA-retroanime` and `krea/Krea-2-LoRA-kidsdrawing`. Those
+adapters are trained on Raw and loaded on Turbo with Diffusers
+`lora_A` / `lora_B` keys. The native loader preserves Krea's `img_in`,
+`txt_in`, `text_fusion`, `time_embed`, `time_mod_proj`,
+`transformer_blocks`, and `final_layer` module names so those published
+adapters can be used as compatibility references.
 
 Runtime defaults come from the managed manifest:
 

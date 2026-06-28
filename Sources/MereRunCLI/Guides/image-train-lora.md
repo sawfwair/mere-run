@@ -76,6 +76,9 @@ the adapter to learn.
   `image-klein-9b`.
 - `--lora-rank-preset flux2-style-128`: expand FLUX.2 transformer targets to
   rank `128` with alpha `64`.
+- `--lora-target-mode`: for FLUX.2 Klein, choose `suffix` for the default
+  allowlist or `transformer-linear-walk` to train every transformer
+  Linear/QuantizedLinear layer.
 - `--lora-target-ranks`: custom FLUX.2 target suffix ranks, for example
   `.attn.to_q=128,.ff.linear_in=64`.
 - Klein-only recipe controls: `--timestep-sampling`, `--timestep-loss-weighting`,
@@ -91,9 +94,17 @@ mere.run image train-lora \
   --data ./dataset \
   --output ./my-krea2-style.safetensors \
   --training-steps 1000 \
-  --rank 16 \
-  --lite
+  --learning-rate 0.0001 \
+  --width 768 \
+  --height 768 \
+  --rank 32
 ```
+
+Krea's published LoRA adapters use a broad Diffusers-style transformer surface:
+image input, text projection/fusion, time embedding/projection, all transformer
+attention/feed-forward projections including gates, and the final output layer.
+The default Krea target set matches that surface; use `--lite` only for a
+smaller attention Q/V experiment.
 
 For high-capacity Klein style LoRAs, use the base model, preserve the target
 aspect ratio, keep the trigger token in the captions and prompts, and save
@@ -164,6 +175,8 @@ mere.run image generate \
 
 - https://huggingface.co/krea/Krea-2-Raw
 - https://huggingface.co/krea/Krea-2-Turbo
+- https://huggingface.co/krea/Krea-2-LoRA-retroanime
+- https://huggingface.co/krea/Krea-2-LoRA-kidsdrawing
 - https://www.krea.ai/krea-2-open-source
 - https://docs.bfl.ml/flux_2/flux2_klein_training
 - https://docs.bfl.ml/flux_2/flux2_klein_training_example

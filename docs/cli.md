@@ -300,7 +300,9 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
   --training-steps 1000 \
-  --rank 16
+  --learning-rate 0.0001 \
+  --width 768 --height 768 \
+  --rank 32
 swift run mere.run image generate \
   --model image-krea2-turbo \
   --prompt "a studio portrait in the trained style" \
@@ -353,6 +355,7 @@ Key options:
 - `--lite`: train only attention Q/V layers to reduce memory
 - `--exclude-preview-images`
 - `--checkpoint-interval`: save intermediate Klein LoRA adapters every N steps
+- `--lora-target-mode`: for FLUX.2 Klein, `suffix` or `transformer-linear-walk`
 - `--quiet`
 
 ### `mere.run image validate`

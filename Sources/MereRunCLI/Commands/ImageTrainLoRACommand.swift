@@ -111,6 +111,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("lora-rank-preset")], help: "Klein rank preset: flux2-style-128.")
     var loraRankPreset: String?
 
+    @Option(name: [.customLong("lora-target-mode")], help: "Klein target mode: suffix or transformer-linear-walk.")
+    var loraTargetMode: String?
+
     @Option(name: [.customLong("timestep-sampling")], help: "Klein timestep sampler: uniform, bellCurve, contentFocused, styleFocused, logitNormal, or shift.")
     var timestepSampling: String?
 
@@ -191,6 +194,15 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
         if loraTargetRanks != nil, loraRankPreset != nil {
             throw ValidationError("--lora-target-ranks cannot be combined with --lora-rank-preset")
+        }
+        let parsedLoRATargetMode = try Self.resolveKleinLoRATargetMode(loraTargetMode)
+        if parsedLoRATargetMode == .transformerLinearWalk {
+            if lite {
+                throw ValidationError("--lite cannot be combined with --lora-target-mode transformer-linear-walk")
+            }
+            if loraTargetRanks != nil || loraRankPreset != nil {
+                throw ValidationError("--lora-target-mode transformer-linear-walk cannot be combined with --lora-target-ranks or --lora-rank-preset")
+            }
         }
         if let timestepLow, timestepLow < 0 {
             throw ValidationError("--timestep-low must be >= 0")
@@ -328,6 +340,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         config.seed = seed
         config.loraRank = rankPreset?.rank ?? rank
         config.loraAlpha = alpha ?? rankPreset?.alpha ?? Float(config.loraRank)
+        config.loraTargetMode = try Self.resolveKleinLoRATargetMode(loraTargetMode)
         config.captionDropout = captionDropout
         config.loraTargetSuffixes = lite ? Self.kleinLiteTargetSuffixes : nil
         config.loraTargetRankSuffixes = targetRankSuffixes
@@ -413,6 +426,18 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             )
         default:
             throw ValidationError("Unsupported --lora-rank-preset '\(raw)'. Supported preset: flux2-style-128")
+        }
+    }
+
+    private static func resolveKleinLoRATargetMode(_ raw: String?) throws -> Flux2LoRAInjector.TargetMode {
+        guard let raw else { return .suffix }
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "suffix", "default":
+            return .suffix
+        case "transformer-linear-walk", "linear-walk", "all-linear", "walk":
+            return .transformerLinearWalk
+        default:
+            throw ValidationError("Unsupported --lora-target-mode '\(raw)'. Supported modes: suffix, transformer-linear-walk")
         }
     }
 
@@ -523,6 +548,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             sampleSeed != nil ||
             loraTargetRanks != nil ||
             loraRankPreset != nil ||
+            loraTargetMode != nil ||
             timestepSampling != nil ||
             timestepLossWeighting != nil ||
             lossWeighting != nil ||

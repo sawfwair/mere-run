@@ -455,6 +455,12 @@ final class MereRunController: ObservableObject {
     @Published private(set) var queuedRunCount = 0
     @Published var readinessByMode: [StudioMode: ModelReadinessState] = [:]
     @Published var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
+    @Published private(set) var recommendedChatModelID: String? = nil {
+        didSet {
+            guard oldValue != recommendedChatModelID else { return }
+            applyRecommendedChatDefaultsToCurrentDraft(replacing: oldValue)
+        }
+    }
     @Published var cliPath: String {
         didSet { UserDefaults.standard.set(cliPath, forKey: Keys.cliPath) }
     }
@@ -574,10 +580,62 @@ final class MereRunController: ObservableObject {
 
     func select(_ template: CommandTemplate) {
         selectedTemplate = template
-        draft = template.defaultDraft()
+        draft = defaultDraft(for: template)
         lastOutputURL = nil
         lastExitCode = nil
         status = "Idle"
+    }
+
+    func defaultDraft(for template: CommandTemplate) -> CommandDraft {
+        var nextDraft = template.defaultDraft()
+        applyRecommendedChatDefaults(to: &nextDraft, templateID: template.id, replacing: nil)
+        return nextDraft
+    }
+
+    func recommendedChatModelForStudioDefault() -> String {
+        recommendedChatModelID ?? StudioChatDefaults.fallbackModelID
+    }
+
+    func applyRecommendedDefaults(to studioDraft: inout StudioDraft, for mode: StudioMode) {
+        guard mode == .chat else { return }
+        let recommended = recommendedChatModelForStudioDefault()
+        if StudioChatDefaults.shouldReplaceModelDefault(studioDraft.model) {
+            studioDraft.model = recommended
+        }
+    }
+
+    private func applyRecommendedChatDefaultsToCurrentDraft(replacing oldRecommendation: String?) {
+        applyRecommendedChatDefaults(
+            to: &draft,
+            templateID: selectedTemplate.id,
+            replacing: oldRecommendation
+        )
+    }
+
+    private func applyRecommendedChatDefaults(
+        to draft: inout CommandDraft,
+        templateID: CommandTemplateID,
+        replacing oldRecommendation: String?
+    ) {
+        let recommended = recommendedChatModelForStudioDefault()
+        switch templateID {
+        case .textChat, .openWebui:
+            if StudioChatDefaults.shouldReplaceModelDefault(draft.model, oldRecommendation: oldRecommendation) {
+                draft.model = recommended
+            }
+        case .apiServe:
+            if StudioChatDefaults.shouldReplaceModelDefault(draft.model, oldRecommendation: oldRecommendation) {
+                draft.model = recommended
+            }
+            if StudioChatDefaults.shouldReplaceServingEngineDefault(
+                draft.engine,
+                oldRecommendation: oldRecommendation
+            ) {
+                draft.engine = StudioChatDefaults.servingEngine(for: recommended)
+            }
+        default:
+            break
+        }
     }
 
     /// URL on the runtime server (model load/unload) for `path`, built from the owned
@@ -863,6 +921,7 @@ final class MereRunController: ObservableObject {
         let capabilityTemplate = CommandCatalog.template(id: .modelCapabilities) ?? selectedTemplate
         var capabilityDraft = capabilityTemplate.defaultDraft()
         capabilityDraft.all = true
+        capabilityDraft.json = true
         let args = commandArguments(
             template: capabilityTemplate,
             draft: capabilityDraft
@@ -884,9 +943,13 @@ final class MereRunController: ObservableObject {
                     Task { @MainActor in
                         guard self?.readinessRequests[mode] == request else { return }
                         guard let self else { return }
-                        let capabilities = ModelCapabilitiesParser.capabilities(from: output.text())
-                        if !capabilities.isEmpty {
-                            self.modelCapabilitiesByID = capabilities
+                        let report = ModelCapabilitiesParser.report(from: output.text())
+                        if !report.capabilitiesByID.isEmpty {
+                            self.modelCapabilitiesByID = report.capabilitiesByID
+                        }
+                        if let recommendedChatModelID = report.recommendedChatModelID,
+                           !recommendedChatModelID.isBlank {
+                            self.recommendedChatModelID = recommendedChatModelID
                         }
 
                         if let message = self.modelCapabilitiesByID[modelID]?.unavailableMessage {
@@ -895,7 +958,7 @@ final class MereRunController: ObservableObject {
                             return
                         }
 
-                        if code != 0, capabilities.isEmpty {
+                        if code != 0, report.capabilitiesByID.isEmpty {
                             self.readinessProcesses[mode] = nil
                             let detail = errors.text().trimmingCharacters(in: .whitespacesAndNewlines)
                             self.readinessByMode[mode] = .unknown(

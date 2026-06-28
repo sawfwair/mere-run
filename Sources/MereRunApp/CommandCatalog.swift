@@ -107,6 +107,59 @@ enum CommandOutputKind: Equatable {
     }
 }
 
+enum StudioChatDefaults {
+    static let fallbackModelID = "text-chat-q36-nano"
+    static let fallbackServingEngine = "text-chat-q36"
+
+    static func servingEngine(for modelID: String) -> String {
+        let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.contains("deepseek-v4-flash") {
+            return "text-chat-deepseek-v4-flash"
+        }
+        if normalized.contains("q36") || normalized.contains("q35") {
+            return "text-chat-q36"
+        }
+        if normalized.contains("lfm") {
+            return "text-chat-lfm2"
+        }
+        if normalized.contains("klein") {
+            return "text-chat-klein"
+        }
+        if normalized.contains("gemma") {
+            return "text-chat-gemma4"
+        }
+        return fallbackServingEngine
+    }
+
+    static func shouldReplaceModelDefault(_ modelID: String, oldRecommendation: String? = nil) -> Bool {
+        let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty { return true }
+        var replaceable: Set<String> = [
+            fallbackModelID,
+            "text-chat-gemma4",
+            "text-chat-gemma4-12b",
+            "text-chat-gemma4-12b-4bit"
+        ]
+        if let oldRecommendation, !oldRecommendation.isBlank {
+            replaceable.insert(oldRecommendation)
+        }
+        return replaceable.contains(normalized)
+    }
+
+    static func shouldReplaceServingEngineDefault(_ engine: String, oldRecommendation: String? = nil) -> Bool {
+        let normalized = engine.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty { return true }
+        var replaceable: Set<String> = [
+            fallbackServingEngine,
+            "text-chat-gemma4"
+        ]
+        if let oldRecommendation, !oldRecommendation.isBlank {
+            replaceable.insert(servingEngine(for: oldRecommendation))
+        }
+        return replaceable.contains(normalized)
+    }
+}
+
 struct CommandDraft: Equatable {
     var prompt = ""
     var secondaryText = ""
@@ -128,7 +181,7 @@ struct CommandDraft: Equatable {
     var host = "127.0.0.1"
     var port = 8080
     var apiKey = ""
-    var engine = "text-chat-gemma4"
+    var engine = StudioChatDefaults.fallbackServingEngine
     var variant = "distilled"
     var backend = "auto"
     var task = "transcribe"
@@ -150,6 +203,7 @@ struct CommandDraft: Equatable {
     var quiet = false
     var force = false
     var all = false
+    var json = false
     var stream = false
     var extraArguments = ""
 }
@@ -217,7 +271,7 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
         case .apiServe:
-            draft.engine = "text-chat-gemma4"
+            draft.engine = StudioChatDefaults.fallbackServingEngine
             draft.port = 8080
         case .setup:
             draft.setupMode = "agent"
@@ -340,6 +394,7 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["model", "capabilities"]
             if draft.all { args.append("--all") }
             if draft.force { args.append("--recommended") }
+            if draft.json { args.append("--json") }
 
         case .modelPull:
             args = ["model", "pull"]
@@ -742,7 +797,7 @@ enum CommandCatalog {
             promptLabel: "Prompt",
             secondaryLabel: "System",
             defaultPrompt: "Summarize diffusion models in one paragraph.",
-            defaultModel: "text-chat-gemma4"
+            defaultModel: StudioChatDefaults.fallbackModelID
         ),
         CommandTemplate(
             id: .textCode,
@@ -1049,7 +1104,7 @@ enum CommandCatalog {
             title: "Open WebUI",
             subtitle: "Start the Open WebUI companion",
             systemImage: "globe",
-            defaultModel: "text-chat-gemma4-12b"
+            defaultModel: StudioChatDefaults.fallbackModelID
         ),
         CommandTemplate(
             id: .apiServe,
@@ -1057,7 +1112,7 @@ enum CommandCatalog {
             title: "API server",
             subtitle: "OpenAI-compatible local server",
             systemImage: "network",
-            defaultModel: "text-chat-gemma4"
+            defaultModel: StudioChatDefaults.fallbackModelID
         ),
         CommandTemplate(
             id: .custom,

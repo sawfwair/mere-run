@@ -121,6 +121,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
 
     public var loraRank: Int
     public var loraAlpha: Float
+    public var loraTargetMode: Flux2LoRAInjector.TargetMode
     public var loraTargetSuffixes: [String]?
     public var loraTargetRanks: [String: Int]?
     public var loraTargetRankSuffixes: [String: Int]?
@@ -206,6 +207,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
         seed: UInt64 = 0,
         loraRank: Int = 16,
         loraAlpha: Float = 1.0,
+        loraTargetMode: Flux2LoRAInjector.TargetMode = .suffix,
         loraTargetSuffixes: [String]? = nil,
         loraTargetRanks: [String: Int]? = nil,
         loraTargetRankSuffixes: [String: Int]? = nil,
@@ -247,6 +249,7 @@ public struct Flux2KleinLoRATrainingConfig: Sendable {
         self.seed = seed
         self.loraRank = loraRank
         self.loraAlpha = loraAlpha
+        self.loraTargetMode = loraTargetMode
         self.loraTargetSuffixes = loraTargetSuffixes
         self.loraTargetRanks = loraTargetRanks
         self.loraTargetRankSuffixes = loraTargetRankSuffixes
@@ -420,6 +423,7 @@ public enum Flux2KleinLoRATrainer {
             "learning_rate:\(config.learningRate)",
             "rank:\(config.loraRank)",
             "alpha:\(config.loraAlpha)",
+            "lora_target_mode:\(config.loraTargetMode.rawValue)",
             "caption_dropout:\(config.captionDropout)",
             "max_text_length:\(config.maxTextLength)",
             "checkpoint_interval:\(config.checkpointInterval.map { "\($0)" } ?? "")",
@@ -624,6 +628,7 @@ public enum Flux2KleinLoRATrainer {
             "learning_rate": "\(config.learningRate)",
             "rank": "\(config.loraRank)",
             "alpha": "\(config.loraAlpha)",
+            "lora_target_mode": config.loraTargetMode.rawValue,
             "caption_dropout": "\(config.captionDropout)",
             "max_text_length": "\(config.maxTextLength)",
             "checkpoint_interval": config.checkpointInterval.map { "\($0)" } ?? "",
@@ -799,6 +804,7 @@ public enum Flux2KleinLoRATrainer {
             into: transformer,
             rank: config.loraRank,
             alpha: config.loraAlpha,
+            targetMode: config.loraTargetMode,
             targetSuffixes: targetSuffixes,
             targetRanks: resolvedTargetRanks,
             zeroInitUp: true
@@ -1550,6 +1556,7 @@ public enum Flux2KleinLoRATrainer {
                                         "gradient_checkpointing": "\(config.gradientCheckpointing)",
                                         "low_ram": "\(config.lowRam)",
                                         "edit_mode": "\(hasEditExamples)",
+                                        "lora_target_mode": config.loraTargetMode.rawValue,
                                         "lora_target_suffixes": config.loraTargetSuffixes?.joined(separator: ",") ?? "",
                                         "lora_target_ranks": serializedTargetRanks,
                                         "lora_target_rank_suffixes": serializedTargetRankSuffixes,
@@ -1780,6 +1787,7 @@ public enum Flux2KleinLoRATrainer {
                             "gradient_checkpointing": "\(config.gradientCheckpointing)",
                             "low_ram": "\(config.lowRam)",
                             "edit_mode": "\(hasEditExamples)",
+                            "lora_target_mode": config.loraTargetMode.rawValue,
                             "lora_target_suffixes": config.loraTargetSuffixes?.joined(separator: ",") ?? "",
                             "lora_target_ranks": serializedTargetRanks,
                             "lora_target_rank_suffixes": serializedTargetRankSuffixes,
@@ -1993,6 +2001,7 @@ public enum Flux2KleinLoRATrainer {
                 "gradient_checkpointing": "\(config.gradientCheckpointing)",
                 "low_ram": "\(config.lowRam)",
                 "edit_mode": "\(hasEditExamples)",
+                "lora_target_mode": config.loraTargetMode.rawValue,
                 "lora_target_suffixes": config.loraTargetSuffixes?.joined(separator: ",") ?? "",
                 "lora_target_ranks": serializedTargetRanks,
                 "lora_target_rank_suffixes": serializedTargetRankSuffixes,
