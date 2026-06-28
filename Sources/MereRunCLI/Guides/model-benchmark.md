@@ -179,6 +179,19 @@ Use `--python` to select a Python interpreter and `--execution-timeout` to
 control the per-candidate subprocess timeout. The command never auto-pulls
 models during scoring; install missing models with `mere.run model pull` first.
 
+For a larger slice, download the official HumanEval JSONL, decompress it, and
+pass it with `--humaneval-file`:
+
+```bash
+curl -L https://raw.githubusercontent.com/openai/human-eval/master/data/HumanEval.jsonl.gz \
+  -o /tmp/HumanEval.jsonl.gz
+gunzip -c /tmp/HumanEval.jsonl.gz > /tmp/HumanEval.jsonl
+mere.run model benchmark code \
+  --humaneval-file /tmp/HumanEval.jsonl \
+  --tasks HumanEval/0,HumanEval/1,HumanEval/2,HumanEval/3,HumanEval/4 \
+  --allow-code-execution
+```
+
 ## VLM Benchmark
 
 `model benchmark vlm` writes a tiny deterministic image-question suite to a

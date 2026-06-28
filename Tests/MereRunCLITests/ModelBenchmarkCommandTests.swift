@@ -28,6 +28,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertNil(cmd.models)
         XCTAssertEqual(cmd.suite, .humanEvalSlice)
         XCTAssertNil(cmd.tasks)
+        XCTAssertNil(cmd.humanevalFile)
         XCTAssertEqual(cmd.maxTokens, 1024)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
@@ -67,6 +68,45 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(cmd.dryRun)
         XCTAssertTrue(cmd.allowCodeExecution)
         XCTAssertTrue(cmd.json)
+    }
+
+    func testCodeBenchmarkParsesHumanEvalFile() throws {
+        let url = try makeHumanEvalJSONLFixture()
+        let cmd = try ModelBenchmarkCode.parse([
+            "--tasks", "HumanEval/42",
+            "--humaneval-file", url.path,
+            "--dry-run",
+        ])
+
+        XCTAssertEqual(cmd.humanevalFile, url.path)
+        XCTAssertEqual(cmd.tasks, "HumanEval/42")
+    }
+
+    func testHumanEvalJSONLLoaderDecodesOfficialShape() throws {
+        let url = try makeHumanEvalJSONLFixture()
+
+        let tasks = try HumanEvalJSONLLoader.load(from: url)
+
+        XCTAssertEqual(tasks.count, 1)
+        XCTAssertEqual(tasks[0].taskID, "HumanEval/42")
+        XCTAssertEqual(tasks[0].entryPoint, "answer")
+        XCTAssertTrue(tasks[0].prompt.contains("def answer()"))
+        XCTAssertTrue(tasks[0].tests.contains("assert candidate() == 42"))
+    }
+
+    private func makeHumanEvalJSONLFixture() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-humaneval-loader-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let url = directory.appendingPathComponent("HumanEval.jsonl")
+        let line = """
+        {"task_id":"HumanEval/42","prompt":"def answer():\\n    pass\\n","entry_point":"answer","canonical_solution":"    return 42\\n","test":"def check(candidate):\\n    assert candidate() == 42\\n"}
+        """
+        try Data((line + "\n").utf8).write(to: url)
+        return url
     }
 
     func testCodeExecutionSandboxNoneRunsPython() throws {

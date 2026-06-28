@@ -1259,6 +1259,19 @@ timeout and temporary-directory hygiene are enough. The default generation cap i
 or `capped=true` in text output. Use `--models` and `--tasks` to narrow the
 slice while iterating.
 
+For a larger slice from the official HumanEval data, download and decompress
+`HumanEval.jsonl.gz`, then pass the JSONL file with `--humaneval-file`:
+
+```bash
+curl -L https://raw.githubusercontent.com/openai/human-eval/master/data/HumanEval.jsonl.gz \
+  -o /tmp/HumanEval.jsonl.gz
+gunzip -c /tmp/HumanEval.jsonl.gz > /tmp/HumanEval.jsonl
+swift run mere.run model benchmark code \
+  --humaneval-file /tmp/HumanEval.jsonl \
+  --tasks HumanEval/0,HumanEval/1,HumanEval/2,HumanEval/3,HumanEval/4 \
+  --allow-code-execution
+```
+
 ### `mere.run model benchmark vlm`
 
 Run a tiny synthetic VLM smoke, or use `lmms-eval` to compare an installed

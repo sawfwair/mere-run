@@ -5,7 +5,7 @@ import MereRunCore
 struct ModelBenchmarkCode: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "code",
-        abstract: "Run a small real coding-eval slice against local coding models."
+        abstract: "Run a real coding-eval slice against local coding models."
     )
 
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to the installed coding comparison lane.")
@@ -16,6 +16,12 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Comma-separated task ids from the selected suite.")
     var tasks: String?
+
+    @Option(
+        name: [.long],
+        help: "Optional official HumanEval JSONL file for running a larger task slice."
+    )
+    var humanevalFile: String?
 
     @Option(name: [.long], help: "Maximum generated tokens per task.")
     var maxTokens: Int = 1024
@@ -123,7 +129,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     private func selectedTasks() throws -> [CodeBenchmarkTask] {
-        let suiteTasks = suite.tasks
+        let suiteTasks = try availableTasks()
         guard let tasks else {
             return suiteTasks
         }
@@ -143,6 +149,14 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
             selected.append(task)
         }
         return selected
+    }
+
+    private func availableTasks() throws -> [CodeBenchmarkTask] {
+        guard let humanevalFile else {
+            return suite.tasks
+        }
+        let url = URL(fileURLWithPath: humanevalFile)
+        return try HumanEvalJSONLLoader.load(from: url)
     }
 
     private func runModel(_ modelID: String, tasks: [CodeBenchmarkTask]) async throws -> CodeBenchmarkModelResult {
@@ -318,7 +332,7 @@ enum CodeBenchmarkSuite: String, CaseIterable, ExpressibleByArgument {
     }
 }
 
-private struct CodeBenchmarkTask: Encodable {
+struct CodeBenchmarkTask: Encodable {
     let taskID: String
     let entryPoint: String
     let prompt: String
@@ -475,6 +489,59 @@ private struct CodeBenchmarkTask: Encodable {
             """
         ),
     ]
+}
+
+enum HumanEvalJSONLLoader {
+    static func load(from url: URL) throws -> [CodeBenchmarkTask] {
+        guard url.pathExtension != "gz" else {
+            throw ValidationError("Decompress HumanEval.jsonl.gz first, then pass the .jsonl path to --humaneval-file.")
+        }
+        let data = try Data(contentsOf: url)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw ValidationError("HumanEval JSONL must be UTF-8 text.")
+        }
+
+        var tasks: [CodeBenchmarkTask] = []
+        tasks.reserveCapacity(164)
+        for (lineNumber, rawLine) in text.split(separator: "\n", omittingEmptySubsequences: true).enumerated() {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            do {
+                let record = try JSONDecoder().decode(HumanEvalJSONLRecord.self, from: Data(line.utf8))
+                tasks.append(record.task)
+            } catch {
+                throw ValidationError("Invalid HumanEval JSONL at line \(lineNumber + 1): \(error)")
+            }
+        }
+
+        guard !tasks.isEmpty else {
+            throw ValidationError("HumanEval JSONL did not contain any tasks.")
+        }
+        return tasks
+    }
+}
+
+private struct HumanEvalJSONLRecord: Decodable {
+    let taskID: String
+    let prompt: String
+    let tests: String
+    let entryPoint: String
+
+    private enum CodingKeys: String, CodingKey {
+        case taskID = "task_id"
+        case prompt
+        case tests = "test"
+        case entryPoint = "entry_point"
+    }
+
+    var task: CodeBenchmarkTask {
+        CodeBenchmarkTask(
+            taskID: taskID,
+            entryPoint: entryPoint,
+            prompt: prompt,
+            tests: tests
+        )
+    }
 }
 
 private struct CodeBenchmarkPlan: Encodable {
