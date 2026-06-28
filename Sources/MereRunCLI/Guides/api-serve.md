@@ -115,6 +115,7 @@ mere.run status
   `benchmarkStats` so these experiments stay measured.
 - DS4 raw-proxies the complete OpenAI chat request to `ds4-server`.
 - Native engines reject unsupported OpenAI fields explicitly instead of silently dropping them.
+- `text-code` maps OpenAI `stop` sequences into native generation stops.
 - Function `tool_choice` values are accepted for native tool-capable engines;
   specific function choices narrow the advertised tools to the named function.
 - `/v1/embeddings` accepts OpenAI-compatible string or string-array `input`

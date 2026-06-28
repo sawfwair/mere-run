@@ -303,9 +303,9 @@ Engine compatibility:
   image content parts.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
-- `text-code`: accepts plain text chat requests and rejects tools, images,
-  reasoning controls, logprobs, seed, stop sequences, and structured outputs
-  with explicit errors.
+- `text-code`: accepts plain text chat requests and OpenAI `stop` sequences;
+  rejects tools, images, reasoning controls, logprobs, seed, and structured
+  outputs with explicit errors.
 
 Streaming responses only emit assistant content tokens. Local progress labels
 stay in logs/stderr, and `stream_options.include_usage` adds the final usage

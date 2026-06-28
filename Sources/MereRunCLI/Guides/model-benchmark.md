@@ -162,7 +162,9 @@ backend. Because this runs generated code locally, the command requires
 `--allow-code-execution` unless you are using `--dry-run`. The default
 `--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on Linux when
 available. Use `--sandbox none` only for a trusted local smoke where timeout and
-temporary-directory hygiene are enough.
+temporary-directory hygiene are enough. The default generation cap is
+`--max-tokens 1024`; JSON and text output flag cases that still reach the cap
+with `reachedMaxTokens`/`capped=true`.
 
 Narrow the run while iterating:
 

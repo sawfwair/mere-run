@@ -28,7 +28,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertNil(cmd.models)
         XCTAssertEqual(cmd.suite, .humanEvalSlice)
         XCTAssertNil(cmd.tasks)
-        XCTAssertEqual(cmd.maxTokens, 512)
+        XCTAssertEqual(cmd.maxTokens, 1024)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
         XCTAssertEqual(cmd.executionTimeout, 5)

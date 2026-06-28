@@ -642,6 +642,34 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.messages[0].content, "Follow repo rules.")
     }
 
+    func testChatRequestMapsSupportedStopSequences() throws {
+        let single = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            stop: .string("END")
+        )
+        let singleRequest = try APIServerContract.chatRequest(
+            from: single,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textCode.openAICompatibility
+        )
+        XCTAssertEqual(singleRequest.stopSequences, ["END"])
+
+        let multiple = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            stop: .array(["END", "", "\nif __name__"])
+        )
+        let multipleRequest = try APIServerContract.chatRequest(
+            from: multiple,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textCode.openAICompatibility
+        )
+        XCTAssertEqual(multipleRequest.stopSequences, ["END", "\nif __name__"])
+    }
+
     func testChatRequestValidatesImageContentPartsAgainstEngineCapability() throws {
         let data = """
         {

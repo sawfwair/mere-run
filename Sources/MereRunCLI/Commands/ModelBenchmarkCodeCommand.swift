@@ -18,7 +18,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     var tasks: String?
 
     @Option(name: [.long], help: "Maximum generated tokens per task.")
-    var maxTokens: Int = 512
+    var maxTokens: Int = 1024
 
     @Option(name: [.long], help: "Temperature for generation.")
     var temperature: Double = 0
@@ -225,7 +225,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                 temperature: temperature,
                 topP: topP,
                 showThinking: false,
-                stopOnEOS: true
+                stopOnEOS: true,
+                stopSequences: Self.codeBenchmarkStopSequences
             )
             let generationStart = Date()
             do {
@@ -248,6 +249,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                         sandboxBackend: execution.backend.rawValue,
                         tokensGenerated: response.tokensGenerated,
                         decodeTokensPerSecond: response.decodeTokensPerSecond(elapsed: generationSeconds),
+                        finishReason: response.finishReason?.rawValue,
+                        reachedMaxTokens: response.reachedMaxTokens(limit: maxTokens),
                         error: execution.errorSummary
                     )
                 )
@@ -262,6 +265,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                         sandboxBackend: nil,
                         tokensGenerated: 0,
                         decodeTokensPerSecond: nil,
+                        finishReason: nil,
+                        reachedMaxTokens: false,
                         error: String(describing: error)
                     )
                 )
@@ -292,7 +297,14 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     private static let systemPrompt = """
     You are completing Python programming benchmark tasks. Return only valid Python code.
     Do not include Markdown fences, prose, comments about your approach, or test code.
+    Stop immediately after the requested function implementation.
     """
+
+    private static let codeBenchmarkStopSequences = TextGenerationStopSequences.defaultRenderedChatStops + [
+        "\n# The following code is for testing",
+        "\nif __name__",
+        "\ndef check(",
+    ]
 }
 
 enum CodeBenchmarkSuite: String, CaseIterable, ExpressibleByArgument {
@@ -564,6 +576,9 @@ private struct CodeBenchmarkModelResult: Encodable {
                 result.executionSeconds.map { "exec=\(Self.format($0))s" },
                 result.sandboxBackend.map { "sandbox=\($0)" },
                 result.decodeTokensPerSecond.map { "tps=\(Self.format($0))" },
+                "tokens=\(result.tokensGenerated)",
+                result.finishReason.map { "finish=\($0)" },
+                result.reachedMaxTokens ? "capped=true" : nil,
             ]
                 .compactMap { $0 }
                 .joined(separator: " ")
@@ -608,10 +623,22 @@ private struct CodeBenchmarkCaseResult: Encodable {
     let sandboxBackend: String?
     let tokensGenerated: Int
     let decodeTokensPerSecond: Double?
+    let finishReason: String?
+    let reachedMaxTokens: Bool
     let error: String?
 }
 
 private extension ChatResponse {
+    func reachedMaxTokens(limit: Int) -> Bool {
+        if finishReason == .length {
+            return true
+        }
+        guard finishReason == nil else {
+            return false
+        }
+        return tokensGenerated >= limit
+    }
+
     func decodeTokensPerSecond(elapsed: Double) -> Double? {
         if let timing, let decodeTokensPerSecond = timing.decodeTokensPerSecond {
             return decodeTokensPerSecond

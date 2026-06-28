@@ -524,8 +524,16 @@ public actor Q35Generator: ChatGenerator {
             progressHandler: progressHandler
         )
 
-        let decoded = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stopSequences = TextGenerationStopSequences.merged(request.stopSequences)
+        let decodedRaw = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
+        let trimmed = TextGenerationStopSequences.trimming(decodedRaw, sequences: stopSequences)
+        let decoded = trimmed.text
+        let finishReason: ChatFinishReason = {
+            if trimmed.matchedSequence != nil {
+                return .stopSequence
+            }
+            return decodeResult.generatedTokens.count >= tokenBudget ? .length : .stop
+        }()
         let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
             let parsed = Gemma4ToolParser.parseToolCalls(decoded)
             return parsed.isEmpty ? nil : parsed
@@ -540,7 +548,8 @@ public actor Q35Generator: ChatGenerator {
                 decodeSeconds: decodeResult.decodeSeconds
             ),
             toolCalls: toolCalls,
-            promptTokens: promptTokens.count
+            promptTokens: promptTokens.count,
+            finishReason: finishReason
         )
     }
 

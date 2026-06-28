@@ -1727,7 +1727,7 @@ extension RuntimeServingEngine {
     var openAICompatibility: APIEngineCapabilities {
         switch self {
         case .textCode:
-            return .localText
+            return .localTextWithStopSequences
         case .textChatKlein:
             return .localTextWithStructuredJSON
         case .textChatGemma4:

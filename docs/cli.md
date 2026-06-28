@@ -1254,8 +1254,10 @@ a per-candidate timeout. Because scoring executes generated code locally, pass
 `--allow-code-execution` for real runs or `--dry-run` to inspect the plan.
 The default `--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on
 Linux when available. Use `--sandbox none` only for a trusted local smoke where
-timeout and temporary-directory hygiene are enough. Use `--models` and `--tasks`
-to narrow the slice while iterating.
+timeout and temporary-directory hygiene are enough. The default generation cap is
+`--max-tokens 1024`, and capped cases are reported as `reachedMaxTokens` in JSON
+or `capped=true` in text output. Use `--models` and `--tasks` to narrow the
+slice while iterating.
 
 ### `mere.run model benchmark vlm`
 
@@ -1430,8 +1432,8 @@ OpenAI chat compatibility:
 - Native engines decode the common OpenAI Chat request shape and reject
   unsupported high-impact fields with `invalid_request_error`.
 - `max_completion_tokens`, `developer` messages, function tools, image content
-  parts, structured JSON mode, and streaming usage are capability-gated by
-  engine.
+  parts, structured JSON mode, `stop` sequences, and streaming usage are
+  capability-gated by engine.
 - `tool_choice` accepts `none`, `auto`, `required`, and specific function
   choices by narrowing the advertised tool list to the named function.
 

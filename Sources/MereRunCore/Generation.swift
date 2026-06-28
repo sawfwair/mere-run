@@ -249,6 +249,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var requiresJSON: Bool
     public var tools: [ToolDefinition]?
     public var stopOnEOS: Bool
+    public var stopSequences: [String]
     public var kvCacheMode: RuntimeKVCacheMode?
     public var maxContextTokens: Int?
 
@@ -262,6 +263,7 @@ public struct ChatRequest: Sendable, Hashable {
         requiresJSON: Bool = false,
         tools: [ToolDefinition]? = nil,
         stopOnEOS: Bool = true,
+        stopSequences: [String] = [],
         kvCacheMode: RuntimeKVCacheMode? = nil,
         maxContextTokens: Int? = nil
     ) {
@@ -274,6 +276,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.requiresJSON = requiresJSON
         self.tools = tools
         self.stopOnEOS = stopOnEOS
+        self.stopSequences = stopSequences
         self.kvCacheMode = kvCacheMode
         self.maxContextTokens = maxContextTokens
     }
@@ -322,19 +325,86 @@ public struct ChatResponse: Sendable, Hashable {
     public var timing: ChatTiming?
     public var toolCalls: [ToolCall]?
     public var promptTokens: Int?
+    public var finishReason: ChatFinishReason?
 
     public init(
         response: String,
         tokensGenerated: Int,
         timing: ChatTiming? = nil,
         toolCalls: [ToolCall]? = nil,
-        promptTokens: Int? = nil
+        promptTokens: Int? = nil,
+        finishReason: ChatFinishReason? = nil
     ) {
         self.response = response
         self.tokensGenerated = tokensGenerated
         self.timing = timing
         self.toolCalls = toolCalls
         self.promptTokens = promptTokens
+        self.finishReason = finishReason
+    }
+}
+
+public enum ChatFinishReason: String, Sendable, Hashable {
+    case stop
+    case stopSequence = "stop_sequence"
+    case length
+}
+
+public enum TextGenerationStopSequences {
+    public static let defaultRenderedChatStops = [
+        "<|END_OF_TURN_TOKEN|>",
+        "<|END_OFTURN_TOKEN|>",
+        "<|CHANNEL_END|>",
+        "<|im_end|>",
+        "</s>",
+        "<|endoftext|>",
+    ]
+
+    public static func merged(_ sequences: [String]) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+        result.reserveCapacity(sequences.count)
+        for sequence in sequences {
+            guard !sequence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  seen.insert(sequence).inserted else {
+                continue
+            }
+            result.append(sequence)
+        }
+        return result
+    }
+
+    public static func firstMatch(
+        in text: String,
+        sequences: [String]
+    ) -> (sequence: String, range: Range<String.Index>)? {
+        var first: (sequence: String, range: Range<String.Index>)?
+        for sequence in merged(sequences) {
+            guard let range = text.range(of: sequence) else {
+                continue
+            }
+            if let current = first {
+                if range.lowerBound < current.range.lowerBound
+                    || (range.lowerBound == current.range.lowerBound && range.upperBound > current.range.upperBound) {
+                    first = (sequence, range)
+                }
+            } else {
+                first = (sequence, range)
+            }
+        }
+        return first
+    }
+
+    public static func trimming(
+        _ text: String,
+        sequences: [String]
+    ) -> (text: String, matchedSequence: String?) {
+        guard let match = firstMatch(in: text, sequences: sequences) else {
+            return (text.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+        }
+        let trimmed = String(text[..<match.range.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed, match.sequence)
     }
 }
 

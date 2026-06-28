@@ -61,20 +61,11 @@ public actor CodeGenGenerator: ChatGenerator {
 
         let prompt = ctx.chatPrompt(for: request.messages)
 
-        progressHandler?(ChatProgress(stage: .generating, message: "Generating..."))
-        try ctx.completionInit(text: prompt)
-
-        var response = ""
-        while !ctx.isDone {
-            let token = try ctx.completionLoop()
-            response += token
-            progressHandler?(ChatProgress(stage: .generating, message: token))
-        }
-
-        let tokensDecoded = ctx.getTokensDecoded()
-        return ChatResponse(
-            response: Self.trimmingRenderedStopSequences(from: response),
-            tokensGenerated: tokensDecoded
+        return try Self.generateResponse(
+            request: request,
+            context: ctx,
+            prompt: prompt,
+            progressHandler: progressHandler
         )
     }
 
@@ -124,20 +115,48 @@ public actor CodeGenGenerator: ChatGenerator {
 
         let prompt = ctx.chatPrompt(for: request.messages)
 
+        return try Self.generateResponse(
+            request: request,
+            context: ctx,
+            prompt: prompt,
+            progressHandler: progressHandler
+        )
+    }
+
+    private static func generateResponse(
+        request: ChatRequest,
+        context ctx: LlamaContext,
+        prompt: String,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) throws -> ChatResponse {
+        let stopSequences = TextGenerationStopSequences.merged(
+            TextGenerationStopSequences.defaultRenderedChatStops + request.stopSequences
+        )
         progressHandler?(ChatProgress(stage: .generating, message: "Generating..."))
         try ctx.completionInit(text: prompt)
 
         var response = ""
+        var finishReason: ChatFinishReason?
         while !ctx.isDone {
             let token = try ctx.completionLoop()
             response += token
+            let trimmed = TextGenerationStopSequences.trimming(response, sequences: stopSequences)
+            if trimmed.matchedSequence != nil {
+                response = trimmed.text
+                finishReason = .stopSequence
+                break
+            }
             progressHandler?(ChatProgress(stage: .generating, message: token))
         }
 
         let tokensDecoded = ctx.getTokensDecoded()
+        if finishReason == nil {
+            finishReason = tokensDecoded >= request.maxTokens ? .length : .stop
+        }
         return ChatResponse(
-            response: Self.trimmingRenderedStopSequences(from: response),
-            tokensGenerated: tokensDecoded
+            response: TextGenerationStopSequences.trimming(response, sequences: stopSequences).text,
+            tokensGenerated: tokensDecoded,
+            finishReason: finishReason
         )
     }
 
@@ -211,28 +230,6 @@ public actor CodeGenGenerator: ChatGenerator {
         case .downloadFailed(let message):
             return .downloadFailed(message)
         }
-    }
-
-    private static func trimmingRenderedStopSequences(from response: String) -> String {
-        let stopSequences = [
-            "<|END_OF_TURN_TOKEN|>",
-            "<|im_end|>",
-            "</s>",
-            "<|endoftext|>"
-        ]
-        var firstStopRange: Range<String.Index>?
-        for stopSequence in stopSequences {
-            guard let range = response.range(of: stopSequence) else {
-                continue
-            }
-            if let current = firstStopRange, current.lowerBound <= range.lowerBound {
-                continue
-            }
-            firstStopRange = range
-        }
-
-        let trimmed = firstStopRange.map { String(response[..<$0.lowerBound]) } ?? response
-        return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
 }
