@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Hardened-runtime entitlements for the bundled `mere.run` CLI (and the vendored ds4
+	  inference binaries) inside MereRun.app. The CLI — not the SwiftUI app — is the process
+	  that JIT-compiles, allocates executable memory, loads co-located unsigned frameworks, and
+	  opens the camera, so these entitlements belong on the CLI's own signature. The app bundle
+	  is signed inside-out (see build_mere_run_app.sh), so the CLI carries this set explicitly
+	  rather than relying on a deep codesign pass to propagate the app's entitlements.
+
+	  - allow-jit / allow-unsigned-executable-memory: MLX/Metal and llama.cpp JIT-compile and
+	    use executable memory during inference.
+	  - disable-library-validation: the CLI loads its co-located llama.framework, the mlx bundle,
+	    and the vendored ds4-server (third-party signatures, not the app's Team ID).
+	  - device.camera: `vision track-live` opens an AVCaptureSession in this process.
+	    (No audio-input: nothing captures the microphone yet — add it when that ships.)
+	-->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
+</dict>
+</plist>

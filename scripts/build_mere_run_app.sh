@@ -105,29 +105,63 @@ plutil -insert CFBundleShortVersionString -string "$app_version" "${contents}/In
 plutil -insert LSMinimumSystemVersion -string "15.0" "${contents}/Info.plist"
 plutil -insert NSPrincipalClass -string "NSApplication" "${contents}/Info.plist"
 plutil -insert NSHighResolutionCapable -bool true "${contents}/Info.plist"
-# TCC usage strings. The CLI captures the camera/mic as a child of this bundle, so TCC
-# attributes access to the app and the strings must live here.
+plutil -insert CFBundleInfoDictionaryVersion -string "6.0" "${contents}/Info.plist"
+plutil -insert LSApplicationCategoryType -string "public.app-category.developer-tools" "${contents}/Info.plist"
+plutil -insert NSHumanReadableCopyright -string "© mere.run" "${contents}/Info.plist"
+# TCC usage string. The CLI opens the camera as a child of this bundle, so TCC attributes
+# access to the app and the string must live here. (No microphone string: nothing records the
+# mic yet — add NSMicrophoneUsageDescription when `music realtime` mic capture ships.)
 plutil -insert NSCameraUsageDescription -string \
   "MereRun uses the camera for live object tracking (vision track-live)." "${contents}/Info.plist"
-plutil -insert NSMicrophoneUsageDescription -string \
-  "MereRun uses the microphone for realtime music input." "${contents}/Info.plist"
 
 if [[ -f "$app_icon" ]]; then
   cp "$app_icon" "${resources}/AppIcon.icns"
   plutil -insert CFBundleIconFile -string "AppIcon" "${contents}/Info.plist"
 fi
 
-# Codesign the whole bundle in a single deep pass so nested code (llama.framework, the mlx
-# bundle, the CLI, and the vendored ds4-server) is signed consistently. With a Developer ID
-# identity this produces a hardened-runtime, notarizable bundle; otherwise it ad-hoc signs
-# for local development. Manual inside-out signing of the mixed vendored tree is brittle, so
-# --deep is used deliberately here.
-if [[ "$identity" == "-" ]]; then
-  codesign --force --deep --sign - "$bundle"
-else
-  codesign --force --deep --timestamp --options runtime \
-    --entitlements "$entitlements" --sign "$identity" "$bundle"
-  codesign --verify --deep --strict --verbose=2 "$bundle"
-fi
+# Codesign inside-out so each Mach-O carries the entitlements it actually needs on its OWN
+# signature. We deliberately do not lean on `codesign --deep --force` for entitlements: a forced
+# deep pass applies the *same* entitlements to every nested binary (unreliable across toolchains
+# and wrong here — the app and CLI need different sets). The app executable links only system
+# frameworks and just opens the camera, so it gets the minimal app set; the bundled CLI and the
+# vendored ds4 inference binaries JIT, load co-located unsigned frameworks, and capture the
+# camera, so they get the broader CLI set. With a Developer ID identity this yields a
+# hardened-runtime, notarizable bundle; with the default "-" it ad-hoc signs for local dev.
+cli_entitlements="${repo_root}/scripts/MereRunCLI.entitlements"
+
+sign() {
+  # sign <entitlements-or-empty> <path...>
+  local ents="$1"; shift
+  local args=(--force --options runtime --sign "$identity")
+  [[ "$identity" != "-" ]] && args+=(--timestamp)
+  [[ -n "$ents" ]] && args+=(--entitlements "$ents")
+  codesign "${args[@]}" "$@"
+}
+
+# 1. Co-located frameworks/bundles — no entitlements.
+while IFS= read -r -d '' asset; do
+  sign "" "$asset"
+done < <(find "$helpers" \( -name '*.framework' -o -name '*.bundle' \) -prune -print0)
+
+# 2. The bundled CLI and every vendored Mach-O under Helpers — CLI entitlements. (The .metal
+#    shader sources sit beside the ds4 executables; the file-type test skips them.)
+sign "$cli_entitlements" "${helpers}/mere.run"
+while IFS= read -r -d '' candidate; do
+  if file -b "$candidate" | grep -q 'Mach-O'; then
+    sign "$cli_entitlements" "$candidate"
+  fi
+done < <(find "${helpers}/vendor" -type f -print0 2>/dev/null)
+
+# 3. Seal the bundle. The app executable arrives ad-hoc-signed by the Swift toolchain, so strip
+#    that first — then a `--deep` pass WITHOUT `--force` signs only the now-unsigned app exe
+#    (with the app entitlements) and seals CodeResources, while skipping — never re-stamping —
+#    the already-signed nested code, so each nested binary keeps its own entitlement set. --deep
+#    (vs a plain seal) is needed so codesign walks the loose vendored ds4 tree correctly instead
+#    of mistaking its sibling .metal shaders for unsigned nested code.
+codesign --remove-signature "${macos}/mere.run.app" 2>/dev/null || true
+seal_args=(--deep --options runtime --entitlements "$entitlements" --sign "$identity")
+[[ "$identity" != "-" ]] && seal_args+=(--timestamp)
+codesign "${seal_args[@]}" "$bundle"
+codesign --verify --verbose=2 "$bundle"
 
 echo "$bundle"
