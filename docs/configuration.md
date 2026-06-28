@@ -60,10 +60,11 @@ This is optional for loopback-only usage and required for non-loopback binds.
 
 ### `MERERUN_GEMMA4_PREFIX_KV_CACHE`
 
-Set to `1` to enable the in-memory Gemma4 prefix KV reuse prototype in
-`mere.run api serve`. This stores bounded, forked Gemma4 prompt-prefix cache
-state for matching token prefixes and reports entries, hits, and reused tokens
-through `/runtime/status`. When the final chat message changes but the earlier
+Gemma4 in-memory prefix KV reuse is enabled by default in `mere.run api serve`.
+Set this to `0`, `false`, `no`, or `off` to disable it for a baseline run. The
+runtime stores bounded, forked Gemma4 prompt-prefix cache state for matching
+token prefixes and reports entries, hits, and reused tokens through
+`/runtime/status`. When the final chat message changes but the earlier
 system/tool/chat prefix is identical, Gemma4 stores that semantic prefix as an
 extra checkpoint before continuing normal prefill chunks. The bounded cache
 keeps semantic checkpoints ahead of ordinary chunk checkpoints when pruning.
@@ -112,10 +113,11 @@ clamped to the native runtime's supported range.
 
 ### `MERERUN_Q35_PREFIX_KV_CACHE`
 
-Set to `1` to enable the in-memory Qwen-family text-only prefix KV reuse prototype in
-`mere.run api serve`. Vision prompts are excluded because image embeddings
-change the effective prefix even when the token ids match. Runtime status uses
-the same prefix KV counters as Gemma4. Text-only Qwen-family requests also store the
+Qwen-family text-only prefix KV reuse is enabled by default in
+`mere.run api serve`. Set this to `0`, `false`, `no`, or `off` to disable it for
+a baseline run. Vision prompts are excluded because image embeddings change the
+effective prefix even when the token ids match. Runtime status uses the same
+prefix KV counters as Gemma4. Text-only Qwen-family requests also store the
 stable chat prefix before the final message as an extra checkpoint when it is an
 exact token prefix of the full prompt, and the bounded cache gives those
 semantic checkpoints the same pruning priority as Gemma4.

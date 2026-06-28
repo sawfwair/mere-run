@@ -322,11 +322,11 @@ swift run mere.run guide open-webui
 scripts/smoke-open-webui.sh print-env
 scripts/smoke-open-webui.sh live-smoke
 
-# Optional Gemma4 prefix KV reuse prototype; status reports cache and timing stats
-MERERUN_GEMMA4_PREFIX_KV_CACHE=1 swift run mere.run api serve --engine text-chat-gemma4
+# Gemma4 prefix KV reuse is on by default for api serve; set 0 for a baseline
+MERERUN_GEMMA4_PREFIX_KV_CACHE=0 swift run mere.run api serve --engine text-chat-gemma4
 
-# Optional Qwen3.6 text-only prefix KV reuse prototype; vision prompts are excluded
-MERERUN_Q35_PREFIX_KV_CACHE=1 swift run mere.run api serve
+# Qwen3.6 text-only prefix KV reuse is also on by default; set 0 for a baseline
+MERERUN_Q35_PREFIX_KV_CACHE=0 swift run mere.run api serve
 
 # Optional decode batching; overlap requires max-active > 1
 MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
@@ -364,6 +364,15 @@ swift run mere.run model benchmark q36-mtp \
   --prompt-repeat-values 8,80,150 \
   --temperature-values 0,0.7 \
   --decode-tokens 32 \
+  --json
+
+# Real serving-path workload: streaming chat TTFT, throughput, cache, and batching counters
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 1
+swift run mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
   --json
 
 # Small real coding-eval slice: Ornith vs North Mini vs Qwen3-Coder
