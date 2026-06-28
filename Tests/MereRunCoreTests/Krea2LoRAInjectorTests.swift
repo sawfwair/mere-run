@@ -3,23 +3,45 @@ import XCTest
 @testable import MereRunCore
 
 final class Krea2LoRAInjectorTests: XCTestCase {
-    func testDefaultTargetsTransformerBlockAttentionAndFeedForwardLayers() throws {
+    func testDefaultTargetsKreaPublishedAdapterSurface() throws {
         let transformer = Krea2Transformer(configuration: try makeTinyConfig(numLayers: 2))
 
         let layers = try Krea2LoRAInjector.inject(into: transformer, rank: 4, alpha: 2.0)
 
-        XCTAssertEqual(layers.count, 14)
+        XCTAssertEqual(layers.count, 40)
+        XCTAssertNotNil(layers["img_in"])
+        XCTAssertNotNil(layers["txt_in.linear_1"])
+        XCTAssertNotNil(layers["txt_in.linear_2"])
+        XCTAssertNotNil(layers["text_fusion.projector"])
+        XCTAssertNotNil(layers["time_embed.linear_1"])
+        XCTAssertNotNil(layers["time_embed.linear_2"])
+        XCTAssertNotNil(layers["time_mod_proj"])
+        XCTAssertNotNil(layers["final_layer.linear"])
         XCTAssertNotNil(layers["transformer_blocks.0.attn.to_q"])
         XCTAssertNotNil(layers["transformer_blocks.0.attn.to_k"])
         XCTAssertNotNil(layers["transformer_blocks.0.attn.to_v"])
+        XCTAssertNotNil(layers["transformer_blocks.0.attn.to_gate"])
         XCTAssertNotNil(layers["transformer_blocks.0.attn.to_out.0"])
         XCTAssertNotNil(layers["transformer_blocks.0.ff.gate"])
         XCTAssertNotNil(layers["transformer_blocks.0.ff.up"])
         XCTAssertNotNil(layers["transformer_blocks.0.ff.down"])
-        XCTAssertNil(layers["text_fusion.refiner_blocks.0.attn.to_q"])
+        XCTAssertNotNil(layers["text_fusion.layerwise_blocks.0.attn.to_gate"])
+        XCTAssertNotNil(layers["text_fusion.refiner_blocks.0.attn.to_q"])
     }
 
-    func testLiteTargetsOnlyTransformerBlockQAndVLayers() throws {
+    func testDefaultTargetsMatchOfficialFullModelModuleCount() throws {
+        let transformer = Krea2Transformer(configuration: try makeTinyConfig(
+            numLayers: 28,
+            numLayerwiseTextBlocks: 2,
+            numRefinerTextBlocks: 2
+        ))
+
+        let layers = try Krea2LoRAInjector.inject(into: transformer, rank: 32, alpha: 32.0)
+
+        XCTAssertEqual(layers.count, 264)
+    }
+
+    func testLiteTargetsOnlyAttentionQAndVLayers() throws {
         let transformer = Krea2Transformer(configuration: try makeTinyConfig(numLayers: 3))
 
         let layers = try Krea2LoRAInjector.inject(
@@ -28,11 +50,14 @@ final class Krea2LoRAInjectorTests: XCTestCase {
             targetSuffixes: Krea2LoRAInjector.liteTargetSuffixes
         )
 
-        XCTAssertEqual(layers.count, 6)
+        XCTAssertEqual(layers.count, 10)
         XCTAssertNotNil(layers["transformer_blocks.0.attn.to_q"])
         XCTAssertNotNil(layers["transformer_blocks.0.attn.to_v"])
+        XCTAssertNotNil(layers["text_fusion.layerwise_blocks.0.attn.to_q"])
+        XCTAssertNotNil(layers["text_fusion.refiner_blocks.0.attn.to_v"])
         XCTAssertNil(layers["transformer_blocks.0.attn.to_k"])
         XCTAssertNil(layers["transformer_blocks.0.ff.down"])
+        XCTAssertNil(layers["img_in"])
     }
 
     func testTextFusionAcceptsTrainerSyntheticHiddenStateLayout() throws {
@@ -54,7 +79,11 @@ final class Krea2LoRAInjectorTests: XCTestCase {
         XCTAssertEqual(output.shape, [1, textLength, config.textHiddenDim])
     }
 
-    private func makeTinyConfig(numLayers: Int) throws -> Krea2TransformerConfiguration {
+    private func makeTinyConfig(
+        numLayers: Int,
+        numLayerwiseTextBlocks: Int = 1,
+        numRefinerTextBlocks: Int = 1
+    ) throws -> Krea2TransformerConfiguration {
         let json = """
         {
           "attention_head_dim": 8,
@@ -65,8 +94,8 @@ final class Krea2LoRAInjectorTests: XCTestCase {
           "num_attention_heads": 2,
           "num_key_value_heads": 2,
           "num_layers": \(numLayers),
-          "num_layerwise_text_blocks": 1,
-          "num_refiner_text_blocks": 1,
+          "num_layerwise_text_blocks": \(numLayerwiseTextBlocks),
+          "num_refiner_text_blocks": \(numRefinerTextBlocks),
           "num_text_layers": 4,
           "rope_theta": 10000,
           "text_hidden_dim": 16,

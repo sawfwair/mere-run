@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import MereRunCore
 
@@ -19,6 +20,18 @@ final class ManagedModelCatalogTests: XCTestCase {
             let manifest = MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
             XCTAssertEqual(manifest.id, spec.id)
         }
+    }
+
+    func testModelSourcesCatalogTableMatchesManagedModelCatalog() throws {
+        let markdownURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/model-sources.md")
+        let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
+        let documentedRows = try managedModelCatalogRows(in: markdown)
+        let catalogRows = ManagedModelCatalog.allSpecs.map {
+            ManagedModelCatalogDocRow(category: $0.category.rawValue, id: $0.id)
+        }
+
+        XCTAssertEqual(documentedRows, catalogRows)
     }
 
     func testRemovedQ35ChatModelIDsAreNotCataloged() {
@@ -785,6 +798,41 @@ final class ManagedModelCatalogTests: XCTestCase {
         return url
     }
 
+    private func managedModelCatalogRows(in markdown: String) throws -> [ManagedModelCatalogDocRow] {
+        let startMarker = "<!-- managed-model-catalog:start -->"
+        let endMarker = "<!-- managed-model-catalog:end -->"
+        let startRange = try XCTUnwrap(markdown.range(of: startMarker))
+        let tableStart = startRange.upperBound..<markdown.endIndex
+        let endRange = try XCTUnwrap(markdown.range(of: endMarker, range: tableStart))
+        let tableMarkdown = markdown[startRange.upperBound..<endRange.lowerBound]
+
+        return tableMarkdown.split(separator: "\n").compactMap { line in
+            managedModelCatalogRow(from: String(line))
+        }
+    }
+
+    private func managedModelCatalogRow(from line: String) -> ManagedModelCatalogDocRow? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("| `") else {
+            return nil
+        }
+
+        let columns = trimmed.split(separator: "|", omittingEmptySubsequences: false)
+        guard columns.count >= 4 else {
+            return nil
+        }
+
+        return ManagedModelCatalogDocRow(
+            category: markdownCodeValue(String(columns[1])),
+            id: markdownCodeValue(String(columns[2]))
+        )
+    }
+
+    private func markdownCodeValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "`"))
+    }
+
     private func writeMinimalLTX23MLXRoot(at root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try MereRunModelManifest.template(
@@ -1119,4 +1167,9 @@ final class ManagedModelCatalogTests: XCTestCase {
             contents: Data("{}".utf8)
         ))
     }
+}
+
+private struct ManagedModelCatalogDocRow: Equatable {
+    let category: String
+    let id: String
 }

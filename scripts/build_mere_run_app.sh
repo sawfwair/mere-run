@@ -79,6 +79,7 @@ fi
 # Frameworks/bundles co-located beside the CLI so its @executable_path rpath resolves.
 for asset in \
   "${build_dir}/llama.framework" \
+  "${build_dir}/magentart.framework" \
   "${build_dir}/mlx-swift_Cmlx.bundle" \
   "${build_dir}/Resources"
 do

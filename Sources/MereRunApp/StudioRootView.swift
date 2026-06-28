@@ -288,7 +288,7 @@ struct StudioRootView: View {
             }
         }
         .onAppear {
-            draft.reset(for: mode)
+            draft = freshDraft(for: mode)
             // mode may be restored from @SceneStorage (e.g. chat) — onChange(of:mode) doesn't fire
             // for the initial value, so replicate the conversational setup here to open the latest
             // thread instead of leaving the canvas blank.
@@ -310,9 +310,7 @@ struct StudioRootView: View {
             if isShown { syncAdvancedToStudio() }
         }
         .onChange(of: mode) { _, newMode in
-            var nextDraft = StudioDraft()
-            nextDraft.reset(for: newMode)
-            draft = nextDraft
+            var nextDraft = freshDraft(for: newMode)
             studioError = nil
             if newMode.isConversational {
                 // Open the most recent thread for this mode (or a fresh one) and reuse its
@@ -320,13 +318,19 @@ struct StudioRootView: View {
                 let latest = library.items.first { $0.mode == newMode && $0.isConversation }
                 activeConversationID = latest?.id
                 selectedLibraryID = latest?.id
-                if let latest { applyConversationSettings(from: latest, to: &draft) }
-                draft.prompt = ""
+                if let latest { applyConversationSettings(from: latest, to: &nextDraft) }
+                nextDraft.prompt = ""
             } else {
                 activeConversationID = nil
                 selectedLibraryID = library.items.first { $0.mode == newMode }?.id
             }
-            controller.checkReadiness(for: newMode, draft: nextDraft)
+            draft = nextDraft
+            controller.checkReadiness(for: newMode, draft: draft)
+        }
+        .onChange(of: controller.recommendedChatModelID) { _, _ in
+            guard mode == .chat, activeConversationID == nil else { return }
+            controller.applyRecommendedDefaults(to: &draft, for: mode)
+            refreshReadiness()
         }
         .onChange(of: selectedLibraryID) { _, id in
             // Selecting a thread of the current conversation mode opens it in the canvas.
@@ -587,6 +591,13 @@ struct StudioRootView: View {
         controller.draft.fps = draft.fps
         controller.draft.numFrames = draft.numFrames
         controller.draft.variant = draft.variant
+    }
+
+    private func freshDraft(for mode: StudioMode) -> StudioDraft {
+        var nextDraft = StudioDraft()
+        nextDraft.reset(for: mode)
+        controller.applyRecommendedDefaults(to: &nextDraft, for: mode)
+        return nextDraft
     }
 
     /// Edits a prior user turn: truncates the thread at that message and loads its text back into

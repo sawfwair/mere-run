@@ -18,17 +18,32 @@ public enum Krea2LoRAInjectionError: Error, LocalizedError {
 
 public enum Krea2LoRAInjector {
     public static let defaultTargetPrefixes: [String] = [
+        "img_in",
+        "txt_in.",
+        "text_fusion.",
+        "time_embed.",
+        "time_mod_proj",
         "transformer_blocks.",
+        "final_layer.",
     ]
 
     public static let defaultTargetSuffixes: [String] = [
         ".attn.to_q",
         ".attn.to_k",
         ".attn.to_v",
+        ".attn.to_gate",
         ".attn.to_out.0",
         ".ff.gate",
         ".ff.up",
         ".ff.down",
+        "img_in",
+        "txt_in.linear_1",
+        "txt_in.linear_2",
+        "text_fusion.projector",
+        "time_embed.linear_1",
+        "time_embed.linear_2",
+        "time_mod_proj",
+        "final_layer.linear",
     ]
 
     public static let liteTargetSuffixes: [String] = [

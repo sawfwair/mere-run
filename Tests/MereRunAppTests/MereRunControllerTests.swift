@@ -50,8 +50,8 @@ final class MereRunControllerTests: XCTestCase {
 
         XCTAssertEqual(runner.starts.count, 1)
         XCTAssertEqual(
-            Array(runner.starts[0].configuration.arguments.suffix(3)),
-            ["model", "capabilities", "--all"]
+            Array(runner.starts[0].configuration.arguments.suffix(4)),
+            ["model", "capabilities", "--all", "--json"]
         )
     }
 
@@ -113,6 +113,35 @@ final class MereRunControllerTests: XCTestCase {
             .unsupported("Requires at least 12 GB unified memory; detected 8 GB.")
         )
         XCTAssertEqual(controller.modelCapabilitiesByID["image-zimage-nano"]?.minimumUnifiedMemoryGB, 12)
+    }
+
+    func testReadinessCapturesRecommendedChatModelFromJSONCapabilities() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let chatTemplate = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        controller.select(chatTemplate)
+        XCTAssertEqual(controller.draft.model, StudioChatDefaults.fallbackModelID)
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+
+        controller.checkReadiness(for: .chat, draft: draft)
+        XCTAssertEqual(
+            Array(runner.starts[0].configuration.arguments.suffix(4)),
+            ["model", "capabilities", "--all", "--json"]
+        )
+
+        runner.starts[0].stdout(jsonCapabilitiesOutput(
+            recommendedChatModelID: "text-agent-deepseek-v4-flash",
+            supportedModelID: StudioChatDefaults.fallbackModelID
+        ))
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(controller.recommendedChatModelID, "text-agent-deepseek-v4-flash")
+        XCTAssertEqual(controller.draft.model, "text-agent-deepseek-v4-flash")
+        XCTAssertEqual(runner.starts.count, 2)
     }
 
     func testReadImageAutoDownloadActionIsReadyWithoutStartingCLI() {
@@ -603,6 +632,26 @@ private func supportedCapabilitiesOutput(for modelID: String, minimum: Int) -> S
       category: test
       memory: minimum \(minimum) GB, recommended \(minimum) GB
       download: Hugging Face snapshot
+    """
+}
+
+private func jsonCapabilitiesOutput(recommendedChatModelID: String, supportedModelID: String) -> String {
+    """
+    {
+      "recommendedChatModel" : {
+        "modelID" : "\(recommendedChatModelID)"
+      },
+      "models" : [
+        {
+          "download" : "hugging-face",
+          "id" : "\(supportedModelID)",
+          "minimumUnifiedMemoryGB" : 24,
+          "reasons" : [],
+          "recommendedUnifiedMemoryGB" : 32,
+          "supported" : true
+        }
+      ]
+    }
     """
 }
 

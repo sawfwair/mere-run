@@ -711,7 +711,22 @@ struct StudioModelCapability: Equatable {
     }
 }
 
+struct StudioModelCapabilityReport: Equatable {
+    let capabilitiesByID: [String: StudioModelCapability]
+    let recommendedChatModelID: String?
+}
+
 enum ModelCapabilitiesParser {
+    static func report(from output: String) -> StudioModelCapabilityReport {
+        if let jsonReport = jsonReport(from: output) {
+            return jsonReport
+        }
+        return StudioModelCapabilityReport(
+            capabilitiesByID: capabilities(from: output),
+            recommendedChatModelID: nil
+        )
+    }
+
     static func capabilities(from output: String) -> [String: StudioModelCapability] {
         var capabilities: [String: StudioModelCapability] = [:]
         var current: CapabilityBuilder?
@@ -738,6 +753,53 @@ enum ModelCapabilitiesParser {
 
         flushCurrent()
         return capabilities
+    }
+
+    private static func jsonReport(from output: String) -> StudioModelCapabilityReport? {
+        guard let data = jsonObjectData(in: output) else { return nil }
+
+        struct Payload: Decodable {
+            struct ChatBand: Decodable {
+                let modelID: String
+            }
+            struct Model: Decodable {
+                let id: String
+                let supported: Bool
+                let minimumUnifiedMemoryGB: Int?
+                let recommendedUnifiedMemoryGB: Int?
+                let download: String?
+                let reasons: [String]?
+            }
+
+            let recommendedChatModel: ChatBand?
+            let models: [Model]
+        }
+
+        guard let payload = try? JSONDecoder().decode(Payload.self, from: data) else { return nil }
+        let capabilities = Dictionary(uniqueKeysWithValues: payload.models.map { model in
+            (
+                model.id,
+                StudioModelCapability(
+                    modelID: model.id,
+                    isSupported: model.supported,
+                    minimumUnifiedMemoryGB: model.minimumUnifiedMemoryGB,
+                    recommendedUnifiedMemoryGB: model.recommendedUnifiedMemoryGB,
+                    download: model.download,
+                    reason: model.reasons?.joined(separator: " ")
+                )
+            )
+        })
+        return StudioModelCapabilityReport(
+            capabilitiesByID: capabilities,
+            recommendedChatModelID: payload.recommendedChatModel?.modelID
+        )
+    }
+
+    private static func jsonObjectData(in text: String) -> Data? {
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              start < end else { return nil }
+        return String(text[start...end]).data(using: .utf8)
     }
 }
 

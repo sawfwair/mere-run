@@ -624,6 +624,49 @@ final class StudioTypesTests: XCTestCase {
         )
     }
 
+    func testModelCapabilitiesParserReadsJSONRecommendationReport() throws {
+        let output = """
+        {
+          "recommendedChatModel" : {
+            "modelID" : "text-chat-q36-nano"
+          },
+          "models" : [
+            {
+              "download" : "hugging-face",
+              "id" : "text-chat-q36-nano",
+              "minimumUnifiedMemoryGB" : 24,
+              "reasons" : [],
+              "recommendedUnifiedMemoryGB" : 32,
+              "supported" : true
+            },
+            {
+              "download" : "hugging-face",
+              "id" : "text-chat-gemma4",
+              "minimumUnifiedMemoryGB" : 48,
+              "reasons" : [
+                "Requires at least 48 GB unified memory; detected 32 GB."
+              ],
+              "recommendedUnifiedMemoryGB" : 64,
+              "supported" : false
+            }
+          ]
+        }
+        """
+
+        let report = ModelCapabilitiesParser.report(from: output)
+        XCTAssertEqual(report.recommendedChatModelID, "text-chat-q36-nano")
+        let q36 = try XCTUnwrap(report.capabilitiesByID["text-chat-q36-nano"])
+        let gemma = try XCTUnwrap(report.capabilitiesByID["text-chat-gemma4"])
+
+        XCTAssertTrue(q36.isSupported)
+        XCTAssertFalse(gemma.isSupported)
+        XCTAssertEqual(gemma.minimumUnifiedMemoryGB, 48)
+        XCTAssertEqual(
+            gemma.unavailableMessage,
+            "Requires at least 48 GB unified memory; detected 32 GB."
+        )
+    }
+
     func testAPIKeyPreviewMasking() {
         let args = ["api", "serve", "--api-key", "secret-token", "--port", "8080"]
         XCTAssertEqual(

@@ -1176,6 +1176,7 @@ private struct ModelInspectionOptions: View {
                 if controller.selectedTemplate.id == .modelCapabilities {
                     Toggle("All", isOn: $controller.draft.all)
                     Toggle("Recommended", isOn: $controller.draft.force)
+                    Toggle("JSON", isOn: $controller.draft.json)
                 } else {
                     Toggle("JSON", isOn: $controller.draft.all)
                     Toggle("Components", isOn: $controller.draft.force)

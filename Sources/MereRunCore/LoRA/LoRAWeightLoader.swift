@@ -79,13 +79,17 @@ public enum LoRAWeightLoader {
                 continue
             }
 
-            let mapped = Flux2LoRAKeyMapper.map(baseKey: baseKey, down: downWeight, up: upWeight)
-            if mapped.isEmpty {
-                // Mapper didn't recognize the key format - use as-is (e.g., ZImage native LoRAs)
+            if isKrea2NativeBaseKey(baseKey) {
                 loraWeights[baseKey] = (down: downWeight, up: upWeight)
             } else {
-                for (mappedKey, pair) in mapped {
-                    loraWeights[mappedKey] = pair
+                let mapped = Flux2LoRAKeyMapper.map(baseKey: baseKey, down: downWeight, up: upWeight)
+                if mapped.isEmpty {
+                    // Mapper didn't recognize the key format - use as-is (e.g., ZImage native LoRAs)
+                    loraWeights[baseKey] = (down: downWeight, up: upWeight)
+                } else {
+                    for (mappedKey, pair) in mapped {
+                        loraWeights[mappedKey] = pair
+                    }
                 }
             }
 
@@ -143,6 +147,19 @@ public enum LoRAWeightLoader {
         }
 
         return base
+    }
+
+    private static func isKrea2NativeBaseKey(_ key: String) -> Bool {
+        key == "img_in" ||
+        key == "time_mod_proj" ||
+        key == "final_layer.linear" ||
+        key.hasPrefix("txt_in.") ||
+        key.hasPrefix("time_embed.") ||
+        key.hasPrefix("text_fusion.") ||
+        key.contains(".attn.to_gate") ||
+        key.contains(".ff.gate") ||
+        key.contains(".ff.up") ||
+        key.contains(".ff.down")
     }
 
     private static func inferTargetRanks(from weights: [String: (down: MLXArray, up: MLXArray)]) -> [String: Int] {
