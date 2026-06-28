@@ -16,6 +16,7 @@ struct StudioRootView: View {
     @State private var advancedWidth: CGFloat = 560
     @State private var advancedDragStartWidth: CGFloat?
     @State private var advancedDetached = false
+    @State private var isDropTargeted = false
     @State private var selectedLibraryID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
@@ -194,7 +195,19 @@ struct StudioRootView: View {
                 draft.inputPath = url.path
                 studioError = nil
                 return true
+            } isTargeted: { targeted in
+                isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
             }
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(MereRunTheme.accent, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                        .padding(8)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
 
             if showAdvanced {
                 advancedResizeHandle
@@ -650,6 +663,37 @@ struct StudioRootView: View {
         if panel.runModal() == .OK, let url = panel.url {
             draft.inputPath = url.path
             studioError = nil
+        }
+    }
+
+    /// Pastes an image from the clipboard into the attachment (Edit ▸ Paste / ⌘V when the canvas,
+    /// not a text field, holds focus). Prefers a pasted image file; otherwise writes the pasted
+    /// bitmap to a temporary PNG. Only acts in modes that accept an image.
+    private func pasteImageFromClipboard() {
+        guard mode.acceptedTypes.contains(.image) else { return }
+        let pasteboard = NSPasteboard.general
+
+        if let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL], let imageURL = urls.first(where: { StudioOutputFileKind.classify($0) == .image }) {
+            draft.inputPath = imageURL.path
+            studioError = nil
+            return
+        }
+
+        guard let image = NSImage(pasteboard: pasteboard), let data = image.pngDataRepresentation() else {
+            studioError = "The clipboard has no image to paste."
+            return
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pasted-\(UUID().uuidString).png")
+        do {
+            try data.write(to: url)
+            draft.inputPath = url.path
+            studioError = nil
+        } catch {
+            studioError = "Could not paste image: \(error.localizedDescription)"
         }
     }
 
@@ -1967,5 +2011,14 @@ private extension String {
         var words = ShellWords.split(self)
         words = words.maskingSecrets()
         return words.shellQuoted()
+    }
+}
+
+private extension NSImage {
+    /// PNG encoding of the image (for persisting a pasted bitmap to a temp file).
+    func pngDataRepresentation() -> Data? {
+        guard let tiff = tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
     }
 }
