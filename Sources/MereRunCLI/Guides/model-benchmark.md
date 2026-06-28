@@ -149,6 +149,9 @@ leaderboard substitute. The default comparison is:
 - `text-code-north-mini`: native llama.cpp/GGUF North Mini Code target.
 - `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline.
 
+For larger explicit Ornith runs, pass `--models text-agent-ornith-35b`; it is
+not part of the default comparison because it is a larger GGUF download/load.
+
 The default suite is `humaneval-slice`, currently three public HumanEval tasks:
 
 - `HumanEval/0`
@@ -170,7 +173,7 @@ Narrow the run while iterating:
 
 ```bash
 mere.run model benchmark code \
-  --models text-agent-ornith-9b,text-code-north-mini \
+  --models text-agent-ornith-35b \
   --tasks HumanEval/0 \
   --allow-code-execution
 ```
@@ -189,6 +192,7 @@ gunzip -c /tmp/HumanEval.jsonl.gz > /tmp/HumanEval.jsonl
 mere.run model benchmark code \
   --humaneval-file /tmp/HumanEval.jsonl \
   --tasks HumanEval/0,HumanEval/1,HumanEval/2,HumanEval/3,HumanEval/4 \
+  --models text-agent-ornith-35b \
   --allow-code-execution
 ```
 
@@ -274,6 +278,7 @@ mere.run model benchmark vlm \
 - Pull `text-chat-gemma4-turbo` before running the benchmark.
 - Pull `text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`
   before running the default code benchmark comparison.
+- Pull `text-agent-ornith-35b` before running larger explicit Ornith code evals.
 - Pull `vision-chat-gemma4-12b` before using it in the VLM benchmark.
 - Install `lmms-eval` dependencies in the selected Python environment before
   running external datasets; dataset downloads and licenses are handled by the

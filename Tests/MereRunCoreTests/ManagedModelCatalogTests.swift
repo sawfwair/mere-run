@@ -378,6 +378,23 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textCode)
     }
 
+    func testOrnith35BUsesPinnedGGUFHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ornith35BCodeResources.modelId))
+
+        XCTAssertEqual(spec.category, .textCode)
+        XCTAssertEqual(spec.installShape, .singleFile(relativePath: Ornith35BCodeResources.managedRelativePath))
+        XCTAssertEqual(spec.hubFallback?.repoId, Ornith35BCodeResources.upstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Ornith35BCodeResources.upstreamRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, [Ornith35BCodeResources.ggufFile])
+        XCTAssertEqual(spec.hubFallback?.filePath, Ornith35BCodeResources.ggufFile)
+        XCTAssertEqual(spec.upstreamRepoId, Ornith35BCodeResources.upstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Ornith35BCodeResources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .codegenGGUF)
+        XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Ornith35BCodeResources.estimatedDownloadBytes)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textCode)
+    }
+
     func testLFM2UsesLiquidAIHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId))
 

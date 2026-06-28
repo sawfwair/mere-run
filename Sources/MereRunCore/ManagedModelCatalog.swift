@@ -715,6 +715,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["text code", "api serve", "agent start"]
         ),
         ManagedModelSpec(
+            id: Ornith35BCodeResources.modelId,
+            category: .textCode,
+            installShape: .singleFile(relativePath: Ornith35BCodeResources.managedRelativePath),
+            hubFallback: Ornith35BCodeResources.hubFallbackConfig,
+            upstreamRepoId: Ornith35BCodeResources.upstreamRepoId,
+            upstreamRevision: Ornith35BCodeResources.upstreamRevision,
+            validationKind: .codegenGGUF,
+            estimatedDownloadBytes: Ornith35BCodeResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text code", "api serve", "agent start"]
+        ),
+        ManagedModelSpec(
             // GGUF Qwen3.6-35B-A3B: the CUDA default chat model. Routes through
             // llama.cpp (.codegenGGUF) for the GB10-optimized quantized-MoE
             // kernels (~68 tok/s on GB10 vs ~13 for the MLX path). Same model

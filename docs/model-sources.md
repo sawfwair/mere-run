@@ -55,6 +55,7 @@ from the runtime catalog used by `mere.run model list`,
 | `text-code` | `text-agent-ornith-9b` |
 | `text-code` | `text-agent-qwen35-9b` |
 | `text-code` | `text-code-north-mini` |
+| `text-code` | `text-agent-ornith-35b` |
 | `text-chat` | `text-chat-q36-nano-gguf` |
 | `text-chat` | `text-agent-deepseek-v4-flash` |
 | `text-chat` | `text-chat-lfm25-a1b-8bit` |
@@ -114,6 +115,12 @@ a llama.cpp runtime with `cohere2moe` architecture support.
 revision. Ornith is a DeepReinforce agentic coding model with Qwen3.5 text
 architecture metadata; mere.run treats this MLX OptiQ quant as a native
 Qwen-family runtime target for `chat`, `api serve`, and setup-agent experiments.
+
+`text-agent-ornith-35b` installs DeepReinforce's public
+`deepreinforce-ai/Ornith-1.0-35B-GGUF` Q4_K_M file at the pinned catalog
+revision. It runs through the native Swift/llama.cpp `text code` path for
+larger Ornith coding-agent comparisons and uses a 32K runtime context by
+default to keep local evals predictable.
 
 `text-agent-deepseek-v4-flash` is the preferred managed setup-agent tier on
 96 GB+ Apple Silicon Macs. Smaller Qwen setup agents are lower-memory

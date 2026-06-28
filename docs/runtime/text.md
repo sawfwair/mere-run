@@ -27,6 +27,7 @@ embeddings, and PII anonymization.
 
 ### Code
 
+- `text-agent-ornith-35b`
 - `text-code-north-mini`
 - `text-code-qwen3`
 
@@ -82,16 +83,23 @@ swift run mere.run text code \
   --prompt "Write a Swift function that reverses a string."
 ```
 
-`text-code-qwen3` and `text-code-north-mini` are native `text code` models and
-run GGUF weights through llama.cpp. North Mini Code uses the Unsloth
-`North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant, so it requires a llama.cpp runtime
-with `cohere2moe` architecture support.
+`text-code-qwen3`, `text-code-north-mini`, and `text-agent-ornith-35b` are
+native `text code` models and run GGUF weights through llama.cpp. North Mini
+Code uses the Unsloth `North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant, so it
+requires a llama.cpp runtime with `cohere2moe` architecture support. Ornith 35B
+uses DeepReinforce's `ornith-1.0-35b-Q4_K_M.gguf` quant for larger coding-agent
+evals.
 
 ```bash
 swift run mere.run model pull text-code-north-mini
 swift run mere.run text code \
   --model text-code-north-mini \
   --prompt "Write a Swift function that reverses a string."
+
+swift run mere.run model pull text-agent-ornith-35b
+swift run mere.run text code \
+  --model text-agent-ornith-35b \
+  --prompt "Write a compact Swift Result helper."
 ```
 
 ### Embeddings

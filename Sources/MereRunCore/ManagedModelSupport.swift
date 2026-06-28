@@ -414,6 +414,14 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                Ornith35BCodeResources.modelId,
+                "Ornith 1.0 35B Q4",
+                "Runs DeepReinforce's larger Ornith coding-agent GGUF through the native "
+                + "llama.cpp/GGUF code runtime.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 "speech-tts-qwen3-nano",
                 "Text to speech",
                 "Synthesizes speech with Qwen3 TTS, including style prompts and voice-design workflows.",

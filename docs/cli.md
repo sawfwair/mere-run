@@ -73,7 +73,7 @@ are:
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
-- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-code-north-mini`, `text-code-qwen3`
+- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
@@ -447,6 +447,15 @@ Swift/llama.cpp code path as Qwen:
 ```bash
 swift run mere.run model pull text-code-north-mini
 swift run mere.run text code --model text-code-north-mini --prompt "Sketch a small Swift Result helper."
+```
+
+Ornith 35B is managed as `text-agent-ornith-35b` for larger local coding-agent
+comparisons. It pulls DeepReinforce's Q4_K_M GGUF quant and runs through the
+same native Swift/llama.cpp code path:
+
+```bash
+swift run mere.run model pull text-agent-ornith-35b
+swift run mere.run text code --model text-agent-ornith-35b --prompt "Sketch a small Swift Result helper."
 ```
 
 ### `mere.run text embed`
@@ -1257,7 +1266,8 @@ Linux when available. Use `--sandbox none` only for a trusted local smoke where
 timeout and temporary-directory hygiene are enough. The default generation cap is
 `--max-tokens 1024`, and capped cases are reported as `reachedMaxTokens` in JSON
 or `capped=true` in text output. Use `--models` and `--tasks` to narrow the
-slice while iterating.
+slice while iterating. Use `--models text-agent-ornith-35b` for the larger
+Ornith GGUF eval target.
 
 For a larger slice from the official HumanEval data, download and decompress
 `HumanEval.jsonl.gz`, then pass the JSONL file with `--humaneval-file`:
@@ -1533,6 +1543,12 @@ installed llama.cpp runtime supports the `cohere2moe` architecture.
 Ornith (`text-agent-ornith-9b`) is available as an experimental native
 MLX/OptiQ coding-agent model. It uses the Qwen-family runtime, so serve it with
 `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
+The larger Ornith 35B GGUF target (`text-agent-ornith-35b`) is also available
+for explicit evals and runs through:
+
+```bash
+swift run mere.run api serve --engine text-code --model text-agent-ornith-35b
+```
 
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.

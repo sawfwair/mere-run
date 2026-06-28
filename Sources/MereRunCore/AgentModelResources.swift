@@ -34,6 +34,25 @@ public struct NorthMiniCodeResources: Sendable, Hashable {
     )
 }
 
+public struct Ornith35BCodeResources: Sendable, Hashable {
+    public static let modelId = "text-agent-ornith-35b"
+    public static let upstreamRepoId = "deepreinforce-ai/Ornith-1.0-35B-GGUF"
+    public static let upstreamRevision = "c2e1703039380de4ce6820e97afd185682d3c16c"
+    public static let ggufFile = "ornith-1.0-35b-Q4_K_M.gguf"
+    public static let managedRelativePath = "\(modelId).gguf"
+    public static let contextLength = 262_144
+    public static let runtimeContextLength = 32_768
+    public static let maxOutputTokens = 4_096
+    public static let estimatedDownloadBytes: Int64 = 21_166_757_760
+
+    public static let hubFallbackConfig = HubFallbackConfig(
+        repoId: upstreamRepoId,
+        revision: upstreamRevision,
+        patterns: [ggufFile],
+        filePath: ggufFile
+    )
+}
+
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
     case textChatQ36 = "text-chat-q36"
@@ -159,6 +178,7 @@ public enum MereRunAgentModelCatalog {
             qwen35NineB(),
             northMiniCode(),
             ornith9B(),
+            ornith35B(),
             q36Nano(),
             qwen3CoderNext(),
             deepseekV4Flash(),
@@ -210,6 +230,18 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 24,
             servingEngine: .textChatQ35,
             managedModelID: Q35Resources.ornith9BModelId
+        )
+    }
+
+    private static func ornith35B() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Ornith35BCodeResources.modelId,
+            displayName: "Ornith 1.0 35B Q4",
+            summary: "Larger Ornith GGUF coding-agent model for native llama.cpp-backed eval comparisons.",
+            minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 64,
+            servingEngine: .textCode,
+            managedModelID: Ornith35BCodeResources.modelId
         )
     }
 

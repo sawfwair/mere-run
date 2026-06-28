@@ -44,6 +44,8 @@ The format is based on Keep a Changelog.
   default `vision ocr` backend.
 - added `text-agent-ornith-9b` as an experimental native Qwen-family MLX/OptiQ
   coding-agent target backed by the pinned public Ornith 1.0 9B snapshot.
+- added `text-agent-ornith-35b` as a managed native GGUF coding-agent target
+  for larger Ornith evals through the existing `text-code` runtime.
 
 ### Fixed
 

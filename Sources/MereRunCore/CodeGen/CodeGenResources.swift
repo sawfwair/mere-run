@@ -20,6 +20,8 @@ public struct CodeGenResources: Sendable, Hashable {
         switch modelId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case NorthMiniCodeResources.modelId:
             return "North Mini Code"
+        case Ornith35BCodeResources.modelId:
+            return "Ornith 1.0 35B"
         default:
             return "Qwen3-Coder"
         }
@@ -29,6 +31,8 @@ public struct CodeGenResources: Sendable, Hashable {
         switch modelId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case NorthMiniCodeResources.modelId:
             return UInt32(NorthMiniCodeResources.runtimeContextLength)
+        case Ornith35BCodeResources.modelId:
+            return UInt32(Ornith35BCodeResources.runtimeContextLength)
         default:
             return 32_768
         }

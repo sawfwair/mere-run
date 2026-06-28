@@ -821,6 +821,22 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     + "@\(Q35Resources.ornith9BUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .ornith35B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3Coder,
+                family: .code,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "gguf-q4-k-m"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: nil,
+                upstreamRepoId: "\(Ornith35BCodeResources.upstreamRepoId)"
+                    + "@\(Ornith35BCodeResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .northMiniCode:
             return MereRunModelManifest(
                 id: modelID.rawValue,

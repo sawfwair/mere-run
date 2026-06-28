@@ -304,8 +304,10 @@ Engine compatibility:
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
 - `text-code`: accepts plain text chat requests and OpenAI `stop` sequences;
-  rejects tools, images, reasoning controls, logprobs, seed, and structured
-  outputs with explicit errors.
+  use it for GGUF code models such as `text-code-qwen3`,
+  `text-code-north-mini`, and `text-agent-ornith-35b`. It rejects tools,
+  images, reasoning controls, logprobs, seed, and structured outputs with
+  explicit errors.
 
 Streaming responses only emit assistant content tokens. Local progress labels
 stay in logs/stderr, and `stream_options.include_usage` adds the final usage
