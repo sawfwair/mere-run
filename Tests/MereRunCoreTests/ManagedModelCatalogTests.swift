@@ -317,6 +317,20 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("optiq_metadata.json"), true)
     }
 
+    func testOrnith35BMLXUsesLocalNativeQ35Source() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLXModelId))
+
+        XCTAssertEqual(spec.category, .textCode)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertNil(spec.hubFallback)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.ornith35BMLXUpstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Q35Resources.ornith35BMLXUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith35BMLXEstimatedDownloadBytes)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+    }
+
     func testInfinityParser2FlashUsesNativeQ35VisionOCRSpec() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2FlashModelId))
 

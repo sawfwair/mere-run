@@ -694,6 +694,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["chat", "api serve", "agent start"]
         ),
         ManagedModelSpec(
+            id: Q35Resources.ornith35BMLXModelId,
+            category: .textCode,
+            installShape: .directoryRoot,
+            upstreamRepoId: Q35Resources.ornith35BMLXUpstreamRepoId,
+            upstreamRevision: Q35Resources.ornith35BMLXUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
+            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"]
+        ),
+        ManagedModelSpec(
             id: AgentModelResources.qwen35NineBModelId,
             category: .textCode,
             installShape: .singleFile(relativePath: AgentModelResources.qwen35NineBRelativePath),

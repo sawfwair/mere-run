@@ -188,6 +188,25 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testOrnith35BMLXTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(for: .ornith35BMLX, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.id, Q35Resources.ornith35BMLXModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .code)
+        XCTAssertEqual(manifest.tier, .small)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine-moe")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.ornith35BMLXUpstreamRepoId)@\(Q35Resources.ornith35BMLXUpstreamRevision)"
+        )
+    }
+
     func testOrnith35BTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .ornith35B, createdAt: Date(timeIntervalSince1970: 0))
 

@@ -149,8 +149,10 @@ leaderboard substitute. The default comparison is:
 - `text-code-north-mini`: native llama.cpp/GGUF North Mini Code target.
 - `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline.
 
-For larger explicit Ornith runs, pass `--models text-agent-ornith-35b`; it is
-not part of the default comparison because it is a larger GGUF download/load.
+For larger explicit Ornith runs, pass `--models text-agent-ornith-35b-mlx` for
+the local native MLX Q4 conversion or `--models text-agent-ornith-35b` for the
+GGUF target. They are not part of the default comparison because they are larger
+installs/loads.
 
 The default suite is `humaneval-slice`, currently three public HumanEval tasks:
 

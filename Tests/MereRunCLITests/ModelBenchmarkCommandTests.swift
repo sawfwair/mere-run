@@ -42,7 +42,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
 
     func testCodeBenchmarkParsesOverrides() throws {
         let cmd = try ModelBenchmarkCode.parse([
-            "--models", "text-agent-ornith-9b,text-code-north-mini",
+            "--models", "text-agent-ornith-35b-mlx,text-code-north-mini",
             "--suite", "humaneval-slice",
             "--tasks", "HumanEval/0,HumanEval/8",
             "--max-tokens", "256",
@@ -56,7 +56,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--json",
         ])
 
-        XCTAssertEqual(cmd.models, "text-agent-ornith-9b,text-code-north-mini")
+        XCTAssertEqual(cmd.models, "text-agent-ornith-35b-mlx,text-code-north-mini")
         XCTAssertEqual(cmd.suite, .humanEvalSlice)
         XCTAssertEqual(cmd.tasks, "HumanEval/0,HumanEval/8")
         XCTAssertEqual(cmd.maxTokens, 256)

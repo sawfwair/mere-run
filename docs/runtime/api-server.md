@@ -303,6 +303,9 @@ Engine compatibility:
 - `text-agent-ornith-9b`: uses the same Qwen-family serving engine for the
   Ornith 1.0 9B OptiQ coding-agent experiment; start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
+- `text-agent-ornith-35b-mlx`: uses the Qwen-family serving engine for a local
+  converted Ornith 1.0 35B Q4 MLX snapshot; start it with
+  `api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx`.
 - `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
   LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
   image content parts.

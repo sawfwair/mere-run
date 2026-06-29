@@ -12,7 +12,8 @@ is `text-agent-deepseek-v4-flash`. Smaller Qwen agent models are lower-memory
 or comparison alternatives. `text-code-north-mini` is available for native
 GGUF coding-agent experiments, `text-agent-ornith-35b` is available for larger
 native GGUF Ornith evals, and `text-agent-ornith-9b` is available for native
-Qwen-family MLX/OptiQ coding-agent experiments.
+Qwen-family MLX/OptiQ coding-agent experiments. `text-agent-ornith-35b-mlx`
+is the local converted native MLX Q4 lane for larger Ornith evals.
 
 ## Install And Check
 
@@ -40,6 +41,8 @@ mere.run agent onboard --help
   then use `--configure-pi --model text-code-north-mini --host <host> --port <port>`.
 - For Ornith 35B, pull `text-agent-ornith-35b`, start `api serve --engine text-code --model text-agent-ornith-35b`,
   then use `--configure-pi --model text-agent-ornith-35b --host <host> --port <port>`.
+- For Ornith 35B MLX, install `text-agent-ornith-35b-mlx`, start `api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx`,
+  then use `--configure-pi --model text-agent-ornith-35b-mlx --host <host> --port <port>`.
 - For Ornith, pull `text-agent-ornith-9b`, start `api serve --engine text-chat-q36 --model text-agent-ornith-9b`,
   then use `--configure-pi --model text-agent-ornith-9b --host <host> --port <port>`.
 

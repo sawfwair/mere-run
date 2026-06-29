@@ -382,6 +382,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                Q35Resources.ornith35BMLXModelId,
+                "Ornith 1.0 35B MLX Q4",
+                "Runs a converted Ornith 1.0 35B Q4 MLX MoE through the native Qwen-family runtime.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
                 LFM2Resources.defaultModelId,
                 "LFM2.5 A1B 8-bit",
                 "Runs the LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot through the native Swift LFM2 runtime.",

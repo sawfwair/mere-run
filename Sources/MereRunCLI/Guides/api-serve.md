@@ -15,7 +15,8 @@ Supported engines:
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
-  and also serves Qwen-family agent experiments such as `text-agent-ornith-9b`.
+  and also serves Qwen-family agent experiments such as `text-agent-ornith-9b`
+  and `text-agent-ornith-35b-mlx`.
 - `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.

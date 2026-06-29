@@ -37,6 +37,8 @@ mere.run status
   through the native GGUF code runtime.
 - Use `agent start --model text-agent-ornith-35b` to compare the larger Ornith
   GGUF coding-agent target through the same native `text-code` runtime.
+- Use `agent start --model text-agent-ornith-35b-mlx` to compare the locally
+  converted Ornith 35B MLX target through the native Qwen-family runtime.
 - On Linux, provide an existing Pi binary with `--pi-path` or PATH before starting.
 - Run `status` when you need to confirm the local server and served model.
 - Keep the default prompt unless the user has a specific setup goal.

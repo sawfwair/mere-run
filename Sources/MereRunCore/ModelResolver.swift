@@ -41,6 +41,7 @@ public struct ModelResolver {
         case qwen35Agent9B = "text-agent-qwen35-9b"
         case ornith9B = "text-agent-ornith-9b"
         case ornith35B = "text-agent-ornith-35b"
+        case ornith35BMLX = "text-agent-ornith-35b-mlx"
         case northMiniCode = "text-code-north-mini"
         case q36NanoGGUF = "text-chat-q36-nano-gguf"
         case deepseekV4Flash = "text-agent-deepseek-v4-flash"

@@ -73,7 +73,7 @@ are:
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
-- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
+- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
@@ -456,6 +456,14 @@ same native Swift/llama.cpp code path:
 ```bash
 swift run mere.run model pull text-agent-ornith-35b
 swift run mere.run text code --model text-agent-ornith-35b --prompt "Sketch a small Swift Result helper."
+```
+
+`text-agent-ornith-35b-mlx` is the native Swift/MLX lane for a locally converted
+Ornith 1.0 35B Q4 directory. It is intentionally local-only until a converted
+MLX snapshot is published:
+
+```bash
+swift run mere.run text chat --model text-agent-ornith-35b-mlx --prompt "Sketch a small Swift Result helper."
 ```
 
 ### `mere.run text embed`
@@ -1547,10 +1555,13 @@ installed llama.cpp runtime supports the `cohere2moe` architecture.
 Ornith (`text-agent-ornith-9b`) is available as an experimental native
 MLX/OptiQ coding-agent model. It uses the Qwen-family runtime, so serve it with
 `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
+The local converted Ornith 35B MLX target (`text-agent-ornith-35b-mlx`) uses
+the same native Qwen-family serving engine when installed.
 The larger Ornith 35B GGUF target (`text-agent-ornith-35b`) is also available
 for explicit evals and runs through:
 
 ```bash
+swift run mere.run api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx
 swift run mere.run api serve --engine text-code --model text-agent-ornith-35b
 ```
 

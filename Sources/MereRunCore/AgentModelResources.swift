@@ -179,6 +179,7 @@ public enum MereRunAgentModelCatalog {
             northMiniCode(),
             ornith9B(),
             ornith35B(),
+            ornith35BMLX(),
             q36Nano(),
             qwen3CoderNext(),
             deepseekV4Flash(),
@@ -242,6 +243,18 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 64,
             servingEngine: .textCode,
             managedModelID: Ornith35BCodeResources.modelId
+        )
+    }
+
+    private static func ornith35BMLX() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Q35Resources.ornith35BMLXModelId,
+            displayName: "Ornith 1.0 35B MLX Q4",
+            summary: "Converted MLX Q4 Ornith 35B MoE for native Swift Qwen-family eval comparisons.",
+            minimumUnifiedMemoryGB: 24,
+            recommendedUnifiedMemoryGB: 32,
+            servingEngine: .textChatQ35,
+            managedModelID: Q35Resources.ornith35BMLXModelId
         )
     }
 

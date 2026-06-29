@@ -21,6 +21,7 @@ embeddings, and PII anonymization.
 - `text-chat-q36-nano`
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
+- `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot`
 - `text-chat-psi-agent`
@@ -75,6 +76,10 @@ and runs through the native Swift LFM2 runtime. It is text-only; use
 through the native Qwen-family runtime. Use `text chat --model text-agent-ornith-9b`
 or `api serve --engine text-chat-q36 --model text-agent-ornith-9b` for coding-agent
 smoke tests.
+
+`text-agent-ornith-35b-mlx` is the same native Qwen-family runtime lane for a
+locally converted Ornith 1.0 35B Q4 MLX directory. It does not auto-download
+from Hugging Face until a converted snapshot is published.
 
 ### Local code generation
 
