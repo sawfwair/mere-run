@@ -91,14 +91,15 @@ mere.run status
   removed from the FIFO instead of running later.
 - Gemma4 and Qwen-family chat use chunked prefill with cancellation/progress checkpoints.
   This improves long-prompt observability without arbitrary batching.
-- Gemma4 can opt into in-memory prefix KV reuse with
-  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; `/runtime/status` reports entries, hits,
-  and reused tokens when a Gemma4 model is loaded. The cache records chunk
-  boundaries plus the stable chat prefix before the final message when token
-  prefixes match exactly.
-- Qwen-family chat can opt into text-only in-memory prefix KV reuse with
-  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
-  text-only requests use the same stable chat-prefix checkpoint rule as Gemma4.
+- Gemma4 uses in-memory prefix KV reuse by default; set
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
+  entries, hits, and reused tokens when a Gemma4 model is loaded. The cache
+  records chunk boundaries plus the stable chat prefix before the final message
+  when token prefixes match exactly.
+- Qwen-family chat uses text-only in-memory prefix KV reuse by default; set
+  `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
+  from reuse, and text-only requests use the same stable chat-prefix checkpoint
+  rule as Gemma4.
 - Gemma4 and Qwen-family chat can opt into decode batching with
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to

@@ -1235,6 +1235,49 @@ block verifier; non-greedy forced MTP stays on the exact probabilistic
 speculative path. Use `--mtp-block-size` to test a different greedy draft block
 cap and `--forced-mtp-min-prompt-tokens` to adjust the forced policy threshold.
 
+### `mere.run model benchmark api-workload`
+
+Replay streaming OpenAI-compatible chat requests against an already-running
+`mere.run api serve` process. This is the serving-path benchmark for request
+admission, prefix KV reuse, opt-in decode batching, and the eventual SSD KV
+decision.
+
+```bash
+MERERUN_GEMMA4_PREFIX_KV_CACHE=0 \
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 1
+
+swift run mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --json
+```
+
+To test the measured-work path, rerun the same workload with default prefix
+reuse and opt-in batching enabled, then compare TTFT, wall-clock throughput, and
+runtime status deltas:
+
+```bash
+MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 \
+swift run mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 4
+
+swift run mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --concurrency 4 \
+  --json
+```
+
+The built-in workload uses one stable system prefix and varied final user turns.
+Output reports per-request TTFT, total latency, streamed chunk count, wall-clock
+requests/sec, prefix KV hits/misses, reused prefix tokens, decode batched steps,
+single decode steps, and whether SSD KV cache is available. Use
+`--workload-file` to replay JSONL rows with either `{ "id", "user" }` or
+`{ "id", "messages" }`.
+
 ### `mere.run model benchmark code`
 
 Run a small real coding-eval slice against installed local coding models. The
@@ -1378,13 +1421,15 @@ Security defaults:
 - elevated or critical memory pressure pauses extra concurrent admissions while
   letting one request run so the server can make progress
 - Gemma4 and Qwen-family chat use chunked prefill checkpoints for long prompts.
-- Gemma4 can opt into an in-memory prefix KV reuse prototype with
-  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; runtime status reports entries, hits, and
-  reused tokens when a Gemma4 model is loaded, including semantic chat-prefix
-  checkpoints before the final message when token prefixes match exactly
-- Qwen-family chat can opt into text-only in-memory prefix KV reuse with
-  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
-  text-only requests use the same semantic chat-prefix checkpoints as Gemma4
+- Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. Runtime status reports
+  entries, hits, and reused tokens when a Gemma4 model is loaded, including
+  semantic chat-prefix checkpoints before the final message when token prefixes
+  match exactly.
+- Qwen-family chat uses text-only in-memory prefix KV reuse by default in
+  `api serve`; set `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision
+  prompts are excluded from reuse, and text-only requests use the same semantic
+  chat-prefix checkpoints as Gemma4.
 - Managed Gemma4 12B text and vision pulls install a companion MTP assistant.
   When `MERERUN_GEMMA4_MTP` is not disabled, greedy serial decode can use that
   assistant on the decode tail after prefill; sampled requests, continuous
