@@ -265,28 +265,24 @@ struct ModelBenchmarkAPIWorkload: AsyncParsableCommand {
         }
         request.httpBody = body
 
-        let start = Date()
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw ValidationError("Chat completion returned a non-HTTP response.")
-        }
-
         var firstTokenSeconds: Double?
         var completion = ""
         var streamedChunks = 0
         var completionTokens: Int?
         var errorBody = ""
-        for try await line in bytes.lines {
-            if http.statusCode != 200 {
+
+        let start = Date()
+        func consumeLine(_ line: String, statusCode: Int) {
+            if statusCode != 200 {
                 errorBody += line
-                continue
+                return
             }
-            guard line.hasPrefix("data: ") else { continue }
+            guard line.hasPrefix("data: ") else { return }
             let payload = String(line.dropFirst("data: ".count))
-            guard payload != "[DONE]" else { break }
-            guard let data = payload.data(using: .utf8),
+            guard payload != "[DONE]" else { return }
+            guard let data = payload.data(using: String.Encoding.utf8),
                   let chunk = try? JSONDecoder().decode(OpenAIChatResponse.self, from: data) else {
-                continue
+                return
             }
             if let usage = chunk.usage {
                 completionTokens = usage.completion_tokens
@@ -301,6 +297,29 @@ struct ModelBenchmarkAPIWorkload: AsyncParsableCommand {
                 }
             }
         }
+
+        let http: HTTPURLResponse
+        #if os(Linux)
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let resolvedHTTP = response as? HTTPURLResponse else {
+            throw ValidationError("Chat completion returned a non-HTTP response.")
+        }
+        http = resolvedHTTP
+        let responseText = String(data: responseData, encoding: .utf8)
+            ?? String(decoding: responseData, as: UTF8.self)
+        for line in responseText.split(separator: "\n", omittingEmptySubsequences: false) {
+            consumeLine(String(line), statusCode: http.statusCode)
+        }
+        #else
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let resolvedHTTP = response as? HTTPURLResponse else {
+            throw ValidationError("Chat completion returned a non-HTTP response.")
+        }
+        http = resolvedHTTP
+        for try await line in bytes.lines {
+            consumeLine(line, statusCode: http.statusCode)
+        }
+        #endif
 
         let totalSeconds = Date().timeIntervalSince(start)
         guard http.statusCode == 200 else {

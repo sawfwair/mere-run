@@ -295,13 +295,14 @@ private final class LimitedOutputPipe: @unchecked Sendable {
 
     init(limitBytes: Int) {
         self.limitBytes = limitBytes
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+        let handler: @Sendable (FileHandle) -> Void = { [weak self] handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else {
                 return
             }
             self?.append(chunk)
         }
+        pipe.fileHandleForReading.readabilityHandler = handler
     }
 
     func finish() -> Capture {
