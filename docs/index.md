@@ -16,6 +16,9 @@ hero:
       text: CLI Reference
       link: /cli
     - theme: alt
+      text: Benchmarking
+      link: /benchmarking
+    - theme: alt
       text: Repository Tour
       link: /repository-tour
 
@@ -28,6 +31,8 @@ features:
     details: Linux releases ship portable x86_64 CPU and CUDA tarballs plus Debian packages for CLI-only installs on Ubuntu-style hosts; arm64 Linux packages are CUDA-only and require a real arm64 CUDA host.
   - title: Canonical model system
     details: Public model IDs, shared model-store rules, Hugging Face-backed pulls, and `mere.run status` make installs predictable and scriptable.
+  - title: Focused local benchmarks
+    details: Quality evals, generated-code execution, VLM fixtures, serving workload, and runtime microbenchmarks are documented as separate lanes.
   - title: Readable runtime families
     details: The repo is documented and decomposed so contributors can follow command -> runtime -> model loading -> generation without guesswork.
 ---
@@ -39,6 +44,7 @@ features:
 - [Getting Started](/getting-started)
 - [Linux QuickStart](/linux-quickstart)
 - [CLI Reference](/cli)
+- [Benchmarking](/benchmarking)
 - [Configuration](/configuration)
 - [Model Sources](/model-sources)
 

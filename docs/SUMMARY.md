@@ -4,6 +4,7 @@
 - [Getting Started](./getting-started.md)
 - [Linux QuickStart](./linux-quickstart.md)
 - [CLI Reference](./cli.md)
+- [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
