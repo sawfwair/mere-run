@@ -10,11 +10,13 @@ this when another tool, editor, UI, or agent needs to call mere.run over HTTP.
 
 Supported engines:
 
-- `text-code`: GGUF code models such as `text-code-qwen3` and `text-code-north-mini`.
+- `text-code`: GGUF code models such as `text-code-qwen3`,
+  `text-code-north-mini`, and `text-agent-ornith-35b`.
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
-  and also serves Qwen-family agent experiments such as `text-agent-ornith-9b`.
+  and also serves Qwen-family agent experiments such as `text-agent-ornith-9b`
+  and `text-agent-ornith-35b-mlx`.
 - `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
@@ -91,14 +93,15 @@ mere.run status
   removed from the FIFO instead of running later.
 - Gemma4 and Qwen-family chat use chunked prefill with cancellation/progress checkpoints.
   This improves long-prompt observability without arbitrary batching.
-- Gemma4 can opt into in-memory prefix KV reuse with
-  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; `/runtime/status` reports entries, hits,
-  and reused tokens when a Gemma4 model is loaded. The cache records chunk
-  boundaries plus the stable chat prefix before the final message when token
-  prefixes match exactly.
-- Qwen-family chat can opt into text-only in-memory prefix KV reuse with
-  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded from reuse, and
-  text-only requests use the same stable chat-prefix checkpoint rule as Gemma4.
+- Gemma4 uses in-memory prefix KV reuse by default; set
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
+  entries, hits, and reused tokens when a Gemma4 model is loaded. The cache
+  records chunk boundaries plus the stable chat prefix before the final message
+  when token prefixes match exactly.
+- Qwen-family chat uses text-only in-memory prefix KV reuse by default; set
+  `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
+  from reuse, and text-only requests use the same stable chat-prefix checkpoint
+  rule as Gemma4.
 - Gemma4 and Qwen-family chat can opt into decode batching with
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
   `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to
@@ -115,6 +118,7 @@ mere.run status
   `benchmarkStats` so these experiments stay measured.
 - DS4 raw-proxies the complete OpenAI chat request to `ds4-server`.
 - Native engines reject unsupported OpenAI fields explicitly instead of silently dropping them.
+- `text-code` maps OpenAI `stop` sequences into native generation stops.
 - Function `tool_choice` values are accepted for native tool-capable engines;
   specific function choices narrow the advertised tools to the named function.
 - `/v1/embeddings` accepts OpenAI-compatible string or string-array `input`

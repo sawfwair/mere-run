@@ -317,6 +317,20 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("optiq_metadata.json"), true)
     }
 
+    func testOrnith35BMLXUsesLocalNativeQ35Source() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLXModelId))
+
+        XCTAssertEqual(spec.category, .textCode)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertNil(spec.hubFallback)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.ornith35BMLXUpstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Q35Resources.ornith35BMLXUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith35BMLXEstimatedDownloadBytes)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+    }
+
     func testInfinityParser2FlashUsesNativeQ35VisionOCRSpec() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2FlashModelId))
 
@@ -375,6 +389,23 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .codegenGGUF)
         XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.estimatedDownloadBytes, NorthMiniCodeResources.estimatedDownloadBytes)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textCode)
+    }
+
+    func testOrnith35BUsesPinnedGGUFHubSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ornith35BCodeResources.modelId))
+
+        XCTAssertEqual(spec.category, .textCode)
+        XCTAssertEqual(spec.installShape, .singleFile(relativePath: Ornith35BCodeResources.managedRelativePath))
+        XCTAssertEqual(spec.hubFallback?.repoId, Ornith35BCodeResources.upstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Ornith35BCodeResources.upstreamRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, [Ornith35BCodeResources.ggufFile])
+        XCTAssertEqual(spec.hubFallback?.filePath, Ornith35BCodeResources.ggufFile)
+        XCTAssertEqual(spec.upstreamRepoId, Ornith35BCodeResources.upstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Ornith35BCodeResources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .codegenGGUF)
+        XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Ornith35BCodeResources.estimatedDownloadBytes)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textCode)
     }
 

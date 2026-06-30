@@ -21,12 +21,14 @@ embeddings, and PII anonymization.
 - `text-chat-q36-nano`
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
+- `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot`
 - `text-chat-psi-agent`
 
 ### Code
 
+- `text-agent-ornith-35b`
 - `text-code-north-mini`
 - `text-code-qwen3`
 
@@ -75,6 +77,10 @@ through the native Qwen-family runtime. Use `text chat --model text-agent-ornith
 or `api serve --engine text-chat-q36 --model text-agent-ornith-9b` for coding-agent
 smoke tests.
 
+`text-agent-ornith-35b-mlx` is the same native Qwen-family runtime lane for a
+locally converted Ornith 1.0 35B Q4 MLX directory. It does not auto-download
+from Hugging Face until a converted snapshot is published.
+
 ### Local code generation
 
 ```bash
@@ -82,16 +88,23 @@ swift run mere.run text code \
   --prompt "Write a Swift function that reverses a string."
 ```
 
-`text-code-qwen3` and `text-code-north-mini` are native `text code` models and
-run GGUF weights through llama.cpp. North Mini Code uses the Unsloth
-`North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant, so it requires a llama.cpp runtime
-with `cohere2moe` architecture support.
+`text-code-qwen3`, `text-code-north-mini`, and `text-agent-ornith-35b` are
+native `text code` models and run GGUF weights through llama.cpp. North Mini
+Code uses the Unsloth `North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant, so it
+requires a llama.cpp runtime with `cohere2moe` architecture support. Ornith 35B
+uses DeepReinforce's `ornith-1.0-35b-Q4_K_M.gguf` quant for larger coding-agent
+evals.
 
 ```bash
 swift run mere.run model pull text-code-north-mini
 swift run mere.run text code \
   --model text-code-north-mini \
   --prompt "Write a Swift function that reverses a string."
+
+swift run mere.run model pull text-agent-ornith-35b
+swift run mere.run text code \
+  --model text-agent-ornith-35b \
+  --prompt "Write a compact Swift Result helper."
 ```
 
 ### Embeddings

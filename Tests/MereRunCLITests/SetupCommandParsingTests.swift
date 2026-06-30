@@ -121,6 +121,29 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textChatGemma4)
     }
 
+    func testOrnith35BProviderUsesNativeManagedModelID() throws {
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(
+                    on: MereRunMachineProfile(
+                        physicalMemoryBytes: 64 * 1_073_741_824,
+                        processorName: "M4 Max",
+                        isAppleSiliconMac: true
+                    )
+                )
+                .first { $0.id == Ornith35BCodeResources.modelId }
+        )
+
+        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+
+        XCTAssertEqual(providerModel.id, Ornith35BCodeResources.modelId)
+        XCTAssertEqual(providerModel.contextWindow, Ornith35BCodeResources.runtimeContextLength)
+        XCTAssertEqual(providerModel.maxTokens, Ornith35BCodeResources.maxOutputTokens)
+        XCTAssertFalse(providerModel.reasoning)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textCode)
+    }
+
     func testOrnithProviderUsesNativeQ35ManagedModelID() throws {
         let recommendation = try XCTUnwrap(
             MereRunAgentModelCatalog

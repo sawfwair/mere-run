@@ -41,6 +41,28 @@ mere.run model benchmark q36-mtp \
   --json
 ```
 
+Replay a real OpenAI-compatible chat workload against a running API server:
+
+```bash
+MERERUN_GEMMA4_PREFIX_KV_CACHE=0 \
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 1
+
+mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --json
+```
+
+Compare the installed coding models on a small HumanEval slice:
+
+```bash
+mere.run model benchmark code \
+  --allow-code-execution \
+  --json
+```
+
 Compare Gemma4 12B vision chat against the existing Qwen3-VL inspect backend:
 
 ```bash
@@ -128,6 +150,55 @@ against baseline. Use `--temperature-values 0,0.7` to compare deterministic
 greedy decode against the default chat sampling temperature. Greedy forced MTP
 uses the native block verifier; non-greedy forced MTP stays on the exact
 probabilistic speculative path.
+
+## API Workload Benchmark
+
+`model benchmark api-workload` replays streaming `/v1/chat/completions`
+requests against an already-running `mere.run api serve` process. It is the
+serving-path benchmark for prefix reuse, request admission, and opt-in decode
+batching. The built-in workload uses a deterministic stable system prefix with
+different final user turns so prefix-cache hits, TTFT, and active-request
+behavior are visible in `/runtime/status`.
+
+Run the same workload twice, with prefix reuse disabled for the baseline and
+then default prefix reuse plus opt-in batching enabled, before promoting cache
+or batching changes:
+
+```bash
+MERERUN_GEMMA4_PREFIX_KV_CACHE=0 \
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 1
+
+mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --json
+
+MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 \
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 4
+
+mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --concurrency 4 \
+  --json
+```
+
+Output includes per-request status, TTFT, total latency, streamed chunk count,
+and runtime-status deltas for prefix KV hits/misses, reused tokens, decode
+batched steps, single decode steps, completed requests, failed requests, and
+whether SSD KV cache is available. SSD cache promotion should require repeatable
+TTFT or throughput wins from in-memory prefix reuse first.
+
+Use `--workload-file` to replay JSONL:
+
+```json
+{"id":"case-1","user":"Summarize the runtime benchmark rule."}
+{"id":"case-2","messages":[{"role":"system","content":"Shared product context..."},{"role":"user","content":"Answer from that context."}]}
+```
 
 ## Prompt Control
 
@@ -219,6 +290,70 @@ mere.run model benchmark tool-calls \
   --log-responses
 ```
 
+## Code Benchmark
+
+`model benchmark code` runs a tiny, fixed HumanEval slice against local coding
+models. It is a real functional-code eval slice, not a full pass@k benchmark or
+leaderboard substitute. The default comparison is:
+
+- `text-agent-ornith-9b`: native Q35/MLX OptiQ coding-agent target.
+- `text-code-north-mini`: native llama.cpp/GGUF North Mini Code target.
+- `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline.
+
+For larger explicit Ornith runs, pass `--models text-agent-ornith-35b-mlx` for
+the local native MLX Q4 conversion or `--models text-agent-ornith-35b` for the
+GGUF target. They are not part of the default comparison because they are larger
+installs/loads.
+
+The default suite is `humaneval-slice`, currently three public HumanEval tasks:
+
+- `HumanEval/0`
+- `HumanEval/3`
+- `HumanEval/8`
+
+Each task is prompted once with deterministic sampling by default
+(`--temperature 0 --top-p 1`), the generated Python is combined with the task's
+tests, and the candidate is executed with `python3` inside the selected sandbox
+backend. Because this runs generated code locally, the command requires
+`--allow-code-execution` unless you are using `--dry-run`. The default
+`--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on Linux when
+available. Use `--sandbox none` only for a trusted local smoke where timeout and
+temporary-directory hygiene are enough. The default generation cap is
+`--max-tokens 1024`; JSON and text output flag cases that still reach the cap
+with `reachedMaxTokens`/`capped=true`. Reasoning-model output is split before
+scoring: visible code is executed, while captured `<think>...</think>` content
+is reported as `reasoningCharacters`/`reasoning_chars` and
+`incompleteReasoning`/`reasoning_incomplete`. A second generated reasoning
+block is reported as `reasoning_reopened=true`; treat it as a loop or
+phase-restart warning, not a correctness failure by itself.
+
+Narrow the run while iterating:
+
+```bash
+mere.run model benchmark code \
+  --models text-agent-ornith-35b \
+  --tasks HumanEval/0 \
+  --allow-code-execution
+```
+
+Use `--python` to select a Python interpreter and `--execution-timeout` to
+control the per-candidate subprocess timeout. The command never auto-pulls
+models during scoring; install missing models with `mere.run model pull` first.
+
+For a larger slice, download the official HumanEval JSONL, decompress it, and
+pass it with `--humaneval-file`:
+
+```bash
+curl -L https://raw.githubusercontent.com/openai/human-eval/master/data/HumanEval.jsonl.gz \
+  -o /tmp/HumanEval.jsonl.gz
+gunzip -c /tmp/HumanEval.jsonl.gz > /tmp/HumanEval.jsonl
+mere.run model benchmark code \
+  --humaneval-file /tmp/HumanEval.jsonl \
+  --tasks HumanEval/0,HumanEval/1,HumanEval/2,HumanEval/3,HumanEval/4 \
+  --models text-agent-ornith-35b \
+  --allow-code-execution
+```
+
 ## VLM Benchmark
 
 `model benchmark vlm` writes a tiny deterministic image-question suite to a
@@ -299,6 +434,9 @@ mere.run model benchmark vlm \
 ## Notes
 
 - Pull `text-chat-gemma4-turbo` before running the benchmark.
+- Pull `text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`
+  before running the default code benchmark comparison.
+- Pull `text-agent-ornith-35b` before running larger explicit Ornith code evals.
 - Pull `vision-chat-gemma4-12b` before using it in the VLM benchmark.
 - Install `lmms-eval` dependencies in the selected Python environment before
   running external datasets; dataset downloads and licenses are handled by the
@@ -309,6 +447,7 @@ mere.run model benchmark vlm \
 ## Sources
 
 - `Sources/MereRunCLI/Commands/ModelBenchmarkCommand.swift`
+- `Sources/MereRunCLI/Commands/ModelBenchmarkCodeCommand.swift`
 - `Sources/MereRunCLI/Commands/ModelBenchmarkVLMCommand.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4Generator.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4KVQuantization.swift`

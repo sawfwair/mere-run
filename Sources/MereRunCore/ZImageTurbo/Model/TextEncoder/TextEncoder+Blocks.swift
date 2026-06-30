@@ -140,28 +140,27 @@ public final class QwenAttention: Module {
       values = cachedValues
     }
 
-    if numKeyValueHeads != numAttentionHeads {
-      keys = expandKeyValue(keys, repeats: numKeyValueGroups)
-      values = expandKeyValue(values, repeats: numKeyValueGroups)
-    }
-
     let queriesF32 = queries.asType(.float32)
-    let keysF32 = keys.asType(.float32)
-    let valuesF32 = values.asType(.float32)
 
     let output: MLXArray
     if cache != nil && L == 1 {
       // Qwen3-VL decode diverges after prefill on the fast single-token path.
       // Fall back to explicit attention for cached 1-token decode, which matches
       // the upstream reference more closely while keeping prefill on the fast kernel.
+      if numKeyValueHeads != numAttentionHeads {
+        keys = expandKeyValue(keys, repeats: numKeyValueGroups)
+        values = expandKeyValue(values, repeats: numKeyValueGroups)
+      }
+      let keysF32 = keys.asType(.float32)
+      let valuesF32 = values.asType(.float32)
       let scores = MLX.matmul(queriesF32, keysF32.transposed(0, 1, 3, 2)) * MLXArray(scale)
       let probs = softmax(scores, axis: -1)
       output = MLX.matmul(probs, valuesF32)
     } else {
       output = MLXFast.scaledDotProductAttention(
         queries: queriesF32,
-        keys: keysF32,
-        values: valuesF32,
+        keys: keys.asType(.float32),
+        values: values.asType(.float32),
         scale: scale,
         mask: mask
       )

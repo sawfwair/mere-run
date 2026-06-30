@@ -694,6 +694,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["chat", "api serve", "agent start"]
         ),
         ManagedModelSpec(
+            id: Q35Resources.ornith35BMLXModelId,
+            category: .textCode,
+            installShape: .directoryRoot,
+            upstreamRepoId: Q35Resources.ornith35BMLXUpstreamRepoId,
+            upstreamRevision: Q35Resources.ornith35BMLXUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
+            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"]
+        ),
+        ManagedModelSpec(
             id: AgentModelResources.qwen35NineBModelId,
             category: .textCode,
             installShape: .singleFile(relativePath: AgentModelResources.qwen35NineBRelativePath),
@@ -712,6 +723,17 @@ public enum ManagedModelCatalog {
             upstreamRevision: NorthMiniCodeResources.upstreamRevision,
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: NorthMiniCodeResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text code", "api serve", "agent start"]
+        ),
+        ManagedModelSpec(
+            id: Ornith35BCodeResources.modelId,
+            category: .textCode,
+            installShape: .singleFile(relativePath: Ornith35BCodeResources.managedRelativePath),
+            hubFallback: Ornith35BCodeResources.hubFallbackConfig,
+            upstreamRepoId: Ornith35BCodeResources.upstreamRepoId,
+            upstreamRevision: Ornith35BCodeResources.upstreamRevision,
+            validationKind: .codegenGGUF,
+            estimatedDownloadBytes: Ornith35BCodeResources.estimatedDownloadBytes,
             defaultCLICommands: ["text code", "api serve", "agent start"]
         ),
         ManagedModelSpec(

@@ -50,6 +50,92 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(normalizedPyTorch.shape, [8, 4, 1])
     }
 
+    func testQ35FusedPortableQuantizedLinearMatchesSeparateOutputs() {
+        MLXRandom.seed(42)
+        let lhs = PortableQuantizedLinear(
+            weight: MLXRandom.uniform(-1.0 ..< 1.0, [4, 32]),
+            bias: nil,
+            groupSize: 32,
+            bits: 4,
+            mode: .affine
+        )
+        let rhs = PortableQuantizedLinear(
+            weight: MLXRandom.uniform(-1.0 ..< 1.0, [6, 32]),
+            bias: nil,
+            groupSize: 32,
+            bits: 4,
+            mode: .affine
+        )
+        guard let fused = q35FusedPortableQuantizedLinear(lhs, rhs) else {
+            XCTFail("Expected compatible quantized projections to fuse")
+            return
+        }
+
+        let input = MLXRandom.uniform(-1.0 ..< 1.0, [2, 3, 32])
+        let separate = MLX.concatenated([lhs(input), rhs(input)], axis: -1)
+        let together = fused(input)
+        MLX.eval(separate, together)
+
+        XCTAssertEqual(together.shape, separate.shape)
+        let maxDiff = MLX.max(MLX.abs((together - separate).asType(.float32))).item(Float.self)
+        XCTAssertLessThan(maxDiff, 1e-4)
+    }
+
+    func testQ35GatedDeltaMetalMatchesOpsReference() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Q35 gated-delta Metal parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+
+        let batch = 1
+        let sequence = 3
+        let numKeyHeads = 2
+        let numValueHeads = 4
+        let keyHeadDim = 32
+        let valueHeadDim = 4
+
+        MLXRandom.seed(11)
+        let q = MLXRandom.uniform(-0.3 ..< 0.3, [batch, sequence, numKeyHeads, keyHeadDim])
+        let k = MLXRandom.uniform(-0.3 ..< 0.3, [batch, sequence, numKeyHeads, keyHeadDim])
+        let v = MLXRandom.uniform(-0.3 ..< 0.3, [batch, sequence, numValueHeads, valueHeadDim])
+        let a = MLXRandom.uniform(-0.1 ..< 0.1, [batch, sequence, numValueHeads])
+        let b = MLXRandom.uniform(-0.1 ..< 0.1, [batch, sequence, numValueHeads])
+        let aLog = MLXRandom.uniform(-0.2 ..< 0.2, [numValueHeads])
+        let dtBias = MLXRandom.uniform(-0.2 ..< 0.2, [numValueHeads])
+        let state = MLXRandom.uniform(-0.1 ..< 0.1, [batch, numValueHeads, valueHeadDim, keyHeadDim])
+
+        let reference = q35GatedDeltaUpdateOps(
+            q: q,
+            k: k,
+            v: v,
+            a: a,
+            b: b,
+            aLog: aLog,
+            dtBias: dtBias,
+            state: state,
+            numKeyHeads: numKeyHeads,
+            numValueHeads: numValueHeads,
+            valueHeadDim: valueHeadDim
+        )
+        let fast = try XCTUnwrap(q35GatedDeltaUpdateMetal(
+            q: q,
+            k: k,
+            v: v,
+            a: a,
+            b: b,
+            aLog: aLog,
+            dtBias: dtBias,
+            state: state,
+            numKeyHeads: numKeyHeads,
+            numValueHeads: numValueHeads,
+            valueHeadDim: valueHeadDim
+        ))
+
+        let outputMaxDiff = MLX.max(MLX.abs(reference.0.asType(.float32) - fast.0.asType(.float32))).item(Float.self)
+        let stateMaxDiff = MLX.max(MLX.abs(reference.1.asType(.float32) - fast.1.asType(.float32))).item(Float.self)
+        XCTAssertEqual(outputMaxDiff, 0, accuracy: 1e-5)
+        XCTAssertEqual(stateMaxDiff, 0, accuracy: 1e-5)
+    }
+
     func testQ35RMSNormOffsetConversionSkipsLinearAttentionGateNorm() {
         XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.0.input_layernorm.weight"))
         XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.0.post_attention_layernorm.weight"))
@@ -374,6 +460,22 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(config.quantization?.mode, "affine")
         XCTAssertFalse(config.textConfig.usesMoE)
         XCTAssertEqual(config.textConfig.hiddenSize, 4096)
+    }
+
+    func testQ35ConfigUsesMLXLMNormTopKDefault() throws {
+        var configObject = makeBaseConfig()
+        var textConfig = configObject["text_config"] as? [String: Any] ?? [:]
+        textConfig.removeValue(forKey: "norm_topk_prob")
+        configObject["text_config"] = textConfig
+
+        let defaulted = try decodeConfig(configObject)
+        XCTAssertFalse(defaulted.textConfig.normTopKProb)
+
+        textConfig["norm_topk_prob"] = true
+        configObject["text_config"] = textConfig
+
+        let explicit = try decodeConfig(configObject)
+        XCTAssertTrue(explicit.textConfig.normTopKProb)
     }
 
     func testQ35DenseFeedForwardRuntimeProducesLogits() throws {

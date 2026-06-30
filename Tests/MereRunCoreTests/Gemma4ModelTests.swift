@@ -201,10 +201,10 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         configObject["hidden_size_per_layer_input"] = 0
         let config = try decodeTextConfig(configObject)
         let model = Gemma4TextCausalLM(config: config)
-        let caches = try XCTUnwrap(model.makeCache(quantization: nil) as? [Gemma4AttentionCache])
+        let caches = model.makeAttentionCache(quantization: nil)
         let inputIds = MLXArray([Int32(3), Int32(4)]).reshaped(1, 2)
 
-        let output = model.forwardForSpeculation(inputIds: inputIds, cache: caches as [AnyObject])
+        let output = model.forwardForSpeculation(inputIds: inputIds, cache: caches)
 
         MLX.eval(output.logits, output.hidden)
         XCTAssertEqual(output.logits.shape, [1, 2, config.vocabSize])

@@ -1,6 +1,12 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
+
+private let q35PreciseSwigluCompiled = compile(shapeless: true) { hiddenStates, gate, x in
+    let gate = MLXNN.silu(gate.asType(.float32))
+    return (gate * x.asType(.float32)).asType(hiddenStates.dtype)
+}
 
 final class Q35RMSNormGated: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
@@ -13,16 +19,11 @@ final class Q35RMSNormGated: Module {
     }
 
     func callAsFunction(_ hiddenStates: MLXArray, gate: MLXArray?) -> MLXArray {
-        let dtype = hiddenStates.dtype
-        let hidden32 = hiddenStates.asType(.float32)
-        let variance = (hidden32 * hidden32).mean(axis: -1, keepDims: true)
-        let scale = weight.reshaped([1, 1, 1, hiddenStates.dim(hiddenStates.ndim - 1)])
-        var normalized = (hidden32 * rsqrt(variance + MLXArray(eps))).asType(dtype)
-        normalized = normalized * scale
-        if let gate {
-            normalized = normalized * MLXNN.silu(gate.asType(.float32))
+        let normalized = MLXFast.rmsNorm(hiddenStates, weight: weight, eps: eps)
+        guard let gate else {
+            return normalized.asType(hiddenStates.dtype)
         }
-        return normalized.asType(dtype)
+        return q35PreciseSwigluCompiled(hiddenStates, gate, normalized)
     }
 }
 
@@ -31,20 +32,143 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
     MLXNN.silu(gate) * up
 }
 
-@inline(__always)
-private func q35RmsNormNoWeight(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
+private let q35RmsNormNoWeightCompiled = compile(shapeless: true) { x in
     let squaredMean = (x * x).mean(axis: -1, keepDims: true)
-    return x * rsqrt(squaredMean + MLXArray(eps).asType(x.dtype))
+    return x * rsqrt(squaredMean + MLXArray(1e-6).asType(x.dtype))
 }
 
-@inline(__always)
-private func q35ComputeG(aLog: MLXArray, a: MLXArray, dtBias: MLXArray) -> MLXArray {
+private func q35RmsNormNoWeight(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
+    guard eps == 1e-6 else {
+        let squaredMean = (x * x).mean(axis: -1, keepDims: true)
+        return x * rsqrt(squaredMean + MLXArray(eps).asType(x.dtype))
+    }
+    return q35RmsNormNoWeightCompiled(x)
+}
+
+private func q35ConcatenatedOptional(_ lhs: MLXArray?, _ rhs: MLXArray?) -> MLXArray?? {
+    switch (lhs, rhs) {
+    case (nil, nil):
+        return .some(nil)
+    case let (lhs?, rhs?):
+        return .some(MLX.concatenated([lhs, rhs], axis: 0))
+    default:
+        return nil
+    }
+}
+
+func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear) -> PortableQuantizedLinear? {
+    guard let lhs = lhs as? PortableQuantizedLinear,
+          let rhs = rhs as? PortableQuantizedLinear,
+          lhs.shape.1 == rhs.shape.1,
+          lhs.groupSize == rhs.groupSize,
+          lhs.bits == rhs.bits,
+          lhs.mode == rhs.mode,
+          let bias = q35ConcatenatedOptional(lhs.bias, rhs.bias),
+          let biases = q35ConcatenatedOptional(lhs.biases, rhs.biases) else {
+        return nil
+    }
+
+    let weight = MLX.concatenated([lhs.weight, rhs.weight], axis: 0)
+    let scales = MLX.concatenated([lhs.scales, rhs.scales], axis: 0)
+    MLX.eval(weight, scales)
+    if let bias { MLX.eval(bias) }
+    if let biases { MLX.eval(biases) }
+
+    return PortableQuantizedLinear(
+        weight: weight,
+        bias: bias,
+        scales: scales,
+        biases: biases,
+        groupSize: lhs.groupSize,
+        bits: lhs.bits,
+        mode: lhs.mode
+    )
+}
+
+private let q35ComputeGCompiled = compile(shapeless: true) { aLog, a, dtBias in
     let dt = softplus(a.asType(.float32) + dtBias.asType(.float32).reshaped(1, 1, dtBias.dim(0)))
     let decayBase = MLX.exp(aLog.asType(.float32)).reshaped(1, 1, dtBias.dim(0))
     return MLX.exp(-decayBase * dt)
 }
 
-private func q35GatedDeltaUpdate(
+@inline(__always)
+private func q35ComputeG(aLog: MLXArray, a: MLXArray, dtBias: MLXArray) -> MLXArray {
+    q35ComputeGCompiled(aLog, a, dtBias)
+}
+
+#if os(macOS)
+private enum Q35GatedDeltaMetalKernel {
+    static let kernel = MLXFast.metalKernel(
+        name: "q35_gated_delta_step",
+        inputNames: ["q", "k", "v", "g", "beta", "state_in", "T"],
+        outputNames: ["y", "state_out"],
+        source: """
+            auto n = thread_position_in_grid.z;
+            auto b_idx = n / Hv;
+            auto hv_idx = n % Hv;
+            auto hk_idx = hv_idx / (Hv / Hk);
+            constexpr int n_per_t = Dk / 32;
+
+            auto q_ = q + b_idx * T * Hk * Dk + hk_idx * Dk;
+            auto k_ = k + b_idx * T * Hk * Dk + hk_idx * Dk;
+
+            auto v_ = v + b_idx * T * Hv * Dv + hv_idx * Dv;
+            y += b_idx * T * Hv * Dv + hv_idx * Dv;
+
+            auto dk_idx = thread_position_in_threadgroup.x;
+            auto dv_idx = thread_position_in_grid.y;
+
+            auto i_state = state_in + (n * Dv + dv_idx) * Dk;
+            auto o_state = state_out + (n * Dv + dv_idx) * Dk;
+
+            float state[n_per_t];
+            for (int i = 0; i < n_per_t; ++i) {
+              auto s_idx = n_per_t * dk_idx + i;
+              state[i] = static_cast<float>(i_state[s_idx]);
+            }
+
+            auto g_ = g + b_idx * T * Hv;
+            auto beta_ = beta + b_idx * T * Hv;
+
+            for (int t = 0; t < T; ++t) {
+              float kv_mem = 0.0f;
+              for (int i = 0; i < n_per_t; ++i) {
+                auto s_idx = n_per_t * dk_idx + i;
+                state[i] = state[i] * g_[hv_idx];
+                kv_mem += state[i] * k_[s_idx];
+              }
+              kv_mem = simd_sum(kv_mem);
+
+              auto delta = (v_[dv_idx] - kv_mem) * beta_[hv_idx];
+
+              float out = 0.0f;
+              for (int i = 0; i < n_per_t; ++i) {
+                auto s_idx = n_per_t * dk_idx + i;
+                state[i] = state[i] + k_[s_idx] * delta;
+                out += state[i] * q_[s_idx];
+              }
+              out = simd_sum(out);
+              if (thread_index_in_simdgroup == 0) {
+                y[dv_idx] = static_cast<InT>(out);
+              }
+
+              q_ += Hk * Dk;
+              k_ += Hk * Dk;
+              v_ += Hv * Dv;
+              y += Hv * Dv;
+              g_ += Hv;
+              beta_ += Hv;
+            }
+            for (int i = 0; i < n_per_t; ++i) {
+              auto s_idx = n_per_t * dk_idx + i;
+              o_state[s_idx] = static_cast<StT>(state[i]);
+            }
+            """
+    )
+}
+#endif
+
+func q35GatedDeltaUpdateOps(
     q: MLXArray,
     k: MLXArray,
     v: MLXArray,
@@ -109,6 +233,109 @@ private func q35GatedDeltaUpdate(
 
     return (y.asType(outputDType), recurrent)
 }
+
+func q35GatedDeltaUpdate(
+    q: MLXArray,
+    k: MLXArray,
+    v: MLXArray,
+    a: MLXArray,
+    b: MLXArray,
+    aLog: MLXArray,
+    dtBias: MLXArray,
+    state: MLXArray?,
+    numKeyHeads: Int,
+    numValueHeads: Int,
+    valueHeadDim: Int
+) -> (MLXArray, MLXArray) {
+    #if os(macOS)
+    if let fast = q35GatedDeltaUpdateMetal(
+        q: q,
+        k: k,
+        v: v,
+        a: a,
+        b: b,
+        aLog: aLog,
+        dtBias: dtBias,
+        state: state,
+        numKeyHeads: numKeyHeads,
+        numValueHeads: numValueHeads,
+        valueHeadDim: valueHeadDim
+    ) {
+        return fast
+    }
+    #endif
+
+    return q35GatedDeltaUpdateOps(
+        q: q,
+        k: k,
+        v: v,
+        a: a,
+        b: b,
+        aLog: aLog,
+        dtBias: dtBias,
+        state: state,
+        numKeyHeads: numKeyHeads,
+        numValueHeads: numValueHeads,
+        valueHeadDim: valueHeadDim
+    )
+}
+
+#if os(macOS)
+func q35GatedDeltaUpdateMetal(
+    q: MLXArray,
+    k: MLXArray,
+    v: MLXArray,
+    a: MLXArray,
+    b: MLXArray,
+    aLog: MLXArray,
+    dtBias: MLXArray,
+    state: MLXArray?,
+    numKeyHeads: Int,
+    numValueHeads: Int,
+    valueHeadDim: Int
+) -> (MLXArray, MLXArray)? {
+    guard Device.defaultDevice().deviceType == .gpu else {
+        return nil
+    }
+
+    let batch = q.dim(0)
+    let sequence = q.dim(1)
+    let keyHeadDim = q.dim(3)
+    guard keyHeadDim % 32 == 0,
+          numKeyHeads > 0,
+          numValueHeads > 0,
+          numValueHeads % numKeyHeads == 0 else {
+        return nil
+    }
+
+    let beta = MLX.sigmoid(b).asType(.float32)
+    let g = q35ComputeG(aLog: aLog, a: a, dtBias: dtBias)
+    let recurrent = state
+        .map { $0.asType(.float32) }
+        ?? MLXArray.zeros([batch, numValueHeads, valueHeadDim, keyHeadDim], dtype: .float32)
+
+    let outputs = Q35GatedDeltaMetalKernel.kernel(
+        [q, k, v, g, beta, recurrent, sequence],
+        template: [
+            ("InT", q.dtype),
+            ("StT", recurrent.dtype),
+            ("Dk", keyHeadDim),
+            ("Dv", valueHeadDim),
+            ("Hk", numKeyHeads),
+            ("Hv", numValueHeads),
+        ],
+        grid: (32, valueHeadDim, batch * numValueHeads),
+        threadGroup: (32, 4, 1),
+        outputShapes: [
+            [batch, sequence, numValueHeads, valueHeadDim],
+            recurrent.shape,
+        ],
+        outputDTypes: [q.dtype, recurrent.dtype]
+    )
+
+    return (outputs[0], outputs[1])
+}
+#endif
 
 public final class Q35LinearCache: @unchecked Sendable {
     var convState: MLXArray?
@@ -214,6 +441,8 @@ final class Q35LinearAttention: Module {
     private let valueDim: Int
     private let convDim: Int
     private let convKernelSize: Int
+    private var fusedInProjQKVZ: Linear?
+    private var fusedInProjBA: Linear?
 
     init(config: Q35Config) {
         let text = config.textConfig
@@ -262,10 +491,33 @@ final class Q35LinearAttention: Module {
         let sequence = x.dim(1)
         let keep = max(0, convKernelSize - 1)
 
-        let qkv = inProjQKV(x)
-        let z = inProjZ(x).reshaped(batch, sequence, numValueHeads, valueHeadDim)
-        let b = inProjB(x)
-        let a = inProjA(x)
+        let qkv: MLXArray
+        let z: MLXArray
+        if fusedInProjQKVZ == nil {
+            fusedInProjQKVZ = q35FusedPortableQuantizedLinear(inProjQKV, inProjZ)
+        }
+        if let fusedInProjQKVZ {
+            let qkvz = fusedInProjQKVZ(x)
+            qkv = qkvz[.ellipsis, 0..<convDim]
+            z = qkvz[.ellipsis, convDim...].reshaped(batch, sequence, numValueHeads, valueHeadDim)
+        } else {
+            qkv = inProjQKV(x)
+            z = inProjZ(x).reshaped(batch, sequence, numValueHeads, valueHeadDim)
+        }
+
+        let b: MLXArray
+        let a: MLXArray
+        if fusedInProjBA == nil {
+            fusedInProjBA = q35FusedPortableQuantizedLinear(inProjB, inProjA)
+        }
+        if let fusedInProjBA {
+            let ba = fusedInProjBA(x)
+            b = ba[.ellipsis, 0..<numValueHeads]
+            a = ba[.ellipsis, numValueHeads...]
+        } else {
+            b = inProjB(x)
+            a = inProjA(x)
+        }
 
         let convState = cache?.convState
             ?? MLXArray.zeros([batch, keep, convDim], dtype: x.dtype)

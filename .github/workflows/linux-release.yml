@@ -123,17 +123,17 @@ jobs:
             gfortran \
             git \
             gzip \
-            cuda-cccl-13-0 \
-            cuda-crt-13-0 \
-            cuda-cudart-dev-13-0 \
-            cuda-driver-dev-13-0 \
-            cuda-nvcc-13-0 \
-            cuda-nvrtc-dev-13-0 \
+            cuda-cccl-12-4 \
+            cuda-crt-12-4 \
+            cuda-cudart-dev-12-4 \
+            cuda-driver-dev-12-4 \
+            cuda-nvcc-12-4 \
+            cuda-nvrtc-dev-12-4 \
             libcurl4-openssl-dev \
-            libcublas-dev-13-0 \
-            libcufft-dev-13-0 \
-            libcudnn9-cuda-13 \
-            libcudnn9-dev-cuda-13 \
+            libcublas-dev-12-4 \
+            libcufft-dev-12-4 \
+            libcudnn9-cuda-12 \
+            libcudnn9-dev-cuda-12 \
             libnccl2 \
             libnccl-dev \
             liblapacke-dev \
@@ -149,7 +149,7 @@ jobs:
           hash -r
           cmake --version
           cuda_home=""
-          for candidate in /usr/local/cuda-13.0 /usr/local/cuda; do
+          for candidate in /usr/local/cuda-12.4 /usr/local/cuda; do
             if [[ -x "$candidate/bin/nvcc" || -d "$candidate/include" ]]; then
               cuda_home="$candidate"
               break

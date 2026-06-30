@@ -235,6 +235,7 @@ enum GuideRegistry {
             models: [
                 "text-code-qwen3",
                 "text-code-north-mini",
+                "text-agent-ornith-35b",
             ],
             resourceName: "text-code.md"
         ),
@@ -393,6 +394,8 @@ enum GuideRegistry {
             commandPaths: [["api", "serve"]],
             models: [
                 "text-code-qwen3",
+                "text-code-north-mini",
+                "text-agent-ornith-35b",
                 "text-chat-gemma4",
                 "text-chat-gemma4-12b",
                 "vision-chat-gemma4-12b",
@@ -470,6 +473,7 @@ enum GuideRegistry {
                 ["model", "benchmark", "gemma4-kv"],
                 ["model", "benchmark", "gemma4-mtp"],
                 ["model", "benchmark", "q36-mtp"],
+                ["model", "benchmark", "api-workload"],
             ],
             models: [
                 "text-chat-gemma4-turbo",
@@ -521,6 +525,7 @@ enum GuideRegistry {
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
                 "text-code-north-mini",
+                "text-agent-ornith-35b",
             ],
             resourceName: "setup.md"
         ),
@@ -532,6 +537,7 @@ enum GuideRegistry {
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
                 "text-code-north-mini",
+                "text-agent-ornith-35b",
             ],
             resourceName: "agent-onboard.md"
         ),
@@ -550,6 +556,7 @@ enum GuideRegistry {
                 "text-code-qwen3",
                 "text-agent-qwen35-9b",
                 "text-code-north-mini",
+                "text-agent-ornith-35b",
             ],
             resourceName: "agent-start.md"
         ),

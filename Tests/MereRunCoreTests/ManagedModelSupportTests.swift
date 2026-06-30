@@ -121,6 +121,46 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
     }
 
+    func testOrnith35BIsSupportedOnSixtyFourGBAndStartableThroughTextCode() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ornith35BCodeResources.modelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(on: machine)
+                .first { $0.id == Ornith35BCodeResources.modelId }
+        )
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textCode)
+    }
+
+    func testOrnith35BMLXIsSupportedOnThirtyTwoGBAndStartableThroughQ35() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLXModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog
+                .allTierRecommendations(on: machine)
+                .first { $0.id == Q35Resources.ornith35BMLXModelId }
+        )
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
+    }
+
     func testUnsupportedRuntimeIsRejected() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
         let machine = MereRunMachineProfile(

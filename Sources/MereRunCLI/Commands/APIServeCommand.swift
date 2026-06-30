@@ -376,6 +376,10 @@ struct APIEngineCapabilities: Equatable, Sendable {
 
     static let localText = APIEngineCapabilities()
 
+    static let localTextWithStopSequences = APIEngineCapabilities(
+        supportsStopSequences: true
+    )
+
     static let localTextWithStructuredJSON = APIEngineCapabilities(
         supportsStructuredOutputs: true
     )
@@ -805,6 +809,7 @@ enum APIServerContract {
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,
+            stopSequences: openaiRequest.stop?.values ?? [],
             maxContextTokens: contextSize
         )
     }
@@ -2110,9 +2115,10 @@ actor CodeGenServer {
                     message: OpenAIChatMessage(
                         role: "assistant",
                         content: result.response,
+                        reasoning_content: result.reasoningContent,
                         tool_calls: openAIToolCalls(from: result.toolCalls)
                     ),
-                    finish_reason: result.toolCalls?.isEmpty == false ? "tool_calls" : "stop"
+                    finish_reason: openAIFinishReason(for: result)
                 )
             ],
             usage: OpenAIUsage(
@@ -2674,7 +2680,10 @@ actor CodeGenServer {
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
-                                delta: OpenAIChatDelta(content: result.response),
+                                delta: OpenAIChatDelta(
+                                    content: result.response,
+                                    reasoning_content: result.reasoningContent
+                                ),
                                 finish_reason: nil
                             )
                         ]
@@ -2695,7 +2704,7 @@ actor CodeGenServer {
                         OpenAIChatChoice(
                             index: 0,
                             delta: OpenAIChatDelta(),
-                            finish_reason: result.toolCalls?.isEmpty == false ? "tool_calls" : "stop"
+                            finish_reason: openAIFinishReason(for: result)
                         )
                     ]
                 )
@@ -2764,6 +2773,13 @@ actor CodeGenServer {
                 )
             )
         }
+    }
+
+    private nonisolated func openAIFinishReason(for result: ChatResponse) -> String {
+        if result.toolCalls?.isEmpty == false {
+            return "tool_calls"
+        }
+        return result.finishReason == .length ? "length" : "stop"
     }
 
     private nonisolated func jsonString(from arguments: [String: String]) -> String {

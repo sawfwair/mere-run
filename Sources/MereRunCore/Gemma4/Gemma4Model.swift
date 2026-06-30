@@ -3,19 +3,21 @@ import MLX
 import MLXFast
 import MLXNN
 import MLXRandom
-
-@inline(__always)
-private func gemma4RepeatAlongHeads(_ x: MLXArray, heads: Int) -> MLXArray {
-    MLX.repeated(x, count: heads, axis: 1)
-}
+import Cmlx
 
 @inline(__always)
 private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
-    let dtype = x.dtype
-    let x32 = x.asType(.float32)
-    let variance = MLX.mean(x32 * x32, axis: -1, keepDims: true)
-    let normalized = x32 * rsqrt(variance + MLXArray(eps))
-    return normalized.asType(dtype)
+    let noWeight = MLXArray.mlxNone
+    var result = mlx_array_new()
+    _ = withExtendedLifetime(noWeight) {
+        mlx_fast_rms_norm(&result, x.ctx, noWeight.ctx, eps, StreamOrDevice.default.ctx)
+    }
+    return MLXArray(result)
+}
+
+@inline(__always)
+private func gemma4RMSNormNoScale(_ x: MLXArray, weight: MLXArray, eps: Float) -> MLXArray {
+    MLXFast.rmsNorm(x, weight: weight, eps: eps)
 }
 
 struct Gemma4SharedKVState {
@@ -38,12 +40,12 @@ struct Gemma4ForwardOutput {
 }
 
 protocol Gemma4CausalModel: AnyObject, Sendable {
-    func forward(inputIds: MLXArray, cache: [AnyObject]?) -> MLXArray
-    func forwardForSpeculation(inputIds: MLXArray, cache: [AnyObject]?) -> Gemma4ForwardOutput
+    func forward(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray
+    func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> Gemma4ForwardOutput
     func inputEmbeddings(for inputIds: MLXArray) -> MLXArray
     func speculativeLogits(fromHidden hidden: MLXArray) -> MLXArray
     func speculativeDraftHidden(_ hidden: MLXArray) -> MLXArray
-    func makeCache(quantization: Gemma4KVCacheQuantization?) -> [AnyObject]
+    func makeAttentionCache(quantization: Gemma4KVCacheQuantization?) -> [Gemma4AttentionCache]
 }
 
 /// Proportional RoPE for Gemma 4 full-attention layers.
@@ -147,24 +149,55 @@ extension Gemma4AttentionCache {
 }
 
 final class Gemma4FullKVCache: Gemma4AttentionCache {
+    private static let allocationStep = 256
+
     private var keys: MLXArray?
     private var values: MLXArray?
     private(set) var offset: Int = 0
 
     func currentState() -> (MLXArray, MLXArray)? {
         guard let keys, let values else { return nil }
-        return (keys, values)
+        guard offset < keys.dim(2) else {
+            return (keys, values)
+        }
+        return (keys[0..., 0..., 0..<offset, 0...], values[0..., 0..., 0..<offset, 0...])
     }
 
     func append(keys: MLXArray, values: MLXArray) {
-        if let existingKeys = self.keys, let existingValues = self.values {
-            self.keys = concatenated([existingKeys, keys], axis: 2)
-            self.values = concatenated([existingValues, values], axis: 2)
-        } else {
-            self.keys = keys
-            self.values = values
+        let previousOffset = offset
+        let newOffset = previousOffset + keys.dim(2)
+
+        if self.keys == nil || newOffset > (self.keys?.dim(2) ?? 0) {
+            let batch = keys.dim(0)
+            let heads = keys.dim(1)
+            let keyDim = keys.dim(3)
+            let valueDim = values.dim(3)
+            let missing = max(0, newOffset - (self.keys?.dim(2) ?? 0))
+            let steps = max(1, (missing + Self.allocationStep - 1) / Self.allocationStep)
+            let growth = steps * Self.allocationStep
+            let newKeys = MLXArray.zeros([batch, heads, growth, keyDim], dtype: keys.dtype)
+            let newValues = MLXArray.zeros([batch, heads, growth, valueDim], dtype: values.dtype)
+            if let existingKeys = self.keys, let existingValues = self.values {
+                let trimmedKeys = previousOffset < existingKeys.dim(2)
+                    ? existingKeys[0..., 0..., 0..<previousOffset, 0...]
+                    : existingKeys
+                let trimmedValues = previousOffset < existingValues.dim(2)
+                    ? existingValues[0..., 0..., 0..<previousOffset, 0...]
+                    : existingValues
+                self.keys = concatenated([trimmedKeys, newKeys], axis: 2)
+                self.values = concatenated([trimmedValues, newValues], axis: 2)
+            } else {
+                self.keys = newKeys
+                self.values = newValues
+            }
         }
-        self.offset += keys.dim(2)
+
+        guard let storedKeys = self.keys, let storedValues = self.values else {
+            preconditionFailure("Gemma4FullKVCache should allocate before writing.")
+        }
+        storedKeys[0..., 0..., previousOffset..<newOffset, 0...] = keys
+        storedValues[0..., 0..., previousOffset..<newOffset, 0...] = values
+        self.offset = newOffset
     }
 
     func fork() -> Gemma4AttentionCache {
@@ -234,10 +267,13 @@ final class Gemma4FullKVCache: Gemma4AttentionCache {
 }
 
 final class Gemma4SlidingKVCache: Gemma4AttentionCache {
+    private static let allocationStep = 256
+
     private let maxSize: Int
     private var keys: MLXArray?
     private var values: MLXArray?
     private(set) var offset: Int = 0
+    private var writeIndex: Int = 0
 
     init(maxSize: Int) {
         self.maxSize = max(1, maxSize)
@@ -249,30 +285,108 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
 
     func currentState() -> (MLXArray, MLXArray)? {
         guard let keys, let values else { return nil }
-        return (keys, values)
+        return (temporalOrder(keys), temporalOrder(values))
     }
 
     func append(keys: MLXArray, values: MLXArray) {
-        let combinedKeys: MLXArray
-        let combinedValues: MLXArray
-        if let existingKeys = self.keys, let existingValues = self.values {
-            combinedKeys = concatenated([existingKeys, keys], axis: 2)
-            combinedValues = concatenated([existingValues, values], axis: 2)
+        if keys.dim(2) == 1 {
+            updateInPlace(keys: keys, values: values)
         } else {
-            combinedKeys = keys
-            combinedValues = values
+            updateByConcatenating(keys: keys, values: values)
+        }
+    }
+
+    private func updateByConcatenating(keys: MLXArray, values: MLXArray) {
+        if let existingKeys = self.keys, let existingValues = self.values {
+            let orderedKeys = temporalOrder(existingKeys)
+            let orderedValues = temporalOrder(existingValues)
+            writeIndex = orderedKeys.dim(2)
+            let trimSize = writeIndex - maxSize + keys.dim(2)
+            self.keys = trim(orderedKeys, trimSize: trimSize, appending: keys)
+            self.values = trim(orderedValues, trimSize: trimSize, appending: values)
+        } else {
+            self.keys = keys
+            self.values = values
+        }
+        offset += keys.dim(2)
+        writeIndex = self.keys?.dim(2) ?? 0
+    }
+
+    private func updateInPlace(keys: MLXArray, values: MLXArray) {
+        let previousOffset = offset
+        if self.keys == nil || (previousOffset >= (self.keys?.dim(2) ?? 0) && (self.keys?.dim(2) ?? 0) < maxSize) {
+            let batch = keys.dim(0)
+            let heads = keys.dim(1)
+            let keyDim = keys.dim(3)
+            let valueDim = values.dim(3)
+            let existingSize = self.keys?.dim(2) ?? 0
+            let growth = min(Self.allocationStep, maxSize - existingSize)
+            if growth > 0 {
+                let newKeys = MLXArray.zeros([batch, heads, growth, keyDim], dtype: keys.dtype)
+                let newValues = MLXArray.zeros([batch, heads, growth, valueDim], dtype: values.dtype)
+                if let existingKeys = self.keys, let existingValues = self.values {
+                    let trimmedKeys = previousOffset < existingKeys.dim(2)
+                        ? existingKeys[0..., 0..., 0..<previousOffset, 0...]
+                        : existingKeys
+                    let trimmedValues = previousOffset < existingValues.dim(2)
+                        ? existingValues[0..., 0..., 0..<previousOffset, 0...]
+                        : existingValues
+                    self.keys = concatenated([trimmedKeys, newKeys], axis: 2)
+                    self.values = concatenated([trimmedValues, newValues], axis: 2)
+                } else {
+                    self.keys = newKeys
+                    self.values = newValues
+                }
+                writeIndex = min(previousOffset, self.keys?.dim(2) ?? previousOffset)
+            }
         }
 
-        let totalLength = combinedKeys.dim(2)
-        if totalLength > maxSize {
-            let start = totalLength - maxSize
-            self.keys = combinedKeys[0..., 0..., start..., 0...]
-            self.values = combinedValues[0..., 0..., start..., 0...]
-        } else {
-            self.keys = combinedKeys
-            self.values = combinedValues
+        if let existingKeys = self.keys, existingKeys.dim(2) > maxSize {
+            self.keys = trim(existingKeys, trimSize: existingKeys.dim(2) - maxSize)
+            writeIndex = maxSize
         }
-        self.offset += keys.dim(2)
+        if let existingValues = self.values, existingValues.dim(2) > maxSize {
+            self.values = trim(existingValues, trimSize: existingValues.dim(2) - maxSize)
+        }
+        if writeIndex >= maxSize {
+            writeIndex = 0
+        }
+
+        let newWriteIndex = writeIndex + keys.dim(2)
+        guard let storedKeys = self.keys, let storedValues = self.values else {
+            preconditionFailure("Gemma4SlidingKVCache should allocate before writing.")
+        }
+        storedKeys[0..., 0..., writeIndex..<newWriteIndex, 0...] = keys
+        storedValues[0..., 0..., writeIndex..<newWriteIndex, 0...] = values
+        offset += keys.dim(2)
+        writeIndex = newWriteIndex
+    }
+
+    private func temporalOrder(_ array: MLXArray) -> MLXArray {
+        let length = array.dim(2)
+        if offset < length {
+            return array[0..., 0..., 0..<offset, 0...]
+        }
+        guard writeIndex < length, writeIndex < offset else {
+            return array
+        }
+        return concatenated([
+            array[0..., 0..., writeIndex..., 0...],
+            array[0..., 0..., 0..<writeIndex, 0...],
+        ], axis: 2)
+    }
+
+    private func trim(_ array: MLXArray, trimSize: Int, appending append: MLXArray? = nil) -> MLXArray {
+        var parts: [MLXArray]
+        if trimSize > 0 {
+            parts = [array[0..., 0..., trimSize..., 0...]]
+        } else {
+            parts = [array]
+        }
+        if let append {
+            parts.append(append)
+        }
+        return concatenated(parts, axis: 2)
     }
 
     func fork() -> Gemma4AttentionCache {
@@ -280,6 +394,7 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         copy.keys = keys
         copy.values = values
         copy.offset = offset
+        copy.writeIndex = writeIndex
         return copy
     }
 
@@ -300,6 +415,7 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
             cache.values = values
         }
         cache.offset = offset
+        cache.writeIndex = cache.keys?.dim(2) ?? 0
         return cache
     }
 
@@ -336,6 +452,7 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         copy.keys = concatenated(states.map(\.0), axis: 0)
         copy.values = concatenated(states.map(\.1), axis: 0)
         copy.offset = offset
+        copy.writeIndex = copy.keys?.dim(2) ?? 0
         return copy
     }
 
@@ -348,6 +465,7 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
             copy.keys = keys[index..<(index + 1), 0..., 0..., 0...]
             copy.values = values[index..<(index + 1), 0..., 0..., 0...]
             copy.offset = offset
+            copy.writeIndex = writeIndex
             return copy
         }
     }
@@ -711,17 +829,10 @@ final class Gemma4Attention: Module {
             }
         }
 
-        var broadcastKeys = keys
-        var broadcastValues = values
-        if repeats > 1 {
-            broadcastKeys = gemma4RepeatAlongHeads(broadcastKeys, heads: repeats)
-            broadcastValues = gemma4RepeatAlongHeads(broadcastValues, heads: repeats)
-        }
-
         let mask = makeAttentionMask(
             queryLength: sequenceLength,
             queryOffset: offset,
-            keyLength: broadcastKeys.dim(2),
+            keyLength: keys.dim(2),
             windowSize: layerType == "sliding_attention" ? windowSize : nil,
             dtype: x.dtype,
             visionBlockIDs: visionBlockIDs
@@ -729,8 +840,8 @@ final class Gemma4Attention: Module {
 
         let attended = MLXFast.scaledDotProductAttention(
             queries: queries,
-            keys: broadcastKeys,
-            values: broadcastValues,
+            keys: keys,
+            values: values,
             scale: scale,
             mask: mask
         )
@@ -1149,8 +1260,11 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         _ inputIds: MLXArray,
         cache: [AnyObject]? = nil
     ) -> MLXArray {
-        let typedCache = cache as? [Gemma4AttentionCache]
-        var logits = languageModel.logits(inputIds, cache: typedCache)
+        forward(inputIds: inputIds, cache: cache as? [Gemma4AttentionCache])
+    }
+
+    func forward(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
+        var logits = languageModel.logits(inputIds, cache: cache)
         if let finalLogitSoftcapping {
             let softcap = MLXArray(finalLogitSoftcapping).asType(logits.dtype)
             logits = tanh(logits / softcap) * softcap
@@ -1158,12 +1272,7 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         return logits
     }
 
-    func forward(inputIds: MLXArray, cache: [AnyObject]? = nil) -> MLXArray {
-        self(inputIds, cache: cache)
-    }
-
-    func forwardForSpeculation(inputIds: MLXArray, cache: [AnyObject]? = nil) -> Gemma4ForwardOutput {
-        let typedCache = cache as? [Gemma4AttentionCache]
+    func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> Gemma4ForwardOutput {
         var tokenIds = inputIds
         if tokenIds.dtype != .int32 {
             tokenIds = tokenIds.asType(.int32)
@@ -1171,7 +1280,7 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         let output = languageModel.detailedLogits(
             embeddings: languageModel.embeddings(inputIds: tokenIds),
             inputIds: tokenIds,
-            cache: typedCache
+            cache: cache
         )
         let logits = applyFinalSoftcap(output.logits)
         return Gemma4ForwardOutput(
@@ -1197,8 +1306,12 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         languageModel.norm(hidden)
     }
 
-    public func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [AnyObject] {
+    func makeAttentionCache(quantization: Gemma4KVCacheQuantization? = nil) -> [Gemma4AttentionCache] {
         languageModel.makeCache(quantization: quantization)
+    }
+
+    public func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [AnyObject] {
+        makeAttentionCache(quantization: quantization)
     }
 
     private func applyFinalSoftcap(_ logits: MLXArray) -> MLXArray {
@@ -1263,15 +1376,17 @@ final class Gemma4UnifiedMultimodalEmbedder: Module {
     @ModuleInfo(key: "embedding_projection") var embeddingProjection: Linear
 
     private let eps: Float
+    private let normWeight: MLXArray
 
     init(embeddingDim: Int, textHiddenSize: Int, eps: Float) {
         self.eps = eps
+        self.normWeight = MLXArray.ones([embeddingDim])
         self._embeddingProjection.wrappedValue = Linear(embeddingDim, textHiddenSize, bias: false)
         super.init()
     }
 
     func callAsFunction(_ inputsEmbeds: MLXArray) -> MLXArray {
-        embeddingProjection(gemma4RMSNormNoScale(inputsEmbeds, eps: eps))
+        embeddingProjection(gemma4RMSNormNoScale(inputsEmbeds, weight: normWeight, eps: eps))
     }
 }
 
@@ -1304,9 +1419,8 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         super.init()
     }
 
-    func forward(inputIds: MLXArray, cache: [AnyObject]? = nil) -> MLXArray {
-        let typedCache = cache as? [Gemma4AttentionCache]
-        var logits = languageModel.logits(inputIds, cache: typedCache)
+    func forward(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
+        var logits = languageModel.logits(inputIds, cache: cache)
         if let finalLogitSoftcapping {
             let softcap = MLXArray(finalLogitSoftcapping).asType(logits.dtype)
             logits = tanh(logits / softcap) * softcap
@@ -1314,8 +1428,7 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         return logits
     }
 
-    func forwardForSpeculation(inputIds: MLXArray, cache: [AnyObject]? = nil) -> Gemma4ForwardOutput {
-        let typedCache = cache as? [Gemma4AttentionCache]
+    func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> Gemma4ForwardOutput {
         var tokenIds = inputIds
         if tokenIds.dtype != .int32 {
             tokenIds = tokenIds.asType(.int32)
@@ -1323,7 +1436,7 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         let output = languageModel.detailedLogits(
             embeddings: languageModel.embeddings(inputIds: tokenIds),
             inputIds: tokenIds,
-            cache: typedCache
+            cache: cache
         )
         let logits = applyFinalSoftcap(output.logits)
         return Gemma4ForwardOutput(
@@ -1338,9 +1451,8 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         pixelValues: MLXArray,
         imagePositionIds: MLXArray,
         mmTokenTypeIds: MLXArray,
-        cache: [AnyObject]? = nil
+        cache: [Gemma4AttentionCache]? = nil
     ) throws -> MLXArray {
-        let typedCache = cache as? [Gemma4AttentionCache]
         var tokenIds = inputIds
         if tokenIds.dtype != .int32 {
             tokenIds = tokenIds.asType(.int32)
@@ -1359,7 +1471,7 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         var logits = languageModel.logits(
             embeddings: embeddings,
             inputIds: tokenIds,
-            cache: typedCache,
+            cache: cache,
             mmTokenTypeIds: mmTokenTypeIds
         )
         if let finalLogitSoftcapping {
@@ -1374,9 +1486,8 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         pixelValues: MLXArray,
         imagePositionIds: MLXArray,
         mmTokenTypeIds: MLXArray,
-        cache: [AnyObject]? = nil
+        cache: [Gemma4AttentionCache]? = nil
     ) throws -> Gemma4ForwardOutput {
-        let typedCache = cache as? [Gemma4AttentionCache]
         var tokenIds = inputIds
         if tokenIds.dtype != .int32 {
             tokenIds = tokenIds.asType(.int32)
@@ -1395,7 +1506,7 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         let output = languageModel.detailedLogits(
             embeddings: embeddings,
             inputIds: tokenIds,
-            cache: typedCache,
+            cache: cache,
             mmTokenTypeIds: mmTokenTypeIds
         )
         return Gemma4ForwardOutput(
@@ -1421,8 +1532,12 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         languageModel.norm(hidden)
     }
 
-    public func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [AnyObject] {
+    func makeAttentionCache(quantization: Gemma4KVCacheQuantization? = nil) -> [Gemma4AttentionCache] {
         languageModel.makeCache(quantization: quantization)
+    }
+
+    public func makeCache(quantization: Gemma4KVCacheQuantization? = nil) -> [AnyObject] {
+        makeAttentionCache(quantization: quantization)
     }
 
     private func applyFinalSoftcap(_ logits: MLXArray) -> MLXArray {

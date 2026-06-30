@@ -14,9 +14,11 @@ struct ModelBenchmark: ParsableCommand {
         subcommands: [
             ModelBenchmarkChat.self,
             ModelBenchmarkToolCalls.self,
+            ModelBenchmarkCode.self,
             ModelBenchmarkGemma4KV.self,
             ModelBenchmarkGemma4MTP.self,
             ModelBenchmarkQ36MTP.self,
+            ModelBenchmarkAPIWorkload.self,
             ModelBenchmarkVLM.self,
         ]
     )

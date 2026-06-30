@@ -171,16 +171,16 @@ swift run mere.run api serve \
 - Gemma4 and Qwen-family prefills are chunked with cancellation and progress checkpoints
   before decode; this is cooperative single-request prefill, not continuous
   batching
-- Gemma4 has an opt-in in-memory prefix KV reuse prototype behind
-  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; `/runtime/status` reports cache entries,
-  hits, and reused tokens when the Gemma4 model is loaded; the cache stores
-  chunk boundaries plus the stable chat prefix before the final message when it
-  is an exact token prefix, and pruning keeps that stable prefix ahead of
-  ordinary chunk boundaries
-- Qwen-family chat has an opt-in text-only prefix KV reuse prototype behind
-  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded because image
-  embeddings alter the effective prefix; text-only requests use the same stable
-  chat-prefix checkpoint and pruning rule as Gemma4
+- Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
+  cache entries, hits, and reused tokens when the Gemma4 model is loaded; the
+  cache stores chunk boundaries plus the stable chat prefix before the final
+  message when it is an exact token prefix, and pruning keeps that stable prefix
+  ahead of ordinary chunk boundaries.
+- Qwen-family chat uses text-only prefix KV reuse by default in `api serve`; set
+  `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
+  because image embeddings alter the effective prefix; text-only requests use
+  the same stable chat-prefix checkpoint and pruning rule as Gemma4.
 - Managed Gemma4 12B text and vision installs include the
   `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
   for greedy serial decode-tail speculation after prefill; sampled requests,
@@ -283,6 +283,11 @@ supported fields into `ChatRequest` or return an OpenAI-style
 `metadata`, `user`, and `service_tier` are accepted as request context but do
 not change local generation.
 
+For non-streaming chat responses, native runtimes split `<think>...</think>`
+blocks out of `message.content` and expose them as OpenAI-compatible
+`message.reasoning_content` when present. Streaming responses still emit token
+chunks as they are produced.
+
 Engine compatibility:
 
 - `text-chat-deepseek-v4-flash`: raw-proxies the original request body to
@@ -298,14 +303,19 @@ Engine compatibility:
 - `text-agent-ornith-9b`: uses the same Qwen-family serving engine for the
   Ornith 1.0 9B OptiQ coding-agent experiment; start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
+- `text-agent-ornith-35b-mlx`: uses the Qwen-family serving engine for a local
+  converted Ornith 1.0 35B Q4 MLX snapshot; start it with
+  `api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx`.
 - `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
   LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
   image content parts.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
-- `text-code`: accepts plain text chat requests and rejects tools, images,
-  reasoning controls, logprobs, seed, stop sequences, and structured outputs
-  with explicit errors.
+- `text-code`: accepts plain text chat requests and OpenAI `stop` sequences;
+  use it for GGUF code models such as `text-code-qwen3`,
+  `text-code-north-mini`, and `text-agent-ornith-35b`. It rejects tools,
+  images, reasoning controls, logprobs, seed, and structured outputs with
+  explicit errors.
 
 Streaming responses only emit assistant content tokens. Local progress labels
 stay in logs/stderr, and `stream_options.include_usage` adds the final usage

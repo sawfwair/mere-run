@@ -22,6 +22,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-agent-ornith-9b (Ornith 1.0 9B OptiQ, experimental coding-agent target)
+          - text-agent-ornith-35b-mlx (Ornith 1.0 35B MLX Q4, local converted coding-agent target)
           - text-chat-gemma4-12b (Gemma 4 12B dense native Swift runtime)
           - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit native Swift runtime)
           - text-chat-gemma4-turbo (Gemma 4 26B-A4B NVFP4 native Swift runtime)
@@ -109,7 +110,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
@@ -363,22 +364,7 @@ struct TextChat: AsyncParsableCommand {
 
     func cleanResponse(_ response: String, showThinking: Bool) -> String {
         guard !showThinking else { return response }
-        var cleaned = response.replacingOccurrences(
-            of: "(?is)<think>.*?</think>",
-            with: "",
-            options: .regularExpression
-        )
-        cleaned = cleaned.replacingOccurrences(
-            of: "(?is)<think>.*\\z",
-            with: "",
-            options: .regularExpression
-        )
-        cleaned = cleaned.replacingOccurrences(
-            of: "(?i)</think>",
-            with: "",
-            options: .regularExpression
-        )
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ChatReasoningMarkup.splitThinkBlocks(in: response).visibleContent
     }
 
     func resolveGemma4KVCacheQuantization(for modelId: String) throws -> Gemma4KVCacheQuantization {
