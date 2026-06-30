@@ -10,6 +10,29 @@ final class TextChatCommandParsingTests: XCTestCase {
 
         XCTAssertFalse(cmd.stream)
         XCTAssertEqual(cmd.prompt, "Say hello")
+        XCTAssertEqual(cmd.model, TextChat.defaultChatModelId)
+    }
+
+    func testTextChatDefaultModelSelectionForMemoryBands() {
+        let compactAppleSilicon = MereRunMachineProfile(
+            physicalMemoryBytes: 24 * 1_073_741_824,
+            processorName: "Apple Silicon",
+            isAppleSiliconMac: true
+        )
+        let undersizedAppleSilicon = MereRunMachineProfile(
+            physicalMemoryBytes: 8 * 1_073_741_824,
+            processorName: "Apple Silicon",
+            isAppleSiliconMac: true
+        )
+
+        XCTAssertEqual(
+            TextChat.defaultChatModelId(on: compactAppleSilicon),
+            Gemma4Resources.twelveB4BitModelId
+        )
+        XCTAssertEqual(
+            TextChat.defaultChatModelId(on: undersizedAppleSilicon),
+            Gemma4Resources.nanoModelId
+        )
     }
 
     func testTextChatParsesStreamingFlag() throws {

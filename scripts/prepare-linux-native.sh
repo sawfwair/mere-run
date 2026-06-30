@@ -321,6 +321,60 @@ patch_mlx_cuda_bf16_sigmoid() {
   echo "[prepare-linux-native] patched mlx-swift CUDA bf16 sigmoid in ${mlx_unary_ops#$repo_root/}."
 }
 
+patch_mlx_cuda_bf16_power() {
+  local mlx_binary_ops="$1"
+  if [[ ! -f "$mlx_binary_ops" ]]; then
+    return
+  fi
+  if grep -Fq "MERERUN_CUDA_BF16_POWER" "$mlx_binary_ops"; then
+    return
+  fi
+
+  local mlx_binary_tmp
+  mlx_binary_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-binary.XXXXXX")"
+  if ! awk '
+    $0 == "    } else if constexpr (is_complex_v<T>) {" && !patched {
+      line1 = $0
+      if ((getline line2) <= 0 || (getline line3) <= 0 || (getline line4) <= 0) {
+        print line1
+        if (line2 != "") print line2
+        if (line3 != "") print line3
+        if (line4 != "") print line4
+        next
+      }
+      if (line2 == "      return cuda::std::pow(base, exp);" &&
+          line3 == "    } else {" &&
+          line4 == "      return cuda::std::pow(base, exp);") {
+        print line1
+        print line2
+        print "    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {"
+        print "      // MERERUN_CUDA_BF16_POWER: CUDA 12.x cannot resolve"
+        print "      // cuda::std::pow(__nv_bfloat16, __nv_bfloat16) in NVRTC JIT kernels."
+        print "      float base_f = static_cast<float>(base);"
+        print "      float exp_f = static_cast<float>(exp);"
+        print "      return static_cast<T>(cuda::std::pow(base_f, exp_f));"
+        print "    } else {"
+        print line4
+        patched=1
+        next
+      }
+      print line1
+      print line2
+      print line3
+      print line4
+      next
+    }
+    { print }
+    END { if (!patched) exit 42 }
+  ' "$mlx_binary_ops" >"$mlx_binary_tmp"; then
+    rm -f "$mlx_binary_tmp"
+    echo "[prepare-linux-native] error: could not patch MLX CUDA bf16 power in ${mlx_binary_ops#$repo_root/}." >&2
+    exit 69
+  fi
+  mv "$mlx_binary_tmp" "$mlx_binary_ops"
+  echo "[prepare-linux-native] patched mlx-swift CUDA bf16 power in ${mlx_binary_ops#$repo_root/}."
+}
+
 detect_cuda_dependency_defaults() {
   if [[ "$linux_accel" != "cuda" ]]; then
     return
@@ -511,6 +565,9 @@ patch_mlx_swift_for_linux() {
   swift package resolve
 
   if [[ "$linux_accel" == "cuda" ]]; then
+    patch_mlx_cuda_jit_include_path "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
+    patch_mlx_cuda_bf16_sigmoid "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/unary_ops.cuh"
+    patch_mlx_cuda_bf16_power "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/binary_ops.cuh"
     echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix; CUDA builds use the CMake prebuilt bridge."
   else
     local package_file="$mlx_swift_checkout/Package.swift"
@@ -570,8 +627,13 @@ smoke_mlx_swift_cuda() {
 
   patch_mlx_cuda_jit_include_path "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
+  patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/device/unary_ops.cuh"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/unary_ops.cuh"
+  patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/unary_ops.cuh"
+  patch_mlx_cuda_bf16_power "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/device/binary_ops.cuh"
+  patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/binary_ops.cuh"
+  patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/binary_ops.cuh"
 
   local local_openblas_root="$native_root/deps/apt-root"
   local local_openblas_lib="$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so"
@@ -670,7 +732,11 @@ smoke_mlx_swift_cuda() {
   echo "[prepare-linux-native] configuring mlx-swift CUDA smoke via CMake"
   cmake -S "$mlx_cmake_src" -B "$mlx_cmake_build" -G Ninja "${mlx_cmake_args[@]}"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
+  patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/unary_ops.cuh"
+  patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/unary_ops.cuh"
+  patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/binary_ops.cuh"
+  patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/binary_ops.cuh"
 
   echo "[prepare-linux-native] building mlx-swift CUDA smoke"
   local build_jobs

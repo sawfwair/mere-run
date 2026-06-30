@@ -108,8 +108,8 @@ enum CommandOutputKind: Equatable {
 }
 
 enum StudioChatDefaults {
-    static let fallbackModelID = "text-chat-q36-nano"
-    static let fallbackServingEngine = "text-chat-q36"
+    static let fallbackModelID = "text-chat-gemma4-12b-4bit"
+    static let fallbackServingEngine = "text-chat-gemma4"
 
     static func servingEngine(for modelID: String) -> String {
         let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -136,6 +136,7 @@ enum StudioChatDefaults {
         if normalized.isEmpty { return true }
         var replaceable: Set<String> = [
             fallbackModelID,
+            "text-chat-q36-nano",
             "text-chat-gemma4",
             "text-chat-gemma4-12b",
             "text-chat-gemma4-12b-4bit"
@@ -151,6 +152,7 @@ enum StudioChatDefaults {
         if normalized.isEmpty { return true }
         var replaceable: Set<String> = [
             fallbackServingEngine,
+            "text-chat-q36",
             "text-chat-gemma4"
         ]
         if let oldRecommendation, !oldRecommendation.isBlank {

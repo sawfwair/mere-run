@@ -99,6 +99,28 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
+    func testGemmaProviderUsesNativeGemmaRuntime() throws {
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog.recommendation(
+                for: .tier,
+                on: MereRunMachineProfile(
+                    physicalMemoryBytes: 32 * 1_073_741_824,
+                    processorName: "M2 Max",
+                    isAppleSiliconMac: true
+                )
+            )
+        )
+
+        let runtime = try SetupAgentRuntime.runtime(for: recommendation)
+        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+
+        XCTAssertEqual(runtime.engine, .textChatGemma4)
+        XCTAssertEqual(providerModel.id, Gemma4Resources.twelveB4BitModelId)
+        XCTAssertEqual(providerModel.contextWindow, Gemma4Resources.defaultContextLength)
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textChatGemma4)
+    }
+
     func testOrnith35BProviderUsesNativeManagedModelID() throws {
         let recommendation = try XCTUnwrap(
             MereRunAgentModelCatalog

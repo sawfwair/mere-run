@@ -138,6 +138,34 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.structuredPromptModel, "text-chat-gemma4-12b-4bit")
     }
 
+    func testParsesKreaConditioningRebalanceOptions() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a printed diner ticket",
+            "--model", "image-krea2-turbo",
+            "--krea-conditioning-multiplier", "1.0",
+            "--krea-conditioning-layer-weights", "1,1,1,1,1,1,1,2.5,5,1.1,4,1",
+        ])
+
+        XCTAssertEqual(cmd.kreaConditioningMultiplier, 1.0)
+        XCTAssertEqual(cmd.kreaConditioningLayerWeights, "1,1,1,1,1,1,1,2.5,5,1.1,4,1")
+
+        let rebalance = try ImageGenerate.resolveKreaConditioningRebalance(
+            multiplier: cmd.kreaConditioningMultiplier,
+            layerWeights: cmd.kreaConditioningLayerWeights
+        )
+        XCTAssertEqual(rebalance?.multiplier, 1.0)
+        XCTAssertEqual(rebalance?.layerWeights, [1, 1, 1, 1, 1, 1, 1, 2.5, 5, 1.1, 4, 1])
+    }
+
+    func testKreaConditioningLayerWeightsAcceptSemicolonsAndWhitespace() throws {
+        let weights = try ImageGenerate.parseKreaConditioningLayerWeights(" 1 ; 2.5, 3 ")
+        XCTAssertEqual(weights, [1, 2.5, 3])
+    }
+
+    func testKreaConditioningLayerWeightsRejectInvalidValues() {
+        XCTAssertThrowsError(try ImageGenerate.parseKreaConditioningLayerWeights("1,nope,3"))
+    }
+
     func testStructuredPromptAdapterValidatesPaperSchema() throws {
         let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
 

@@ -66,38 +66,70 @@ the adapter to learn.
   `--progressive`.
 - `--low-ram`: for FLUX.2 Klein, cache encoded latents on disk to reduce peak
   memory.
-- `--no-compile`: for FLUX.2 Klein, skip the compiled train-step graph when
-  graph compilation spikes GPU memory.
+- `--no-compile`: skip the compiled train-step graph when graph compilation
+  spikes GPU memory or CUDA graph capture fails.
 - `--gradient-checkpointing`: for FLUX.2 Klein, recompute transformer block
   activations during backprop to reduce peak memory for high-rank/high-res runs.
+- `--recipe krea-fast-style`: apply the fast Krea style recipe: `image-krea2-raw`,
+  100 steps, LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank `32`,
+  alpha `32`, and the full Krea target surface. Treat this as a quick proof
+  pass; inspect images before trusting it as a final style adapter.
+- `--recipe krea-cinematic-style`: apply the proven Krea movie-style recipe:
+  `image-krea2-raw`, 200 steps, LR `0.0001`, 20-step warmup/cosine decay,
+  768x416, rank `32`, alpha `32`, and compiled-step disablement. Override
+  `--width`/`--height` when your source set is not widescreen.
+- `--recipe klein-fast-style`: apply the local fast Klein style recipe:
+  `image-klein-base-9b`, 1000 steps, LR `0.00005`, max side `512`,
+  `--lora-target-preset fal-klein-fast`, `--low-ram`, `--no-compile`, and
+  250-step checkpoints. Explicit `--model`, `--steps`, `--learning-rate`,
+  `--max-resolution`, and `--checkpoint-interval` values override the recipe.
+- `--benchmark-steps`, `--benchmark-warmup-steps`: for FLUX.2 Klein, run a
+  steady-state training throughput measurement and skip final adapter saving.
 - `--sample-interval`, `--sample-prompt`, `--sample-model`, `--sample-steps`,
   `--sample-cfg`, `--sample-lora-scale`, `--sample-seed`: for FLUX.2 Klein,
   generate checkpoint previews during training. The default preview model is
   `image-klein-9b`.
 - `--lora-rank-preset flux2-style-128`: expand FLUX.2 transformer targets to
   rank `128` with alpha `64`.
+- `--lora-target-preset fal-klein-fast`: use a FAL-like fast Klein target
+  surface: global projections, joint blocks `0...7`, and single blocks `0...23`
+  at the selected rank.
 - `--lora-target-mode`: for FLUX.2 Klein, choose `suffix` for the default
   allowlist or `transformer-linear-walk` to train every transformer
   Linear/QuantizedLinear layer.
 - `--lora-target-ranks`: custom FLUX.2 target suffix ranks, for example
   `.attn.to_q=128,.ff.linear_in=64`.
+- Krea/Klein LR controls: `--lr-warmup-steps`, `--no-cosine-scheduler`, and
+  `--lr-min-factor`.
 - Klein-only recipe controls: `--timestep-sampling`, `--timestep-loss-weighting`,
-  `--loss-weighting`, `--timestep-low`, `--timestep-high`,
-  `--lr-warmup-steps`, `--no-cosine-scheduler`, `--lr-min-factor`, and
+  `--loss-weighting`, `--timestep-low`, `--timestep-high`, and
   `--adam-weight-decay`.
 - `--quiet`, `-q`: print only the final adapter path.
 
+For CUDA Krea training, set `MLX_CUDA_USE_CUDNN_SDPA=0` if cuDNN SDPA graph
+capture fails during the first training step. Large real datasets may also need
+`MLX_CUDA_GRAPH_CACHE_SIZE=4096` to avoid MLX CUDA graph-cache thrashing.
+
 ## Train
+
+For the fast Krea style recipe:
 
 ```bash
 mere.run image train-lora \
   --data ./dataset \
-  --output ./my-krea2-style.safetensors \
-  --training-steps 1000 \
-  --learning-rate 0.0001 \
-  --width 768 \
-  --height 768 \
-  --rank 32
+  --output ./my-krea2-fast-style.safetensors \
+  --recipe krea-fast-style \
+  --quiet
+```
+
+For the safer Krea movie-style recipe:
+
+```bash
+mere.run image train-lora \
+  --data ./dataset \
+  --output ./my-krea2-cinematic-style.safetensors \
+  --recipe krea-cinematic-style \
+  --quiet
 ```
 
 Krea's published LoRA adapters use a broad Diffusers-style transformer surface:
@@ -132,9 +164,52 @@ mere.run image train-lora \
   --sample-lora-scale 1.0
 ```
 
+For the canonical fast local Klein style recipe, keep a trigger token in every
+caption, train on the base 9B model, then render on `image-klein-9b` with the
+same trigger. This recipe is meant for small style datasets of roughly a few
+dozen image/caption pairs and is practical on a single Apple Silicon machine:
+
+```bash
+mere.run image train-lora \
+  --data ./dataset \
+  --output ./my-klein-fast-style.safetensors \
+  --recipe klein-fast-style \
+  --quiet
+```
+
+For a quick local throughput check before starting the full run, add benchmark
+mode. Benchmark mode measures the steady-state training loop and skips adapter
+saving:
+
+```bash
+mere.run image train-lora \
+  --data ./dataset \
+  --output ./my-klein-fast-style.safetensors \
+  --recipe klein-fast-style \
+  --benchmark-warmup-steps 5 \
+  --benchmark-steps 10 \
+  --quiet
+```
+
+Preview the adapter on the distilled 9B model. Style adapters commonly need a
+stronger scale such as `2.0` or `3.0`:
+
+```bash
+mere.run image generate \
+  --model image-klein-9b \
+  --prompt "TRIGGER_TOKEN a quiet rural bus stop in the rain, wide shot" \
+  --lora ./my-klein-fast-style.safetensors \
+  --lora-scale 2.0 \
+  --width 768 \
+  --height 432 \
+  --steps 16 \
+  --output ./my-klein-fast-style-preview.png
+```
+
 The command writes the adapter plus sidecar training artifacts beside it:
 
-- `*.safetensors`: LoRA weights and optimizer state.
+- `*.safetensors`: LoRA weights. Final Krea adapters are inference-only;
+  resumable Klein checkpoint adapters may include optimizer state.
 - `*.manifest.json`: training manifest.
 - `*.checkpoint.json`: final checkpoint state.
 - `run.json`: run manifest.
@@ -167,6 +242,9 @@ mere.run image generate \
   unless memory requires it, use `--max-resolution` or exact source dimensions,
   use a higher-capacity rank for broad styles, and compare intermediate
   checkpoints instead of assuming the final step is best.
+- Klein training suddenly slows down: check AC power, battery charge, macOS Low
+  Power Mode, and thermal/performance warnings before changing recipe
+  parameters. Long local runs are sensitive to power-state throttling.
 - Out of memory: use `--low-ram --gradient-checkpointing --no-compile`, lower
   resolution, lower rank, `--lite`, or fewer concurrent apps.
 - Dataset rejected: check every image has a same-stem `.txt` caption.

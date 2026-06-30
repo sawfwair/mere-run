@@ -227,8 +227,8 @@ swift run mere.run model capabilities --recommended
 
 # Chat winners by RAM band
 # 16-23 GB: text-chat-gemma4-12b-4bit
-# 24-95 GB: text-chat-q36-nano
-# 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Q36 for lower-latency CLI chat
+# 24-95 GB: text-chat-gemma4-12b-4bit
+# 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Gemma 12B 4-bit for normal local chat
 # Coding-agent comparison: text-code-north-mini, text-agent-ornith-35b-mlx, and text-agent-ornith-35b
 
 # Choose guided, bring-your-own-agent, or manual setup
@@ -272,8 +272,15 @@ swift run mere.run image train-lora \
   --model image-krea2-raw \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
-  --training-steps 1000 \
-  --lite
+  --recipe krea-cinematic-style \
+  --quiet
+
+# Train a practical local Klein style LoRA with the fast 9B recipe.
+swift run mere.run image train-lora \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --recipe klein-fast-style \
+  --quiet
 
 # Run local chat
 swift run mere.run text chat \
@@ -381,6 +388,12 @@ swift run mere.run model benchmark api-workload \
 swift run mere.run model benchmark code \
   --allow-code-execution \
   --json
+
+# Small grounded-chat eval: local email/workspace evidence, abstention, and format checks
+swift run mere.run model benchmark chat --json
+
+# Small tool-call eval: synthetic Mere tools, parsed tool names/arguments only
+swift run mere.run model benchmark tool-calls --json
 
 # Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend
 swift run mere.run model benchmark vlm --json

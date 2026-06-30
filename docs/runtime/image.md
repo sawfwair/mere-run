@@ -59,23 +59,27 @@ local equivalent model root, then use the saved adapter with Klein
 `image generate --lora`. The loader accepts mflux-format Klein transformer
 shards and maps their time-guidance weights into the Swift transformer module
 layout.
-Use `--lora-target-mode transformer-linear-walk` when you want an ai-toolkit-style
+Use `--recipe klein-fast-style` for the canonical fast local style recipe. It
+trains on `image-klein-base-9b` at rank 16 for 1000 steps, LR `0.00005`, max
+side `512`, disk-backed latent caching, compiled-step disablement, 250-step
+checkpoints, and the fast Klein target surface. Use
+`--lora-target-mode transformer-linear-walk` when you want an ai-toolkit-style
 comparison that trains every transformer Linear/QuantizedLinear layer instead
 of the default suffix allowlist.
 
 ```bash
 swift run mere.run model pull image-klein-base-9b
+swift run mere.run model pull image-klein-9b
 swift run mere.run image train-lora \
-  --model image-klein-base-9b \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
-  --training-steps 1500 \
-  --rank 16 \
-  --checkpoint-interval 250
+  --recipe klein-fast-style \
+  --quiet
 swift run mere.run image generate \
-  --model image-klein-base-9b \
-  --prompt "a ceramic mug in the trained style" \
+  --model image-klein-9b \
+  --prompt "TRIGGER_TOKEN a ceramic mug in the trained style" \
   --lora ./style-klein.safetensors \
+  --lora-scale 2.0 \
   --output ./style-klein.png
 ```
 
@@ -177,10 +181,8 @@ swift run mere.run model pull image-krea2-turbo
 swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
-  --training-steps 1000 \
-  --learning-rate 0.0001 \
-  --width 768 --height 768 \
-  --rank 32
+  --recipe krea-cinematic-style \
+  --quiet
 swift run mere.run image generate \
   --model image-krea2-turbo \
   --prompt "a cinematic product photo in the trained style" \
@@ -196,6 +198,14 @@ weight 1.0. The native Krea target set matches the published adapter surface:
 264 Linear modules on the full model, including image input, text
 projection/fusion, time embedding/projection, transformer attention/feed-forward
 gates, and final output projection.
+Use `--recipe krea-fast-style` for a quick local Krea proof pass: Raw base, 100
+steps, LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank `32`, alpha
+`32`, and the full native Krea target surface. Treat this as a smoke recipe and
+inspect images before trusting it as a final style adapter. Use
+`--recipe krea-cinematic-style` for the safer movie-style lane: 200 steps, LR
+`0.0001`, 20-step warmup/cosine decay, 768x416, rank `32`, alpha `32`, and
+compiled-step disablement. Override `--width`/`--height` when your source set is
+not widescreen.
 
 The wired Krea generation mode is text-to-image with optional LoRA adapters;
 image-to-image and reference inputs are not wired for this family yet.

@@ -69,6 +69,18 @@ Compare Gemma4 12B vision chat against the existing Qwen3-VL inspect backend:
 mere.run model benchmark vlm --json
 ```
 
+Run the small grounded-chat slice for local assistant behavior:
+
+```bash
+mere.run model benchmark chat --json
+```
+
+Run the small tool-call selection slice for Q36 vs Gemma 12B 4-bit:
+
+```bash
+mere.run model benchmark tool-calls --json
+```
+
 Prepare an external VLM quality run against an existing `lmms-eval` dataset:
 
 ```bash
@@ -201,6 +213,82 @@ Use one of:
   MTP matrix.
 
 The fixture prompt is for runtime comparison only; it is not a quality eval.
+
+## Chat Benchmark
+
+`model benchmark chat` runs a tiny, fixed Mere-style chat slice against local
+assistant models. It is a grounded behavior check, not a leaderboard substitute.
+The default comparison lane is:
+
+- the hardware-aware default from `text chat`
+- `text-chat-lfm25-a1b-8bit`
+- `text-chat-gemma4-12b-4bit`
+- `text-chat-gemma4-nano`
+
+The default suite is `mere-chat-slice`, currently 40 original fixtures covering:
+
+- sender-specific local email questions
+- missing-evidence abstention with `NOT_IN_EVIDENCE`
+- workspace ambiguity and workspace selection
+- JSON extraction
+- concise summaries from provided evidence
+- local action boundaries
+- date sorting and small arithmetic
+- conflicting evidence
+- avoiding fabricated links, secrets, and command output
+
+Each case is prompted once with deterministic sampling by default
+(`--temperature 0 --top-p 1`) and scored with deterministic checks such as
+required phrases, forbidden phrases, regexes, JSON keys, and bullet counts. The
+command never auto-pulls models during scoring; install missing models with
+`mere.run model pull` first.
+
+Narrow the run while iterating:
+
+```bash
+mere.run model benchmark chat \
+  --models text-chat-lfm25-a1b-8bit,text-chat-gemma4-nano \
+  --cases MereChat/0,MereChat/1,MereChat/3 \
+  --log-responses
+```
+
+Use `--dry-run --json` to print the planned model/case matrix without loading a
+runtime. Use `--log-responses` when debugging a failure; otherwise reports keep
+responses out of the text and JSON output.
+
+## Tool-Call Benchmark
+
+`model benchmark tool-calls` runs a separate tool protocol check. It is split
+from `model benchmark chat` on purpose: the chat slice scores grounded answers,
+while this slice scores whether a model chooses the right tool name and
+arguments when the prompt requires a local lookup or action.
+
+The default comparison is:
+
+- `text-chat-q36-nano`
+- `text-chat-gemma4-12b-4bit`
+
+The default suite currently has 10 original Mere-style cases covering:
+
+- email search by sender, workspace, date, and attachment flag
+- opening a local email by id
+- project and audit search
+- workspace selection
+- safe dry-run command planning
+- no-tool cases when evidence is already present or confirmation is missing
+
+The benchmark passes synthetic `ToolDefinition` schemas to the runtime and
+scores the parsed `toolCalls` returned by the model. It does not execute shell
+commands, write files, mutate local data, or invoke the real Mere command plane.
+
+Narrow the run while iterating:
+
+```bash
+mere.run model benchmark tool-calls \
+  --models text-chat-q36-nano,text-chat-gemma4-12b-4bit \
+  --cases MereTool/0,MereTool/4 \
+  --log-responses
+```
 
 ## Code Benchmark
 

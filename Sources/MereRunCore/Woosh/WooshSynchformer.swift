@@ -182,7 +182,7 @@ public final class WooshSynchformer {
         let roundedSourceFPS = Int(sourceFPS.rounded())
         let roundedTargetFPS = Int(targetFrameRate.rounded())
         if roundedTargetFPS > 0,
-           abs(sourceFPS - Double(roundedSourceFPS)) < 0.01,
+           Swift.abs(sourceFPS - Double(roundedSourceFPS)) < 0.01,
            roundedSourceFPS >= roundedTargetFPS,
            roundedSourceFPS % roundedTargetFPS == 0 {
             let factor = max(1, roundedSourceFPS / roundedTargetFPS)

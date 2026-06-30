@@ -55,6 +55,7 @@ public struct Ornith35BCodeResources: Sendable, Hashable {
 
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
+    case textChatGemma4 = "text-chat-gemma4"
     case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
     case deepseekV4Flash = "text-chat-deepseek-v4-flash"
@@ -137,11 +138,17 @@ public enum MereRunAgentModelCatalog {
         if machine.unifiedMemoryGB >= 96 {
             return deepseekV4Flash()
         }
-        if machine.unifiedMemoryGB >= 64 {
+        if machine.isLinux && machine.unifiedMemoryGB >= 64 {
             return qwen3CoderNext()
         }
-        if machine.unifiedMemoryGB >= 24 {
+        if machine.unifiedMemoryGB >= 64 {
+            return gemma12B4Bit()
+        }
+        if machine.isLinux && machine.unifiedMemoryGB >= 24 {
             return q36Nano()
+        }
+        if machine.unifiedMemoryGB >= 24 {
+            return gemma12B4Bit()
         }
         return smallRecommendation(on: machine)
     }
@@ -162,11 +169,17 @@ public enum MereRunAgentModelCatalog {
         if machine.unifiedMemoryGB >= 96 {
             return deepseekV4Flash()
         }
-        if machine.unifiedMemoryGB >= 64 {
+        if machine.isLinux && machine.unifiedMemoryGB >= 64 {
             return qwen3CoderNext()
         }
-        if machine.unifiedMemoryGB >= 24 {
+        if machine.unifiedMemoryGB >= 64 {
+            return gemma12B4Bit()
+        }
+        if machine.isLinux && machine.unifiedMemoryGB >= 24 {
             return q36Nano()
+        }
+        if machine.unifiedMemoryGB >= 24 {
+            return gemma12B4Bit()
         }
         return smallRecommendation(on: machine)
     }
@@ -176,6 +189,7 @@ public enum MereRunAgentModelCatalog {
     ) -> [MereRunAgentModelRecommendation] {
         [
             qwen35NineB(),
+            gemma12B4Bit(),
             northMiniCode(),
             ornith9B(),
             ornith35B(),
@@ -202,11 +216,23 @@ public enum MereRunAgentModelCatalog {
         MereRunAgentModelRecommendation(
             id: Q35Resources.q36NanoModelId,
             displayName: "Qwen3.6 35B-A3B OptiQ 4-bit",
-            summary: "Higher-quality Qwen3.6 MLX agent tier for Macs with enough memory.",
+            summary: "Qwen-family alternate for Q36 runtime testing and comparison.",
             minimumUnifiedMemoryGB: 24,
             recommendedUnifiedMemoryGB: 32,
             servingEngine: .textChatQ36,
             managedModelID: Q35Resources.q36NanoModelId
+        )
+    }
+
+    private static func gemma12B4Bit() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Gemma4Resources.twelveB4BitModelId,
+            displayName: "Gemma 4 12B 4-bit",
+            summary: "Default local chat and assistant tier across supported Apple Silicon RAM bands.",
+            minimumUnifiedMemoryGB: 16,
+            recommendedUnifiedMemoryGB: 24,
+            servingEngine: .textChatGemma4,
+            managedModelID: Gemma4Resources.twelveB4BitModelId
         )
     }
 

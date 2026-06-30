@@ -36,6 +36,9 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertFalse(cmd.lowRam)
         XCTAssertFalse(cmd.noCompile)
         XCTAssertFalse(cmd.gradientCheckpointing)
+        XCTAssertNil(cmd.recipe)
+        XCTAssertNil(cmd.benchmarkSteps)
+        XCTAssertEqual(cmd.benchmarkWarmupSteps, 5)
         XCTAssertNil(cmd.sampleInterval)
         XCTAssertNil(cmd.samplePrompt)
         XCTAssertNil(cmd.sampleModel)
@@ -45,6 +48,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.sampleSeed)
         XCTAssertNil(cmd.loraTargetRanks)
         XCTAssertNil(cmd.loraRankPreset)
+        XCTAssertNil(cmd.loraTargetPreset)
         XCTAssertNil(cmd.loraTargetMode)
         XCTAssertNil(cmd.timestepSampling)
         XCTAssertNil(cmd.timestepLossWeighting)
@@ -81,6 +85,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--low-ram",
             "--no-compile",
             "--gradient-checkpointing",
+            "--benchmark-steps", "7",
+            "--benchmark-warmup-steps", "3",
             "--sample-interval", "150",
             "--sample-prompt", "esfakira portrait in a diner",
             "--sample-model", "image-klein-9b",
@@ -120,6 +126,9 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.lowRam)
         XCTAssertTrue(cmd.noCompile)
         XCTAssertTrue(cmd.gradientCheckpointing)
+        XCTAssertNil(cmd.recipe)
+        XCTAssertEqual(cmd.benchmarkSteps, 7)
+        XCTAssertEqual(cmd.benchmarkWarmupSteps, 3)
         XCTAssertEqual(cmd.sampleInterval, 150)
         XCTAssertEqual(cmd.samplePrompt, "esfakira portrait in a diner")
         XCTAssertEqual(cmd.sampleModel, "image-klein-9b")
@@ -129,6 +138,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleSeed, 99)
         XCTAssertEqual(cmd.loraTargetRanks, ".attn.to_q=128,.ff.linear_in=64")
         XCTAssertNil(cmd.loraRankPreset)
+        XCTAssertNil(cmd.loraTargetPreset)
         XCTAssertNil(cmd.loraTargetMode)
         XCTAssertEqual(cmd.timestepSampling, "shift")
         XCTAssertEqual(cmd.timestepLossWeighting, "weighted")
@@ -194,5 +204,196 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(cmd.loraTargetMode, "transformer-linear-walk")
+    }
+
+    func testTrainLoRAParsesFALKleinFastTargetPreset() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/ffmrfox",
+            "--output", "/tmp/ffmrfox.safetensors",
+            "--model", "image-klein-base-9b",
+            "--lora-target-preset", "fal-klein-fast",
+        ])
+
+        XCTAssertEqual(cmd.loraTargetPreset, "fal-klein-fast")
+
+        let ranks = try XCTUnwrap(ImageTrainLoRA.resolveKleinTargetPreset("fal-klein-fast", rank: 16))
+        XCTAssertEqual(ranks.count, 120)
+        XCTAssertEqual(ranks["x_embedder"], 16)
+        XCTAssertEqual(ranks["context_embedder"], 16)
+        XCTAssertEqual(ranks["time_guidance_embed.timestep_embedder.linear_1"], 16)
+        XCTAssertEqual(ranks["double_stream_modulation_img.linear"], 16)
+        XCTAssertEqual(ranks["transformer_blocks.0.attn.to_q"], 16)
+        XCTAssertEqual(ranks["transformer_blocks.7.attn.to_add_out"], 16)
+        XCTAssertEqual(ranks["single_transformer_blocks.0.attn.to_qkv_mlp_proj"], 16)
+        XCTAssertEqual(ranks["single_transformer_blocks.23.attn.to_out"], 16)
+        XCTAssertNil(ranks["transformer_blocks.8.attn.to_q"])
+        XCTAssertNil(ranks["single_transformer_blocks.24.attn.to_out"])
+    }
+
+    func testTrainLoRAResolvesKleinFastStyleRecipe() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/spirited",
+            "--output", "/tmp/spirited.safetensors",
+            "--recipe", "klein-fast-style",
+        ])
+
+        XCTAssertEqual(cmd.recipe, "klein-fast-style")
+
+        let options = try cmd.resolvedTrainingOptions()
+        XCTAssertEqual(options.model, "image-klein-base-9b")
+        XCTAssertEqual(options.width, 1024)
+        XCTAssertEqual(options.height, 1024)
+        XCTAssertEqual(options.trainingSteps, 1000)
+        XCTAssertEqual(options.learningRate, 0.00005)
+        XCTAssertEqual(options.rank, 16)
+        XCTAssertNil(options.alpha)
+        XCTAssertEqual(options.captionDropout, 0.05)
+        XCTAssertEqual(options.checkpointInterval, 250)
+        XCTAssertEqual(options.maxResolution, 512)
+        XCTAssertTrue(options.lowRam)
+        XCTAssertTrue(options.noCompile)
+        XCTAssertEqual(options.loraTargetPreset, "fal-klein-fast")
+        XCTAssertNil(options.lrWarmupSteps)
+        XCTAssertNil(options.useCosineScheduler)
+        XCTAssertNil(options.lrMinFactor)
+
+        let ranks = try XCTUnwrap(ImageTrainLoRA.resolveKleinTargetPreset(options.loraTargetPreset, rank: 16))
+        XCTAssertEqual(ranks.count, 120)
+    }
+
+    func testTrainLoRAResolvesKreaFastStyleRecipe() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/ffmrfox",
+            "--output", "/tmp/ffmrfox.safetensors",
+            "--recipe", "krea-fast-style",
+        ])
+
+        XCTAssertEqual(cmd.recipe, "krea-fast-style")
+
+        let options = try cmd.resolvedTrainingOptions()
+        XCTAssertEqual(options.model, "image-krea2-raw")
+        XCTAssertEqual(options.width, 768)
+        XCTAssertEqual(options.height, 768)
+        XCTAssertEqual(options.trainingSteps, 100)
+        XCTAssertEqual(options.learningRate, 0.0005)
+        XCTAssertEqual(options.rank, 32)
+        XCTAssertEqual(options.alpha, 32)
+        XCTAssertEqual(options.captionDropout, 0.05)
+        XCTAssertNil(options.checkpointInterval)
+        XCTAssertNil(options.maxResolution)
+        XCTAssertFalse(options.lowRam)
+        XCTAssertFalse(options.noCompile)
+        XCTAssertNil(options.loraTargetPreset)
+        XCTAssertEqual(options.lrWarmupSteps, 10)
+        XCTAssertEqual(options.useCosineScheduler, true)
+        XCTAssertEqual(options.lrMinFactor, 0)
+    }
+
+    func testTrainLoRAKreaFastStyleRecipeAllowsExplicitSafeOverrides() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/ffmrfox",
+            "--output", "/tmp/ffmrfox.safetensors",
+            "--recipe", "krea-fast-style",
+            "--model", "/tmp/custom-krea-raw",
+            "--width", "1024",
+            "--height", "768",
+            "--steps", "300",
+            "--learning-rate", "0.0003",
+            "--rank", "48",
+            "--alpha", "24",
+            "--caption-dropout", "0",
+            "--lr-warmup-steps", "25",
+            "--lr-min-factor", "0.1",
+        ])
+
+        let options = try cmd.resolvedTrainingOptions()
+        XCTAssertEqual(options.model, "/tmp/custom-krea-raw")
+        XCTAssertEqual(options.width, 1024)
+        XCTAssertEqual(options.height, 768)
+        XCTAssertEqual(options.trainingSteps, 300)
+        XCTAssertEqual(options.learningRate, 0.0003)
+        XCTAssertEqual(options.rank, 48)
+        XCTAssertEqual(options.alpha, 24)
+        XCTAssertEqual(options.captionDropout, 0)
+        XCTAssertNil(options.loraTargetPreset)
+        XCTAssertEqual(options.lrWarmupSteps, 25)
+        XCTAssertEqual(options.useCosineScheduler, true)
+        XCTAssertEqual(options.lrMinFactor, 0.1)
+    }
+
+    func testTrainLoRAResolvesKreaCinematicStyleRecipe() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/neon",
+            "--output", "/tmp/neon.safetensors",
+            "--recipe", "krea-cinematic-style",
+        ])
+
+        let options = try cmd.resolvedTrainingOptions()
+        XCTAssertEqual(options.model, "image-krea2-raw")
+        XCTAssertEqual(options.width, 768)
+        XCTAssertEqual(options.height, 416)
+        XCTAssertEqual(options.trainingSteps, 200)
+        XCTAssertEqual(options.learningRate, 0.0001)
+        XCTAssertEqual(options.rank, 32)
+        XCTAssertEqual(options.alpha, 32)
+        XCTAssertEqual(options.captionDropout, 0.05)
+        XCTAssertFalse(options.lowRam)
+        XCTAssertTrue(options.noCompile)
+        XCTAssertNil(options.loraTargetPreset)
+        XCTAssertEqual(options.lrWarmupSteps, 20)
+        XCTAssertEqual(options.useCosineScheduler, true)
+        XCTAssertEqual(options.lrMinFactor, 0)
+    }
+
+    func testTrainLoRAKreaSchedulerCanBeDisabled() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/neon",
+            "--output", "/tmp/neon.safetensors",
+            "--recipe", "krea-fast-style",
+            "--no-cosine-scheduler",
+        ])
+
+        let options = try cmd.resolvedTrainingOptions()
+        XCTAssertEqual(options.lrWarmupSteps, 10)
+        XCTAssertEqual(options.useCosineScheduler, false)
+        XCTAssertEqual(options.lrMinFactor, 0)
+    }
+
+    func testTrainLoRARecipeAllowsExplicitSafeOverrides() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/spirited",
+            "--output", "/tmp/spirited.safetensors",
+            "--recipe", "klein-fast-style",
+            "--model", "/tmp/custom-klein-base",
+            "--steps", "1200",
+            "--learning-rate", "0.00007",
+            "--max-resolution", "768",
+            "--checkpoint-interval", "300",
+        ])
+
+        let options = try cmd.resolvedTrainingOptions()
+        XCTAssertEqual(options.model, "/tmp/custom-klein-base")
+        XCTAssertEqual(options.width, 1024)
+        XCTAssertEqual(options.height, 1024)
+        XCTAssertEqual(options.trainingSteps, 1200)
+        XCTAssertEqual(options.learningRate, 0.00007)
+        XCTAssertEqual(options.rank, 16)
+        XCTAssertNil(options.alpha)
+        XCTAssertEqual(options.captionDropout, 0.05)
+        XCTAssertEqual(options.maxResolution, 768)
+        XCTAssertEqual(options.checkpointInterval, 300)
+        XCTAssertTrue(options.lowRam)
+        XCTAssertTrue(options.noCompile)
+        XCTAssertEqual(options.loraTargetPreset, "fal-klein-fast")
+    }
+
+    func testTrainLoRARejectsUnknownRecipeWhenResolved() throws {
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", "/tmp/spirited",
+            "--output", "/tmp/spirited.safetensors",
+            "--recipe", "mystery",
+        ])
+
+        XCTAssertThrowsError(try cmd.resolvedTrainingOptions())
     }
 }

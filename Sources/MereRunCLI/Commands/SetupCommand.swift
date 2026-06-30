@@ -469,6 +469,8 @@ struct SetupAgentRuntime {
         switch recommendation.servingEngine {
         case .textCode:
             engine = .textCode
+        case .textChatGemma4:
+            engine = .textChatGemma4
         case .textChatQ36:
             engine = .textChatQ36
         case .textChatQ35:
@@ -509,6 +511,8 @@ struct SetupAgentRuntime {
 
     private static func contextWindow(for recommendation: MereRunAgentModelRecommendation) -> Int {
         switch recommendation.servingEngine {
+        case .textChatGemma4:
+            return Gemma4Resources.defaultContextLength
         case .textChatQ36, .textChatQ35:
             return Q35Resources.defaultContextLength
         case .deepseekV4Flash:

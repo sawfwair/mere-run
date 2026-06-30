@@ -20,9 +20,9 @@ Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the man
 | Unified memory | Winner | Why |
 | --- | --- | --- |
 | 16-23 GB | `text-chat-gemma4-12b-4bit` | Best compact first chat pick; `text-chat-gemma4-nano` is the safer smallest fallback. |
-| 24-63 GB | `text-chat-q36-nano` | Default strong chat tier; `text-chat-gemma4-turbo` is the Gemma-specific alternative. |
-| 64-95 GB | `text-chat-q36-nano` | Extra RAM is better spent on context, concurrency, or code models than dense Gemma 31B as a default. |
-| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Q36 for lower-latency interactive chat. |
+| 24-63 GB | `text-chat-gemma4-12b-4bit` | Default grounded local-assistant tier; `text-chat-gemma4-turbo` is the larger Gemma alternate. |
+| 64-95 GB | `text-chat-gemma4-12b-4bit` | Keep the proven Gemma assistant lane; spend headroom on context, concurrency, or larger Gemma alternates. |
+| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API tier; keep Gemma 12B 4-bit for normal interactive local chat. |
 
 ## Install And Check
 
@@ -77,7 +77,7 @@ mere.run text chat \
 
 ```bash
 mere.run text chat \
-  --model text-chat-q36-nano \
+  --model text-chat-gemma4-12b-4bit \
   --system "Answer with bullet points and cite uncertainty." \
   --prompt "Compare speech transcription backends for meeting notes."
 ```

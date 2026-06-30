@@ -13,6 +13,16 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("vlm"))
     }
 
+    func testBenchmarkCommandExposesChatSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("chat"))
+    }
+
+    func testBenchmarkCommandExposesToolCallsSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("tool-calls"))
+    }
+
     func testBenchmarkCommandExposesCodeSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("code"))
@@ -358,6 +368,187 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.temperature, 0.2)
         XCTAssertEqual(cmd.topP, 0.7)
         XCTAssertTrue(cmd.json)
+    }
+
+    func testChatBenchmarkParsesDefaults() throws {
+        let cmd = try ModelBenchmarkChat.parse([])
+
+        XCTAssertNil(cmd.models)
+        XCTAssertEqual(cmd.suite, .mereChatSlice)
+        XCTAssertNil(cmd.cases)
+        XCTAssertEqual(cmd.maxTokens, 96)
+        XCTAssertEqual(cmd.temperature, 0)
+        XCTAssertEqual(cmd.topP, 1)
+        XCTAssertNil(cmd.contextSize)
+        XCTAssertFalse(cmd.dryRun)
+        XCTAssertFalse(cmd.logResponses)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testChatBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkChat.parse([
+            "--models", "text-chat-lfm25-a1b-8bit,text-chat-gemma4-nano",
+            "--suite", "mere-chat-slice",
+            "--cases", "MereChat/0,MereChat/3",
+            "--max-tokens", "128",
+            "--temperature", "0.1",
+            "--top-p", "0.8",
+            "--context-size", "4096",
+            "--dry-run",
+            "--log-responses",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.models, "text-chat-lfm25-a1b-8bit,text-chat-gemma4-nano")
+        XCTAssertEqual(cmd.suite, .mereChatSlice)
+        XCTAssertEqual(cmd.cases, "MereChat/0,MereChat/3")
+        XCTAssertEqual(cmd.maxTokens, 128)
+        XCTAssertEqual(cmd.temperature, 0.1)
+        XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.contextSize, 4096)
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertTrue(cmd.logResponses)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testChatBenchmarkSuiteHasFortyCases() {
+        XCTAssertEqual(ChatBenchmarkCase.mereChatSlice.count, 40)
+    }
+
+    func testChatBenchmarkSelectsCaseSubset() throws {
+        let cmd = try ModelBenchmarkChat.parse(["--cases", "MereChat/0,MereChat/39"])
+        let selected = try cmd.selectedCases()
+
+        XCTAssertEqual(selected.map(\.caseID), ["MereChat/0", "MereChat/39"])
+    }
+
+    func testChatBenchmarkScoresGroundedEmailAnswer() {
+        let benchmarkCase = ChatBenchmarkCase.mereChatSlice[0]
+        let evaluation = benchmarkCase.evaluate(
+            "mail_103 from abenewsoil@gmail.com on 2026-06-27, subject Revised nursery quote."
+        )
+
+        XCTAssertTrue(evaluation.passed, evaluation.failedChecks.joined(separator: "\n"))
+        XCTAssertEqual(evaluation.passedChecks, evaluation.totalChecks)
+    }
+
+    func testChatBenchmarkRejectsHallucinatedMissingSenderAnswer() {
+        let benchmarkCase = ChatBenchmarkCase.mereChatSlice[1]
+        let evaluation = benchmarkCase.evaluate(
+            "The most recent email from abenewsoil@gmail.com is mail_103, Revised nursery quote, on 2026-06-27."
+        )
+
+        XCTAssertFalse(evaluation.passed)
+        XCTAssertTrue(evaluation.failedChecks.contains { $0.contains("NOT_IN_EVIDENCE") })
+    }
+
+    func testChatBenchmarkScoresJSONExtraction() {
+        let benchmarkCase = ChatBenchmarkCase.mereChatSlice[3]
+        let evaluation = benchmarkCase.evaluate(
+            """
+            {"id":"mail_301","sender":"orders@nova.example","subject":"PO 1178 accepted","date":"2026-06-22T08:03"}
+            """
+        )
+
+        XCTAssertTrue(evaluation.passed, evaluation.failedChecks.joined(separator: "\n"))
+    }
+
+    func testChatBenchmarkAllowsExplicitBrowserNotOpenedEvidence() {
+        let benchmarkCase = ChatBenchmarkCase.mereChatSlice[33]
+        let evaluation = benchmarkCase.evaluate(
+            "No, the browser did not open (browser_opened=false). The device code is MERE-42AB."
+        )
+
+        XCTAssertTrue(evaluation.passed, evaluation.failedChecks.joined(separator: "\n"))
+    }
+
+    func testToolCallsBenchmarkParsesDefaults() throws {
+        let cmd = try ModelBenchmarkToolCalls.parse([])
+
+        XCTAssertNil(cmd.models)
+        XCTAssertNil(cmd.cases)
+        XCTAssertEqual(cmd.maxTokens, 192)
+        XCTAssertEqual(cmd.temperature, 0)
+        XCTAssertEqual(cmd.topP, 1)
+        XCTAssertNil(cmd.contextSize)
+        XCTAssertFalse(cmd.dryRun)
+        XCTAssertFalse(cmd.logResponses)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testToolCallsBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkToolCalls.parse([
+            "--models", "text-chat-q36-nano,text-chat-gemma4-12b-4bit",
+            "--cases", "MereTool/0,MereTool/4",
+            "--max-tokens", "96",
+            "--temperature", "0.1",
+            "--top-p", "0.8",
+            "--context-size", "4096",
+            "--dry-run",
+            "--log-responses",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.models, "text-chat-q36-nano,text-chat-gemma4-12b-4bit")
+        XCTAssertEqual(cmd.cases, "MereTool/0,MereTool/4")
+        XCTAssertEqual(cmd.maxTokens, 96)
+        XCTAssertEqual(cmd.temperature, 0.1)
+        XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.contextSize, 4096)
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertTrue(cmd.logResponses)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testToolCallsBenchmarkSuiteHasTenCases() {
+        XCTAssertEqual(ToolBenchmarkCase.mereToolSlice.count, 10)
+    }
+
+    func testToolCallsBenchmarkSelectsCaseSubset() throws {
+        let cmd = try ModelBenchmarkToolCalls.parse(["--cases", "MereTool/0,MereTool/9"])
+        let selected = try cmd.selectedCases()
+
+        XCTAssertEqual(selected.map(\.caseID), ["MereTool/0", "MereTool/9"])
+    }
+
+    func testToolCallsBenchmarkScoresExpectedToolCall() {
+        let benchmarkCase = ToolBenchmarkCase.mereToolSlice[0]
+        let evaluation = benchmarkCase.expectation.evaluate([
+            ToolBenchmarkObservedCall(
+                call: ToolCall(
+                    name: "mere_email_search",
+                    arguments: [
+                        "workspace": "sawfwair",
+                        "sender": "abenewsoil@gmail.com",
+                        "after": "2026-06-01",
+                    ]
+                )
+            ),
+        ])
+
+        XCTAssertTrue(evaluation.passed, evaluation.failedChecks.joined(separator: "\n"))
+    }
+
+    func testToolCallsBenchmarkRejectsWrongToolCall() {
+        let benchmarkCase = ToolBenchmarkCase.mereToolSlice[0]
+        let evaluation = benchmarkCase.expectation.evaluate([
+            ToolBenchmarkObservedCall(
+                call: ToolCall(
+                    name: "mere_project_search",
+                    arguments: ["workspace": "sawfwair"]
+                )
+            ),
+        ])
+
+        XCTAssertFalse(evaluation.passed)
+        XCTAssertTrue(evaluation.failedChecks.contains { $0.contains("expected tool mere_email_search") })
+    }
+
+    func testToolCallsBenchmarkScoresNoToolCase() {
+        let benchmarkCase = ToolBenchmarkCase.mereToolSlice[4]
+        let evaluation = benchmarkCase.expectation.evaluate([])
+
+        XCTAssertTrue(evaluation.passed, evaluation.failedChecks.joined(separator: "\n"))
     }
 
     func testVLMBenchmarkParsesDefaults() throws {
