@@ -417,6 +417,10 @@ public actor Q35Generator: ChatGenerator {
             repetitionPenalty: nil,
             repetitionContextSize: 64
         )
+        let retainPrefillHidden =
+            prefixKVCacheEnabled
+            || (Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
+                && mtpModel != nil)
 
         var layerCaches = makeLayerCaches(config: loadedConfig)
         let promptInput = MLXArray(promptTokens.map { Int32($0) }).reshaped(1, promptTokens.count)
@@ -450,6 +454,7 @@ public actor Q35Generator: ChatGenerator {
                 existingHidden: prefixSeed?.hidden,
                 modelPath: loadedModelPath ?? "",
                 checkpointTokenCounts: prefixCheckpoints,
+                retainHidden: retainPrefillHidden,
                 progressHandler: progressHandler
             )
         } else {
@@ -459,6 +464,7 @@ public actor Q35Generator: ChatGenerator {
                         model: model,
                         promptTokens: promptTokens,
                         cache: layerCaches,
+                        retainHidden: retainPrefillHidden,
                         progressHandler: progressHandler
                     )
                 } else {
@@ -490,6 +496,7 @@ public actor Q35Generator: ChatGenerator {
                         inputEmbeddings: promptEmbeddings,
                         cache: layerCaches,
                         positionIds: positionIds,
+                        retainHidden: retainPrefillHidden,
                         progressHandler: progressHandler
                     )
                 }
@@ -498,6 +505,7 @@ public actor Q35Generator: ChatGenerator {
                     model: model,
                     promptTokens: promptTokens,
                     cache: layerCaches,
+                    retainHidden: retainPrefillHidden,
                     progressHandler: progressHandler
                 )
             }
@@ -685,7 +693,8 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> Q35BatchedDecodeResult {
         var logits = initialLogits
         var layerCaches = layerCaches
-        var previousHidden = initialHidden.map(lastTokenHidden)
+        let retainHidden = mtpModel != nil
+        var previousHidden = retainHidden ? initialHidden.map(lastTokenHidden) : nil
         var generated: [Int] = []
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
@@ -886,15 +895,25 @@ public actor Q35Generator: ChatGenerator {
             }
 
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            let output = model.forward(
-                nextInput,
-                cache: layerCaches,
-                positionIds: decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
-            )
-            logits = output.logits
-            previousHidden = lastTokenHidden(output.hidden)
-            MLX.eval(logits)
-            MLX.eval(previousHidden!)
+            let positionIds = decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
+            if retainHidden {
+                let output = model.forward(
+                    nextInput,
+                    cache: layerCaches,
+                    positionIds: positionIds
+                )
+                logits = output.logits
+                previousHidden = lastTokenHidden(output.hidden)
+                MLX.eval(logits)
+                MLX.eval(previousHidden!)
+            } else {
+                logits = model(
+                    nextInput,
+                    cache: layerCaches,
+                    positionIds: positionIds
+                )
+                MLX.eval(logits)
+            }
         }
 
         return Q35BatchedDecodeResult(
@@ -1223,6 +1242,7 @@ public actor Q35Generator: ChatGenerator {
         existingHidden: MLXArray? = nil,
         modelPath: String? = nil,
         checkpointTokenCounts: Set<Int> = [],
+        retainHidden: Bool = true,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
         guard !promptTokens.isEmpty else {
@@ -1248,23 +1268,30 @@ public actor Q35Generator: ChatGenerator {
             }
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
                 .reshaped(1, end - processed)
-            let output = model.forward(chunk, cache: cache)
-            MLX.eval(output.logits)
-            MLX.eval(output.hidden)
-            logits = output.logits
-            hidden = output.hidden
-            processed = end
-            if let modelPath {
-                storePrefixKVCache(
-                    modelPath: modelPath,
-                    promptTokens: promptTokens,
-                    tokenCount: processed,
-                    cache: cache,
-                    logits: output.logits,
-                    hidden: output.hidden,
-                    priority: checkpointTokenCounts.contains(processed) ? .semantic : .chunk
-                )
+            if retainHidden {
+                let output = model.forward(chunk, cache: cache)
+                MLX.eval(output.logits)
+                MLX.eval(output.hidden)
+                logits = output.logits
+                hidden = output.hidden
+                if let modelPath {
+                    storePrefixKVCache(
+                        modelPath: modelPath,
+                        promptTokens: promptTokens,
+                        tokenCount: end,
+                        cache: cache,
+                        logits: output.logits,
+                        hidden: output.hidden,
+                        priority: checkpointTokenCounts.contains(end) ? .semantic : .chunk
+                    )
+                }
+            } else {
+                let output = model(chunk, cache: cache)
+                MLX.eval(output)
+                logits = output
+                hidden = nil
             }
+            processed = end
             await Task.yield()
         }
 
@@ -1279,6 +1306,7 @@ public actor Q35Generator: ChatGenerator {
         inputEmbeddings: MLXArray,
         cache: [Q35LayerCache?],
         positionIds: MLXArray? = nil,
+        retainHidden: Bool = true,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
         let tokenCount = inputEmbeddings.dim(1)
@@ -1298,16 +1326,28 @@ public actor Q35Generator: ChatGenerator {
             let chunkEmbeddings = inputEmbeddings[0..., processed..<end, 0...]
             let chunkInput = MLXArray.zeros([1, end - processed], dtype: .int32)
             let chunkPositionIds = positionIds?[0..., 0..., processed..<end]
-            let output = model.forward(
-                chunkInput,
-                cache: cache,
-                inputEmbeddings: chunkEmbeddings,
-                positionIds: chunkPositionIds
-            )
-            MLX.eval(output.logits)
-            MLX.eval(output.hidden)
-            logits = output.logits
-            hidden = output.hidden
+            if retainHidden {
+                let output = model.forward(
+                    chunkInput,
+                    cache: cache,
+                    inputEmbeddings: chunkEmbeddings,
+                    positionIds: chunkPositionIds
+                )
+                MLX.eval(output.logits)
+                MLX.eval(output.hidden)
+                logits = output.logits
+                hidden = output.hidden
+            } else {
+                let output = model(
+                    chunkInput,
+                    cache: cache,
+                    inputEmbeddings: chunkEmbeddings,
+                    positionIds: chunkPositionIds
+                )
+                MLX.eval(output)
+                logits = output
+                hidden = nil
+            }
             processed = end
             await Task.yield()
         }

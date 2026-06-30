@@ -92,6 +92,51 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxDiff, 0.001)
     }
 
+    func testQ35SwitchLinearSortedRouteMatchesUnsortedRoute() throws {
+        let routeCount = 64
+        let inputDims = 4
+        let outputDims = 3
+        let numExperts = 5
+        let weightValues = (0..<(numExperts * outputDims * inputDims)).map {
+            Float(($0 % 23) - 11) / 13.0
+        }
+        let inputValues = (0..<(routeCount * inputDims)).map {
+            Float(($0 % 17) - 8) / 9.0
+        }
+        let expertIndices = (0..<routeCount).map { Int32(($0 * 3 + 2) % numExperts) }
+        let flatX = MLXArray(inputValues, [routeCount, 1, inputDims])
+        let indices = MLXArray(expertIndices, [routeCount])
+
+        let layer = Q35SwitchLinear(
+            inputDims: inputDims,
+            outputDims: outputDims,
+            numExperts: numExperts,
+            groupSize: 64,
+            bits: 4,
+            quantized: false,
+            bias: false
+        )
+        try layer.update(
+            parameters: ModuleParameters.unflattened([
+                ("weight", MLXArray(weightValues, [numExperts, outputDims, inputDims])),
+            ]),
+            verify: .none
+        )
+
+        let expected = layer.applyFlat(flatX, indices: indices, sortedIndices: false)
+        let order = argSort(indices, axis: 0)
+        let inverseOrder = argSort(order, axis: 0)
+        let actual = layer.applyFlat(
+            flatX.take(order, axis: 0),
+            indices: indices.take(order, axis: 0),
+            sortedIndices: true
+        )
+        .take(inverseOrder, axis: 0)
+
+        let maxDiff = MLX.max(MLX.abs(expected.asType(.float32) - actual.asType(.float32))).item(Float.self)
+        XCTAssertLessThan(maxDiff, 0.0001)
+    }
+
     func testDequantizedGatherFallbackMatchesGatherQMM() {
         let weightValues = (0..<384).map { Float($0 % 17) / 16.0 - 0.5 }
         let denseWeight = MLXArray(weightValues, [3, 4, 32])

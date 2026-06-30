@@ -65,39 +65,44 @@ final class Q35SwitchLinear: Module {
         }
 
         let flatIndices = indices.reshaped([batchTokens * topK])
-
-        let output: MLXArray
-        if let scales {
-            let resolved = resolvedQuantization(inputDim: inputDim, scales: scales)
-            output = portableGatherQuantizedMM(
-                flatX,
-                weight,
-                scales: scales,
-                biases: biases,
-                rhsIndices: flatIndices,
-                transpose: true,
-                groupSize: resolved.groupSize,
-                bits: resolved.bits,
-                mode: .affine,
-                sortedIndices: false
-            )
-        } else {
-            output = gatherMM(
-                flatX,
-                weight.swappedAxes(-1, -2),
-                rhsIndices: flatIndices,
-                sortedIndices: false
-            )
-        }
-
+        let output = applyFlat(flatX, indices: flatIndices, sortedIndices: false)
         let outDim = output.dim(2)
         var reshaped = output.reshaped([batchTokens, topK, outDim])
         reshaped = reshaped.reshaped([x.dim(0), x.dim(1), topK, outDim])
 
-        if let bias {
-            return reshaped + bias.reshaped([1, 1, 1, outDim])
-        }
         return reshaped
+    }
+
+    func applyFlat(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
+        let inputDim = x.dim(x.ndim - 1)
+        let output: MLXArray
+        if let scales {
+            let resolved = resolvedQuantization(inputDim: inputDim, scales: scales)
+            output = portableGatherQuantizedMM(
+                x,
+                weight,
+                scales: scales,
+                biases: biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: resolved.groupSize,
+                bits: resolved.bits,
+                mode: .affine,
+                sortedIndices: sortedIndices
+            )
+        } else {
+            output = gatherMM(
+                x,
+                weight.swappedAxes(-1, -2),
+                rhsIndices: indices,
+                sortedIndices: sortedIndices
+            )
+        }
+
+        if let bias {
+            return output + bias.take(indices, axis: 0).expandedDimensions(axis: 1)
+        }
+        return output
     }
 
     private func resolvedQuantization(inputDim: Int, scales: MLXArray) -> (groupSize: Int, bits: Int) {
@@ -164,6 +169,33 @@ final class Q35SwitchGLU: Module {
     }
 
     func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let batchTokens = x.dim(0) * x.dim(1)
+        let topK = indices.dim(2)
+        let routeCount = batchTokens * topK
+        guard routeCount >= 64 else {
+            return unsorted(x, indices: indices)
+        }
+
+        let inputDim = x.dim(x.ndim - 1)
+        let flatIndices = indices.reshaped([routeCount])
+        let order = argSort(flatIndices, axis: 0)
+        let inverseOrder = argSort(order, axis: 0)
+        let sortedIndices = flatIndices.take(order, axis: 0)
+        let tokenOrder = order.floorDivide(topK)
+        let flatInput = x.reshaped([batchTokens, inputDim])
+            .take(tokenOrder, axis: 0)
+            .reshaped([routeCount, 1, inputDim])
+
+        let up = upProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+        let gate = gateProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+        let activated = q35Swiglu(gate, up)
+        let output = downProj.applyFlat(activated, indices: sortedIndices, sortedIndices: true)
+            .take(inverseOrder, axis: 0)
+
+        return output.reshaped([x.dim(0), x.dim(1), topK, output.dim(2)])
+    }
+
+    func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
         let up = upProj(x, indices: indices)
         let gate = gateProj(x, indices: indices)
         let activated = q35Swiglu(gate, up)
@@ -237,10 +269,9 @@ final class Q35FeedForward: Module {
            let switchMLP,
            let sharedExpert,
            let sharedExpertGate {
-            var scores = softmax(gate(x), axis: -1)
+            var scores = softmax(gate(x), axis: -1, precise: true)
 
-            let kth = topK - 1
-            let indices = argPartition(-scores, kth: kth, axis: -1)[.ellipsis, 0..<topK]
+            let indices = argPartition(scores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
             scores = takeAlong(scores, indices, axis: -1)
 
             if normTopKProb, topK > 1 {
@@ -289,10 +320,9 @@ final class Q35MoE: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        var scores = softmax(gate(x), axis: -1)
+        var scores = softmax(gate(x), axis: -1, precise: true)
 
-        let kth = topK - 1
-        let indices = argPartition(-scores, kth: kth, axis: -1)[.ellipsis, 0..<topK]
+        let indices = argPartition(scores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
         scores = takeAlong(scores, indices, axis: -1)
 
         if normTopKProb, topK > 1 {
