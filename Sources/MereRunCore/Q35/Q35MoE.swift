@@ -62,10 +62,8 @@ final class Q35SwitchLinear: Module {
         if x.ndim == 4 && x.dim(2) == topK {
             flatX = x.reshaped([batchTokens * topK, 1, inputDim])
         } else {
-            var expanded = x.reshaped([batchTokens, 1, inputDim])
-            expanded = MLX.expandedDimensions(expanded, axis: 1)
-            expanded = MLX.repeated(expanded, count: topK, axis: 1)
-            flatX = expanded.reshaped([batchTokens * topK, 1, inputDim])
+            let expanded = MLX.expandedDimensions(x, axes: [-2, -3])
+            return applyGather(expanded, indices: indices, sortedIndices: false).squeezed(axis: -2)
         }
 
         let flatIndices = indices.reshaped([batchTokens * topK])
@@ -78,6 +76,10 @@ final class Q35SwitchLinear: Module {
     }
 
     func applyFlat(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
+        applyGather(x, indices: indices, sortedIndices: sortedIndices)
+    }
+
+    private func applyGather(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
         let inputDim = x.dim(x.ndim - 1)
         let output: MLXArray
         if let scales {
@@ -104,7 +106,7 @@ final class Q35SwitchLinear: Module {
         }
 
         if let bias {
-            return output + bias.take(indices, axis: 0).expandedDimensions(axis: 1)
+            return output + bias.take(indices, axis: 0).expandedDimensions(axis: -2)
         }
         return output
     }
@@ -241,7 +243,7 @@ final class Q35FeedForward: Module {
         let text = config.textConfig
         self.usesMoE = text.usesMoE
         self.topK = max(1, text.numExpertsPerTok)
-        self.normTopKProb = true
+        self.normTopKProb = text.normTopKProb
 
         if text.usesMoE {
             self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
@@ -310,7 +312,7 @@ final class Q35MoE: Module {
     init(config: Q35Config) {
         let text = config.textConfig
         self.topK = max(1, text.numExpertsPerTok)
-        self.normTopKProb = true
+        self.normTopKProb = text.normTopKProb
 
         self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
         self._switchMLP.wrappedValue = Q35SwitchGLU(config: config)

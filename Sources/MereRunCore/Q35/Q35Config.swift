@@ -40,6 +40,7 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
     public let headDim: Int
     public let numExperts: Int
     public let numExpertsPerTok: Int
+    public let normTopKProb: Bool
     public let layerTypes: [String]
     public let mlpOnlyLayers: [Int]
     public let linearNumValueHeads: Int
@@ -69,6 +70,7 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         case headDim = "head_dim"
         case numExperts = "num_experts"
         case numExpertsPerTok = "num_experts_per_tok"
+        case normTopKProb = "norm_topk_prob"
         case layerTypes = "layer_types"
         case mlpOnlyLayers = "mlp_only_layers"
         case linearNumValueHeads = "linear_num_value_heads"
@@ -115,6 +117,7 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         self.headDim = try container.decode(Int.self, forKey: .headDim)
         self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
         self.numExpertsPerTok = try container.decodeIfPresent(Int.self, forKey: .numExpertsPerTok) ?? 0
+        self.normTopKProb = try container.decodeIfPresent(Bool.self, forKey: .normTopKProb) ?? false
         self.layerTypes = try container.decode([String].self, forKey: .layerTypes)
         self.mlpOnlyLayers = try container.decodeIfPresent([Int].self, forKey: .mlpOnlyLayers) ?? []
         self.linearNumValueHeads = try container.decode(Int.self, forKey: .linearNumValueHeads)
@@ -146,6 +149,7 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         try container.encode(headDim, forKey: .headDim)
         try container.encode(numExperts, forKey: .numExperts)
         try container.encode(numExpertsPerTok, forKey: .numExpertsPerTok)
+        try container.encode(normTopKProb, forKey: .normTopKProb)
         try container.encode(layerTypes, forKey: .layerTypes)
         try container.encode(mlpOnlyLayers, forKey: .mlpOnlyLayers)
         try container.encode(linearNumValueHeads, forKey: .linearNumValueHeads)
