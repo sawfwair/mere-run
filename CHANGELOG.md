@@ -44,6 +44,10 @@ The format is based on Keep a Changelog.
   default `vision ocr` backend.
 - added `text-agent-ornith-9b` as an experimental native Qwen-family MLX/OptiQ
   coding-agent target backed by the pinned public Ornith 1.0 9B snapshot.
+- added `text-agent-ornith-35b-mlx` as a local native Qwen-family MLX Q4
+  coding-agent target for testing converted Ornith 1.0 35B snapshots.
+- added `text-agent-ornith-35b` as a managed native GGUF coding-agent target
+  for larger Ornith evals through the existing `text-code` runtime.
 
 ### Fixed
 
@@ -59,6 +63,12 @@ The format is based on Keep a Changelog.
 - fixed mflux-format FLUX.2 Klein transformer loading by mapping
   `time_guidance_embed.linear_*` weights into the native Swift transformer's
   nested timestep embedder path.
+- split `<think>...</think>` model output into preserved reasoning metadata and
+  visible response text across native chat responses, API non-streaming output,
+  and code benchmark reports, including reopened-reasoning diagnostics for
+  loop-like model output.
+- fixed MLX CUDA BF16 sigmoid JIT smoke failures by patching the upstream CUDA
+  unary kernel path during `scripts/prepare-linux-native.sh`.
 
 ## 0.17.0 - 2026-06-23
 

@@ -267,8 +267,9 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
                 debugLog?("chat: decoded response length=\(cleanedResponse.count)")
 
                 return ChatResponse(
-                    response: cleanedResponse,
-                    tokensGenerated: generatedTokens.count
+                    generatedText: cleanedResponse,
+                    tokensGenerated: generatedTokens.count,
+                    showThinking: request.showThinking
                 )
             }()
 

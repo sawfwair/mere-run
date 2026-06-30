@@ -3,11 +3,6 @@ import MLX
 import MLXFast
 import MLXNN
 
-@inline(__always)
-private func q35RepeatAlongHeads(_ x: MLXArray, heads: Int) -> MLXArray {
-    MLX.repeated(x, count: heads, axis: 1)
-}
-
 final class Q35FullAttention: Module {
     @ModuleInfo(key: "q_proj") var qProj: Linear
     @ModuleInfo(key: "k_proj") var kProj: Linear
@@ -110,30 +105,13 @@ final class Q35FullAttention: Module {
             v = cached.1
         }
 
-        let repeats = max(1, numHeads / max(1, numKVHeads))
-        if repeats > 1 {
-            k = q35RepeatAlongHeads(k, heads: repeats)
-            v = q35RepeatAlongHeads(v, heads: repeats)
-        }
-
-        let useEagerDecode = s == 1
-        let attn: MLXArray
-        if useEagerDecode {
-            var scores = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * MLXArray(scale).asType(q.dtype)
-            if case .array(let maskArray) = mask {
-                scores = scores + maskArray.asType(scores.dtype)
-            }
-            let weights = softmax(scores.asType(.float32), axis: -1).asType(q.dtype)
-            attn = MLX.matmul(weights, v)
-        } else {
-            attn = MLXFast.scaledDotProductAttention(
-                queries: q,
-                keys: k,
-                values: v,
-                scale: scale,
-                mask: mask
-            )
-        }
+        let attn = MLXFast.scaledDotProductAttention(
+            queries: q,
+            keys: k,
+            values: v,
+            scale: scale,
+            mask: mask
+        )
 
         var out = attn.transposed(0, 2, 1, 3).reshaped(b, s, numHeads * headDim)
         if let gate {

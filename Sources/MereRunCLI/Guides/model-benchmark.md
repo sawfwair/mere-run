@@ -212,6 +212,11 @@ leaderboard substitute. The default comparison is:
 - `text-code-north-mini`: native llama.cpp/GGUF North Mini Code target.
 - `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline.
 
+For larger explicit Ornith runs, pass `--models text-agent-ornith-35b-mlx` for
+the local native MLX Q4 conversion or `--models text-agent-ornith-35b` for the
+GGUF target. They are not part of the default comparison because they are larger
+installs/loads.
+
 The default suite is `humaneval-slice`, currently three public HumanEval tasks:
 
 - `HumanEval/0`
@@ -225,13 +230,20 @@ backend. Because this runs generated code locally, the command requires
 `--allow-code-execution` unless you are using `--dry-run`. The default
 `--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on Linux when
 available. Use `--sandbox none` only for a trusted local smoke where timeout and
-temporary-directory hygiene are enough.
+temporary-directory hygiene are enough. The default generation cap is
+`--max-tokens 1024`; JSON and text output flag cases that still reach the cap
+with `reachedMaxTokens`/`capped=true`. Reasoning-model output is split before
+scoring: visible code is executed, while captured `<think>...</think>` content
+is reported as `reasoningCharacters`/`reasoning_chars` and
+`incompleteReasoning`/`reasoning_incomplete`. A second generated reasoning
+block is reported as `reasoning_reopened=true`; treat it as a loop or
+phase-restart warning, not a correctness failure by itself.
 
 Narrow the run while iterating:
 
 ```bash
 mere.run model benchmark code \
-  --models text-agent-ornith-9b,text-code-north-mini \
+  --models text-agent-ornith-35b \
   --tasks HumanEval/0 \
   --allow-code-execution
 ```
@@ -239,6 +251,20 @@ mere.run model benchmark code \
 Use `--python` to select a Python interpreter and `--execution-timeout` to
 control the per-candidate subprocess timeout. The command never auto-pulls
 models during scoring; install missing models with `mere.run model pull` first.
+
+For a larger slice, download the official HumanEval JSONL, decompress it, and
+pass it with `--humaneval-file`:
+
+```bash
+curl -L https://raw.githubusercontent.com/openai/human-eval/master/data/HumanEval.jsonl.gz \
+  -o /tmp/HumanEval.jsonl.gz
+gunzip -c /tmp/HumanEval.jsonl.gz > /tmp/HumanEval.jsonl
+mere.run model benchmark code \
+  --humaneval-file /tmp/HumanEval.jsonl \
+  --tasks HumanEval/0,HumanEval/1,HumanEval/2,HumanEval/3,HumanEval/4 \
+  --models text-agent-ornith-35b \
+  --allow-code-execution
+```
 
 ## VLM Benchmark
 
@@ -322,6 +348,7 @@ mere.run model benchmark vlm \
 - Pull `text-chat-gemma4-turbo` before running the benchmark.
 - Pull `text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`
   before running the default code benchmark comparison.
+- Pull `text-agent-ornith-35b` before running larger explicit Ornith code evals.
 - Pull `vision-chat-gemma4-12b` before using it in the VLM benchmark.
 - Install `lmms-eval` dependencies in the selected Python environment before
   running external datasets; dataset downloads and licenses are handled by the

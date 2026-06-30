@@ -6,7 +6,7 @@ Start Pi against a local mere.run setup-agent API server. This is the guided "he
 
 ## Required Models
 
-Use this machine's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Smaller Qwen and North Mini Code models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash. On Linux, provide Pi with `--pi-path` or PATH; auto-install uses macOS release assets.
+Use this machine's supported setup-agent tier. On 96 GB+ Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed setup agent. Smaller Qwen, North Mini Code, and Ornith 35B models are lower-memory or comparison alternatives, not upgrades from DeepSeek V4 Flash. On Linux, provide Pi with `--pi-path` or PATH; auto-install uses macOS release assets.
 
 ## Install And Check
 
@@ -35,6 +35,10 @@ mere.run status
 - Use `--skip-server` only when you already started a compatible local API server.
 - Use `agent start --model text-code-north-mini` to compare North Mini Code
   through the native GGUF code runtime.
+- Use `agent start --model text-agent-ornith-35b` to compare the larger Ornith
+  GGUF coding-agent target through the same native `text-code` runtime.
+- Use `agent start --model text-agent-ornith-35b-mlx` to compare the locally
+  converted Ornith 35B MLX target through the native Qwen-family runtime.
 - On Linux, provide an existing Pi binary with `--pi-path` or PATH before starting.
 - Run `status` when you need to confirm the local server and served model.
 - Keep the default prompt unless the user has a specific setup goal.

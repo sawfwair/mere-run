@@ -107,6 +107,26 @@ final class Gemma4JSONConstrainedDecodingTests: XCTestCase {
         XCTAssertNotEqual(token, 1)
     }
 
+    func testGenerationConfigBannedTokensFlowThroughGreedyTokenArray() {
+        let logits = MLXArray([Float]([0.0, 8.0, 0.0, 0.0]))
+        var config = GenerationConfig(temperature: 0)
+        config.bannedTokens = [1]
+        let token = greedySampleTokenArray(logits: logits, config: config, previousTokens: [])
+        XCTAssertNotEqual(token.item(Int.self), 1)
+    }
+
+    func testGreedyTokenArrayHonorsTensorRepetitionPenalty() {
+        let logits = MLXArray([Float]([0.0, 5.0, 4.0]))
+        let config = GenerationConfig(temperature: 0, repetitionPenalty: 2.0)
+        let previous = MLXArray([Int32(1)])
+        let token = greedySampleTokenArray(
+            logits: logits,
+            config: config,
+            previousTokenIndices: previous
+        )
+        XCTAssertEqual(token.item(Int.self), 2)
+    }
+
     func testGemma4MultimodalDecodeBanIncludesVisionPromptTokens() {
         let banned = Gemma4Generator.multimodalDecodeBannedTokens(
             imageTokenId: 10,

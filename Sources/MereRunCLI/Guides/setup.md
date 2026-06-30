@@ -10,7 +10,8 @@ No model is required to view the plan. Agent setup selects this machine's
 supported tier; on 96 GB+ machines that is `text-agent-deepseek-v4-flash`.
 Smaller Qwen agent models are lower-memory or comparison alternatives, not
 upgrades from DeepSeek V4 Flash. `text-code-north-mini` can be pulled for
-native GGUF coding-agent experiments through the same `text-code` runtime.
+native GGUF coding-agent experiments through the same `text-code` runtime;
+`text-agent-ornith-35b` is the larger explicit Ornith GGUF eval target.
 
 ## Install And Check
 
@@ -39,7 +40,8 @@ mere.run model capabilities --recommended
 - Use agent mode only with a supported local runtime and model. Prefer `--agent-model tier` unless the user asks for a smaller comparison model.
 - On Linux, provide Pi with `--pi-path` or put `pi` on PATH; auto-install uses macOS release assets.
 - Use `--agent-model small` for the smallest setup model, or pull
-  `text-code-north-mini` manually when comparing North Mini Code against Qwen.
+  `text-code-north-mini` or `text-agent-ornith-35b` manually when comparing
+  coding models against Qwen.
 
 ## Examples
 

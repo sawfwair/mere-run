@@ -112,8 +112,9 @@ extension Flux2KleinGenerator {
                 if isValidJSON(lastResponse) {
                     debugLog?("chat: JSON validation passed")
                     return ChatResponse(
-                        response: lastResponse,
-                        tokensGenerated: generatedTokens.count
+                        generatedText: lastResponse,
+                        tokensGenerated: generatedTokens.count,
+                        showThinking: request.showThinking
                     )
                 } else {
                     debugLog?("chat: JSON validation failed, attempt \(attempt)/\(maxRetries)")
@@ -123,8 +124,9 @@ extension Flux2KleinGenerator {
                 }
             } else {
                 return ChatResponse(
-                    response: lastResponse,
-                    tokensGenerated: generatedTokens.count
+                    generatedText: lastResponse,
+                    tokensGenerated: generatedTokens.count,
+                    showThinking: request.showThinking
                 )
             }
         }
@@ -132,8 +134,9 @@ extension Flux2KleinGenerator {
         // All retries exhausted - return last response anyway
         debugLog?("chat: JSON validation failed after \(maxRetries) attempts, returning last response")
         return ChatResponse(
-            response: lastResponse,
-            tokensGenerated: 0
+            generatedText: lastResponse,
+            tokensGenerated: 0,
+            showThinking: request.showThinking
         )
     }
 
@@ -210,23 +213,26 @@ extension Flux2KleinGenerator {
             if request.requiresJSON {
                 if isValidJSON(lastResponse) {
                     return ChatResponse(
-                        response: lastResponse,
-                        tokensGenerated: generatedTokens.count
+                        generatedText: lastResponse,
+                        tokensGenerated: generatedTokens.count,
+                        showThinking: request.showThinking
                     )
                 } else if attempt < maxRetries {
                     progressHandler?(ChatProgress(stage: .generating, message: "Retrying generation"))
                 }
             } else {
                 return ChatResponse(
-                    response: lastResponse,
-                    tokensGenerated: generatedTokens.count
+                    generatedText: lastResponse,
+                    tokensGenerated: generatedTokens.count,
+                    showThinking: request.showThinking
                 )
             }
         }
 
         return ChatResponse(
-            response: lastResponse,
-            tokensGenerated: 0
+            generatedText: lastResponse,
+            tokensGenerated: 0,
+            showThinking: request.showThinking
         )
     }
 

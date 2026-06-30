@@ -395,6 +395,7 @@ public struct OpenAIEmbeddingRequest: Codable, Sendable {
 public struct OpenAIChatMessage: Codable, Sendable {
     public var role: String
     public var content: String
+    public var reasoning_content: String?
     public var name: String?
     public var tool_call_id: String?
     public var tool_calls: [OpenAIChatToolCall]?
@@ -403,6 +404,7 @@ public struct OpenAIChatMessage: Codable, Sendable {
     public init(
         role: String,
         content: String = "",
+        reasoning_content: String? = nil,
         name: String? = nil,
         tool_call_id: String? = nil,
         tool_calls: [OpenAIChatToolCall]? = nil,
@@ -410,6 +412,7 @@ public struct OpenAIChatMessage: Codable, Sendable {
     ) {
         self.role = role
         self.content = content
+        self.reasoning_content = reasoning_content
         self.name = name
         self.tool_call_id = tool_call_id
         self.tool_calls = tool_calls
@@ -419,6 +422,7 @@ public struct OpenAIChatMessage: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case role
         case content
+        case reasoning_content
         case name
         case tool_call_id
         case tool_calls
@@ -430,6 +434,7 @@ public struct OpenAIChatMessage: Codable, Sendable {
         let decoded = try container.decodeFlexibleContentIfPresent(forKey: .content)
         content = decoded.text
         imageURLs = decoded.imageURLs
+        reasoning_content = try container.decodeIfPresent(String.self, forKey: .reasoning_content)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         tool_call_id = try container.decodeIfPresent(String.self, forKey: .tool_call_id)
         tool_calls = try container.decodeIfPresent([OpenAIChatToolCall].self, forKey: .tool_calls)
@@ -439,6 +444,7 @@ public struct OpenAIChatMessage: Codable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(role, forKey: .role)
         try container.encode(content, forKey: .content)
+        try container.encodeIfPresent(reasoning_content, forKey: .reasoning_content)
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(tool_call_id, forKey: .tool_call_id)
         try container.encodeIfPresent(tool_calls, forKey: .tool_calls)
@@ -712,11 +718,18 @@ public struct OpenAIChatChoice: Codable, Sendable {
 public struct OpenAIChatDelta: Codable, Sendable {
     public var role: String?
     public var content: String?
+    public var reasoning_content: String?
     public var tool_calls: [OpenAIChatToolCallDelta]?
 
-    public init(role: String? = nil, content: String? = nil, tool_calls: [OpenAIChatToolCallDelta]? = nil) {
+    public init(
+        role: String? = nil,
+        content: String? = nil,
+        reasoning_content: String? = nil,
+        tool_calls: [OpenAIChatToolCallDelta]? = nil
+    ) {
         self.role = role
         self.content = content
+        self.reasoning_content = reasoning_content
         self.tool_calls = tool_calls
     }
 }

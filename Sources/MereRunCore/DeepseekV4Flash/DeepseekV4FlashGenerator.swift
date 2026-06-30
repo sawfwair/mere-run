@@ -92,7 +92,8 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
                 loadSeconds: loadSeconds,
                 prefillSeconds: 0,
                 decodeSeconds: elapsed
-            )
+            ),
+            reasoningContent: choice.message?.reasoning_content ?? choice.delta?.reasoning_content
         )
     }
 

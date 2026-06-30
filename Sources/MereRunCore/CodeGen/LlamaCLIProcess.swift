@@ -77,17 +77,24 @@ struct LlamaCLIProcess {
             let invocation = Self.invocation(for: request, modelPath: modelPath)
             progressHandler?(ChatProgress(stage: .generating, message: "Generating..."))
             let result = try run(arguments: invocation.arguments)
-            let response = Self.extractResponse(from: result.stdout)
+            let rawResponse = Self.extractResponse(from: result.stdout)
+            let trimmed = TextGenerationStopSequences.trimming(
+                rawResponse,
+                sequences: TextGenerationStopSequences.defaultRenderedChatStops + request.stopSequences
+            )
             let performance = Self.extractPerformance(from: result.stdout)
-            guard !response.isEmpty else {
+            guard !trimmed.text.isEmpty else {
                 throw LlamaCLIProcessError.emptyResponse(stderr: Self.tail(result.stderr))
             }
-            progressHandler?(ChatProgress(stage: .generating, message: response))
-            return ChatResponse(
-                response: response,
-                tokensGenerated: max(1, response.split(whereSeparator: { $0.isWhitespace }).count),
-                timing: performance.chatTiming
+            let response = ChatResponse(
+                generatedText: trimmed.text,
+                tokensGenerated: max(1, rawResponse.split(whereSeparator: { $0.isWhitespace }).count),
+                showThinking: request.showThinking,
+                timing: performance.chatTiming,
+                finishReason: trimmed.matchedSequence == nil ? nil : .stopSequence
             )
+            progressHandler?(ChatProgress(stage: .generating, message: response.response))
+            return response
         }.value
     }
 

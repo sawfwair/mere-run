@@ -4,9 +4,13 @@ import MLXFast
 import MLXNN
 import MLXRandom
 
+private let q35SwigluCompiled = compile(shapeless: true) { gate, up in
+    MLXNN.silu(gate) * up
+}
+
 @inline(__always)
 private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
-    MLXNN.silu(gate) * up
+    q35SwigluCompiled(gate, up)
 }
 
 final class Q35SwitchLinear: Module {
@@ -58,46 +62,53 @@ final class Q35SwitchLinear: Module {
         if x.ndim == 4 && x.dim(2) == topK {
             flatX = x.reshaped([batchTokens * topK, 1, inputDim])
         } else {
-            var expanded = x.reshaped([batchTokens, 1, inputDim])
-            expanded = MLX.expandedDimensions(expanded, axis: 1)
-            expanded = MLX.repeated(expanded, count: topK, axis: 1)
-            flatX = expanded.reshaped([batchTokens * topK, 1, inputDim])
+            let expanded = MLX.expandedDimensions(x, axes: [-2, -3])
+            return applyGather(expanded, indices: indices, sortedIndices: false).squeezed(axis: -2)
         }
 
         let flatIndices = indices.reshaped([batchTokens * topK])
-
-        let output: MLXArray
-        if let scales {
-            let resolved = resolvedQuantization(inputDim: inputDim, scales: scales)
-            output = portableGatherQuantizedMM(
-                flatX,
-                weight,
-                scales: scales,
-                biases: biases,
-                rhsIndices: flatIndices,
-                transpose: true,
-                groupSize: resolved.groupSize,
-                bits: resolved.bits,
-                mode: .affine,
-                sortedIndices: false
-            )
-        } else {
-            output = gatherMM(
-                flatX,
-                weight.swappedAxes(-1, -2),
-                rhsIndices: flatIndices,
-                sortedIndices: false
-            )
-        }
-
+        let output = applyFlat(flatX, indices: flatIndices, sortedIndices: false)
         let outDim = output.dim(2)
         var reshaped = output.reshaped([batchTokens, topK, outDim])
         reshaped = reshaped.reshaped([x.dim(0), x.dim(1), topK, outDim])
 
-        if let bias {
-            return reshaped + bias.reshaped([1, 1, 1, outDim])
-        }
         return reshaped
+    }
+
+    func applyFlat(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
+        applyGather(x, indices: indices, sortedIndices: sortedIndices)
+    }
+
+    private func applyGather(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
+        let inputDim = x.dim(x.ndim - 1)
+        let output: MLXArray
+        if let scales {
+            let resolved = resolvedQuantization(inputDim: inputDim, scales: scales)
+            output = portableGatherQuantizedMM(
+                x,
+                weight,
+                scales: scales,
+                biases: biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: resolved.groupSize,
+                bits: resolved.bits,
+                mode: .affine,
+                sortedIndices: sortedIndices
+            )
+        } else {
+            output = gatherMM(
+                x,
+                weight.swappedAxes(-1, -2),
+                rhsIndices: indices,
+                sortedIndices: sortedIndices
+            )
+        }
+
+        if let bias {
+            return output + bias.take(indices, axis: 0).expandedDimensions(axis: -2)
+        }
+        return output
     }
 
     private func resolvedQuantization(inputDim: Int, scales: MLXArray) -> (groupSize: Int, bits: Int) {
@@ -164,6 +175,33 @@ final class Q35SwitchGLU: Module {
     }
 
     func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let batchTokens = x.dim(0) * x.dim(1)
+        let topK = indices.dim(2)
+        let routeCount = batchTokens * topK
+        guard routeCount >= 64 else {
+            return unsorted(x, indices: indices)
+        }
+
+        let inputDim = x.dim(x.ndim - 1)
+        let flatIndices = indices.reshaped([routeCount])
+        let order = argSort(flatIndices, axis: 0)
+        let inverseOrder = argSort(order, axis: 0)
+        let sortedIndices = flatIndices.take(order, axis: 0)
+        let tokenOrder = order.floorDivide(topK)
+        let flatInput = x.reshaped([batchTokens, inputDim])
+            .take(tokenOrder, axis: 0)
+            .reshaped([routeCount, 1, inputDim])
+
+        let up = upProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+        let gate = gateProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+        let activated = q35Swiglu(gate, up)
+        let output = downProj.applyFlat(activated, indices: sortedIndices, sortedIndices: true)
+            .take(inverseOrder, axis: 0)
+
+        return output.reshaped([x.dim(0), x.dim(1), topK, output.dim(2)])
+    }
+
+    func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
         let up = upProj(x, indices: indices)
         let gate = gateProj(x, indices: indices)
         let activated = q35Swiglu(gate, up)
@@ -205,7 +243,7 @@ final class Q35FeedForward: Module {
         let text = config.textConfig
         self.usesMoE = text.usesMoE
         self.topK = max(1, text.numExpertsPerTok)
-        self.normTopKProb = true
+        self.normTopKProb = text.normTopKProb
 
         if text.usesMoE {
             self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
@@ -237,10 +275,9 @@ final class Q35FeedForward: Module {
            let switchMLP,
            let sharedExpert,
            let sharedExpertGate {
-            var scores = softmax(gate(x), axis: -1)
+            var scores = softmax(gate(x), axis: -1, precise: true)
 
-            let kth = topK - 1
-            let indices = argPartition(-scores, kth: kth, axis: -1)[.ellipsis, 0..<topK]
+            let indices = argPartition(scores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
             scores = takeAlong(scores, indices, axis: -1)
 
             if normTopKProb, topK > 1 {
@@ -275,7 +312,7 @@ final class Q35MoE: Module {
     init(config: Q35Config) {
         let text = config.textConfig
         self.topK = max(1, text.numExpertsPerTok)
-        self.normTopKProb = true
+        self.normTopKProb = text.normTopKProb
 
         self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
         self._switchMLP.wrappedValue = Q35SwitchGLU(config: config)
@@ -289,10 +326,9 @@ final class Q35MoE: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        var scores = softmax(gate(x), axis: -1)
+        var scores = softmax(gate(x), axis: -1, precise: true)
 
-        let kth = topK - 1
-        let indices = argPartition(-scores, kth: kth, axis: -1)[.ellipsis, 0..<topK]
+        let indices = argPartition(scores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
         scores = takeAlong(scores, indices, axis: -1)
 
         if normTopKProb, topK > 1 {

@@ -330,12 +330,9 @@ public final class LlamaContext: @unchecked Sendable {
     }
 
     private static func isRenderedStopToken(_ token: String) -> Bool {
-        switch token.trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "<|END_OF_TURN_TOKEN|>", "<|im_end|>", "</s>", "<|endoftext|>":
-            return true
-        default:
-            return false
-        }
+        TextGenerationStopSequences.defaultRenderedChatStops.contains(
+            token.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
     }
 
     private func applyModelChatTemplate(_ messages: [ChatMessage]) -> String? {

@@ -13,12 +13,18 @@ For lower-memory coding experiments, `text-code-north-mini` installs the
 Unsloth GGUF quant of Cohere Labs' North Mini Code. It runs through the native
 Swift/llama.cpp code path and requires a llama.cpp runtime with `cohere2moe`
 architecture support.
+For larger Ornith coding-agent evals, `text-agent-ornith-35b` installs
+DeepReinforce's Q4_K_M GGUF quant and runs through the same native `text-code`
+path with a 32K runtime context.
+Use `text-agent-ornith-35b-mlx` through `text chat`, `api serve`, or
+`model benchmark code` when testing a locally converted native MLX Q4 snapshot.
 
 ## Install And Check
 
 ```bash
 mere.run model pull text-code-qwen3
 mere.run model pull text-code-north-mini
+mere.run model pull text-agent-ornith-35b
 mere.run text code --help
 ```
 
@@ -61,6 +67,12 @@ mere.run text code \
   --prompt "Write a small Swift Result extension with tests."
 ```
 
+```bash
+mere.run text code \
+  --model text-agent-ornith-35b \
+  --prompt "Write a small Swift Result extension with tests."
+```
+
 ## Iteration Tips
 
 - Lower temperature for compiler-sensitive work.
@@ -72,6 +84,8 @@ mere.run text code \
 - No model found: run `mere.run model pull text-code-qwen3` or pass a GGUF path with `--model`.
 - North Mini Code fails to load: rebuild or update the bundled llama.cpp runtime
   so it includes `cohere2moe` support.
+- Ornith 35B answers with long reasoning: reduce `--max-tokens` or ask for code
+  only when doing interactive generation.
 - Output rambles: reduce `--max-tokens` and ask for a specific format.
 - Code is stale: paste current symbols and file names instead of relying on model memory.
 

@@ -50,6 +50,43 @@ public func argMaxSample(logits: MLXArray) -> Int {
     argMax(logits, axis: -1).item(Int.self)
 }
 
+public func greedySampleTokenArray(
+    logits: MLXArray,
+    config: GenerationConfig,
+    previousTokens: [Int]
+) -> MLXArray {
+    let contextTokens = previousTokens.isEmpty || config.repetitionPenalty == nil
+        ? nil
+        : MLXArray(previousTokens.suffix(config.repetitionContextSize).map { Int32($0) })
+    return greedySampleTokenArray(
+        logits: logits,
+        config: config,
+        previousTokenIndices: contextTokens
+    )
+}
+
+public func greedySampleTokenArray(
+    logits: MLXArray,
+    config: GenerationConfig,
+    previousTokenIndices: MLXArray?
+) -> MLXArray {
+    var logits = logits
+
+    logits = applyTokenBan(logits: logits, tokens: config.bannedTokens)
+
+    if let penalty = config.repetitionPenalty,
+       let previousTokenIndices,
+       previousTokenIndices.dim(0) > 0 {
+        logits = applyRepetitionPenalty(
+            logits: logits,
+            tokenIndices: previousTokenIndices,
+            penalty: penalty
+        )
+    }
+
+    return argMax(logits, axis: -1).asType(.int32)
+}
+
 public func topPSample(logits: MLXArray, temperature: Float, topP: Float) -> Int {
     var logits = logits
     if logits.dtype == .bfloat16 {
@@ -110,6 +147,26 @@ public func applyRepetitionPenalty(
 
     let result = logits
     result[indices] = penalized
+    return result
+}
+
+public func applyRepetitionPenalty(
+    logits: MLXArray,
+    tokenIndices: MLXArray,
+    penalty: Float
+) -> MLXArray {
+    guard tokenIndices.dim(0) > 0, penalty != 1.0 else { return logits }
+
+    let selectedLogits = logits[tokenIndices]
+
+    let penalized = MLX.where(
+        selectedLogits .< 0,
+        selectedLogits * penalty,
+        selectedLogits / penalty
+    )
+
+    let result = logits
+    result[tokenIndices] = penalized
     return result
 }
 
