@@ -5,17 +5,8 @@ import MLXNN
 import MLXRandom
 
 @inline(__always)
-private func gemma4RepeatAlongHeads(_ x: MLXArray, heads: Int) -> MLXArray {
-    MLX.repeated(x, count: heads, axis: 1)
-}
-
-@inline(__always)
-private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
-    let dtype = x.dtype
-    let x32 = x.asType(.float32)
-    let variance = MLX.mean(x32 * x32, axis: -1, keepDims: true)
-    let normalized = x32 * rsqrt(variance + MLXArray(eps))
-    return normalized.asType(dtype)
+private func gemma4RMSNormNoScale(_ x: MLXArray, weight: MLXArray, eps: Float) -> MLXArray {
+    MLXFast.rmsNorm(x, weight: weight, eps: eps)
 }
 
 struct Gemma4SharedKVState {
@@ -592,6 +583,7 @@ final class Gemma4Attention: Module {
     private let rmsNormEps: Float
     private let isKVSharedLayer: Bool
     private let useKeyEqualsValue: Bool
+    private let valueNormWeight: MLXArray
 
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         self.layerType = config.layerTypes[layerIndex]
@@ -604,6 +596,7 @@ final class Gemma4Attention: Module {
         self.numKVHeads = isFullAttention ? (config.numGlobalKeyValueHeads ?? config.numKeyValueHeads) : config.numKeyValueHeads
         self.isKVSharedLayer = forceKVShared || (config.numKVSharedLayers > 0 && layerIndex >= (config.numHiddenLayers - config.numKVSharedLayers))
         self.useKeyEqualsValue = config.attentionKEqV && isFullAttention
+        self.valueNormWeight = MLXArray.ones([headDim])
 
         let ropeConfig = config.ropeParameters[layerType] ?? config.ropeParameters["sliding_attention"]
         let ropeBase = ropeConfig?.ropeTheta ?? 10_000
@@ -671,7 +664,7 @@ final class Gemma4Attention: Module {
                     : vProj!(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
 
                 rawKeys = kNorm(rawKeys)
-                rawValues = gemma4RMSNormNoScale(rawValues, eps: rmsNormEps)
+                rawValues = gemma4RMSNormNoScale(rawValues, weight: valueNormWeight, eps: rmsNormEps)
 
                 var computedKeys = rawKeys.transposed(0, 2, 1, 3)
                 let computedValues = rawValues.transposed(0, 2, 1, 3)
@@ -689,7 +682,7 @@ final class Gemma4Attention: Module {
                 : vProj!(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
 
             rawKeys = kNorm(rawKeys)
-            rawValues = gemma4RMSNormNoScale(rawValues, eps: rmsNormEps)
+            rawValues = gemma4RMSNormNoScale(rawValues, weight: valueNormWeight, eps: rmsNormEps)
 
             var computedKeys = rawKeys.transposed(0, 2, 1, 3)
             let computedValues = rawValues.transposed(0, 2, 1, 3)
@@ -711,17 +704,10 @@ final class Gemma4Attention: Module {
             }
         }
 
-        var broadcastKeys = keys
-        var broadcastValues = values
-        if repeats > 1 {
-            broadcastKeys = gemma4RepeatAlongHeads(broadcastKeys, heads: repeats)
-            broadcastValues = gemma4RepeatAlongHeads(broadcastValues, heads: repeats)
-        }
-
         let mask = makeAttentionMask(
             queryLength: sequenceLength,
             queryOffset: offset,
-            keyLength: broadcastKeys.dim(2),
+            keyLength: keys.dim(2),
             windowSize: layerType == "sliding_attention" ? windowSize : nil,
             dtype: x.dtype,
             visionBlockIDs: visionBlockIDs
@@ -729,8 +715,8 @@ final class Gemma4Attention: Module {
 
         let attended = MLXFast.scaledDotProductAttention(
             queries: queries,
-            keys: broadcastKeys,
-            values: broadcastValues,
+            keys: keys,
+            values: values,
             scale: scale,
             mask: mask
         )
@@ -1263,15 +1249,17 @@ final class Gemma4UnifiedMultimodalEmbedder: Module {
     @ModuleInfo(key: "embedding_projection") var embeddingProjection: Linear
 
     private let eps: Float
+    private let normWeight: MLXArray
 
     init(embeddingDim: Int, textHiddenSize: Int, eps: Float) {
         self.eps = eps
+        self.normWeight = MLXArray.ones([embeddingDim])
         self._embeddingProjection.wrappedValue = Linear(embeddingDim, textHiddenSize, bias: false)
         super.init()
     }
 
     func callAsFunction(_ inputsEmbeds: MLXArray) -> MLXArray {
-        embeddingProjection(gemma4RMSNormNoScale(inputsEmbeds, eps: eps))
+        embeddingProjection(gemma4RMSNormNoScale(inputsEmbeds, weight: normWeight, eps: eps))
     }
 }
 

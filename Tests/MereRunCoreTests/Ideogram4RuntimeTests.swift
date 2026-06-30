@@ -152,6 +152,32 @@ final class Ideogram4RuntimeTests: XCTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(features.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testQwenTextEncoderGroupedQueryAttentionRunsOnFastPrefillPath() {
+        let encoder = QwenEncoder(configuration: QwenTextEncoderConfiguration(
+            vocabSize: 32,
+            hiddenSize: 8,
+            numHiddenLayers: 1,
+            numAttentionHeads: 4,
+            numKeyValueHeads: 2,
+            intermediateSize: 16,
+            ropeTheta: 10_000,
+            maxPositionEmbeddings: 32,
+            rmsNormEps: 1e-6,
+            headDim: 2
+        ))
+        let inputIds = MLXArray([Int32(1), Int32(2), Int32(3), Int32(4)]).reshaped(1, 4)
+        let attentionMask = MLXArray([Int32(1), Int32(1), Int32(1), Int32(1)]).reshaped(1, 4)
+
+        let output = encoder.forward(
+            inputIds: inputIds,
+            attentionMask: attentionMask
+        ).lastHiddenState
+        eval(output)
+
+        XCTAssertEqual(output.shape, [1, 4, 8])
+        XCTAssertTrue(MLX.max(MLX.abs(output.asType(.float32))).item(Float.self).isFinite)
+    }
+
     func testTextFeatureConcatenationInterleavesActivationLayersPerHiddenChannel() {
         let layer0 = MLXArray([1, 2, 3, 4], [1, 2, 2])
         let layer1 = MLXArray([10, 20, 30, 40], [1, 2, 2])
