@@ -36,10 +36,11 @@ If you are new to the repo, read these in order:
 1. [Getting Started](./getting-started.md)
 2. [Linux QuickStart](./linux-quickstart.md), if you are installing the headless CLI on Linux
 3. [CLI Reference](./cli.md)
-4. [Cookbooks](./cookbooks.md)
-5. [Configuration](./configuration.md)
-6. [Model Sources](./model-sources.md)
-7. [Repository Tour](./repository-tour.md)
+4. [Benchmarking](./benchmarking.md)
+5. [Cookbooks](./cookbooks.md)
+6. [Configuration](./configuration.md)
+7. [Model Sources](./model-sources.md)
+8. [Repository Tour](./repository-tour.md)
 
 ## Choose your path
 
@@ -48,6 +49,7 @@ If you are new to the repo, read these in order:
 - [Getting Started](./getting-started.md)
 - [Linux QuickStart](./linux-quickstart.md)
 - [CLI Reference](./cli.md)
+- [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
@@ -86,6 +88,8 @@ If you are new to the repo, read these in order:
   debug toggles
 - [Model Sources](./model-sources.md): canonical model IDs, Hugging Face sources,
   and local model-store behavior
+- [Benchmarking](./benchmarking.md): local quality evals, generated-code
+  execution, VLM datasets, API workload, and runtime microbenchmarks
 
 ### Repository guides
 

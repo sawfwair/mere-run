@@ -1190,6 +1190,9 @@ swift run mere.run model pull --all
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
+For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
+sections below are the command reference for each benchmark lane.
+
 ### `mere.run model benchmark gemma4-kv`
 
 Run a fixed-token real-checkpoint Gemma4 KV cache comparison. The command runs
