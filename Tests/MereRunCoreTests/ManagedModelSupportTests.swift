@@ -176,8 +176,8 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(bands.map(\.bandLabel), ["16-23 GB", "24-63 GB", "64-95 GB", "96+ GB"])
         XCTAssertEqual(bands.map(\.modelID), [
             Gemma4Resources.twelveB4BitModelId,
-            Q35Resources.q36NanoModelId,
-            Q35Resources.q36NanoModelId,
+            Gemma4Resources.twelveB4BitModelId,
+            Gemma4Resources.twelveB4BitModelId,
             DeepseekV4FlashResources.defaultModelId,
         ])
         XCTAssertTrue(bands.allSatisfy { !$0.title.isEmpty && !$0.summary.isEmpty })
@@ -196,7 +196,7 @@ final class ManagedModelSupportTests: XCTestCase {
                 .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
         )
 
-        XCTAssertEqual(currentBand.modelID, Q35Resources.q36NanoModelId)
+        XCTAssertEqual(currentBand.modelID, Gemma4Resources.twelveB4BitModelId)
     }
 
     func testChatBandRecommendationUsesGGUFQ36OnLinux() throws {
@@ -241,7 +241,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
-    func testAgentTierSelectsQ36NanoOnThirtyTwoGB() throws {
+    func testAgentTierSelectsGemmaOnThirtyTwoGB() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 32 * 1_073_741_824,
             processorName: "M2 Max",
@@ -250,11 +250,12 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
 
-        XCTAssertEqual(recommendation.id, Q35Resources.q36NanoModelId)
+        XCTAssertEqual(recommendation.id, Gemma4Resources.twelveB4BitModelId)
+        XCTAssertEqual(recommendation.servingEngine, .textChatGemma4)
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
-    func testAgentTierSelectsCoderOnSixtyFourGB() throws {
+    func testAgentTierSelectsGemmaOnSixtyFourGB() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 64 * 1_073_741_824,
             processorName: "M3 Ultra",
@@ -263,7 +264,8 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
 
-        XCTAssertEqual(recommendation.id, CodeGenResources.defaultModelId)
+        XCTAssertEqual(recommendation.id, Gemma4Resources.twelveB4BitModelId)
+        XCTAssertEqual(recommendation.servingEngine, .textChatGemma4)
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 

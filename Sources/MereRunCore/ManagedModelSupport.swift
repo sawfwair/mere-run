@@ -678,6 +678,16 @@ public enum ManagedModelCapabilityCatalog {
         on machine: MereRunMachineProfile = .current
     ) -> [ManagedChatModelBandRecommendation] {
         let q36ModelID = machine.isLinux ? ModelResolver.ModelID.q36NanoGGUF.rawValue : Q35Resources.q36NanoModelId
+        let defaultAssistantModelID = machine.isLinux ? q36ModelID : Gemma4Resources.twelveB4BitModelId
+        let defaultAssistantSummary: String
+        let headroomAssistantSummary: String
+        if machine.isLinux {
+            defaultAssistantSummary = "Q36 GGUF stays the Linux CUDA chat default; Gemma 12B 4-bit is the Apple Silicon local-assistant default."
+            headroomAssistantSummary = "Keep the optimized Q36 GGUF Linux lane; use headroom for context, concurrency, or larger alternates."
+        } else {
+            defaultAssistantSummary = "Gemma 12B 4-bit is the conservative default for grounded local chat; use Turbo when you want to spend more memory."
+            headroomAssistantSummary = "Keep the proven Gemma local-assistant lane as default; use the headroom for context, concurrency, or larger Gemma alternates."
+        }
         return [
             ManagedChatModelBandRecommendation(
                 minimumUnifiedMemoryGB: 16,
@@ -690,26 +700,26 @@ public enum ManagedModelCapabilityCatalog {
             ManagedChatModelBandRecommendation(
                 minimumUnifiedMemoryGB: 24,
                 maximumUnifiedMemoryGB: 63,
-                modelID: q36ModelID,
-                title: "Default strong chat",
-                summary: "Best general-purpose chat tier; Gemma 4 Turbo is the Gemma-specific alternative.",
-                alternateModelIDs: [Gemma4Resources.turboModelId, Gemma4Resources.twelveB4BitModelId]
+                modelID: defaultAssistantModelID,
+                title: "Default local assistant",
+                summary: defaultAssistantSummary,
+                alternateModelIDs: [Gemma4Resources.turboModelId, q36ModelID]
             ),
             ManagedChatModelBandRecommendation(
                 minimumUnifiedMemoryGB: 64,
                 maximumUnifiedMemoryGB: 95,
-                modelID: q36ModelID,
-                title: "Strong chat with headroom",
-                summary: "Q36 remains the general chat winner; spend the extra RAM on context, concurrency, or code models.",
-                alternateModelIDs: [Gemma4Resources.maxModelId, CodeGenResources.defaultModelId]
+                modelID: defaultAssistantModelID,
+                title: "Gemma chat with headroom",
+                summary: headroomAssistantSummary,
+                alternateModelIDs: [Gemma4Resources.maxModelId, Gemma4Resources.turboModelId, q36ModelID]
             ),
             ManagedChatModelBandRecommendation(
                 minimumUnifiedMemoryGB: 96,
                 maximumUnifiedMemoryGB: nil,
                 modelID: DeepseekV4FlashResources.defaultModelId,
                 title: "Premier agent/API chat",
-                summary: "Highest-tier agent/API chat model; keep Q36 as the lower-latency interactive chat lane.",
-                alternateModelIDs: [q36ModelID]
+                summary: "Highest-tier agent/API chat model; keep Gemma 12B 4-bit as the normal interactive local-assistant fallback.",
+                alternateModelIDs: [Gemma4Resources.twelveB4BitModelId, Gemma4Resources.maxModelId, q36ModelID]
             ),
         ]
     }

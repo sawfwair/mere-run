@@ -97,6 +97,18 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.long], help: "LoRA scale (default: 1.0).")
     var loraScale: Double = 1.0
 
+    @Option(
+        name: [.customLong("krea-conditioning-multiplier")],
+        help: "Experimental Krea 2 text-conditioning multiplier, applied before denoising."
+    )
+    var kreaConditioningMultiplier: Double?
+
+    @Option(
+        name: [.customLong("krea-conditioning-layer-weights")],
+        help: "Experimental comma-separated Krea 2 selected-layer weights, e.g. 1,1,1,1,1,1,1,2.5,5,1.1,4,1."
+    )
+    var kreaConditioningLayerWeights: String?
+
     @Flag(name: [.short, .long], help: "Print only the output path.")
     var quiet: Bool = false
 
@@ -112,6 +124,10 @@ struct ImageGenerate: AsyncParsableCommand {
         if let strength, !(0.0...1.0).contains(strength) {
             throw ValidationError("--strength must be between 0.0 and 1.0")
         }
+        let kreaConditioningRebalance = try Self.resolveKreaConditioningRebalance(
+            multiplier: kreaConditioningMultiplier,
+            layerWeights: kreaConditioningLayerWeights
+        )
 
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-image", defaultExtension: "png")
         try FileManager.default.createDirectory(
@@ -256,7 +272,8 @@ struct ImageGenerate: AsyncParsableCommand {
             strength: conditioning.strength,
             keepOriginalAspect: keepOriginalAspect,
             useBetaSigmas: false,
-            sigmaShift: effectiveSigmaShift
+            sigmaShift: effectiveSigmaShift,
+            kreaConditioningRebalance: kreaConditioningRebalance
         )
 
         let progressHandler: (@Sendable (GenerationProgress) -> Void)? = quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
@@ -380,5 +397,41 @@ struct ImageGenerate: AsyncParsableCommand {
             strength: explicitStrength ?? defaultInputStrength,
             referenceStrength: explicitStrength ?? (inputImage == nil ? 0.0 : defaultInputStrength)
         )
+    }
+
+    static func resolveKreaConditioningRebalance(
+        multiplier: Double?,
+        layerWeights rawLayerWeights: String?
+    ) throws -> Krea2ConditioningRebalance? {
+        guard multiplier != nil || rawLayerWeights != nil else { return nil }
+
+        let resolvedMultiplier = multiplier ?? 1.0
+        guard resolvedMultiplier.isFinite else {
+            throw ValidationError("--krea-conditioning-multiplier must be finite")
+        }
+
+        let layerWeights = try parseKreaConditioningLayerWeights(rawLayerWeights)
+        return Krea2ConditioningRebalance(
+            multiplier: Float(resolvedMultiplier),
+            layerWeights: layerWeights.map(Float.init)
+        )
+    }
+
+    static func parseKreaConditioningLayerWeights(_ raw: String?) throws -> [Double] {
+        guard let raw else { return [] }
+
+        let normalized = raw.replacingOccurrences(of: ";", with: ",")
+        let parts = normalized.split(separator: ",", omittingEmptySubsequences: true)
+        guard !parts.isEmpty else {
+            throw ValidationError("--krea-conditioning-layer-weights must include at least one number")
+        }
+
+        return try parts.map { part in
+            let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let value = Double(trimmed), value.isFinite else {
+                throw ValidationError("Invalid --krea-conditioning-layer-weights value: \(trimmed)")
+            }
+            return value
+        }
     }
 }

@@ -227,8 +227,8 @@ swift run mere.run model capabilities --recommended
 
 # Chat winners by RAM band
 # 16-23 GB: text-chat-gemma4-12b-4bit
-# 24-95 GB: text-chat-q36-nano
-# 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Q36 for lower-latency CLI chat
+# 24-95 GB: text-chat-gemma4-12b-4bit
+# 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Gemma 12B 4-bit for normal local chat
 # Coding-agent comparison: text-code-north-mini via native llama.cpp/GGUF
 
 # Choose guided, bring-your-own-agent, or manual setup
@@ -372,6 +372,12 @@ swift run mere.run model benchmark q36-mtp \
   --temperature-values 0,0.7 \
   --decode-tokens 32 \
   --json
+
+# Small grounded-chat eval: local email/workspace evidence, abstention, and format checks
+swift run mere.run model benchmark chat --json
+
+# Small tool-call eval: synthetic Mere tools, parsed tool names/arguments only
+swift run mere.run model benchmark tool-calls --json
 
 # Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend
 swift run mere.run model benchmark vlm --json

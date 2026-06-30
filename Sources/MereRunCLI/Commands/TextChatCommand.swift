@@ -15,10 +15,11 @@ struct TextChat: AsyncParsableCommand {
         abstract: "Run local chat with text chat models.",
         discussion: """
         Auto-downloads the selected model on first use. The default is
-        text-chat-q36-nano on Apple Silicon (MLX) and text-chat-q36-nano-gguf on
-        Linux CUDA (llama.cpp) — the fastest strong chat model on each platform.
+        text-chat-gemma4-12b-4bit on Apple Silicon (MLX) and text-chat-q36-nano-gguf on
+        Linux CUDA (llama.cpp).
         Known model IDs:
-          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit, default on Apple Silicon)
+          - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit, default on Apple Silicon)
+          - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-agent-ornith-9b (Ornith 1.0 9B OptiQ, experimental coding-agent target)
           - text-chat-gemma4-12b (Gemma 4 12B dense native Swift runtime)
@@ -91,7 +92,7 @@ struct TextChat: AsyncParsableCommand {
         #if os(Linux)
         let a3b = isCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId
         #else
-        let a3b = Q35Resources.q36NanoModelId
+        let a3b = Gemma4Resources.twelveB4BitModelId
         #endif
         if fits(a3b) { return a3b }
         if fits(Gemma4Resources.twelveB4BitModelId) { return Gemma4Resources.twelveB4BitModelId }
@@ -106,7 +107,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-q36-nano (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")

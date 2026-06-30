@@ -122,16 +122,22 @@ public enum Flux2LoRAKeyMapper {
         down: MLXArray,
         up: MLXArray
     ) -> [String: (down: MLXArray, up: MLXArray)]? {
-        if let (block, remainder) = parseBFL(key: key, prefix: "double_blocks_") {
+        if let (block, remainder) = parseBFLSnake(key: key, prefix: "double_blocks_") {
             return mapBFLDoubleBlock(block: block, remainder: remainder, down: down, up: up)
         }
-        if let (block, remainder) = parseBFL(key: key, prefix: "single_blocks_") {
+        if let (block, remainder) = parseBFLSnake(key: key, prefix: "single_blocks_") {
+            return mapBFLSingleBlock(block: block, remainder: remainder, down: down, up: up)
+        }
+        if let (block, remainder) = parseBFLDotted(key: key, prefix: "double_blocks") {
+            return mapBFLDoubleBlock(block: block, remainder: remainder, down: down, up: up)
+        }
+        if let (block, remainder) = parseBFLDotted(key: key, prefix: "single_blocks") {
             return mapBFLSingleBlock(block: block, remainder: remainder, down: down, up: up)
         }
         return nil
     }
 
-    private static func parseBFL(key: String, prefix: String) -> (block: Int, remainder: String)? {
+    private static func parseBFLSnake(key: String, prefix: String) -> (block: Int, remainder: String)? {
         guard key.hasPrefix(prefix) else { return nil }
         let rest = key.dropFirst(prefix.count)
         guard let underscoreIndex = rest.firstIndex(of: "_") else { return nil }
@@ -140,6 +146,17 @@ public enum Flux2LoRAKeyMapper {
         let remainderStart = rest.index(after: underscoreIndex)
         let remainder = String(rest[remainderStart...])
         return (block, remainder)
+    }
+
+    private static func parseBFLDotted(key: String, prefix: String) -> (block: Int, remainder: String)? {
+        let components = key.split(separator: ".")
+        guard components.count >= 3,
+              components[0] == prefix,
+              let block = Int(components[1]) else {
+            return nil
+        }
+        let remainder = components.dropFirst(2).joined(separator: "_")
+        return remainder.isEmpty ? nil : (block, remainder)
     }
 
     private static func mapBFLDoubleBlock(

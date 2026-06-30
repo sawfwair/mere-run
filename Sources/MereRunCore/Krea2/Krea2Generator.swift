@@ -6,6 +6,7 @@ public enum Krea2GeneratorError: LocalizedError, Sendable {
     case missingModelFiles([URL])
     case unsupportedMode(String)
     case modelsNotLoaded
+    case invalidConditioningRebalanceWeights(expected: Int, actual: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -15,6 +16,8 @@ public enum Krea2GeneratorError: LocalizedError, Sendable {
             return "Krea 2 Turbo native generation does not support \(mode) yet."
         case .modelsNotLoaded:
             return "Krea 2 models were not loaded."
+        case .invalidConditioningRebalanceWeights(let expected, let actual):
+            return "Krea 2 conditioning rebalance expected \(expected) layer weights, received \(actual)."
         }
     }
 }
@@ -104,7 +107,8 @@ public final class Krea2Generator: ImageGenerator {
             tokenizer: tokenizer,
             encoder: textEncoder,
             selectedLayers: configs.selectedTextLayers,
-            maxLength: min(request.maxSequenceLength, 512)
+            maxLength: min(request.maxSequenceLength, 512),
+            conditioningRebalance: request.kreaConditioningRebalance
         )
         progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 1, totalSteps: 1))
 
@@ -310,7 +314,8 @@ public final class Krea2Generator: ImageGenerator {
         tokenizer: QwenTokenizer,
         encoder: QwenEncoder,
         selectedLayers: [Int],
-        maxLength: Int
+        maxLength: Int,
+        conditioningRebalance: Krea2ConditioningRebalance?
     ) throws -> (hiddenStates: MLXArray, attentionMask: MLXArray) {
         let prefix = "<|im_start|>system\nDescribe the image by detailing the color, shape, size, texture, quantity, text, spatial relationships of the objects and background:<|im_end|>\n<|im_start|>user\n"
         let suffix = "<|im_end|>\n<|im_start|>assistant\n"
@@ -333,9 +338,39 @@ public final class Krea2Generator: ImageGenerator {
         )
         let stacked = MLX.stacked(hiddenStates, axis: 2).asType(.bfloat16)
         let croppedStates = stacked[0..., prefixDropCount..., 0..., 0...]
+        let rebalancedStates = try rebalanceTextConditioning(croppedStates, conditioningRebalance)
         let croppedMask = attentionMask[0..., prefixDropCount...]
-        MLX.eval(croppedStates, croppedMask)
-        return (croppedStates, croppedMask)
+        MLX.eval(rebalancedStates, croppedMask)
+        return (rebalancedStates, croppedMask)
+    }
+
+    private func rebalanceTextConditioning(
+        _ hiddenStates: MLXArray,
+        _ conditioningRebalance: Krea2ConditioningRebalance?
+    ) throws -> MLXArray {
+        guard let conditioningRebalance else { return hiddenStates }
+
+        var rebalanced = hiddenStates.asType(.float32)
+        if !conditioningRebalance.layerWeights.isEmpty {
+            let layerCount = rebalanced.dim(2)
+            guard conditioningRebalance.layerWeights.count == layerCount else {
+                throw Krea2GeneratorError.invalidConditioningRebalanceWeights(
+                    expected: layerCount,
+                    actual: conditioningRebalance.layerWeights.count
+                )
+            }
+
+            let layerWeights = MLXArray(conditioningRebalance.layerWeights)
+                .reshaped(1, 1, layerCount, 1)
+                .asType(.float32)
+            rebalanced = rebalanced * layerWeights
+        }
+
+        if conditioningRebalance.multiplier != 1 {
+            rebalanced = rebalanced * MLXArray(conditioningRebalance.multiplier).asType(.float32)
+        }
+
+        return rebalanced.asType(hiddenStates.dtype)
     }
 
     private func decodeLatents(

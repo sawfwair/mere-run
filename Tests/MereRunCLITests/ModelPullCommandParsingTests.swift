@@ -52,13 +52,13 @@ final class ModelPullCommandParsingTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ModelCapabilitiesOutput.self, from: data)
 
         XCTAssertEqual(decoded.machine.unifiedMemoryGB, 32)
-        XCTAssertEqual(decoded.recommendedChatModel?.modelID, "text-chat-q36-nano")
+        XCTAssertEqual(decoded.recommendedChatModel?.modelID, "text-chat-gemma4-12b-4bit")
         XCTAssertEqual(decoded.recommendedChatModel?.alternateModelIDs, [
             "text-chat-gemma4-turbo",
-            "text-chat-gemma4-12b-4bit",
+            "text-chat-q36-nano",
         ])
         XCTAssertTrue(decoded.recommendedChatModel?.currentMachine == true)
-        XCTAssertEqual(decoded.setupAgent?.id, "text-chat-q36-nano")
+        XCTAssertEqual(decoded.setupAgent?.id, "text-chat-gemma4-12b-4bit")
     }
 
     func testInstallValidationErrorIncludesRetryWithoutUsage() {

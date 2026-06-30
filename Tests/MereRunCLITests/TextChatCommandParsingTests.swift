@@ -10,6 +10,7 @@ final class TextChatCommandParsingTests: XCTestCase {
 
         XCTAssertFalse(cmd.stream)
         XCTAssertEqual(cmd.prompt, "Say hello")
+        XCTAssertEqual(cmd.model, Gemma4Resources.twelveB4BitModelId)
     }
 
     func testTextChatParsesStreamingFlag() throws {

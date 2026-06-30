@@ -5,6 +5,16 @@ public enum LoRA: Sendable, Hashable {
     case remote(reference: String, scale: Double)
 }
 
+public struct Krea2ConditioningRebalance: Sendable, Hashable {
+    public var multiplier: Float
+    public var layerWeights: [Float]
+
+    public init(multiplier: Float = 1, layerWeights: [Float] = []) {
+        self.multiplier = multiplier
+        self.layerWeights = layerWeights
+    }
+}
+
 public struct GenerationRequest: Sendable, Hashable {
     public var prompt: String
     public var negativePrompt: String?
@@ -28,6 +38,7 @@ public struct GenerationRequest: Sendable, Hashable {
     public var keepOriginalAspect: Bool
     public var useBetaSigmas: Bool
     public var sigmaShift: Float?
+    public var kreaConditioningRebalance: Krea2ConditioningRebalance?
 
     public init(
         prompt: String,
@@ -48,7 +59,8 @@ public struct GenerationRequest: Sendable, Hashable {
         strength: Double = 0.75,
         keepOriginalAspect: Bool = false,
         useBetaSigmas: Bool = false,
-        sigmaShift: Float? = nil
+        sigmaShift: Float? = nil,
+        kreaConditioningRebalance: Krea2ConditioningRebalance? = nil
     ) {
         self.prompt = prompt
         self.negativePrompt = negativePrompt
@@ -69,6 +81,7 @@ public struct GenerationRequest: Sendable, Hashable {
         self.keepOriginalAspect = keepOriginalAspect
         self.useBetaSigmas = useBetaSigmas
         self.sigmaShift = sigmaShift
+        self.kreaConditioningRebalance = kreaConditioningRebalance
     }
 }
 

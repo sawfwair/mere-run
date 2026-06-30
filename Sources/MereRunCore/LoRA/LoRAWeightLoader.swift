@@ -81,6 +81,8 @@ public enum LoRAWeightLoader {
 
             if isKrea2NativeBaseKey(baseKey) {
                 loraWeights[baseKey] = (down: downWeight, up: upWeight)
+            } else if let mapped = Krea2LoRAKeyMapper.map(baseKey: baseKey) {
+                loraWeights[mapped] = (down: downWeight, up: upWeight)
             } else {
                 let mapped = Flux2LoRAKeyMapper.map(baseKey: baseKey, down: downWeight, up: upWeight)
                 if mapped.isEmpty {

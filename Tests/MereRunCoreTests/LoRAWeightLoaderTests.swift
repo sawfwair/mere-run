@@ -104,4 +104,78 @@ final class LoRAWeightLoaderTests: MereRunCoreTestCase {
         XCTAssertEqual(weights.targetRanks["transformer_blocks.0.attn.to_q"], 4)
         XCTAssertEqual(weights.targetRanks["text_fusion.layerwise_blocks.0.ff.down"], 4)
     }
+
+    func testLoadMapsFALKrea2AdapterKeys() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let adapterURL = temp.appendingPathComponent("fal-krea2-lora.safetensors")
+        let sourceToExpected = [
+            "base_model.model.first": "img_in",
+            "base_model.model.txtmlp.1": "txt_in.linear_1",
+            "base_model.model.txtmlp.3": "txt_in.linear_2",
+            "base_model.model.txtfusion.projector": "text_fusion.projector",
+            "base_model.model.tmlp.0": "time_embed.linear_1",
+            "base_model.model.tmlp.2": "time_embed.linear_2",
+            "base_model.model.tproj.1": "time_mod_proj",
+            "base_model.model.last.linear": "final_layer.linear",
+            "base_model.model.blocks.0.attn.wq": "transformer_blocks.0.attn.to_q",
+            "base_model.model.blocks.0.attn.wk": "transformer_blocks.0.attn.to_k",
+            "base_model.model.blocks.0.attn.wv": "transformer_blocks.0.attn.to_v",
+            "base_model.model.blocks.0.attn.gate": "transformer_blocks.0.attn.to_gate",
+            "base_model.model.blocks.0.attn.wo": "transformer_blocks.0.attn.to_out.0",
+            "base_model.model.blocks.0.mlp.gate": "transformer_blocks.0.ff.gate",
+            "base_model.model.blocks.0.mlp.up": "transformer_blocks.0.ff.up",
+            "base_model.model.blocks.0.mlp.down": "transformer_blocks.0.ff.down",
+            "base_model.model.txtfusion.layerwise_blocks.0.attn.wq": "text_fusion.layerwise_blocks.0.attn.to_q",
+            "base_model.model.txtfusion.refiner_blocks.1.mlp.down": "text_fusion.refiner_blocks.1.ff.down",
+        ]
+        var arrays: [String: MLXArray] = [:]
+        for source in sourceToExpected.keys {
+            arrays["\(source).lora_A.weight"] = MLXArray.zeros([4, 8], dtype: .float32)
+            arrays["\(source).lora_B.weight"] = MLXArray.zeros([8, 4], dtype: .float32)
+        }
+        try MLX.save(arrays: arrays, metadata: ["lora_alpha": "32"], url: adapterURL)
+
+        let weights = try LoRAWeightLoader.load(from: adapterURL)
+
+        XCTAssertEqual(Set(weights.weights.keys), Set(sourceToExpected.values))
+        XCTAssertNil(weights.weights["blocks.0.attn.wq"])
+        XCTAssertNil(weights.weights["txtfusion.layerwise_blocks.0.attn.wq"])
+        XCTAssertEqual(weights.alpha, 32)
+        XCTAssertEqual(weights.targetRanks["transformer_blocks.0.attn.to_q"], 4)
+        XCTAssertEqual(weights.targetRanks["text_fusion.refiner_blocks.1.ff.down"], 4)
+    }
+
+    func testLoadMapsDottedBFLKleinAdapterKeys() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let adapterURL = temp.appendingPathComponent("fal-klein-lora.safetensors")
+        try MLX.save(
+            arrays: [
+                "base_model.model.double_blocks.0.img_attn.qkv.lora_A.weight": MLXArray.zeros([4, 8], dtype: .float32),
+                "base_model.model.double_blocks.0.img_attn.qkv.lora_B.weight": MLXArray.zeros([24, 4], dtype: .float32),
+                "base_model.model.double_blocks.1.txt_attn.proj.lora_A.weight": MLXArray.zeros([4, 8], dtype: .float32),
+                "base_model.model.double_blocks.1.txt_attn.proj.lora_B.weight": MLXArray.zeros([8, 4], dtype: .float32),
+                "base_model.model.single_blocks.2.linear1.lora_A.weight": MLXArray.zeros([4, 8], dtype: .float32),
+                "base_model.model.single_blocks.2.linear1.lora_B.weight": MLXArray.zeros([32, 4], dtype: .float32),
+                "base_model.model.single_blocks.3.linear2.lora_A.weight": MLXArray.zeros([4, 8], dtype: .float32),
+                "base_model.model.single_blocks.3.linear2.lora_B.weight": MLXArray.zeros([8, 4], dtype: .float32),
+            ],
+            url: adapterURL
+        )
+
+        let weights = try LoRAWeightLoader.load(from: adapterURL)
+
+        XCTAssertNotNil(weights.weights["transformer_blocks.0.attn.to_q"])
+        XCTAssertNotNil(weights.weights["transformer_blocks.0.attn.to_k"])
+        XCTAssertNotNil(weights.weights["transformer_blocks.0.attn.to_v"])
+        XCTAssertNotNil(weights.weights["transformer_blocks.1.attn.to_add_out"])
+        XCTAssertNotNil(weights.weights["single_transformer_blocks.2.attn.to_qkv_mlp_proj"])
+        XCTAssertNotNil(weights.weights["single_transformer_blocks.3.attn.to_out"])
+        XCTAssertNil(weights.weights["double_blocks.0.img_attn.qkv"])
+        XCTAssertEqual(weights.targetRanks["transformer_blocks.0.attn.to_q"], 4)
+        XCTAssertEqual(weights.targetRanks["single_transformer_blocks.2.attn.to_qkv_mlp_proj"], 4)
+    }
 }
