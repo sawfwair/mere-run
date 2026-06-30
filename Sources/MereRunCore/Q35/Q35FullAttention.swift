@@ -116,24 +116,13 @@ final class Q35FullAttention: Module {
             v = q35RepeatAlongHeads(v, heads: repeats)
         }
 
-        let useEagerDecode = s == 1
-        let attn: MLXArray
-        if useEagerDecode {
-            var scores = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * MLXArray(scale).asType(q.dtype)
-            if case .array(let maskArray) = mask {
-                scores = scores + maskArray.asType(scores.dtype)
-            }
-            let weights = softmax(scores.asType(.float32), axis: -1).asType(q.dtype)
-            attn = MLX.matmul(weights, v)
-        } else {
-            attn = MLXFast.scaledDotProductAttention(
-                queries: q,
-                keys: k,
-                values: v,
-                scale: scale,
-                mask: mask
-            )
-        }
+        let attn = MLXFast.scaledDotProductAttention(
+            queries: q,
+            keys: k,
+            values: v,
+            scale: scale,
+            mask: mask
+        )
 
         var out = attn.transposed(0, 2, 1, 3).reshaped(b, s, numHeads * headDim)
         if let gate {

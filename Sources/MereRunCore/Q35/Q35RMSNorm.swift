@@ -2,6 +2,16 @@ import Foundation
 import MLX
 import MLXNN
 
+private let q35RMSNormCompiled = compile(shapeless: true) { x, weight in
+    let dtype = x.dtype
+    let x32 = x.asType(.float32)
+    let variance = MLX.mean(x32 * x32, axis: -1, keepDims: true)
+    let normalized = x32 * rsqrt(variance + MLXArray(1e-6))
+    let scale = weight.asType(.float32) + MLXArray(1.0)
+    let output = normalized * scale.reshaped(Array(repeating: 1, count: x.ndim - 1) + [scale.dim(0)])
+    return output.asType(dtype)
+}
+
 final class Q35RMSNorm: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
 
@@ -14,6 +24,13 @@ final class Q35RMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        guard eps == 1e-6 else {
+            return callUncompiled(x)
+        }
+        return q35RMSNormCompiled(x, weight)
+    }
+
+    private func callUncompiled(_ x: MLXArray) -> MLXArray {
         let dtype = x.dtype
         let x32 = x.asType(.float32)
         let variance = MLX.mean(x32 * x32, axis: -1, keepDims: true)

@@ -691,6 +691,19 @@ public actor Q35Generator: ChatGenerator {
         promptTokens: [Int],
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
+        if mtpModel == nil, canUsePipelinedGreedyDecode(generationConfig) {
+            return try await decodeTokensGreedyPipelined(
+                model: model,
+                tokenizerAndTemplate: tokenizerAndTemplate,
+                initialLogits: initialLogits,
+                layerCaches: layerCaches,
+                eosSet: eosSet,
+                tokenBudget: tokenBudget,
+                mropeRopeDelta: mropeRopeDelta,
+                progressHandler: progressHandler
+            )
+        }
+
         var logits = initialLogits
         var layerCaches = layerCaches
         let retainHidden = mtpModel != nil
@@ -704,6 +717,7 @@ public actor Q35Generator: ChatGenerator {
         func emit(_ token: Int) {
             generated.append(token)
             repetitionHistory.append(token)
+            guard let progressHandler else { return }
             let piece = tokenizerAndTemplate.decode(token: token)
             guard !piece.isEmpty else { return }
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -718,7 +732,7 @@ public actor Q35Generator: ChatGenerator {
                 visiblePiece = pendingProgressWhitespace + piece
                 pendingProgressWhitespace = ""
             }
-            progressHandler?(ChatProgress(stage: .generating, message: visiblePiece))
+            progressHandler(ChatProgress(stage: .generating, message: visiblePiece))
         }
 
         while generated.count < tokenBudget {
@@ -922,6 +936,88 @@ public actor Q35Generator: ChatGenerator {
         )
     }
 
+    private func canUsePipelinedGreedyDecode(_ config: GenerationConfig) -> Bool {
+        config.temperature == 0
+            && config.repetitionPenalty == nil
+            && config.bannedTokens.isEmpty
+    }
+
+    private func decodeTokensGreedyPipelined(
+        model: Q35Model,
+        tokenizerAndTemplate: Q35TokenizerAndTemplate,
+        initialLogits: MLXArray,
+        layerCaches: [Q35LayerCache?],
+        eosSet: Set<Int>,
+        tokenBudget: Int,
+        mropeRopeDelta: Int?,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws -> Q35BatchedDecodeResult {
+        let layerCaches = layerCaches
+        var pendingToken = greedyTokenArray(from: initialLogits)
+        asyncEval(pendingToken)
+
+        var generated: [Int] = []
+        generated.reserveCapacity(tokenBudget)
+        var pendingProgressWhitespace = ""
+        let decodeStart = Date()
+
+        func emit(_ token: Int) {
+            generated.append(token)
+            guard let progressHandler else { return }
+            let piece = tokenizerAndTemplate.decode(token: token)
+            guard !piece.isEmpty else { return }
+            if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                pendingProgressWhitespace += piece
+                return
+            }
+
+            let visiblePiece: String
+            if pendingProgressWhitespace.isEmpty {
+                visiblePiece = piece
+            } else {
+                visiblePiece = pendingProgressWhitespace + piece
+                pendingProgressWhitespace = ""
+            }
+            progressHandler(ChatProgress(stage: .generating, message: visiblePiece))
+        }
+
+        while generated.count < tokenBudget {
+            try Task.checkCancellation()
+
+            let scheduled: MLXArray?
+            if generated.count + 1 < tokenBudget {
+                let nextInput = pendingToken.asType(.int32).reshaped(1, 1)
+                let nextLogits = model(
+                    nextInput,
+                    cache: layerCaches,
+                    positionIds: decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
+                )
+                let nextToken = greedyTokenArray(from: nextLogits)
+                asyncEval(nextToken, nextLogits)
+                scheduled = nextToken
+            } else {
+                scheduled = nil
+            }
+
+            let token = pendingToken.item(Int.self)
+            if eosSet.contains(token) {
+                break
+            }
+
+            emit(token)
+
+            guard let scheduled else {
+                break
+            }
+            pendingToken = scheduled
+        }
+
+        return Q35BatchedDecodeResult(
+            generatedTokens: generated,
+            decodeSeconds: Date().timeIntervalSince(decodeStart)
+        )
+    }
+
     private func enqueueDecodeRow(
         _ row: Q35BatchedDecodeRow,
         model: Q35Model,
@@ -1091,9 +1187,11 @@ public actor Q35Generator: ChatGenerator {
             }
             row.generatedTokens.append(next)
             row.repetitionHistory.append(next)
-            let piece = tokenizerAndTemplate.decode(token: next)
-            if !piece.isEmpty {
-                row.progressHandler?(ChatProgress(stage: .generating, message: piece))
+            if let progressHandler = row.progressHandler {
+                let piece = tokenizerAndTemplate.decode(token: next)
+                if !piece.isEmpty {
+                    progressHandler(ChatProgress(stage: .generating, message: piece))
+                }
             }
         }
 
@@ -1231,6 +1329,10 @@ public actor Q35Generator: ChatGenerator {
     private func lastTokenLogits(_ logits: MLXArray) -> MLXArray {
         let start = max(0, logits.dim(1) - 1)
         return logits[0..., start..<(start + 1), 0...]
+    }
+
+    private func greedyTokenArray(from logits: MLXArray) -> MLXArray {
+        argMax(logits[0, -1, 0...], axis: -1).asType(.int32)
     }
 
     private func chunkedPrefill(
