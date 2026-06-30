@@ -15,6 +15,8 @@ public enum Krea2LoRATrainerError: Error, LocalizedError {
     case imageDecodeFailed(URL)
     case modelPathNotFound(String)
     case baseModelNotTrainable(String)
+    case invalidLRWarmupSteps(Int)
+    case invalidLRMinFactor(Float)
 
     public var errorDescription: String? {
         switch self {
@@ -40,6 +42,10 @@ public enum Krea2LoRATrainerError: Error, LocalizedError {
             return "Model path not found: \(path)"
         case .baseModelNotTrainable(let id):
             return "Krea 2 LoRA training requires the Raw/base checkpoint; got \(id)."
+        case .invalidLRWarmupSteps(let steps):
+            return "LR warmup steps must be >= 0 (got \(steps))."
+        case .invalidLRMinFactor(let factor):
+            return "LR minimum factor must be between 0.0 and 1.0 (got \(factor))."
         }
     }
 }
@@ -75,6 +81,10 @@ public struct Krea2LoRATrainingConfig: Sendable {
     public var timestepLow: Int
     public var timestepHigh: Int?
     public var datasetRoot: String?
+    public var useCompile: Bool
+    public var lrWarmupSteps: Int
+    public var useCosineScheduler: Bool
+    public var lrMinFactor: Float
 
     public init(
         width: Int = 1024,
@@ -96,7 +106,11 @@ public struct Krea2LoRATrainingConfig: Sendable {
         syntheticSampleCount: Int? = nil,
         timestepLow: Int = 0,
         timestepHigh: Int? = nil,
-        datasetRoot: String? = nil
+        datasetRoot: String? = nil,
+        useCompile: Bool = true,
+        lrWarmupSteps: Int = 0,
+        useCosineScheduler: Bool = false,
+        lrMinFactor: Float = 0.0
     ) {
         self.width = width
         self.height = height
@@ -118,6 +132,10 @@ public struct Krea2LoRATrainingConfig: Sendable {
         self.timestepLow = timestepLow
         self.timestepHigh = timestepHigh
         self.datasetRoot = datasetRoot
+        self.useCompile = useCompile
+        self.lrWarmupSteps = lrWarmupSteps
+        self.useCosineScheduler = useCosineScheduler
+        self.lrMinFactor = lrMinFactor
     }
 }
 
@@ -161,6 +179,12 @@ public enum Krea2LoRATrainer {
         }
         guard config.schedulerSteps >= 1 else {
             throw Krea2LoRATrainerError.invalidSchedulerSteps(config.schedulerSteps)
+        }
+        guard config.lrWarmupSteps >= 0 else {
+            throw Krea2LoRATrainerError.invalidLRWarmupSteps(config.lrWarmupSteps)
+        }
+        guard (0.0...1.0).contains(config.lrMinFactor) else {
+            throw Krea2LoRATrainerError.invalidLRMinFactor(config.lrMinFactor)
         }
         guard outputURL.pathExtension.lowercased() == "safetensors" else {
             throw Krea2LoRATrainerError.outputMustBeSafetensors(outputURL)
@@ -233,6 +257,10 @@ public enum Krea2LoRATrainer {
             "synthetic_sample_count:\(config.syntheticSampleCount.map { "\($0)" } ?? "")",
             "lora_target_prefixes:\(serializedTargetPrefixes)",
             "lora_target_suffixes:\(serializedTargetSuffixes)",
+            "use_compile:\(config.useCompile)",
+            "lr_warmup_steps:\(config.lrWarmupSteps)",
+            "use_cosine_scheduler:\(config.useCosineScheduler)",
+            "lr_min_factor:\(config.lrMinFactor)",
         ].joined(separator: "\n")
         let configFingerprint = LoRATrainingFingerprint.sha256Hex(configFingerprintInput)
 
@@ -400,19 +428,17 @@ public enum Krea2LoRATrainer {
         let oneMinusBeta1 = MLXArray(Float(0.1))
         let oneMinusBeta2 = MLXArray(Float(0.001))
         let eps = MLXArray(Float(1e-8))
-        let lr = MLXArray(config.learningRate)
-        let oneMinusLrWd = MLXArray(1.0 - config.learningRate * 0.0001)
+        let baseLR = config.learningRate
         let timestepHigh = config.timestepHigh ?? config.schedulerSteps
         let timestepLow = config.timestepLow
 
-        let state: [any Updatable] = [loraState]
-        let trainStep = compile(inputs: state, outputs: state) { inputs -> [MLXArray] in
+        let runTrainStep = { (inputs: [MLXArray], scheduledLR: MLXArray, oneMinusLrWd: MLXArray) -> [MLXArray] in
             let (values, grads) = lossAndGrad(transformer, inputs)
             let gradMap = Dictionary(uniqueKeysWithValues: grads.flattened())
             ZImageTurboLoRATrainer.applyAdamW(
                 loraLayers: loraLayerList,
                 gradMap: gradMap,
-                lr: lr,
+                lr: scheduledLR,
                 beta1: beta1,
                 beta2: beta2,
                 oneMinusBeta1: oneMinusBeta1,
@@ -422,6 +448,17 @@ public enum Krea2LoRATrainer {
                 useWeightDecay: true
             )
             return values
+        }
+        let trainStep: ([MLXArray]) -> [MLXArray]
+        if config.useCompile {
+            let state: [any Updatable] = [loraState]
+            trainStep = compile(inputs: state, outputs: state) { inputs -> [MLXArray] in
+                runTrainStep(inputs, inputs[6], inputs[7])
+            }
+        } else {
+            trainStep = { inputs in
+                runTrainStep(inputs, inputs[6], inputs[7])
+            }
         }
 
         for step in 0..<config.trainingSteps {
@@ -468,7 +505,17 @@ public enum Krea2LoRATrainer {
             let timestepBatch = MLXArray(timestepValues).asType(.float32)
             let positionBatch = MLX.concatenated(positionParts, axis: 0)
             let maskBatch = MLX.concatenated(maskParts, axis: 0)
-            let loss = trainStep([cleanBatch, noiseBatch, textBatch, timestepBatch, positionBatch, maskBatch])[0]
+            let scheduledLR = Self.scheduledLearningRate(
+                baseLearningRate: baseLR,
+                step: step,
+                totalSteps: config.trainingSteps,
+                warmupSteps: config.lrWarmupSteps,
+                useCosineScheduler: config.useCosineScheduler,
+                minFactor: config.lrMinFactor
+            )
+            let lr = MLXArray(scheduledLR)
+            let oneMinusLrWd = MLXArray(1.0 - scheduledLR * 0.0001)
+            let loss = trainStep([cleanBatch, noiseBatch, textBatch, timestepBatch, positionBatch, maskBatch, lr, oneMinusLrWd])[0]
             MLX.asyncEval(loss, loraState)
 
             let shouldLog = (step + 1) % max(config.logEvery, 1) == 0 || step == config.trainingSteps - 1
@@ -498,7 +545,7 @@ public enum Krea2LoRATrainer {
             loraLayers: loraLayers,
             to: outputURL,
             dtype: config.saveDType,
-            includeOptimizerState: true,
+            includeOptimizerState: false,
             metadata: metadata
         )
 
@@ -536,6 +583,10 @@ public enum Krea2LoRATrainer {
                 "lora_target_prefixes": serializedTargetPrefixes,
                 "lora_target_suffixes": serializedTargetSuffixes,
                 "config_fingerprint": configFingerprint,
+                "use_compile": "\(config.useCompile)",
+                "lr_warmup_steps": "\(config.lrWarmupSteps)",
+                "use_cosine_scheduler": "\(config.useCosineScheduler)",
+                "lr_min_factor": "\(config.lrMinFactor)",
             ],
             lossCSVFile: metricsLogger.csvURL.lastPathComponent,
             lossHTMLFile: metricsLogger.htmlURL.lastPathComponent,
@@ -565,7 +616,7 @@ public enum Krea2LoRATrainer {
                 rank: config.loraRank,
                 alpha: effectiveAlpha,
                 saveDType: String(describing: config.saveDType),
-                includesOptimizerState: true
+                includesOptimizerState: false
             ),
             extras: [
                 "recommended_runtime_model": Krea2Resources.modelId,
@@ -585,6 +636,10 @@ public enum Krea2LoRATrainer {
                 "checkpoint_sidecar_file": LoRATrainingCheckpointState.url(nextTo: outputURL).lastPathComponent,
                 "loss_csv_file": metricsLogger.csvURL.lastPathComponent,
                 "loss_html_file": metricsLogger.htmlURL.lastPathComponent,
+                "use_compile": "\(config.useCompile)",
+                "lr_warmup_steps": "\(config.lrWarmupSteps)",
+                "use_cosine_scheduler": "\(config.useCosineScheduler)",
+                "lr_min_factor": "\(config.lrMinFactor)",
             ]
         )
         try manifest.write(nextTo: outputURL)
@@ -605,7 +660,6 @@ public enum Krea2LoRATrainer {
                 "manifest": LoRATrainingManifest.url(nextTo: outputURL).lastPathComponent,
                 "loss_csv": metricsLogger.csvURL.lastPathComponent,
                 "loss_html": metricsLogger.htmlURL.lastPathComponent,
-                "optimizer": outputURL.lastPathComponent,
             ],
             step: config.trainingSteps,
             totalSteps: config.trainingSteps,
@@ -630,6 +684,23 @@ public enum Krea2LoRATrainer {
             ]
         )
         progressHandler?(Krea2LoRATrainingProgress(stage: .saving, fraction: 1))
+    }
+
+    static func scheduledLearningRate(
+        baseLearningRate: Float,
+        step: Int,
+        totalSteps: Int,
+        warmupSteps: Int,
+        useCosineScheduler: Bool,
+        minFactor: Float
+    ) -> Float {
+        guard useCosineScheduler else { return baseLearningRate }
+        if step < warmupSteps {
+            return baseLearningRate * Float(step + 1) / Float(max(warmupSteps, 1))
+        }
+        let progress = Float(step - warmupSteps) / Float(max(totalSteps - warmupSteps, 1))
+        let cosineDecay = 0.5 * (1.0 + cos(Float.pi * progress))
+        return baseLearningRate * (minFactor + (1.0 - minFactor) * cosineDecay)
     }
 
     static func encodePrompt(

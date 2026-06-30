@@ -270,8 +270,15 @@ swift run mere.run image train-lora \
   --model image-krea2-raw \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
-  --training-steps 1000 \
-  --lite
+  --recipe krea-cinematic-style \
+  --quiet
+
+# Train a practical local Klein style LoRA with the fast 9B recipe.
+swift run mere.run image train-lora \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --recipe klein-fast-style \
+  --quiet
 
 # Run local chat
 swift run mere.run text chat \

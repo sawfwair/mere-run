@@ -299,10 +299,8 @@ swift run mere.run model pull image-krea2-turbo
 swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
-  --training-steps 1000 \
-  --learning-rate 0.0001 \
-  --width 768 --height 768 \
-  --rank 32
+  --recipe krea-cinematic-style \
+  --quiet
 swift run mere.run image generate \
   --model image-krea2-turbo \
   --prompt "a studio portrait in the trained style" \
@@ -310,22 +308,32 @@ swift run mere.run image generate \
   --output ./style-preview.png
 ```
 
-For Klein Base 9B training, use the undistilled BF16 `image-klein-base-9b`
-model id or a local equivalent model root:
+For quick Krea smoke runs, `krea-fast-style` trains on `image-krea2-raw` for
+100 steps with LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank 32,
+and alpha 32. Treat it as a proof pass and inspect images before trusting the
+adapter. For stronger widescreen style datasets, `krea-cinematic-style` uses
+1000 steps, LR `0.0001`, 100-step warmup/cosine decay, 768x416, rank 32, alpha
+32, and compiled-step disablement; override `--width`/`--height` for other
+source aspects.
+
+For practical Klein Base 9B style training, the `klein-fast-style` recipe uses
+the undistilled BF16 `image-klein-base-9b` model, 1000 steps, LR `0.00005`,
+max side `512`, the fast Klein target surface, disk-backed latent caching,
+compiled-step disablement, and 250-step checkpoints:
 
 ```bash
 swift run mere.run model pull image-klein-base-9b
+swift run mere.run model pull image-klein-9b
 swift run mere.run image train-lora \
-  --model image-klein-base-9b \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
-  --training-steps 1500 \
-  --rank 16 \
-  --checkpoint-interval 250
+  --recipe klein-fast-style \
+  --quiet
 swift run mere.run image generate \
-  --model image-klein-base-9b \
-  --prompt "a studio portrait in the trained style" \
+  --model image-klein-9b \
+  --prompt "TRIGGER_TOKEN a studio portrait in the trained style" \
   --lora ./style-klein.safetensors \
+  --lora-scale 2.0 \
   --output ./style-preview.png
 ```
 
@@ -352,9 +360,17 @@ Key options:
 - `--max-text-length`
 - `--scheduler-steps`
 - `--caption-dropout`
+- `--recipe`: named training recipe: `krea-fast-style`, `krea-cinematic-style`,
+  or `klein-fast-style`
+- `--lr-warmup-steps`, `--no-cosine-scheduler`, `--lr-min-factor`: Krea/Klein
+  LR scheduler controls
 - `--lite`: train only attention Q/V layers to reduce memory
 - `--exclude-preview-images`
 - `--checkpoint-interval`: save intermediate Klein LoRA adapters every N steps
+- `--max-resolution`: preserve source aspect ratio up to a maximum side length
+- `--low-ram`: use the Klein disk-backed latent cache
+- `--no-compile`: disable compiled train-step graphs
+- `--lora-target-preset`: exact Klein target preset, including `fal-klein-fast`
 - `--lora-target-mode`: for FLUX.2 Klein, `suffix` or `transformer-linear-walk`
 - `--quiet`
 

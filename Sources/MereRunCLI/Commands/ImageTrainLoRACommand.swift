@@ -4,6 +4,12 @@ import MereRunCore
 
 struct ImageTrainLoRA: AsyncParsableCommand {
     static let defaultManagedModelID: ModelResolver.ModelID = .krea2Raw
+    private static let defaultWidth = 1024
+    private static let defaultHeight = 1024
+    private static let defaultTrainingSteps = 1000
+    private static let defaultLearningRate: Float = 1e-4
+    private static let defaultRank = 16
+    private static let defaultCaptionDropout: Float = 0.05
 
     static let configuration = CommandConfiguration(
         commandName: "train-lora",
@@ -24,26 +30,50 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Raw/base model path or canonical model id (default: image-krea2-raw).")
     var model: String?
 
-    @Option(name: [.customShort("W"), .long], help: "Training image width in pixels.")
-    var width: Int = 1024
+    @Option(name: [.customShort("W"), .customLong("width")], help: "Training image width in pixels.")
+    var widthOverride: Int?
 
-    @Option(name: [.customShort("H"), .long], help: "Training image height in pixels.")
-    var height: Int = 1024
+    var width: Int {
+        widthOverride ?? Self.defaultWidth
+    }
+
+    @Option(name: [.customShort("H"), .customLong("height")], help: "Training image height in pixels.")
+    var heightOverride: Int?
+
+    var height: Int {
+        heightOverride ?? Self.defaultHeight
+    }
 
     @Option(name: [.customLong("training-steps"), .customLong("steps")], help: "Number of optimizer steps.")
-    var trainingSteps: Int = 1000
+    private var trainingStepsOverride: Int?
+
+    var trainingSteps: Int {
+        trainingStepsOverride ?? Self.defaultTrainingSteps
+    }
 
     @Option(name: [.long], help: "Batch size.")
     var batchSize: Int = 1
 
     @Option(name: [.customLong("learning-rate"), .customLong("lr")], help: "Learning rate.")
-    var learningRate: Float = 1e-4
+    private var learningRateOverride: Float?
+
+    var learningRate: Float {
+        learningRateOverride ?? Self.defaultLearningRate
+    }
 
     @Option(name: [.customLong("rank")], help: "LoRA rank.")
-    var rank: Int = 16
+    var rankOverride: Int?
+
+    var rank: Int {
+        rankOverride ?? Self.defaultRank
+    }
 
     @Option(name: [.customLong("alpha")], help: "LoRA alpha. Defaults to rank.")
-    var alpha: Float?
+    var alphaOverride: Float?
+
+    var alpha: Float? {
+        alphaOverride
+    }
 
     @Option(name: [.customLong("max-text-length")], help: "Maximum prompt token length.")
     var maxTextLength: Int = 512
@@ -51,8 +81,12 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("scheduler-steps")], help: "Number of FlowMatch training timesteps.")
     var schedulerSteps: Int = 1000
 
-    @Option(name: [.long], help: "Caption dropout probability between 0.0 and 1.0.")
-    var captionDropout: Float = 0.05
+    @Option(name: [.customLong("caption-dropout")], help: "Caption dropout probability between 0.0 and 1.0.")
+    var captionDropoutOverride: Float?
+
+    var captionDropout: Float {
+        captionDropoutOverride ?? Self.defaultCaptionDropout
+    }
 
     @Option(name: [.long], help: "Random seed. Defaults to wall-clock time when omitted or zero.")
     var seed: UInt64 = 0
@@ -78,11 +112,23 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Flag(name: [.customLong("low-ram")], help: "Klein disk-backed latent cache to reduce peak memory.")
     var lowRam: Bool = false
 
-    @Flag(name: [.customLong("no-compile")], help: "Disable Klein compiled train-step graph to reduce peak GPU memory.")
+    @Flag(name: [.customLong("no-compile")], help: "Disable Krea/Klein compiled train-step graph to reduce peak GPU memory or avoid CUDA graph issues.")
     var noCompile: Bool = false
 
     @Flag(name: [.customLong("gradient-checkpointing")], help: "Checkpoint Klein transformer blocks during backprop to reduce peak GPU memory.")
     var gradientCheckpointing: Bool = false
+
+    @Option(
+        name: [.customLong("recipe")],
+        help: "Apply a named training recipe: krea-fast-style, krea-cinematic-style, or klein-fast-style."
+    )
+    var recipe: String?
+
+    @Option(name: [.customLong("benchmark-steps")], help: "Klein benchmark mode: measure N training steps after warmup, report seconds/step, and skip saving.")
+    var benchmarkSteps: Int?
+
+    @Option(name: [.customLong("benchmark-warmup-steps")], help: "Klein benchmark warmup steps before timing.")
+    var benchmarkWarmupSteps: Int = 5
 
     @Option(name: [.customLong("sample-interval")], help: "Generate a Klein preview image every N training steps.")
     var sampleInterval: Int?
@@ -111,6 +157,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("lora-rank-preset")], help: "Klein rank preset: flux2-style-128.")
     var loraRankPreset: String?
 
+    @Option(name: [.customLong("lora-target-preset")], help: "Klein exact target preset: fal-klein-fast.")
+    var loraTargetPreset: String?
+
     @Option(name: [.customLong("lora-target-mode")], help: "Klein target mode: suffix or transformer-linear-walk.")
     var loraTargetMode: String?
 
@@ -129,13 +178,13 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("timestep-high")], help: "Klein maximum sampled timestep index, exclusive.")
     var timestepHigh: Int?
 
-    @Option(name: [.customLong("lr-warmup-steps")], help: "Klein cosine schedule warmup steps.")
+    @Option(name: [.customLong("lr-warmup-steps")], help: "Krea/Klein cosine schedule warmup steps.")
     var lrWarmupSteps: Int?
 
-    @Flag(name: [.customLong("no-cosine-scheduler")], help: "Disable Klein cosine LR scheduling.")
+    @Flag(name: [.customLong("no-cosine-scheduler")], help: "Disable Krea/Klein cosine LR scheduling.")
     var noCosineScheduler: Bool = false
 
-    @Option(name: [.customLong("lr-min-factor")], help: "Klein cosine LR floor as a fraction of base LR.")
+    @Option(name: [.customLong("lr-min-factor")], help: "Krea/Klein cosine LR floor as a fraction of base LR.")
     var lrMinFactor: Float?
 
     @Option(name: [.customLong("adam-weight-decay")], help: "Klein AdamW weight decay.")
@@ -149,11 +198,15 @@ struct ImageTrainLoRA: AsyncParsableCommand {
 
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        let resolvedOptions = try resolvedTrainingOptions()
 
-        guard width > 0, height > 0, width % 16 == 0, height % 16 == 0 else {
+        guard resolvedOptions.width > 0,
+              resolvedOptions.height > 0,
+              resolvedOptions.width % 16 == 0,
+              resolvedOptions.height % 16 == 0 else {
             throw ValidationError("--width/--height must be > 0 and divisible by 16")
         }
-        guard trainingSteps >= 1 else {
+        guard resolvedOptions.trainingSteps >= 1 else {
             throw ValidationError("--training-steps must be >= 1")
         }
         guard batchSize >= 1 else {
@@ -162,22 +215,28 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         guard schedulerSteps >= 1 else {
             throw ValidationError("--scheduler-steps must be >= 1")
         }
-        guard rank >= 1 else {
+        guard resolvedOptions.rank >= 1 else {
             throw ValidationError("--rank must be >= 1")
         }
-        guard (0.0...1.0).contains(captionDropout) else {
+        guard (0.0...1.0).contains(resolvedOptions.captionDropout) else {
             throw ValidationError("--caption-dropout must be between 0.0 and 1.0")
         }
         if let syntheticSamples, syntheticSamples < 1 {
             throw ValidationError("--synthetic-samples must be >= 1")
         }
-        if let checkpointInterval, checkpointInterval < 1 {
+        if let checkpointInterval = resolvedOptions.checkpointInterval, checkpointInterval < 1 {
             throw ValidationError("--checkpoint-interval must be >= 1")
         }
-        if let maxResolution, maxResolution < 1 {
+        if let maxResolution = resolvedOptions.maxResolution, maxResolution < 1 {
             throw ValidationError("--max-resolution must be >= 1")
         }
-        if maxResolution != nil, progressive {
+        if let benchmarkSteps, benchmarkSteps < 1 {
+            throw ValidationError("--benchmark-steps must be >= 1")
+        }
+        guard benchmarkWarmupSteps >= 0 else {
+            throw ValidationError("--benchmark-warmup-steps must be >= 0")
+        }
+        if resolvedOptions.maxResolution != nil, progressive {
             throw ValidationError("--max-resolution cannot be combined with --progressive")
         }
         if let sampleInterval, sampleInterval < 1 {
@@ -195,13 +254,22 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         if loraTargetRanks != nil, loraRankPreset != nil {
             throw ValidationError("--lora-target-ranks cannot be combined with --lora-rank-preset")
         }
+        if let loraTargetPreset = resolvedOptions.loraTargetPreset {
+            if lite {
+                throw ValidationError("--lite cannot be combined with --lora-target-preset")
+            }
+            if loraTargetRanks != nil || loraRankPreset != nil {
+                throw ValidationError("--lora-target-preset cannot be combined with --lora-target-ranks or --lora-rank-preset")
+            }
+            _ = try Self.resolveKleinTargetPreset(loraTargetPreset, rank: resolvedOptions.rank)
+        }
         let parsedLoRATargetMode = try Self.resolveKleinLoRATargetMode(loraTargetMode)
         if parsedLoRATargetMode == .transformerLinearWalk {
             if lite {
                 throw ValidationError("--lite cannot be combined with --lora-target-mode transformer-linear-walk")
             }
-            if loraTargetRanks != nil || loraRankPreset != nil {
-                throw ValidationError("--lora-target-mode transformer-linear-walk cannot be combined with --lora-target-ranks or --lora-rank-preset")
+            if loraTargetRanks != nil || loraRankPreset != nil || resolvedOptions.loraTargetPreset != nil {
+                throw ValidationError("--lora-target-mode transformer-linear-walk cannot be combined with LoRA target/rank presets")
             }
         }
         if let timestepLow, timestepLow < 0 {
@@ -235,27 +303,33 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             withIntermediateDirectories: true
         )
 
-        let modelRoot = try resolveModelRoot()
+        let modelRoot = try resolveModelRoot(model: resolvedOptions.model)
         let modelManifest = try MereRunModelManifest.loadRequired(from: modelRoot)
 
         switch modelManifest.family {
         case .krea:
-            try await runKreaTraining(modelRoot: modelRoot, outputURL: outputURL)
+            try await runKreaTraining(modelRoot: modelRoot, outputURL: outputURL, options: resolvedOptions)
         case .klein:
-            try await runKleinTraining(modelRoot: modelRoot, outputURL: outputURL)
+            try await runKleinTraining(modelRoot: modelRoot, outputURL: outputURL, options: resolvedOptions)
         default:
             let family = modelManifest.family?.rawValue ?? "unknown"
             throw ValidationError("Unsupported LoRA training model family: \(family). Use a Krea 2 Raw or FLUX.2 Klein base model.")
         }
 
-        print(outputURL.path)
+        if benchmarkSteps == nil {
+            print(outputURL.path)
+        }
     }
 
-    private func runKreaTraining(modelRoot: URL, outputURL: URL) async throws {
-        if checkpointInterval != nil {
+    private func runKreaTraining(
+        modelRoot: URL,
+        outputURL: URL,
+        options: ResolvedLoRATrainingOptions
+    ) async throws {
+        if options.checkpointInterval != nil {
             throw ValidationError("--checkpoint-interval is only supported for FLUX.2 Klein LoRA training")
         }
-        if hasKleinOnlyTrainingOptions {
+        if hasKleinOnlyTrainingOptions(options: options) {
             throw ValidationError("Klein training options require a FLUX.2 Klein base model.")
         }
 
@@ -280,20 +354,30 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
 
         var config = Krea2LoRATrainingConfig()
-        config.width = width
-        config.height = height
+        config.width = options.width
+        config.height = options.height
         config.maxTextLength = maxTextLength
         config.schedulerSteps = schedulerSteps
-        config.trainingSteps = trainingSteps
+        config.trainingSteps = options.trainingSteps
         config.batchSize = batchSize
-        config.learningRate = learningRate
+        config.learningRate = options.learningRate
         config.seed = seed
-        config.loraRank = rank
-        config.loraAlpha = alpha
-        config.captionDropout = captionDropout
+        config.loraRank = options.rank
+        config.loraAlpha = options.alpha
+        config.captionDropout = options.captionDropout
         config.loraTargetSuffixes = lite ? Krea2LoRAInjector.liteTargetSuffixes : nil
         config.syntheticSampleCount = syntheticSamples
         config.datasetRoot = datasetRoot
+        config.useCompile = !options.noCompile
+        if let lrWarmupSteps = options.lrWarmupSteps {
+            config.lrWarmupSteps = lrWarmupSteps
+        }
+        if let useCosineScheduler = options.useCosineScheduler {
+            config.useCosineScheduler = useCosineScheduler
+        }
+        if let lrMinFactor = options.lrMinFactor {
+            config.lrMinFactor = lrMinFactor
+        }
 
         let progressHandler = quiet ? nil : Self.makeProgressHandler()
         if !quiet {
@@ -309,7 +393,11 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         )
     }
 
-    private func runKleinTraining(modelRoot: URL, outputURL: URL) async throws {
+    private func runKleinTraining(
+        modelRoot: URL,
+        outputURL: URL,
+        options: ResolvedLoRATrainingOptions
+    ) async throws {
         if syntheticSamples != nil {
             throw ValidationError("--synthetic-samples is only supported for Krea 2 LoRA smoke tests")
         }
@@ -328,29 +416,34 @@ struct ImageTrainLoRA: AsyncParsableCommand {
 
         var config = Flux2KleinLoRATrainingConfig()
         let rankPreset = try Self.resolveKleinRankPreset(loraRankPreset)
+        let resolvedRank = rankPreset?.rank ?? options.rank
+        let targetRanks = try Self.resolveKleinTargetPreset(options.loraTargetPreset, rank: resolvedRank)
         let targetRankSuffixes = try loraTargetRanks.map(Self.parseKleinTargetRankSuffixes) ?? rankPreset?.targetRankSuffixes
-        config.width = width
-        config.height = height
-        config.maxResolution = maxResolution
+        config.width = options.width
+        config.height = options.height
+        config.maxResolution = options.maxResolution
         config.maxTextLength = maxTextLength
         config.schedulerSteps = schedulerSteps
-        config.trainingSteps = trainingSteps
+        config.trainingSteps = benchmarkSteps.map { benchmarkWarmupSteps + $0 } ?? options.trainingSteps
         config.batchSize = batchSize
-        config.learningRate = learningRate
+        config.learningRate = options.learningRate
         config.seed = seed
-        config.loraRank = rankPreset?.rank ?? rank
-        config.loraAlpha = alpha ?? rankPreset?.alpha ?? Float(config.loraRank)
+        config.loraRank = resolvedRank
+        config.loraAlpha = options.alpha ?? rankPreset?.alpha ?? Float(config.loraRank)
         config.loraTargetMode = try Self.resolveKleinLoRATargetMode(loraTargetMode)
-        config.captionDropout = captionDropout
+        config.captionDropout = options.captionDropout
         config.loraTargetSuffixes = lite ? Self.kleinLiteTargetSuffixes : nil
+        config.loraTargetRanks = targetRanks
         config.loraTargetRankSuffixes = targetRankSuffixes
-        config.checkpointInterval = checkpointInterval
+        config.checkpointInterval = options.checkpointInterval
         config.sampleInterval = sampleInterval
         config.samplePrompt = samplePrompt
         config.progressive = progressive
-        config.lowRam = lowRam
+        config.lowRam = options.lowRam
         config.gradientCheckpointing = gradientCheckpointing
-        if noCompile || gradientCheckpointing {
+        config.benchmarkSteps = benchmarkSteps
+        config.benchmarkWarmupSteps = benchmarkWarmupSteps
+        if options.noCompile || gradientCheckpointing {
             config.useCompile = false
         }
         config.datasetRoot = dataURL.path
@@ -392,7 +485,12 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
 
         let progressHandler = quiet ? nil : Self.makeKleinProgressHandler()
-        let sampleHandler = try makeKleinSampleHandler(outputURL: outputURL, fallbackPrompt: examples.first?.caption ?? "")
+        let sampleHandler = try makeKleinSampleHandler(
+            outputURL: outputURL,
+            fallbackPrompt: examples.first?.caption ?? "",
+            width: options.width,
+            height: options.height
+        )
         if !quiet {
             CLIStderr.write("[runtime] image training backend: \(NativeMLXRuntime.backendDescription)\n")
         }
@@ -405,6 +503,134 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             progressHandler: progressHandler,
             sampleHandler: sampleHandler
         )
+    }
+
+    struct ResolvedLoRATrainingOptions {
+        let model: String?
+        let width: Int
+        let height: Int
+        let trainingSteps: Int
+        let learningRate: Float
+        let rank: Int
+        let alpha: Float?
+        let captionDropout: Float
+        let checkpointInterval: Int?
+        let maxResolution: Int?
+        let lowRam: Bool
+        let noCompile: Bool
+        let loraTargetPreset: String?
+        let lrWarmupSteps: Int?
+        let useCosineScheduler: Bool?
+        let lrMinFactor: Float?
+    }
+
+    private struct LoRATrainingRecipe {
+        let model: String?
+        let width: Int?
+        let height: Int?
+        let trainingSteps: Int?
+        let learningRate: Float?
+        let rank: Int?
+        let alpha: Float?
+        let captionDropout: Float?
+        let checkpointInterval: Int?
+        let maxResolution: Int?
+        let lowRam: Bool
+        let noCompile: Bool
+        let loraTargetPreset: String?
+        let lrWarmupSteps: Int?
+        let useCosineScheduler: Bool?
+        let lrMinFactor: Float?
+    }
+
+    func resolvedTrainingOptions() throws -> ResolvedLoRATrainingOptions {
+        let recipe = try Self.resolveLoRATrainingRecipe(recipe)
+        let explicitSchedulerRequested = lrWarmupSteps != nil || lrMinFactor != nil
+        return ResolvedLoRATrainingOptions(
+            model: model ?? recipe?.model,
+            width: widthOverride ?? recipe?.width ?? Self.defaultWidth,
+            height: heightOverride ?? recipe?.height ?? Self.defaultHeight,
+            trainingSteps: trainingStepsOverride ?? recipe?.trainingSteps ?? Self.defaultTrainingSteps,
+            learningRate: learningRateOverride ?? recipe?.learningRate ?? Self.defaultLearningRate,
+            rank: rankOverride ?? recipe?.rank ?? Self.defaultRank,
+            alpha: alphaOverride ?? recipe?.alpha,
+            captionDropout: captionDropoutOverride ?? recipe?.captionDropout ?? Self.defaultCaptionDropout,
+            checkpointInterval: checkpointInterval ?? recipe?.checkpointInterval,
+            maxResolution: maxResolution ?? recipe?.maxResolution,
+            lowRam: lowRam || recipe?.lowRam == true,
+            noCompile: noCompile || recipe?.noCompile == true,
+            loraTargetPreset: loraTargetPreset ?? recipe?.loraTargetPreset,
+            lrWarmupSteps: lrWarmupSteps ?? recipe?.lrWarmupSteps,
+            useCosineScheduler: noCosineScheduler ? false : recipe?.useCosineScheduler ?? (explicitSchedulerRequested ? true : nil),
+            lrMinFactor: lrMinFactor ?? recipe?.lrMinFactor
+        )
+    }
+
+    private static func resolveLoRATrainingRecipe(_ raw: String?) throws -> LoRATrainingRecipe? {
+        guard let raw else { return nil }
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "krea-fast-style", "local-krea-style", "fal-krea-style", "krea2-fast-style":
+            return LoRATrainingRecipe(
+                model: ModelResolver.ModelID.krea2Raw.rawValue,
+                width: 768,
+                height: 768,
+                trainingSteps: 100,
+                learningRate: 0.0005,
+                rank: 32,
+                alpha: 32,
+                captionDropout: Self.defaultCaptionDropout,
+                checkpointInterval: nil,
+                maxResolution: nil,
+                lowRam: false,
+                noCompile: false,
+                loraTargetPreset: nil,
+                lrWarmupSteps: 10,
+                useCosineScheduler: true,
+                lrMinFactor: 0
+            )
+        case "krea-cinematic-style", "krea-movie-style", "krea-wide-style":
+            return LoRATrainingRecipe(
+                model: ModelResolver.ModelID.krea2Raw.rawValue,
+                width: 768,
+                height: 416,
+                trainingSteps: 1000,
+                learningRate: 0.0001,
+                rank: 32,
+                alpha: 32,
+                captionDropout: Self.defaultCaptionDropout,
+                checkpointInterval: nil,
+                maxResolution: nil,
+                lowRam: false,
+                noCompile: true,
+                loraTargetPreset: nil,
+                lrWarmupSteps: 100,
+                useCosineScheduler: true,
+                lrMinFactor: 0
+            )
+        case "klein-fast-style", "local-klein-style", "flux2-klein-fast-style":
+            return LoRATrainingRecipe(
+                model: ModelResolver.ModelID.kleinBase9B.rawValue,
+                width: nil,
+                height: nil,
+                trainingSteps: 1000,
+                learningRate: 0.00005,
+                rank: nil,
+                alpha: nil,
+                captionDropout: nil,
+                checkpointInterval: 250,
+                maxResolution: 512,
+                lowRam: true,
+                noCompile: true,
+                loraTargetPreset: "fal-klein-fast",
+                lrWarmupSteps: nil,
+                useCosineScheduler: nil,
+                lrMinFactor: nil
+            )
+        default:
+            throw ValidationError(
+                "Unsupported --recipe '\(raw)'. Supported recipes: krea-fast-style, krea-cinematic-style, klein-fast-style"
+            )
+        }
     }
 
     private struct KleinRankPreset {
@@ -441,6 +667,51 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
     }
 
+    static func resolveKleinTargetPreset(_ raw: String?, rank: Int) throws -> [String: Int]? {
+        guard let raw else { return nil }
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "fal-klein-fast", "fal-fast", "flux2-klein-fal-fast":
+            return falKleinFastTargetRanks(rank: rank)
+        default:
+            throw ValidationError("Unsupported --lora-target-preset '\(raw)'. Supported preset: fal-klein-fast")
+        }
+    }
+
+    private static func falKleinFastTargetRanks(rank: Int) -> [String: Int] {
+        var ranks: [String: Int] = [
+            "x_embedder": rank,
+            "context_embedder": rank,
+            "time_guidance_embed.timestep_embedder.linear_1": rank,
+            "time_guidance_embed.timestep_embedder.linear_2": rank,
+            "double_stream_modulation_img.linear": rank,
+            "double_stream_modulation_txt.linear": rank,
+            "single_stream_modulation.linear": rank,
+            "proj_out": rank,
+        ]
+
+        for block in 0..<8 {
+            for suffix in [
+                "attn.to_q",
+                "attn.to_k",
+                "attn.to_v",
+                "attn.to_out.0",
+                "attn.add_q_proj",
+                "attn.add_k_proj",
+                "attn.add_v_proj",
+                "attn.to_add_out",
+            ] {
+                ranks["transformer_blocks.\(block).\(suffix)"] = rank
+            }
+        }
+
+        for block in 0..<24 {
+            ranks["single_transformer_blocks.\(block).attn.to_qkv_mlp_proj"] = rank
+            ranks["single_transformer_blocks.\(block).attn.to_out"] = rank
+        }
+
+        return ranks
+    }
+
     private static func parseKleinTargetRankSuffixes(_ raw: String) throws -> [String: Int] {
         let entries = raw
             .split(separator: ",")
@@ -468,7 +739,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
 
     private func makeKleinSampleHandler(
         outputURL: URL,
-        fallbackPrompt: String
+        fallbackPrompt: String,
+        width: Int,
+        height: Int
     ) throws -> (@Sendable (Int, URL) async -> Void)? {
         guard sampleInterval != nil else { return nil }
 
@@ -534,11 +807,13 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         throw ValidationError("Sample model path not found: \(spec). Pass a local path or known model id.")
     }
 
-    private var hasKleinOnlyTrainingOptions: Bool {
-        maxResolution != nil ||
+    private func hasKleinOnlyTrainingOptions(options: ResolvedLoRATrainingOptions) -> Bool {
+        options.maxResolution != nil ||
             progressive ||
-            lowRam ||
+            options.lowRam ||
             gradientCheckpointing ||
+            benchmarkSteps != nil ||
+            benchmarkWarmupSteps != 5 ||
             sampleInterval != nil ||
             samplePrompt != nil ||
             sampleModel != nil ||
@@ -548,19 +823,17 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             sampleSeed != nil ||
             loraTargetRanks != nil ||
             loraRankPreset != nil ||
+            options.loraTargetPreset != nil ||
             loraTargetMode != nil ||
             timestepSampling != nil ||
             timestepLossWeighting != nil ||
             lossWeighting != nil ||
             timestepLow != nil ||
             timestepHigh != nil ||
-            lrWarmupSteps != nil ||
-            noCosineScheduler ||
-            lrMinFactor != nil ||
             adamWeightDecay != nil
     }
 
-    private func resolveModelRoot() throws -> URL {
+    private func resolveModelRoot(model: String?) throws -> URL {
         let resolver = ModelResolver()
         guard let model else {
             do {
