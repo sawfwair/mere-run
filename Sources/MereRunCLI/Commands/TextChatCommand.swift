@@ -77,11 +77,6 @@ struct TextChat: AsyncParsableCommand {
     /// it steps down to Gemma 4 12B 4-bit, then nano as the final fallback.
     static var defaultChatModelId: String {
         let machine = MereRunMachineProfile.current
-        func fits(_ id: String) -> Bool {
-            guard let descriptor = ManagedModelCapabilityCatalog.descriptor(for: id) else { return false }
-            return machine.unifiedMemoryGB >= descriptor.minimumUnifiedMemoryGB
-        }
-
         let isCUDA: Bool
         #if os(Linux)
         isCUDA = ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda"
@@ -89,11 +84,18 @@ struct TextChat: AsyncParsableCommand {
         isCUDA = false
         #endif
 
-        #if os(Linux)
-        let a3b = isCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId
-        #else
-        let a3b = Gemma4Resources.twelveB4BitModelId
-        #endif
+        return defaultChatModelId(on: machine, linuxCUDA: isCUDA)
+    }
+
+    static func defaultChatModelId(on machine: MereRunMachineProfile, linuxCUDA: Bool = false) -> String {
+        func fits(_ id: String) -> Bool {
+            guard let descriptor = ManagedModelCapabilityCatalog.descriptor(for: id) else { return false }
+            return machine.unifiedMemoryGB >= descriptor.minimumUnifiedMemoryGB
+        }
+
+        let a3b = machine.isLinux
+            ? (linuxCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId)
+            : Gemma4Resources.twelveB4BitModelId
         if fits(a3b) { return a3b }
         if fits(Gemma4Resources.twelveB4BitModelId) { return Gemma4Resources.twelveB4BitModelId }
         return Gemma4Resources.nanoModelId
