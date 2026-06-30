@@ -593,7 +593,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                 model: ModelResolver.ModelID.krea2Raw.rawValue,
                 width: 768,
                 height: 416,
-                trainingSteps: 1000,
+                trainingSteps: 200,
                 learningRate: 0.0001,
                 rank: 32,
                 alpha: 32,
@@ -603,7 +603,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                 lowRam: false,
                 noCompile: true,
                 loraTargetPreset: nil,
-                lrWarmupSteps: 100,
+                lrWarmupSteps: 20,
                 useCosineScheduler: true,
                 lrMinFactor: 0
             )

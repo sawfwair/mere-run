@@ -332,7 +332,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(options.model, "image-krea2-raw")
         XCTAssertEqual(options.width, 768)
         XCTAssertEqual(options.height, 416)
-        XCTAssertEqual(options.trainingSteps, 1000)
+        XCTAssertEqual(options.trainingSteps, 200)
         XCTAssertEqual(options.learningRate, 0.0001)
         XCTAssertEqual(options.rank, 32)
         XCTAssertEqual(options.alpha, 32)
@@ -340,7 +340,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertFalse(options.lowRam)
         XCTAssertTrue(options.noCompile)
         XCTAssertNil(options.loraTargetPreset)
-        XCTAssertEqual(options.lrWarmupSteps, 100)
+        XCTAssertEqual(options.lrWarmupSteps, 20)
         XCTAssertEqual(options.useCosineScheduler, true)
         XCTAssertEqual(options.lrMinFactor, 0)
     }

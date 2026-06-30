@@ -312,7 +312,7 @@ For quick Krea smoke runs, `krea-fast-style` trains on `image-krea2-raw` for
 100 steps with LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank 32,
 and alpha 32. Treat it as a proof pass and inspect images before trusting the
 adapter. For stronger widescreen style datasets, `krea-cinematic-style` uses
-1000 steps, LR `0.0001`, 100-step warmup/cosine decay, 768x416, rank 32, alpha
+200 steps, LR `0.0001`, 20-step warmup/cosine decay, 768x416, rank 32, alpha
 32, and compiled-step disablement; override `--width`/`--height` for other
 source aspects.
 

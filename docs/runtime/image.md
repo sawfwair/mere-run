@@ -202,8 +202,8 @@ Use `--recipe krea-fast-style` for a quick local Krea proof pass: Raw base, 100
 steps, LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank `32`, alpha
 `32`, and the full native Krea target surface. Treat this as a smoke recipe and
 inspect images before trusting it as a final style adapter. Use
-`--recipe krea-cinematic-style` for the safer movie-style lane: 1000 steps, LR
-`0.0001`, 100-step warmup/cosine decay, 768x416, rank `32`, alpha `32`, and
+`--recipe krea-cinematic-style` for the safer movie-style lane: 200 steps, LR
+`0.0001`, 20-step warmup/cosine decay, 768x416, rank `32`, alpha `32`, and
 compiled-step disablement. Override `--width`/`--height` when your source set is
 not widescreen.
 

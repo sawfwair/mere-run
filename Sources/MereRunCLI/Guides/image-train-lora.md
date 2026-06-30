@@ -74,8 +74,8 @@ the adapter to learn.
   100 steps, LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank `32`,
   alpha `32`, and the full Krea target surface. Treat this as a quick proof
   pass; inspect images before trusting it as a final style adapter.
-- `--recipe krea-cinematic-style`: apply the longer Krea movie-style recipe:
-  `image-krea2-raw`, 1000 steps, LR `0.0001`, 100-step warmup/cosine decay,
+- `--recipe krea-cinematic-style`: apply the proven Krea movie-style recipe:
+  `image-krea2-raw`, 200 steps, LR `0.0001`, 20-step warmup/cosine decay,
   768x416, rank `32`, alpha `32`, and compiled-step disablement. Override
   `--width`/`--height` when your source set is not widescreen.
 - `--recipe klein-fast-style`: apply the local fast Klein style recipe:
