@@ -473,6 +473,7 @@ enum GuideRegistry {
                 ["model", "benchmark", "gemma4-kv"],
                 ["model", "benchmark", "gemma4-mtp"],
                 ["model", "benchmark", "q36-mtp"],
+                ["model", "benchmark", "api-workload"],
             ],
             models: [
                 "text-chat-gemma4-turbo",

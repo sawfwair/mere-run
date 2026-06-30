@@ -160,6 +160,77 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("q36-mtp"))
     }
 
+    func testBenchmarkCommandExposesAPIWorkloadSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("api-workload"))
+    }
+
+    func testAPIWorkloadBenchmarkParsesDefaults() throws {
+        let cmd = try ModelBenchmarkAPIWorkload.parse(["--dry-run"])
+
+        XCTAssertEqual(cmd.host, "127.0.0.1")
+        XCTAssertEqual(cmd.port, 8080)
+        XCTAssertNil(cmd.apiKey)
+        XCTAssertEqual(cmd.model, Gemma4Resources.turboModelId)
+        XCTAssertNil(cmd.workloadFile)
+        XCTAssertEqual(cmd.turns, 8)
+        XCTAssertEqual(cmd.sharedPrefixRepeat, 32)
+        XCTAssertEqual(cmd.maxTokens, 64)
+        XCTAssertEqual(cmd.temperature, 0)
+        XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.concurrency, 1)
+        XCTAssertEqual(cmd.timeoutSeconds, 300)
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testAPIWorkloadBenchmarkParsesOverrides() throws {
+        let cmd = try ModelBenchmarkAPIWorkload.parse([
+            "--host", "localhost",
+            "--port", "11434",
+            "--api-key", "secret",
+            "--model", Q35Resources.q36NanoModelId,
+            "--workload-file", "/tmp/workload.jsonl",
+            "--turns", "3",
+            "--shared-prefix-repeat", "4",
+            "--max-tokens", "16",
+            "--temperature", "0.2",
+            "--top-p", "0.8",
+            "--concurrency", "2",
+            "--timeout-seconds", "30",
+            "--dry-run",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.host, "localhost")
+        XCTAssertEqual(cmd.port, 11434)
+        XCTAssertEqual(cmd.apiKey, "secret")
+        XCTAssertEqual(cmd.model, Q35Resources.q36NanoModelId)
+        XCTAssertEqual(cmd.workloadFile, "/tmp/workload.jsonl")
+        XCTAssertEqual(cmd.turns, 3)
+        XCTAssertEqual(cmd.sharedPrefixRepeat, 4)
+        XCTAssertEqual(cmd.maxTokens, 16)
+        XCTAssertEqual(cmd.temperature, 0.2)
+        XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.concurrency, 2)
+        XCTAssertEqual(cmd.timeoutSeconds, 30)
+        XCTAssertTrue(cmd.dryRun)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testAPIWorkloadBuiltInFixtureUsesStablePrefix() {
+        let cases = ModelBenchmarkAPIWorkload.builtInStablePrefixWorkload(turns: 2, sharedPrefixRepeat: 3)
+
+        XCTAssertEqual(cases.count, 2)
+        XCTAssertEqual(cases[0].messages.count, 2)
+        XCTAssertEqual(cases[1].messages.count, 2)
+        XCTAssertEqual(cases[0].messages[0].role, "system")
+        XCTAssertEqual(cases[1].messages[0].role, "system")
+        XCTAssertEqual(cases[0].messages[0].content, cases[1].messages[0].content)
+        XCTAssertNotEqual(cases[0].messages[1].content, cases[1].messages[1].content)
+        XCTAssertTrue(cases[0].messages[0].content.contains("Cache note 3"))
+    }
+
     func testQ36MTPBenchmarkParsesDefaults() throws {
         let cmd = try ModelBenchmarkQ36MTP.parse([])
 

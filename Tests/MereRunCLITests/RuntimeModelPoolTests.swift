@@ -26,7 +26,7 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertTrue(status.capabilities.chunkedPrefill.enabled)
         XCTAssertTrue(status.capabilities.continuousBatching.available)
         XCTAssertFalse(status.capabilities.continuousBatching.enabled)
-        XCTAssertFalse(status.capabilities.prefixKVReuse.enabled)
+        XCTAssertTrue(status.capabilities.prefixKVReuse.enabled)
     }
 
     func testModelsResponseIncludesStartupDefault() async throws {
@@ -60,6 +60,25 @@ final class RuntimeModelPoolTests: XCTestCase {
 
         XCTAssertTrue(status.capabilities.prefixKVReuse.available)
         XCTAssertTrue(status.capabilities.prefixKVReuse.enabled)
+    }
+
+    func testStatusReportsPrefixKVCacheCapabilityWhenExplicitlyDisabled() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            gemma4PrefixKVCacheEnabled: false,
+            q35PrefixKVCacheEnabled: false
+        )
+
+        let status = await pool.status()
+
+        XCTAssertTrue(status.capabilities.prefixKVReuse.available)
+        XCTAssertFalse(status.capabilities.prefixKVReuse.enabled)
+        XCTAssertTrue(status.capabilities.prefixKVReuse.detail.contains("disabled"))
     }
 
     func testStatusReportsQ35PrefixKVCacheCapabilityWhenEnabled() async throws {

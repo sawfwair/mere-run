@@ -41,6 +41,20 @@ mere.run model benchmark q36-mtp \
   --json
 ```
 
+Replay a real OpenAI-compatible chat workload against a running API server:
+
+```bash
+MERERUN_GEMMA4_PREFIX_KV_CACHE=0 \
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 1
+
+mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --json
+```
+
 Compare the installed coding models on a small HumanEval slice:
 
 ```bash
@@ -124,6 +138,55 @@ against baseline. Use `--temperature-values 0,0.7` to compare deterministic
 greedy decode against the default chat sampling temperature. Greedy forced MTP
 uses the native block verifier; non-greedy forced MTP stays on the exact
 probabilistic speculative path.
+
+## API Workload Benchmark
+
+`model benchmark api-workload` replays streaming `/v1/chat/completions`
+requests against an already-running `mere.run api serve` process. It is the
+serving-path benchmark for prefix reuse, request admission, and opt-in decode
+batching. The built-in workload uses a deterministic stable system prefix with
+different final user turns so prefix-cache hits, TTFT, and active-request
+behavior are visible in `/runtime/status`.
+
+Run the same workload twice, with prefix reuse disabled for the baseline and
+then default prefix reuse plus opt-in batching enabled, before promoting cache
+or batching changes:
+
+```bash
+MERERUN_GEMMA4_PREFIX_KV_CACHE=0 \
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 1
+
+mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --json
+
+MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 \
+mere.run api serve \
+  --engine text-chat-gemma4 \
+  --model text-chat-gemma4-turbo \
+  --max-active-requests 4
+
+mere.run model benchmark api-workload \
+  --model text-chat-gemma4-turbo \
+  --concurrency 4 \
+  --json
+```
+
+Output includes per-request status, TTFT, total latency, streamed chunk count,
+and runtime-status deltas for prefix KV hits/misses, reused tokens, decode
+batched steps, single decode steps, completed requests, failed requests, and
+whether SSD KV cache is available. SSD cache promotion should require repeatable
+TTFT or throughput wins from in-memory prefix reuse first.
+
+Use `--workload-file` to replay JSONL:
+
+```json
+{"id":"case-1","user":"Summarize the runtime benchmark rule."}
+{"id":"case-2","messages":[{"role":"system","content":"Shared product context..."},{"role":"user","content":"Answer from that context."}]}
+```
 
 ## Prompt Control
 

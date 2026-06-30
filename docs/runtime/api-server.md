@@ -171,16 +171,16 @@ swift run mere.run api serve \
 - Gemma4 and Qwen-family prefills are chunked with cancellation and progress checkpoints
   before decode; this is cooperative single-request prefill, not continuous
   batching
-- Gemma4 has an opt-in in-memory prefix KV reuse prototype behind
-  `MERERUN_GEMMA4_PREFIX_KV_CACHE=1`; `/runtime/status` reports cache entries,
-  hits, and reused tokens when the Gemma4 model is loaded; the cache stores
-  chunk boundaries plus the stable chat prefix before the final message when it
-  is an exact token prefix, and pruning keeps that stable prefix ahead of
-  ordinary chunk boundaries
-- Qwen-family chat has an opt-in text-only prefix KV reuse prototype behind
-  `MERERUN_Q35_PREFIX_KV_CACHE=1`; vision prompts are excluded because image
-  embeddings alter the effective prefix; text-only requests use the same stable
-  chat-prefix checkpoint and pruning rule as Gemma4
+- Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
+  `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
+  cache entries, hits, and reused tokens when the Gemma4 model is loaded; the
+  cache stores chunk boundaries plus the stable chat prefix before the final
+  message when it is an exact token prefix, and pruning keeps that stable prefix
+  ahead of ordinary chunk boundaries.
+- Qwen-family chat uses text-only prefix KV reuse by default in `api serve`; set
+  `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
+  because image embeddings alter the effective prefix; text-only requests use
+  the same stable chat-prefix checkpoint and pruning rule as Gemma4.
 - Managed Gemma4 12B text and vision installs include the
   `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
   for greedy serial decode-tail speculation after prefill; sampled requests,

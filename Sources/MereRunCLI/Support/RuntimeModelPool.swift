@@ -4,6 +4,14 @@ import MereRunCore
 import Darwin
 #endif
 
+private func runtimeDefaultOnEnvironmentFlag(_ key: String) -> Bool {
+    guard let rawValue = ProcessInfo.processInfo.environment[key] else {
+        return true
+    }
+    let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    return !["0", "false", "no", "off"].contains(normalized)
+}
+
 struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     let object: String
     let defaultModel: String
@@ -55,7 +63,8 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
                 enabled: prefixKVCacheEnabled,
                 detail: prefixKVCacheEnabled
                     ? "In-memory prefix KV reuse is enabled for matching Gemma4 or Qwen-family text token prefixes."
-                    : "In-memory prefix KV reuse is available behind MERERUN_GEMMA4_PREFIX_KV_CACHE=1 and MERERUN_Q35_PREFIX_KV_CACHE=1."
+                    : "In-memory prefix KV reuse is disabled by " +
+                        "MERERUN_GEMMA4_PREFIX_KV_CACHE=0 or MERERUN_Q35_PREFIX_KV_CACHE=0."
             ),
             ssdKVCache: RuntimeCapabilityStatus(
                 available: false,
@@ -744,9 +753,9 @@ actor RuntimeModelPool {
         startupModelPath: String?,
         settingsStore: RuntimeModelSettingsStore = RuntimeModelSettingsStore(),
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
-        gemma4PrefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_PREFIX_KV_CACHE"] == "1",
+        gemma4PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_GEMMA4_PREFIX_KV_CACHE"),
         gemma4ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_CONTINUOUS_BATCHING"] == "1",
-        q35PrefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFIX_KV_CACHE"] == "1",
+        q35PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_Q35_PREFIX_KV_CACHE"),
         q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
@@ -1064,6 +1073,7 @@ actor RuntimeModelPool {
             return loaded
         }
 
+        try MLXBundleSupport.ensureAvailable(quiet: true)
         let loaded = makeLoadedModel(for: resolved)
         loadedModels[resolved.id] = loaded
         do {
