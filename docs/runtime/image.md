@@ -74,6 +74,7 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
   --recipe klein-fast-style \
+  --visualize \
   --quiet
 swift run mere.run image generate \
   --model image-klein-9b \
@@ -81,6 +82,14 @@ swift run mere.run image generate \
   --lora ./style-klein.safetensors \
   --lora-scale 2.0 \
   --output ./style-klein.png
+```
+
+Add `--visualize` during training to start a loopback dashboard with the live
+loss curve, progress events, samples, checkpoints, and run artifacts. Reopen a
+completed or copied run directory later with:
+
+```bash
+swift run mere.run image visualize-run ./runs/my-style
 ```
 
 ### Bonsai binary and ternary

@@ -280,7 +280,11 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
   --recipe klein-fast-style \
+  --visualize \
   --quiet
+
+# Reopen the local run dashboard later from the run directory.
+swift run mere.run image visualize-run .
 
 # Run local chat
 swift run mere.run text chat \

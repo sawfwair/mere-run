@@ -97,6 +97,40 @@ final class LoRATrainingArtifactsTests: MereRunCoreTestCase {
         XCTAssertTrue(csv.contains("3,0.5"))
     }
 
+    func testTrainingEventLoggerPersistsJSONLinesAndResumesSequence() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let outputURL = temp.appendingPathComponent("train-output.safetensors")
+        let logger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
+        try logger.record(
+            type: "run_started",
+            stage: "starting",
+            step: 0,
+            totalSteps: 20,
+            metadata: ["model": "image-klein-base-9b"]
+        )
+        try logger.record(
+            type: "progress",
+            stage: "training",
+            step: 10,
+            totalSteps: 20,
+            loss: 0.42,
+            fraction: 0.5
+        )
+
+        let resumed = try LoRATrainingEventLogger(baseOutputURL: outputURL, resumeExisting: true)
+        try resumed.record(type: "run_finished", stage: "finished", step: 20, totalSteps: 20, fraction: 1)
+
+        let events = try LoRATrainingRunEvent.load(from: logger.eventURL)
+        XCTAssertEqual(events.count, 3)
+        XCTAssertEqual(events.map(\.sequence), [0, 1, 2])
+        XCTAssertEqual(events[0].type, "run_started")
+        XCTAssertEqual(events[1].stage, "training")
+        XCTAssertEqual(events[1].loss, 0.42)
+        XCTAssertEqual(events[2].type, "run_finished")
+    }
+
     func testCheckpointArchiveCreation() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

@@ -6,6 +6,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
     func testImageCommandExposesTrainLoRA() {
         let commandNames = Set(Image.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("train-lora"))
+        XCTAssertTrue(commandNames.contains("visualize-run"))
     }
 
     func testTrainLoRAParsesDefaults() throws {
@@ -46,6 +47,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleGuidanceScale, 1.0)
         XCTAssertEqual(cmd.sampleLoRAScale, 1.0)
         XCTAssertNil(cmd.sampleSeed)
+        XCTAssertFalse(cmd.visualize)
+        XCTAssertEqual(cmd.visualizePort, 8787)
         XCTAssertNil(cmd.loraTargetRanks)
         XCTAssertNil(cmd.loraRankPreset)
         XCTAssertNil(cmd.loraTargetPreset)
@@ -94,6 +97,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--sample-cfg", "1.2",
             "--sample-lora-scale", "0.75",
             "--sample-seed", "99",
+            "--visualize",
+            "--visualize-port", "8899",
             "--lora-target-ranks", ".attn.to_q=128,.ff.linear_in=64",
             "--timestep-sampling", "shift",
             "--timestep-loss-weighting", "weighted",
@@ -136,6 +141,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleGuidanceScale, 1.2)
         XCTAssertEqual(cmd.sampleLoRAScale, 0.75)
         XCTAssertEqual(cmd.sampleSeed, 99)
+        XCTAssertTrue(cmd.visualize)
+        XCTAssertEqual(cmd.visualizePort, 8899)
         XCTAssertEqual(cmd.loraTargetRanks, ".attn.to_q=128,.ff.linear_in=64")
         XCTAssertNil(cmd.loraRankPreset)
         XCTAssertNil(cmd.loraTargetPreset)
@@ -159,6 +166,54 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
 
         XCTAssertNil(cmd.data)
         XCTAssertEqual(cmd.syntheticSamples, 2)
+    }
+
+    func testImageVisualizeRunParsesDefaults() throws {
+        let cmd = try ImageVisualizeRun.parse(["/tmp/lora-run"])
+
+        XCTAssertEqual(cmd.runDirectory, "/tmp/lora-run")
+        XCTAssertEqual(cmd.port, 8787)
+    }
+
+    func testImageVisualizeRunParsesPort() throws {
+        let cmd = try ImageVisualizeRun.parse([
+            "/tmp/lora-run",
+            "--port", "8899",
+        ])
+
+        XCTAssertEqual(cmd.runDirectory, "/tmp/lora-run")
+        XCTAssertEqual(cmd.port, 8899)
+    }
+
+    func testLoRATrainingRunViewerSnapshotReadsRunArtifacts() throws {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-viewer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let outputURL = temp.appendingPathComponent("demo.safetensors")
+        try Data("adapter".utf8).write(to: outputURL)
+
+        let metrics = try LoRATrainingMetricsLogger(baseOutputURL: outputURL, resumeExisting: false)
+        try metrics.record(step: 10, loss: 0.75)
+        try metrics.record(step: 20, loss: 0.5)
+
+        let logger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
+        try logger.record(type: "run_started", stage: "starting", step: 0, totalSteps: 20)
+        try logger.record(type: "progress", stage: "training", step: 20, totalSteps: 20, loss: 0.5, fraction: 1)
+
+        let sampleDir = temp.appendingPathComponent("samples", isDirectory: true)
+        try FileManager.default.createDirectory(at: sampleDir, withIntermediateDirectories: true)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: sampleDir.appendingPathComponent("demo-step20-sample.png"))
+
+        let viewer = LoRATrainingRunViewer(runDirectoryURL: temp)
+        let snapshot = try viewer.snapshot()
+
+        XCTAssertEqual(snapshot.status, "running")
+        XCTAssertEqual(snapshot.lossPoints.map(\.step), [10, 20])
+        XCTAssertEqual(snapshot.events.map(\.type), ["run_started", "progress"])
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "root" && $0.name == "demo.safetensors" })
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "samples" && $0.isImage })
     }
 
     func testTrainLoRAParsesKleinModelPath() throws {

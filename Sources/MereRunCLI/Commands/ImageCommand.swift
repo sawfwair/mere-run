@@ -7,6 +7,7 @@ struct Image: ParsableCommand {
         subcommands: [
             ImageGenerate.self,
             ImageTrainLoRA.self,
+            ImageVisualizeRun.self,
             ImageValidate.self,
         ]
     )

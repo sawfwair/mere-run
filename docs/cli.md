@@ -18,6 +18,7 @@ Public tree:
 - `mere.run guide`
 - `mere.run image generate`
 - `mere.run image train-lora`
+- `mere.run image visualize-run`
 - `mere.run image validate`
 - `mere.run text chat`
 - `mere.run text code`
@@ -328,6 +329,7 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
   --recipe klein-fast-style \
+  --visualize \
   --quiet
 swift run mere.run image generate \
   --model image-klein-9b \
@@ -372,7 +374,19 @@ Key options:
 - `--no-compile`: disable compiled train-step graphs
 - `--lora-target-preset`: exact Klein target preset, including `fal-klein-fast`
 - `--lora-target-mode`: for FLUX.2 Klein, `suffix` or `transformer-linear-walk`
+- `--visualize`: start a loopback LoRA training dashboard for the run
+- `--visualize-port`: port for the local dashboard; defaults to `8787`
 - `--quiet`
+
+### `mere.run image visualize-run`
+
+Open the same local LoRA training dashboard for an existing run directory.
+The viewer reads `run.json`, `*.loss.csv`, `*.events.jsonl`, samples,
+checkpoints, and adapter artifacts from disk.
+
+```bash
+swift run mere.run image visualize-run ./runs/my-style --port 8787
+```
 
 ### `mere.run image validate`
 
