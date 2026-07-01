@@ -1486,7 +1486,11 @@ public extension ManagedModelSpec {
         case .privacyFilter:
             return OpenAIPrivacyFilterResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .codegenGGUF:
-            return Self.missingCodeGenPaths(in: rootURL, fileManager: fileManager)
+            return Self.missingCodeGenPaths(
+                preferredRelativePath: hubFallback?.filePath,
+                in: rootURL,
+                fileManager: fileManager
+            )
         case .deepseekV4FlashIMatrixGGUF:
             return Self.missingDeepseekV4FlashIMatrixPaths(in: rootURL, fileManager: fileManager)
         case .lightOnOCR:
@@ -1719,8 +1723,20 @@ public extension ManagedModelSpec {
             .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
-    private static func missingCodeGenPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
-        findFirstGGUFFile(in: rootURL, fileManager: fileManager) == nil ? [rootURL.appendingPathComponent("*.gguf")] : []
+    private static func missingCodeGenPaths(
+        preferredRelativePath: String?,
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        if let preferredRelativePath {
+            let preferredURL = rootURL.appendingPathComponent(preferredRelativePath, isDirectory: false)
+            if isRegularFileOrSymlinkTarget(preferredURL, fileManager: fileManager) {
+                return []
+            }
+        }
+        return findFirstGGUFFile(in: rootURL, fileManager: fileManager) == nil
+            ? [rootURL.appendingPathComponent("*.gguf")]
+            : []
     }
 
     /// DeepSeek V4 Flash explicitly prefers the imatrix-tuned GGUF (per the

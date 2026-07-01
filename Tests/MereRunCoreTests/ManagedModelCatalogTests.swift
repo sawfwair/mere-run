@@ -409,6 +409,33 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textCode)
     }
 
+    func testQwen3CodeAcceptsSymlinkedNestedHubGGUFInstallRoot() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: CodeGenResources.defaultModelId))
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        XCTAssertEqual(spec.hubFallback?.filePath, CodeGenResources.hubGGUFPath)
+
+        let snapshot = temp.appendingPathComponent("snapshot", isDirectory: true)
+        let snapshotFile = snapshot.appendingPathComponent(CodeGenResources.hubGGUFPath, isDirectory: false)
+        try FileManager.default.createDirectory(
+            at: snapshotFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(FileManager.default.createFile(atPath: snapshotFile.path, contents: Data()))
+
+        let root = temp.appendingPathComponent(CodeGenResources.defaultModelId, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: .qwen3Code, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("Qwen3-Coder-Next-Q4_K_M", isDirectory: true),
+            withDestinationURL: snapshot.appendingPathComponent("Qwen3-Coder-Next-Q4_K_M", isDirectory: true)
+        )
+
+        XCTAssertTrue(spec.missingPaths(in: root, fileManager: .default).isEmpty)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+    }
+
     func testLFM2UsesLiquidAIHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId))
 
