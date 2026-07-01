@@ -864,6 +864,7 @@ mlx_swift_cuda_link_flags() {
     flags+=("-L" "/usr/lib/$deb_multiarch")
   fi
 
+  flags+=("-lswiftSwiftOnoneSupport")
   flags+=(
     "-lcublasLt"
     "-lnvrtc"
