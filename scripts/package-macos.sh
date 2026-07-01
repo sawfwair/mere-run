@@ -8,6 +8,9 @@ set -euo pipefail
 #   MERERUN_NOTARY_PROFILE      notarytool keychain profile name
 #                               (created via: xcrun notarytool store-credentials)
 #     OR the trio:
+#   MERERUN_NOTARY_KEY_ID, MERERUN_NOTARY_ISSUER_ID, MERERUN_NOTARY_KEY_PATH
+#                               App Store Connect API key notarization
+#     OR the trio:
 #   MERERUN_NOTARY_APPLE_ID, MERERUN_NOTARY_PASSWORD, MERERUN_NOTARY_TEAM_ID
 #
 # Without a codesign identity the script still produces an (ad-hoc, un-notarized) DMG so
@@ -34,12 +37,22 @@ fi
 build_dir="$(dirname "$bundle")"
 app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${bundle}/Contents/Info.plist" 2>/dev/null || echo "0.0.0")"
 dmg_path="${build_dir}/MereRun-${app_version}.dmg"
+app_zip_path="${build_dir}/MereRun-${app_version}.app.zip"
 staging="${build_dir}/dmg-staging"
 
 notarize() {
   local target="$1"
   if [[ -n "${MERERUN_NOTARY_PROFILE:-}" ]]; then
     xcrun notarytool submit "$target" --keychain-profile "$MERERUN_NOTARY_PROFILE" --wait
+  elif [[ -n "${MERERUN_NOTARY_KEY_ID:-}" && -n "${MERERUN_NOTARY_KEY_PATH:-}" ]]; then
+    local args=(
+      --key "$MERERUN_NOTARY_KEY_PATH"
+      --key-id "$MERERUN_NOTARY_KEY_ID"
+    )
+    if [[ -n "${MERERUN_NOTARY_ISSUER_ID:-}" ]]; then
+      args+=(--issuer "$MERERUN_NOTARY_ISSUER_ID")
+    fi
+    xcrun notarytool submit "$target" "${args[@]}" --wait
   elif [[ -n "${MERERUN_NOTARY_APPLE_ID:-}" && -n "${MERERUN_NOTARY_PASSWORD:-}" && -n "${MERERUN_NOTARY_TEAM_ID:-}" ]]; then
     xcrun notarytool submit "$target" \
       --apple-id "$MERERUN_NOTARY_APPLE_ID" \
@@ -70,9 +83,12 @@ if [[ "$identity" != "-" ]]; then
 fi
 
 if [[ "$identity" != "-" ]]; then
-  if notarize "$bundle"; then
+  rm -f "$app_zip_path"
+  ditto -c -k --keepParent "$bundle" "$app_zip_path"
+  if notarize "$app_zip_path"; then
     xcrun stapler staple "$bundle"
   fi
+  rm -f "$app_zip_path"
   if notarize "$dmg_path"; then
     xcrun stapler staple "$dmg_path"
   fi
