@@ -116,6 +116,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
         "-lNumerics",
         "-lComplexModule",
         "-lRealModule",
+        "-lswiftSwiftOnoneSupport",
         "-lpthread",
         "-ldl",
         "-lstdc++",
