@@ -19,7 +19,13 @@ cd "$repo_root"
 configuration="${1:-release}"
 identity="${MERERUN_CODESIGN_IDENTITY:--}"
 
-bundle="$(MERERUN_CODESIGN_IDENTITY="$identity" "${repo_root}/scripts/build_mere_run_app.sh" "$configuration")"
+build_log="$(mktemp -t mere-run-app-build.XXXXXX)"
+trap 'rm -f "$build_log"' EXIT
+if ! MERERUN_CODESIGN_IDENTITY="$identity" "${repo_root}/scripts/build_mere_run_app.sh" "$configuration" 2>&1 | tee "$build_log"; then
+  echo "build_mere_run_app.sh failed; see build output above." >&2
+  exit 66
+fi
+bundle="$(awk 'NF { line = $0 } END { print line }' "$build_log")"
 if [[ ! -d "$bundle" ]]; then
   echo "build_mere_run_app.sh did not produce a bundle: ${bundle}" >&2
   exit 66
