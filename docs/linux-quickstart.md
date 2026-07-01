@@ -33,7 +33,7 @@ manifests, and CUDA-gated arm64 package work.
 Use this path on Debian or Ubuntu-style systems:
 
 ```bash
-tag=v0.17.0
+tag=v0.18.0
 version="${tag#v}"
 case "$(uname -m)" in
   x86_64|amd64) deb_arch=amd64 ;;
@@ -54,7 +54,7 @@ assets that the CLI needs at runtime.
 Use this path when you do not want to install a Debian package:
 
 ```bash
-tag=v0.17.0
+tag=v0.18.0
 case "$(uname -m)" in
   x86_64|amd64) linux_arch=x86_64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
@@ -82,7 +82,7 @@ Use this artifact for GPU worker images, remote trainers, and other x86_64 CUDA
 hosts:
 
 ```bash
-tag=v0.17.0
+tag=v0.18.0
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64-cuda.tar.gz" -o mere-run-linux-cuda.tar.gz
 tar -xzf mere-run-linux-cuda.tar.gz
 cd "mere-run-${tag}-linux-x86_64-cuda"
@@ -134,7 +134,7 @@ that build locally on a Linux x86_64 CUDA development host:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.18.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 
@@ -148,7 +148,7 @@ MERERUN_LINUX_ACCEL=cuda \
 MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
 MERERUN_NATIVE_BUILD_JOBS=14 \
 MERERUN_CUDA_ARCHITECTURES="86-real;90-virtual" \
-  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.18.0 --artifact-suffix cuda
 ```
 
 Run a real GPU smoke on the target runtime class before widening support claims.
@@ -165,7 +165,7 @@ repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.17.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.18.0
 ls dist/linux/
 ```
 
@@ -242,7 +242,7 @@ studio, and DMG packaging are macOS-only.
 Each Linux release includes `SHA256SUMS` beside the tarball and `.deb`:
 
 ```bash
-tag=v0.17.0
+tag=v0.18.0
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
 sha256sum -c SHA256SUMS

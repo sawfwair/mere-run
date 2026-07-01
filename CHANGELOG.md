@@ -6,8 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.18.0 - 2026-07-01
+
 ### Added
 
+- added `image train-lora --visualize` and `image visualize-run` for a
+  loopback LoRA training dashboard that reads run manifests, loss CSVs,
+  typed JSONL progress events, samples, checkpoints, and adapter artifacts.
 - macOS Studio app: inline audio/video playback (AVKit / AVAudioPlayer) for
   generated speech, music, sound effects, and video; determinate download and
   generation progress with bytes, speed, and percentage; drag-and-drop file
@@ -26,6 +31,11 @@ The format is based on Keep a Changelog.
 - added `mere.run plugin { list, info, install, doctor }` for live official
   companion-plugin catalog discovery, `pipx` install previews, opt-in
   execution, and post-install manifest verification.
+- added hosted Linux x86_64 CUDA release artifacts alongside the default
+  x86_64/amd64 CPU tarball and Debian package lanes.
+- added dedicated benchmarking docs plus local `model benchmark api-workload`
+  and `model benchmark code` lanes for serving workloads and generated-code
+  eval slices.
 - added `vision caption --prompt-file`, `--focus`, and `--trigger-token` for
   domain-aware dataset captions and deterministic LoRA trigger prefixes.
 - added FLUX.2 Klein support to `image train-lora` when `--model` resolves to a
@@ -42,12 +52,22 @@ The format is based on Keep a Changelog.
 - added `vision-ocr-infinity-pro-int8` as an explicit-pull native Infinity
   Pro OCR option for quality-focused evals while keeping LightOnOCR as the
   default `vision ocr` backend.
+- added `text-code-north-mini` as a managed GGUF coding model target for Cohere
+  Labs North Mini Code through the local `text-code` runtime.
 - added `text-agent-ornith-9b` as an experimental native Qwen-family MLX/OptiQ
   coding-agent target backed by the pinned public Ornith 1.0 9B snapshot.
 - added `text-agent-ornith-35b-mlx` as a local native Qwen-family MLX Q4
   coding-agent target for testing converted Ornith 1.0 35B snapshots.
 - added `text-agent-ornith-35b` as a managed native GGUF coding-agent target
   for larger Ornith evals through the existing `text-code` runtime.
+
+### Changed
+
+- improved native Qwen-family and Gemma decode paths, including Q35 switch
+  routing alignment with MLX-LM, dense-path MLXFast attention learnings, and
+  faster Gemma4 greedy decode.
+- locked fast Krea and Klein LoRA recipes to the proven local training step
+  counts used for the current native image-training workflow.
 
 ### Fixed
 
@@ -67,6 +87,9 @@ The format is based on Keep a Changelog.
   visible response text across native chat responses, API non-streaming output,
   and code benchmark reports, including reopened-reasoning diagnostics for
   loop-like model output.
+- fixed code benchmark stop handling for generated-code eval slices.
+- fixed Qwen3 Code GGUF pull validation so preferred nested hub files are
+  accepted through symlinked managed install roots.
 - fixed MLX CUDA BF16 sigmoid JIT smoke failures by patching the upstream CUDA
   unary kernel path during `scripts/prepare-linux-native.sh`.
 
