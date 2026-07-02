@@ -99,6 +99,10 @@ the adapter to learn.
   Linear/QuantizedLinear layer.
 - `--lora-target-ranks`: custom FLUX.2 target suffix ranks, for example
   `.attn.to_q=128,.ff.linear_in=64`.
+- `--preflight`: inspect the training request without loading the model or
+  running training.
+- `--json`: with `--preflight`, emit one structured JSON report with dataset
+  counts, model readiness, diagnostics, and declarative next actions.
 - Krea/Klein LR controls: `--lr-warmup-steps`, `--no-cosine-scheduler`, and
   `--lr-min-factor`.
 - Klein-only recipe controls: `--timestep-sampling`, `--timestep-loss-weighting`,
@@ -111,6 +115,22 @@ capture fails during the first training step. Large real datasets may also need
 `MLX_CUDA_GRAPH_CACHE_SIZE=4096` to avoid MLX CUDA graph-cache thrashing.
 
 ## Train
+
+Before spending GPU time, run a preflight. It catches missing captions, missing
+models, suspicious repeated captions, output-path issues, and suggested next
+commands without starting the training runtime:
+
+```bash
+mere.run image train-lora \
+  --data ./dataset \
+  --output ./my-klein-fast-style.safetensors \
+  --recipe klein-fast-style \
+  --preflight \
+  --json
+```
+
+Hard blockers exit nonzero after printing the JSON report, so scripts can
+consume stdout and decide whether to run the emitted `start-training` action.
 
 For the fast Krea style recipe:
 

@@ -361,6 +361,24 @@ style-dataset/
   002.txt
 ```
 
+Before starting a real LoRA run, use preflight JSON to catch cheap blockers
+without loading the model or allocating the training runtime:
+
+```bash
+swift run mere.run image train-lora \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --recipe klein-fast-style \
+  --preflight \
+  --json
+```
+
+The preflight report writes one structured JSON document to stdout. It includes
+dataset counts, model readiness, output-path checks, diagnostics, and
+declarative actions such as `start-training` or `pull-model`. Hard blockers
+exit nonzero after printing the JSON report so scripts and agents can inspect
+the same payload humans do.
+
 Key options:
 
 - `--data`: dataset directory with image + caption pairs
@@ -386,6 +404,8 @@ Key options:
 - `--no-compile`: disable compiled train-step graphs
 - `--lora-target-preset`: exact Klein target preset, including `fal-klein-fast`
 - `--lora-target-mode`: for FLUX.2 Klein, `suffix` or `transformer-linear-walk`
+- `--preflight`: inspect the training request without running training
+- `--json`: with `--preflight`, emit a structured JSON report
 - `--visualize`: start a loopback LoRA training dashboard for the run
 - `--visualize-port`: port for the local dashboard; defaults to `8787`
 - `--quiet`
