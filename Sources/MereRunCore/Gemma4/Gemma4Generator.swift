@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXNN
 
 public typealias Gemma4PrefixKVCacheStats = PrefixKVCacheStats
 public typealias Gemma4ContinuousBatchingStats = RuntimeDecodeBatchingStats
@@ -110,6 +111,7 @@ public actor Gemma4Generator: ChatGenerator {
     private var loadedMTPModelPath: String?
     private var tokenizerAndTemplate: Gemma4TokenizerAndTemplate?
     private var loadedModelPath: String?
+    private var loadedTextLoRASignature: String?
     private var loadedConfig: Gemma4Config?
     private var lastMTPStats = Gemma4MTPStats()
 
@@ -160,7 +162,12 @@ public actor Gemma4Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
         let loadStart = Date()
+        let requestedLoRASignature = Self.loraSignature(request.lora)
+        if loadedTextLoRASignature != requestedLoRASignature {
+            resetLoadedModel()
+        }
         try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+        try await applyTextLoRAIfNeeded(request.lora, progressHandler: progressHandler)
         let loadSeconds = Date().timeIntervalSince(loadStart)
 
         var response = try await generate(
@@ -193,6 +200,21 @@ public actor Gemma4Generator: ChatGenerator {
         loadedMTPModelPath = nil
         tokenizerAndTemplate = nil
         loadedModelPath = nil
+        loadedTextLoRASignature = nil
+        loadedConfig = nil
+        lastMTPStats = Gemma4MTPStats()
+        Memory.clearCache()
+    }
+
+    private func resetLoadedModel() {
+        failQueuedDecodeRows(CancellationError())
+        resetPrefixKVCache()
+        model = nil
+        mtpModel = nil
+        loadedMTPModelPath = nil
+        tokenizerAndTemplate = nil
+        loadedModelPath = nil
+        loadedTextLoRASignature = nil
         loadedConfig = nil
         lastMTPStats = Gemma4MTPStats()
         Memory.clearCache()
@@ -275,6 +297,35 @@ public actor Gemma4Generator: ChatGenerator {
         tokenizerAndTemplate = tokenizer
         loadedConfig = config
         loadedModelPath = normalizedRoot.path
+    }
+
+    private func applyTextLoRAIfNeeded(
+        _ lora: LoRA?,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws {
+        guard let lora else {
+            loadedTextLoRASignature = nil
+            return
+        }
+        let signature = Self.loraSignature(lora)
+        guard loadedTextLoRASignature != signature else { return }
+        guard let model else {
+            throw Gemma4Error.modelNotLoaded
+        }
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 text LoRA"))
+        _ = try await Gemma4TextLoRAAdapter.apply(lora, to: model)
+        loadedTextLoRASignature = signature
+        resetPrefixKVCache()
+    }
+
+    private static func loraSignature(_ lora: LoRA?) -> String? {
+        guard let lora else { return nil }
+        switch lora {
+        case .local(let path, let scale):
+            return "local:\(URL(fileURLWithPath: path).standardizedFileURL.path):\(scale)"
+        case .remote(let reference, let scale):
+            return "remote:\(reference):\(scale)"
+        }
     }
 
     private func generate(

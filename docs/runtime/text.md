@@ -1,7 +1,7 @@
 # Text Runtime
 
 This page covers the text-facing command families: chat, code generation,
-embeddings, and PII anonymization.
+embeddings, PII anonymization, and native text LoRA preparation.
 
 ## Public surface
 
@@ -9,6 +9,7 @@ embeddings, and PII anonymization.
 - `mere.run text code`
 - `mere.run text embed`
 - `mere.run text anonymize`
+- `mere.run text train-lora`
 
 ## Model families
 
@@ -64,9 +65,9 @@ equally recommended:
 | Unified memory | Winner | Notes |
 | --- | --- | --- |
 | 16-23 GB | `text-chat-gemma4-12b-4bit` | Best compact first chat pick; `text-chat-gemma4-nano` is the safer smallest fallback. |
-| 24-63 GB | `text-chat-q36-nano` | Default strong chat tier; `text-chat-gemma4-turbo` is the Gemma-specific alternative. |
-| 64-95 GB | `text-chat-q36-nano` | Extra RAM is better spent on context, concurrency, or code models than dense Gemma 31B as a default. |
-| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Q36 for lower-latency interactive chat. |
+| 24-63 GB | `text-chat-gemma4-12b-4bit` | Default grounded local-assistant tier; `text-chat-gemma4-turbo` is the larger Gemma alternate. |
+| 64-95 GB | `text-chat-gemma4-12b-4bit` | Keep the proven Gemma assistant lane; spend headroom on context, concurrency, or larger Gemma alternates. |
+| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Gemma 12B 4-bit for normal interactive local chat. |
 
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use
@@ -122,6 +123,54 @@ swift run mere.run text anonymize \
   "My name is Alice Smith and my email is alice@example.com"
 ```
 
+### Native text LoRA training
+
+```bash
+swift run mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./local-assistant.safetensors \
+  --model text-chat-gemma4-12b-4bit \
+  --dry-run \
+  --json
+```
+
+`text train-lora` is the native MereRun entrypoint for chat-style SFT JSONL.
+The data format is one JSON object per line with `sources` and `messages`;
+messages use the same `system`, `user`, and `assistant` roles as the local chat
+runtime. `--dry-run` validates the dataset, fingerprints it, counts optional
+eval prompts, and writes a `.manifest.json` next to the requested adapter path.
+
+Without `--dry-run`, the command resolves the Gemma4 text model through the same
+managed model store as chat, applies the Gemma chat template to each example,
+masks loss to assistant tokens, injects native LoRA layers into attention
+projections, and writes a `.safetensors` adapter plus manifest. Add
+`--visualize` to start the same loopback LoRA training dashboard used by image
+training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
+`*.loss.html` beside the adapter so loss and training events can be inspected
+while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
+model ids, manifests, runtime constraints, and eval artifacts remain under the
+MereRun command plane.
+
+```bash
+swift run mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./local-assistant.safetensors \
+  --model text-chat-gemma4-12b-4bit \
+  --visualize \
+  --visualize-port 8787
+```
+
+Use the resulting adapter with native Gemma chat:
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --lora ./local-assistant.safetensors \
+  --prompt "What should this local assistant know?"
+```
+
 ## Runtime entrypoints
 
 ### CLI
@@ -130,6 +179,7 @@ swift run mere.run text anonymize \
 - `Sources/MereRunCLI/Commands/TextCodeCommand.swift`
 - `Sources/MereRunCLI/Commands/TextEmbedCommand.swift`
 - `Sources/MereRunCLI/Commands/TextAnonymizeCommand.swift`
+- `Sources/MereRunCLI/Commands/TextTrainLoRACommand.swift`
 
 ### Chat families
 
@@ -178,6 +228,12 @@ tasks. It is not a generative command.
 Use this for local PII detection and redaction. It runs the OpenAI Privacy
 Filter token-classification model through the native MLX runtime and can emit
 plain redacted text or structured JSON spans.
+
+### `mere.run text train-lora`
+
+Use this to prepare and train Gemma-family text LoRA adapters from reviewed chat
+SFT data. The first supported target lane is `text-chat-gemma4-12b-4bit` for
+local assistant tuning.
 
 ## Reading the code
 
