@@ -115,6 +115,37 @@ mere.run image generate \
   --output ./knight.png
 ```
 
+## Klein LoRA Reference Inference
+
+Use `--ref-image` when applying a Klein LoRA to a source composition. This is
+the preferred path for repeatable Klein reference conditioning; `--input` is
+accepted as a single-reference shorthand, but `--ref-image` keeps the recipe
+clear and works with multiple references.
+
+Good starting settings for a style LoRA are `--strength 0.55`,
+`--lora-scale 1.5`, 1024x768 output, 16 steps, and a locked seed once the pose
+is close. Put the trigger token first, then describe the subject, action,
+relationship, and style. For limb-heavy reference poses, state the expected
+body layout explicitly.
+
+```bash
+mere.run image generate \
+  --model image-klein-9b \
+  --ref-image ./reference-pose.png \
+  --strength 0.55 \
+  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, full body pose, natural human anatomy, no extra limbs, clean cinematic film still, crisp faces, reflective pavement" \
+  --lora ./style-adapter.safetensors \
+  --lora-scale 1.5 \
+  --width 1024 --height 768 \
+  --steps 16 \
+  --seed 525252 \
+  --output ./style-reference.png
+```
+
+If edges look crunchy in a showcase render, render the same seed at a larger
+matching aspect ratio, such as 1280x960 with 24 steps, then downsample to the
+delivery size with a high-quality image resizer.
+
 ## Iteration Tips
 
 - Lock `--seed` once composition is close, then change one parameter at a time.

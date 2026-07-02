@@ -285,6 +285,18 @@ swift run mere.run image generate \
   --prompt "a trading card character with the same sticker layout" \
   --ref-image ./card-reference.png \
   --output ./card.png
+
+swift run mere.run image generate \
+  --model image-klein-9b \
+  --ref-image ./reference-pose.png \
+  --strength 0.55 \
+  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, natural human anatomy, no extra limbs" \
+  --lora ./style-adapter.safetensors \
+  --lora-scale 1.5 \
+  --width 1024 --height 768 \
+  --steps 16 \
+  --seed 525252 \
+  --output ./style-reference.png
 ```
 
 ### `mere.run image train-lora`

@@ -84,6 +84,31 @@ swift run mere.run image generate \
   --output ./style-klein.png
 ```
 
+For reference-guided Klein LoRA inference, run the adapter on the distilled
+Klein model and pass the source composition with `--ref-image`. A practical
+starting point for style transfer is `--strength 0.55`, `--lora-scale 1.5`,
+1024x768, 16 steps, and a locked seed once the composition is close. Put the
+trigger token first, then describe the subject/action relationship, visible
+anatomy, and style:
+
+```bash
+swift run mere.run image generate \
+  --model image-klein-9b \
+  --ref-image ./reference-pose.png \
+  --strength 0.55 \
+  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, full body pose, natural human anatomy, no extra limbs, clean cinematic film still, crisp faces, reflective pavement" \
+  --lora ./style-adapter.safetensors \
+  --lora-scale 1.5 \
+  --width 1024 --height 768 \
+  --steps 16 \
+  --seed 525252 \
+  --output ./style-reference.png
+```
+
+For cleaner public-facing exports, keep the seed and prompt fixed, render at a
+larger matching aspect ratio such as 1280x960 with 24 steps, then downsample to
+1024x768 with a high-quality image resizer.
+
 Add `--visualize` during training to start a loopback dashboard with the live
 loss curve, progress events, samples, checkpoints, and run artifacts. Reopen a
 completed or copied run directory later with:
