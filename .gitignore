@@ -30,3 +30,4 @@ scripts/upload_release.sh
 # Local release/notarization credentials
 .notarize.local.env
 .upload_release.local.env
+logs/

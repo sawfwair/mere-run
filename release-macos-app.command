@@ -36,13 +36,18 @@ echo "[release-macos-app.command] root $ROOT_DIR"
 
 source_env_file "$ROOT_DIR/.notarize.local.env"
 source_env_file "$HOME/.config/mere-run/notary.env"
-source_env_file "$HOME/.config/merekit-console/notary.env"
 
-export MERERUN_CODESIGN_IDENTITY="${MERERUN_CODESIGN_IDENTITY:-${APPLE_SIGNING_IDENTITY:-${SIGN_IDENTITY:-Developer ID Application: Kyle McCullough (S5JDPCT8RC)}}}"
+export MERERUN_CODESIGN_IDENTITY="${MERERUN_CODESIGN_IDENTITY:-${APPLE_SIGNING_IDENTITY:-${SIGN_IDENTITY:-}}}"
 export MERERUN_NOTARY_KEY_ID="${MERERUN_NOTARY_KEY_ID:-${APPLE_API_KEY:-${KEY_ID:-}}}"
 export MERERUN_NOTARY_ISSUER_ID="${MERERUN_NOTARY_ISSUER_ID:-${APPLE_API_ISSUER:-${ISSUER_ID:-}}}"
 export MERERUN_NOTARY_KEY_PATH="${MERERUN_NOTARY_KEY_PATH:-${APPLE_API_KEY_PATH:-${KEY_PATH:-}}}"
 export MERERUN_NOTARY_TEAM_ID="${MERERUN_NOTARY_TEAM_ID:-${APPLE_TEAM_ID:-${TEAM_ID:-}}}"
+
+if [[ -z "$MERERUN_CODESIGN_IDENTITY" ]]; then
+  echo "[release-macos-app.command] missing MERERUN_CODESIGN_IDENTITY." >&2
+  echo "[release-macos-app.command] set it in .notarize.local.env or ~/.config/mere-run/notary.env." >&2
+  exit 1
+fi
 
 echo "[release-macos-app.command] signing identity: $MERERUN_CODESIGN_IDENTITY"
 if [[ -n "${MERERUN_NOTARY_PROFILE:-}" ]]; then
