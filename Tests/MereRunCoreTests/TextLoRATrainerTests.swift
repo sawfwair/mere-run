@@ -1,6 +1,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
@@ -128,6 +129,104 @@ final class TextLoRATrainerTests: MereRunCoreTestCase {
         XCTAssertEqual(report.steps, 2)
         XCTAssertGreaterThan(report.layerCount, 0)
         XCTAssertNotNil(report.finalLoss)
+    }
+
+    func testGatheredBatchMatchesMaskPositions() throws {
+        let examples = [
+            TextSFTTokenizedExample(
+                inputTokenIds: [3, 4, 5, 6],
+                labelTokenIds: [4, 5, 6, 7],
+                lossMask: [0, 1, 0, 1]
+            ),
+            TextSFTTokenizedExample(
+                inputTokenIds: [1, 2],
+                labelTokenIds: [2, 3],
+                lossMask: [0, 1]
+            ),
+        ]
+        let batch = try TextSFTTrainingBatchBuilder.makeGatheredBatch(examples)
+
+        XCTAssertEqual(batch.inputIds.shape, [2, 4])
+        // Row 0 targets columns 1 and 3; row 1 (padded to length 4) column 1.
+        XCTAssertEqual(batch.targetPositions.asArray(Int32.self), [1, 3, 5])
+        XCTAssertEqual(batch.targetLabels.asArray(Int32.self), [5, 7, 3])
+    }
+
+    func testGatheredLossMatchesMaskedLoss() throws {
+        MLXRandom.seed(11)
+        let logits = MLXRandom.normal([2, 4, 8])
+        let labels = MLXArray([Int32]([1, 2, 3, 4, 5, 6, 7, 0]), [2, 4])
+        let mask = MLXArray([Float]([0, 1, 1, 0, 1, 0, 0, 1]), [2, 4])
+
+        let legacy = TextSFTTrainingLoss.maskedNextTokenCrossEntropy(
+            logits: logits,
+            labels: labels,
+            lossMask: mask
+        ).item(Float.self)
+
+        let flatLogits = logits.reshaped([-1, 8])
+        let positions = MLXArray([Int32]([1, 2, 4, 7]))
+        let gathered = TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(
+            logits: take(flatLogits, positions, axis: 0),
+            labels: MLXArray([Int32]([2, 3, 5, 0]))
+        ).item(Float.self)
+
+        XCTAssertEqual(legacy, gathered, accuracy: 1e-5)
+    }
+
+    func testTrainingLogitsMatchesFullForwardAtTargets() throws {
+        MLXRandom.seed(5)
+        let model = Gemma4TextCausalLM(config: try tinyGemma4TextConfig())
+        let inputIds = MLXArray([Int32]([3, 4, 5, 6, 1, 2, 0, 0]), [2, 4])
+        let positions = MLXArray([Int32]([1, 3, 5]))
+
+        let full = model(inputIds).reshaped([-1, 32])
+        let expected = take(full, positions, axis: 0)
+        let gathered = model.trainingLogits(inputIds: inputIds, flatTargetPositions: positions)
+
+        XCTAssertEqual(gathered.shape, expected.shape)
+        let maxDiff = MLX.abs(gathered - expected).max().item(Float.self)
+        XCTAssertLessThan(maxDiff, 1e-5)
+    }
+
+    func testGatheredTrainingMatchesLegacyTrajectory() throws {
+        let examples = [
+            TextSFTTokenizedExample(
+                inputTokenIds: [3, 4, 5, 6],
+                labelTokenIds: [4, 5, 6, 7],
+                lossMask: [0, 1, 1, 1]
+            ),
+            TextSFTTokenizedExample(
+                inputTokenIds: [7, 8, 9],
+                labelTokenIds: [8, 9, 10],
+                lossMask: [0, 0, 1]
+            ),
+        ]
+        let config = TextLoRATrainingConfig(trainingSteps: 3, batchSize: 1, learningRate: 0.02)
+
+        func trainOnce(gathered: Bool) throws -> Float {
+            MLXRandom.seed(21)
+            let model = Gemma4TextCausalLM(config: try tinyGemma4TextConfig())
+            let layers = try Gemma4TextLoRAInjector.inject(into: model, rank: 2)
+            let report = try TextLoRATrainer.train(
+                model: model,
+                loraLayers: layers,
+                examples: examples,
+                config: config,
+                gatheredForward: gathered
+                    ? { model, inputIds, positions in
+                        model.trainingLogits(inputIds: inputIds, flatTargetPositions: positions)
+                    }
+                    : nil
+            ) { model, inputIds in
+                model(inputIds)
+            }
+            return try XCTUnwrap(report.finalLoss)
+        }
+
+        let legacyLoss = try trainOnce(gathered: false)
+        let gatheredLoss = try trainOnce(gathered: true)
+        XCTAssertEqual(legacyLoss, gatheredLoss, accuracy: 2e-4)
     }
 
     private func tinyGemma4TextConfig() throws -> Gemma4TextConfig {

@@ -1577,6 +1577,19 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         forward(inputIds: inputIds, cache: cache as? [Gemma4AttentionCache])
     }
 
+    /// Logits for an explicit set of flattened (`[batch * seq]` row-major)
+    /// positions only. SFT training reads logits solely at loss-masked target
+    /// positions, and prompt/pad rows are the majority of a chat batch —
+    /// projecting them through the 262k-vocab lm_head (plus the float32 loss
+    /// chain) is pure waste. Hidden states still flow through every position,
+    /// so gradients match the full-logits path exactly.
+    func trainingLogits(inputIds: MLXArray, flatTargetPositions: MLXArray) -> MLXArray {
+        let hidden = languageModel(inputIds)
+        let flattened = hidden.reshaped([-1, hidden.dim(-1)])
+        let selected = take(flattened, flatTargetPositions.asType(.int32), axis: 0)
+        return applyFinalSoftcap(languageModel.embedTokens.asLinear(selected))
+    }
+
     func forward(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
         var logits = languageModel.logits(inputIds, cache: cache)
         if let finalLogitSoftcapping {

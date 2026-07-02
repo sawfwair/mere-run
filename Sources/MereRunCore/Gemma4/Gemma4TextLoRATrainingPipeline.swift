@@ -79,7 +79,10 @@ public enum Gemma4TextLoRATrainingPipeline {
             config: request.trainingConfig,
             outputURL: request.outputURL,
             metadata: metadata,
-            progressHandler: trainingProgressHandler
+            progressHandler: trainingProgressHandler,
+            gatheredForward: { model, inputIds, targetPositions in
+                model.trainingLogits(inputIds: inputIds, flatTargetPositions: targetPositions)
+            }
         ) { model, inputIds in
             model(inputIds)
         }

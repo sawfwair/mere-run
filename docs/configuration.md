@@ -146,6 +146,32 @@ exact full-vocabulary sort. The truncation only affects requests whose top-p
 nucleus would span more than this many tokens, which does not occur at
 practical temperatures.
 
+### `MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS`
+
+Native text LoRA training (`text train-lora`) projects only loss-masked
+target positions through the 262k-vocabulary lm_head and computes cross
+entropy as logSumExp-minus-gather, instead of materializing full-sequence
+logits plus a second full-vocabulary log-probability tensor. Gradients are
+identical to the full path — prompt and padding rows never contribute loss —
+so this is on by default; set `0`, `false`, or `off` to restore the legacy
+full-logits loss. The trainer prints its decision at startup
+(`gathered_loss=` on stderr).
+
+### `MERERUN_TEXT_LORA_TRAIN_LOG_EVERY`
+
+Loss-readback cadence for text LoRA training, in optimizer steps (default
+`10`). Between boundaries steps are scheduled with asyncEval and the loop
+continues without a GPU→CPU sync, so the next step's graph construction
+overlaps execution. Boundary steps read the loss, update the metrics CSV and
+progress, and print `[text-lora-train] step= loss= step_s= footprint_gb=` to
+stderr. Set `1` for the legacy per-step synchronous readback. The shared
+image/text training knobs (`MERERUN_LORA_TRAIN_CACHE_LIMIT_GB`,
+`MERERUN_LORA_TRAIN_SAVE_EVERY`, `MERERUN_LORA_TRAIN_SYNC_EVAL`) also apply:
+the buffer-cache cap defaults to 32 GB for text training (a sub-working-set
+cap doubles step time at ~900-token sequences, while uncapped the cache
+balloons past 100 GB), and a `<name>.partial.safetensors` adapter checkpoint
+is written every 100 steps and removed after the final save.
+
 ### `MERERUN_GEMMA4_DECODE_TRACE`
 
 Set to `1` to log a per-decode summary to stderr splitting each token's wall

@@ -103,6 +103,34 @@ public enum TextSFTTrainingBatchBuilder {
         )
     }
 
+    /// Batch plus the flattened (row-major `[batch * maxLength]`) indices of
+    /// positions with a positive loss mask, and the labels at those
+    /// positions. The gathered training path projects only these rows through
+    /// the lm_head instead of every position in the batch.
+    public static func makeGatheredBatch(
+        _ examples: [TextSFTTokenizedExample],
+        padTokenId: Int = 0
+    ) throws -> (inputIds: MLXArray, targetPositions: MLXArray, targetLabels: MLXArray) {
+        let batch = try makeBatch(examples, padTokenId: padTokenId)
+        let maxLength = batch.inputIds.dim(1)
+        var positions: [Int32] = []
+        var labels: [Int32] = []
+        for (row, example) in examples.enumerated() {
+            for (column, maskValue) in example.lossMask.enumerated() where maskValue > 0 {
+                positions.append(Int32(row * maxLength + column))
+                labels.append(Int32(example.labelTokenIds[column]))
+            }
+        }
+        guard !positions.isEmpty else {
+            throw TextSFTTrainingBatchError.noAssistantTargets
+        }
+        return (
+            inputIds: batch.inputIds,
+            targetPositions: MLXArray(positions),
+            targetLabels: MLXArray(labels)
+        )
+    }
+
     public static func makeBatch(
         _ examples: [TextSFTTokenizedExample],
         padTokenId: Int = 0
@@ -161,6 +189,25 @@ public enum TextSFTTrainingLoss {
         let mask = lossMask.asType(.float32)
         let denominator = mask.sum() + MLXArray(Float(1e-8))
         return -(selected * mask).sum() / denominator
+    }
+
+    /// Cross entropy over pre-gathered target rows: `[N, vocab]` logits and
+    /// `[N]` labels. logSumExp-minus-gather avoids materializing a second
+    /// full-vocabulary log-probability tensor the way logSoftmax does, and
+    /// every gathered row contributes, so no mask is needed. Matches
+    /// `maskedNextTokenCrossEntropy` on the same positions to float precision.
+    public static func gatheredNextTokenCrossEntropy(
+        logits: MLXArray,
+        labels: MLXArray
+    ) -> MLXArray {
+        let float32Logits = logits.asType(.float32)
+        let normalizers = logSumExp(float32Logits, axis: -1)
+        let selected = takeAlong(
+            float32Logits,
+            labels.asType(.int32).expandedDimensions(axis: -1),
+            axis: -1
+        ).squeezed(axis: -1)
+        return (normalizers - selected).mean()
     }
 }
 
