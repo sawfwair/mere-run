@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-22.04
     container: swift:6.0-jammy
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install packaging dependencies
         run: |
@@ -98,7 +98,7 @@ jobs:
     container: swift:6.0-jammy
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Enable NVIDIA CUDA apt repository
         run: |
@@ -215,7 +215,7 @@ jobs:
     # runner is online — the x86_64 release proceeds independently.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install packaging dependencies
         run: |
