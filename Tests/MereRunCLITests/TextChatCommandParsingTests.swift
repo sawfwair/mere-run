@@ -44,6 +44,17 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.stream)
     }
 
+    func testTextChatParsesLoRAAdapterOptions() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "Use adapter",
+            "--lora", "/tmp/adapter.safetensors",
+            "--lora-scale", "0.75",
+        ])
+
+        XCTAssertEqual(cmd.loraPath, "/tmp/adapter.safetensors")
+        XCTAssertEqual(cmd.loraScale, 0.75)
+    }
+
     func testTextChatBackendDescriptionIdentifiesNativeMLXModels() {
         let backend = TextChat.backendDescription(for: Gemma4Resources.twelveB4BitModelId)
 

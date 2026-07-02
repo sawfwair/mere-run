@@ -113,6 +113,12 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
+    @Option(name: [.customLong("lora")], help: "Optional local LoRA adapter .safetensors path for supported chat models.")
+    var loraPath: String?
+
+    @Option(name: [.customLong("lora-scale")], help: "LoRA adapter scale.")
+    var loraScale: Double = 1.0
+
     @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
     var thinking: Bool = false
 
@@ -176,12 +182,20 @@ struct TextChat: AsyncParsableCommand {
             throw ValidationError("The 'shell_exec' tool requires --allow-shell-exec.")
         }
 
+        let lora: LoRA?
+        if let loraPath, !loraPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lora = .local(path: URL(fileURLWithPath: loraPath).standardizedFileURL.path, scale: loraScale)
+        } else {
+            lora = nil
+        }
+
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
             showThinking: thinking,
+            lora: lora,
             tools: toolDefs
         )
 

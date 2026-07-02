@@ -9,6 +9,7 @@ struct Text: ParsableCommand {
             TextCode.self,
             TextEmbed.self,
             TextAnonymize.self,
+            TextTrainLoRA.self,
         ]
     )
 }
