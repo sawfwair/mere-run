@@ -7,6 +7,12 @@ import MLXRandom
 @testable import MereRunCore
 
 final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
+    private func skipUnlessGPUForFusedDecodeKernels() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Gemma4 fused decode kernels use MLXFast Metal kernels; set MERERUN_TEST_MLX_DEVICE=gpu to run them.")
+        }
+    }
+
     private func maxAbsDifference(_ a: MLXArray, _ b: MLXArray) -> Float {
         MLX.abs(a.asType(.float32) - b.asType(.float32)).max().item(Float.self)
     }
@@ -21,7 +27,9 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
         return (MLX.abs(lhs - rhs) / (MLX.abs(rhs) + 1)).max().item(Float.self)
     }
 
-    func testQKVNormsMatchesReference() {
+    func testQKVNormsMatchesReference() throws {
+        try skipUnlessGPUForFusedDecodeKernels()
+
         let numHeads = 4
         let numKVHeads = 2
         let headDim = 64
@@ -63,7 +71,9 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxRelativeDifference(v, expectedV), 0.02)
     }
 
-    func testResidualDoubleNormMatchesReference() {
+    func testResidualDoubleNormMatchesReference() throws {
+        try skipUnlessGPUForFusedDecodeKernels()
+
         let hidden = 1_536
         let eps: Float = 1e-6
         let batch = 2
@@ -92,7 +102,9 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxRelativeDifference(mlpInput, expectedInput), 0.02)
     }
 
-    func testGeluMulMatchesReference() {
+    func testGeluMulMatchesReference() throws {
+        try skipUnlessGPUForFusedDecodeKernels()
+
         let intermediate = 2_048
         let batch = 2
 
@@ -109,7 +121,9 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxRelativeDifference(activated, expected), 0.02)
     }
 
-    func testFFNResidualScaleMatchesReference() {
+    func testFFNResidualScaleMatchesReference() throws {
+        try skipUnlessGPUForFusedDecodeKernels()
+
         let hidden = 1_536
         let eps: Float = 1e-6
         let batch = 2
