@@ -13,9 +13,18 @@ enum MereRunTheme {
     static let textSecondary = dynamic(light: "5C564A", dark: "C9C1B3")
     static let textMuted = dynamic(light: "8A8273", dark: "918A7C")
     static let accent = dynamic(light: "9C7A2E", dark: "C9A65D")
+    /// A solid bronze wash for selection fills and the user chat bubble — solid (not
+    /// accent-at-opacity) so stacked layers never drift in tone.
+    static let accentSoft = dynamic(light: "F0E7D2", dark: "39331F")
     static let green = dynamic(light: "5E7A45", dark: "8EAA74")
     static let yellow = dynamic(light: "9C7520", dark: "D2A24E")
     static let red = dynamic(light: "C2493B", dark: "D98072")
+
+    /// Transient pointer-hover fill for rows and icon buttons.
+    static let hoverFill = dynamicNSColor(
+        light: NSColor(calibratedWhite: 0.1, alpha: 0.06),
+        dark: NSColor(calibratedWhite: 1.0, alpha: 0.07)
+    )
 
     /// Drop-shadow color tuned per appearance (soft neutral in light, deep black in dark).
     static let shadowColor = dynamicNSColor(
@@ -30,6 +39,10 @@ enum MereRunTheme {
     static let bodyFont = Font.system(.body)
     static let captionFont = Font.system(.caption, weight: .medium)
     static let monoFont = Font.system(.callout, design: .monospaced)
+    // New York serif is reserved for short display moments (empty-state headlines, the welcome
+    // hero) — never controls or body copy. Serif-on-paper is a core identity element.
+    static let displayFont = Font.system(.largeTitle, design: .serif, weight: .medium)
+    static let displaySmallFont = Font.system(.title2, design: .serif, weight: .medium)
 
     /// Consistent spacing scale for padding/stack spacing.
     enum Spacing {
@@ -53,6 +66,15 @@ enum MereRunTheme {
     }
 
     static let cornerRadius: CGFloat = Radius.base
+
+    /// The app's motion vocabulary: exponential ease-outs for state fades, soft springs for
+    /// selection and entrances. Nothing bounces.
+    enum Motion {
+        static let quick = Animation.easeOut(duration: 0.15)
+        static let standard = Animation.easeOut(duration: 0.22)
+        static let spring = Animation.spring(response: 0.32, dampingFraction: 0.86)
+        static let gentleSpring = Animation.spring(response: 0.5, dampingFraction: 0.9)
+    }
 
     /// A SwiftUI color that resolves to `light` or `dark` against the current appearance.
     static func dynamic(light: String, dark: String) -> Color {
@@ -159,5 +181,20 @@ extension View {
                         .strokeBorder(MereRunTheme.border.opacity(0.8), lineWidth: 1)
                 }
         }
+    }
+
+    /// An accent focus treatment for the element that currently owns keyboard input (the
+    /// composer): a warm ring plus a faint glow, fading with `active`.
+    func mereFocusRing(_ active: Bool, cornerRadius: CGFloat) -> some View {
+        overlay {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(MereRunTheme.accent.opacity(active ? 0.55 : 0), lineWidth: 1.5)
+        }
+        .shadow(
+            color: active ? MereRunTheme.accent.opacity(0.16) : .clear,
+            radius: active ? 9 : 0,
+            y: 2
+        )
+        .animation(MereRunTheme.Motion.standard, value: active)
     }
 }

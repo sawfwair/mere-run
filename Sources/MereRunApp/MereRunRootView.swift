@@ -68,9 +68,7 @@ private struct DockedAdvancedEditor: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider().overlay(MereRunTheme.border.opacity(0.5))
-            ScrollView {
-                CommandEditor()
-            }
+            CommandEditor()
         }
     }
 
@@ -240,6 +238,7 @@ private struct CommandEditor: View {
                 actionRow
             }
             .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(MereRunTheme.background)
     }
@@ -695,12 +694,25 @@ private struct PathField: View {
     }
 }
 
+private struct AdaptiveControlRow<Content: View>: View {
+    var spacing: CGFloat = 10
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: spacing, content: content)
+            VStack(alignment: .leading, spacing: spacing, content: content)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct DimensionsGrid: View {
     @EnvironmentObject private var controller: MereRunController
 
     var body: some View {
         EditorSection("Size") {
-            HStack(spacing: 10) {
+            AdaptiveControlRow {
                 NumberStepper(title: "Width", value: $controller.draft.width, range: 64...4096, step: 64)
                 NumberStepper(title: "Height", value: $controller.draft.height, range: 64...4096, step: 64)
             }
@@ -714,7 +726,7 @@ private struct GenerationOptions: View {
     var body: some View {
         EditorSection("Generation") {
             VStack(spacing: 10) {
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...80, step: 1)
                     NumberField(title: "CFG", value: $controller.draft.cfgScale)
                     NumberField(title: "Strength", value: $controller.draft.strength)
@@ -767,10 +779,9 @@ private struct ImageValidationOptions: View {
                     Text("Klein").tag("klein")
                 }
                 .pickerStyle(.segmented)
-                HStack {
+                AdaptiveControlRow {
                     Toggle("Save reference", isOn: $controller.draft.force)
                     Toggle("Compare", isOn: $controller.draft.all)
-                    Spacer()
                 }
             }
         }
@@ -783,12 +794,12 @@ private struct TextGenerationOptions: View {
     var body: some View {
         EditorSection("Parameters") {
             VStack(spacing: 10) {
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     NumberStepper(title: "Max tokens", value: $controller.draft.maxTokens, range: 1...32768, step: 64)
                     NumberField(title: "Temp", value: $controller.draft.temperature)
                     NumberField(title: "Top-p", value: $controller.draft.topP)
                 }
-                HStack {
+                AdaptiveControlRow {
                     if [.textChat].contains(controller.selectedTemplate.id) {
                         Toggle("Thinking", isOn: $controller.draft.all)
                     }
@@ -804,7 +815,6 @@ private struct TextGenerationOptions: View {
                     if controller.selectedTemplate.id == .textAnonymize {
                         Toggle("JSON", isOn: $controller.draft.all)
                     }
-                    Spacer()
                     Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
 
@@ -814,10 +824,9 @@ private struct TextGenerationOptions: View {
                         .textFieldStyle(.plain)
                         .padding(10)
                         .merePanel()
-                    HStack {
+                    AdaptiveControlRow {
                         Toggle("Tool loop", isOn: $controller.draft.toolLoop)
                         Toggle("Allow shell exec", isOn: $controller.draft.allowShellExec)
-                        Spacer()
                     }
                     PathField(
                         path: $controller.draft.sandboxDir,
@@ -867,7 +876,7 @@ private struct SpeechOptions: View {
                         .merePanel()
                 }
 
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     NumberField(title: "Temperature", value: $controller.draft.temperature)
                     Toggle("Stream", isOn: $controller.draft.stream)
                     Toggle("Quiet", isOn: $controller.draft.quiet)
@@ -894,7 +903,7 @@ private struct SpeechTranscribeOptions: View {
                     Text("Translate").tag("translate")
                 }
                 .pickerStyle(.segmented)
-                HStack {
+                AdaptiveControlRow {
                     NumberStepper(title: "Max tokens", value: $controller.draft.maxTokens, range: 1...4096, step: 64)
                     TextField("Language", text: $controller.draft.language)
                         .textFieldStyle(.plain)
@@ -914,7 +923,7 @@ private struct SpeechProfileCreateOptions: View {
 
     var body: some View {
         EditorSection("Profile") {
-            HStack(spacing: 10) {
+            AdaptiveControlRow {
                 TextField("Language", text: $controller.draft.language)
                     .textFieldStyle(.plain)
                     .padding(10)
@@ -930,12 +939,11 @@ private struct VisionTrackingOptions: View {
 
     var body: some View {
         EditorSection("Vision") {
-            HStack {
+            AdaptiveControlRow {
                 if controller.selectedTemplate.id == .visionTrackLive {
                     NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
                 }
                 Toggle("Show boxes", isOn: $controller.draft.force)
-                Spacer()
             }
         }
     }
@@ -947,7 +955,7 @@ private struct MusicOptions: View {
     var body: some View {
         EditorSection("Music") {
             VStack(spacing: 10) {
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
                     NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...80, step: 1)
                 }
@@ -967,7 +975,7 @@ private struct SFXOptions: View {
     var body: some View {
         EditorSection("Sound FX") {
             VStack(spacing: 10) {
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
                     NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...64, step: 1)
                     NumberField(title: "CFG", value: $controller.draft.cfgScale)
@@ -993,7 +1001,7 @@ private struct VideoOptions: View {
                     Text("Unified AV").tag("unified-av")
                 }
                 .pickerStyle(.segmented)
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     NumberStepper(title: "Frames", value: $controller.draft.numFrames, range: 9...257, step: 8)
                     NumberStepper(title: "FPS", value: $controller.draft.fps, range: 1...60, step: 1)
                     NumberField(title: "Image strength", value: $controller.draft.strength)
@@ -1038,7 +1046,7 @@ private struct APIOptions: View {
                     Text("Code").tag("text-code")
                 }
                 .pickerStyle(.segmented)
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     TextField("Host", text: $controller.draft.host)
                         .textFieldStyle(.plain)
                         .padding(10)
@@ -1070,17 +1078,16 @@ private struct AgentStartOptions: View {
     var body: some View {
         EditorSection("Agent") {
             VStack(spacing: 10) {
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     TextField("Host", text: $controller.draft.host)
                         .textFieldStyle(.plain)
                         .padding(10)
                         .merePanel()
                     NumberStepper(title: "Port", value: $controller.draft.port, range: 1...65535, step: 1)
                 }
-                HStack {
+                AdaptiveControlRow {
                     Toggle("Skip server", isOn: $controller.draft.stream)
                     Toggle("Allow unsupported", isOn: $controller.draft.force)
-                    Spacer()
                 }
             }
         }
@@ -1105,7 +1112,7 @@ private struct SetupOptions: View {
                     Text("Premier").tag("premier")
                 }
                 .pickerStyle(.segmented)
-                HStack {
+                AdaptiveControlRow {
                     Toggle("Install", isOn: $controller.draft.force)
                     Toggle("Start", isOn: $controller.draft.stream)
                     Toggle("Quiet", isOn: $controller.draft.quiet)
@@ -1121,12 +1128,12 @@ private struct AgentOptions: View {
     var body: some View {
         EditorSection("Agent") {
             VStack(spacing: 10) {
-                HStack {
+                AdaptiveControlRow {
                     Toggle("Pull recommended", isOn: $controller.draft.force)
                     Toggle("Install Pi", isOn: $controller.draft.all)
                     Toggle("Configure Pi", isOn: $controller.draft.stream)
                 }
-                HStack(spacing: 10) {
+                AdaptiveControlRow {
                     TextField("Host", text: $controller.draft.host)
                         .textFieldStyle(.plain)
                         .padding(10)
@@ -1143,7 +1150,7 @@ private struct ModelPullOptions: View {
 
     var body: some View {
         EditorSection("Download") {
-            HStack {
+            AdaptiveControlRow {
                 Toggle("All", isOn: $controller.draft.all)
                 Toggle("Force", isOn: $controller.draft.force)
                 Toggle("Allow unsupported", isOn: $controller.draft.stream)
@@ -1172,7 +1179,7 @@ private struct ModelInspectionOptions: View {
 
     var body: some View {
         EditorSection("Output") {
-            HStack {
+            AdaptiveControlRow {
                 if controller.selectedTemplate.id == .modelCapabilities {
                     Toggle("All", isOn: $controller.draft.all)
                     Toggle("Recommended", isOn: $controller.draft.force)
@@ -1181,7 +1188,6 @@ private struct ModelInspectionOptions: View {
                     Toggle("JSON", isOn: $controller.draft.all)
                     Toggle("Components", isOn: $controller.draft.force)
                 }
-                Spacer()
             }
         }
     }
