@@ -134,13 +134,14 @@ private enum Gemma4AffineFastKernels {
             )
         return kernel(
             key: key,
-            inputNames: ["queries", "packed", "scales", "biases", "scale"],
+            inputNames: ["queries", "packed", "scales", "biases", "scale", "token_counts"],
             source: """
                 auto lane = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_capacity = packed_shape[2];
                 auto head_count = queries_shape[1];
                 auto batch = n / token_count;
                 auto token = n % token_count;
@@ -150,9 +151,9 @@ private enum Gemma4AffineFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto query_ptr = queries + ((batch * head_count + head_idx) * Dim);
-                auto packed_ptr = packed + (((batch * packed_shape[1] + kv_head) * token_count + token) * PackedWidth);
-                auto scales_ptr = scales + (((batch * scales_shape[1] + kv_head) * token_count + token) * GroupCount);
-                auto biases_ptr = biases + (((batch * biases_shape[1] + kv_head) * token_count + token) * GroupCount);
+                auto packed_ptr = packed + (((batch * packed_shape[1] + kv_head) * token_capacity + token) * PackedWidth);
+                auto scales_ptr = scales + (((batch * scales_shape[1] + kv_head) * token_capacity + token) * GroupCount);
+                auto biases_ptr = biases + (((batch * biases_shape[1] + kv_head) * token_capacity + token) * GroupCount);
 
                 constexpr uint value_mask = (1u << Bits) - 1u;
                 float acc = 0.0f;
@@ -201,13 +202,14 @@ private enum Gemma4AffineFastKernels {
             )
         return kernel(
             key: key,
-            inputNames: ["weights", "packed", "scales", "biases"],
+            inputNames: ["weights", "packed", "scales", "biases", "token_counts"],
             source: """
                 auto lane = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_capacity = packed_shape[2];
                 auto head_count = weights_shape[1];
                 auto batch = n / Dim;
                 auto dim_idx = n % Dim;
@@ -217,9 +219,9 @@ private enum Gemma4AffineFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto weights_ptr = weights + ((batch * head_count + head_idx) * token_count);
-                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_count * PackedWidth);
-                auto scales_ptr = scales + ((batch * scales_shape[1] + kv_head) * token_count * GroupCount);
-                auto biases_ptr = biases + ((batch * biases_shape[1] + kv_head) * token_count * GroupCount);
+                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_capacity * PackedWidth);
+                auto scales_ptr = scales + ((batch * scales_shape[1] + kv_head) * token_capacity * GroupCount);
+                auto biases_ptr = biases + ((batch * biases_shape[1] + kv_head) * token_capacity * GroupCount);
 
                 int group_idx = dim_idx / GroupSize;
                 int bit_offset = dim_idx * Bits;
@@ -272,13 +274,14 @@ private enum Gemma4AffineFastKernels {
         )
         return kernel(
             key: key,
-            inputNames: ["scores", "packed", "scales", "biases", "score_max"],
+            inputNames: ["scores", "packed", "scales", "biases", "score_max", "token_counts"],
             source: """
                 auto lane = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_capacity = packed_shape[2];
                 auto head_count = scores_shape[1];
                 auto batch = n / Dim;
                 auto dim_idx = n % Dim;
@@ -288,9 +291,9 @@ private enum Gemma4AffineFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto scores_ptr = scores + ((batch * head_count + head_idx) * token_count);
-                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_count * PackedWidth);
-                auto scales_ptr = scales + ((batch * scales_shape[1] + kv_head) * token_count * GroupCount);
-                auto biases_ptr = biases + ((batch * biases_shape[1] + kv_head) * token_count * GroupCount);
+                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_capacity * PackedWidth);
+                auto scales_ptr = scales + ((batch * scales_shape[1] + kv_head) * token_capacity * GroupCount);
+                auto biases_ptr = biases + ((batch * biases_shape[1] + kv_head) * token_capacity * GroupCount);
                 float max_score = static_cast<float>(score_max[batch * head_count + head_idx]);
 
                 int group_idx = dim_idx / GroupSize;
@@ -345,14 +348,15 @@ private enum Gemma4AffineFastKernels {
         )
         return kernel(
             key: key,
-            inputNames: ["scores", "packed", "scales", "biases", "score_max"],
+            inputNames: ["scores", "packed", "scales", "biases", "score_max", "token_counts"],
             outputNames: ["weighted", "normalizer"],
             source: """
                 auto lane = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_capacity = packed_shape[2];
                 auto head_count = scores_shape[1];
                 auto batch = n / Dim;
                 auto dim_idx = n % Dim;
@@ -362,9 +366,9 @@ private enum Gemma4AffineFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto scores_ptr = scores + ((batch * head_count + head_idx) * token_count);
-                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_count * PackedWidth);
-                auto scales_ptr = scales + ((batch * scales_shape[1] + kv_head) * token_count * GroupCount);
-                auto biases_ptr = biases + ((batch * biases_shape[1] + kv_head) * token_count * GroupCount);
+                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_capacity * PackedWidth);
+                auto scales_ptr = scales + ((batch * scales_shape[1] + kv_head) * token_capacity * GroupCount);
+                auto biases_ptr = biases + ((batch * biases_shape[1] + kv_head) * token_capacity * GroupCount);
                 float max_score = static_cast<float>(score_max[batch * head_count + head_idx]);
 
                 int group_idx = dim_idx / GroupSize;
@@ -442,6 +446,7 @@ private enum Gemma4AffineFastKernels {
                 "value_scales",
                 "value_biases",
                 "scale",
+                "token_counts",
             ],
             outputNames: ["weighted", "normalizer", "score_max"],
             source: """
@@ -449,7 +454,10 @@ private enum Gemma4AffineFastKernels {
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = key_packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_start = int(token_counts[1]);
+                int key_capacity = key_packed_shape[2];
+                int value_capacity = value_packed_shape[2];
                 auto head_count = queries_shape[1];
                 auto batch = n / Dim;
                 auto dim_idx = n % Dim;
@@ -460,13 +468,13 @@ private enum Gemma4AffineFastKernels {
                 auto kv_head = head_idx / RepeatCount;
                 auto query_ptr = queries + ((batch * head_count + head_idx) * Dim);
 
-                auto key_packed_ptr = key_packed + ((batch * key_packed_shape[1] + kv_head) * token_count * KeyPackedWidth);
-                auto key_scales_ptr = key_scales + ((batch * key_scales_shape[1] + kv_head) * token_count * KeyGroupCount);
-                auto key_biases_ptr = key_biases + ((batch * key_biases_shape[1] + kv_head) * token_count * KeyGroupCount);
+                auto key_packed_ptr = key_packed + (((batch * key_packed_shape[1] + kv_head) * key_capacity + token_start) * KeyPackedWidth);
+                auto key_scales_ptr = key_scales + (((batch * key_scales_shape[1] + kv_head) * key_capacity + token_start) * KeyGroupCount);
+                auto key_biases_ptr = key_biases + (((batch * key_biases_shape[1] + kv_head) * key_capacity + token_start) * KeyGroupCount);
 
-                auto value_packed_ptr = value_packed + ((batch * value_packed_shape[1] + kv_head) * token_count * ValuePackedWidth);
-                auto value_scales_ptr = value_scales + ((batch * value_scales_shape[1] + kv_head) * token_count * ValueGroupCount);
-                auto value_biases_ptr = value_biases + ((batch * value_biases_shape[1] + kv_head) * token_count * ValueGroupCount);
+                auto value_packed_ptr = value_packed + (((batch * value_packed_shape[1] + kv_head) * value_capacity + token_start) * ValuePackedWidth);
+                auto value_scales_ptr = value_scales + (((batch * value_scales_shape[1] + kv_head) * value_capacity + token_start) * ValueGroupCount);
+                auto value_biases_ptr = value_biases + (((batch * value_biases_shape[1] + kv_head) * value_capacity + token_start) * ValueGroupCount);
 
                 int value_group_idx = dim_idx / GroupSize;
                 int value_bit_offset = dim_idx * ValueBits;
@@ -713,20 +721,22 @@ private enum Gemma4PolarFastKernels {
         let key = Gemma4PolarFastKernelKey(kind: .unpack, bits: bits, dim: dim, packedWidth: packedWidth, repeats: 1)
         return kernel(
             key: key,
-            inputNames: ["packed", "norms", "centroids"],
+            inputNames: ["packed", "norms", "centroids", "token_counts"],
             source: """
                 auto dim_idx = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_start = int(token_counts[1]);
+                int token_capacity = packed_shape[2];
                 auto batch = n / token_count;
                 auto token = n % token_count;
                 if (dim_idx >= Dim || head_idx >= packed_shape[1] || batch >= packed_shape[0]) {
                     return;
                 }
 
-                auto packed_ptr = packed + (((batch * packed_shape[1] + head_idx) * token_count + token) * PackedWidth);
+                auto packed_ptr = packed + (((batch * packed_shape[1] + head_idx) * token_capacity + token_start + token) * PackedWidth);
                 int bit_offset = int(dim_idx) * Bits;
                 int word_idx = bit_offset / 32;
                 int offset = bit_offset % 32;
@@ -739,7 +749,7 @@ private enum Gemma4PolarFastKernels {
                 }
                 packed_value &= value_mask;
 
-                float norm = static_cast<float>(norms[((batch * norms_shape[1] + head_idx) * token_count + token)]);
+                float norm = static_cast<float>(norms[((batch * norms_shape[1] + head_idx) * token_capacity + token_start + token)]);
                 out[((batch * packed_shape[1] + head_idx) * token_count + token) * Dim + dim_idx] =
                     static_cast<float>(centroids[packed_value]) * norm;
                 """
@@ -756,13 +766,14 @@ private enum Gemma4PolarFastKernels {
         )
         return kernel(
             key: key,
-            inputNames: ["queries", "packed", "norms", "centroids", "scale"],
+            inputNames: ["queries", "packed", "norms", "centroids", "scale", "token_counts"],
             source: """
                 auto lane = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_capacity = packed_shape[2];
                 auto head_count = queries_shape[1];
                 auto batch = n / token_count;
                 auto token = n % token_count;
@@ -772,8 +783,8 @@ private enum Gemma4PolarFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto query_ptr = queries + ((batch * head_count + head_idx) * Dim);
-                auto packed_ptr = packed + (((batch * packed_shape[1] + kv_head) * token_count + token) * PackedWidth);
-                auto norms_ptr = norms + ((batch * norms_shape[1] + kv_head) * token_count);
+                auto packed_ptr = packed + (((batch * packed_shape[1] + kv_head) * token_capacity + token) * PackedWidth);
+                auto norms_ptr = norms + ((batch * norms_shape[1] + kv_head) * token_capacity);
                 float norm = static_cast<float>(norms_ptr[token]);
 
                 constexpr uint value_mask = (1u << Bits) - 1u;
@@ -812,13 +823,14 @@ private enum Gemma4PolarFastKernels {
         )
         return kernel(
             key: key,
-            inputNames: ["weights", "packed", "norms", "centroids"],
+            inputNames: ["weights", "packed", "norms", "centroids", "token_counts"],
             source: """
                 auto lane = thread_position_in_grid.x;
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_capacity = packed_shape[2];
                 auto head_count = weights_shape[1];
                 auto batch = n / Dim;
                 auto dim_idx = n % Dim;
@@ -828,8 +840,8 @@ private enum Gemma4PolarFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto weights_ptr = weights + ((batch * head_count + head_idx) * token_count);
-                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_count * PackedWidth);
-                auto norms_ptr = norms + ((batch * norms_shape[1] + kv_head) * token_count);
+                auto packed_ptr = packed + ((batch * packed_shape[1] + kv_head) * token_capacity * PackedWidth);
+                auto norms_ptr = norms + ((batch * norms_shape[1] + kv_head) * token_capacity);
 
                 int bit_offset = dim_idx * Bits;
                 int word_idx = bit_offset / 32;
@@ -876,6 +888,7 @@ private enum Gemma4PolarFastKernels {
                 "value_norms",
                 "centroids",
                 "scale",
+                "token_counts",
             ],
             outputNames: ["weighted", "normalizer", "score_max"],
             source: """
@@ -883,7 +896,10 @@ private enum Gemma4PolarFastKernels {
                 auto head_idx = thread_position_in_grid.y;
                 auto n = thread_position_in_grid.z;
 
-                auto token_count = key_packed_shape[2];
+                int token_count = int(token_counts[0]);
+                int token_start = int(token_counts[1]);
+                int key_capacity = key_packed_shape[2];
+                int value_capacity = value_packed_shape[2];
                 auto head_count = queries_shape[1];
                 auto batch = n / Dim;
                 auto dim_idx = n % Dim;
@@ -893,10 +909,10 @@ private enum Gemma4PolarFastKernels {
 
                 auto kv_head = head_idx / RepeatCount;
                 auto query_ptr = queries + ((batch * head_count + head_idx) * Dim);
-                auto key_packed_ptr = key_packed + ((batch * key_packed_shape[1] + kv_head) * token_count * PackedWidth);
-                auto value_packed_ptr = value_packed + ((batch * value_packed_shape[1] + kv_head) * token_count * PackedWidth);
-                auto key_norms_ptr = key_norms + ((batch * key_norms_shape[1] + kv_head) * token_count);
-                auto value_norms_ptr = value_norms + ((batch * value_norms_shape[1] + kv_head) * token_count);
+                auto key_packed_ptr = key_packed + (((batch * key_packed_shape[1] + kv_head) * key_capacity + token_start) * PackedWidth);
+                auto value_packed_ptr = value_packed + (((batch * value_packed_shape[1] + kv_head) * value_capacity + token_start) * PackedWidth);
+                auto key_norms_ptr = key_norms + ((batch * key_norms_shape[1] + kv_head) * key_capacity + token_start);
+                auto value_norms_ptr = value_norms + ((batch * value_norms_shape[1] + kv_head) * value_capacity + token_start);
 
                 constexpr uint value_mask = (1u << Bits) - 1u;
                 int value_bit_offset = dim_idx * Bits;
@@ -983,16 +999,27 @@ private enum Gemma4PolarFastKernels {
     }
 }
 
-private func concatenatedOptional(_ lhs: MLXArray?, _ rhs: MLXArray?, axis: Int) -> MLXArray? {
-    switch (lhs, rhs) {
-    case (.some(let lhs), .some(let rhs)):
-        return concatenated([lhs, rhs], axis: axis)
-    case (.some(let lhs), .none):
-        return lhs
-    case (.none, .some(let rhs)):
-        return rhs
-    case (.none, .none):
-        return nil
+private enum Gemma4KVTokenStorage {
+    static let allocationStep = 256
+
+    // Tensor states returned by `appending` share these capacity-padded buffers with their
+    // ancestors: new rows are written in place at indices >= the writer's previous tokenCount,
+    // so a snapshot must only ever read rows below its own tokenCount. Growth reallocates for
+    // the writer, leaving older snapshots on the previous buffer.
+    static func appended(_ array: MLXArray, rows: MLXArray, validCount: Int) -> MLXArray {
+        let newCount = validCount + rows.dim(2)
+        var target = array
+        if newCount > array.dim(2) {
+            let steps = max(1, (newCount - validCount + allocationStep - 1) / allocationStep)
+            let valid = validCount < array.dim(2) ? array[0..., 0..., 0..<validCount, 0...] : array
+            let padding = MLXArray.zeros(
+                [array.dim(0), array.dim(1), steps * allocationStep, array.dim(3)],
+                dtype: array.dtype
+            )
+            target = concatenated([valid, padding], axis: 2)
+        }
+        target[0..., 0..., validCount..<newCount, 0...] = rows
+        return target
     }
 }
 
@@ -1003,8 +1030,9 @@ final class Gemma4QuantizedTensorState {
     let groupSize: Int
     let bits: Int
     let dtype: DType
+    let tokenCount: Int
 
-    var tokenCount: Int {
+    var tokenCapacity: Int {
         weight.dim(2)
     }
 
@@ -1029,39 +1057,46 @@ final class Gemma4QuantizedTensorState {
         self.groupSize = groupSize
         self.bits = bits
         self.dtype = source.dtype
+        self.tokenCount = source.dim(2)
     }
 
-    init(weight: MLXArray, scales: MLXArray, biases: MLXArray?, groupSize: Int, bits: Int, dtype: DType) {
+    init(
+        weight: MLXArray,
+        scales: MLXArray,
+        biases: MLXArray?,
+        groupSize: Int,
+        bits: Int,
+        dtype: DType,
+        tokenCount: Int
+    ) {
         self.weight = weight
         self.scales = scales
         self.biases = biases
         self.groupSize = groupSize
         self.bits = bits
         self.dtype = dtype
+        self.tokenCount = tokenCount
     }
 
     func appending(_ source: MLXArray) -> Gemma4QuantizedTensorState {
         let next = Gemma4QuantizedTensorState(source: source, groupSize: groupSize, bits: bits)
+        var appendedBiases: MLXArray?
+        if let biases, let nextBiases = next.biases {
+            appendedBiases = Gemma4KVTokenStorage.appended(biases, rows: nextBiases, validCount: tokenCount)
+        }
         return Gemma4QuantizedTensorState(
-            weight: concatenated([weight, next.weight], axis: 2),
-            scales: concatenated([scales, next.scales], axis: 2),
-            biases: concatenatedOptional(biases, next.biases, axis: 2),
+            weight: Gemma4KVTokenStorage.appended(weight, rows: next.weight, validCount: tokenCount),
+            scales: Gemma4KVTokenStorage.appended(scales, rows: next.scales, validCount: tokenCount),
+            biases: appendedBiases,
             groupSize: groupSize,
             bits: bits,
-            dtype: dtype
+            dtype: dtype,
+            tokenCount: tokenCount + next.tokenCount
         )
     }
 
     func dequantized() -> MLXArray {
-        MLX.dequantized(
-            weight,
-            scales: scales,
-            biases: biases,
-            groupSize: groupSize,
-            bits: bits,
-            mode: .affine,
-            dtype: dtype
-        )
+        dequantized(tokenRange: 0..<tokenCount)
     }
 
     func dequantized(tokenRange: Range<Int>) -> MLXArray {
@@ -1090,8 +1125,9 @@ final class Gemma4PolarTensorState {
     let rotationTransposed: MLXArray
     let centroids: MLXArray
     let innerBoundaries: MLXArray
+    let tokenCount: Int
 
-    var tokenCount: Int {
+    var tokenCapacity: Int {
         packed.dim(2)
     }
 
@@ -1133,6 +1169,7 @@ final class Gemma4PolarTensorState {
         self.rotationTransposed = rotationTransposed
         self.centroids = centroids
         self.innerBoundaries = innerBoundaries
+        self.tokenCount = source.dim(2)
     }
 
     init(
@@ -1144,7 +1181,8 @@ final class Gemma4PolarTensorState {
         rotation: MLXArray,
         rotationTransposed: MLXArray,
         centroids: MLXArray,
-        innerBoundaries: MLXArray
+        innerBoundaries: MLXArray,
+        tokenCount: Int
     ) {
         self.packed = packed
         self.norms = norms
@@ -1155,47 +1193,43 @@ final class Gemma4PolarTensorState {
         self.rotationTransposed = rotationTransposed
         self.centroids = centroids
         self.innerBoundaries = innerBoundaries
+        self.tokenCount = tokenCount
     }
 
     func appending(_ source: MLXArray) -> Gemma4PolarTensorState {
         let next = Gemma4PolarTensorState(source: source, bits: bits)
         return Gemma4PolarTensorState(
-            packed: concatenated([packed, next.packed], axis: 2),
-            norms: concatenated([norms, next.norms], axis: 2),
+            packed: Gemma4KVTokenStorage.appended(packed, rows: next.packed, validCount: tokenCount),
+            norms: Gemma4KVTokenStorage.appended(norms, rows: next.norms, validCount: tokenCount),
             bits: bits,
             dtype: dtype,
             headDim: headDim,
             rotation: rotation,
             rotationTransposed: rotationTransposed,
             centroids: centroids,
-            innerBoundaries: innerBoundaries
+            innerBoundaries: innerBoundaries,
+            tokenCount: tokenCount + next.tokenCount
         )
     }
 
     func dequantized() -> MLXArray {
-        dequantized(packed: packed, norms: norms)
+        dequantized(tokenRange: 0..<tokenCount)
     }
 
     func dequantized(tokenRange: Range<Int>) -> MLXArray {
-        dequantized(
-            packed: packed[0..., 0..., tokenRange, 0...],
-            norms: norms[0..., 0..., tokenRange, 0...]
-        )
-    }
-
-    private func dequantized(packed: MLXArray, norms: MLXArray) -> MLXArray {
         let unpackKernel = Gemma4PolarFastKernels.unpackKernel(bits: bits, dim: headDim, packedWidth: packedWidth)
         let roundedDim = ((headDim + 31) / 32) * 32
+        let tokenCounts = MLXArray([UInt32(tokenRange.count), UInt32(tokenRange.lowerBound)])
         let rotated = unpackKernel(
-            [packed, norms, centroids],
+            [packed, norms, centroids, tokenCounts],
             template: [
                 ("Bits", bits),
                 ("Dim", headDim),
                 ("PackedWidth", packedWidth),
             ],
-            grid: (roundedDim, packed.dim(1), packed.dim(0) * packed.dim(2)),
+            grid: (roundedDim, packed.dim(1), packed.dim(0) * tokenRange.count),
             threadGroup: (32, 1, 1),
-            outputShapes: [[packed.dim(0), packed.dim(1), packed.dim(2), headDim]],
+            outputShapes: [[packed.dim(0), packed.dim(1), tokenRange.count, headDim]],
             outputDTypes: [.float32]
         )[0]
         return MLX.matmul(rotated, rotation).asType(dtype)
@@ -1487,6 +1521,7 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
 
         let queries32 = queries.asType(.float32)
         let rotatedQueries = MLX.matmul(queries32, keyState.rotationTransposed)
+        let tokenCounts = MLXArray([UInt32(totalTokens)])
         let scoreKernel = Gemma4PolarFastKernels.scoreKernel(
             bits: keyState.bits,
             dim: queries.dim(3),
@@ -1494,7 +1529,7 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
             repeats: repeats
         )
         let scores = scoreKernel(
-            [rotatedQueries, keyState.packed, keyState.norms, keyState.centroids, scale],
+            [rotatedQueries, keyState.packed, keyState.norms, keyState.centroids, scale, tokenCounts],
             template: [
                 ("Bits", keyState.bits),
                 ("Dim", queries.dim(3)),
@@ -1517,7 +1552,7 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
             repeats: repeats
         )
         let weighted = weightedValueKernel(
-            [weights, valueState.packed, valueState.norms, valueState.centroids],
+            [weights, valueState.packed, valueState.norms, valueState.centroids, tokenCounts],
             template: [
                 ("Bits", valueState.bits),
                 ("Dim", queries.dim(3)),
@@ -1591,10 +1626,7 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
         runningNormalizer: inout MLXArray?,
         runningMax: inout MLXArray?
     ) {
-        let packedKeys = keyState.packed[0..., 0..., tokenRange, 0...]
-        let keyNorms = keyState.norms[0..., 0..., tokenRange, 0...]
-        let packedValues = valueState.packed[0..., 0..., tokenRange, 0...]
-        let valueNorms = valueState.norms[0..., 0..., tokenRange, 0...]
+        let tokenCounts = MLXArray([UInt32(tokenRange.count), UInt32(tokenRange.lowerBound)])
         let fusedChunkDecodeKernel = Gemma4PolarFastKernels.fusedChunkDecodeKernel(
             bits: keyState.bits,
             dim: queries.dim(3),
@@ -1603,7 +1635,7 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
         )
 
         let weightedAndStats = fusedChunkDecodeKernel(
-            [queries, packedKeys, keyNorms, packedValues, valueNorms, keyState.centroids, scale],
+            [queries, keyState.packed, keyState.norms, valueState.packed, valueState.norms, keyState.centroids, scale, tokenCounts],
             template: [
                 ("Bits", keyState.bits),
                 ("Dim", queries.dim(3)),
@@ -2096,15 +2128,9 @@ final class Gemma4QuantizedKVCache: Gemma4AttentionCache {
             return false
         }
 
-        let packedKeys = keyState.weight[0..., 0..., tokenRange, 0...]
-        let keyScales = keyState.scales[0..., 0..., tokenRange, 0...]
-        let keyBiasChunk = keyBiases[0..., 0..., tokenRange, 0...]
-        let packedValues = valueState.weight[0..., 0..., tokenRange, 0...]
-        let valueScales = valueState.scales[0..., 0..., tokenRange, 0...]
-        let valueBiasChunk = valueBiases[0..., 0..., tokenRange, 0...]
-
+        let tokenCounts = MLXArray([UInt32(tokenRange.count), UInt32(tokenRange.lowerBound)])
         let weightedAndStats = fusedChunkDecodeKernel(
-            [queries, packedKeys, keyScales, keyBiasChunk, packedValues, valueScales, valueBiasChunk, scale],
+            [queries, keyState.weight, keyState.scales, keyBiases, valueState.weight, valueState.scales, valueBiases, scale, tokenCounts],
             template: fusedChunkDecodeTemplateArguments(
                 keyState: keyState,
                 valueState: valueState,

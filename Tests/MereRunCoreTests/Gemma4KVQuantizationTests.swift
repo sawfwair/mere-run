@@ -431,6 +431,168 @@ final class Gemma4KVQuantizationTests: MereRunCoreTestCase {
         XCTAssertLessThan(mse.item(Float.self), 0.02)
     }
 
+    func testQuantizedStateTokenByTokenAppendMatchesOneShot() throws {
+        MLXRandom.seed(41)
+        let tokens = 520
+        let source = MLXRandom.uniform(0.0 ..< 1.0, [1, 2, tokens, 64]).asType(.bfloat16)
+
+        var state = Gemma4QuantizedTensorState(source: source[0..., 0..., 0..<1, 0...], groupSize: 64, bits: 4)
+        for token in 1..<tokens {
+            state = state.appending(source[0..., 0..., token..<(token + 1), 0...])
+        }
+        let oneShot = Gemma4QuantizedTensorState(source: source, groupSize: 64, bits: 4)
+
+        XCTAssertEqual(state.tokenCount, tokens)
+        XCTAssertGreaterThan(state.tokenCapacity, tokens)
+        let incremental = state.dequantized()
+        let reference = oneShot.dequantized()
+        XCTAssertEqual(incremental.shape, [1, 2, tokens, 64])
+        XCTAssertTrue(MLX.arrayEqual(incremental, reference).item(Bool.self))
+    }
+
+    func testPolarStateTokenByTokenAppendMatchesOneShot() throws {
+        try skipUnlessGPUForPolarKV()
+
+        MLXRandom.seed(42)
+        let tokens = 520
+        let source = MLXRandom.normal([1, 2, tokens, 64]).asType(.bfloat16)
+
+        var state = Gemma4PolarTensorState(source: source[0..., 0..., 0..<1, 0...], bits: 2)
+        for token in 1..<tokens {
+            state = state.appending(source[0..., 0..., token..<(token + 1), 0...])
+        }
+        let oneShot = Gemma4PolarTensorState(source: source, bits: 2)
+
+        XCTAssertEqual(state.tokenCount, tokens)
+        XCTAssertGreaterThan(state.tokenCapacity, tokens)
+        let incremental = state.dequantized()
+        let reference = oneShot.dequantized()
+        XCTAssertEqual(incremental.shape, [1, 2, tokens, 64])
+        XCTAssertTrue(MLX.arrayEqual(incremental, reference).item(Bool.self))
+    }
+
+    func testQuantizedStateSnapshotUnaffectedByLaterAppends() throws {
+        MLXRandom.seed(43)
+        let source = MLXRandom.uniform(0.0 ..< 1.0, [1, 1, 8, 32]).asType(.bfloat16)
+
+        var snapshot = Gemma4QuantizedTensorState(source: source[0..., 0..., 0..<1, 0...], groupSize: 32, bits: 4)
+        for token in 1..<4 {
+            snapshot = snapshot.appending(source[0..., 0..., token..<(token + 1), 0...])
+        }
+        let before = snapshot.dequantized()
+        MLX.eval(before)
+
+        var parent = snapshot
+        for token in 4..<8 {
+            parent = parent.appending(source[0..., 0..., token..<(token + 1), 0...])
+        }
+        MLX.eval(parent.dequantized())
+
+        let after = snapshot.dequantized()
+        XCTAssertEqual(snapshot.tokenCount, 4)
+        XCTAssertEqual(parent.tokenCount, 8)
+        XCTAssertEqual(after.shape, [1, 1, 4, 32])
+        XCTAssertTrue(MLX.arrayEqual(before, after).item(Bool.self))
+        XCTAssertTrue(MLX.arrayEqual(parent.dequantized(tokenRange: 0..<4), before).item(Bool.self))
+    }
+
+    func testPolarStateSnapshotUnaffectedByLaterAppends() throws {
+        try skipUnlessGPUForPolarKV()
+
+        MLXRandom.seed(44)
+        let source = MLXRandom.normal([1, 1, 8, 32]).asType(.bfloat16)
+
+        var snapshot = Gemma4PolarTensorState(source: source[0..., 0..., 0..<1, 0...], bits: 2)
+        for token in 1..<4 {
+            snapshot = snapshot.appending(source[0..., 0..., token..<(token + 1), 0...])
+        }
+        let before = snapshot.dequantized()
+        MLX.eval(before)
+
+        var parent = snapshot
+        for token in 4..<8 {
+            parent = parent.appending(source[0..., 0..., token..<(token + 1), 0...])
+        }
+        MLX.eval(parent.dequantized())
+
+        let after = snapshot.dequantized()
+        XCTAssertEqual(snapshot.tokenCount, 4)
+        XCTAssertEqual(parent.tokenCount, 8)
+        XCTAssertEqual(after.shape, [1, 1, 4, 32])
+        XCTAssertTrue(MLX.arrayEqual(before, after).item(Bool.self))
+        XCTAssertTrue(MLX.arrayEqual(parent.dequantized(tokenRange: 0..<4), before).item(Bool.self))
+    }
+
+    func testSpecializedAttentionMatchesDenseAfterIncrementalAppends() throws {
+        MLXRandom.seed(45)
+        let config = try Gemma4KVCacheQuantization(bits: 4, scheme: .turboquant, groupSize: 64, quantizedStart: 0).validated()
+        let cache = Gemma4QuantizedKVCache(configuration: config, maxSize: nil)
+
+        let tokens = 56
+        let keys = MLXRandom.uniform(0.0 ..< 1.0, [1, 2, tokens, 64]).asType(.bfloat16)
+        let values = MLXRandom.uniform(0.0 ..< 1.0, [1, 2, tokens, 64]).asType(.bfloat16)
+        cache.append(keys: keys[0..., 0..., 0..<48, 0...], values: values[0..., 0..., 0..<48, 0...])
+        for token in 48..<tokens {
+            cache.append(
+                keys: keys[0..., 0..., token..<(token + 1), 0...],
+                values: values[0..., 0..., token..<(token + 1), 0...]
+            )
+        }
+
+        let queries = MLXRandom.uniform(0.0 ..< 1.0, [1, 4, 1, 64]).asType(.bfloat16)
+        let scale: Float = 1.0 / sqrt(64.0)
+
+        let specialized = try XCTUnwrap(cache.specializedAttention(queries: queries, repeats: 2, scale: scale))
+        let denseKeys = MLX.repeated(keys.asType(.float32), count: 2, axis: 1)
+        let denseValues = MLX.repeated(values.asType(.float32), count: 2, axis: 1)
+        var denseScores = MLX.matmul(queries.asType(.float32), denseKeys.transposed(0, 1, 3, 2)) * MLXArray(scale)
+        denseScores = softmax(denseScores, axis: -1)
+        let dense = MLX.matmul(denseScores, denseValues).asType(specialized.dtype)
+
+        XCTAssertEqual(cache.offset, tokens)
+        XCTAssertEqual(specialized.shape, [1, 4, 1, 64])
+        let delta = specialized.asType(.float32) - dense.asType(.float32)
+        let mse = MLX.mean(delta * delta)
+        XCTAssertLessThan(mse.item(Float.self), 0.02)
+    }
+
+    func testPolarFusedSpecializedAttentionMatchesDenseAfterIncrementalAppends() throws {
+        try skipUnlessGPUForPolarKV()
+
+        MLXRandom.seed(46)
+        let config = try Gemma4KVCacheQuantization(bits: 2, scheme: .polar, groupSize: 64, quantizedStart: 0).validated()
+        let cache = Gemma4PolarKVCache(configuration: config, maxSize: nil)
+
+        let tokens = 56
+        let keys = MLXRandom.normal([1, 2, tokens, 64]).asType(.bfloat16)
+        let values = MLXRandom.normal([1, 2, tokens, 64]).asType(.bfloat16)
+        cache.append(keys: keys[0..., 0..., 0..<48, 0...], values: values[0..., 0..., 0..<48, 0...])
+        for token in 48..<tokens {
+            cache.append(
+                keys: keys[0..., 0..., token..<(token + 1), 0...],
+                values: values[0..., 0..., token..<(token + 1), 0...]
+            )
+        }
+
+        let queries = MLXRandom.normal([1, 4, 1, 64]).asType(.bfloat16)
+        let scale: Float = 1.0 / sqrt(64.0)
+
+        let fused = try XCTUnwrap(cache.fusedSpecializedAttention(queries: queries, repeats: 2, scale: scale))
+        let state = try XCTUnwrap(cache.currentState())
+        XCTAssertEqual(state.0.shape, [1, 2, tokens, 64])
+        let denseKeys = MLX.repeated(state.0.asType(.float32), count: 2, axis: 1)
+        let denseValues = MLX.repeated(state.1.asType(.float32), count: 2, axis: 1)
+        var denseScores = MLX.matmul(queries.asType(.float32), denseKeys.transposed(0, 1, 3, 2)) * MLXArray(scale)
+        denseScores = softmax(denseScores, axis: -1)
+        let dense = MLX.matmul(denseScores, denseValues).asType(fused.dtype)
+
+        XCTAssertEqual(cache.offset, tokens)
+        XCTAssertEqual(fused.shape, [1, 4, 1, 64])
+        let delta = fused.asType(.float32) - dense.asType(.float32)
+        let mse = MLX.mean(delta * delta)
+        XCTAssertLessThan(mse.item(Float.self), 0.02)
+    }
+
     private func skipUnlessGPUForPolarKV() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("PolarKV uses MLXFast Metal pack/unpack kernels; set MERERUN_TEST_MLX_DEVICE=gpu to run it.")

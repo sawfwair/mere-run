@@ -91,6 +91,67 @@ Override the Gemma 4 12B assistant draft block size. Defaults to the assistant
 config value, currently `4`, and is clamped to the native runtime's supported
 range.
 
+### `MERERUN_GEMMA4_MTP_SAMPLED`
+
+Opt-in (`1`, `true`, or `on`) Gemma 4 12B MTP for sampled (temperature > 0)
+requests. The verify loop samples the target model at every drafted position
+and emits either the matching draft token or the target's own sample, so
+sampled outputs remain true target-model samples; drafts run greedily to
+maximize the match rate. Off by default: with the current assistant the
+acceptance economics measured below the pipelined sampled decode path at long
+context.
+
+### `MERERUN_Q35_FUSED_SWITCH_GLU`
+
+Qwen-family MoE blocks stack the gate and up expert weights so each
+`SwitchGLU` issues one gather matmul instead of two. Enabled by default; set
+to `0`, `false`, or `off` to fall back to separate gate/up gathers. The stack
+keeps a second resident copy of the gate/up expert weights.
+
+### `MERERUN_GEMMA4_FUSED_PROJ`
+
+Gemma4 concatenates the q/k/v and gate/up quantized projection weights after
+load so decode issues one fused matmul instead of two or three per group
+(measured +17% decode throughput on the 12B MTP long-context path). Enabled by
+default; set to `0`, `false`, or `off` to fall back to separate projections.
+Fusion trades roughly 4 GB of additional resident weight copies for the fused
+matmuls on the 12B and is skipped automatically while a text LoRA adapter
+wraps the affected projection modules.
+
+### `MERERUN_GEMMA4_FUSED_DECODE_KERNELS`
+
+Opt-in (`1`, `true`, or `on`) custom fused Metal kernels for the elementwise
+chains between matmuls on Gemma4 single-token decode (QKV head split plus
+q/k/v norms, post-attention norm plus residual plus pre-FFN norm, gelu·up over
+the fused gate/up buffer, and post-FFN norm plus residual plus layer scalar).
+Off by default: throughput is neutral on an idle GPU and the kernels' float32
+single-rounding numerics reduce Gemma MTP speculative acceptance at long
+context. They cut per-token kernel dispatches roughly in half, which helps
+when the GPU is shared with other heavy work (for example concurrent
+training) — enable explicitly for that scenario.
+
+### `MERERUN_GEMMA4_COMPILED_SEGMENTS`
+
+Opt-in (`1`, `true`, or `on`) MLX-compiled per-layer decode segments. Off by
+default: with mlx-swift 0.31.4 every compiled call serializes on the global
+eval lock, which measured slower than the interpreted path at decode call
+rates. Kept for evaluation against future mlx-swift releases.
+
+### `MERERUN_SAMPLER_TOP_P_PREFILTER`
+
+GPU-side top-p sampling prefilters to this many top-logit candidates (via
+argPartition) before running the softmax/sort/cumsum chain, replacing a
+full-vocabulary sort per sampled token. Defaults to `256`; set `0` for the
+exact full-vocabulary sort. The truncation only affects requests whose top-p
+nucleus would span more than this many tokens, which does not occur at
+practical temperatures.
+
+### `MERERUN_GEMMA4_DECODE_TRACE`
+
+Set to `1` to log a per-decode summary to stderr splitting each token's wall
+time into graph build, sampling, and eval scheduling, plus the readback wait.
+Useful for locating whether decode is CPU-, schedule-, or GPU-bound.
+
 ### `MERERUN_Q35_MTP_SPECULATION`
 
 Controls the Qwen-family MTP path used by `text-chat-q36-nano`. Set this to

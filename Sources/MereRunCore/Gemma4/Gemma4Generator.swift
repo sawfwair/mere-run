@@ -4,6 +4,16 @@ import MLX
 public typealias Gemma4PrefixKVCacheStats = PrefixKVCacheStats
 public typealias Gemma4ContinuousBatchingStats = RuntimeDecodeBatchingStats
 
+/// Set MERERUN_GEMMA4_DECODE_TRACE=1 to log the per-token split between graph
+/// construction (CPU) and evaluation waits (GPU) to stderr after each decode.
+enum Gemma4DecodeTrace {
+    static let enabled = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_DECODE_TRACE"] == "1"
+
+    static func emit(_ message: String) {
+        FileHandle.standardError.write(Data((message + "\n").utf8))
+    }
+}
+
 private struct Gemma4PrefixKVCacheKey: Hashable {
     let modelPath: String
     let quantization: Gemma4KVCacheQuantization
@@ -726,12 +736,12 @@ public actor Gemma4Generator: ChatGenerator {
         jsonConstrained: Bool = false,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
-        if canUsePipelinedGreedyDecode(
+        if canUsePipelinedDecode(
             generationConfig,
             mtpModel: mtpModel,
             jsonConstrained: jsonConstrained
         ) {
-            return try await decodeTokensGreedyPipelined(
+            return try await decodeTokensPipelined(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 initialLogits: initialLogits,
@@ -757,6 +767,9 @@ public actor Gemma4Generator: ChatGenerator {
         var pendingSampledToken: Int?
         var jsonScanner = JSONPrefixScanner()
         let decodeStart = Date()
+        let traceEnabled = Gemma4DecodeTrace.enabled
+        var traceSampleSeconds = 0.0
+        var traceForwardSeconds = 0.0
 
         while generated.count < tokenBudget {
             try Task.checkCancellation()
@@ -765,11 +778,15 @@ public actor Gemma4Generator: ChatGenerator {
                 next = pending
                 pendingSampledToken = nil
             } else {
+                let sampleStart = CFAbsoluteTimeGetCurrent()
                 next = sampleToken(
                     logits: logits[0, -1, 0...],
                     config: generationConfig,
                     previousTokens: repetitionHistory
                 )
+                if traceEnabled {
+                    traceSampleSeconds += CFAbsoluteTimeGetCurrent() - sampleStart
+                }
             }
             if jsonConstrained {
                 guard let constrained = jsonConstrainedToken(
@@ -810,13 +827,19 @@ public actor Gemma4Generator: ChatGenerator {
                 break
             }
 
-            if let mtpModel, let hidden = previousHidden, !currentSharedKVStates.isEmpty {
+            if let mtpModel, let hidden = previousHidden, !jsonConstrained, !currentSharedKVStates.isEmpty {
                 let baseCaches = layerCaches
                 let blockSize = min(
                     mtpStats.blockSize,
                     max(2, tokenBudget - generated.count + 1)
                 )
                 let positionOffset = prefillTokenCount + generated.count - 1
+                // For sampled requests the drafts are generated greedily: the
+                // verify loop samples the target either way, so correctness is
+                // unaffected, and matching the target's argmax maximizes the
+                // acceptance rate (sampled drafts collapse it to sum(p*q)).
+                var draftConfig = generationConfig
+                draftConfig.temperature = 0
                 let draft = try mtpModel.draftBlock(
                     lastToken: next,
                     hidden: hidden,
@@ -824,7 +847,7 @@ public actor Gemma4Generator: ChatGenerator {
                     positionOffset: positionOffset,
                     blockSize: blockSize,
                     baseModel: model,
-                    generationConfig: generationConfig,
+                    generationConfig: draftConfig,
                     repetitionHistory: repetitionHistory
                 )
                 if !draft.tokens.isEmpty {
@@ -837,24 +860,49 @@ public actor Gemma4Generator: ChatGenerator {
                         inputIds: candidateInput,
                         cache: candidateCaches
                     )
-                    MLX.eval(candidate.logits, candidate.hidden)
 
-                    var accepted = 0
-                    var verificationHistory = repetitionHistory
-                    var replacement: Int?
-                    for (index, draftToken) in draft.tokens.enumerated() {
-                        let targetToken = sampleToken(
+                    // Sample every verify position — the draft checks plus the
+                    // bonus token after a full accept — in one graph with one
+                    // readback, instead of a blocking sample per position.
+                    // Histories are prospective: position i verifies against
+                    // history + draft[0..<i], which matches the serial loop for
+                    // every position at or before the first mismatch (later
+                    // samples go unused).
+                    let verifyBanMask = tokenBanMask(
+                        vocabularySize: candidate.logits.dim(-1),
+                        dtype: candidate.logits.dtype,
+                        tokens: generationConfig.bannedTokens
+                    )
+                    var verifySampleArrays: [MLXArray] = []
+                    verifySampleArrays.reserveCapacity(draft.tokens.count + 1)
+                    var prospectiveHistory = repetitionHistory
+                    for index in 0...draft.tokens.count {
+                        verifySampleArrays.append(sampledTokenArray(
                             logits: candidate.logits[0, index, 0...],
                             config: generationConfig,
-                            previousTokens: verificationHistory
-                        )
-                        guard targetToken == draftToken else {
-                            replacement = targetToken
+                            previousTokenIndices: repetitionHistoryArray(
+                                promptTokens: prospectiveHistory,
+                                config: generationConfig
+                            ),
+                            banMask: verifyBanMask
+                        ))
+                        if index < draft.tokens.count {
+                            prospectiveHistory.append(draft.tokens[index])
+                        }
+                    }
+                    let stackedVerify = MLX.stacked(verifySampleArrays)
+                    MLX.eval(stackedVerify, candidate.hidden)
+                    let verifySamples = stackedVerify.asArray(Int32.self).map(Int.init)
+
+                    var accepted = 0
+                    var replacement: Int?
+                    for (index, draftToken) in draft.tokens.enumerated() {
+                        guard verifySamples[index] == draftToken else {
+                            replacement = verifySamples[index]
                             mtpStats.rejectedTokens += 1
                             break
                         }
                         accepted += 1
-                        verificationHistory.append(draftToken)
                     }
 
                     if accepted == draft.tokens.count {
@@ -881,13 +929,11 @@ public actor Gemma4Generator: ChatGenerator {
                         if hitEOS || generated.count >= tokenBudget {
                             break
                         }
-                        pendingSampledToken = sampleToken(
-                            logits: logits[0, -1, 0...],
-                            config: generationConfig,
-                            previousTokens: repetitionHistory
-                        )
+                        // The bonus token was already sampled in the batched
+                        // verify pass (last position, full-draft history).
+                        pendingSampledToken = verifySamples[draft.tokens.count]
                         if let previousHidden {
-                            MLX.eval(logits, previousHidden)
+                            MLX.eval(previousHidden)
                         }
                         continue
                     }
@@ -947,6 +993,7 @@ public actor Gemma4Generator: ChatGenerator {
                 }
             }
 
+            let forwardStart = CFAbsoluteTimeGetCurrent()
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
             if mtpModel != nil {
                 let output = model.forwardForSpeculation(inputIds: nextInput, cache: layerCaches)
@@ -958,6 +1005,21 @@ public actor Gemma4Generator: ChatGenerator {
                 logits = model.forward(inputIds: nextInput, cache: layerCaches)
                 MLX.eval(logits)
             }
+            if traceEnabled {
+                traceForwardSeconds += CFAbsoluteTimeGetCurrent() - forwardStart
+            }
+        }
+
+        if traceEnabled, !generated.isEmpty {
+            let count = Double(generated.count)
+            Gemma4DecodeTrace.emit(String(
+                format: "[gemma4-decode-trace] mode=serial mtp=%d tokens=%d sample=%.2fms/tok forward=%.2fms/tok wall=%.2fms/tok",
+                mtpModel == nil ? 0 : 1,
+                generated.count,
+                traceSampleSeconds / count * 1000,
+                traceForwardSeconds / count * 1000,
+                Date().timeIntervalSince(decodeStart) / count * 1000
+            ))
         }
 
         return Gemma4BatchedDecodeResult(
@@ -968,15 +1030,19 @@ public actor Gemma4Generator: ChatGenerator {
         )
     }
 
-    private func canUsePipelinedGreedyDecode(
+    private func canUsePipelinedDecode(
         _ config: GenerationConfig,
         mtpModel: Gemma4AssistantDraftModel?,
         jsonConstrained: Bool
     ) -> Bool {
-        mtpModel == nil && !jsonConstrained && config.temperature == 0
+        // MTP verification and JSON-constrained decoding both need each token on
+        // the CPU before the next forward; everything else can pipeline, sampling
+        // included — the token stays on the GPU and only the previous step's
+        // readback blocks.
+        mtpModel == nil && !jsonConstrained
     }
 
-    private func decodeTokensGreedyPipelined(
+    private func decodeTokensPipelined(
         model: any Gemma4CausalModel,
         tokenizerAndTemplate: Gemma4TokenizerAndTemplate,
         initialLogits: MLXArray,
@@ -995,39 +1061,65 @@ public actor Gemma4Generator: ChatGenerator {
             promptTokens: promptTokens,
             config: generationConfig
         )
+        let banMask = tokenBanMask(
+            vocabularySize: initialLogits.dim(-1),
+            dtype: initialLogits.dtype,
+            tokens: generationConfig.bannedTokens
+        )
         var firstTokenSeconds: Double?
-        var pendingToken = greedySampleTokenArray(
+        var pendingToken = sampledTokenArray(
             logits: initialLogits[0, -1, 0...],
             config: generationConfig,
-            previousTokenIndices: repetitionHistory
+            previousTokenIndices: repetitionHistory,
+            banMask: banMask
         )
         MLX.asyncEval(pendingToken)
         let decodeStart = Date()
+        let traceEnabled = Gemma4DecodeTrace.enabled
+        var traceBuildSeconds = 0.0
+        var traceWaitSeconds = 0.0
+        var traceForwardSeconds = 0.0
+        var traceSampleSeconds = 0.0
+        var traceScheduleSeconds = 0.0
 
         while generated.count < tokenBudget {
             try Task.checkCancellation()
 
+            let buildStart = CFAbsoluteTimeGetCurrent()
+            var forwardEnd = buildStart
+            var sampleEnd = buildStart
             let scheduled: (token: MLXArray, history: MLXArray?)?
             if generated.count + 1 < tokenBudget {
                 let nextInput = pendingToken.asType(.int32).reshaped(1, 1)
                 let nextLogits = model.forward(inputIds: nextInput, cache: layerCaches)
+                forwardEnd = CFAbsoluteTimeGetCurrent()
                 let nextHistory = appendingGreedyRepetitionHistory(
                     repetitionHistory,
                     token: pendingToken,
                     config: generationConfig
                 )
-                let nextToken = greedySampleTokenArray(
+                let nextToken = sampledTokenArray(
                     logits: nextLogits[0, -1, 0...],
                     config: generationConfig,
-                    previousTokenIndices: nextHistory
+                    previousTokenIndices: nextHistory,
+                    banMask: banMask
                 )
+                sampleEnd = CFAbsoluteTimeGetCurrent()
                 MLX.asyncEval(nextToken, nextLogits)
                 scheduled = (nextToken, nextHistory)
             } else {
                 scheduled = nil
             }
+            let buildEnd = CFAbsoluteTimeGetCurrent()
 
             let next = pendingToken.item(Int.self)
+            if traceEnabled {
+                traceForwardSeconds += forwardEnd - buildStart
+                traceSampleSeconds += sampleEnd - forwardEnd
+                traceScheduleSeconds += buildEnd - sampleEnd
+                traceBuildSeconds += buildEnd - buildStart
+                traceWaitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
+            }
             if eosSet.contains(next) {
                 break
             }
@@ -1050,6 +1142,20 @@ public actor Gemma4Generator: ChatGenerator {
             repetitionHistory = scheduled.history
         }
 
+        if traceEnabled, !generated.isEmpty {
+            let count = Double(generated.count)
+            Gemma4DecodeTrace.emit(String(
+                format: "[gemma4-decode-trace] mode=pipelined temp=\(generationConfig.temperature) tokens=%d build=%.2fms/tok (forward=%.2f sample=%.2f schedule=%.2f) wait=%.2fms/tok wall=%.2fms/tok",
+                generated.count,
+                traceBuildSeconds / count * 1000,
+                traceForwardSeconds / count * 1000,
+                traceSampleSeconds / count * 1000,
+                traceScheduleSeconds / count * 1000,
+                traceWaitSeconds / count * 1000,
+                Date().timeIntervalSince(decodeStart) / count * 1000
+            ))
+        }
+
         return Gemma4BatchedDecodeResult(
             generatedTokens: generated,
             decodeSeconds: Date().timeIntervalSince(decodeStart),
@@ -1062,12 +1168,7 @@ public actor Gemma4Generator: ChatGenerator {
         promptTokens: [Int],
         config: GenerationConfig
     ) -> MLXArray? {
-        guard config.repetitionPenalty != nil,
-              config.repetitionContextSize > 0,
-              !promptTokens.isEmpty else {
-            return nil
-        }
-        return MLXArray(promptTokens.suffix(config.repetitionContextSize).map { Int32($0) })
+        repetitionHistoryArray(promptTokens: promptTokens, config: config)
     }
 
     private func appendingGreedyRepetitionHistory(
@@ -1075,21 +1176,7 @@ public actor Gemma4Generator: ChatGenerator {
         token: MLXArray,
         config: GenerationConfig
     ) -> MLXArray? {
-        guard config.repetitionPenalty != nil, config.repetitionContextSize > 0 else {
-            return nil
-        }
-
-        let nextToken = token.asType(.int32).reshaped(1)
-        guard let history else {
-            return nextToken
-        }
-
-        let combined = concatenated([history, nextToken], axis: 0)
-        let overflow = combined.dim(0) - config.repetitionContextSize
-        guard overflow > 0 else {
-            return combined
-        }
-        return combined[overflow..<combined.dim(0)]
+        appendingRepetitionHistory(history, token: token, config: config)
     }
 
     private func enqueueDecodeRow(
@@ -1378,7 +1465,7 @@ public actor Gemma4Generator: ChatGenerator {
                 sharedKVStates = output.sharedKVStates
                 MLX.eval(chunkLogits, output.hidden)
             } else {
-                chunkLogits = model.forward(inputIds: chunk, cache: cache)
+                chunkLogits = model.prefillStep(inputIds: chunk, cache: cache)
                 MLX.eval(chunkLogits)
             }
             logits = chunkLogits

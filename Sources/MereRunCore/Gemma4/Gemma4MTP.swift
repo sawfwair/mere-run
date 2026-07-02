@@ -250,15 +250,22 @@ final class Gemma4AssistantDraftModel: Module {
         repetitionHistory: [Int]
     ) throws -> Gemma4MTPDraft {
         let total = max(1, blockSize) - 1
-        var token = lastToken
+        var tokenArray = MLXArray([Int32(lastToken)]).reshaped(1, 1)
         var previousHidden = hidden
-        var history = repetitionHistory
-        var tokens: [Int] = []
-        tokens.reserveCapacity(total)
+        var history = repetitionHistoryArray(
+            promptTokens: repetitionHistory,
+            config: generationConfig
+        )
+        var banMask: MLXArray?
+        var banMaskResolved = false
+        var draftTokenArrays: [MLXArray] = []
+        draftTokenArrays.reserveCapacity(total)
 
+        // The sampled token feeds the next step as an array, so the whole
+        // draft chain schedules with a single readback at the end instead of
+        // one blocking sample per drafted token.
         for _ in 0..<total {
-            let tokenIds = MLXArray([Int32(token)]).reshaped(1, 1)
-            let tokenEmbedding = baseModel.inputEmbeddings(for: tokenIds)
+            let tokenEmbedding = baseModel.inputEmbeddings(for: tokenArray)
             let inputs = MLX.concatenated([tokenEmbedding, previousHidden], axis: -1)
             let output = try forward(
                 inputsEmbeds: inputs,
@@ -266,17 +273,32 @@ final class Gemma4AssistantDraftModel: Module {
                 positionOffset: positionOffset
             )
             let draftLogits = output.logits[0, -1, 0...]
-            let next = sampleToken(
+            if !banMaskResolved {
+                banMaskResolved = true
+                banMask = tokenBanMask(
+                    vocabularySize: draftLogits.dim(-1),
+                    dtype: draftLogits.dtype,
+                    tokens: generationConfig.bannedTokens
+                )
+            }
+            let next = sampledTokenArray(
                 logits: draftLogits,
                 config: generationConfig,
-                previousTokens: history
+                previousTokenIndices: history,
+                banMask: banMask
             )
-            tokens.append(next)
-            history.append(next)
-            token = next
+            draftTokenArrays.append(next)
+            history = appendingRepetitionHistory(history, token: next, config: generationConfig)
+            tokenArray = next.reshaped(1, 1)
             previousHidden = output.hidden
         }
-        return Gemma4MTPDraft(tokens: tokens)
+
+        guard !draftTokenArrays.isEmpty else {
+            return Gemma4MTPDraft(tokens: [])
+        }
+        let stacked = MLX.stacked(draftTokenArrays)
+        MLX.eval(stacked)
+        return Gemma4MTPDraft(tokens: stacked.asArray(Int32.self).map(Int.init))
     }
 
     private func forward(
@@ -377,6 +399,14 @@ enum Gemma4MTPPolicy {
         return Gemma4MTPResources.defaultPromptThreshold
     }
 
+    static func sampledSpeculationEnabled(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        let raw = environment["MERERUN_GEMMA4_MTP_SAMPLED"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw == "1" || raw == "true" || raw == "on"
+    }
+
     static func blockSize(
         configured: Int,
         environment: [String: String] = ProcessInfo.processInfo.environment
@@ -417,8 +447,15 @@ enum Gemma4MTPPolicy {
         guard assistantAvailable else {
             return "assistant not installed"
         }
-        guard generationConfig.temperature == 0 else {
-            return "non-greedy sampling"
+        // Sampled decode is speculative-safe here (the verify loop samples the
+        // target at every position, so emitted tokens are true target samples
+        // regardless of draft policy), but it is opt-in: with sampled drafts
+        // the match probability collapses and 7.4k-context decode measured
+        // 14.7 tok/s vs 30.2 for the pipelined sampled path. When opted in via
+        // MERERUN_GEMMA4_MTP_SAMPLED=1 the drafts are generated greedily to
+        // maximize the match rate.
+        if generationConfig.temperature != 0, !sampledSpeculationEnabled(environment: environment) {
+            return "non-greedy sampling (MERERUN_GEMMA4_MTP_SAMPLED unset)"
         }
         guard !prefixSeedWasUsed else {
             return "prefix KV reuse"

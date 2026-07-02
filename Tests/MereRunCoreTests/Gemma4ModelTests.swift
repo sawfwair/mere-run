@@ -247,13 +247,23 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
             prefixSeedWasUsed: false,
             environment: env
         ))
+        // Sampled requests stay on the pipelined path by default (sampled-MTP
+        // acceptance economics measured worse)…
         XCTAssertEqual(Gemma4MTPPolicy.activationReason(
             assistantAvailable: true,
             promptTokenCount: 8,
             generationConfig: sampled,
             prefixSeedWasUsed: false,
             environment: env
-        ), "non-greedy sampling")
+        ), "non-greedy sampling (MERERUN_GEMMA4_MTP_SAMPLED unset)")
+        // …but can opt in to speculative sampled decode.
+        XCTAssertNil(Gemma4MTPPolicy.activationReason(
+            assistantAvailable: true,
+            promptTokenCount: 8,
+            generationConfig: sampled,
+            prefixSeedWasUsed: false,
+            environment: env.merging(["MERERUN_GEMMA4_MTP_SAMPLED": "1"]) { _, new in new }
+        ))
         XCTAssertEqual(Gemma4MTPPolicy.activationReason(
             assistantAvailable: false,
             promptTokenCount: 8,
