@@ -283,6 +283,19 @@ swift run mere.run image train-lora \
   --visualize \
   --quiet
 
+# Apply a Klein LoRA to a reference image.
+swift run mere.run image generate \
+  --model image-klein-9b \
+  --ref-image ./reference-pose.png \
+  --strength 0.55 \
+  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, natural human anatomy, no extra limbs" \
+  --lora ./style-adapter.safetensors \
+  --lora-scale 1.5 \
+  --width 1024 --height 768 \
+  --steps 16 \
+  --seed 525252 \
+  --output ./style-reference.png
+
 # Reopen the local run dashboard later from the run directory.
 swift run mere.run image visualize-run .
 
