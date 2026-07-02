@@ -13,6 +13,18 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
     q35SwigluCompiled(gate, up)
 }
 
+enum Q35FusedSwitchGLUPolicy {
+    /// Kill switch: MERERUN_Q35_FUSED_SWITCH_GLU=0 disables the stacked
+    /// gate+up expert matmul. The fusion halves the gather-matmul launches per
+    /// MoE block at the cost of a second resident copy of the gate/up expert
+    /// weights.
+    static let enabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_FUSED_SWITCH_GLU"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw != "0" && raw != "false" && raw != "off"
+    }()
+}
+
 final class Q35SwitchLinear: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
     @ModuleInfo(key: "scales") var scales: MLXArray?
@@ -137,6 +149,21 @@ final class Q35SwitchGLU: Module {
     @ModuleInfo(key: "up_proj") var upProj: Q35SwitchLinear
     @ModuleInfo(key: "down_proj") var downProj: Q35SwitchLinear
 
+    /// Gate and up expert weights stacked along the output dimension so each
+    /// MoE block issues one gather matmul instead of two. Identity-guarded:
+    /// weight loading replaces the parameter arrays, which invalidates the
+    /// stack and triggers a lazy rebuild on the next forward.
+    private struct FusedGateUp {
+        let weight: MLXArray
+        let scales: MLXArray?
+        let biases: MLXArray?
+        let intermediate: Int
+        let sourceIDs: [ObjectIdentifier]
+    }
+
+    private var fusedGateUp: FusedGateUp?
+    private var fusedGateUpAttempted = false
+
     init(config: Q35Config) {
         let text = config.textConfig
         let groupSize = config.quantization?.groupSize ?? 64
@@ -192,9 +219,14 @@ final class Q35SwitchGLU: Module {
             .take(tokenOrder, axis: 0)
             .reshaped([routeCount, 1, inputDim])
 
-        let up = upProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
-        let gate = gateProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
-        let activated = q35Swiglu(gate, up)
+        let activated: MLXArray
+        if let fused = resolvedFusedGateUp() {
+            activated = fusedGateUpGLU(flatInput, fused: fused, indices: sortedIndices, sortedIndices: true)
+        } else {
+            let up = upProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+            let gate = gateProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+            activated = q35Swiglu(gate, up)
+        }
         let output = downProj.applyFlat(activated, indices: sortedIndices, sortedIndices: true)
             .take(inverseOrder, axis: 0)
 
@@ -202,11 +234,147 @@ final class Q35SwitchGLU: Module {
     }
 
     func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
-        let up = upProj(x, indices: indices)
-        let gate = gateProj(x, indices: indices)
-        let activated = q35Swiglu(gate, up)
+        let activated: MLXArray
+        if let fused = resolvedFusedGateUp() {
+            let expanded = MLX.expandedDimensions(x, axes: [-2, -3])
+            activated = fusedGateUpGLU(expanded, fused: fused, indices: indices, sortedIndices: false)
+                .squeezed(axis: -2)
+        } else {
+            let up = upProj(x, indices: indices)
+            let gate = gateProj(x, indices: indices)
+            activated = q35Swiglu(gate, up)
+        }
         return downProj(activated, indices: indices)
     }
+
+    private func resolvedFusedGateUp() -> FusedGateUp? {
+        guard Q35FusedSwitchGLUPolicy.enabled else { return nil }
+
+        let gateScales = gateProj.scales
+        let upScales = upProj.scales
+        var sourceIDs = [ObjectIdentifier(gateProj.weight), ObjectIdentifier(upProj.weight)]
+        if let gateScales {
+            sourceIDs.append(ObjectIdentifier(gateScales))
+        }
+        if let upScales {
+            sourceIDs.append(ObjectIdentifier(upScales))
+        }
+
+        if let fused = fusedGateUp {
+            if fused.sourceIDs == sourceIDs { return fused }
+            fusedGateUp = nil
+            fusedGateUpAttempted = false
+        }
+        if !fusedGateUpAttempted {
+            fusedGateUpAttempted = true
+            fusedGateUp = buildFusedGateUp(sourceIDs: sourceIDs)
+        }
+        return fusedGateUp
+    }
+
+    private func buildFusedGateUp(sourceIDs: [ObjectIdentifier]) -> FusedGateUp? {
+        guard gateProj.bias == nil, upProj.bias == nil else { return nil }
+        guard gateProj.weight.ndim == 3,
+              gateProj.weight.shape == upProj.weight.shape,
+              gateProj.weight.dtype == upProj.weight.dtype else {
+            return nil
+        }
+
+        let quantizationMatches = (gateProj.scales == nil) == (upProj.scales == nil)
+            && (gateProj.biases == nil) == (upProj.biases == nil)
+        guard quantizationMatches else { return nil }
+        if let gateScales = gateProj.scales, let upScales = upProj.scales {
+            guard gateScales.shape == upScales.shape else { return nil }
+        }
+
+        let weight = concatenated([gateProj.weight, upProj.weight], axis: 1)
+        let scales = gateProj.scales.flatMap { gateScales in
+            upProj.scales.map { concatenated([gateScales, $0], axis: 1) }
+        }
+        let biases = gateProj.biases.flatMap { gateBiases in
+            upProj.biases.map { concatenated([gateBiases, $0], axis: 1) }
+        }
+        var toEvaluate = [weight]
+        if let scales { toEvaluate.append(scales) }
+        if let biases { toEvaluate.append(biases) }
+        MLX.eval(toEvaluate)
+
+        return FusedGateUp(
+            weight: weight,
+            scales: scales,
+            biases: biases,
+            intermediate: gateProj.weight.dim(1),
+            sourceIDs: sourceIDs
+        )
+    }
+
+    /// One gather matmul over the stacked weights, split into gate/up, with the
+    /// swiglu applied as raw ops (the split output makes the compiled swiglu
+    /// helper's extra call overhead pointless here).
+    private func fusedGateUpGLU(
+        _ x: MLXArray,
+        fused: FusedGateUp,
+        indices: MLXArray,
+        sortedIndices: Bool
+    ) -> MLXArray {
+        let inputDim = x.dim(x.ndim - 1)
+        let output: MLXArray
+        if let scales = fused.scales {
+            let resolved = q35ResolvedQuantization(
+                inputDim: inputDim,
+                packedInputDim: fused.weight.dim(fused.weight.ndim - 1),
+                scaleGroups: scales.dim(scales.ndim - 1),
+                fallbackGroupSize: gateProj.groupSize,
+                fallbackBits: gateProj.bits
+            )
+            output = portableGatherQuantizedMM(
+                x,
+                fused.weight,
+                scales: scales,
+                biases: fused.biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: resolved.groupSize,
+                bits: resolved.bits,
+                mode: .affine,
+                sortedIndices: sortedIndices
+            )
+        } else {
+            output = gatherMM(
+                x,
+                fused.weight.swappedAxes(-1, -2),
+                rhsIndices: indices,
+                sortedIndices: sortedIndices
+            )
+        }
+
+        let parts = split(output, indices: [fused.intermediate], axis: -1)
+        return MLXNN.silu(parts[0]) * parts[1]
+    }
+}
+
+private func q35ResolvedQuantization(
+    inputDim: Int,
+    packedInputDim: Int,
+    scaleGroups: Int,
+    fallbackGroupSize: Int,
+    fallbackBits: Int
+) -> (groupSize: Int, bits: Int) {
+    var resolvedBits = fallbackBits
+    let numerator = packedInputDim * 32
+    if inputDim > 0, numerator % inputDim == 0 {
+        let inferredBits = numerator / inputDim
+        if (2...8).contains(inferredBits) {
+            resolvedBits = inferredBits
+        }
+    }
+
+    var resolvedGroupSize = fallbackGroupSize
+    if inputDim > 0, scaleGroups > 0, inputDim % scaleGroups == 0 {
+        resolvedGroupSize = inputDim / scaleGroups
+    }
+
+    return (resolvedGroupSize, resolvedBits)
 }
 
 final class Q35MLP: Module {

@@ -46,6 +46,152 @@ public func applyTokenBan(logits: MLXArray, tokens: [Int]) -> MLXArray {
     return logits + mask
 }
 
+/// Precomputes the additive token-ban mask so per-token sampling reuses one
+/// materialized array instead of rebuilding a vocab-sized scatter every step.
+public func tokenBanMask(vocabularySize: Int, dtype: DType, tokens: [Int]) -> MLXArray? {
+    let valid = tokens.filter { $0 >= 0 && $0 < vocabularySize }
+    guard !valid.isEmpty else { return nil }
+    let indices = MLXArray(valid.map(Int32.init))
+    let mask = MLXArray.zeros([vocabularySize], dtype: dtype)
+    mask[indices] = MLXArray(Array(repeating: -Float.infinity, count: valid.count)).asType(dtype)
+    return mask
+}
+
+/// Seeds the repetition-penalty history for pipelined decode loops that keep
+/// the window on the GPU instead of re-uploading previousTokens each step.
+public func repetitionHistoryArray(
+    promptTokens: [Int],
+    config: GenerationConfig
+) -> MLXArray? {
+    guard config.repetitionPenalty != nil,
+          config.repetitionContextSize > 0,
+          !promptTokens.isEmpty else {
+        return nil
+    }
+    return MLXArray(promptTokens.suffix(config.repetitionContextSize).map { Int32($0) })
+}
+
+/// Appends a still-on-GPU token to the repetition window, trimming to
+/// `repetitionContextSize`.
+public func appendingRepetitionHistory(
+    _ history: MLXArray?,
+    token: MLXArray,
+    config: GenerationConfig
+) -> MLXArray? {
+    guard config.repetitionPenalty != nil, config.repetitionContextSize > 0 else {
+        return nil
+    }
+
+    let nextToken = token.asType(.int32).reshaped(1)
+    guard let history else {
+        return nextToken
+    }
+
+    let combined = concatenated([history, nextToken], axis: 0)
+    let overflow = combined.dim(0) - config.repetitionContextSize
+    guard overflow > 0 else {
+        return combined
+    }
+    return combined[overflow..<combined.dim(0)]
+}
+
+enum SamplerPolicy {
+    /// Top-p sampling prefilters to this many top-logit candidates via
+    /// argPartition before the softmax/sort/cumsum chain, replacing a
+    /// full-vocabulary sort (262k for Gemma) with a tiny one. The top-p
+    /// nucleus at practical temperatures lives entirely inside the top few
+    /// dozen tokens, so the truncation is a no-op in practice; it only bends
+    /// the distribution when the nucleus would exceed this many candidates.
+    /// MERERUN_SAMPLER_TOP_P_PREFILTER overrides; 0 disables (exact full sort).
+    static let topPPrefilter: Int = {
+        if let raw = ProcessInfo.processInfo.environment["MERERUN_SAMPLER_TOP_P_PREFILTER"],
+           let value = Int(raw), value >= 0 {
+            return value
+        }
+        return 256
+    }()
+}
+
+/// Samples a token entirely on the GPU and returns it as a 0-d array, so decode
+/// loops can pipeline the readback instead of blocking on `.item()` per token.
+/// Matches `sampleToken(logits:config:previousTokens:)` distribution semantics;
+/// intentional differences: top-k thresholding happens after the float32
+/// upcast rather than in bfloat16, and top-p runs on an argPartition prefilter
+/// of the top logits (see `SamplerPolicy.topPPrefilter`).
+public func sampledTokenArray(
+    logits: MLXArray,
+    config: GenerationConfig,
+    previousTokenIndices: MLXArray?,
+    banMask: MLXArray?
+) -> MLXArray {
+    var logits = logits
+    if let banMask {
+        logits = logits + banMask
+    }
+
+    if let penalty = config.repetitionPenalty,
+       let previousTokenIndices,
+       previousTokenIndices.dim(0) > 0 {
+        logits = applyRepetitionPenalty(
+            logits: logits,
+            tokenIndices: previousTokenIndices,
+            penalty: penalty
+        )
+    }
+
+    if config.temperature == 0 {
+        return argMax(logits, axis: -1).asType(.int32)
+    }
+
+    let useTopK = config.topK > 0 && config.topK < logits.dim(-1)
+    let useTopP = config.topP > 0 && config.topP < 1
+
+    if useTopK || useTopP, logits.dtype == .bfloat16 {
+        logits = logits.asType(.float32)
+    }
+
+    if useTopK {
+        let sortedIndices = argSort(logits, axis: -1)
+        let sortedLogits = logits.take(sortedIndices, axis: -1)
+        let threshold = sortedLogits[sortedLogits.dim(-1) - config.topK]
+        logits = MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
+    }
+
+    if useTopP {
+        // Restrict the top-p math to the highest-logit candidates. Skipped
+        // when an explicit top-k already thresholded the logits (masked
+        // entries would defeat the partition) or when disabled.
+        var candidateIndices: MLXArray?
+        var workingLogits = logits
+        let prefilter = SamplerPolicy.topPPrefilter
+        if !useTopK, prefilter > 0, logits.dim(-1) > prefilter * 4 {
+            let vocabulary = logits.dim(-1)
+            let partitioned = argPartition(logits, kth: vocabulary - prefilter, axis: -1)
+            let top = partitioned[(vocabulary - prefilter)...]
+            candidateIndices = top
+            workingLogits = logits[top]
+        }
+
+        let probs = softmax(workingLogits / config.temperature, axis: -1)
+        let sortedIndices = argSort(probs, axis: -1)
+        let sortedProbs = probs.take(sortedIndices, axis: -1)
+        let cumulativeProbs = cumsum(sortedProbs, axis: -1)
+        let topProbs = MLX.where(
+            cumulativeProbs .> (1 - config.topP),
+            sortedProbs,
+            MLXArray.zeros(like: sortedProbs)
+        )
+        let sortedToken = categorical(MLX.log(topProbs + 1e-10))
+        let chosen = sortedIndices[sortedToken]
+        if let candidateIndices {
+            return candidateIndices[chosen].asType(.int32)
+        }
+        return chosen.asType(.int32)
+    }
+
+    return categorical(logits / config.temperature).asType(.int32)
+}
+
 public func argMaxSample(logits: MLXArray) -> Int {
     argMax(logits, axis: -1).item(Int.self)
 }

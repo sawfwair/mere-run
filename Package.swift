@@ -401,7 +401,15 @@ if !isLinuxPackage {
 }
 
 let packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
-  .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0")
+  // sawfwair/mlx-swift = upstream v0.31.4 (dc43e62) plus one measured patch:
+  // CompiledFunction no longer takes the global evalLock per call, which fixed
+  // a 2.6x slowdown for per-token compiled-function usage (70.8 -> 28.2 ms/tok
+  // on Gemma4 12B decode). Drop back to ml-explore/mlx-swift `from: "0.30.0"`
+  // once the patch lands upstream.
+  .package(
+    url: "https://github.com/sawfwair/mlx-swift",
+    revision: "7450480eb9f9c0a41649bd3348fce13f7892ad29"
+  )
 ]) + [
   .package(
     url: "https://github.com/huggingface/swift-transformers",
