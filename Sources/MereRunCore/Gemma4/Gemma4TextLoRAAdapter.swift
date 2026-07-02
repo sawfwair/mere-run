@@ -16,12 +16,17 @@ enum Gemma4TextLoRAAdapterError: Error, LocalizedError, Sendable {
     }
 }
 
+struct Gemma4TextLoRAApplyReport: Sendable, Equatable {
+    let matchedLayerCount: Int
+    let injectedLayerCount: Int
+}
+
 enum Gemma4TextLoRAAdapter {
     static func apply(
         _ lora: LoRA,
         to model: any Gemma4CausalModel,
         targetSuffixes: [String] = Gemma4TextLoRAInjector.defaultTargetSuffixes
-    ) async throws -> [String: TrainableLoRALayer] {
+    ) async throws -> Gemma4TextLoRAApplyReport {
         guard let module = model as? Module else {
             throw Gemma4TextLoRAAdapterError.modelIsNotModule
         }
@@ -49,7 +54,10 @@ enum Gemma4TextLoRAAdapter {
         }
 
         eval(layers.values.flatMap { [$0.loraDown, $0.loraUp] })
-        return layers
+        return Gemma4TextLoRAApplyReport(
+            matchedLayerCount: matched,
+            injectedLayerCount: layers.count
+        )
     }
 
     private static func scale(for lora: LoRA) -> Float {
