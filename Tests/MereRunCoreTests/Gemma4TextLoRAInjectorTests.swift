@@ -2,7 +2,7 @@ import MLXNN
 import XCTest
 @testable import MereRunCore
 
-final class Gemma4TextLoRAInjectorTests: XCTestCase {
+final class Gemma4TextLoRAInjectorTests: MereRunCoreTestCase {
     func testTargetMatcherAcceptsGemmaAttentionProjectionSuffixes() {
         XCTAssertTrue(Gemma4TextLoRAInjector.shouldTarget(path: "language_model.layers.0.self_attn.q_proj", suffixes: ["q_proj"]))
         XCTAssertTrue(Gemma4TextLoRAInjector.shouldTarget(path: "language_model.layers.0.self_attn.o_proj", suffixes: ["o_proj"]))

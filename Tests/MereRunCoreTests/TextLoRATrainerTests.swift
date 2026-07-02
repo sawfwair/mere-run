@@ -4,7 +4,7 @@ import MLXNN
 import XCTest
 @testable import MereRunCore
 
-final class TextLoRATrainerTests: XCTestCase {
+final class TextLoRATrainerTests: MereRunCoreTestCase {
     func testTrainingOrderIsSeededAndCoversEpochs() {
         let first = TextLoRATrainer.makeTrainingOrder(exampleCount: 5, drawCount: 7, seed: 42)
         let second = TextLoRATrainer.makeTrainingOrder(exampleCount: 5, drawCount: 7, seed: 42)

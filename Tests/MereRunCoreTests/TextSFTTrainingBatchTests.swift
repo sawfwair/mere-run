@@ -2,7 +2,7 @@ import MLX
 import XCTest
 @testable import MereRunCore
 
-final class TextSFTTrainingBatchTests: XCTestCase {
+final class TextSFTTrainingBatchTests: MereRunCoreTestCase {
     func testShiftedTargetExampleMasksOnlyTargetTokens() throws {
         let example = try TextSFTTrainingBatchBuilder.shiftedTargetExample(
             prefixTokenIds: [10, 11, 12, 13],
