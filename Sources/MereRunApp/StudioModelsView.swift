@@ -102,6 +102,7 @@ struct StudioModelsSheet: View {
     @State private var detailText = ""
     @State private var statusMessage = "Loading models"
     @State private var showAll = false
+    @State private var searchText = ""
     @State private var isRefreshing = false
     @State private var loadingInfoID: String?
     @State private var loadingRuntimeID: String?
@@ -121,7 +122,12 @@ struct StudioModelsSheet: View {
     }
 
     private var visibleRows: [StudioModelInventoryRow] {
-        showAll ? rows : installedRows
+        let scoped = showAll ? rows : installedRows
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return scoped }
+        return scoped.filter { row in
+            row.id.lowercased().contains(query) || row.category.lowercased().contains(query)
+        }
     }
 
     private var selectedRow: StudioModelInventoryRow? {
@@ -221,10 +227,17 @@ struct StudioModelsSheet: View {
     }
 
     private var modelList: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
+            searchField
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
             HStack {
                 Text(showAll ? "All known models" : "Downloaded")
-                    .font(MereRunTheme.sectionFont)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .kerning(0.5)
+                    .textCase(.uppercase)
                     .foregroundStyle(MereRunTheme.textMuted)
                 Spacer()
                 Text("\(visibleRows.count)")
@@ -232,21 +245,57 @@ struct StudioModelsSheet: View {
                     .foregroundStyle(MereRunTheme.textMuted)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.bottom, 6)
 
             if visibleRows.isEmpty {
                 emptyList
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 4) {
                         ForEach(visibleRows) { row in
-                            modelRow(row)
+                            StudioModelListRow(
+                                row: row,
+                                isSelected: selectedID == row.id,
+                                runtime: runtimeSettingsByID[row.id]
+                            ) {
+                                select(row)
+                            }
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 10)
                     .padding(.bottom, 14)
                 }
             }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
+            TextField("Search models", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5))
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, MereRunTheme.Spacing.sm)
+        .frame(height: 30)
+        .background {
+            Capsule()
+                .fill(MereRunTheme.surface)
+                .overlay {
+                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.7), lineWidth: 1)
+                }
         }
     }
 
@@ -255,59 +304,20 @@ struct StudioModelsSheet: View {
             Image(systemName: "shippingbox")
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(MereRunTheme.textMuted)
-            Text(showAll ? "No models reported." : "No downloaded models yet.")
+            Text(emptyListMessage)
                 .font(MereRunTheme.bodyFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
     }
 
-    private func modelRow(_ row: StudioModelInventoryRow) -> some View {
-        Button {
-            select(row)
-        } label: {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(row.isInstalled ? MereRunTheme.green : MereRunTheme.border)
-                    .frame(width: 8, height: 8)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(row.id)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    HStack(spacing: 8) {
-                        Text(row.category)
-                        Text(row.status)
-                        Text(row.size)
-                        if let runtime = runtimeSettingsByID[row.id] {
-                            if runtime.pinned {
-                                Text("pinned")
-                            }
-                            if let alias = runtime.alias {
-                                Text(alias)
-                            }
-                        }
-                    }
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(10)
-            .background {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(selectedID == row.id ? MereRunTheme.surfaceRaised : MereRunTheme.surface.opacity(0.42))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9)
-                            .strokeBorder(
-                                selectedID == row.id ? MereRunTheme.accent.opacity(0.85) : MereRunTheme.border.opacity(0.55),
-                                lineWidth: 1
-                            )
-                    }
-            }
+    private var emptyListMessage: String {
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "No models match the search."
         }
-        .buttonStyle(.plain)
+        return showAll ? "No models reported." : "No downloaded models yet."
     }
 
     private var detailPane: some View {
@@ -418,39 +428,62 @@ struct StudioModelsSheet: View {
     }
 
     private func runtimeSettingsEditor(_ row: StudioModelInventoryRow) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("Alias", text: $runtimeAlias)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(minWidth: 110)
-                TextField("TTL", text: $runtimeTTL)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(width: 72)
-                TextField("Context", text: $runtimeMaxContext)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(width: 88)
-                TextField("Max tokens", text: $runtimeMaxTokens)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(width: 88)
-                TextField("Temp", text: $runtimeTemperature)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(width: 72)
-                TextField("Top P", text: $runtimeTopP)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    .frame(width: 72)
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
+            Text("Runtime settings")
+                .font(.system(size: 10.5, weight: .semibold))
+                .kerning(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(MereRunTheme.textMuted)
+
+            Grid(alignment: .leading, horizontalSpacing: MereRunTheme.Spacing.sm, verticalSpacing: 8) {
+                GridRow {
+                    runtimeField("Alias", text: $runtimeAlias, width: 150)
+                    runtimeField("TTL seconds", text: $runtimeTTL, width: 100)
+                    runtimeField("Context", text: $runtimeMaxContext, width: 100)
+                }
+                GridRow {
+                    runtimeField("Max tokens", text: $runtimeMaxTokens, width: 150)
+                    runtimeField("Temperature", text: $runtimeTemperature, width: 100)
+                    runtimeField("Top P", text: $runtimeTopP, width: 100)
+                }
+            }
+
+            HStack(spacing: MereRunTheme.Spacing.sm) {
                 Toggle("Pinned", isOn: $runtimePinned)
                     .toggleStyle(.checkbox)
+                    .font(MereRunTheme.captionFont)
+
+                Spacer()
 
                 Button {
                     Task { await saveRuntimeSettings(for: row, pinned: runtimePinned) }
                 } label: {
-                    Label("Save", systemImage: "checkmark")
+                    Label("Save settings", systemImage: "checkmark")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(.merePrimary)
                 .disabled(!row.isInstalled || loadingRuntimeID != nil)
             }
-            .font(MereRunTheme.captionFont)
+        }
+        .padding(MereRunTheme.Spacing.md)
+        .background {
+            RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                .fill(MereRunTheme.surface.opacity(0.55))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                        .strokeBorder(MereRunTheme.border.opacity(0.5), lineWidth: 1)
+                }
+        }
+    }
+
+    private func runtimeField(_ label: String, text: Binding<String>, width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
+            TextField(label, text: text)
+                .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                .frame(width: width)
+                .labelsHidden()
         }
     }
 
@@ -691,5 +724,85 @@ struct StudioModelsSheet: View {
         return base
             .appendingPathComponent("MereRun", isDirectory: true)
             .appendingPathComponent("models", isDirectory: true)
+    }
+}
+
+/// One model in the catalog list: install dot, name, category/runtime facts, size in the
+/// trailing column where the eye expects it.
+private struct StudioModelListRow: View {
+    let row: StudioModelInventoryRow
+    let isSelected: Bool
+    let runtime: StudioRuntimeSettings?
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: MereRunTheme.Spacing.sm) {
+                Circle()
+                    .fill(row.isInstalled ? MereRunTheme.green : MereRunTheme.border)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(row.id)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    HStack(spacing: 6) {
+                        Text(row.category)
+                        if !row.isInstalled {
+                            Text("·")
+                            Text(row.status)
+                        }
+                        if let runtime {
+                            if runtime.pinned {
+                                Label("pinned", systemImage: "pin.fill")
+                                    .labelStyle(.titleAndIcon)
+                            }
+                            if let alias = runtime.alias {
+                                Text("→ \(alias)")
+                            }
+                        }
+                    }
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(row.size)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                    .fill(rowFill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                            .strokeBorder(
+                                isSelected ? MereRunTheme.accent.opacity(0.5) : Color.clear,
+                                lineWidth: 1
+                            )
+                    }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .accessibilityLabel("\(row.id), \(row.category), \(row.status), \(row.size)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var rowFill: Color {
+        if isSelected { return MereRunTheme.accentSoft }
+        if hovering { return MereRunTheme.hoverFill }
+        return MereRunTheme.surface.opacity(0.35)
     }
 }

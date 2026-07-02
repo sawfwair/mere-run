@@ -41,18 +41,15 @@ struct StudioHelpSheet: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 2) {
                 ForEach(topics) { topic in
-                    Button { select(topic) } label: {
-                        Text(topic.title)
-                            .font(MereRunTheme.bodyFont)
-                            .foregroundStyle(selected?.id == topic.id ? MereRunTheme.accent : MereRunTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 14)
+                    StudioHelpTopicRow(
+                        title: topic.title,
+                        isSelected: selected?.id == topic.id
+                    ) {
+                        select(topic)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(8)
         }
     }
 
@@ -69,18 +66,12 @@ struct StudioHelpSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(24)
             } else {
-                Text(renderedMarkdown)
-                    .font(MereRunTheme.bodyFont)
-                    .textSelection(.enabled)
+                StudioMarkdownText(content: content)
+                    .frame(maxWidth: 680, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(24)
             }
         }
-    }
-
-    private var renderedMarkdown: AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: content, options: options)) ?? AttributedString(content)
     }
 
     private func loadTopics() async {
@@ -98,5 +89,34 @@ struct StudioHelpSheet: View {
             content = text
             isLoading = false
         }
+    }
+}
+
+private struct StudioHelpTopicRow: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? MereRunTheme.textPrimary : MereRunTheme.textSecondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                        .fill(isSelected ? MereRunTheme.accentSoft : (hovering ? MereRunTheme.hoverFill : .clear))
+                }
+                .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

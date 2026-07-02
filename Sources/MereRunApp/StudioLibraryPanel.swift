@@ -1,0 +1,333 @@
+import AppKit
+import SwiftUI
+
+/// Run history as a second column: searchable, grouped by day, keyboard-navigable
+/// (arrows move, Space previews), with Quick Look surfacing on hover.
+struct StudioLibraryPanel: View {
+    let items: [StudioLibraryItem]
+    @Binding var selectedID: UUID?
+    @Binding var isVisible: Bool
+    let onDelete: (UUID) -> Void
+    let onRename: (UUID, String) -> Void
+    let onQuickLook: (URL) -> Void
+
+    @State private var searchText = ""
+    @State private var renamingID: UUID?
+    @State private var renameText = ""
+
+    private var filteredItems: [StudioLibraryItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return items }
+        return items.filter { item in
+            item.displayTitle.lowercased().contains(query)
+                || item.mode.title.lowercased().contains(query)
+                || item.prompt.lowercased().contains(query)
+        }
+    }
+
+    private var daySections: [(day: Date, title: String, items: [StudioLibraryItem])] {
+        let calendar = Calendar.current
+        var order: [Date] = []
+        var grouped: [Date: [StudioLibraryItem]] = [:]
+        for item in filteredItems {
+            let day = calendar.startOfDay(for: item.createdAt)
+            if grouped[day] == nil { order.append(day) }
+            grouped[day, default: []].append(item)
+        }
+        return order.map { day in
+            (day: day, title: Self.sectionFormatter.string(from: day), items: grouped[day] ?? [])
+        }
+    }
+
+    private static let sectionFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            Divider()
+                .overlay(MereRunTheme.border.opacity(0.5))
+
+            searchField
+
+            if filteredItems.isEmpty {
+                emptyState
+            } else {
+                list
+            }
+        }
+        .background(MereRunTheme.background)
+        .alert("Rename run", isPresented: renameBinding) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                if let renamingID { onRename(renamingID, renameText) }
+                renamingID = nil
+            }
+            Button("Cancel", role: .cancel) { renamingID = nil }
+        }
+    }
+
+    private var renameBinding: Binding<Bool> {
+        Binding(get: { renamingID != nil }, set: { if !$0 { renamingID = nil } })
+    }
+
+    private var header: some View {
+        HStack(spacing: MereRunTheme.Spacing.xs) {
+            Text("Library")
+                .font(.system(size: 15, weight: .semibold))
+            Text("\(items.count)")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            Spacer()
+            Button {
+                withAnimation(MereRunTheme.Motion.standard) {
+                    isVisible = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.mereIcon)
+            .help("Hide library (⌃⌘L)")
+            .accessibilityLabel("Hide library")
+        }
+        .padding(.horizontal, MereRunTheme.Spacing.md)
+        .frame(height: 52)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
+            TextField("Search runs", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5))
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, MereRunTheme.Spacing.sm)
+        .frame(height: 30)
+        .background {
+            Capsule()
+                .fill(MereRunTheme.surface)
+                .overlay {
+                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.7), lineWidth: 1)
+                }
+        }
+        .padding(.horizontal, MereRunTheme.Spacing.sm)
+        .padding(.vertical, MereRunTheme.Spacing.sm)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: MereRunTheme.Spacing.sm) {
+            Image(systemName: "rectangle.stack")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textMuted)
+            Text(items.isEmpty ? "Runs you create will land here." : "No matching runs.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(MereRunTheme.Spacing.xl)
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 4, pinnedViews: []) {
+                ForEach(daySections, id: \.day) { section in
+                    Text(section.title)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .kerning(0.5)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .textCase(.uppercase)
+                        .padding(.horizontal, 10)
+                        .padding(.top, MereRunTheme.Spacing.sm)
+                        .padding(.bottom, 2)
+                        .accessibilityAddTraits(.isHeader)
+
+                    ForEach(section.items) { item in
+                        StudioLibraryRow(
+                            item: item,
+                            isSelected: selectedID == item.id,
+                            onQuickLook: item.outputURL.map { url in { onQuickLook(url) } }
+                        ) {
+                            selectedID = item.id
+                        }
+                        .contextMenu {
+                            if let url = item.outputURL {
+                                Button("Quick Look") { onQuickLook(url) }
+                            }
+                            Button("Rename") {
+                                renameText = item.displayTitle
+                                renamingID = item.id
+                            }
+                            Button("Delete", role: .destructive) {
+                                onDelete(item.id)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, MereRunTheme.Spacing.xs)
+            .padding(.bottom, MereRunTheme.Spacing.sm)
+        }
+        .focusable()
+        // Finder-style keys: arrows move the selection, Space previews the selected output
+        // (ignored when it has none, so it never swallows the key destructively).
+        .onKeyPress(.space) {
+            guard let id = selectedID,
+                  let url = items.first(where: { $0.id == id })?.outputURL else { return .ignored }
+            onQuickLook(url)
+            return .handled
+        }
+        .onKeyPress(.upArrow) { moveSelection(by: -1) }
+        .onKeyPress(.downArrow) { moveSelection(by: 1) }
+    }
+
+    private func moveSelection(by offset: Int) -> KeyPress.Result {
+        let visible = filteredItems
+        guard !visible.isEmpty else { return .ignored }
+        guard let selectedID, let index = visible.firstIndex(where: { $0.id == selectedID }) else {
+            self.selectedID = offset > 0 ? visible.first?.id : visible.last?.id
+            return .handled
+        }
+        let next = min(max(index + offset, 0), visible.count - 1)
+        self.selectedID = visible[next].id
+        return .handled
+    }
+}
+
+private struct StudioLibraryRow: View {
+    let item: StudioLibraryItem
+    let isSelected: Bool
+    let onQuickLook: (() -> Void)?
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: MereRunTheme.Spacing.sm) {
+                thumbnail
+                    .frame(width: 52, height: 42)
+                    .background(isSelected ? MereRunTheme.surface : MereRunTheme.accentSoft.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.displayTitle)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        if item.status != .completed {
+                            Circle()
+                                .fill(statusColor)
+                                .frame(width: 5, height: 5)
+                        }
+                        Text(subtitle)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if hovering, let onQuickLook {
+                    Button {
+                        onQuickLook()
+                    } label: {
+                        Image(systemName: "eye")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.mereIcon)
+                    .help("Quick Look (Space)")
+                    .accessibilityLabel("Quick Look")
+                    .transition(.opacity)
+                }
+            }
+            .padding(6)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                    .fill(rowFill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                            .strokeBorder(
+                                isSelected ? MereRunTheme.accent.opacity(0.4) : Color.clear,
+                                lineWidth: 1
+                            )
+                    }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.mode.title), \(item.status.rawValue), \(item.displayTitle)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var rowFill: Color {
+        if isSelected { return MereRunTheme.accentSoft }
+        if hovering { return MereRunTheme.hoverFill }
+        return .clear
+    }
+
+    private var subtitle: String {
+        if item.status == .completed {
+            return "\(item.mode.title) · \(Self.timeFormatter.string(from: item.createdAt))"
+        }
+        return "\(item.mode.title) · \(item.status.rawValue)"
+    }
+
+    private var statusColor: Color {
+        switch item.status {
+        case .queued: return MereRunTheme.textMuted
+        case .running: return MereRunTheme.yellow
+        case .completed: return MereRunTheme.green
+        case .failed: return MereRunTheme.red
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        if let url = item.outputURL, StudioOutputFileKind.classify(url) == .image {
+            StudioAsyncImagePreview(
+                url: url,
+                maxPixelSize: 180,
+                contentMode: .fill,
+                fallbackSystemImage: item.mode.systemImage
+            )
+        } else {
+            Image(systemName: item.mode.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
+        }
+    }
+}
