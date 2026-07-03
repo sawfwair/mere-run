@@ -8,6 +8,17 @@ import AudioCodecs
 /// Owns prompt preparation, token generation, and waveform assembly for TTS.
 /// This file is intentionally separate from model loading so the speech
 /// generation flow can be read end-to-end.
+/// Non-Sendable values captured by the pipelined decode's emit closure. The
+/// closure runs synchronously on the generator actor (runPipelinedTalkerLoop
+/// invokes it inline), so no concurrent access exists; the box states that to
+/// the Linux toolchain's region-isolation analysis, which otherwise rejects
+/// the captures with "sending ... risks causing data races".
+private struct Qwen3TTSEmitCaptures: @unchecked Sendable {
+    let referenceCodesBQT: MLXArray?
+    let speechTokenizer: Qwen3TTSSpeechTokenizer
+    let onAudioDelta: (([Float]) -> Void)?
+}
+
 extension Qwen3TTSGenerator {
     func generateVoiceClone(
         request: TTSRequest,
@@ -121,69 +132,102 @@ extension Qwen3TTSGenerator {
             .filter { $0 != eosTokenId }
 
         var generatedCodes: [MLXArray] = []
-        var generatedFirstTokens: [Int] = []
         var emittedSampleCount = 0
 
-        let cache = talker.makeCache()
-        var inputEmbedsVar = inputEmbeds
-        var trailingIndex = 0
-
-        for step in 0..<effectiveMaxTokens {
-            let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
-            let nextToken = sampleToken(
-                logits: logits,
+        if Qwen3TTSEnvironment.pipelinedDecodeEnabled {
+            let result = try runPipelinedTalkerLoop(
+                inputEmbeds: inputEmbeds,
+                trailingTextHidden: trailingTextHidden,
+                ttsPadEmbed: ttsPadEmbed,
+                effectiveMaxTokens: effectiveMaxTokens,
                 temperature: temperature,
                 topK: topK,
                 topP: topP,
                 repetitionPenalty: repetitionPenalty,
-                generatedTokens: generatedFirstTokens,
-                suppressTokens: suppressTokens,
-                eosTokenId: eosTokenId
-            )
-
-            let tokenValue = nextToken.item(Int.self)
-            if tokenValue == eosTokenId {
-                break
-            }
-
-            generatedFirstTokens.append(tokenValue)
-            onToken?(tokenValue)
-
-            let codeTokens = try generateCodecTokens(
-                firstToken: nextToken,
-                hidden: hidden,
                 talker: talker,
-                temperature: temperature,
-                topK: topK,
-                topP: topP
-            )
-            let allCodes = MLX.concatenated(codeTokens, axis: 1)
-            generatedCodes.append(allCodes)
-
-            if let streamingChunkTokenInterval, generatedCodes.count % streamingChunkTokenInterval == 0 {
-                try emitStreamingAudioDelta(
-                    generatedCodes: generatedCodes,
+                config: config,
+                progressHandler: progressHandler,
+                streamingChunkTokenInterval: streamingChunkTokenInterval,
+                onToken: onToken,
+                emitDelta: { [captures = Qwen3TTSEmitCaptures(
                     referenceCodesBQT: nil,
                     speechTokenizer: speechTokenizer,
-                    emittedSampleCount: &emittedSampleCount,
                     onAudioDelta: onAudioDelta
+                )] codes, emitted in
+                    try self.emitStreamingAudioDelta(
+                        generatedCodes: codes,
+                        referenceCodesBQT: captures.referenceCodesBQT,
+                        speechTokenizer: captures.speechTokenizer,
+                        emittedSampleCount: &emitted,
+                        onAudioDelta: captures.onAudioDelta
+                    )
+                }
+            )
+            generatedCodes = result.codes
+            emittedSampleCount = result.emittedSampleCount
+        } else {
+            var generatedFirstTokens: [Int] = []
+            let cache = talker.makeCache()
+            var inputEmbedsVar = inputEmbeds
+            var trailingIndex = 0
+
+            for step in 0..<effectiveMaxTokens {
+                let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
+                let nextToken = sampleToken(
+                    logits: logits,
+                    temperature: temperature,
+                    topK: topK,
+                    topP: topP,
+                    repetitionPenalty: repetitionPenalty,
+                    generatedTokens: generatedFirstTokens,
+                    suppressTokens: suppressTokens,
+                    eosTokenId: eosTokenId
                 )
-            }
 
-            let textEmbed: MLXArray
-            if trailingIndex < trailingTextHidden.dim(1) {
-                textEmbed = trailingTextHidden[0..., trailingIndex..<(trailingIndex + 1), 0...]
-                trailingIndex += 1
-            } else {
-                textEmbed = ttsPadEmbed
-            }
+                let tokenValue = nextToken.item(Int.self)
+                if tokenValue == eosTokenId {
+                    break
+                }
 
-            inputEmbedsVar = textEmbed + combineCodecEmbeddings(codeTokens: codeTokens, talker: talker)
-            MLX.eval(inputEmbedsVar)
+                generatedFirstTokens.append(tokenValue)
+                onToken?(tokenValue)
 
-            if step > 0 && step % 25 == 0 {
-                progressHandler?(TTSProgress(stage: .generating, tokensGenerated: step, message: "Generated \(step) tokens..."))
-                Memory.clearCache()
+                let codeTokens = try generateCodecTokens(
+                    firstToken: nextToken,
+                    hidden: hidden,
+                    talker: talker,
+                    temperature: temperature,
+                    topK: topK,
+                    topP: topP
+                )
+                let allCodes = MLX.concatenated(codeTokens, axis: 1)
+                generatedCodes.append(allCodes)
+
+                if let streamingChunkTokenInterval, generatedCodes.count % streamingChunkTokenInterval == 0 {
+                    try emitStreamingAudioDelta(
+                        generatedCodes: generatedCodes,
+                        referenceCodesBQT: nil,
+                        speechTokenizer: speechTokenizer,
+                        emittedSampleCount: &emittedSampleCount,
+                        onAudioDelta: onAudioDelta
+                    )
+                }
+
+                let textEmbed: MLXArray
+                if trailingIndex < trailingTextHidden.dim(1) {
+                    textEmbed = trailingTextHidden[0..., trailingIndex..<(trailingIndex + 1), 0...]
+                    trailingIndex += 1
+                } else {
+                    textEmbed = ttsPadEmbed
+                }
+
+                inputEmbedsVar = textEmbed + combineCodecEmbeddings(codeTokens: codeTokens, talker: talker)
+                MLX.eval(inputEmbedsVar)
+
+                if step > 0 && step % 25 == 0 {
+                    progressHandler?(TTSProgress(stage: .generating, tokensGenerated: step, message: "Generated \(step) tokens..."))
+                    Memory.clearCache()
+                }
             }
         }
 
@@ -216,6 +260,161 @@ extension Qwen3TTSGenerator {
 
         MLX.eval(audio)
         return audio
+    }
+
+    /// One confirmed-or-pending step of the pipelined talker loop: the
+    /// sampled first token (still on GPU) plus the codec tokens derived from
+    /// it. Confirmation (EOS check, callbacks, streaming) happens one step
+    /// later, while the GPU executes the next step's graph.
+    private struct PipelinedTalkerStep {
+        let token: MLXArray
+        let codeTokens: [MLXArray]
+        let step: Int
+    }
+
+    /// Depth-1 pipelined talker loop shared by the style and clone paths.
+    /// The legacy loop synchronizes with the GPU roughly nine times per
+    /// emitted frame (the sampled token plus every codec sub-token reads
+    /// back with `.item()`); here sampling and the codec sub-loop stay on
+    /// GPU, the step is scheduled with `asyncEval`, and the previous step's
+    /// token is read back while the current one executes. EOS therefore
+    /// costs one speculative frame of GPU work, which is discarded.
+    private func runPipelinedTalkerLoop(
+        inputEmbeds: MLXArray,
+        trailingTextHidden: MLXArray,
+        ttsPadEmbed: MLXArray,
+        effectiveMaxTokens: Int,
+        temperature: Float,
+        topK: Int,
+        topP: Float,
+        repetitionPenalty: Float,
+        talker: Qwen3TTSTalkerForConditionalGeneration,
+        config: Qwen3TTSModelConfig,
+        progressHandler: (@Sendable (TTSProgress) -> Void)?,
+        streamingChunkTokenInterval: Int?,
+        onToken: ((Int) -> Void)?,
+        emitDelta: (([MLXArray], inout Int) throws -> Void)?
+    ) throws -> (codes: [MLXArray], emittedSampleCount: Int) {
+        let eosTokenId = config.talkerConfig.codecEosTokenId
+        let suppressTokens = Array((config.talkerConfig.vocabSize - 1024)..<config.talkerConfig.vocabSize)
+            .filter { $0 != eosTokenId }
+        var samplerContext = Qwen3TTSSamplerContext(
+            vocabSize: config.talkerConfig.vocabSize,
+            temperature: temperature,
+            topK: topK,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            eosTokenId: eosTokenId,
+            suppressTokens: suppressTokens
+        )
+        let codecContext = Qwen3TTSSamplerContext(
+            vocabSize: 0,
+            temperature: temperature,
+            topK: topK,
+            topP: topP,
+            repetitionPenalty: 1.0,
+            eosTokenId: nil,
+            suppressTokens: nil
+        )
+
+        var generatedCodes: [MLXArray] = []
+        var emittedSampleCount = 0
+        var pending: PipelinedTalkerStep?
+        var inputEmbedsVar = inputEmbeds
+        var trailingIndex = 0
+        let cache = talker.makeCache()
+
+        func confirm(_ step: PipelinedTalkerStep) throws -> Bool {
+            let tokenValue = step.token.item(Int.self)
+            if tokenValue == eosTokenId {
+                return false
+            }
+            onToken?(tokenValue)
+            generatedCodes.append(MLX.concatenated(step.codeTokens, axis: 1))
+            if let streamingChunkTokenInterval, let emitDelta,
+               generatedCodes.count % streamingChunkTokenInterval == 0 {
+                try emitDelta(generatedCodes, &emittedSampleCount)
+            }
+            let confirmedCount = generatedCodes.count
+            if confirmedCount > 0 && confirmedCount % 25 == 0 {
+                progressHandler?(TTSProgress(
+                    stage: .generating,
+                    tokensGenerated: confirmedCount,
+                    message: "Generated \(confirmedCount) tokens..."
+                ))
+                Memory.clearCache()
+            }
+            return true
+        }
+
+        for step in 0..<effectiveMaxTokens {
+            let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
+            let tokenArray = sampleTokenArrayTTS(logits: logits, context: samplerContext)
+            samplerContext.appendHistory(tokenArray)
+            let codeTokens = try generateCodecTokensPipelined(
+                firstToken: tokenArray,
+                hidden: hidden,
+                talker: talker,
+                context: codecContext
+            )
+
+            let textEmbed: MLXArray
+            if trailingIndex < trailingTextHidden.dim(1) {
+                textEmbed = trailingTextHidden[0..., trailingIndex..<(trailingIndex + 1), 0...]
+                trailingIndex += 1
+            } else {
+                textEmbed = ttsPadEmbed
+            }
+            inputEmbedsVar = textEmbed + combineCodecEmbeddings(codeTokens: codeTokens, talker: talker)
+            asyncEval([inputEmbedsVar, tokenArray])
+
+            if let previous = pending {
+                pending = nil
+                guard try confirm(previous) else {
+                    return (generatedCodes, emittedSampleCount)
+                }
+            }
+            pending = PipelinedTalkerStep(token: tokenArray, codeTokens: codeTokens, step: step)
+        }
+
+        if let previous = pending {
+            _ = try confirm(previous)
+        }
+        return (generatedCodes, emittedSampleCount)
+    }
+
+    /// All-GPU variant of `generateCodecTokens`: identical sub-loop, but the
+    /// per-code sampling returns arrays instead of reading each code back
+    /// with `.item()`.
+    private func generateCodecTokensPipelined(
+        firstToken: MLXArray,
+        hidden: MLXArray,
+        talker: Qwen3TTSTalkerForConditionalGeneration,
+        context: Qwen3TTSSamplerContext
+    ) throws -> [MLXArray] {
+        var codeTokens: [MLXArray] = [firstToken]
+        let codeHidden = hidden[0..., (hidden.dim(1) - 1)..<hidden.dim(1), 0...]
+        let codeCache = talker.codePredictor.makeCache()
+
+        for codeIdx in 0..<(talker.config.numCodeGroups - 1) {
+            let codeInput: MLXArray
+            if codeIdx == 0 {
+                let code0Embed = talker.getInputEmbeddings()(firstToken)
+                codeInput = MLX.concatenated([codeHidden, code0Embed], axis: 1)
+            } else {
+                codeInput = talker.codePredictor.codecEmbedding[codeIdx - 1](codeTokens.last!)
+            }
+
+            let (codeLogits, _, _) = talker.codePredictor(
+                codeInput,
+                cache: codeCache,
+                generationStep: codeIdx
+            )
+
+            codeTokens.append(sampleTokenArrayTTS(logits: codeLogits, context: context))
+        }
+
+        return codeTokens
     }
 
     private func generateCodecTokens(
@@ -513,69 +712,102 @@ extension Qwen3TTSGenerator {
             .filter { $0 != eosTokenId }
 
         var generatedCodes: [MLXArray] = []
-        var generatedFirstTokens: [Int] = []
         var emittedSampleCount = 0
 
-        let cache = talker.makeCache()
-        var inputEmbedsVar = inputEmbeds
-        var trailingIndex = 0
-
-        for step in 0..<effectiveMaxTokens {
-            let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
-            let nextToken = sampleToken(
-                logits: logits,
+        if Qwen3TTSEnvironment.pipelinedDecodeEnabled {
+            let result = try runPipelinedTalkerLoop(
+                inputEmbeds: inputEmbeds,
+                trailingTextHidden: trailingTextHidden,
+                ttsPadEmbed: ttsPadEmbed,
+                effectiveMaxTokens: effectiveMaxTokens,
                 temperature: temperature,
                 topK: topK,
                 topP: topP,
                 repetitionPenalty: repetitionPenalty,
-                generatedTokens: generatedFirstTokens,
-                suppressTokens: suppressTokens,
-                eosTokenId: eosTokenId
-            )
-
-            let tokenValue = nextToken.item(Int.self)
-            if tokenValue == eosTokenId {
-                break
-            }
-
-            generatedFirstTokens.append(tokenValue)
-            onToken?(tokenValue)
-
-            let codeTokens = try generateCodecTokens(
-                firstToken: nextToken,
-                hidden: hidden,
                 talker: talker,
-                temperature: temperature,
-                topK: topK,
-                topP: topP
-            )
-            let allCodes = MLX.concatenated(codeTokens, axis: 1)
-            generatedCodes.append(allCodes)
-
-            if let streamingChunkTokenInterval, generatedCodes.count % streamingChunkTokenInterval == 0 {
-                try emitStreamingAudioDelta(
-                    generatedCodes: generatedCodes,
+                config: config,
+                progressHandler: progressHandler,
+                streamingChunkTokenInterval: streamingChunkTokenInterval,
+                onToken: onToken,
+                emitDelta: { [captures = Qwen3TTSEmitCaptures(
                     referenceCodesBQT: referenceCodesBQT,
                     speechTokenizer: speechTokenizer,
-                    emittedSampleCount: &emittedSampleCount,
                     onAudioDelta: onAudioDelta
+                )] codes, emitted in
+                    try self.emitStreamingAudioDelta(
+                        generatedCodes: codes,
+                        referenceCodesBQT: captures.referenceCodesBQT,
+                        speechTokenizer: captures.speechTokenizer,
+                        emittedSampleCount: &emitted,
+                        onAudioDelta: captures.onAudioDelta
+                    )
+                }
+            )
+            generatedCodes = result.codes
+            emittedSampleCount = result.emittedSampleCount
+        } else {
+            var generatedFirstTokens: [Int] = []
+            let cache = talker.makeCache()
+            var inputEmbedsVar = inputEmbeds
+            var trailingIndex = 0
+
+            for step in 0..<effectiveMaxTokens {
+                let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
+                let nextToken = sampleToken(
+                    logits: logits,
+                    temperature: temperature,
+                    topK: topK,
+                    topP: topP,
+                    repetitionPenalty: repetitionPenalty,
+                    generatedTokens: generatedFirstTokens,
+                    suppressTokens: suppressTokens,
+                    eosTokenId: eosTokenId
                 )
-            }
 
-            let textEmbed: MLXArray
-            if trailingIndex < trailingTextHidden.dim(1) {
-                textEmbed = trailingTextHidden[0..., trailingIndex..<(trailingIndex + 1), 0...]
-                trailingIndex += 1
-            } else {
-                textEmbed = ttsPadEmbed
-            }
+                let tokenValue = nextToken.item(Int.self)
+                if tokenValue == eosTokenId {
+                    break
+                }
 
-            inputEmbedsVar = textEmbed + combineCodecEmbeddings(codeTokens: codeTokens, talker: talker)
-            MLX.eval(inputEmbedsVar)
+                generatedFirstTokens.append(tokenValue)
+                onToken?(tokenValue)
 
-            if step > 0 && step % 25 == 0 {
-                progressHandler?(TTSProgress(stage: .generating, tokensGenerated: step, message: "Generated \(step) tokens..."))
-                Memory.clearCache()
+                let codeTokens = try generateCodecTokens(
+                    firstToken: nextToken,
+                    hidden: hidden,
+                    talker: talker,
+                    temperature: temperature,
+                    topK: topK,
+                    topP: topP
+                )
+                let allCodes = MLX.concatenated(codeTokens, axis: 1)
+                generatedCodes.append(allCodes)
+
+                if let streamingChunkTokenInterval, generatedCodes.count % streamingChunkTokenInterval == 0 {
+                    try emitStreamingAudioDelta(
+                        generatedCodes: generatedCodes,
+                        referenceCodesBQT: referenceCodesBQT,
+                        speechTokenizer: speechTokenizer,
+                        emittedSampleCount: &emittedSampleCount,
+                        onAudioDelta: onAudioDelta
+                    )
+                }
+
+                let textEmbed: MLXArray
+                if trailingIndex < trailingTextHidden.dim(1) {
+                    textEmbed = trailingTextHidden[0..., trailingIndex..<(trailingIndex + 1), 0...]
+                    trailingIndex += 1
+                } else {
+                    textEmbed = ttsPadEmbed
+                }
+
+                inputEmbedsVar = textEmbed + combineCodecEmbeddings(codeTokens: codeTokens, talker: talker)
+                MLX.eval(inputEmbedsVar)
+
+                if step > 0 && step % 25 == 0 {
+                    progressHandler?(TTSProgress(stage: .generating, tokensGenerated: step, message: "Generated \(step) tokens..."))
+                    Memory.clearCache()
+                }
             }
         }
 

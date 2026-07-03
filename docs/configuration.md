@@ -275,6 +275,18 @@ step's token is read back while the current step executes (the legacy loop
 synchronized twice per token). Enabled by default; set `0`, `false`, or
 `off` to restore the legacy loop.
 
+### `MERERUN_TTS_PIPELINED_DECODE`
+
+Qwen3 TTS talker decoding samples on GPU and pipelines the loop at depth 1:
+the sampled token and all codec sub-tokens stay on GPU (the legacy loop reads
+each back with `.item()`, roughly nine GPU→CPU round trips per emitted
+frame), the ~1k-entry suppress list becomes a mask built once per generation
+instead of a per-token upload, top-k uses argPartition instead of a
+full-vocabulary sort, and the previous step's token is read back while the
+current step executes. EOS therefore costs one speculative frame of discarded
+GPU work. Enabled by default; set `0`, `false`, or `off` to restore the
+legacy synchronous loop.
+
 ### `MERERUN_GEMMA4_DECODE_TRACE`
 
 Set to `1` to log a per-decode summary to stderr splitting each token's wall

@@ -377,6 +377,13 @@ targets.append(contentsOf: [
     path: "Tests/MereRunCLITests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
+  ),
+  .testTarget(
+    name: "AudioTTSTests",
+    dependencies: ["AudioTTS"],
+    path: "Tests/AudioTTSTests",
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
   )
 ])
 
