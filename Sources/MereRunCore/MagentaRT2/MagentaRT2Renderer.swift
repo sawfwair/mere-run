@@ -134,7 +134,6 @@ public enum MagentaRT2Renderer {
                 rendered.reserveCapacity(frameCount * MagentaRT2Resources.frameSamples * MagentaRT2Resources.channels)
                 var left = [Float](repeating: 0, count: MagentaRT2Resources.frameSamples)
                 var right = [Float](repeating: 0, count: MagentaRT2Resources.frameSamples)
-                var promptSwapPending = false
                 for frameIndex in 0..<frameCount {
                     try Task.checkCancellation()
                     if let snapshot = try liveControls?(frameIndex) {
@@ -153,28 +152,16 @@ public enum MagentaRT2Renderer {
                             mrt2_engine_reset_state(engine)
                         }
                         if let prompt = snapshot.prompt {
+                            // The wait is mandatory: overlapping
+                            // mrt2_engine_generate_frame with the engine's
+                            // asynchronous prompt encode segfaults (verified
+                            // via MagentaRT2PromptSwapTests against the live
+                            // engine), so a mid-session swap stalls the
+                            // render loop for the encode. The engine's
+                            // mrt2_runner_* API with its buffered audio ring
+                            // is the path to stall-free swaps.
                             mrt2_engine_set_text_prompt(engine, prompt)
-                            if nonBlockingPromptSwap {
-                                // The engine encodes the new prompt on its own
-                                // thread and switches when ready; frames keep
-                                // rendering on the previous prompt meanwhile.
-                                // Blocking here stalled the render thread for
-                                // the whole encode — a guaranteed underrun for
-                                // any live audio consumer.
-                                promptSwapPending = true
-                            } else {
-                                try waitForPrompt(engine)
-                            }
-                        }
-                    }
-                    if promptSwapPending {
-                        let textStatus = mrt2_engine_get_text_encoder_status(engine)
-                        let quantizerStatus = mrt2_engine_get_quantizer_status(engine)
-                        guard textStatus != 3, quantizerStatus != 3 else {
-                            throw MagentaRT2Error.promptEncodingFailed
-                        }
-                        if textStatus != 1 && quantizerStatus != 1 {
-                            promptSwapPending = false
+                            try waitForPrompt(engine)
                         }
                     }
                     let didGenerate = left.withUnsafeMutableBufferPointer { leftBuffer in
@@ -217,22 +204,6 @@ public enum MagentaRT2Renderer {
         mrt2_engine_set_drumless(engine, controls.drumless)
         mrt2_engine_set_unmask_width(engine, controls.unmaskWidth)
         mrt2_engine_set_seed_rotation(engine, controls.seedRotation)
-    }
-
-    /// Opt-in (MERERUN_MAGENTA_NONBLOCKING_PROMPT_SWAP=1): mid-session prompt
-    /// swaps leave the render loop free-running while the engine encodes
-    /// asynchronously (frames continue on the previous prompt, the engine
-    /// switches when ready) instead of blocking the render thread for the
-    /// whole encode. Off by default: the vendored engine currently fails to
-    /// load its Metal library on this toolchain (tracked separately), so the
-    /// behavior cannot be validated live yet —
-    /// MagentaRT2PromptSwapTests.testNonBlockingPromptSwapKeepsRendering is
-    /// the promotion gate once the engine runs again. Read per swap so tests
-    /// can flip it via setenv.
-    private static var nonBlockingPromptSwap: Bool {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_MAGENTA_NONBLOCKING_PROMPT_SWAP"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
     }
 
     private static func waitForPrompt(_ engine: OpaquePointer) throws {

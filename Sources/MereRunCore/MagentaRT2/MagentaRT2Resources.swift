@@ -221,7 +221,11 @@ public enum MagentaRT2Error: LocalizedError, Sendable {
         case .engineInitializationFailed(let path):
             return "Failed to initialize Magenta RT2 assets from \(path)."
         case .modelLoadFailed(let path):
-            return "Failed to load Magenta RT2 model from \(path)."
+            return "Failed to load Magenta RT2 model from \(path). "
+                + "If the engine reported a metallib failure, the vendored "
+                + "magentart.xcframework Metal libraries are Git LFS objects "
+                + "and may be un-hydrated pointer stubs — run "
+                + "`git lfs install --local && git lfs pull` in the repo and rebuild."
         case .promptEncodingFailed:
             return "Magenta RT2 prompt encoding failed."
         case .generationFailed(let frame):
