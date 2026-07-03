@@ -137,16 +137,25 @@ public final class Qwen3EmbeddingModel {
             outputHiddenStates: false
         ).lastHiddenState
 
+        // Pool every row's final valid token in one gather and normalize the
+        // whole batch before a single readback. The previous loop evaluated
+        // and read back each embedding separately — N GPU→CPU syncs per
+        // batch.
+        let hiddenSize = hiddenStates.dim(2)
+        let lastIndices = MLXArray(tokenCounts.map { Int32(max(0, $0 - 1)) })
+        let flatHidden = hiddenStates.reshaped([batchSize * sequenceLength, hiddenSize])
+        let rowBases = MLXArray((0..<batchSize).map { Int32($0 * sequenceLength) })
+        let pooled = MLX.take(flatHidden, rowBases + lastIndices, axis: 0).asType(.float32)
+        let eps = MLXArray(Float32(1e-12))
+        let norms = MLX.sqrt(MLX.sum(pooled * pooled, axis: -1, keepDims: true) + eps)
+        let normalized = pooled / norms
+        MLX.eval(normalized)
+        let flat = normalized.asArray(Float.self)
+
         var output: [[Float]] = []
         output.reserveCapacity(batchSize)
-
         for row in 0..<batchSize {
-            let tokenCount = tokenCounts[row]
-            let lastIndex = max(0, tokenCount - 1)
-            let pooled = hiddenStates[row, lastIndex, 0...].asType(.float32)
-            let normalized = l2Normalize(pooled)
-            MLX.eval(normalized)
-            output.append(normalized.asArray(Float.self))
+            output.append(Array(flat[(row * hiddenSize)..<((row + 1) * hiddenSize)]))
         }
 
         return (output, tokenCounts)
