@@ -89,28 +89,50 @@ extension LightOnOCRGenerator {
         )
         MLX.eval(logits)
         log("[Gen] Prefill logits shape: \(logits.shape)")
-        let lastLogitsPrefill = logits[0, -1, 0...]
-        let topIndices = MLX.argSort(lastLogitsPrefill, axis: -1)[(-5)...]
-        eval(topIndices)
-        log("[Gen] Top 5 token indices: \(topIndices.asArray(Int32.self))")
+        if logProgress {
+            // Debug-only: full-vocabulary sort plus a GPU readback.
+            let lastLogitsPrefill = logits[0, -1, 0...]
+            let topIndices = MLX.argSort(lastLogitsPrefill, axis: -1)[(-5)...]
+            eval(topIndices)
+            log("[Gen] Top 5 token indices: \(topIndices.asArray(Int32.self))")
+        }
 
+        // Depth-1 pipelined decode: the sampled token stays on GPU and feeds
+        // the next forward directly; the previous step's token is read back
+        // while the current step executes. The legacy loop synchronized
+        // twice per token (softmax eval inside sampling plus a blocking
+        // logits eval), which dominates OCR's long page transcriptions.
         var generatedTokens: [Int] = []
+        var pendingToken: MLXArray?
+        var scheduledCount = 0
         for _ in 0..<config.maxNewTokens {
-            let nextToken = sampleToken(logits: logits[0, -1, 0...], temperature: config.temperature)
-            if nextToken == eosTokenId || nextToken == padTokenId {
-                break
-            }
-
-            generatedTokens.append(nextToken)
-            let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
+            let tokenArray = sampleTokenArray(logits: logits[0, -1, 0...], temperature: config.temperature)
+            scheduledCount += 1
+            let nextInput = tokenArray.reshaped(1, 1)
             if positionIds != nil {
-                let posValue = Int32(promptSeqLen + generatedTokens.count - 1 + ropeDelta)
+                let posValue = Int32(promptSeqLen + scheduledCount - 1 + ropeDelta)
                 let posIds = MLXArray([posValue]).reshaped(1, 1)
                 logits = textDecoder.encoder.forwardCausal(inputIds: nextInput, cache: cache, positionIds: posIds)
             } else {
                 logits = textDecoder.encoder.forwardCausal(inputIds: nextInput, cache: cache)
             }
-            MLX.eval(logits)
+            asyncEval([logits, tokenArray])
+
+            if let previous = pendingToken {
+                pendingToken = nil
+                let value = previous.item(Int.self)
+                if value == eosTokenId || value == padTokenId {
+                    return generatedTokens
+                }
+                generatedTokens.append(value)
+            }
+            pendingToken = tokenArray
+        }
+        if let previous = pendingToken {
+            let value = previous.item(Int.self)
+            if value != eosTokenId && value != padTokenId {
+                generatedTokens.append(value)
+            }
         }
 
         return generatedTokens
@@ -160,6 +182,20 @@ extension LightOnOCRGenerator {
 
         let flat = positions.flatMap { $0.map(Int32.init) }
         return MLXArray(flat, [3, 1, finalSeqLen])
+    }
+
+    /// GPU-side variant of `sampleToken`: greedy skips the softmax (argMax
+    /// over logits picks the same token) and the sampled path uses GPU
+    /// categorical sampling; both return a 0-d array with no host readback,
+    /// so the decode loop can pipeline. The legacy sampled path drew from an
+    /// unseeded host RNG, so sampled outputs were nondeterministic before
+    /// and after this change.
+    func sampleTokenArray(logits: MLXArray, temperature: Float) -> MLXArray {
+        if temperature <= 0.1 {
+            return MLX.argMax(logits, axis: -1).asType(.int32)
+        }
+        let scores = (logits.asType(.float32)) / temperature
+        return categorical(scores).asType(.int32)
     }
 
     func sampleToken(logits: MLXArray, temperature: Float) -> Int {

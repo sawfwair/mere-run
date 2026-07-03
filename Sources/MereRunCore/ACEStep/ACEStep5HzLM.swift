@@ -258,9 +258,12 @@ public final class ACEStep5HzLM {
             let topK = max(config.topK, 0)
             var nextLogits = lastLogits
             if topK > 0 && topK < nextLogits.dim(-1) {
-                let sortedIndices = argSort(nextLogits, axis: -1)
-                let sortedLogits = nextLogits.take(sortedIndices, axis: -1)
-                let threshold = sortedLogits[sortedLogits.dim(-1) - topK]
+                // k-th largest value via argPartition — identical threshold
+                // to the full argSort without sorting the whole vocabulary
+                // every token.
+                let kth = nextLogits.dim(-1) - topK
+                let partition = argPartition(nextLogits, kth: kth, axis: -1)
+                let threshold = nextLogits.take(partition[kth..<(kth + 1)], axis: -1)
                 nextLogits = MLX.where(nextLogits .< threshold, MLXArray(-Float.infinity), nextLogits)
             }
 
