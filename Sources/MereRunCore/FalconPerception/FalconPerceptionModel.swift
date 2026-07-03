@@ -81,22 +81,51 @@ final class FalconPerceptionKVCache: @unchecked Sendable {
     private var keys: MLXArray?
     private var values: MLXArray?
     private(set) var offset: Int = 0
+    private let step = 256
 
-    func updateAndFetch(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray) {
-        if let cachedKeys = self.keys, let cachedValues = self.values {
-            self.keys = falconPerceptionContiguous(concatenated([cachedKeys, keys], axis: 2))
-            self.values = falconPerceptionContiguous(concatenated([cachedValues, values], axis: 2))
+    /// Capacity-padded append: buffers grow in 256-step chunks and new
+    /// keys/values write into a slice, so a decode of T tokens copies O(T)
+    /// data instead of the O(T²) of re-concatenating the whole cache per
+    /// token. The previous implementation also forced an eval per layer per
+    /// token; evaluation is now left to the decode loop's readback.
+    func updateAndFetch(keys newKeys: MLXArray, values newValues: MLXArray) -> (MLXArray, MLXArray) {
+        let previous = offset
+        let required = previous + newKeys.dim(2)
+
+        let needsGrowth: Bool
+        if let currentKeys = keys {
+            needsGrowth = required > currentKeys.dim(2)
         } else {
-            self.keys = falconPerceptionContiguous(keys)
-            self.values = falconPerceptionContiguous(values)
+            needsGrowth = true
         }
 
-        self.offset += keys.dim(2)
-        guard let cachedKeys = self.keys, let cachedValues = self.values else {
+        if needsGrowth {
+            let batch = newKeys.dim(0)
+            let heads = newKeys.dim(1)
+            let keyDim = newKeys.dim(3)
+            let valueDim = newValues.dim(3)
+            let chunks = (required + step - 1) / step
+            let grownKeys = MLXArray.zeros([batch, heads, chunks * step, keyDim], dtype: newKeys.dtype)
+            let grownValues = MLXArray.zeros([batch, heads, chunks * step, valueDim], dtype: newValues.dtype)
+            if let currentKeys = keys, let currentValues = values, previous > 0 {
+                grownKeys[.ellipsis, ..<previous, 0...] = currentKeys[.ellipsis, ..<previous, 0...]
+                grownValues[.ellipsis, ..<previous, 0...] = currentValues[.ellipsis, ..<previous, 0...]
+            }
+            keys = grownKeys
+            values = grownValues
+        }
+
+        keys?[.ellipsis, previous..<required, 0...] = newKeys
+        values?[.ellipsis, previous..<required, 0...] = newValues
+        offset = required
+
+        guard let cachedKeys = keys, let cachedValues = values else {
             preconditionFailure("FalconPerceptionKVCache should hold keys and values after update.")
         }
-        MLX.eval(cachedKeys, cachedValues)
-        return (cachedKeys, cachedValues)
+        return (
+            cachedKeys[.ellipsis, ..<required, 0...],
+            cachedValues[.ellipsis, ..<required, 0...]
+        )
     }
 }
 

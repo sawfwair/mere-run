@@ -27,6 +27,16 @@ public actor Qwen3ASRGenerator: ASRGenerator {
         return raw == "1" || raw == "true" || raw == "yes"
     }()
 
+    /// Depth-1 pipelined decode (default on): the sampled token feeds the
+    /// next forward as a GPU array and the previous token is read back while
+    /// the current step executes. MERERUN_STT_PIPELINED_DECODE=0 restores
+    /// the legacy two-syncs-per-token loop.
+    private static let pipelinedDecodeEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_STT_PIPELINED_DECODE"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw != "0" && raw != "false" && raw != "off"
+    }()
+
     public init(modelId: String = Qwen3ASRResources.defaultModelId) {
         self.modelId = modelId
     }
@@ -492,34 +502,77 @@ public actor Qwen3ASRGenerator: ASRGenerator {
             FileHandle.standardError.write(Data(message.utf8))
         }
 
-        for step in 0..<maxTokens {
-            let lastLogits = logits[0..., (logits.dim(1) - 1), 0...]
-            let nextToken = sampleToken(logits: lastLogits, mode: sampling, previousTokens: generatedTokens)
+        if Self.pipelinedDecodeEnabled {
+            // Depth-1 pipelined decode: the sampled token stays on GPU and
+            // feeds the next forward directly; the previous step's token is
+            // read back while the current step executes. The legacy loop
+            // synchronized twice per token (sample readback + eval).
+            var pendingToken: MLXArray?
+            for step in 0..<maxTokens {
+                let lastLogits = logits[0..., (logits.dim(1) - 1), 0...]
+                let tokenArray = sampleTokenArray(logits: lastLogits, mode: sampling)
+                logits = thinker(inputIds: tokenArray.reshaped(1, 1), cache: cache)
+                asyncEval([logits, tokenArray])
 
-            if nextToken == eosTokenId || nextToken == padTokenId {
-                if Self.debugEnabled {
-                    FileHandle.standardError.write(Data("[ASR DEBUG] Hit EOS at step \(step)\n".utf8))
+                if let previous = pendingToken {
+                    pendingToken = nil
+                    let value = previous.item(Int.self)
+                    if value == eosTokenId || value == padTokenId {
+                        if Self.debugEnabled {
+                            FileHandle.standardError.write(Data("[ASR DEBUG] Hit EOS at step \(step - 1)\n".utf8))
+                        }
+                        break
+                    }
+                    generatedTokens.append(value)
+                    if generatedTokens.count % 10 == 0 {
+                        progressHandler?(ASRProgress(
+                            stage: .transcribing,
+                            tokensGenerated: generatedTokens.count,
+                            message: "Generated \(generatedTokens.count) tokens..."
+                        ))
+                    }
+                    if generatedTokens.count % 50 == 0 {
+                        Memory.clearCache()
+                    }
                 }
-                break
+                pendingToken = tokenArray
             }
-
-            generatedTokens.append(nextToken)
-
-            if step > 0 && step % 10 == 0 {
-                progressHandler?(ASRProgress(
-                    stage: .transcribing,
-                    tokensGenerated: step,
-                    message: "Generated \(step) tokens..."
-                ))
+            if let previous = pendingToken {
+                let value = previous.item(Int.self)
+                if value != eosTokenId && value != padTokenId {
+                    generatedTokens.append(value)
+                }
             }
+        } else {
+            for step in 0..<maxTokens {
+                let lastLogits = logits[0..., (logits.dim(1) - 1), 0...]
+                let nextToken = sampleToken(logits: lastLogits, mode: sampling, previousTokens: generatedTokens)
 
-            // Generate next
-            let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
-            logits = thinker(inputIds: nextInput, cache: cache)
-            MLX.eval(logits)
+                if nextToken == eosTokenId || nextToken == padTokenId {
+                    if Self.debugEnabled {
+                        FileHandle.standardError.write(Data("[ASR DEBUG] Hit EOS at step \(step)\n".utf8))
+                    }
+                    break
+                }
 
-            if step % 50 == 0 {
-                Memory.clearCache()
+                generatedTokens.append(nextToken)
+
+                if step > 0 && step % 10 == 0 {
+                    progressHandler?(ASRProgress(
+                        stage: .transcribing,
+                        tokensGenerated: step,
+                        message: "Generated \(step) tokens..."
+                    ))
+                }
+
+                // Generate next
+                let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
+                logits = thinker(inputIds: nextInput, cache: cache)
+                MLX.eval(logits)
+
+                if step % 50 == 0 {
+                    Memory.clearCache()
+                }
             }
         }
 
@@ -535,6 +588,37 @@ public actor Qwen3ASRGenerator: ASRGenerator {
             text: decoded,
             tokensGenerated: generatedTokens.count
         )
+    }
+
+    /// GPU-side variant of `sampleToken`: identical math, but the result
+    /// stays on GPU as a 0-d array so the decode loop can feed it straight
+    /// into the next forward without a host readback.
+    private func sampleTokenArray(
+        logits: MLXArray,
+        mode: SamplingMode
+    ) -> MLXArray {
+        let squeezed = logits.squeezed(axis: 0)
+        switch mode {
+        case .greedy:
+            return argMax(squeezed, axis: -1).asType(.int32)
+        case .topP(let temperature, let topP):
+            var scores = squeezed
+            if scores.dtype == .bfloat16 {
+                scores = scores.asType(.float32)
+            }
+            let probs = softmax(scores / temperature, axis: -1)
+            let sortedIndices = argSort(probs, axis: -1)
+            let sortedProbs = probs.take(sortedIndices, axis: -1)
+            let cumulativeProbs = cumsum(sortedProbs, axis: -1)
+            let topProbs = MLX.where(
+                cumulativeProbs .> (1 - topP),
+                sortedProbs,
+                MLXArray.zeros(like: sortedProbs)
+            )
+            let sortedToken = categorical(MLX.log(topProbs + 1e-10))
+            return sortedIndices.take(sortedToken.reshaped(1), axis: -1)
+                .squeezed(axis: 0).asType(.int32)
+        }
     }
 
     private func sampleToken(

@@ -721,6 +721,7 @@ class ParakeetTDTModel: ParakeetBaseModel {
 
         let vocabularySize = config.vocabulary.count
         let stepSeconds = timePerEncoderStep
+        let windowSize = ParakeetDecodingEnvironment.windowedDecodeFrames
 
         for b in 0..<batch.dim(0) {
             let features = encoded[b..<(b + 1), 0..., 0...]
@@ -732,9 +733,14 @@ class ParakeetTDTModel: ParakeetBaseModel {
             var newSymbols = 0
             var state: (MLXArray, MLXArray)?
 
+            // Greedy TDT decode over windows of frames. The decoder state
+            // only changes when a token is emitted, so the joint can be
+            // evaluated for many contiguous frames against the same state
+            // in one batched call with a single readback; the host then
+            // follows the duration jumps until an emission invalidates the
+            // window. The legacy loop read two argMax scalars back per
+            // frame. Semantics are identical to the per-frame loop.
             while time < maxLength {
-                let feature = features[0..., time..<(time + 1), 0...]
-
                 let tokenInput: MLXArray?
                 if lastToken == vocabularySize {
                     tokenInput = nil
@@ -743,41 +749,72 @@ class ParakeetTDTModel: ParakeetBaseModel {
                 }
 
                 let (decoderOutput, proposedState) = decoder(tokenInput, state: state)
-                let jointOutput = joint(feature, decoderOutput.asType(feature.dtype))
+                let windowStart = time
+                let windowEnd = min(windowStart + windowSize, maxLength)
+                let windowFeatures = features[0..., windowStart..<windowEnd, 0...]
+                let jointOutput = joint(windowFeatures, decoderOutput.asType(windowFeatures.dtype))
 
-                let predictionSlice = jointOutput[0, 0, 0, 0..<(vocabularySize + 1)]
-                let durationSlice = jointOutput[0, 0, 0, (vocabularySize + 1)..<jointOutput.dim(3)]
-
-                let predictedToken = Int(MLX.argMax(predictionSlice).item(Int32.self))
-                let decisionIndex = durationSlice.count > 0
-                    ? Int(MLX.argMax(durationSlice).item(Int32.self))
-                    : 1
-                let clampedDecision = min(max(0, decisionIndex), max(0, durations.count - 1))
-                let durationSteps = max(0, durations[clampedDecision])
-
-                if predictedToken != vocabularySize {
-                    let start = TimeInterval(time) * stepSeconds
-                    let duration = TimeInterval(durationSteps) * stepSeconds
-                    tokens.append(
-                        ParakeetAlignedToken(
-                            id: predictedToken,
-                            text: tokenText(predictedToken),
-                            start: start,
-                            duration: duration
-                        )
-                    )
-                    lastToken = predictedToken
-                    state = proposedState
+                let classCount = jointOutput.dim(3)
+                let predictions = MLX.argMax(
+                    jointOutput[0, 0..., 0, 0..<(vocabularySize + 1)],
+                    axis: -1
+                ).asType(.int32)
+                let hasDurations = classCount > vocabularySize + 1
+                let readback: [Int32]
+                if hasDurations {
+                    let decisions = MLX.argMax(
+                        jointOutput[0, 0..., 0, (vocabularySize + 1)..<classCount],
+                        axis: -1
+                    ).asType(.int32)
+                    readback = MLX.concatenated([predictions, decisions], axis: 0).asArray(Int32.self)
+                } else {
+                    readback = predictions.asArray(Int32.self)
                 }
+                let windowLength = windowEnd - windowStart
+                var emitted = false
 
-                time += durationSteps
-                newSymbols += 1
+                while time < windowEnd {
+                    let row = time - windowStart
+                    let predictedToken = Int(readback[row])
+                    let decisionIndex = hasDurations ? Int(readback[windowLength + row]) : 1
+                    let clampedDecision = min(max(0, decisionIndex), max(0, durations.count - 1))
+                    let durationSteps = max(0, durations[clampedDecision])
 
-                if durationSteps != 0 {
-                    newSymbols = 0
-                } else if let maxSymbols, maxSymbols <= newSymbols {
-                    time += 1
-                    newSymbols = 0
+                    if predictedToken != vocabularySize {
+                        let start = TimeInterval(time) * stepSeconds
+                        let duration = TimeInterval(durationSteps) * stepSeconds
+                        tokens.append(
+                            ParakeetAlignedToken(
+                                id: predictedToken,
+                                text: tokenText(predictedToken),
+                                start: start,
+                                duration: duration
+                            )
+                        )
+                        lastToken = predictedToken
+                        state = proposedState
+                        emitted = true
+                    }
+
+                    time += durationSteps
+                    newSymbols += 1
+
+                    if durationSteps != 0 {
+                        newSymbols = 0
+                    } else if let maxSymbols, maxSymbols <= newSymbols {
+                        time += 1
+                        newSymbols = 0
+                    }
+
+                    if emitted {
+                        break
+                    }
+                    if durationSteps == 0, maxSymbols == nil {
+                        // Blank with zero duration and no symbol cap would
+                        // re-read the same frame forever in the legacy loop
+                        // too; preserve its behavior by re-evaluating.
+                        break
+                    }
                 }
             }
 
@@ -834,9 +871,13 @@ class ParakeetRNNTModel: ParakeetBaseModel {
             var newSymbols = 0
             var state: (MLXArray, MLXArray)?
 
+            // Greedy RNN-T decode over windows of frames: the joint runs for
+            // many contiguous frames against the fixed decoder state in one
+            // batched call with a single readback, and the host scans blanks
+            // forward until an emission changes the state. The legacy loop
+            // read one argMax scalar back per frame. Semantics identical.
+            let windowSize = ParakeetDecodingEnvironment.windowedDecodeFrames
             while time < maxLength {
-                let feature = features[0..., time..<(time + 1), 0...]
-
                 let tokenInput: MLXArray?
                 if lastToken == vocabularySize {
                     tokenInput = nil
@@ -845,30 +886,39 @@ class ParakeetRNNTModel: ParakeetBaseModel {
                 }
 
                 let (decoderOutput, proposedState) = decoder(tokenInput, state: state)
-                let jointOutput = joint(feature, decoderOutput.asType(feature.dtype))
-                let predictedToken = Int(MLX.argMax(jointOutput).item(Int32.self))
+                let windowStart = time
+                let windowEnd = min(windowStart + windowSize, maxLength)
+                let windowFeatures = features[0..., windowStart..<windowEnd, 0...]
+                let jointOutput = joint(windowFeatures, decoderOutput.asType(windowFeatures.dtype))
+                let predictions = MLX.argMax(jointOutput[0, 0..., 0, 0...], axis: -1)
+                    .asType(.int32).asArray(Int32.self)
 
-                if predictedToken != vocabularySize {
-                    let start = TimeInterval(time) * stepSeconds
-                    tokens.append(
-                        ParakeetAlignedToken(
-                            id: predictedToken,
-                            text: tokenText(predictedToken),
-                            start: start,
-                            duration: stepSeconds
+                while time < windowEnd {
+                    let predictedToken = Int(predictions[time - windowStart])
+
+                    if predictedToken != vocabularySize {
+                        let start = TimeInterval(time) * stepSeconds
+                        tokens.append(
+                            ParakeetAlignedToken(
+                                id: predictedToken,
+                                text: tokenText(predictedToken),
+                                start: start,
+                                duration: stepSeconds
+                            )
                         )
-                    )
-                    lastToken = predictedToken
-                    state = proposedState
+                        lastToken = predictedToken
+                        state = proposedState
 
-                    newSymbols += 1
-                    if let maxSymbols, maxSymbols <= newSymbols {
+                        newSymbols += 1
+                        if let maxSymbols, maxSymbols <= newSymbols {
+                            time += 1
+                            newSymbols = 0
+                        }
+                        break
+                    } else {
                         time += 1
                         newSymbols = 0
                     }
-                } else {
-                    time += 1
-                    newSymbols = 0
                 }
             }
 
