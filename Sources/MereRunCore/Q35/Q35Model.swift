@@ -232,6 +232,32 @@ public final class Q35Model: Module, @unchecked Sendable {
         return Q35ForwardOutput(hidden: hidden, logits: logits(from: hidden))
     }
 
+    /// Forward for prefill chunks: hidden states flow through every position
+    /// (the KV cache needs them all), but the lm_head projects only the
+    /// final position. Prefill consumers — first-token sampling, the MTP
+    /// hidden seed, and prefix-KV checkpoint restores — read exactly the
+    /// last position, while a full-chunk projection is a
+    /// [chunk, 150k-vocab] matmul plus its materialization per chunk and
+    /// pins full-chunk logits inside stored prefix-cache entries.
+    func forwardPrefill(
+        _ inputIds: MLXArray,
+        cache: [Q35LayerCache?]?,
+        inputEmbeddings: MLXArray? = nil,
+        positionIds: MLXArray? = nil
+    ) -> Q35ForwardOutput {
+        var hidden = model(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings,
+            positionIds: positionIds
+        )
+        let sequenceLength = hidden.dim(1)
+        if sequenceLength > 1 {
+            hidden = hidden[0..., (sequenceLength - 1)..., 0...]
+        }
+        return Q35ForwardOutput(hidden: hidden, logits: logits(from: hidden))
+    }
+
     public func callAsFunction(
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,

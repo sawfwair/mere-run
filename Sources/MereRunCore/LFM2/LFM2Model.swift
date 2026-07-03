@@ -542,6 +542,24 @@ public final class LFM2Model: Module, @unchecked Sendable {
         return LFM2ForwardOutput(hidden: hidden, logits: model.embedTokens.asLinear(hidden))
     }
 
+    /// Forward for prefill chunks: hidden states flow through every position
+    /// (the caches need them all), but the tied-embedding lm_head projects
+    /// only the final position — prefill consumers read exactly the last
+    /// position, and the full-chunk projection is a [chunk, vocab] matmul
+    /// plus its materialization per chunk.
+    func forwardPrefill(
+        _ inputIds: MLXArray,
+        cache: [LFM2LayerCache?]?,
+        inputEmbeddings: MLXArray? = nil
+    ) -> LFM2ForwardOutput {
+        var hidden = model(inputIds, cache: cache, inputEmbeddings: inputEmbeddings)
+        let sequenceLength = hidden.dim(1)
+        if sequenceLength > 1 {
+            hidden = hidden[0..., (sequenceLength - 1)..., 0...]
+        }
+        return LFM2ForwardOutput(hidden: hidden, logits: model.embedTokens.asLinear(hidden))
+    }
+
     public func callAsFunction(
         _ inputIds: MLXArray,
         cache: [LFM2LayerCache?]?,
