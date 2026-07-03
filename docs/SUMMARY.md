@@ -24,4 +24,5 @@
   - [Local API Server](./runtime/api-server.md)
 - Internals
   - [CLI and Runtime Internals](./internals/cli-and-runtime.md)
+  - [Structured Runs, Preflights, and Declarative Actions](./internals/structured-runs-preflight-actions.md)
   - [Source Layout Reference](./internals/source-layout.md)

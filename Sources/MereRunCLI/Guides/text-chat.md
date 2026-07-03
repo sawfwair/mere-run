@@ -32,6 +32,37 @@ mere.run model pull text-chat-gemma4-12b-4bit
 mere.run text chat --help
 ```
 
+## Native Assistant Tuning
+
+Use `mere.run text train-lora` for reviewed chat-style SFT data. Keep the data
+source-tagged and run `--dry-run --json` first so the dataset fingerprint,
+manifest path, and eval prompt count are captured before any optimizer work:
+
+```bash
+mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./local-assistant.safetensors \
+  --model text-chat-gemma4-12b-4bit \
+  --dry-run \
+  --json
+```
+
+The native optimizer path is intentionally part of `mere.run`; keep local
+fine-tune workflows in the same command plane as model resolution and runtime
+metadata. Drop `--dry-run` when the dataset is reviewed and you are ready for
+the native Gemma LoRA training run. Add `--visualize` to open a loopback
+training dashboard with loss, events, and adapter artifacts:
+
+```bash
+mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./local-assistant.safetensors \
+  --model text-chat-gemma4-12b-4bit \
+  --visualize
+```
+
 ## Parameters
 
 - `--prompt`, `-p`: user prompt.
@@ -45,6 +76,8 @@ mere.run text chat --help
 - `--thinking`, `--show-thinking`: include hidden reasoning output when supported.
 - `--stats`: print timing to stderr; Gemma4 runs also include MTP state and accept/draft counts.
 - `--stream`: stream tokens to stdout.
+- `--lora`: local `.safetensors` adapter path for supported native chat models.
+- `--lora-scale`: adapter scale; defaults to `1.0`.
 - `--tools`: comma-separated built-ins, currently `write_file` and `shell_exec`.
 - `--tool-loop`: let the model call tools repeatedly.
 - `--sandbox-dir`: working directory for tool execution.

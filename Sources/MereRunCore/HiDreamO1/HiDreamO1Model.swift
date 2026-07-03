@@ -398,6 +398,18 @@ enum HiDreamO1Denoiser {
         var uniPCState = scheduler.usesFlashStep ? nil : HiDreamO1UniPCState(scheduler: scheduler)
         var z = initialPatches(height: height, width: width, seed: seed)
 
+        // Read the sigma schedule once: the flash step's terminal branch
+        // needs each sigmaNext's sign on the host, and reading it inside the
+        // loop forced a GPU sync every denoise step.
+        let sigmaNextPositive: [Bool]
+        if scheduler.usesFlashStep, steps > 0 {
+            let sigmaNextValues = MLX.stacked((0..<steps).map { scheduler.sigma(at: $0 + 1) })
+                .asType(.float32).asArray(Float.self)
+            sigmaNextPositive = sigmaNextValues.map { $0 > 0 }
+        } else {
+            sigmaNextPositive = []
+        }
+
         progressHandler?(GenerationProgress(stage: .denoising, stepIndex: 0, totalSteps: steps))
         for stepIndex in 0..<steps {
             let timestep = scheduler.timestep(at: stepIndex)
@@ -435,6 +447,7 @@ enum HiDreamO1Denoiser {
                     sample: z,
                     sigma: scheduler.sigma(at: stepIndex),
                     sigmaNext: scheduler.sigma(at: stepIndex + 1),
+                    sigmaNextIsPositive: sigmaNextPositive[stepIndex],
                     noiseScale: scheduler.noiseScales[stepIndex],
                     seed: seed &+ UInt64(stepIndex + 10_000)
                 ).asType(.bfloat16)
@@ -477,12 +490,13 @@ enum HiDreamO1Denoiser {
         sample: MLXArray,
         sigma: MLXArray,
         sigmaNext: MLXArray,
+        sigmaNextIsPositive: Bool,
         noiseScale: Float,
         seed: UInt64
     ) -> MLXArray {
         let sampleF32 = sample.asType(.float32)
         let denoised = sampleF32 - modelOutput.asType(.float32) * sigma.asType(.float32)
-        guard sigmaNext.item(Float.self) > 0 else {
+        guard sigmaNextIsPositive else {
             return denoised
         }
         let noise = MLXRandom.normal(sample.shape, key: MLXRandom.key(seed)).asType(.float32)

@@ -487,22 +487,27 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
             if let hiddenState = model.lastHiddenState {
                 let hiddenLast = hiddenState[0, hiddenState.dim(1) - 1]
                 let hiddenForDecode = hiddenLast.reshaped(1, hiddenLast.dim(0))
-                let coordLogitsForTrace = model.decodeCoordinates(from: hiddenForDecode)
-                let coordBinsForTrace = MLX.argMax(coordLogitsForTrace, axis: -1).asArray(Int32.self)
-                let coordNumBins = max(1, coordLogitsForTrace.dim(-1) - 1)
-                let traceX = Float(coordBinsForTrace[0]) / Float(coordNumBins)
-                let traceY = Float(coordBinsForTrace[1]) / Float(coordNumBins)
-                let sizeLogitsForTrace = model.decodeSizes(from: hiddenForDecode)
-                let sizeValuesForTrace = model.processSizes(sizeLogitsForTrace).asArray(Float.self)
-                trace(
-                    String(
-                        format: "TRACE runtime hidden_decoded x=%.6f y=%.6f h=%.6f w=%.6f",
-                        traceX,
-                        traceY,
-                        sizeValuesForTrace[0],
-                        sizeValuesForTrace[1]
+                // Trace-only decodes: the coordinate and size heads plus two
+                // GPU readbacks per generated token, so they must not run
+                // when tracing is disabled.
+                if runtimeTraceLogURL != nil {
+                    let coordLogitsForTrace = model.decodeCoordinates(from: hiddenForDecode)
+                    let coordBinsForTrace = MLX.argMax(coordLogitsForTrace, axis: -1).asArray(Int32.self)
+                    let coordNumBins = max(1, coordLogitsForTrace.dim(-1) - 1)
+                    let traceX = Float(coordBinsForTrace[0]) / Float(coordNumBins)
+                    let traceY = Float(coordBinsForTrace[1]) / Float(coordNumBins)
+                    let sizeLogitsForTrace = model.decodeSizes(from: hiddenForDecode)
+                    let sizeValuesForTrace = model.processSizes(sizeLogitsForTrace).asArray(Float.self)
+                    trace(
+                        String(
+                            format: "TRACE runtime hidden_decoded x=%.6f y=%.6f h=%.6f w=%.6f",
+                            traceX,
+                            traceY,
+                            sizeValuesForTrace[0],
+                            sizeValuesForTrace[1]
+                        )
                     )
-                )
+                }
 
                 if tokenID == config.coordTokenID {
                     if let currentXY, let currentHW {

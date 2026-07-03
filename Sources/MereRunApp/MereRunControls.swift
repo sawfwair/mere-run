@@ -22,6 +22,41 @@ extension ButtonStyle where Self == MerePrimaryButtonStyle {
     static var merePrimary: MerePrimaryButtonStyle { MerePrimaryButtonStyle() }
 }
 
+/// Icon-only buttons that acknowledge the pointer: a soft fill on hover, a slight press dip.
+/// Hover feedback is what separates a native-feeling control from a static glyph.
+struct MereIconButtonStyle: ButtonStyle {
+    var tint: Color = MereRunTheme.textSecondary
+
+    func makeBody(configuration: Configuration) -> some View {
+        MereIconButtonBody(configuration: configuration, tint: tint)
+    }
+
+    private struct MereIconButtonBody: View {
+        let configuration: Configuration
+        let tint: Color
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .foregroundStyle(hovering ? MereRunTheme.textPrimary : tint)
+                .background {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                        .fill(hovering ? MereRunTheme.hoverFill : Color.clear)
+                }
+                .scaleEffect(configuration.isPressed ? 0.94 : 1)
+                .onHover { hovering = $0 }
+                .animation(MereRunTheme.Motion.quick, value: hovering)
+                .animation(MereRunTheme.Motion.quick, value: configuration.isPressed)
+        }
+    }
+}
+
+extension ButtonStyle where Self == MereIconButtonStyle {
+    static var mereIcon: MereIconButtonStyle { MereIconButtonStyle() }
+
+    static func mereIcon(tint: Color) -> MereIconButtonStyle { MereIconButtonStyle(tint: tint) }
+}
+
 extension View {
     /// The canonical text-field chrome (plain field over a themed panel), standardizing the
     /// repeated `.textFieldStyle(.plain).padding().merePanel()` pattern and replacing `.roundedBorder`.
@@ -29,5 +64,14 @@ extension View {
         textFieldStyle(.plain)
             .padding(MereRunTheme.Spacing.sm)
             .merePanel(cornerRadius: cornerRadius)
+    }
+
+    /// Row hover treatment for list-like custom rows (library, sidebar, model list).
+    func mereHoverRow(_ hovering: Bool, cornerRadius: CGFloat = MereRunTheme.Radius.md) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(hovering ? MereRunTheme.hoverFill : Color.clear)
+        }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
     }
 }

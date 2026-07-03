@@ -169,7 +169,7 @@ public final class LoRATrainingMetricsLogger: @unchecked Sendable {
         try html.write(to: htmlURL, atomically: true, encoding: .utf8)
     }
 
-    private static func loadPoints(from csvURL: URL) throws -> [LoRALossPoint] {
+    public static func loadPoints(from csvURL: URL) throws -> [LoRALossPoint] {
         guard FileManager.default.fileExists(atPath: csvURL.path) else {
             return []
         }

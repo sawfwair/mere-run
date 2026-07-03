@@ -23,8 +23,11 @@ struct StudioRootView: View {
     @State private var activeConversationID: UUID?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var studioError: String?
+    /// Locally installed models feeding the composer's quick-picker.
+    @State private var installedModels: [StudioModelInventoryRow] = []
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @State private var showWelcome = false
+    @FocusState private var promptFocused: Bool
 
     private var selectedItem: StudioLibraryItem? {
         if let selectedLibraryID, let found = library.items.first(where: { $0.id == selectedLibraryID }) {
@@ -99,125 +102,93 @@ struct StudioRootView: View {
         )
     }
 
+    // The body is staged (shell → panels → sheets → observers) so each stage stays a small,
+    // independently type-checked expression.
     var body: some View {
-        HStack(spacing: 0) {
-            if showLibrary {
-                StudioLibraryPanel(
-                    items: library.items,
-                    selectedID: $selectedLibraryID,
-                    isVisible: $showLibrary,
-                    onDelete: { id in
-                        library.delete(id: id)
-                        if selectedLibraryID == id { selectedLibraryID = nil }
-                    },
-                    onRename: { id, title in
-                        library.rename(id: id, title: title)
-                    },
-                    onQuickLook: { QuickLookCoordinator.shared.preview($0) }
-                )
-                .frame(width: 292)
+        observedShell
+    }
 
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.55))
-            }
-
-            VStack(spacing: 0) {
-                StudioTopBar(
+    private var shell: some View {
+        ZStack(alignment: .trailing) {
+            HStack(spacing: 0) {
+                StudioSidebar(
                     mode: $mode,
-                    showLibrary: $showLibrary,
-                    showAdvanced: $showAdvanced,
-                    readiness: readiness,
                     modeCapabilities: modeCapabilities,
-                    resolvedCLI: controller.resolvedCLI,
                     serverStatus: controller.serverStatus,
+                    resolvedCLI: controller.resolvedCLI,
                     onShowModels: { showModels = true },
                     onShowHelp: { showHelp = true }
                 )
 
                 Divider()
-                    .overlay(MereRunTheme.border.opacity(0.45))
+                    .overlay(MereRunTheme.border.opacity(0.4))
 
-                if let persistenceError = library.lastPersistenceError {
-                    MereBanner(
-                        severity: .warning,
-                        text: "Run history not saved: \(persistenceError)"
+                if showLibrary {
+                    StudioLibraryPanel(
+                        items: library.items,
+                        selectedID: $selectedLibraryID,
+                        isVisible: $showLibrary,
+                        onDelete: { id in
+                            library.delete(id: id)
+                            if selectedLibraryID == id { selectedLibraryID = nil }
+                        },
+                        onRename: { id, title in
+                            library.rename(id: id, title: title)
+                        },
+                        onQuickLook: { QuickLookCoordinator.shared.preview($0) }
                     )
-                    .padding(.horizontal, 24)
-                    .padding(.top, 10)
+                    .frame(width: 272)
+
+                    Divider()
+                        .overlay(MereRunTheme.border.opacity(0.5))
                 }
 
-                StudioCanvas(
-                    mode: mode,
-                    item: selectedItem,
-                    conversationItem: activeConversationItem,
-                    conversationLiveText: activeConversationLiveText,
-                    isConversationRunning: activeConversationRunning,
-                    isRunning: controller.isRunning,
-                    status: displayStatus,
-                    readiness: readiness,
-                    error: studioError,
-                    logs: controller.logs,
-                    liveOutputText: controller.liveOutputText,
-                    progress: controller.currentProgress,
-                    onOpen: openSelectedOutput,
-                    onReveal: revealSelectedOutput,
-                    onQuickLook: {
-                        if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
-                    },
-                    onPullModel: pullModel,
-                    onShowDetails: { showAdvanced = true },
-                    onNewChat: startNewConversation,
-                    onCopy: copyToClipboard,
-                    onRetry: retryLastTurn,
-                    onEdit: editMessage
-                )
-
-                StudioPromptBar(
-                    mode: mode,
-                    draft: $draft,
-                    showOptions: $showOptions,
-                    isRunning: controller.isRunning,
-                    queuedCount: controller.queuedRunCount,
-                    readiness: readiness,
-                    sendBlocked: mode.isConversational && activeConversationRunning,
-                    onRun: runStudioCommand,
-                    onStop: controller.cancel,
-                    onAttach: chooseAttachment,
-                    onPaste: pasteImageFromClipboard
-                )
-                .padding(.horizontal, 24)
-                .padding(.bottom, 22)
+                contentColumn
             }
-            .frame(minWidth: 680)
-            .dropDestination(for: URL.self) { urls, _ in
-                guard !mode.acceptedTypes.isEmpty, let url = urls.first(where: \.isFileURL) else {
-                    return false
-                }
-                draft.inputPath = url.path
-                studioError = nil
-                return true
-            } isTargeted: { targeted in
-                withAnimation(.easeOut(duration: 0.15)) {
-                    isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
-                }
-            }
-            .overlay {
-                if isDropTargeted {
-                    RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(MereRunTheme.accent, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
-                        .padding(8)
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-            }
-            .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
 
             if showAdvanced {
-                advancedResizeHandle
-                AdvancedControlSurface(docked: true, onDetach: { advancedDetached = true })
-                    .frame(width: advancedWidth)
+                advancedPanel
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .zIndex(1)
             }
         }
+        .background(MereRunTheme.background.ignoresSafeArea())
+    }
+
+    private var advancedPanel: some View {
+        HStack(spacing: 0) {
+            advancedResizeHandle
+            AdvancedControlSurface(docked: true, onDetach: { advancedDetached = true })
+                .frame(width: advancedWidth)
+                .clipped()
+        }
+        .background(MereRunTheme.background)
+        .mereShadow(radius: 24, y: 0)
+    }
+
+    private var contentColumn: some View {
+        VStack(spacing: 0) {
+            topBar
+
+            Divider()
+                .overlay(MereRunTheme.border.opacity(0.45))
+
+            if let persistenceError = library.lastPersistenceError {
+                MereBanner(
+                    severity: .warning,
+                    text: "Run history not saved: \(persistenceError)"
+                )
+                .padding(.horizontal, 24)
+                .padding(.top, 10)
+            }
+
+            canvas
+
+            composer
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+        }
+        .frame(minWidth: 620)
         .background {
             ZStack {
                 MereRunTheme.background
@@ -233,55 +204,134 @@ struct StudioRootView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showOptions) {
-            StudioOptionsSheet(mode: mode, draft: $draft)
-                .frame(width: 500)
-        }
-        .sheet(isPresented: $showModels) {
-            StudioModelsSheet(onModelsChanged: refreshReadiness)
-                .environmentObject(controller)
-        }
-        .sheet(isPresented: $showWelcome) {
-            StudioWelcomeSheet(
-                resolvedCLI: controller.resolvedCLI,
-                onBrowseModels: {
-                    hasCompletedWelcome = true
-                    showWelcome = false
-                    showModels = true
-                },
-                onDone: {
-                    hasCompletedWelcome = true
-                    showWelcome = false
-                }
-            )
-        }
-        .sheet(isPresented: $showHelp) {
-            StudioHelpSheet()
-                .environmentObject(controller)
-                .frame(width: 720, height: 560)
-        }
-        .sheet(isPresented: $advancedDetached) {
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Advanced — full control surface")
-                        .font(MereRunTheme.sectionFont)
-                    Spacer()
-                    Button("Dock") { advancedDetached = false }
-                        .keyboardShortcut(.defaultAction)
-                }
-                .padding(16)
-                Divider().overlay(MereRunTheme.border.opacity(0.5))
-                AdvancedControlSurface(docked: false)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard !mode.acceptedTypes.isEmpty, let url = urls.first(where: \.isFileURL) else {
+                return false
             }
-            .frame(width: 1_260, height: 780)
-            .environmentObject(controller)
+            draft.inputPath = url.path
+            studioError = nil
+            return true
+        } isTargeted: { targeted in
+            withAnimation(MereRunTheme.Motion.quick) {
+                isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
+            }
         }
-        .focusedSceneValue(\.showLibrary, $showLibrary)
-        .focusedSceneValue(\.showAdvanced, $showAdvanced)
-        .focusedSceneValue(\.showModels, $showModels)
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.xl)
+                    .strokeBorder(MereRunTheme.accent, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .padding(8)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
+    }
+
+    private var canvas: some View {
+        StudioCanvas(
+            mode: mode,
+            item: selectedItem,
+            conversationItem: activeConversationItem,
+            conversationLiveText: activeConversationLiveText,
+            isConversationRunning: activeConversationRunning,
+            isRunning: controller.isRunning,
+            status: displayStatus,
+            readiness: readiness,
+            error: studioError,
+            logs: controller.logs,
+            liveOutputText: controller.liveOutputText,
+            progress: controller.currentProgress,
+            onOpen: openSelectedOutput,
+            onReveal: revealSelectedOutput,
+            onQuickLook: {
+                if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
+            },
+            onPullModel: pullModel,
+            onShowDetails: { showAdvanced = true },
+            onNewChat: startNewConversation,
+            onCopy: copyToClipboard,
+            onRetry: retryLastTurn,
+            onEdit: editMessage,
+            onStop: controller.cancel,
+            onUseExample: useExamplePrompt,
+            onAttach: chooseAttachment
+        )
+    }
+
+    private var composer: some View {
+        StudioComposer(
+            mode: mode,
+            draft: $draft,
+            showOptions: $showOptions,
+            isRunning: controller.isRunning,
+            queuedCount: controller.queuedRunCount,
+            readiness: readiness,
+            sendBlocked: mode.isConversational && activeConversationRunning,
+            installedModels: installedModels,
+            promptFocus: $promptFocused,
+            onRun: runStudioCommand,
+            onStop: controller.cancel,
+            onAttach: chooseAttachment,
+            onPaste: pasteImageFromClipboard,
+            onShowModels: { showModels = true }
+        )
+    }
+
+    private var sheetedShell: some View {
+        shell
+            .sheet(isPresented: $showModels) {
+                StudioModelsSheet(onModelsChanged: {
+                    refreshReadiness()
+                    refreshInstalledModels()
+                })
+                .environmentObject(controller)
+            }
+            .sheet(isPresented: $showWelcome) {
+                StudioWelcomeSheet(
+                    resolvedCLI: controller.resolvedCLI,
+                    onBrowseModels: {
+                        hasCompletedWelcome = true
+                        showWelcome = false
+                        showModels = true
+                    },
+                    onDone: {
+                        hasCompletedWelcome = true
+                        showWelcome = false
+                    }
+                )
+            }
+            .sheet(isPresented: $showHelp) {
+                StudioHelpSheet()
+                    .environmentObject(controller)
+                    .frame(width: 720, height: 560)
+            }
+            .sheet(isPresented: $advancedDetached) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Advanced — full control surface")
+                            .font(MereRunTheme.sectionFont)
+                        Spacer()
+                        Button("Dock") { advancedDetached = false }
+                            .keyboardShortcut(.defaultAction)
+                    }
+                    .padding(16)
+                    Divider().overlay(MereRunTheme.border.opacity(0.5))
+                    AdvancedControlSurface(docked: false)
+                }
+                .frame(width: 1_260, height: 780)
+                .environmentObject(controller)
+            }
+            .focusedSceneValue(\.showLibrary, $showLibrary)
+            .focusedSceneValue(\.showAdvanced, $showAdvanced)
+            .focusedSceneValue(\.showModels, $showModels)
+    }
+
+    private var lifecycleShell: some View {
+        sheetedShell
         .task {
-            // Poll the local server status for the top-bar pill. status has a 1s probe timeout,
-            // so a modest cadence keeps the pill live without hammering the CLI.
+            // Poll the local server status for the sidebar status cluster. status has a 1s probe
+            // timeout, so a modest cadence keeps it live without hammering the CLI.
             while !Task.isCancelled {
                 await controller.refreshServerStatus()
                 try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
@@ -302,10 +352,17 @@ struct StudioRootView: View {
                 selectedLibraryID = library.items.first { $0.mode == mode }?.id
             }
             controller.checkReadiness(for: mode, draft: draft)
+            refreshInstalledModels()
             if !hasCompletedWelcome {
                 showWelcome = true
+            } else if mode != .listen {
+                promptFocused = true
             }
         }
+    }
+
+    private var navigationObservedShell: some View {
+        lifecycleShell
         .onChange(of: showAdvanced) { _, isShown in
             if isShown { syncAdvancedToStudio() }
         }
@@ -326,6 +383,7 @@ struct StudioRootView: View {
             }
             draft = nextDraft
             controller.checkReadiness(for: newMode, draft: draft)
+            if newMode != .listen { promptFocused = true }
         }
         .onChange(of: controller.recommendedChatModelID) { _, _ in
             guard mode == .chat, activeConversationID == nil else { return }
@@ -343,6 +401,10 @@ struct StudioRootView: View {
             applyConversationSettings(from: item, to: &draft)
             draft.prompt = ""
         }
+    }
+
+    private var validationObservedShell: some View {
+        navigationObservedShell
         .onChange(of: draft.model) { _, _ in
             studioError = nil
             refreshReadiness()
@@ -372,6 +434,10 @@ struct StudioRootView: View {
             studioError = nil
             refreshReadiness()
         }
+    }
+
+    private var observedShell: some View {
+        validationObservedShell
         .onReceive(controller.runCompletions) { result in
             // Subscribe to the lossless completion stream, not lastRunResult: two runs finishing
             // in the same runloop turn would coalesce through onChange and drop one.
@@ -415,6 +481,10 @@ struct StudioRootView: View {
             } else if mutatedModels || completedLibraryItem {
                 refreshReadiness()
             }
+
+            if mutatedModels {
+                refreshInstalledModels()
+            }
         }
         .onChange(of: controller.activeRunRequestID) { _, requestID in
             // Conversation turns use a per-turn request id with no matching library row, so the
@@ -429,6 +499,57 @@ struct StudioRootView: View {
             library.updateOutput(id: requestID, outputURL: outputURL)
             selectedLibraryID = requestID
         }
+    }
+
+    /// The slim, contextual header for the content column: which mode you're in, and the two
+    /// panel toggles. Machine-wide status lives in the sidebar; blocking states own the canvas.
+    private var topBar: some View {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Image(systemName: mode.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(mode.title)
+                    .font(.system(size: 15, weight: .semibold))
+                Text(mode.subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(MereRunTheme.Motion.standard) {
+                    showLibrary.toggle()
+                }
+            } label: {
+                Image(systemName: "rectangle.stack")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.mereIcon)
+            .help(showLibrary ? "Hide library (⌃⌘L)" : "Show library (⌃⌘L)")
+            .accessibilityLabel(showLibrary ? "Hide library" : "Show library")
+
+            Button {
+                withAnimation(MereRunTheme.Motion.standard) {
+                    showAdvanced.toggle()
+                }
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(showAdvanced ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.mereIcon)
+            .help(showAdvanced ? "Hide Advanced (⌃⌘E)" : "Show Advanced (⌃⌘E)")
+            .accessibilityLabel(showAdvanced ? "Hide Advanced" : "Show Advanced")
+        }
+        .padding(.horizontal, MereRunTheme.Spacing.lg)
+        .frame(height: 52)
+        .background(VisualEffectBackground())
     }
 
     private func runStudioCommand() {
@@ -458,7 +579,9 @@ struct StudioRootView: View {
             let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
             let preview = controller
                 .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
-            let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0 ? .queued : .running
+            let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
+                ? .queued
+                : .running
             library.start(request: request, commandPreview: preview, status: status)
             selectedLibraryID = request.id
             controller.run(studio: request)
@@ -553,8 +676,8 @@ struct StudioRootView: View {
     private var advancedResizeHandle: some View {
         Rectangle()
             .fill(MereRunTheme.border.opacity(0.55))
-            .frame(width: 5)
-            .contentShape(Rectangle())
+            .frame(width: 4)
+            .contentShape(Rectangle().inset(by: -3))
             .onHover { inside in
                 if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
             }
@@ -600,6 +723,13 @@ struct StudioRootView: View {
         return nextDraft
     }
 
+    /// Fills the composer from an empty-state example and hands it focus — never auto-runs.
+    private func useExamplePrompt(_ example: String) {
+        draft.prompt = example
+        studioError = nil
+        promptFocused = true
+    }
+
     /// Edits a prior user turn: truncates the thread at that message and loads its text back into
     /// the composer, so sending re-runs the conversation from that point.
     private func editMessage(_ messageID: UUID) {
@@ -609,6 +739,7 @@ struct StudioRootView: View {
             draft.prompt = removed.content
             // Restore the turn's attached image so re-sending re-runs vision chat as before.
             if mode == .chat { draft.inputPath = removed.imagePath ?? "" }
+            promptFocused = true
         }
         // Editing the first turn empties the thread — drop the now-empty row and act like a new chat.
         if let item = library.items.first(where: { $0.id == conversationID }),
@@ -628,6 +759,7 @@ struct StudioRootView: View {
         fresh.reset(for: mode)
         fresh.prompt = ""
         draft = fresh
+        promptFocused = true
     }
 
     private func applyConversationSettings(from item: StudioLibraryItem, to draft: inout StudioDraft) {
@@ -666,7 +798,8 @@ struct StudioRootView: View {
             }
             pendingPullRefresh = StudioReadinessRefresh(mode: mode, draft: draft)
             controller.readinessByMode[mode] = .checking
-            showAdvanced = true
+            // The canvas running overlay shows pull progress (bytes, speed, cancel) in place,
+            // so the Advanced console no longer needs to open for a pull.
             if !controller.run(studio: request) {
                 pendingPullRefresh = nil
                 refreshReadiness()
@@ -678,6 +811,15 @@ struct StudioRootView: View {
 
     private func refreshReadiness() {
         controller.checkReadiness(for: mode, draft: draft)
+    }
+
+    /// Refreshes the composer's installed-model quick-picker from `model list`.
+    private func refreshInstalledModels() {
+        Task {
+            let result = await controller.utilityCommandResult(args: ["model", "list"])
+            guard result.exitCode == 0 else { return }
+            installedModels = StudioModelInventoryParser.rows(from: result.stdout).filter(\.isInstalled)
+        }
     }
 
     private func chooseAttachment() {
@@ -737,1311 +879,6 @@ struct StudioRootView: View {
 private struct StudioReadinessRefresh: Equatable {
     let mode: StudioMode
     let draft: StudioDraft
-}
-
-private struct StudioTopBar: View {
-    @Binding var mode: StudioMode
-    @Binding var showLibrary: Bool
-    @Binding var showAdvanced: Bool
-    let readiness: ModelReadinessState
-    let modeCapabilities: [StudioMode: StudioModelCapability]
-    let resolvedCLI: String
-    let serverStatus: StudioServerStatus?
-    let onShowModels: () -> Void
-    let onShowHelp: () -> Void
-
-    var body: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        showLibrary.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .help("Show library")
-                .accessibilityLabel(showLibrary ? "Hide library" : "Show library")
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("mere.run")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text("Create anything. Locally.")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                }
-
-                Spacer()
-
-                StudioStatusPill(
-                    title: "Server",
-                    detail: serverStatusDetail,
-                    systemImage: serverStatus?.isReachable == true ? "bolt.horizontal.circle" : "circle.dashed",
-                    color: serverStatusColor
-                )
-
-                StudioStatusPill(
-                    title: readiness.title,
-                    detail: readiness.message,
-                    systemImage: readinessStatusImage,
-                    color: readinessStatusColor
-                )
-
-                StudioStatusPill(
-                    title: "CLI",
-                    detail: resolvedCLI,
-                    systemImage: "terminal",
-                    color: MereRunTheme.accent
-                )
-
-                Button {
-                    onShowModels()
-                } label: {
-                    Label("Models", systemImage: "shippingbox")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    onShowHelp()
-                } label: {
-                    Label("Help", systemImage: "questionmark.circle")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        showAdvanced.toggle()
-                    }
-                } label: {
-                    Label("Advanced", systemImage: "slider.horizontal.3")
-                }
-                .buttonStyle(.bordered)
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(StudioMode.allCases) { candidate in
-                        StudioModeChip(
-                            mode: candidate,
-                            isSelected: candidate == mode,
-                            unavailableMessage: modeCapabilities[candidate]?.unavailableMessage
-                        ) {
-                            withAnimation(.easeOut(duration: 0.18)) {
-                                mode = candidate
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 16)
-        .padding(.bottom, 14)
-        .background(VisualEffectBackground())
-    }
-
-    private var serverStatusDetail: String {
-        guard let serverStatus else { return "checking…" }
-        if serverStatus.isReachable {
-            let model = serverStatus.loadedModelSummary.map { " · \($0)" } ?? ""
-            return "up\(model) · \(serverStatus.installedCount) installed"
-        }
-        return "offline · \(serverStatus.installedCount) installed"
-    }
-
-    private var serverStatusColor: Color {
-        guard let serverStatus else { return MereRunTheme.textMuted }
-        return serverStatus.isReachable ? MereRunTheme.green : MereRunTheme.textMuted
-    }
-
-    private var readinessStatusImage: String {
-        if readiness.isChecking { return "hourglass" }
-        if readiness.canPull { return "arrow.down.circle" }
-        if readiness.blocksRun { return "exclamationmark.triangle" }
-        return "checkmark.circle"
-    }
-
-    private var readinessStatusColor: Color {
-        if readiness.isChecking { return MereRunTheme.yellow }
-        if readiness.canPull { return MereRunTheme.yellow }
-        if readiness.blocksRun { return MereRunTheme.red }
-        return MereRunTheme.green
-    }
-}
-
-private struct StudioModeChip: View {
-    let mode: StudioMode
-    let isSelected: Bool
-    let unavailableMessage: String?
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Image(systemName: mode.systemImage)
-                    .font(.system(size: 12, weight: .semibold))
-                Text(mode.title)
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background {
-                Capsule()
-                    .fill(backgroundColor)
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(borderColor, lineWidth: 1)
-                    }
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(unavailableMessage != nil)
-        .opacity(unavailableMessage == nil ? 1 : 0.52)
-        .help(unavailableMessage ?? mode.subtitle)
-    }
-
-    private var foregroundColor: Color {
-        if unavailableMessage != nil {
-            return MereRunTheme.textMuted
-        }
-        return isSelected ? MereRunTheme.background : MereRunTheme.textSecondary
-    }
-
-    private var backgroundColor: Color {
-        if unavailableMessage != nil {
-            return MereRunTheme.surface.opacity(0.55)
-        }
-        return isSelected ? MereRunTheme.accent : MereRunTheme.surface
-    }
-
-    private var borderColor: Color {
-        if unavailableMessage != nil {
-            return MereRunTheme.border.opacity(0.7)
-        }
-        return MereRunTheme.border.opacity(isSelected ? 0 : 0.8)
-    }
-}
-
-private struct StudioStatusPill: View {
-    let title: String
-    let detail: String
-    let systemImage: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(color)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(detail)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 38)
-        .frame(maxWidth: 210)
-        .merePanel(cornerRadius: 18)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title): \(detail)")
-    }
-}
-
-private struct StudioCanvas: View {
-    let mode: StudioMode
-    let item: StudioLibraryItem?
-    let conversationItem: StudioLibraryItem?
-    let conversationLiveText: String?
-    let isConversationRunning: Bool
-    let isRunning: Bool
-    let status: String
-    let readiness: ModelReadinessState
-    let error: String?
-    let logs: [LogLine]
-    let liveOutputText: String
-    let progress: StudioRunProgress?
-    let onOpen: () -> Void
-    let onReveal: () -> Void
-    let onQuickLook: () -> Void
-    let onPullModel: () -> Void
-    let onShowDetails: () -> Void
-    let onNewChat: () -> Void
-    let onCopy: (String) -> Void
-    let onRetry: () -> Void
-    let onEdit: (UUID) -> Void
-
-    private var visibleLiveOutputText: String? {
-        guard isRunning else { return nil }
-        let text = liveOutputText
-            .replacingOccurrences(of: "\0", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    }
-
-    private var recentLogLines: [String] {
-        logs.suffix(4).map(\.text)
-    }
-
-    private var shouldShowReadinessOverlay: Bool {
-        !isRunning && (readiness.blocksRun || error != nil)
-    }
-
-    var body: some View {
-        ZStack {
-            if mode.isConversational {
-                StudioConversationView(
-                    item: conversationItem,
-                    liveText: conversationLiveText,
-                    isRunning: isConversationRunning,
-                    mode: mode,
-                    onNewChat: onNewChat,
-                    onCopy: onCopy,
-                    onRetry: onRetry,
-                    onEdit: onEdit
-                )
-                .transition(.opacity)
-            } else if let item {
-                StudioOutputView(item: item, liveOutputText: visibleLiveOutputText, onOpen: onOpen, onReveal: onReveal, onQuickLook: onQuickLook)
-                    .padding(32)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            } else {
-                StudioEmptyState(mode: mode)
-                    .padding(32)
-            }
-
-            if isRunning && visibleLiveOutputText == nil && !mode.isConversational {
-                StudioRunningOverlay(status: status, progress: progress, recentLogs: recentLogLines)
-                    .transition(.opacity)
-            }
-
-            if shouldShowReadinessOverlay {
-                StudioReadinessOverlay(
-                    title: error == nil ? readiness.title : "Needs attention",
-                    message: error ?? readiness.message,
-                    canPull: error == nil && readiness.canPull,
-                    isChecking: error == nil && readiness.isChecking,
-                    onPullModel: onPullModel,
-                    onShowDetails: onShowDetails
-                )
-                .padding(32)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeOut(duration: 0.18), value: isRunning)
-        .animation(.easeOut(duration: 0.18), value: shouldShowReadinessOverlay)
-    }
-}
-
-private struct StudioEmptyState: View {
-    let mode: StudioMode
-
-    var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: mode.systemImage)
-                .font(.system(size: 48, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-                .frame(width: 92, height: 92)
-                .background {
-                    Circle()
-                        .fill(MereRunTheme.surfaceRaised)
-                }
-
-            VStack(spacing: 8) {
-                Text(mode.emptyTitle)
-                    .font(.system(size: 30, weight: .semibold))
-                Text(mode.emptyMessage)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 460)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct StudioRunningOverlay: View {
-    let status: String
-    let progress: StudioRunProgress?
-    let recentLogs: [String]
-
-    var body: some View {
-        VStack(spacing: 14) {
-            if let progress, let fraction = progress.fractionCompleted {
-                VStack(spacing: 6) {
-                    ProgressView(value: fraction)
-                        .progressViewStyle(.linear)
-                        .tint(MereRunTheme.accent)
-                        .frame(width: 320)
-                    HStack {
-                        Text(progress.label)
-                            .lineLimit(1)
-                        Spacer()
-                        Text("\(Int((fraction * 100).rounded()))%")
-                    }
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .frame(width: 320)
-                    if let detail = progress.detail {
-                        Text(detail)
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                            .lineLimit(1)
-                    }
-                }
-            } else {
-                ProgressView()
-                    .controlSize(.large)
-            }
-            Text(progress?.detail != nil && progress?.fractionCompleted == nil
-                ? "\(status) · \(progress?.detail ?? "")"
-                : status)
-                .font(.system(size: 18, weight: .semibold))
-                .multilineTextAlignment(.center)
-            if !recentLogs.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(recentLogs.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(MereRunTheme.monoFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                            .lineLimit(2)
-                    }
-                }
-                .padding(12)
-                .frame(width: 460, alignment: .leading)
-                .background {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(MereRunTheme.background.opacity(0.55))
-                }
-            }
-        }
-        .padding(28)
-        .merePanel(cornerRadius: 18)
-        .mereShadow(radius: 28, y: 12)
-    }
-}
-
-private struct StudioReadinessOverlay: View {
-    let title: String
-    let message: String
-    let canPull: Bool
-    let isChecking: Bool
-    let onPullModel: () -> Void
-    let onShowDetails: () -> Void
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: statusImage)
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(statusColor)
-            Text(title)
-                .font(.system(size: 22, weight: .semibold))
-            Text(message)
-                .font(MereRunTheme.bodyFont)
-                .foregroundStyle(MereRunTheme.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 280)
-            HStack(spacing: 10) {
-                if canPull {
-                    Button {
-                        onPullModel()
-                    } label: {
-                        Label("Pull Model", systemImage: "arrow.down.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
-                }
-                Button {
-                    onShowDetails()
-                } label: {
-                    Label("Details", systemImage: "terminal")
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(28)
-        .merePanel(cornerRadius: 18)
-        .mereShadow(radius: 30, y: 12)
-    }
-
-    private var statusImage: String {
-        if isChecking { return "hourglass" }
-        return canPull ? "arrow.down.circle" : "exclamationmark.triangle"
-    }
-
-    private var statusColor: Color {
-        if isChecking { return MereRunTheme.yellow }
-        return canPull ? MereRunTheme.yellow : MereRunTheme.red
-    }
-}
-
-private struct StudioOutputView: View {
-    let item: StudioLibraryItem
-    let liveOutputText: String?
-    let onOpen: () -> Void
-    let onReveal: () -> Void
-    let onQuickLook: () -> Void
-
-    var body: some View {
-        VStack(spacing: 18) {
-            outputPreview
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(MereRunTheme.surface.opacity(0.45))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(MereRunTheme.border.opacity(0.65), lineWidth: 1)
-                }
-
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.mode.title)
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                    Text(item.displayTitle)
-                        .font(.system(size: 16, weight: .semibold))
-                        .lineLimit(1)
-                }
-                Spacer()
-                statusBadge
-                if item.outputURL != nil {
-                    Button("Open", action: onOpen)
-                        .buttonStyle(.bordered)
-                    Button {
-                        onQuickLook()
-                    } label: {
-                        Image(systemName: "eye")
-                    }
-                    .buttonStyle(.bordered)
-                    .help("Quick Look")
-                    .accessibilityLabel("Quick Look")
-                    Button {
-                        onReveal()
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }
-                    .buttonStyle(.bordered)
-                    .help("Reveal in Finder")
-                    .accessibilityLabel("Reveal in Finder")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var outputPreview: some View {
-        if let url = item.outputURL {
-            switch StudioOutputFileKind.classify(url) {
-            case .image:
-                StudioAsyncImagePreview(
-                    url: url,
-                    maxPixelSize: 2_200,
-                    contentMode: .fit,
-                    fallbackSystemImage: iconName(for: url)
-                )
-                .padding(22)
-            case .audio:
-                StudioAudioPlayerView(url: url)
-            case .video:
-                StudioVideoPlayerView(url: url)
-            case .text:
-                StudioTextFilePreview(url: url)
-            case .other:
-                filePlaceholder(for: url)
-            }
-        } else if let text = liveOutputText ?? item.outputText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            ScrollView {
-                Text(text)
-                    .font(item.mode == .chat ? MereRunTheme.bodyFont : MereRunTheme.monoFont)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(22)
-            }
-        } else {
-            VStack(spacing: 12) {
-                Image(systemName: "doc")
-                    .font(.system(size: 46, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                Text(item.status == .failed ? "Run did not produce a file." : "Output will appear here.")
-                    .font(MereRunTheme.bodyFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-        }
-    }
-
-    private func filePlaceholder(for url: URL) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: iconName(for: url))
-                .font(.system(size: 54, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-            Text(url.lastPathComponent)
-                .font(.system(size: 16, weight: .semibold))
-                .lineLimit(1)
-            Text(url.deletingLastPathComponent().path)
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .lineLimit(1)
-        }
-        .padding(22)
-    }
-
-    private var statusBadge: some View {
-        Text(item.status.rawValue.capitalized)
-            .font(MereRunTheme.captionFont)
-            .foregroundStyle(statusColor)
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background {
-                Capsule()
-                    .fill(statusColor.opacity(0.14))
-            }
-    }
-
-    private var statusColor: Color {
-        switch item.status {
-        case .queued: return MereRunTheme.textMuted
-        case .running: return MereRunTheme.yellow
-        case .completed: return MereRunTheme.green
-        case .failed: return MereRunTheme.red
-        }
-    }
-
-    private func iconName(for url: URL) -> String {
-        switch url.pathExtension.lowercased() {
-        case "wav", "mp3", "m4a": return "waveform"
-        case "mp4", "mov": return "film"
-        case "json": return "curlybraces"
-        case "safetensors": return "shippingbox"
-        default: return "doc"
-        }
-    }
-}
-
-private enum StudioImageContentMode: Equatable {
-    case fit
-    case fill
-}
-
-private enum StudioImageLoadState {
-    case loading
-    case loaded(NSImage)
-    case unavailable
-}
-
-private struct StudioAsyncImagePreview: View {
-    let url: URL
-    let maxPixelSize: CGFloat
-    let contentMode: StudioImageContentMode
-    let fallbackSystemImage: String
-
-    @State private var loadState = StudioImageLoadState.loading
-
-    var body: some View {
-        Group {
-            switch loadState {
-            case .loading:
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .loaded(let image):
-                if contentMode == .fill {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                }
-            case .unavailable:
-                Image(systemName: fallbackSystemImage)
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .task(id: url) {
-            loadState = .loading
-            let loaded = await Task.detached(priority: .userInitiated) {
-                StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: maxPixelSize)
-            }.value
-            guard !Task.isCancelled else { return }
-            if let image = loaded?.image {
-                loadState = .loaded(image)
-            } else {
-                loadState = .unavailable
-            }
-        }
-    }
-}
-
-private struct StudioTextFilePreview: View {
-    let url: URL
-
-    @State private var text: String?
-    @State private var didLoad = false
-
-    var body: some View {
-        ScrollView {
-            if let text {
-                Text(text)
-                    .font(MereRunTheme.monoFont)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(22)
-            } else if didLoad {
-                Text("Text preview unavailable.")
-                    .font(MereRunTheme.bodyFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(22)
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, minHeight: 180)
-                    .padding(22)
-            }
-        }
-        .task(id: url) {
-            text = nil
-            didLoad = false
-            let preview = await Task.detached(priority: .userInitiated) {
-                StudioTextPreviewReader.previewText(from: url)
-            }.value
-            guard !Task.isCancelled else { return }
-            text = preview
-            didLoad = true
-        }
-    }
-}
-
-private struct StudioPromptBar: View {
-    let mode: StudioMode
-    @Binding var draft: StudioDraft
-    @Binding var showOptions: Bool
-    let isRunning: Bool
-    let queuedCount: Int
-    let readiness: ModelReadinessState
-    var sendBlocked: Bool = false
-    let onRun: () -> Void
-    let onStop: () -> Void
-    let onAttach: () -> Void
-    let onPaste: () -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            if !draft.inputPath.isBlank {
-                HStack {
-                    Label(URL(fileURLWithPath: draft.inputPath).lastPathComponent, systemImage: "paperclip")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textSecondary)
-                    Spacer()
-                    Button {
-                        draft.inputPath = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .help("Remove attachment")
-                    .accessibilityLabel("Remove attachment")
-                }
-                .padding(.horizontal, 14)
-            }
-
-            HStack(spacing: 12) {
-                Button(action: onAttach) {
-                    Image(systemName: mode.requiresAttachment ? "paperclip.circle.fill" : "paperclip")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.plain)
-                .disabled(mode.acceptedTypes.isEmpty)
-                .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
-                .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
-
-                if mode.acceptedTypes.contains(.image) {
-                    Button(action: onPaste) {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Paste image from clipboard")
-                    .accessibilityLabel("Paste image from clipboard")
-                }
-
-                if mode == .listen {
-                    Text(mode.promptPlaceholder)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(MereRunTheme.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    TextField(mode.promptPlaceholder, text: $draft.prompt, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15, weight: .medium))
-                        .lineLimit(1...4)
-                        .onSubmit(onRun)
-                }
-
-                Button {
-                    showOptions = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.plain)
-                .help("Options")
-                .accessibilityLabel("Options")
-
-                if isRunning {
-                    Button(action: onStop) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(MereRunTheme.red)
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Stop current run")
-                    .accessibilityLabel("Stop current run")
-                }
-
-                Button {
-                    onRun()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(MereRunTheme.background)
-                        .frame(width: 38, height: 38)
-                        .background {
-                            Circle()
-                                .fill(runButtonColor)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(readiness.blocksRun || sendBlocked)
-                .help(sendBlocked ? "Waiting for the current reply…" : runButtonHelp)
-                .accessibilityLabel(isRunning ? "Queue run" : "Run")
-                .accessibilityHint(accessibilityRunHint)
-                .keyboardShortcut(.return, modifiers: .command)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(MereRunTheme.surfaceRaised)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(MereRunTheme.border.opacity(0.75), lineWidth: 1)
-                    }
-                    .mereShadow(radius: 20, y: 10)
-            }
-        }
-    }
-
-    private var runButtonColor: Color {
-        if readiness.blocksRun { return MereRunTheme.yellow }
-        return MereRunTheme.accent
-    }
-
-    private var runButtonHelp: String {
-        if readiness.blocksRun { return readiness.message }
-        if isRunning {
-            let queueLabel = queuedCount == 0 ? "Queue run" : "Queue run (\(queuedCount) waiting)"
-            return queueLabel
-        }
-        return "Run"
-    }
-
-    /// Spoken explanation of why Run is disabled, so the blocked state is not color-only.
-    private var accessibilityRunHint: String {
-        if sendBlocked { return "Waiting for the current reply to finish" }
-        if readiness.blocksRun { return readiness.message }
-        return ""
-    }
-}
-
-private struct StudioWelcomeSheet: View {
-    let resolvedCLI: String
-    let onBrowseModels: () -> Void
-    let onDone: () -> Void
-
-    private let highlights: [(String, String, String)] = [
-        ("photo", "Create locally", "Images, video, music, sound effects, and speech — all on-device."),
-        ("bubble.left.and.bubble.right", "Chat & code", "Run local language models for chat, code, OCR, and vision."),
-        ("lock.shield", "Private by default", "Nothing leaves your Mac. The app drives the public mere.run CLI underneath.")
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Welcome to mere.run")
-                    .font(.system(size: 26, weight: .bold))
-                Text("Create anything. Locally.")
-                    .font(MereRunTheme.bodyFont)
-                    .foregroundStyle(MereRunTheme.textSecondary)
-            }
-
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(highlights.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: item.0)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(MereRunTheme.accent)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.1)
-                                .font(.system(size: 14, weight: .semibold))
-                            Text(item.2)
-                                .font(MereRunTheme.captionFont)
-                                .foregroundStyle(MereRunTheme.textMuted)
-                        }
-                    }
-                }
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: "terminal")
-                    .foregroundStyle(MereRunTheme.accent)
-                Text(resolvedCLI)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-            }
-            .padding(10)
-            .merePanel()
-
-            Text("First, download a model for the mode you want. Models open the catalog where you can pull and manage local models.")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-
-            HStack(spacing: 10) {
-                Button {
-                    onBrowseModels()
-                } label: {
-                    Label("Browse models", systemImage: "shippingbox")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
-
-                Button("Get started") {
-                    onDone()
-                }
-                .buttonStyle(.bordered)
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(28)
-        .frame(width: 460)
-        .background(MereRunTheme.background)
-        .foregroundStyle(MereRunTheme.textPrimary)
-    }
-}
-
-private struct StudioOptionsSheet: View {
-    let mode: StudioMode
-    @Binding var draft: StudioDraft
-    @EnvironmentObject private var controller: MereRunController
-    @Environment(\.dismiss) private var dismiss
-    @State private var voiceProfiles: [StudioVoiceProfile] = []
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("\(mode.title) Options")
-                    .font(MereRunTheme.titleFont)
-                Spacer()
-                Button("Done") {
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-
-            if mode == .readImage {
-                Picker("Task", selection: $draft.readImageAction) {
-                    ForEach(StudioReadImageAction.allCases) { action in
-                        Text(action.title)
-                            .foregroundStyle(readImageActionUnavailableMessage(action) == nil
-                                ? MereRunTheme.textPrimary
-                                : MereRunTheme.textMuted)
-                            .tag(action)
-                            .disabled(readImageActionUnavailableMessage(action) != nil)
-                            .help(readImageActionUnavailableMessage(action) ?? action.title)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            if secondaryLabel != nil {
-                TextField(secondaryLabel!, text: $draft.secondaryText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .merePanel()
-            }
-
-            TextField("Model", text: $draft.model)
-                .textFieldStyle(.plain)
-                .padding(10)
-                .merePanel()
-
-            if mode == .speak {
-                Picker("Voice", selection: $draft.voiceMode) {
-                    Text("Style").tag("style")
-                    Text("Clone").tag("clone")
-                }
-                .pickerStyle(.segmented)
-
-                if draft.voiceMode == "clone" {
-                    Picker("Profile", selection: $draft.voiceProfile) {
-                        Text("None").tag("")
-                        ForEach(voiceProfiles) { profile in
-                            Text(profile.name).tag(profile.id)
-                        }
-                    }
-                    HStack(spacing: 10) {
-                        Text(draft.refAudioPath.isEmpty
-                            ? "No reference audio"
-                            : URL(fileURLWithPath: draft.refAudioPath).lastPathComponent)
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                            .lineLimit(1)
-                        Spacer()
-                        Button("Reference audio…") { chooseReferenceAudio() }
-                    }
-                    TextField("Save as profile (optional)", text: $draft.saveProfileName)
-                        .textFieldStyle(.plain)
-                        .padding(10)
-                        .merePanel()
-                }
-            }
-
-            if [.createImage, .video].contains(mode) {
-                HStack(spacing: 10) {
-                    Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
-                    Stepper("Height \(draft.height)", value: $draft.height, in: 64...4096, step: 64)
-                }
-            }
-
-            if [.createImage, .music, .sfx].contains(mode) {
-                Stepper("Steps \(draft.steps)", value: $draft.steps, in: 1...80, step: 1)
-            }
-
-            if [.music, .sfx].contains(mode) {
-                TextField("Duration seconds", value: $draft.durationSeconds, format: .number)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .merePanel()
-            }
-
-            if [.createImage, .music, .video, .sfx].contains(mode) {
-                TextField("Seed", text: $draft.seed)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .merePanel()
-            }
-
-            if !StudioOptionSchema.fields(for: mode).isEmpty {
-                Divider().overlay(MereRunTheme.border.opacity(0.4))
-                ForEach(StudioOptionSchema.fields(for: mode)) { field in
-                    optionRow(field)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(22)
-        .background(MereRunTheme.background)
-        .foregroundStyle(MereRunTheme.textPrimary)
-        .task {
-            if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
-        }
-    }
-
-    /// Renders one schema field as the appropriate control, bound through the draft key path.
-    @ViewBuilder
-    private func optionRow(_ field: StudioOptionField) -> some View {
-        switch field.control {
-        case let .int(keyPath, range, step):
-            Stepper("\(field.label): \(draft[keyPath: keyPath])", value: binding(keyPath), in: range, step: step)
-        case let .double(keyPath):
-            HStack {
-                Text(field.label)
-                Spacer()
-                TextField(field.label, value: binding(keyPath), format: .number)
-                    .textFieldStyle(.plain)
-                    .frame(width: 90)
-                    .padding(8)
-                    .merePanel()
-            }
-        case let .bool(keyPath):
-            Toggle(field.label, isOn: binding(keyPath))
-        case let .text(keyPath, placeholder):
-            HStack {
-                Text(field.label)
-                Spacer()
-                TextField(placeholder, text: binding(keyPath))
-                    .textFieldStyle(.plain)
-                    .frame(width: 170)
-                    .padding(8)
-                    .merePanel()
-            }
-        }
-    }
-
-    private func binding<Value>(_ keyPath: WritableKeyPath<StudioDraft, Value>) -> Binding<Value> {
-        Binding(get: { draft[keyPath: keyPath] }, set: { draft[keyPath: keyPath] = $0 })
-    }
-
-    private func chooseReferenceAudio() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.audio]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        if panel.runModal() == .OK, let url = panel.url {
-            draft.refAudioPath = url.path
-        }
-    }
-
-    private func readImageActionUnavailableMessage(_ action: StudioReadImageAction) -> String? {
-        guard mode == .readImage else { return nil }
-        var candidateDraft = draft
-        candidateDraft.readImageAction = action
-        let requirement = StudioCommandAdapter.capabilityRequirement(
-            for: .readImage,
-            draft: candidateDraft
-        )
-
-        switch requirement {
-        case .unavailable(let message):
-            return message
-        case .managedModel(let modelID):
-            return controller.modelCapabilitiesByID[modelID]?.unavailableMessage
-        case nil:
-            return nil
-        }
-    }
-
-    private var secondaryLabel: String? {
-        switch mode {
-        case .createImage: return "Negative prompt"
-        case .chat, .code: return "System"
-        case .speak: return "Voice"
-        case .music: return "Lyrics"
-        default: return nil
-        }
-    }
-}
-
-private struct StudioLibraryPanel: View {
-    let items: [StudioLibraryItem]
-    @Binding var selectedID: UUID?
-    @Binding var isVisible: Bool
-    let onDelete: (UUID) -> Void
-    let onRename: (UUID, String) -> Void
-    let onQuickLook: (URL) -> Void
-
-    @State private var searchText = ""
-    @State private var renamingID: UUID?
-    @State private var renameText = ""
-
-    private var filteredItems: [StudioLibraryItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return items }
-        return items.filter { item in
-            item.displayTitle.lowercased().contains(query)
-                || item.mode.title.lowercased().contains(query)
-                || item.prompt.lowercased().contains(query)
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-
-            Divider()
-                .overlay(MereRunTheme.border.opacity(0.55))
-
-            searchField
-
-            if filteredItems.isEmpty {
-                emptyState
-            } else {
-                list
-            }
-        }
-        .background(MereRunTheme.background)
-        .alert("Rename run", isPresented: renameBinding) {
-            TextField("Name", text: $renameText)
-            Button("Save") {
-                if let renamingID { onRename(renamingID, renameText) }
-                renamingID = nil
-            }
-            Button("Cancel", role: .cancel) { renamingID = nil }
-        }
-    }
-
-    private var renameBinding: Binding<Bool> {
-        Binding(get: { renamingID != nil }, set: { if !$0 { renamingID = nil } })
-    }
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Library")
-                    .font(.system(size: 20, weight: .semibold))
-                Text("\(items.count) local runs")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    isVisible = false
-                }
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Hide library")
-        }
-        .padding(18)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(MereRunTheme.textMuted)
-            TextField("Search runs", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(MereRunTheme.bodyFont)
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(10)
-        .merePanel()
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "rectangle.stack")
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(MereRunTheme.textMuted)
-            Text(items.isEmpty ? "Runs you create will land here." : "No matching runs.")
-                .font(MereRunTheme.bodyFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(22)
-    }
-
-    private var list: some View {
-        ScrollView {
-            LazyVStack(spacing: 8) {
-                ForEach(filteredItems) { item in
-                    StudioLibraryRow(
-                        item: item,
-                        isSelected: selectedID == item.id
-                    ) {
-                        selectedID = item.id
-                    }
-                    .contextMenu {
-                        if let url = item.outputURL {
-                            Button("Quick Look") { onQuickLook(url) }
-                        }
-                        Button("Rename") {
-                            renameText = item.displayTitle
-                            renamingID = item.id
-                        }
-                        Button("Delete", role: .destructive) {
-                            onDelete(item.id)
-                        }
-                    }
-                }
-            }
-            .padding(12)
-        }
-        .focusable()
-        // Finder-style: space previews the selected run's output (ignored when it has none, so it
-        // never swallows the key destructively).
-        .onKeyPress(.space) {
-            guard let id = selectedID,
-                  let url = items.first(where: { $0.id == id })?.outputURL else { return .ignored }
-            onQuickLook(url)
-            return .handled
-        }
-    }
-}
-
-private struct StudioLibraryRow: View {
-    let item: StudioLibraryItem
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                thumbnail
-                    .frame(width: 46, height: 38)
-                    .background(MereRunTheme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.displayTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                    Text("\(item.mode.title) · \(item.status.rawValue)")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                }
-                Spacer()
-            }
-            .padding(9)
-            .background {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(isSelected ? MereRunTheme.surfaceRaised : Color.clear)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.mode.title), \(item.status.rawValue), \(item.displayTitle)")
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    @ViewBuilder
-    private var thumbnail: some View {
-        if let url = item.outputURL, StudioOutputFileKind.classify(url) == .image {
-            StudioAsyncImagePreview(
-                url: url,
-                maxPixelSize: 160,
-                contentMode: .fill,
-                fallbackSystemImage: item.mode.systemImage
-            )
-        } else {
-            Image(systemName: item.mode.systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-        }
-    }
 }
 
 private extension String {

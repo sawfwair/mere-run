@@ -6,6 +6,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
     func testImageCommandExposesTrainLoRA() {
         let commandNames = Set(Image.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("train-lora"))
+        XCTAssertTrue(commandNames.contains("visualize-run"))
     }
 
     func testTrainLoRAParsesDefaults() throws {
@@ -46,6 +47,10 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleGuidanceScale, 1.0)
         XCTAssertEqual(cmd.sampleLoRAScale, 1.0)
         XCTAssertNil(cmd.sampleSeed)
+        XCTAssertFalse(cmd.visualize)
+        XCTAssertEqual(cmd.visualizePort, 8787)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
         XCTAssertNil(cmd.loraTargetRanks)
         XCTAssertNil(cmd.loraRankPreset)
         XCTAssertNil(cmd.loraTargetPreset)
@@ -94,6 +99,10 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--sample-cfg", "1.2",
             "--sample-lora-scale", "0.75",
             "--sample-seed", "99",
+            "--visualize",
+            "--visualize-port", "8899",
+            "--preflight",
+            "--json",
             "--lora-target-ranks", ".attn.to_q=128,.ff.linear_in=64",
             "--timestep-sampling", "shift",
             "--timestep-loss-weighting", "weighted",
@@ -136,6 +145,10 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleGuidanceScale, 1.2)
         XCTAssertEqual(cmd.sampleLoRAScale, 0.75)
         XCTAssertEqual(cmd.sampleSeed, 99)
+        XCTAssertTrue(cmd.visualize)
+        XCTAssertEqual(cmd.visualizePort, 8899)
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
         XCTAssertEqual(cmd.loraTargetRanks, ".attn.to_q=128,.ff.linear_in=64")
         XCTAssertNil(cmd.loraRankPreset)
         XCTAssertNil(cmd.loraTargetPreset)
@@ -159,6 +172,54 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
 
         XCTAssertNil(cmd.data)
         XCTAssertEqual(cmd.syntheticSamples, 2)
+    }
+
+    func testImageVisualizeRunParsesDefaults() throws {
+        let cmd = try ImageVisualizeRun.parse(["/tmp/lora-run"])
+
+        XCTAssertEqual(cmd.runDirectory, "/tmp/lora-run")
+        XCTAssertEqual(cmd.port, 8787)
+    }
+
+    func testImageVisualizeRunParsesPort() throws {
+        let cmd = try ImageVisualizeRun.parse([
+            "/tmp/lora-run",
+            "--port", "8899",
+        ])
+
+        XCTAssertEqual(cmd.runDirectory, "/tmp/lora-run")
+        XCTAssertEqual(cmd.port, 8899)
+    }
+
+    func testLoRATrainingRunViewerSnapshotReadsRunArtifacts() throws {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-viewer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let outputURL = temp.appendingPathComponent("demo.safetensors")
+        try Data("adapter".utf8).write(to: outputURL)
+
+        let metrics = try LoRATrainingMetricsLogger(baseOutputURL: outputURL, resumeExisting: false)
+        try metrics.record(step: 10, loss: 0.75)
+        try metrics.record(step: 20, loss: 0.5)
+
+        let logger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
+        try logger.record(type: "run_started", stage: "starting", step: 0, totalSteps: 20)
+        try logger.record(type: "progress", stage: "training", step: 20, totalSteps: 20, loss: 0.5, fraction: 1)
+
+        let sampleDir = temp.appendingPathComponent("samples", isDirectory: true)
+        try FileManager.default.createDirectory(at: sampleDir, withIntermediateDirectories: true)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: sampleDir.appendingPathComponent("demo-step20-sample.png"))
+
+        let viewer = LoRATrainingRunViewer(runDirectoryURL: temp)
+        let snapshot = try viewer.snapshot()
+
+        XCTAssertEqual(snapshot.status, "running")
+        XCTAssertEqual(snapshot.lossPoints.map(\.step), [10, 20])
+        XCTAssertEqual(snapshot.events.map(\.type), ["run_started", "progress"])
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "root" && $0.name == "demo.safetensors" })
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "samples" && $0.isImage })
     }
 
     func testTrainLoRAParsesKleinModelPath() throws {
@@ -395,5 +456,121 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         ])
 
         XCTAssertThrowsError(try cmd.resolvedTrainingOptions())
+    }
+
+    func testTrainLoRAPreflightReportsMissingCaptionsAndDisablesTraining() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("not a real png".utf8).write(to: dataset.appendingPathComponent("frame-001.png"))
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-krea", family: .krea, to: model)
+
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", dataset.path,
+            "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            options: try cmd.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.result.dataset.imageCount, 1)
+        XCTAssertEqual(envelope.result.dataset.missingCaptionCount, 1)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "missing_captions" && $0.severity == .blocker })
+
+        let startTraining = try XCTUnwrap(envelope.actions.first { $0.id == "start-training" })
+        XCTAssertFalse(startTraining.enabled)
+        XCTAssertEqual(startTraining.command?.argv.prefix(3), ["mere.run", "image", "train-lora"])
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(LoRATrainingPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded.status, .blocked)
+        XCTAssertEqual(decoded.command, ["image", "train-lora"])
+    }
+
+    func testTrainLoRAPreflightReportsWarningsAndEnabledTrainingAction() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("image 1".utf8).write(to: dataset.appendingPathComponent("frame-001.png"))
+        try Data("image 2".utf8).write(to: dataset.appendingPathComponent("frame-002.png"))
+        try Data("same caption".utf8).write(to: dataset.appendingPathComponent("frame-001.txt"))
+        try Data("same caption".utf8).write(to: dataset.appendingPathComponent("frame-002.txt"))
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-klein", family: .klein, to: model)
+
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", dataset.path,
+            "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path,
+            "--steps", "10",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            options: try cmd.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .warning)
+        XCTAssertEqual(envelope.result.dataset.usablePairCount, 2)
+        XCTAssertEqual(envelope.result.dataset.duplicateCaptionGroupCount, 1)
+        XCTAssertEqual(envelope.result.model.family, "klein")
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "duplicate_captions" && $0.severity == .warning })
+
+        let startTraining = try XCTUnwrap(envelope.actions.first { $0.id == "start-training" })
+        XCTAssertTrue(startTraining.enabled)
+        XCTAssertEqual(startTraining.command?.argv, [
+            "mere.run",
+            "image",
+            "train-lora",
+            "--data",
+            dataset.path,
+            "--output",
+            temp.appendingPathComponent("style.safetensors").path,
+            "--model",
+            model.path,
+            "--training-steps",
+            "10",
+        ])
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-lora-preflight-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        return temp
+    }
+
+    private func writeManifest(
+        id: String,
+        family: MereRunModelManifest.Family,
+        to directory: URL
+    ) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let manifest = MereRunModelManifest(
+            id: id,
+            family: family,
+            variant: .base,
+            precision: .bf16,
+            supports: [.loraTraining]
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(manifest)
+            .write(to: directory.appendingPathComponent(MereRunModelManifest.filename))
     }
 }

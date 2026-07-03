@@ -151,6 +151,18 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("sample-seed")], help: "Klein preview seed.")
     var sampleSeed: UInt64?
 
+    @Flag(name: [.customLong("visualize")], help: "Start a loopback LoRA training dashboard for this run.")
+    var visualize: Bool = false
+
+    @Option(name: [.customLong("visualize-port")], help: "Loopback port for --visualize.")
+    var visualizePort: Int = 8787
+
+    @Flag(name: [.customLong("preflight")], help: "Inspect the LoRA training request without running training.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "Emit a structured preflight JSON report.")
+    var json: Bool = false
+
     @Option(name: [.customLong("lora-target-ranks")], help: "Klein suffix rank map, e.g. .attn.to_q=128,.ff.linear_in=64.")
     var loraTargetRanks: String?
 
@@ -197,9 +209,79 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     var quiet: Bool = false
 
     func run() async throws {
-        try MLXBundleSupport.ensureAvailable(quiet: quiet)
         let resolvedOptions = try resolvedTrainingOptions()
+        try validateResolvedOptions(resolvedOptions)
 
+        if preflight {
+            try runPreflight(options: resolvedOptions)
+            return
+        }
+
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+
+        let outputURL = URL(fileURLWithPath: output).standardizedFileURL
+        guard outputURL.pathExtension.lowercased() == "safetensors" else {
+            throw ValidationError("--output must end in .safetensors")
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let modelRoot = try resolveModelRoot(model: resolvedOptions.model)
+        let modelManifest = try MereRunModelManifest.loadRequired(from: modelRoot)
+        let visualization = try startVisualizationIfNeeded(
+            outputURL: outputURL,
+            modelRoot: modelRoot,
+            modelManifest: modelManifest,
+            options: resolvedOptions
+        )
+        defer { visualization?.stop() }
+
+        do {
+            switch modelManifest.family {
+            case .krea:
+                try await runKreaTraining(
+                    modelRoot: modelRoot,
+                    outputURL: outputURL,
+                    options: resolvedOptions,
+                    eventLogger: visualization?.logger
+                )
+            case .klein:
+                try await runKleinTraining(
+                    modelRoot: modelRoot,
+                    outputURL: outputURL,
+                    options: resolvedOptions,
+                    eventLogger: visualization?.logger
+                )
+            default:
+                let family = modelManifest.family?.rawValue ?? "unknown"
+                throw ValidationError("Unsupported LoRA training model family: \(family). Use a Krea 2 Raw or FLUX.2 Klein base model.")
+            }
+            try visualization?.logger.record(
+                type: "run_finished",
+                stage: "finished",
+                step: resolvedOptions.trainingSteps,
+                totalSteps: resolvedOptions.trainingSteps,
+                fraction: 1,
+                path: outputURL.path
+            )
+        } catch {
+            try? visualization?.logger.record(
+                type: "run_failed",
+                stage: "failed",
+                message: error.localizedDescription,
+                path: outputURL.path
+            )
+            throw error
+        }
+
+        if benchmarkSteps == nil {
+            print(outputURL.path)
+        }
+    }
+
+    private func validateResolvedOptions(_ resolvedOptions: ResolvedLoRATrainingOptions) throws {
         guard resolvedOptions.width > 0,
               resolvedOptions.height > 0,
               resolvedOptions.width % 16 == 0,
@@ -251,6 +333,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         guard sampleLoRAScale >= 0 else {
             throw ValidationError("--sample-lora-scale must be >= 0")
         }
+        if visualize, !(1...65535).contains(visualizePort) {
+            throw ValidationError("--visualize-port must be between 1 and 65535")
+        }
         if loraTargetRanks != nil, loraRankPreset != nil {
             throw ValidationError("--lora-target-ranks cannot be combined with --lora-rank-preset")
         }
@@ -293,38 +378,200 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         if let adamWeightDecay, adamWeightDecay < 0 {
             throw ValidationError("--adam-weight-decay must be >= 0")
         }
+    }
 
-        let outputURL = URL(fileURLWithPath: output).standardizedFileURL
-        guard outputURL.pathExtension.lowercased() == "safetensors" else {
-            throw ValidationError("--output must end in .safetensors")
-        }
-        try FileManager.default.createDirectory(
-            at: outputURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+    func makePreflightEnvelope(
+        options: ResolvedLoRATrainingOptions,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> LoRATrainingPreflightEnvelope {
+        let input = LoRATrainingPreflightInput(
+            data: data,
+            output: output,
+            recipe: recipe,
+            excludePreviewImages: excludePreviewImages,
+            syntheticSamples: syntheticSamples,
+            options: options,
+            trainingArgv: trainingActionArguments(),
+            cwd: fileManager.currentDirectoryPath
         )
+        return LoRATrainingPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
 
-        let modelRoot = try resolveModelRoot(model: resolvedOptions.model)
-        let modelManifest = try MereRunModelManifest.loadRequired(from: modelRoot)
-
-        switch modelManifest.family {
-        case .krea:
-            try await runKreaTraining(modelRoot: modelRoot, outputURL: outputURL, options: resolvedOptions)
-        case .klein:
-            try await runKleinTraining(modelRoot: modelRoot, outputURL: outputURL, options: resolvedOptions)
-        default:
-            let family = modelManifest.family?.rawValue ?? "unknown"
-            throw ValidationError("Unsupported LoRA training model family: \(family). Use a Krea 2 Raw or FLUX.2 Klein base model.")
+    private func runPreflight(options: ResolvedLoRATrainingOptions) throws {
+        let envelope = makePreflightEnvelope(options: options)
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
         }
-
-        if benchmarkSteps == nil {
-            print(outputURL.path)
+        if envelope.status == .blocked {
+            throw ExitCode.failure
         }
+    }
+
+    private func trainingActionArguments() -> [String] {
+        var args = ["mere.run", "image", "train-lora"]
+        if let data {
+            args += ["--data", data]
+        }
+        args += ["--output", output]
+        if let model {
+            args += ["--model", model]
+        }
+        if let widthOverride {
+            args += ["--width", String(widthOverride)]
+        }
+        if let heightOverride {
+            args += ["--height", String(heightOverride)]
+        }
+        if let trainingStepsOverride {
+            args += ["--training-steps", String(trainingStepsOverride)]
+        }
+        if batchSize != 1 {
+            args += ["--batch-size", String(batchSize)]
+        }
+        if let learningRateOverride {
+            args += ["--learning-rate", String(learningRateOverride)]
+        }
+        if let rankOverride {
+            args += ["--rank", String(rankOverride)]
+        }
+        if let alphaOverride {
+            args += ["--alpha", String(alphaOverride)]
+        }
+        if maxTextLength != 512 {
+            args += ["--max-text-length", String(maxTextLength)]
+        }
+        if schedulerSteps != 1000 {
+            args += ["--scheduler-steps", String(schedulerSteps)]
+        }
+        if let captionDropoutOverride {
+            args += ["--caption-dropout", String(captionDropoutOverride)]
+        }
+        if seed != 0 {
+            args += ["--seed", String(seed)]
+        }
+        if lite {
+            args.append("--lite")
+        }
+        if excludePreviewImages {
+            args.append("--exclude-preview-images")
+        }
+        if let checkpointInterval {
+            args += ["--checkpoint-interval", String(checkpointInterval)]
+        }
+        if let maxResolution {
+            args += ["--max-resolution", String(maxResolution)]
+        }
+        if progressive {
+            args.append("--progressive")
+        }
+        if lowRam {
+            args.append("--low-ram")
+        }
+        if noCompile {
+            args.append("--no-compile")
+        }
+        if gradientCheckpointing {
+            args.append("--gradient-checkpointing")
+        }
+        if let recipe {
+            args += ["--recipe", recipe]
+        }
+        if let benchmarkSteps {
+            args += ["--benchmark-steps", String(benchmarkSteps)]
+        }
+        if benchmarkWarmupSteps != 5 {
+            args += ["--benchmark-warmup-steps", String(benchmarkWarmupSteps)]
+        }
+        if let sampleInterval {
+            args += ["--sample-interval", String(sampleInterval)]
+        }
+        if let samplePrompt {
+            args += ["--sample-prompt", samplePrompt]
+        }
+        if let sampleModel {
+            args += ["--sample-model", sampleModel]
+        }
+        if sampleSteps != 8 {
+            args += ["--sample-steps", String(sampleSteps)]
+        }
+        if sampleGuidanceScale != 1.0 {
+            args += ["--sample-cfg", String(sampleGuidanceScale)]
+        }
+        if sampleLoRAScale != 1.0 {
+            args += ["--sample-lora-scale", String(sampleLoRAScale)]
+        }
+        if let sampleSeed {
+            args += ["--sample-seed", String(sampleSeed)]
+        }
+        if visualize {
+            args.append("--visualize")
+            if visualizePort != 8787 {
+                args += ["--visualize-port", String(visualizePort)]
+            }
+        }
+        if let loraTargetRanks {
+            args += ["--lora-target-ranks", loraTargetRanks]
+        }
+        if let loraRankPreset {
+            args += ["--lora-rank-preset", loraRankPreset]
+        }
+        if let loraTargetPreset {
+            args += ["--lora-target-preset", loraTargetPreset]
+        }
+        if let loraTargetMode {
+            args += ["--lora-target-mode", loraTargetMode]
+        }
+        if let timestepSampling {
+            args += ["--timestep-sampling", timestepSampling]
+        }
+        if let timestepLossWeighting {
+            args += ["--timestep-loss-weighting", timestepLossWeighting]
+        }
+        if let lossWeighting {
+            args += ["--loss-weighting", lossWeighting]
+        }
+        if let timestepLow {
+            args += ["--timestep-low", String(timestepLow)]
+        }
+        if let timestepHigh {
+            args += ["--timestep-high", String(timestepHigh)]
+        }
+        if let lrWarmupSteps {
+            args += ["--lr-warmup-steps", String(lrWarmupSteps)]
+        }
+        if noCosineScheduler {
+            args.append("--no-cosine-scheduler")
+        }
+        if let lrMinFactor {
+            args += ["--lr-min-factor", String(lrMinFactor)]
+        }
+        if let adamWeightDecay {
+            args += ["--adam-weight-decay", String(adamWeightDecay)]
+        }
+        if let syntheticSamples {
+            args += ["--synthetic-samples", String(syntheticSamples)]
+        }
+        if quiet {
+            args.append("--quiet")
+        }
+        return args
     }
 
     private func runKreaTraining(
         modelRoot: URL,
         outputURL: URL,
-        options: ResolvedLoRATrainingOptions
+        options: ResolvedLoRATrainingOptions,
+        eventLogger: LoRATrainingEventLogger?
     ) async throws {
         if options.checkpointInterval != nil {
             throw ValidationError("--checkpoint-interval is only supported for FLUX.2 Klein LoRA training")
@@ -379,7 +626,11 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             config.lrMinFactor = lrMinFactor
         }
 
-        let progressHandler = quiet ? nil : Self.makeProgressHandler()
+        let stderrProgressHandler = quiet ? nil : Self.makeProgressHandler()
+        let progressHandler = Self.makeKreaProgressHandler(
+            stderrProgressHandler: stderrProgressHandler,
+            eventLogger: eventLogger
+        )
         if !quiet {
             CLIStderr.write("[runtime] image training backend: \(NativeMLXRuntime.backendDescription)\n")
         }
@@ -396,7 +647,8 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     private func runKleinTraining(
         modelRoot: URL,
         outputURL: URL,
-        options: ResolvedLoRATrainingOptions
+        options: ResolvedLoRATrainingOptions,
+        eventLogger: LoRATrainingEventLogger?
     ) async throws {
         if syntheticSamples != nil {
             throw ValidationError("--synthetic-samples is only supported for Krea 2 LoRA smoke tests")
@@ -484,12 +736,17 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             config.adamWeightDecay = adamWeightDecay
         }
 
-        let progressHandler = quiet ? nil : Self.makeKleinProgressHandler()
+        let stderrProgressHandler = quiet ? nil : Self.makeKleinProgressHandler()
+        let progressHandler = Self.makeKleinProgressHandler(
+            stderrProgressHandler: stderrProgressHandler,
+            eventLogger: eventLogger
+        )
         let sampleHandler = try makeKleinSampleHandler(
             outputURL: outputURL,
             fallbackPrompt: examples.first?.caption ?? "",
             width: options.width,
-            height: options.height
+            height: options.height,
+            eventLogger: eventLogger
         )
         if !quiet {
             CLIStderr.write("[runtime] image training backend: \(NativeMLXRuntime.backendDescription)\n")
@@ -741,7 +998,8 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         outputURL: URL,
         fallbackPrompt: String,
         width: Int,
-        height: Int
+        height: Int,
+        eventLogger: LoRATrainingEventLogger?
     ) throws -> (@Sendable (Int, URL) async -> Void)? {
         guard sampleInterval != nil else { return nil }
 
@@ -778,13 +1036,68 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                     lora: .local(path: checkpointURL.path, scale: loraScale)
                 )
                 _ = try await generator.generate(request, progressHandler: nil)
+                try? eventLogger?.record(
+                    type: "sample_saved",
+                    stage: "sampling",
+                    step: step,
+                    path: sampleURL.path,
+                    metadata: ["checkpoint": checkpointURL.path]
+                )
                 if !quietMode {
                     CLIStderr.write("[sample] \(sampleURL.path)\n")
                 }
             } catch {
+                try? eventLogger?.record(
+                    type: "sample_failed",
+                    stage: "sampling",
+                    message: error.localizedDescription,
+                    step: step,
+                    metadata: ["checkpoint": checkpointURL.path]
+                )
                 CLIStderr.write("[sample] step \(step) failed: \(error.localizedDescription)\n")
             }
         }
+    }
+
+    private func startVisualizationIfNeeded(
+        outputURL: URL,
+        modelRoot: URL,
+        modelManifest: MereRunModelManifest,
+        options: ResolvedLoRATrainingOptions
+    ) throws -> LoRATrainingVisualization? {
+        guard visualize else { return nil }
+        let logger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
+        let viewer = LoRATrainingRunViewer(runDirectoryURL: outputURL.deletingLastPathComponent())
+        let host = "127.0.0.1"
+        let port = visualizePort
+        let task = Task {
+            do {
+                try await viewer.run(host: host, port: port)
+            } catch is CancellationError {
+                // The training command owns this helper server and cancels it when the run exits.
+            } catch {
+                CLIStderr.write("[visualize] server stopped: \(error.localizedDescription)\n")
+            }
+        }
+        try logger.record(
+            type: "run_started",
+            stage: "starting",
+            message: "LoRA training started.",
+            step: 0,
+            totalSteps: options.trainingSteps,
+            fraction: 0,
+            path: outputURL.path,
+            metadata: [
+                "viewer_url": "http://\(host):\(port)",
+                "model_root": modelRoot.path,
+                "model_id": modelManifest.id,
+                "model_family": modelManifest.family?.rawValue ?? "unknown",
+                "recipe": recipe ?? "",
+                "data": data ?? "",
+                "output": outputURL.path,
+            ]
+        )
+        return LoRATrainingVisualization(logger: logger, serverTask: task)
     }
 
     private func resolveKleinSampleModelPath() throws -> String {
@@ -917,5 +1230,144 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                 CLIStderr.write("Saving LoRA artifacts...\n")
             }
         }
+    }
+
+    private static func makeKreaProgressHandler(
+        stderrProgressHandler: (@Sendable (Krea2LoRATrainingProgress) -> Void)?,
+        eventLogger: LoRATrainingEventLogger?
+    ) -> (@Sendable (Krea2LoRATrainingProgress) -> Void)? {
+        guard stderrProgressHandler != nil || eventLogger != nil else { return nil }
+        return { progress in
+            stderrProgressHandler?(progress)
+            recordKreaProgress(progress, to: eventLogger)
+        }
+    }
+
+    private static func makeKleinProgressHandler(
+        stderrProgressHandler: (@Sendable (Flux2KleinLoRATrainingProgress) -> Void)?,
+        eventLogger: LoRATrainingEventLogger?
+    ) -> (@Sendable (Flux2KleinLoRATrainingProgress) -> Void)? {
+        guard stderrProgressHandler != nil || eventLogger != nil else { return nil }
+        return { progress in
+            stderrProgressHandler?(progress)
+            recordKleinProgress(progress, to: eventLogger)
+        }
+    }
+
+    private static func recordKreaProgress(
+        _ progress: Krea2LoRATrainingProgress,
+        to eventLogger: LoRATrainingEventLogger?
+    ) {
+        guard let eventLogger else { return }
+        switch progress.stage {
+        case .loadingModels:
+            try? eventLogger.record(
+                type: "progress",
+                stage: "loading_models",
+                message: "Loading Krea 2 Raw models.",
+                fraction: progress.fraction
+            )
+        case .encodingDataset(let current, let total):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "encoding_dataset",
+                message: "Encoding dataset.",
+                step: current,
+                totalSteps: total,
+                fraction: progress.fraction
+            )
+        case .injectingLoRA(let layerCount):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "injecting_lora",
+                message: "Injected LoRA layers.",
+                fraction: progress.fraction,
+                metadata: ["layer_count": "\(layerCount)"]
+            )
+        case .training(let step, let total, let loss):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "training",
+                message: "Training.",
+                step: step,
+                totalSteps: total,
+                loss: loss,
+                fraction: progress.fraction
+            )
+        case .saving:
+            try? eventLogger.record(
+                type: "progress",
+                stage: "saving",
+                message: "Saving LoRA artifacts.",
+                fraction: progress.fraction
+            )
+        }
+    }
+
+    private static func recordKleinProgress(
+        _ progress: Flux2KleinLoRATrainingProgress,
+        to eventLogger: LoRATrainingEventLogger?
+    ) {
+        guard let eventLogger else { return }
+        switch progress.stage {
+        case .loadingModels:
+            try? eventLogger.record(
+                type: "progress",
+                stage: "loading_models",
+                message: "Loading FLUX.2 Klein models.",
+                fraction: progress.fraction
+            )
+        case .encodingDataset(let current, let total):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "encoding_dataset",
+                message: "Encoding dataset.",
+                step: current,
+                totalSteps: total,
+                fraction: progress.fraction
+            )
+        case .injectingLoRA(let layerCount):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "injecting_lora",
+                message: "Injected LoRA layers.",
+                fraction: progress.fraction,
+                metadata: ["layer_count": "\(layerCount)"]
+            )
+        case .training(let step, let total, let loss):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "training",
+                message: "Training.",
+                step: step,
+                totalSteps: total,
+                loss: loss,
+                fraction: progress.fraction
+            )
+        case .sampling(let step):
+            try? eventLogger.record(
+                type: "progress",
+                stage: "sampling",
+                message: "Sampling preview.",
+                step: step,
+                fraction: progress.fraction
+            )
+        case .saving:
+            try? eventLogger.record(
+                type: "progress",
+                stage: "saving",
+                message: "Saving LoRA artifacts.",
+                fraction: progress.fraction
+            )
+        }
+    }
+}
+
+private struct LoRATrainingVisualization {
+    let logger: LoRATrainingEventLogger
+    let serverTask: Task<Void, Never>
+
+    func stop() {
+        serverTask.cancel()
     }
 }

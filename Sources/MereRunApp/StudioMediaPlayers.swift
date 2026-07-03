@@ -90,46 +90,47 @@ struct StudioAudioPlayerView: View {
 
     @StateObject private var player = StudioAudioPlayer()
     @State private var isScrubbing = false
-    private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+    @State private var peaks: [Float]?
+    @State private var peaksLoaded = false
+    private let ticker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+
+    private var playedFraction: Double {
+        guard player.duration > 0 else { return 0 }
+        return min(1, max(0, player.currentTime / player.duration))
+    }
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "waveform")
-                .font(.system(size: 48, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-
+        VStack(spacing: 18) {
             if player.isReady {
-                VStack(spacing: 8) {
-                    Slider(
-                        value: $player.currentTime,
-                        in: 0...max(player.duration, 0.1),
-                        onEditingChanged: { editing in
-                            isScrubbing = editing
-                            if !editing { player.seek(to: player.currentTime) }
-                        }
-                    )
-                    .tint(MereRunTheme.accent)
+                waveformOrSlider
+                    .frame(maxWidth: 520)
 
-                    HStack {
-                        Text(StudioTimeFormat.string(player.currentTime))
-                        Spacer()
-                        Text(StudioTimeFormat.string(player.duration))
+                HStack(spacing: 16) {
+                    Text(StudioTimeFormat.string(player.currentTime))
+                        .monospacedDigit()
+                        .frame(minWidth: 44, alignment: .trailing)
+
+                    Button {
+                        player.togglePlay()
+                    } label: {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 46))
+                            .foregroundStyle(MereRunTheme.accent)
+                            .contentTransition(.symbolEffect(.replace))
                     }
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                }
-                .frame(maxWidth: 420)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 
-                Button {
-                    player.togglePlay()
-                } label: {
-                    Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(MereRunTheme.accent)
+                    Text(StudioTimeFormat.string(player.duration))
+                        .monospacedDigit()
+                        .frame(minWidth: 44, alignment: .leading)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
             } else {
+                Image(systemName: "waveform.slash")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textMuted)
                 Text("Audio preview unavailable.")
                     .font(MereRunTheme.bodyFont)
                     .foregroundStyle(MereRunTheme.textMuted)
@@ -137,11 +138,56 @@ struct StudioAudioPlayerView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: url) { player.load(url: url) }
+        .task(id: url) {
+            player.load(url: url)
+            peaks = nil
+            peaksLoaded = false
+            let loaded = await Task.detached(priority: .userInitiated) {
+                StudioWaveformLoader.peaks(url: url)
+            }.value
+            guard !Task.isCancelled else { return }
+            peaks = loaded
+            peaksLoaded = true
+        }
         .onReceive(ticker) { _ in
             if !isScrubbing { player.refresh() }
         }
         .onDisappear { player.stop() }
+    }
+
+    /// The waveform is the preferred scrubber; the slider remains for files whose PCM peaks
+    /// can't be decoded, and while peaks are still loading.
+    @ViewBuilder
+    private var waveformOrSlider: some View {
+        if let peaks, !peaks.isEmpty {
+            StudioWaveformView(peaks: peaks, progress: playedFraction) { fraction in
+                player.seek(to: fraction * player.duration)
+            }
+            .frame(height: 72)
+            .transition(.opacity)
+        } else if peaksLoaded {
+            Slider(
+                value: $player.currentTime,
+                in: 0...max(player.duration, 0.1),
+                onEditingChanged: { editing in
+                    isScrubbing = editing
+                    if !editing { player.seek(to: player.currentTime) }
+                }
+            )
+            .tint(MereRunTheme.accent)
+        } else {
+            // Quiet placeholder bars while peaks decode, so the layout doesn't jump.
+            StudioWaveformView(peaks: StudioWaveformView.placeholderPeaks, progress: 0)
+                .frame(height: 72)
+                .opacity(0.35)
+        }
+    }
+}
+
+extension StudioWaveformView {
+    /// A gentle, deterministic bar silhouette for the loading state.
+    static let placeholderPeaks: [Float] = (0..<96).map { index in
+        0.25 + 0.2 * abs(sin(Float(index) * 0.35))
     }
 }
 

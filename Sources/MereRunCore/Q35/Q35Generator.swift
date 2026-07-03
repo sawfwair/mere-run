@@ -691,15 +691,17 @@ public actor Q35Generator: ChatGenerator {
         promptTokens: [Int],
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
-        if mtpModel == nil, canUsePipelinedGreedyDecode(generationConfig) {
-            return try await decodeTokensGreedyPipelined(
+        if mtpModel == nil {
+            return try await decodeTokensPipelined(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 initialLogits: initialLogits,
                 layerCaches: layerCaches,
                 eosSet: eosSet,
+                generationConfig: generationConfig,
                 tokenBudget: tokenBudget,
                 mropeRopeDelta: mropeRopeDelta,
+                promptTokens: promptTokens,
                 progressHandler: progressHandler
             )
         }
@@ -936,30 +938,43 @@ public actor Q35Generator: ChatGenerator {
         )
     }
 
-    private func canUsePipelinedGreedyDecode(_ config: GenerationConfig) -> Bool {
-        config.temperature == 0
-            && config.repetitionPenalty == nil
-            && config.bannedTokens.isEmpty
-    }
-
-    private func decodeTokensGreedyPipelined(
+    private func decodeTokensPipelined(
         model: Q35Model,
         tokenizerAndTemplate: Q35TokenizerAndTemplate,
         initialLogits: MLXArray,
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
+        generationConfig: GenerationConfig,
         tokenBudget: Int,
         mropeRopeDelta: Int?,
+        promptTokens: [Int],
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         let layerCaches = layerCaches
-        var pendingToken = greedyTokenArray(from: initialLogits)
+        let banMask = tokenBanMask(
+            vocabularySize: initialLogits.dim(-1),
+            dtype: initialLogits.dtype,
+            tokens: generationConfig.bannedTokens
+        )
+        var repetitionHistory = repetitionHistoryArray(
+            promptTokens: promptTokens,
+            config: generationConfig
+        )
+        var pendingToken = sampledTokenArray(
+            logits: initialLogits[0, -1, 0...],
+            config: generationConfig,
+            previousTokenIndices: repetitionHistory,
+            banMask: banMask
+        )
         asyncEval(pendingToken)
 
         var generated: [Int] = []
         generated.reserveCapacity(tokenBudget)
         var pendingProgressWhitespace = ""
         let decodeStart = Date()
+        let traceEnabled = Gemma4DecodeTrace.enabled
+        var traceBuildSeconds = 0.0
+        var traceWaitSeconds = 0.0
 
         func emit(_ token: Int) {
             generated.append(token)
@@ -984,7 +999,8 @@ public actor Q35Generator: ChatGenerator {
         while generated.count < tokenBudget {
             try Task.checkCancellation()
 
-            let scheduled: MLXArray?
+            let buildStart = CFAbsoluteTimeGetCurrent()
+            let scheduled: (token: MLXArray, history: MLXArray?)?
             if generated.count + 1 < tokenBudget {
                 let nextInput = pendingToken.asType(.int32).reshaped(1, 1)
                 let nextLogits = model(
@@ -992,14 +1008,29 @@ public actor Q35Generator: ChatGenerator {
                     cache: layerCaches,
                     positionIds: decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
                 )
-                let nextToken = greedyTokenArray(from: nextLogits)
+                let nextHistory = appendingRepetitionHistory(
+                    repetitionHistory,
+                    token: pendingToken,
+                    config: generationConfig
+                )
+                let nextToken = sampledTokenArray(
+                    logits: nextLogits[0, -1, 0...],
+                    config: generationConfig,
+                    previousTokenIndices: nextHistory,
+                    banMask: banMask
+                )
                 asyncEval(nextToken, nextLogits)
-                scheduled = nextToken
+                scheduled = (nextToken, nextHistory)
             } else {
                 scheduled = nil
             }
+            let buildEnd = CFAbsoluteTimeGetCurrent()
 
             let token = pendingToken.item(Int.self)
+            if traceEnabled {
+                traceBuildSeconds += buildEnd - buildStart
+                traceWaitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
+            }
             if eosSet.contains(token) {
                 break
             }
@@ -1009,7 +1040,19 @@ public actor Q35Generator: ChatGenerator {
             guard let scheduled else {
                 break
             }
-            pendingToken = scheduled
+            pendingToken = scheduled.token
+            repetitionHistory = scheduled.history
+        }
+
+        if traceEnabled, !generated.isEmpty {
+            let count = Double(generated.count)
+            Gemma4DecodeTrace.emit(String(
+                format: "[q35-decode-trace] mode=pipelined temp=\(generationConfig.temperature) tokens=%d build=%.2fms/tok wait=%.2fms/tok wall=%.2fms/tok",
+                generated.count,
+                traceBuildSeconds / count * 1000,
+                traceWaitSeconds / count * 1000,
+                Date().timeIntervalSince(decodeStart) / count * 1000
+            ))
         }
 
         return Q35BatchedDecodeResult(
@@ -1371,7 +1414,7 @@ public actor Q35Generator: ChatGenerator {
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
                 .reshaped(1, end - processed)
             if retainHidden {
-                let output = model.forward(chunk, cache: cache)
+                let output = model.forwardPrefill(chunk, cache: cache)
                 MLX.eval(output.logits)
                 MLX.eval(output.hidden)
                 logits = output.logits
@@ -1388,9 +1431,9 @@ public actor Q35Generator: ChatGenerator {
                     )
                 }
             } else {
-                let output = model(chunk, cache: cache)
-                MLX.eval(output)
-                logits = output
+                let output = model.forwardPrefill(chunk, cache: cache)
+                MLX.eval(output.logits)
+                logits = output.logits
                 hidden = nil
             }
             processed = end
@@ -1429,7 +1472,7 @@ public actor Q35Generator: ChatGenerator {
             let chunkInput = MLXArray.zeros([1, end - processed], dtype: .int32)
             let chunkPositionIds = positionIds?[0..., 0..., processed..<end]
             if retainHidden {
-                let output = model.forward(
+                let output = model.forwardPrefill(
                     chunkInput,
                     cache: cache,
                     inputEmbeddings: chunkEmbeddings,
@@ -1440,14 +1483,14 @@ public actor Q35Generator: ChatGenerator {
                 logits = output.logits
                 hidden = output.hidden
             } else {
-                let output = model(
+                let output = model.forwardPrefill(
                     chunkInput,
                     cache: cache,
                     inputEmbeddings: chunkEmbeddings,
                     positionIds: chunkPositionIds
                 )
-                MLX.eval(output)
-                logits = output
+                MLX.eval(output.logits)
+                logits = output.logits
                 hidden = nil
             }
             processed = end

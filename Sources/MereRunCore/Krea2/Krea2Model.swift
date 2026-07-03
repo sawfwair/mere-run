@@ -279,6 +279,33 @@ final class Krea2SingleStreamBlock: Module {
         out = out + postgate * ff((1 + postscale) * norm2(out) + postshift)
         return out
     }
+
+    private var checkpointedForward: (([MLXArray]) -> [MLXArray])?
+
+    /// Gradient-checkpointed block forward: activations inside the block are
+    /// recomputed during backward instead of retained, trading ~one extra
+    /// block forward for a per-block activation footprint.
+    func checkpointed(
+        _ x: MLXArray,
+        modulation: MLXArray,
+        rotary: (cos: MLXArray, sin: MLXArray),
+        mask: MLXArray
+    ) -> MLXArray {
+        if checkpointedForward == nil {
+            checkpointedForward = checkpoint(model: self) { block, inputs in
+                [block(
+                    inputs[0],
+                    modulation: inputs[1],
+                    rotary: (cos: inputs[2], sin: inputs[3]),
+                    mask: inputs[4]
+                )]
+            }
+        }
+        guard let checkpointedForward else {
+            preconditionFailure("Checkpointed Krea 2 block was not initialized.")
+        }
+        return checkpointedForward([x, modulation, rotary.cos, rotary.sin, mask])[0]
+    }
 }
 
 final class Krea2FinalLayer: Module {
@@ -364,6 +391,11 @@ public final class Krea2Transformer: Module {
     @ModuleInfo(key: "transformer_blocks") var transformerBlocks: [Krea2SingleStreamBlock]
     @ModuleInfo(key: "final_layer") var finalLayer: Krea2FinalLayer
 
+    /// Set by trainers: routes each transformer block through the
+    /// gradient-checkpointed forward so backward recomputes activations
+    /// instead of retaining them.
+    public var gradientCheckpointing = false
+
     private let positionalEncoding: Krea2PositionalEncoding
 
     public init(configuration: Krea2TransformerConfiguration) {
@@ -440,7 +472,9 @@ public final class Krea2Transformer: Module {
         let rotary = positionalEncoding(positionIds: combinedPositions)
         for block in transformerBlocks {
             combined = MLX.where(tokenMask, combined, MLX.zeros(combined.shape, dtype: combined.dtype))
-            combined = block(combined, modulation: timeModulation, rotary: rotary, mask: attentionMask)
+            combined = gradientCheckpointing
+                ? block.checkpointed(combined, modulation: timeModulation, rotary: rotary, mask: attentionMask)
+                : block(combined, modulation: timeModulation, rotary: rotary, mask: attentionMask)
         }
         combined = MLX.where(tokenMask, combined, MLX.zeros(combined.shape, dtype: combined.dtype))
         let output = finalLayer(combined, timestepEmbedding: timeEmbedding)

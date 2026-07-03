@@ -18,6 +18,7 @@ Public tree:
 - `mere.run guide`
 - `mere.run image generate`
 - `mere.run image train-lora`
+- `mere.run image visualize-run`
 - `mere.run image validate`
 - `mere.run text chat`
 - `mere.run text code`
@@ -284,6 +285,18 @@ swift run mere.run image generate \
   --prompt "a trading card character with the same sticker layout" \
   --ref-image ./card-reference.png \
   --output ./card.png
+
+swift run mere.run image generate \
+  --model image-klein-9b \
+  --ref-image ./reference-pose.png \
+  --strength 0.55 \
+  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, natural human anatomy, no extra limbs" \
+  --lora ./style-adapter.safetensors \
+  --lora-scale 1.5 \
+  --width 1024 --height 768 \
+  --steps 16 \
+  --seed 525252 \
+  --output ./style-reference.png
 ```
 
 ### `mere.run image train-lora`
@@ -328,6 +341,7 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
   --recipe klein-fast-style \
+  --visualize \
   --quiet
 swift run mere.run image generate \
   --model image-klein-9b \
@@ -346,6 +360,24 @@ style-dataset/
   002.jpg
   002.txt
 ```
+
+Before starting a real LoRA run, use preflight JSON to catch cheap blockers
+without loading the model or allocating the training runtime:
+
+```bash
+swift run mere.run image train-lora \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --recipe klein-fast-style \
+  --preflight \
+  --json
+```
+
+The preflight report writes one structured JSON document to stdout. It includes
+dataset counts, model readiness, output-path checks, diagnostics, and
+declarative actions such as `start-training` or `pull-model`. Hard blockers
+exit nonzero after printing the JSON report so scripts and agents can inspect
+the same payload humans do.
 
 Key options:
 
@@ -372,7 +404,21 @@ Key options:
 - `--no-compile`: disable compiled train-step graphs
 - `--lora-target-preset`: exact Klein target preset, including `fal-klein-fast`
 - `--lora-target-mode`: for FLUX.2 Klein, `suffix` or `transformer-linear-walk`
+- `--preflight`: inspect the training request without running training
+- `--json`: with `--preflight`, emit a structured JSON report
+- `--visualize`: start a loopback LoRA training dashboard for the run
+- `--visualize-port`: port for the local dashboard; defaults to `8787`
 - `--quiet`
+
+### `mere.run image visualize-run`
+
+Open the same local LoRA training dashboard for an existing run directory.
+The viewer reads `run.json`, `*.loss.csv`, `*.events.jsonl`, samples,
+checkpoints, and adapter artifacts from disk.
+
+```bash
+swift run mere.run image visualize-run ./runs/my-style --port 8787
+```
 
 ### `mere.run image validate`
 

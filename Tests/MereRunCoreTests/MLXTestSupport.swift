@@ -75,7 +75,14 @@ enum MLXTestSupport {
         let binaryDir = executableURL.deletingLastPathComponent()
         guard fileManager.isWritableFile(atPath: binaryDir.path) else { return }
         let destination = binaryDir.appendingPathComponent("mlx.metallib")
-        guard !fileManager.fileExists(atPath: destination.path) else { return }
+        // Replace rather than skip: a leftover link/copy from an earlier run
+        // can point at a stale metallib, which silently corrupts kernels
+        // (see scripts/build_mlx_metallib.sh). A symlink already pointing at
+        // the current source is left alone so steady-state runs are no-ops.
+        if symlinkTarget(of: destination, fileManager: fileManager) == sourceMetallib.path {
+            return
+        }
+        try? fileManager.removeItem(at: destination)
 
         // Best-effort + race-safe: if concurrent tests call this at the same time,
         // one may succeed and the other will see "file exists" errors, which we ignore.
@@ -126,7 +133,15 @@ enum MLXTestSupport {
         }
 
         let destinationBundle = resourcesDir.appendingPathComponent(sourceBundle.lastPathComponent, isDirectory: true)
-        guard !fileManager.fileExists(atPath: destinationBundle.path) else { return }
+        // Replace rather than skip: a leftover symlink/copy from an earlier run
+        // can point at a stale bundle (this exact mechanism pinned tests to a
+        // pre-0.30 metallib and produced NaN attention past 1024 keys). A
+        // symlink already pointing at the current source is left alone so
+        // steady-state runs are no-ops.
+        if symlinkTarget(of: destinationBundle, fileManager: fileManager) == sourceBundle.path {
+            return
+        }
+        try? fileManager.removeItem(at: destinationBundle)
 
         // MLX's SwiftPM lookup expects `<someBundle>/Contents/Resources/<SWIFTPM_BUNDLE>.bundle/...`.
         // Symlink (or copy) the entire Cmlx bundle into the test bundle's Resources directory.
@@ -147,6 +162,16 @@ enum MLXTestSupport {
                 }
             }
         }
+    }
+
+    private static func symlinkTarget(of url: URL, fileManager: FileManager) -> String? {
+        guard let target = try? fileManager.destinationOfSymbolicLink(atPath: url.path) else {
+            return nil
+        }
+        if target.hasPrefix("/") {
+            return target
+        }
+        return url.deletingLastPathComponent().appendingPathComponent(target).standardizedFileURL.path
     }
 
     private static func resolveXCTestBundleURL(executableURL: URL, arguments: [String]) -> URL? {

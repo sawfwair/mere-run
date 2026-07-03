@@ -41,6 +41,9 @@ struct Gemma4ForwardOutput {
 
 protocol Gemma4CausalModel: AnyObject, Sendable {
     func forward(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray
+    /// Forward for a prefill chunk: fills the KV cache but only returns logits
+    /// for the chunk's final position.
+    func prefillStep(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray
     func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> Gemma4ForwardOutput
     func inputEmbeddings(for inputIds: MLXArray) -> MLXArray
     func speculativeLogits(fromHidden hidden: MLXArray) -> MLXArray
@@ -119,6 +122,13 @@ final class Gemma4ProportionalRoPE: Module, OffsetLayer {
 protocol Gemma4AttentionCache: AnyObject {
     var offset: Int { get }
     func currentState() -> (MLXArray, MLXArray)?
+    /// State for single-token decode, where softmax attention is invariant to
+    /// key/value ordering (positions are already baked in via RoPE at append
+    /// time and the decode mask is `.none`). Ring-buffer caches may return
+    /// storage order here to skip the temporal-order copy. Multi-token queries
+    /// must keep using `currentState()` — their causal masks assume temporal
+    /// order.
+    func decodeState() -> (MLXArray, MLXArray)?
     func append(keys: MLXArray, values: MLXArray)
     func fork() -> Gemma4AttentionCache
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache?
@@ -128,7 +138,17 @@ protocol Gemma4AttentionCache: AnyObject {
     func evaluateStorage()
 }
 
+extension Gemma4CausalModel {
+    func prefillStep(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray {
+        forward(inputIds: inputIds, cache: cache)
+    }
+}
+
 extension Gemma4AttentionCache {
+    func decodeState() -> (MLXArray, MLXArray)? {
+        currentState()
+    }
+
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
         nil
     }
@@ -286,6 +306,21 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
     func currentState() -> (MLXArray, MLXArray)? {
         guard let keys, let values else { return nil }
         return (temporalOrder(keys), temporalOrder(values))
+    }
+
+    func decodeState() -> (MLXArray, MLXArray)? {
+        guard let keys, let values else { return nil }
+        // Storage order is fine for q-len 1: every slot is a valid in-window
+        // token once the ring is full, and attention over an unmasked key set
+        // is permutation-invariant. Before the ring fills, the valid prefix is
+        // already in temporal order.
+        if offset < keys.dim(2) {
+            return (
+                keys[0..., 0..., 0..<offset, 0...],
+                values[0..., 0..., 0..<offset, 0...]
+            )
+        }
+        return (keys, values)
     }
 
     func append(keys: MLXArray, values: MLXArray) {
@@ -508,6 +543,9 @@ final class Gemma4MLP: Module {
     @ModuleInfo(key: "down_proj") var downProj: Linear
     @ModuleInfo(key: "up_proj") var upProj: Linear
 
+    private var fusedGateUp: Gemma4FusedQuantizedProjection?
+    private var fusedGateUpAttempted = false
+
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         let firstSharedIndex = config.numHiddenLayers - config.numKVSharedLayers
         let isSharedKVLayer = forceKVShared || (config.numKVSharedLayers > 0 && layerIndex >= firstSharedIndex)
@@ -521,7 +559,26 @@ final class Gemma4MLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(geluApproximate(gateProj(x)) * upProj(x))
+        if let fused = resolvedFusedGateUp() {
+            let parts = fused.callSplit(x)
+            return downProj(geluApproximate(parts[0]) * parts[1])
+        }
+        return downProj(geluApproximate(gateProj(x)) * upProj(x))
+    }
+
+    func resolvedFusedGateUp() -> Gemma4FusedQuantizedProjection? {
+        guard Gemma4FusedProjectionPolicy.enabled else { return nil }
+        let sources: [Linear?] = [gateProj, upProj]
+        if let fused = fusedGateUp {
+            if fused.matches(sources) { return fused }
+            fusedGateUp = nil
+            fusedGateUpAttempted = false
+        }
+        if !fusedGateUpAttempted {
+            fusedGateUpAttempted = true
+            fusedGateUp = Gemma4FusedQuantizedProjection.fuse(sources)
+        }
+        return fusedGateUp
     }
 }
 
@@ -710,6 +767,10 @@ final class Gemma4Attention: Module {
     private let rmsNormEps: Float
     private let isKVSharedLayer: Bool
     private let useKeyEqualsValue: Bool
+    private var fusedQKV: Gemma4FusedQuantizedProjection?
+    private var fusedQKVAttempted = false
+    private var compiledQKVSegment: Gemma4CompiledSegment?
+    private var compiledQKVAttempted = false
 
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         self.layerType = config.layerTypes[layerIndex]
@@ -761,39 +822,51 @@ final class Gemma4Attention: Module {
     ) -> MLXArray {
         let batchSize = x.dim(0)
         let sequenceLength = x.dim(1)
-
-        let rawQueries = qProj(x).reshaped(batchSize, sequenceLength, numHeads, headDim)
-        var queries = qNorm(rawQueries).transposed(0, 2, 1, 3)
-
         let offset = cache?.offset ?? 0
-        queries = rope(queries, offset: offset)
+
+        func preRopeQueryHeads(_ rawQueries: MLXArray) -> MLXArray {
+            let shaped = rawQueries.reshaped(batchSize, sequenceLength, numHeads, headDim)
+            return qNorm(shaped).transposed(0, 2, 1, 3)
+        }
+
+        func preRopeKeyValueHeads(rawKeys: MLXArray, rawValues: MLXArray) -> (MLXArray, MLXArray) {
+            let normedKeys = kNorm(rawKeys.reshaped(batchSize, sequenceLength, numKVHeads, headDim))
+            let normedValues = gemma4RMSNormNoScale(
+                rawValues.reshaped(batchSize, sequenceLength, numKVHeads, headDim),
+                eps: rmsNormEps
+            )
+            return (normedKeys.transposed(0, 2, 1, 3), normedValues.transposed(0, 2, 1, 3))
+        }
+
+        func finishedQueries(_ rawQueries: MLXArray) -> MLXArray {
+            rope(preRopeQueryHeads(rawQueries), offset: offset)
+        }
+
+        func finishedKeyValues(rawKeys: MLXArray, rawValues: MLXArray) -> (MLXArray, MLXArray) {
+            let (preRopeKeys, computedValues) = preRopeKeyValueHeads(rawKeys: rawKeys, rawValues: rawValues)
+            return (rope(preRopeKeys, offset: offset), computedValues)
+        }
 
         let scale: Float = 1.0
         let repeats = max(1, numHeads / max(1, numKVHeads))
 
+        let queries: MLXArray
         let keys: MLXArray
         let values: MLXArray
         if isKVSharedLayer, let cache {
+            queries = finishedQueries(qProj(x))
             if sequenceLength == 1,
                let attended = cache.specializedAttention(queries: queries, repeats: repeats, scale: scale) {
                 let reshaped = attended.transposed(0, 2, 1, 3).reshaped(batchSize, sequenceLength, numHeads * headDim)
                 return oProj(reshaped)
             }
-            if let shared = cache.currentState() {
+            if let shared = sequenceLength == 1 ? cache.decodeState() : cache.currentState() {
                 keys = shared.0
                 values = shared.1
             } else {
-                var rawKeys = kProj(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
-                var rawValues = useKeyEqualsValue
-                    ? rawKeys
-                    : vProj!(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
-
-                rawKeys = kNorm(rawKeys)
-                rawValues = gemma4RMSNormNoScale(rawValues, eps: rmsNormEps)
-
-                var computedKeys = rawKeys.transposed(0, 2, 1, 3)
-                let computedValues = rawValues.transposed(0, 2, 1, 3)
-                computedKeys = rope(computedKeys, offset: offset)
+                let rawKeys = kProj(x)
+                let rawValues = useKeyEqualsValue ? rawKeys : vProj!(x)
+                let (computedKeys, computedValues) = finishedKeyValues(rawKeys: rawKeys, rawValues: rawValues)
 
                 cache.append(keys: computedKeys, values: computedValues)
                 let updated = cache.currentState()!
@@ -801,17 +874,36 @@ final class Gemma4Attention: Module {
                 values = updated.1
             }
         } else {
-            var rawKeys = kProj(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
-            var rawValues = useKeyEqualsValue
-                ? rawKeys
-                : vProj!(x).reshaped(batchSize, sequenceLength, numKVHeads, headDim)
-
-            rawKeys = kNorm(rawKeys)
-            rawValues = gemma4RMSNormNoScale(rawValues, eps: rmsNormEps)
-
-            var computedKeys = rawKeys.transposed(0, 2, 1, 3)
-            let computedValues = rawValues.transposed(0, 2, 1, 3)
-            computedKeys = rope(computedKeys, offset: offset)
+            let computedKeys: MLXArray
+            let computedValues: MLXArray
+            if let fusedHeads = fusedDecodeQKV(x, sequenceLength: sequenceLength) {
+                queries = rope(fusedHeads.0, offset: offset)
+                computedKeys = rope(fusedHeads.1, offset: offset)
+                computedValues = fusedHeads.2
+            } else if let compiled = resolvedCompiledQKVSegment(sequenceLength: sequenceLength) {
+                let parts = compiled.function([x])
+                queries = rope(parts[0], offset: offset)
+                computedKeys = rope(parts[1], offset: offset)
+                computedValues = parts[2]
+            } else {
+                let rawQueries: MLXArray
+                let rawKeys: MLXArray
+                let rawValues: MLXArray
+                if let fused = resolvedFusedQKV() {
+                    let parts = fused.callSplit(x)
+                    rawQueries = parts[0]
+                    rawKeys = parts[1]
+                    rawValues = useKeyEqualsValue ? parts[1] : parts[2]
+                } else {
+                    rawQueries = qProj(x)
+                    rawKeys = kProj(x)
+                    rawValues = useKeyEqualsValue ? rawKeys : vProj!(x)
+                }
+                queries = finishedQueries(rawQueries)
+                let keyValues = finishedKeyValues(rawKeys: rawKeys, rawValues: rawValues)
+                computedKeys = keyValues.0
+                computedValues = keyValues.1
+            }
 
             if let cache {
                 cache.append(keys: computedKeys, values: computedValues)
@@ -820,7 +912,7 @@ final class Gemma4Attention: Module {
                     let reshaped = attended.transposed(0, 2, 1, 3).reshaped(batchSize, sequenceLength, numHeads * headDim)
                     return oProj(reshaped)
                 }
-                let updated = cache.currentState()!
+                let updated = (sequenceLength == 1 ? cache.decodeState() : cache.currentState())!
                 keys = updated.0
                 values = updated.1
             } else {
@@ -847,6 +939,96 @@ final class Gemma4Attention: Module {
         )
         let reshaped = attended.transposed(0, 2, 1, 3).reshaped(batchSize, sequenceLength, numHeads * headDim)
         return oProj(reshaped)
+    }
+
+    private func resolvedFusedQKV() -> Gemma4FusedQuantizedProjection? {
+        guard Gemma4FusedProjectionPolicy.enabled else { return nil }
+        let sources: [Linear?] = useKeyEqualsValue ? [qProj, kProj] : [qProj, kProj, vProj]
+        if let fused = fusedQKV {
+            if fused.matches(sources) { return fused }
+            fusedQKV = nil
+            fusedQKVAttempted = false
+            compiledQKVSegment = nil
+            compiledQKVAttempted = false
+        }
+        if !fusedQKVAttempted {
+            fusedQKVAttempted = true
+            fusedQKV = Gemma4FusedQuantizedProjection.fuse(sources)
+        }
+        return fusedQKV
+    }
+
+    /// Fused-kernel decode path: one quantized matmul over the concatenated
+    /// QKV weights, then a single Metal kernel that splits heads and applies
+    /// qNorm, kNorm, and the value no-scale norm in transposed layout.
+    private func fusedDecodeQKV(
+        _ x: MLXArray,
+        sequenceLength: Int
+    ) -> (MLXArray, MLXArray, MLXArray)? {
+        guard Gemma4FusedProjectionPolicy.fusedDecodeKernelsEnabled,
+              sequenceLength == 1,
+              !useKeyEqualsValue else {
+            return nil
+        }
+        guard let fused = resolvedFusedQKV() else { return nil }
+        return Gemma4DecodeFusedKernels.qkvNorms(
+            qkv: fused.callFused(x),
+            qNormWeight: qNorm.weight,
+            kNormWeight: kNorm.weight,
+            eps: Gemma4DecodeScalarCache.epsilon(rmsNormEps),
+            numHeads: numHeads,
+            numKVHeads: numKVHeads,
+            headDim: headDim
+        )
+    }
+
+    /// Compiled decode segment: fused QKV matmul, head reshape, q/k norms, and
+    /// the value no-scale norm — everything between the layer input and RoPE.
+    /// RoPE stays outside because its integer offset changes every token, which
+    /// would force a retrace per position.
+    private func resolvedCompiledQKVSegment(sequenceLength: Int) -> Gemma4CompiledSegment? {
+        guard Gemma4FusedProjectionPolicy.compiledSegmentsEnabled,
+              sequenceLength == 1,
+              !useKeyEqualsValue else {
+            return nil
+        }
+        guard let fused = resolvedFusedQKV() else { return nil }
+        let fingerprint = [
+            ObjectIdentifier(fused),
+            ObjectIdentifier(qNorm),
+            ObjectIdentifier(kNorm),
+        ]
+        if let segment = compiledQKVSegment {
+            if segment.matches(fingerprint) { return segment }
+            compiledQKVSegment = nil
+            compiledQKVAttempted = false
+        }
+        if !compiledQKVAttempted {
+            compiledQKVAttempted = true
+            let numHeads = self.numHeads
+            let numKVHeads = self.numKVHeads
+            let headDim = self.headDim
+            let eps = self.rmsNormEps
+            let qNorm = self.qNorm
+            let kNorm = self.kNorm
+            let function = MLX.compile { (inputs: [MLXArray]) -> [MLXArray] in
+                let x = inputs[0]
+                let batch = x.dim(0)
+                let sequence = x.dim(1)
+                let parts = fused.callSplit(x)
+                let queries = qNorm(parts[0].reshaped(batch, sequence, numHeads, headDim))
+                    .transposed(0, 2, 1, 3)
+                let keys = kNorm(parts[1].reshaped(batch, sequence, numKVHeads, headDim))
+                    .transposed(0, 2, 1, 3)
+                let values = gemma4RMSNormNoScale(
+                    parts[2].reshaped(batch, sequence, numKVHeads, headDim),
+                    eps: eps
+                ).transposed(0, 2, 1, 3)
+                return [queries, keys, values]
+            }
+            compiledQKVSegment = Gemma4CompiledSegment(function: function, fingerprint: fingerprint)
+        }
+        return compiledQKVSegment
     }
 
     private func makeAttentionMask(
@@ -905,6 +1087,9 @@ final class Gemma4DecoderLayer: Module {
     @ParameterInfo(key: "layer_scalar") var layerScalar: MLXArray
 
     private let hasPerLayerInput: Bool
+    private let rmsNormEps: Float
+    private var compiledPostSegment: Gemma4CompiledSegment?
+    private var compiledPostAttempted = false
 
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         self._selfAttention.wrappedValue = Gemma4Attention(
@@ -935,6 +1120,7 @@ final class Gemma4DecoderLayer: Module {
         self._perLayerProjection.wrappedValue = Linear(max(1, config.hiddenSizePerLayerInput), config.hiddenSize, bias: false)
         self._postPerLayerInputNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         self._layerScalar.wrappedValue = MLXArray.ones([1])
+        self.rmsNormEps = config.rmsNormEps
         super.init()
     }
 
@@ -947,6 +1133,23 @@ final class Gemma4DecoderLayer: Module {
         let attentionResidual = x
         var hidden = inputLayerNorm(x)
         hidden = selfAttention(hidden, cache: cache, visionBlockIDs: visionBlockIDs)
+
+        let perLayerInputActive = hasPerLayerInput && perLayerInput != nil
+        if let fusedOutput = fusedDecodeFeedForward(
+            attentionOutput: hidden,
+            attentionResidual: attentionResidual,
+            sequenceLength: x.dim(1),
+            perLayerInputActive: perLayerInputActive
+        ) {
+            return fusedOutput
+        }
+        if let compiled = resolvedCompiledPostSegment(
+            sequenceLength: x.dim(1),
+            perLayerInputActive: perLayerInputActive
+        ) {
+            return compiled.function([hidden, attentionResidual])[0]
+        }
+
         hidden = postAttentionLayerNorm(hidden)
         hidden = attentionResidual + hidden
 
@@ -980,6 +1183,105 @@ final class Gemma4DecoderLayer: Module {
         }
 
         return hidden * layerScalar
+    }
+
+    /// Fused-kernel decode path for everything after attention in the dense
+    /// case: (post-attn norm + residual + pre-FFN norm) in one kernel, one
+    /// fused gate/up matmul, (gelu·up) in one kernel, the down matmul, then
+    /// (post-FFN norm + residual + layer scalar) in one kernel.
+    private func fusedDecodeFeedForward(
+        attentionOutput: MLXArray,
+        attentionResidual: MLXArray,
+        sequenceLength: Int,
+        perLayerInputActive: Bool
+    ) -> MLXArray? {
+        guard Gemma4FusedProjectionPolicy.fusedDecodeKernelsEnabled,
+              sequenceLength == 1,
+              router == nil,
+              experts == nil,
+              !perLayerInputActive else {
+            return nil
+        }
+        guard let gateUpFused = mlp.resolvedFusedGateUp() else { return nil }
+
+        let hiddenSize = attentionOutput.dim(-1)
+        let eps = Gemma4DecodeScalarCache.epsilon(rmsNormEps)
+        let (mlpResidual, mlpInput) = Gemma4DecodeFusedKernels.residualDoubleNorm(
+            attentionOutput: attentionOutput,
+            residual: attentionResidual,
+            postNormWeight: postAttentionLayerNorm.weight,
+            preNormWeight: preFeedforwardLayerNorm.weight,
+            eps: eps,
+            hidden: hiddenSize
+        )
+        let gateUp = gateUpFused.callFused(mlpInput)
+        let activated = Gemma4DecodeFusedKernels.geluMul(
+            gateUp: gateUp,
+            intermediate: gateUp.dim(-1) / 2
+        )
+        let downOutput = mlp.downProj(activated)
+        return Gemma4DecodeFusedKernels.ffnResidualScale(
+            downOutput: downOutput,
+            mlpResidual: mlpResidual,
+            postNormWeight: postFeedforwardLayerNorm.weight,
+            layerScalar: layerScalar,
+            eps: eps,
+            hidden: hiddenSize
+        )
+    }
+
+    /// Compiled decode segment covering everything after attention in the dense
+    /// path: post-attention norm, residual, pre/post feed-forward norms, the MLP,
+    /// the second residual, and the layer scalar. MoE and per-layer-input layers
+    /// keep the interpreted path.
+    private func resolvedCompiledPostSegment(
+        sequenceLength: Int,
+        perLayerInputActive: Bool
+    ) -> Gemma4CompiledSegment? {
+        guard Gemma4FusedProjectionPolicy.compiledSegmentsEnabled,
+              sequenceLength == 1,
+              router == nil,
+              experts == nil,
+              !perLayerInputActive else {
+            return nil
+        }
+        let fingerprint = [
+            ObjectIdentifier(postAttentionLayerNorm),
+            ObjectIdentifier(preFeedforwardLayerNorm),
+            ObjectIdentifier(postFeedforwardLayerNorm),
+            ObjectIdentifier(mlp),
+            ObjectIdentifier(mlp.gateProj),
+            ObjectIdentifier(mlp.upProj),
+            ObjectIdentifier(mlp.downProj),
+            ObjectIdentifier(layerScalar),
+        ]
+        if let segment = compiledPostSegment {
+            if segment.matches(fingerprint) { return segment }
+            compiledPostSegment = nil
+            compiledPostAttempted = false
+        }
+        if !compiledPostAttempted {
+            compiledPostAttempted = true
+            let postAttentionLayerNorm = self.postAttentionLayerNorm
+            let preFeedforwardLayerNorm = self.preFeedforwardLayerNorm
+            let postFeedforwardLayerNorm = self.postFeedforwardLayerNorm
+            let mlp = self.mlp
+            let layerScalar = self.layerScalar
+            let function = MLX.compile { (inputs: [MLXArray]) -> [MLXArray] in
+                let attentionOutput = inputs[0]
+                let attentionResidual = inputs[1]
+                var hidden = postAttentionLayerNorm(attentionOutput)
+                hidden = attentionResidual + hidden
+                let mlpResidual = hidden
+                hidden = preFeedforwardLayerNorm(hidden)
+                hidden = mlp(hidden)
+                hidden = postFeedforwardLayerNorm(hidden)
+                hidden = mlpResidual + hidden
+                return [hidden * layerScalar]
+            }
+            compiledPostSegment = Gemma4CompiledSegment(function: function, fingerprint: fingerprint)
+        }
+        return compiledPostSegment
     }
 }
 
@@ -1125,6 +1427,18 @@ final class Gemma4LanguageModel: Module {
         return embedTokens.asLinear(hidden)
     }
 
+    /// Logits for the final position only. Prefill chunks never read the other
+    /// positions' logits, and skipping them avoids a [seq, 262k] lm_head matmul
+    /// plus its materialization per chunk.
+    func lastPositionLogits(_ inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
+        var hidden = self(inputIds, cache: cache)
+        let sequenceLength = hidden.dim(1)
+        if sequenceLength > 1 {
+            hidden = hidden[0..., (sequenceLength - 1)..., 0...]
+        }
+        return embedTokens.asLinear(hidden)
+    }
+
     func logits(
         embeddings: MLXArray,
         inputIds: MLXArray?,
@@ -1263,6 +1577,19 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         forward(inputIds: inputIds, cache: cache as? [Gemma4AttentionCache])
     }
 
+    /// Logits for an explicit set of flattened (`[batch * seq]` row-major)
+    /// positions only. SFT training reads logits solely at loss-masked target
+    /// positions, and prompt/pad rows are the majority of a chat batch —
+    /// projecting them through the 262k-vocab lm_head (plus the float32 loss
+    /// chain) is pure waste. Hidden states still flow through every position,
+    /// so gradients match the full-logits path exactly.
+    func trainingLogits(inputIds: MLXArray, flatTargetPositions: MLXArray) -> MLXArray {
+        let hidden = languageModel(inputIds)
+        let flattened = hidden.reshaped([-1, hidden.dim(-1)])
+        let selected = take(flattened, flatTargetPositions.asType(.int32), axis: 0)
+        return applyFinalSoftcap(languageModel.embedTokens.asLinear(selected))
+    }
+
     func forward(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
         var logits = languageModel.logits(inputIds, cache: cache)
         if let finalLogitSoftcapping {
@@ -1270,6 +1597,10 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
             logits = tanh(logits / softcap) * softcap
         }
         return logits
+    }
+
+    func prefillStep(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray {
+        applyFinalSoftcap(languageModel.lastPositionLogits(inputIds, cache: cache))
     }
 
     func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> Gemma4ForwardOutput {
@@ -1426,6 +1757,10 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
             logits = tanh(logits / softcap) * softcap
         }
         return logits
+    }
+
+    func prefillStep(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray {
+        applyFinalSoftcap(languageModel.lastPositionLogits(inputIds, cache: cache))
     }
 
     func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> Gemma4ForwardOutput {

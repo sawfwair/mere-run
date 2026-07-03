@@ -89,7 +89,7 @@ the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the current
 validation boundary, CUDA notes, and first commands:
 
 ```bash
-tag=v0.17.0
+tag=v0.18.0
 version="${tag#v}"
 
 # Portable tarball
@@ -124,7 +124,7 @@ during NVRTC JIT compilation:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.18.0 --artifact-suffix cuda
 ```
 
 Current CUDA validation should be treated as limited to the exact hosts that
@@ -169,7 +169,7 @@ swift run mere.run --help
 To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
-scripts/package-linux.sh --version 0.17.0
+scripts/package-linux.sh --version 0.18.0
 ls dist/linux/
 ```
 
@@ -178,14 +178,14 @@ builder with CUDA development packages:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.17.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.18.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 
 On Linux arm64, use a CUDA-provisioned host:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.17.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.18.0
 ```
 
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio
@@ -280,7 +280,24 @@ swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
   --recipe klein-fast-style \
+  --visualize \
   --quiet
+
+# Apply a Klein LoRA to a reference image.
+swift run mere.run image generate \
+  --model image-klein-9b \
+  --ref-image ./reference-pose.png \
+  --strength 0.55 \
+  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, natural human anatomy, no extra limbs" \
+  --lora ./style-adapter.safetensors \
+  --lora-scale 1.5 \
+  --width 1024 --height 768 \
+  --steps 16 \
+  --seed 525252 \
+  --output ./style-reference.png
+
+# Reopen the local run dashboard later from the run directory.
+swift run mere.run image visualize-run .
 
 # Run local chat
 swift run mere.run text chat \

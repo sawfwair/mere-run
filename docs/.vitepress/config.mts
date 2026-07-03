@@ -83,6 +83,7 @@ export default defineConfig({
         text: 'Internals',
         items: [
           { text: 'CLI and Runtime Internals', link: '/internals/cli-and-runtime' },
+          { text: 'Structured Runs, Preflights, and Declarative Actions', link: '/internals/structured-runs-preflight-actions' },
           { text: 'Source Layout Reference', link: '/internals/source-layout' }
         ]
       }

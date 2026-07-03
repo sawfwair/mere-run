@@ -293,7 +293,7 @@ public actor LFM2Generator: ChatGenerator {
             let end = min(promptTokens.count, offset + Self.prefillChunkSize)
             let chunk = Array(promptTokens[offset..<end])
             let input = MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count)
-            let output = model.forward(input, cache: cache)
+            let output = model.forwardPrefill(input, cache: cache)
             MLX.eval(output.logits)
             MLX.eval(output.hidden)
             lastOutput = output

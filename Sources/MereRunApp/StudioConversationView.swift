@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The chat/code canvas: a scrolling transcript of message bubbles for the active conversation,
-/// plus a live streaming bubble while a turn is in flight. The composer lives in the shared
-/// prompt bar below; this view only renders the thread and a "New chat" affordance.
+/// The chat/code canvas: user turns as warm bubbles on the right, assistant turns as unboxed
+/// Markdown on the left, a live streaming turn while a reply is in flight. The composer lives
+/// in the shared prompt bar below; this view renders the thread and a "New chat" affordance.
 struct StudioConversationView: View {
     let item: StudioLibraryItem?
     let liveText: String?
@@ -12,6 +12,7 @@ struct StudioConversationView: View {
     let onCopy: (String) -> Void
     let onRetry: () -> Void
     let onEdit: (UUID) -> Void
+    var onUseExample: ((String) -> Void)?
 
     private static let streamingBubbleID = "studio.conversation.streaming"
 
@@ -45,7 +46,7 @@ struct StudioConversationView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
             Text(item?.displayTitle ?? "New chat")
                 .font(MereRunTheme.sectionFont)
                 .foregroundStyle(MereRunTheme.textSecondary)
@@ -55,30 +56,32 @@ struct StudioConversationView: View {
             Button(action: onNewChat) {
                 Label("New chat", systemImage: "square.and.pencil")
                     .font(MereRunTheme.captionFont)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(MereRunTheme.accent)
+            .buttonStyle(.mereIcon(tint: MereRunTheme.accent))
             .help("Start a new conversation")
             .accessibilityLabel("Start a new conversation")
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder
     private var content: some View {
         if messages.isEmpty && !isRunning {
-            StudioConversationEmptyState()
+            StudioConversationEmptyState(mode: mode, onUseExample: onUseExample)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
+                    LazyVStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
                         ForEach(messages) { message in
-                            StudioMessageBubble(
+                            StudioTurnView(
                                 role: message.role,
                                 content: message.content,
                                 failed: message.failed,
                                 monospaced: mode == .code && message.role == .assistant,
+                                modeIcon: mode.systemImage,
                                 onCopy: message.content.isEmpty ? nil : { onCopy(message.content) },
                                 onRetry: retryAction(for: message),
                                 onEdit: editAction(for: message)
@@ -86,12 +89,13 @@ struct StudioConversationView: View {
                             .id(message.id)
                         }
                         if isRunning {
-                            StudioMessageBubble(
+                            StudioTurnView(
                                 role: .assistant,
                                 content: liveText ?? "",
                                 failed: false,
                                 isStreaming: true,
-                                monospaced: mode == .code
+                                monospaced: mode == .code,
+                                modeIcon: mode.systemImage
                             )
                             .id(Self.streamingBubbleID)
                         }
@@ -121,7 +125,7 @@ struct StudioConversationView: View {
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(MereRunTheme.Motion.quick) {
             if isRunning {
                 proxy.scrollTo(Self.streamingBubbleID, anchor: .bottom)
             } else if let last = messages.last {
@@ -131,69 +135,163 @@ struct StudioConversationView: View {
     }
 }
 
-private struct StudioMessageBubble: View {
+/// One conversation turn. User turns read as authored notes (warm bubble, right side);
+/// assistant turns read as the document itself (unboxed Markdown behind a small mode glyph).
+private struct StudioTurnView: View {
     let role: StudioMessageRole
     let content: String
     var failed: Bool = false
     var isStreaming: Bool = false
     var monospaced: Bool = false
+    var modeIcon: String = "bubble.left.and.bubble.right"
     var onCopy: (() -> Void)?
     var onRetry: (() -> Void)?
     var onEdit: (() -> Void)?
 
+    @State private var hovering = false
+
     private var isUser: Bool { role == .user }
+    private var hasActions: Bool { onCopy != nil || onRetry != nil || onEdit != nil }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            if isUser { Spacer(minLength: 64) }
+            if isUser {
+                Spacer(minLength: 80)
+                userBubble
+            } else {
+                assistantBlock
+                Spacer(minLength: 80)
+            }
+        }
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .contextMenu { contextMenuItems }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(isStreaming ? .updatesFrequently : [])
+    }
+
+    private var userBubble: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(content)
+                .font(MereRunTheme.bodyFont)
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .textSelection(.enabled)
+                .padding(.horizontal, MereRunTheme.Spacing.md)
+                .padding(.vertical, MereRunTheme.Spacing.sm)
+                .background {
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 16,
+                        bottomLeadingRadius: 16,
+                        bottomTrailingRadius: 5,
+                        topTrailingRadius: 16
+                    )
+                    .fill(MereRunTheme.accentSoft)
+                    .overlay {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 16,
+                            bottomLeadingRadius: 16,
+                            bottomTrailingRadius: 5,
+                            topTrailingRadius: 16
+                        )
+                        .strokeBorder(
+                            failed ? MereRunTheme.red.opacity(0.6) : MereRunTheme.accent.opacity(0.14),
+                            lineWidth: 1
+                        )
+                    }
+                }
+                .frame(maxWidth: 520, alignment: .trailing)
+
+            actionRow
+        }
+    }
+
+    private var assistantBlock: some View {
+        HStack(alignment: .top, spacing: MereRunTheme.Spacing.sm) {
+            Image(systemName: modeIcon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
+                .frame(width: 26, height: 26)
+                .background {
+                    Circle().fill(MereRunTheme.accentSoft.opacity(0.7))
+                }
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 6) {
-                Text(isUser ? "You" : "Assistant")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                bubbleBody
+                assistantBody
+
                 if failed {
                     Label("This turn failed", systemImage: "exclamationmark.triangle")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.red)
                 }
-                if !isStreaming, onCopy != nil || onRetry != nil || onEdit != nil {
-                    HStack(spacing: 14) {
-                        if let onCopy {
-                            Button(action: onCopy) { Label("Copy", systemImage: "doc.on.doc") }
-                                .buttonStyle(.plain)
-                                .help("Copy message")
-                        }
-                        if let onEdit {
-                            Button(action: onEdit) { Label("Edit", systemImage: "pencil") }
-                                .buttonStyle(.plain)
-                                .help("Edit and re-run from this turn")
-                        }
-                        if let onRetry {
-                            Button(action: onRetry) { Label("Retry", systemImage: "arrow.clockwise") }
-                                .buttonStyle(.plain)
-                                .help("Regenerate this reply")
-                        }
-                    }
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .padding(.top, 2)
+
+                actionRow
+            }
+            .frame(maxWidth: 660, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var assistantBody: some View {
+        if isStreaming && content.isEmpty {
+            StudioThinkingIndicator()
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                StudioMarkdownText(
+                    content: content,
+                    bodyFont: monospaced ? MereRunTheme.monoFont : MereRunTheme.bodyFont
+                )
+                if isStreaming {
+                    StudioStreamingCaret()
                 }
             }
-            .padding(14)
-            .background {
-                RoundedRectangle(cornerRadius: MereRunTheme.cornerRadius)
-                    .fill(isUser ? MereRunTheme.surfaceRaised : MereRunTheme.surface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: MereRunTheme.cornerRadius)
-                            .strokeBorder((failed ? MereRunTheme.red : MereRunTheme.border).opacity(0.6), lineWidth: 1)
-                    }
-            }
-            .frame(maxWidth: 620, alignment: .leading)
-            if !isUser { Spacer(minLength: 64) }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityText)
-        .accessibilityAddTraits(isStreaming ? .updatesFrequently : [])
+    }
+
+    /// Copy / edit / retry surface on hover; the row keeps its height so nothing jumps.
+    @ViewBuilder
+    private var actionRow: some View {
+        if !isStreaming && hasActions {
+            HStack(spacing: 2) {
+                if let onCopy {
+                    turnAction("Copy", systemImage: "doc.on.doc", help: "Copy message", action: onCopy)
+                }
+                if let onEdit {
+                    turnAction("Edit", systemImage: "pencil", help: "Edit and re-run from this turn", action: onEdit)
+                }
+                if let onRetry {
+                    turnAction("Retry", systemImage: "arrow.clockwise", help: "Regenerate this reply", action: onRetry)
+                }
+            }
+            .opacity(hovering ? 1 : 0)
+            .allowsHitTesting(hovering)
+            .frame(height: 22)
+        }
+    }
+
+    private func turnAction(
+        _ title: String,
+        systemImage: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(MereRunTheme.captionFont)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+        }
+        .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
+        .help(help)
+    }
+
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        if let onCopy { Button("Copy") { onCopy() } }
+        if let onEdit { Button("Edit…") { onEdit() } }
+        if let onRetry { Button("Retry") { onRetry() } }
     }
 
     private var accessibilityText: String {
@@ -202,41 +300,53 @@ private struct StudioMessageBubble: View {
         let suffix = failed ? " (this turn failed)" : ""
         return "\(speaker): \(content)\(suffix)"
     }
+}
 
-    @ViewBuilder
-    private var bubbleBody: some View {
-        if isStreaming && content.isEmpty {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Thinking…")
-                    .font(MereRunTheme.bodyFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
+/// The live-reply cursor: a small bronze bar breathing at the end of the streamed text.
+private struct StudioStreamingCaret: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(MereRunTheme.accent)
+            .frame(width: 8, height: 15)
+            .phaseAnimator([0.25, 1.0]) { view, phase in
+                view.opacity(phase)
+            } animation: { _ in
+                .easeInOut(duration: 0.55)
             }
-        } else {
-            Text(content)
-                .font(monospaced ? MereRunTheme.monoFont : MereRunTheme.bodyFont)
-                .foregroundStyle(MereRunTheme.textPrimary)
-                .textSelection(.enabled)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Three quiet dots taking turns while the model decides what to say.
+private struct StudioThinkingIndicator: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(MereRunTheme.accent)
+                        .frame(width: 6, height: 6)
+                        .phaseAnimator([0, 1, 2]) { view, phase in
+                            view.opacity(phase == Double(index) ? 1 : 0.28)
+                        } animation: { _ in
+                            .easeInOut(duration: 0.38)
+                        }
+                }
+            }
+            Text("Thinking…")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
         }
+        .padding(.vertical, 4)
+        .accessibilityLabel("Generating a reply")
     }
 }
 
 private struct StudioConversationEmptyState: View {
+    let mode: StudioMode
+    var onUseExample: ((String) -> Void)?
+
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-                .frame(width: 84, height: 84)
-                .background { Circle().fill(MereRunTheme.surfaceRaised) }
-            Text("Start a conversation")
-                .font(.system(size: 22, weight: .semibold))
-            Text("Type a message below. Replies stay on this Mac, and the whole thread is remembered for follow-up turns.")
-                .font(MereRunTheme.bodyFont)
-                .foregroundStyle(MereRunTheme.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        StudioEmptyState(mode: mode, onUseExample: onUseExample, onAttach: nil)
     }
 }

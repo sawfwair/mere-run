@@ -164,6 +164,88 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .sfx: return "Describe a sound effect and render a WAV."
         }
     }
+
+    /// One-click starters shown on the empty canvas. They fill the composer, never auto-run.
+    /// Attachment-first modes keep prompts short (they name the subject, not the scene).
+    var examplePrompts: [String] {
+        switch self {
+        case .createImage:
+            return [
+                "A lighthouse at dusk, gouache on rough paper",
+                "Brass mechanical keyboard, studio product shot",
+                "Isometric cutaway of a tiny bakery, morning light"
+            ]
+        case .chat:
+            return [
+                "Explain how attention works in a transformer, briefly",
+                "Draft a friendly reply declining a meeting",
+                "What can I cook with mushrooms, eggs, and spinach?"
+            ]
+        case .code:
+            return [
+                "A Swift function that debounces async work",
+                "A zsh script that renames photos by EXIF date",
+                "A tiny Python HTTP server that logs request headers"
+            ]
+        case .speak:
+            return [
+                "Welcome aboard. Let's make something worth keeping.",
+                "The forecast calls for slow mornings and warm coffee.",
+                "Three… two… one… liftoff."
+            ]
+        case .listen:
+            return []
+        case .readImage:
+            return [
+                "Describe this scene in one paragraph",
+                "What's written on the receipt?",
+                "List every object on the desk"
+            ]
+        case .findObjects:
+            return ["the red bicycle", "every coffee cup", "the person wearing a hat"]
+        case .segment:
+            return ["the foreground subject", "the dog", "the nearest car"]
+        case .track:
+            return ["the skateboarder", "the white van", "the ball"]
+        case .music:
+            return [
+                "Slow-burn synthwave with a hopeful bridge",
+                "Acoustic folk waltz, brushed drums, dusty piano",
+                "90s boom-bap beat over upright bass"
+            ]
+        case .video:
+            return [
+                "Steam rising from a street-food stall at night",
+                "A paper boat drifting down a rain gutter, macro",
+                "Slow dolly through a sunlit greenhouse"
+            ]
+        case .sfx:
+            return [
+                "Heavy wooden door creaking open",
+                "Retro arcade power-up",
+                "Distant thunder rolling over hills"
+            ]
+        }
+    }
+}
+
+/// Sidebar sections. Order here is the navigation order.
+enum StudioModeGroup: String, CaseIterable, Identifiable {
+    case create = "Create"
+    case converse = "Converse"
+    case voice = "Voice"
+    case vision = "Vision"
+
+    var id: String { rawValue }
+
+    var modes: [StudioMode] {
+        switch self {
+        case .create: return [.createImage, .video, .music, .sfx]
+        case .converse: return [.chat, .code]
+        case .voice: return [.speak, .listen]
+        case .vision: return [.readImage, .findObjects, .segment, .track]
+        }
+    }
 }
 
 enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable {
