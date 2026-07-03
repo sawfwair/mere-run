@@ -2,12 +2,21 @@ import Foundation
 import XCTest
 @testable import MereRunCore
 
-/// Live-session prompt-swap behavior against the real Magenta RT2 engine.
-/// Heavy (loads the native engine plus a multi-GB model), so it only runs
-/// when explicitly enabled:
+/// Live prompt-swap behavior against the real Magenta RT2 engine. Heavy
+/// (loads the native engine plus a multi-GB model), so it only runs when
+/// explicitly enabled:
 ///   MERERUN_TEST_RUN_MAGENTA=1 swift test --filter MagentaRT2PromptSwapTests
 /// The model root defaults to the installed managed model and can be
 /// overridden with MERERUN_TEST_MAGENTA_MODEL_ROOT.
+///
+/// History (2026-07-03): a non-blocking swap variant — keep calling
+/// mrt2_engine_generate_frame while the engine encodes the new prompt on its
+/// own thread — SEGFAULTED deterministically when run against the live
+/// engine (signal 11 in the xctest process; the engine API is not safe for
+/// cross-thread overlap with its asynchronous encode). The render loop
+/// therefore blocks on prompt swaps by design; stall-free swaps need the
+/// engine's threaded mrt2_runner_* API with its buffered audio ring. This
+/// suite pins the supported blocking behavior.
 final class MagentaRT2PromptSwapTests: XCTestCase {
     private func resolvedResources() throws -> MagentaRT2Resources {
         let env = ProcessInfo.processInfo.environment
@@ -31,16 +40,12 @@ final class MagentaRT2PromptSwapTests: XCTestCase {
         return resources
     }
 
-    /// Renders through a mid-session prompt swap without blocking and checks
-    /// that every frame around the swap keeps rendering (no stall anywhere
-    /// near the multi-second encode time) and produces finite, non-silent
-    /// audio. This is the empirical proof that mrt2_engine_generate_frame is
-    /// safe while the engine encodes a new prompt on its own thread.
-    func testNonBlockingPromptSwapKeepsRendering() async throws {
+    /// A mid-session prompt swap must complete the stream with finite,
+    /// non-silent audio on both sides of the swap. The swap stalls the
+    /// render loop for the encode by design (see the type comment), so
+    /// there is deliberately no frame-time assertion around it.
+    func testPromptSwapRendersToCompletion() async throws {
         let resources = try resolvedResources()
-        setenv("MERERUN_MAGENTA_NONBLOCKING_PROMPT_SWAP", "1", 1)
-        defer { unsetenv("MERERUN_MAGENTA_NONBLOCKING_PROMPT_SWAP") }
-
         let frameCount = 50
         let swapFrame = 20
         let recorder = FrameRecorder()
@@ -52,11 +57,20 @@ final class MagentaRT2PromptSwapTests: XCTestCase {
         )
 
         do {
-            try await runSwapStream(request: request, frameCount: frameCount, swapFrame: swapFrame, recorder: recorder)
+            try await MagentaRT2Renderer.renderFrameStream(
+                request,
+                frameCount: frameCount,
+                liveControls: { frameIndex in
+                    if frameIndex == swapFrame {
+                        return MagentaRT2LiveControlSnapshot(prompt: "energetic drum and bass")
+                    }
+                    return nil
+                },
+                onFrame: { frameIndex, frame in
+                    recorder.record(frameIndex: frameIndex, frame: frame)
+                }
+            )
         } catch let error as MagentaRT2Error {
-            // The vendored engine currently fails to load its Metal library
-            // on newer toolchains; skip rather than fail until the
-            // xcframework is rebuilt (tracked separately).
             throw XCTSkip("Magenta RT2 engine unavailable: \(error.localizedDescription)")
         }
 
@@ -64,40 +78,7 @@ final class MagentaRT2PromptSwapTests: XCTestCase {
         XCTAssertEqual(stats.framesRendered, frameCount)
         XCTAssertTrue(stats.allFinite, "engine produced non-finite samples")
         XCTAssertGreaterThan(stats.peakAfterSwap, 0, "audio went silent after the prompt swap")
-
-        // The whole point: no frame near the swap may stall for anything
-        // like the prompt-encode time. Frames run ~real-time (tens of ms);
-        // the legacy blocking swap stalled one frame for the full encode
-        // (hundreds of ms to seconds). 250ms is far above any normal frame
-        // yet far below the encode stall.
-        XCTAssertLessThan(
-            stats.maxFrameSecondsAroundSwap,
-            0.25,
-            "a frame near the swap stalled — non-blocking swap is not working"
-        )
-        print("[magenta-test] max_frame_s_around_swap=\(stats.maxFrameSecondsAroundSwap) peak_after_swap=\(stats.peakAfterSwap)")
-    }
-
-    private func runSwapStream(
-        request: MagentaRT2RenderRequest,
-        frameCount: Int,
-        swapFrame: Int,
-        recorder: FrameRecorder
-    ) async throws {
-        try await MagentaRT2Renderer.renderFrameStream(
-            request,
-            frameCount: frameCount,
-            liveControls: { frameIndex in
-                recorder.markFrameStart()
-                if frameIndex == swapFrame {
-                    return MagentaRT2LiveControlSnapshot(prompt: "energetic drum and bass")
-                }
-                return nil
-            },
-            onFrame: { frameIndex, frame in
-                recorder.record(frameIndex: frameIndex, frame: frame)
-            }
-        )
+        print("[magenta-test] blocking swap completed, peak_after_swap=\(stats.peakAfterSwap)")
     }
 
     private final class FrameRecorder: @unchecked Sendable {
@@ -105,21 +86,12 @@ final class MagentaRT2PromptSwapTests: XCTestCase {
             let framesRendered: Int
             let allFinite: Bool
             let peakAfterSwap: Float
-            let maxFrameSecondsAroundSwap: Double
         }
 
         private let lock = NSLock()
         private var framesRendered = 0
         private var allFinite = true
         private var peakAfterSwap: Float = 0
-        private var maxFrameSecondsAroundSwap: Double = 0
-        private var lastFrameStart: Date?
-
-        func markFrameStart() {
-            lock.lock()
-            defer { lock.unlock() }
-            lastFrameStart = Date()
-        }
 
         func record(frameIndex: Int, frame: MagentaRT2Frame) {
             lock.lock()
@@ -132,9 +104,6 @@ final class MagentaRT2PromptSwapTests: XCTestCase {
             if frameIndex >= 20 {
                 peakAfterSwap = max(peakAfterSwap, peak)
             }
-            if frameIndex >= 18, frameIndex <= 30, let start = lastFrameStart {
-                maxFrameSecondsAroundSwap = max(maxFrameSecondsAroundSwap, Date().timeIntervalSince(start))
-            }
         }
 
         func snapshot() -> Stats {
@@ -143,8 +112,7 @@ final class MagentaRT2PromptSwapTests: XCTestCase {
             return Stats(
                 framesRendered: framesRendered,
                 allFinite: allFinite,
-                peakAfterSwap: peakAfterSwap,
-                maxFrameSecondsAroundSwap: maxFrameSecondsAroundSwap
+                peakAfterSwap: peakAfterSwap
             )
         }
     }

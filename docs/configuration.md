@@ -169,17 +169,17 @@ default: with mlx-swift 0.31.4 every compiled call serializes on the global
 eval lock, which measured slower than the interpreted path at decode call
 rates. Kept for evaluation against future mlx-swift releases.
 
-### `MERERUN_MAGENTA_NONBLOCKING_PROMPT_SWAP`
+### Magenta RT2 prompt swaps (no switch)
 
-Opt-in (`1`, `true`, or `on`): Magenta RT2 mid-session prompt swaps keep the
-render loop generating frames on the previous prompt while the engine encodes
-the new one on its own thread, switching when ready, instead of blocking the
-render thread in a status poll for the whole encode (a guaranteed underrun
-for live audio). Off by default until the vendored engine's Metal-library
-regression is fixed and the gated
-`MagentaRT2PromptSwapTests.testNonBlockingPromptSwapKeepsRendering`
-integration test can validate the behavior live. The blocking wait's poll
-interval is also reduced from 10ms to 1ms.
+Magenta RT2 mid-session prompt swaps block the render loop for the engine's
+prompt encode (1ms status poll). This is a hard engine constraint, not a
+tunable: overlapping `mrt2_engine_generate_frame` with the asynchronous
+encode segfaults, verified live against the engine by the gated
+`MagentaRT2PromptSwapTests`. Stall-free swaps require the engine's threaded
+`mrt2_runner_*` API with its buffered audio ring. Note the engine's Metal
+libraries inside `vendor/magentart.xcframework` are Git LFS objects — a
+checkout without hydrated LFS fails at model load with a metallib error; run
+`git lfs install --local && git lfs pull` and rebuild.
 
 ### `MERERUN_SAMPLER_TOP_P_PREFILTER`
 
