@@ -22,12 +22,12 @@ final class KVCacheForkTests: XCTestCase {
         )
     }
 
-    func testForkIsIsolatedFromLaterParentWrites() {
+    func testForkIsIsolatedFromLaterParentWrites() throws {
         let parent = KVCacheSimple(step: 4)
         let (k1, v1) = makeKV(1.0, tokens: 3)
         _ = parent.update(keys: k1, values: v1)
 
-        let fork = parent.fork() as! KVCacheSimple
+        let fork = try XCTUnwrap(parent.fork() as? KVCacheSimple)
         XCTAssertEqual(fork.offset, 3, "fork offset must be frozen at fork time")
 
         // Parent keeps decoding: writes MORE tokens into its buffers. With a
@@ -51,12 +51,12 @@ final class KVCacheForkTests: XCTestCase {
         )
     }
 
-    func testForkedCacheCanDivergeIndependently() {
+    func testForkedCacheCanDivergeIndependently() throws {
         let parent = KVCacheSimple(step: 4)
         let (k1, v1) = makeKV(1.0, tokens: 2)
         _ = parent.update(keys: k1, values: v1)
 
-        let fork = parent.fork() as! KVCacheSimple
+        let fork = try XCTUnwrap(parent.fork() as? KVCacheSimple)
         let (kF, vF) = makeKV(5.0, tokens: 1)
         let forkView = fork.update(keys: kF, values: vF)
         let (kP, vP) = makeKV(7.0, tokens: 1)
