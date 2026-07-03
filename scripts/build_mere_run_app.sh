@@ -149,8 +149,15 @@ sign() {
   codesign "${args[@]}" "$@"
 }
 
-# 1. Co-located frameworks/bundles — no entitlements.
+# 1. Co-located executable frameworks/bundles — no entitlements. SwiftPM also
+#    places resource-only .bundle directories here; those have no executable
+#    to sign and are sealed as bundle resources in step 3.
 while IFS= read -r -d '' asset; do
+  if [[ "$asset" == *.bundle ]]; then
+    executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \
+      "${asset}/Contents/Info.plist" 2>/dev/null || true)"
+    [[ -n "$executable_name" && -e "${asset}/Contents/MacOS/${executable_name}" ]] || continue
+  fi
   sign "" "$asset"
 done < <(find "$helpers" \( -name '*.framework' -o -name '*.bundle' \) -prune -print0)
 
