@@ -41,6 +41,12 @@ fi
 swift "${swift_app_args[@]}"
 swift "${swift_cli_args[@]}"
 
+# Regenerate + stamp the MLX Metal kernel library from the current checkout.
+# `swift build` never compiles the .metal sources, and shipping a stale
+# leftover metallib silently corrupts inference (gibberish, nondeterministic
+# generation past ~1024 tokens of context). See scripts/build_mlx_metallib.sh.
+"${repo_root}/scripts/build_mlx_metallib.sh" --configuration "$configuration"
+
 build_dir="$(swift "${swift_bin_path_args[@]}")"
 executable="${build_dir}/mere.run.app"
 cli_executable="${build_dir}/mere.run"
@@ -94,6 +100,10 @@ if [[ -d "${repo_root}/vendor/ds4" ]]; then
   mkdir -p "${cli_payload}/vendor"
   cp -R "${repo_root}/vendor/ds4" "${cli_payload}/vendor/ds4"
 fi
+
+# Refuse to ship a bundle whose metallib doesn't match the checkout it was
+# supposedly built from.
+"${repo_root}/scripts/build_mlx_metallib.sh" --verify-only "${cli_payload}/mlx-swift_Cmlx.bundle"
 
 plutil -create xml1 "${contents}/Info.plist"
 plutil -insert CFBundleExecutable -string "mere.run.app" "${contents}/Info.plist"

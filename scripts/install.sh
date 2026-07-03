@@ -185,19 +185,34 @@ fi
 # Install MLX Metal shader resources alongside the binary.
 # mlx-swift looks for metallib files in a Resources/ directory next to the executable.
 MLX_BUNDLE="$BIN_DEST_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+MLX_STAMP="$BIN_DEST_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib.version"
 if [[ "$install_platform" == "Darwin" && -f "$MLX_BUNDLE" ]]; then
   echo "[mere.run] installing MLX Metal shaders..."
+  if [[ ! -f "$MLX_STAMP" ]]; then
+    # The CLI validates the stamp at startup; an unstamped library cannot be
+    # checked against the binary and warns on every run. Packages built via
+    # scripts/build_mere_run_app.sh always carry the stamp.
+    echo "[mere.run] WARNING: packaged MLX Metal library has no version stamp;" >&2
+    echo "[mere.run]          the CLI cannot verify it matches this binary. Repackage" >&2
+    echo "[mere.run]          with scripts/build_mlx_metallib.sh to add the stamp." >&2
+  fi
   RESOURCES_DIR="$BIN_DEST_DIR/Resources"
   if [[ "$can_install_without_sudo" == true ]]; then
     mkdir -p "$RESOURCES_DIR"
     cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/default.metallib"
     cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/mlx.metallib"
     cp -f "$MLX_BUNDLE" "$BIN_DEST_DIR/mlx.metallib"
+    if [[ -f "$MLX_STAMP" ]]; then
+      cp -f "$MLX_STAMP" "$RESOURCES_DIR/default.metallib.version"
+    fi
   else
     sudo mkdir -p "$RESOURCES_DIR"
     sudo cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/default.metallib"
     sudo cp -f "$MLX_BUNDLE" "$RESOURCES_DIR/mlx.metallib"
     sudo cp -f "$MLX_BUNDLE" "$BIN_DEST_DIR/mlx.metallib"
+    if [[ -f "$MLX_STAMP" ]]; then
+      sudo cp -f "$MLX_STAMP" "$RESOURCES_DIR/default.metallib.version"
+    fi
   fi
 fi
 
