@@ -1414,7 +1414,7 @@ public actor Q35Generator: ChatGenerator {
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
                 .reshaped(1, end - processed)
             if retainHidden {
-                let output = model.forward(chunk, cache: cache)
+                let output = model.forwardPrefill(chunk, cache: cache)
                 MLX.eval(output.logits)
                 MLX.eval(output.hidden)
                 logits = output.logits
@@ -1431,9 +1431,9 @@ public actor Q35Generator: ChatGenerator {
                     )
                 }
             } else {
-                let output = model(chunk, cache: cache)
-                MLX.eval(output)
-                logits = output
+                let output = model.forwardPrefill(chunk, cache: cache)
+                MLX.eval(output.logits)
+                logits = output.logits
                 hidden = nil
             }
             processed = end
@@ -1472,7 +1472,7 @@ public actor Q35Generator: ChatGenerator {
             let chunkInput = MLXArray.zeros([1, end - processed], dtype: .int32)
             let chunkPositionIds = positionIds?[0..., 0..., processed..<end]
             if retainHidden {
-                let output = model.forward(
+                let output = model.forwardPrefill(
                     chunkInput,
                     cache: cache,
                     inputEmbeddings: chunkEmbeddings,
@@ -1483,14 +1483,14 @@ public actor Q35Generator: ChatGenerator {
                 logits = output.logits
                 hidden = output.hidden
             } else {
-                let output = model(
+                let output = model.forwardPrefill(
                     chunkInput,
                     cache: cache,
                     inputEmbeddings: chunkEmbeddings,
                     positionIds: chunkPositionIds
                 )
-                MLX.eval(output)
-                logits = output
+                MLX.eval(output.logits)
+                logits = output.logits
                 hidden = nil
             }
             processed = end

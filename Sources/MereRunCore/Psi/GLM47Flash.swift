@@ -61,7 +61,7 @@ public final class GLM47Flash: @unchecked Sendable {
             KVCacheSimple(step: 256)
         }
 
-        var logits = model(inputIds, cache: cache)
+        var logits = model.lastPositionLogits(inputIds, cache: cache)
         MLX.eval(logits)
 
         let eosTokens = Set(config.eosTokenId ?? []).union([tokenizer.eosTokenId ?? -1])
@@ -128,7 +128,7 @@ public final class GLM47Flash: @unchecked Sendable {
             KVCacheSimple(step: 256)
         }
 
-        var logits = model(inputIds, cache: cache)
+        var logits = model.lastPositionLogits(inputIds, cache: cache)
         MLX.eval(logits)
 
         let eosTokens = Set(config.eosTokenId ?? []).union([tokenizer.eosTokenId ?? -1])
