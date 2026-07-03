@@ -52,6 +52,10 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
     var layerCaches: [Q35LayerCache?]
     var generatedTokens: [Int]
     var repetitionHistory: [Int]
+    /// GPU-resident repetition window for batched GPU-side sampling; seeded
+    /// lazily from `repetitionHistory` and appended without host readbacks.
+    var repetitionHistoryGPU: MLXArray?
+    var repetitionHistoryGPUSeeded = false
     var stopped = false
 
     init(
@@ -105,6 +109,17 @@ public actor Q35Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
+
+    /// Continuous-batching decode samples every row on GPU (the same sampler
+    /// the serial pipelined path uses) and reads the whole batch back in one
+    /// sync per step; the legacy path performed one blocking readback per row
+    /// per step. MERERUN_Q35_BATCHED_GPU_SAMPLING=0 restores per-row host
+    /// sampling.
+    private static let batchedGPUSamplingEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_BATCHED_GPU_SAMPLING"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw != "0" && raw != "false" && raw != "off"
+    }()
     public static let qwen3VLMinPixels = 2_048
     public static let qwen3VLMaxPixels = 16_777_216
 
@@ -1218,22 +1233,68 @@ public actor Q35Generator: ChatGenerator {
         let sampledRows = rows.filter(\.needsDecodeStep)
         guard !sampledRows.isEmpty else { return }
 
-        for row in sampledRows {
-            let next = sampleToken(
-                logits: row.logits[0, -1, 0...],
-                config: row.generationConfig,
-                previousTokens: row.repetitionHistory
-            )
-            guard !row.eosSet.contains(next) else {
-                row.stopped = true
-                continue
+        if Self.batchedGPUSamplingEnabled {
+            // Sample every row on GPU (same sampler the serial pipelined
+            // decode uses), then read the whole batch back in one sync —
+            // the legacy path performed one blocking readback per row per
+            // step, which scales linearly with serve concurrency.
+            var tokenArrays: [MLXArray] = []
+            tokenArrays.reserveCapacity(sampledRows.count)
+            for row in sampledRows {
+                if !row.repetitionHistoryGPUSeeded {
+                    row.repetitionHistoryGPU = repetitionHistoryArray(
+                        promptTokens: row.repetitionHistory,
+                        config: row.generationConfig
+                    )
+                    row.repetitionHistoryGPUSeeded = true
+                }
+                let tokenArray = sampledTokenArray(
+                    logits: row.logits[0, -1, 0...],
+                    config: row.generationConfig,
+                    previousTokenIndices: row.repetitionHistoryGPU,
+                    banMask: nil
+                )
+                row.repetitionHistoryGPU = appendingRepetitionHistory(
+                    row.repetitionHistoryGPU,
+                    token: tokenArray,
+                    config: row.generationConfig
+                )
+                tokenArrays.append(tokenArray.reshaped(1))
             }
-            row.generatedTokens.append(next)
-            row.repetitionHistory.append(next)
-            if let progressHandler = row.progressHandler {
-                let piece = tokenizerAndTemplate.decode(token: next)
-                if !piece.isEmpty {
-                    progressHandler(ChatProgress(stage: .generating, message: piece))
+            let values = MLX.concatenated(tokenArrays, axis: 0).asArray(Int32.self)
+            for (index, row) in sampledRows.enumerated() {
+                let next = Int(values[index])
+                guard !row.eosSet.contains(next) else {
+                    row.stopped = true
+                    continue
+                }
+                row.generatedTokens.append(next)
+                row.repetitionHistory.append(next)
+                if let progressHandler = row.progressHandler {
+                    let piece = tokenizerAndTemplate.decode(token: next)
+                    if !piece.isEmpty {
+                        progressHandler(ChatProgress(stage: .generating, message: piece))
+                    }
+                }
+            }
+        } else {
+            for row in sampledRows {
+                let next = sampleToken(
+                    logits: row.logits[0, -1, 0...],
+                    config: row.generationConfig,
+                    previousTokens: row.repetitionHistory
+                )
+                guard !row.eosSet.contains(next) else {
+                    row.stopped = true
+                    continue
+                }
+                row.generatedTokens.append(next)
+                row.repetitionHistory.append(next)
+                if let progressHandler = row.progressHandler {
+                    let piece = tokenizerAndTemplate.decode(token: next)
+                    if !piece.isEmpty {
+                        progressHandler(ChatProgress(stage: .generating, message: piece))
+                    }
                 }
             }
         }

@@ -108,6 +108,15 @@ Qwen-family MoE blocks stack the gate and up expert weights so each
 to `0`, `false`, or `off` to fall back to separate gate/up gathers. The stack
 keeps a second resident copy of the gate/up expert weights.
 
+### `MERERUN_Q35_BATCHED_GPU_SAMPLING`
+
+Qwen-family continuous-batching decode samples every active request's row on
+GPU (the same sampler the serial pipelined path uses, including the on-GPU
+repetition window) and reads the whole batch back in a single sync per step.
+The legacy path sampled per row on the host — one blocking GPU→CPU readback
+per request per token, scaling linearly with serve concurrency. Enabled by
+default; set to `0`, `false`, or `off` to restore per-row host sampling.
+
 ### `MERERUN_GEMMA4_FUSED_PROJ`
 
 Gemma4 concatenates the q/k/v and gate/up quantized projection weights after
