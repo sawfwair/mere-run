@@ -64,6 +64,50 @@ public struct TextLoRATrainingProgress: Sendable, Hashable {
     }
 }
 
+/// Environment-tunable behavior specific to the text SFT trainer. Shared
+/// image/text knobs (cache limit, save cadence, sync eval, footprint) live in
+/// `LoRATrainingEnvironment`.
+enum TextLoRATrainingEnvironment {
+    /// Gathered-loss path: project only loss-masked target positions through
+    /// the lm_head and use logSumExp-minus-gather cross entropy. Identical
+    /// gradients to the full-logits path; skips the `[B*T, 262k]` matmul and
+    /// float32 chain over prompt/pad rows. MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS=0
+    /// restores the legacy full-logits loss.
+    static let gatheredLossEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw != "0" && raw != "false" && raw != "off"
+    }()
+
+    /// Loss-readback cadence in steps. Between boundaries the step is
+    /// scheduled with asyncEval and the loop continues without a GPU→CPU
+    /// sync, so graph construction overlaps execution.
+    /// MERERUN_TEXT_LORA_TRAIN_LOG_EVERY overrides; 1 restores the legacy
+    /// per-step synchronous readback.
+    static let logEvery: Int = {
+        if let raw = ProcessInfo.processInfo.environment["MERERUN_TEXT_LORA_TRAIN_LOG_EVERY"],
+           let value = Int(raw), value >= 1 {
+            return value
+        }
+        return 10
+    }()
+
+    /// Buffer-cache cap for text training. The shared image default (16 GB)
+    /// starves text step working sets: image steps run minutes so allocation
+    /// churn amortizes, but a text step is seconds and a sub-working-set cap
+    /// showed 2× step time at ~900-token sequences. 32 GB removed the churn
+    /// while still bounding the footprint (uncapped, the cache balloons past
+    /// 100 GB at long sequences). MERERUN_LORA_TRAIN_CACHE_LIMIT_GB still
+    /// overrides for both trainers.
+    static let cacheLimitGB: Int = {
+        if let raw = ProcessInfo.processInfo.environment["MERERUN_LORA_TRAIN_CACHE_LIMIT_GB"],
+           let value = Int(raw), value >= 0 {
+            return value
+        }
+        return 32
+    }()
+}
+
 public enum TextLoRATrainer {
     public static func train<Model: Module>(
         model: Model,
@@ -73,6 +117,7 @@ public enum TextLoRATrainer {
         outputURL: URL? = nil,
         metadata: [String: String] = [:],
         progressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)? = nil,
+        gatheredForward: ((Model, MLXArray, MLXArray) -> MLXArray)? = nil,
         forward: @escaping (Model, MLXArray) -> MLXArray
     ) throws -> TextLoRATrainingReport {
         try validate(config: config, examples: examples, loraLayers: loraLayers)
@@ -87,15 +132,30 @@ public enum TextLoRATrainer {
             .map { (path: $0.key, layer: $0.value) }
             .sorted { $0.path < $1.path }
 
-        let lossAndGrad = valueAndGrad(model: model) { model, arrays in
-            let logits = forward(model, arrays[0])
-            let loss = TextSFTTrainingLoss.maskedNextTokenCrossEntropy(
-                logits: logits,
-                labels: arrays[1],
-                lossMask: arrays[2]
-            )
-            return [loss]
+        let useGatheredLoss = gatheredForward != nil && TextLoRATrainingEnvironment.gatheredLossEnabled
+        let lossAndGrad: (Model, [MLXArray]) -> ([MLXArray], ModuleParameters)
+        if useGatheredLoss, let gatheredForward {
+            lossAndGrad = valueAndGrad(model: model) { model, arrays in
+                let logits = gatheredForward(model, arrays[0], arrays[1])
+                return [TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(logits: logits, labels: arrays[2])]
+            }
+        } else {
+            lossAndGrad = valueAndGrad(model: model) { model, arrays in
+                let logits = forward(model, arrays[0])
+                let loss = TextSFTTrainingLoss.maskedNextTokenCrossEntropy(
+                    logits: logits,
+                    labels: arrays[1],
+                    lossMask: arrays[2]
+                )
+                return [loss]
+            }
         }
+        if TextLoRATrainingEnvironment.cacheLimitGB > 0 {
+            MLX.Memory.cacheLimit = TextLoRATrainingEnvironment.cacheLimitGB * 1_073_741_824
+        }
+        FileHandle.standardError.write(Data(
+            "[text-lora-train] gathered_loss=\(useGatheredLoss) log_every=\(TextLoRATrainingEnvironment.logEvery) save_every=\(LoRATrainingEnvironment.periodicSaveInterval) cache_limit_gb=\(TextLoRATrainingEnvironment.cacheLimitGB)\n".utf8
+        ))
 
         let beta1 = MLXArray(config.beta1)
         let beta2 = MLXArray(config.beta2)
@@ -119,6 +179,14 @@ public enum TextLoRATrainer {
             seed: config.seed
         )
 
+        let logEvery = TextLoRATrainingEnvironment.logEvery
+        let saveEvery = LoRATrainingEnvironment.periodicSaveInterval
+        let partialURL = outputURL.map {
+            $0.deletingPathExtension().appendingPathExtension("partial").appendingPathExtension("safetensors")
+        }
+        var lastBoundaryTime = Date()
+        var lastBoundaryStep = 0
+
         for step in 0..<config.trainingSteps {
             let batchExamples = scheduledBatch(
                 examples,
@@ -126,8 +194,15 @@ public enum TextLoRATrainer {
                 batchSize: config.batchSize,
                 step: step
             )
-            let batch = try TextSFTTrainingBatchBuilder.makeBatch(batchExamples)
-            let (values, gradients) = lossAndGrad(model, [batch.inputIds, batch.labels, batch.lossMask])
+            let stepInputs: [MLXArray]
+            if useGatheredLoss {
+                let batch = try TextSFTTrainingBatchBuilder.makeGatheredBatch(batchExamples)
+                stepInputs = [batch.inputIds, batch.targetPositions, batch.targetLabels]
+            } else {
+                let batch = try TextSFTTrainingBatchBuilder.makeBatch(batchExamples)
+                stepInputs = [batch.inputIds, batch.labels, batch.lossMask]
+            }
+            let (values, gradients) = lossAndGrad(model, stepInputs)
             let loss = values[0]
             let gradMap = Dictionary(uniqueKeysWithValues: gradients.flattened())
             let stepNumber = step + 1
@@ -147,17 +222,50 @@ public enum TextLoRATrainer {
                 biasCorrection2: biasCorrection2,
                 useWeightDecay: config.weightDecay > 0
             )
-            eval([loss] + orderedLayers.flatMap { [$0.layer.loraDown, $0.layer.loraUp] })
+            let stepState = [loss] + orderedLayers.flatMap { [$0.layer.loraDown, $0.layer.loraUp] }
+            let shouldSavePartial = saveEvery > 0 && stepNumber % saveEvery == 0
+                && stepNumber < config.trainingSteps && partialURL != nil
+            let isBoundary = stepNumber == 1
+                || stepNumber == config.trainingSteps
+                || stepNumber % logEvery == 0
+                || shouldSavePartial
+                || LoRATrainingEnvironment.synchronousStepEval
+            guard isBoundary else {
+                // Off-boundary steps are scheduled without a GPU→CPU sync so
+                // the next step's graph construction overlaps execution;
+                // asyncEval's back-pressure bounds how far the loop runs ahead.
+                asyncEval(stepState)
+                continue
+            }
+            eval(stepState)
             let scalarLoss = loss.item(Float.self)
             if initialLoss == nil { initialLoss = scalarLoss }
             finalLoss = scalarLoss
             let visibleStep = stepNumber
+            let now = Date()
+            let stepsCovered = max(visibleStep - lastBoundaryStep, 1)
+            let secondsPerStep = now.timeIntervalSince(lastBoundaryTime) / Double(stepsCovered)
+            lastBoundaryTime = now
+            lastBoundaryStep = visibleStep
+            let footprint = LoRATrainingEnvironment.currentPhysicalFootprintGB()
+                .map { String(format: "%.1f", $0) } ?? "n/a"
+            FileHandle.standardError.write(Data(
+                "[text-lora-train] step=\(visibleStep)/\(config.trainingSteps) loss=\(scalarLoss) step_s=\(String(format: "%.2f", secondsPerStep)) footprint_gb=\(footprint)\n".utf8
+            ))
             try metricsLogger?.record(step: visibleStep, loss: scalarLoss)
             progressHandler?(
                 TextLoRATrainingProgress(
                     stage: .training(step: visibleStep, total: config.trainingSteps, loss: scalarLoss)
                 )
             )
+            if shouldSavePartial, let partialURL {
+                try LoRASafetensorsWriter.save(
+                    loraLayers: loraLayers,
+                    to: partialURL,
+                    includeOptimizerState: true,
+                    metadata: metadata
+                )
+            }
         }
 
         progressHandler?(TextLoRATrainingProgress(stage: .saving))
@@ -169,6 +277,9 @@ public enum TextLoRATrainer {
                 metadata: metadata
             )
             try metricsLogger?.writeArtifacts()
+            if let partialURL, FileManager.default.fileExists(atPath: partialURL.path) {
+                try? FileManager.default.removeItem(at: partialURL)
+            }
         }
 
         return TextLoRATrainingReport(

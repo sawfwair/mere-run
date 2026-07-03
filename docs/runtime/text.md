@@ -152,6 +152,15 @@ while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
 model ids, manifests, runtime constraints, and eval artifacts remain under the
 MereRun command plane.
 
+The optimizer projects only loss-masked target positions through the lm_head
+(prompt and padding rows never contribute loss, so gradients are unchanged),
+reads the loss back every 10 steps rather than per step, writes a
+`<name>.partial.safetensors` checkpoint every 100 steps so a killed run can be
+salvaged, and prints `[text-lora-train] step= loss= step_s= footprint_gb=`
+diagnostics at each readback. `docs/configuration.md` documents the
+`MERERUN_TEXT_LORA_TRAIN_*` and shared `MERERUN_LORA_TRAIN_*` environment
+switches that tune or disable each behavior.
+
 ```bash
 swift run mere.run text train-lora \
   --data ./pairs.seed.jsonl \
