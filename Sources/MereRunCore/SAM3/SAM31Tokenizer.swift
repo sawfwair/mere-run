@@ -150,7 +150,7 @@ public final class SAM31Tokenizer {
         return directory
     }
 
-    private static func normalizedTokenizerConfig(
+    static func normalizedTokenizerConfig(
         data: Data,
         url: URL,
         overrideTokenizerClass: String
@@ -160,13 +160,7 @@ public final class SAM31Tokenizer {
             throw SAM31TokenizerError.fileNotFound(url)
         }
 
-        if let tokenizerClass = dictionary["tokenizer_class"] as? String {
-            if tokenizerClass == "TokenizersBackend" {
-                dictionary["tokenizer_class"] = overrideTokenizerClass
-            }
-        } else {
-            dictionary["tokenizer_class"] = overrideTokenizerClass
-        }
+        dictionary["tokenizer_class"] = overrideTokenizerClass
 
         let nsDictionary: [NSString: Any] = dictionary.reduce(into: [:]) { partialResult, pair in
             partialResult[pair.key as NSString] = pair.value

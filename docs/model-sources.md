@@ -209,10 +209,13 @@ quantized matmul.
 
 - `config.json`
 - `model.safetensors` or `model.safetensors.index.json`
+- `tokenizer/tokenizer.json`
+- `tokenizer/tokenizer_config.json`
 
-Tokenizer files are optional for geometry prompts. Text prompts require
-`tokenizer.json` and `tokenizer_config.json` in the SAM root or tokenizer
-subdirectory.
+Tokenizer files are technically optional for geometry prompts, but managed
+installs include them because text prompts are the preferred segmentation path.
+The managed package mounts tokenizer assets from the SAM 3.1 mirror while the
+native MLX weights come from `mlx-community/sam3.1-bf16`.
 
 The manifest for this package advertises both `vision_segmentation` and
 `vision_tracking` capabilities.
