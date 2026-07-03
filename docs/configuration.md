@@ -108,6 +108,17 @@ Qwen-family MoE blocks stack the gate and up expert weights so each
 to `0`, `false`, or `off` to fall back to separate gate/up gathers. The stack
 keeps a second resident copy of the gate/up expert weights.
 
+### `MERERUN_Q35_FUSED_QKV`
+
+Qwen-family attention concatenates the q/k/v quantized projection weights so
+each attention call issues one fused matmul instead of three. Quantized
+packing is per-output-row, so results are bit-identical to the separate
+projections (greedy outputs verified byte-equal). Enabled by default; set to
+`0`, `false`, or `off` to fall back. On the 35B MoE this measured +1% decode
+throughput for roughly 130 MB of additional resident weight copies —
+attention is a small slice of a MoE's per-token weights, unlike the dense
+Gemma case where the same fusion bought +17%.
+
 ### `MERERUN_GEMMA4_FUSED_PROJ`
 
 Gemma4 concatenates the q/k/v and gate/up quantized projection weights after

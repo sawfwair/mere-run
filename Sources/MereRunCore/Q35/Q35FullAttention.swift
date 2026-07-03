@@ -11,6 +11,34 @@ final class Q35FullAttention: Module {
     @ModuleInfo(key: "q_norm") var qNorm: Q35RMSNorm
     @ModuleInfo(key: "k_norm") var kNorm: Q35RMSNorm
 
+    /// Row-concatenated q/k/v quantized weights so each attention call issues
+    /// one quantized matmul instead of three (bit-identical: quantized
+    /// packing is per-output-row). Lives outside the module tree; invalidated
+    /// whenever the source modules are replaced. MERERUN_Q35_FUSED_QKV=0
+    /// falls back to separate projections. Trades a second resident copy of
+    /// the attention projection weights for the fused matmul.
+    private var fusedQKV: Gemma4FusedQuantizedProjection?
+    private static let fusedQKVEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_FUSED_QKV"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw != "0" && raw != "false" && raw != "off"
+    }()
+    private static let logFusionOnce: Void = {
+        FileHandle.standardError.write(Data("[q35] fused_qkv=true\n".utf8))
+    }()
+
+    private func resolvedFusedQKV() -> Gemma4FusedQuantizedProjection? {
+        guard Self.fusedQKVEnabled else { return nil }
+        if let fusedQKV, fusedQKV.matches([qProj, kProj, vProj]) {
+            return fusedQKV
+        }
+        fusedQKV = Gemma4FusedQuantizedProjection.fuse([qProj, kProj, vProj])
+        if fusedQKV != nil {
+            _ = Self.logFusionOnce
+        }
+        return fusedQKV
+    }
+
     private let numHeads: Int
     private let numKVHeads: Int
     private let headDim: Int
@@ -69,7 +97,21 @@ final class Q35FullAttention: Module {
         let b = x.dim(0)
         let s = x.dim(1)
 
-        let qProjection = qProj(x).reshaped(b, s, numHeads, hasOutputGate ? headDim * 2 : headDim)
+        let qFlat: MLXArray
+        let kFlat: MLXArray
+        let vFlat: MLXArray
+        if let fused = resolvedFusedQKV() {
+            let parts = fused.callSplit(x)
+            qFlat = parts[0]
+            kFlat = parts[1]
+            vFlat = parts[2]
+        } else {
+            qFlat = qProj(x)
+            kFlat = kProj(x)
+            vFlat = vProj(x)
+        }
+
+        let qProjection = qFlat.reshaped(b, s, numHeads, hasOutputGate ? headDim * 2 : headDim)
 
         let queries: MLXArray
         let gate: MLXArray?
@@ -81,8 +123,8 @@ final class Q35FullAttention: Module {
             gate = nil
         }
 
-        let keys = kProj(x).reshaped(b, s, numKVHeads, headDim)
-        let values = vProj(x).reshaped(b, s, numKVHeads, headDim)
+        let keys = kFlat.reshaped(b, s, numKVHeads, headDim)
+        let values = vFlat.reshaped(b, s, numKVHeads, headDim)
 
         var q = qNorm(queries).transposed(0, 2, 1, 3)
         var k = kNorm(keys).transposed(0, 2, 1, 3)
