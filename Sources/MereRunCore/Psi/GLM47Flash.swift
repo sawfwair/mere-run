@@ -75,22 +75,38 @@ public final class GLM47Flash: @unchecked Sendable {
             repetitionContextSize: 32
         )
 
+        // Depth-1 pipelined decode; see generateStream for the shape. The
+        // legacy loop synchronized twice per token.
+        var repetitionHistory = repetitionHistoryArray(promptTokens: tokens, config: genConfig)
+        var pendingToken: MLXArray?
         for _ in 0..<maxNewTokens {
             let lastLogits = logits[0, -1, 0...]
-            let nextToken = sampleToken(
+            let tokenArray = sampledTokenArray(
                 logits: lastLogits,
                 config: genConfig,
-                previousTokens: tokens + generatedTokens
+                previousTokenIndices: repetitionHistory,
+                banMask: nil
             )
+            repetitionHistory = appendingRepetitionHistory(repetitionHistory, token: tokenArray, config: genConfig)
+            logits = model(tokenArray.asType(.int32).reshaped(1, 1), cache: cache)
+            asyncEval([logits, tokenArray])
 
-            if eosTokens.contains(nextToken) {
-                break
+            if let previous = pendingToken {
+                pendingToken = nil
+                let value = previous.item(Int.self)
+                if eosTokens.contains(value) {
+                    let decoded = tokenizer.decode(tokens: generatedTokens)
+                    return (decoded.trimmingCharacters(in: .whitespacesAndNewlines), generatedTokens.count)
+                }
+                generatedTokens.append(value)
             }
-
-            generatedTokens.append(nextToken)
-            let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
-            logits = model(nextInput, cache: cache)
-            MLX.eval(logits)
+            pendingToken = tokenArray
+        }
+        if let previous = pendingToken {
+            let value = previous.item(Int.self)
+            if !eosTokens.contains(value) {
+                generatedTokens.append(value)
+            }
         }
 
         let decoded = tokenizer.decode(tokens: generatedTokens)
@@ -126,26 +142,46 @@ public final class GLM47Flash: @unchecked Sendable {
             repetitionContextSize: 32
         )
 
+        // Depth-1 pipelined decode: GPU-side sampling with an on-GPU
+        // repetition window, the sampled token feeding the next forward
+        // directly, and the previous step's token read back while the
+        // current step executes. The legacy loop synchronized twice per
+        // token (sample readback plus a blocking logits eval).
+        var repetitionHistory = repetitionHistoryArray(promptTokens: tokens, config: genConfig)
+        var pendingToken: MLXArray?
         for _ in 0..<maxNewTokens {
             let lastLogits = logits[0, -1, 0...]
-            let nextToken = sampleToken(
+            let tokenArray = sampledTokenArray(
                 logits: lastLogits,
                 config: genConfig,
-                previousTokens: tokens + generatedTokens
+                previousTokenIndices: repetitionHistory,
+                banMask: nil
             )
+            repetitionHistory = appendingRepetitionHistory(repetitionHistory, token: tokenArray, config: genConfig)
+            logits = model(tokenArray.asType(.int32).reshaped(1, 1), cache: cache)
+            asyncEval([logits, tokenArray])
 
-            if eosTokens.contains(nextToken) {
-                break
+            if let previous = pendingToken {
+                pendingToken = nil
+                let value = previous.item(Int.self)
+                if eosTokens.contains(value) {
+                    let decoded = tokenizer.decode(tokens: generatedTokens)
+                    return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                generatedTokens.append(value)
+                if let onUpdate {
+                    onUpdate(tokenizer.decode(tokens: generatedTokens))
+                }
             }
-
-            generatedTokens.append(nextToken)
-            let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
-            logits = model(nextInput, cache: cache)
-            MLX.eval(logits)
-
-            if let onUpdate {
-                let partial = tokenizer.decode(tokens: generatedTokens)
-                onUpdate(partial)
+            pendingToken = tokenArray
+        }
+        if let previous = pendingToken {
+            let value = previous.item(Int.self)
+            if !eosTokens.contains(value) {
+                generatedTokens.append(value)
+                if let onUpdate {
+                    onUpdate(tokenizer.decode(tokens: generatedTokens))
+                }
             }
         }
 
