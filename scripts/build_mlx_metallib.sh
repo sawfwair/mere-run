@@ -211,6 +211,34 @@ install_pair() {
   cp -f "$workdir/$stamp_name" "$dest_dir/$stamp_name"
 }
 
+# A bundle created from scratch here (plain `swift build` emits none on CI)
+# needs a valid Contents/Info.plist or codesign rejects the enclosing app
+# with "bundle format unrecognized, invalid, or unsuitable".
+ensure_bundle_info_plist() {
+  local bundle_root="$1"
+  local plist="$bundle_root/Contents/Info.plist"
+  [[ -f "$plist" ]] && return 0
+  mkdir -p "$bundle_root/Contents"
+  cat > "$plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleIdentifier</key>
+	<string>mlx-swift.Cmlx.resources</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>mlx-swift_Cmlx</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+</dict>
+</plist>
+EOF
+}
+
 if [[ "$mode" == "output" ]]; then
   install_pair "$output_dir"
   echo "[metallib] wrote $output_dir/default.metallib (+ $stamp_name)"
@@ -222,6 +250,7 @@ fi
 for config in "${configurations[@]}"; do
   build_root="$repo_root/.build/arm64-apple-macosx/$config"
   install_pair "$build_root/mlx-swift_Cmlx.bundle/Contents/Resources"
+  ensure_bundle_info_plist "$build_root/mlx-swift_Cmlx.bundle"
   install_pair "$build_root/Resources"
   cp -f "$workdir/default.metallib" "$build_root/Resources/mlx.metallib"
   cp -f "$workdir/default.metallib" "$build_root/mlx.metallib"
@@ -234,8 +263,20 @@ done
 # on every mlx-swift bump — commit the refreshed pair when it changes.
 vendor_bundle="$repo_root/vendor/mlx-swift_Cmlx.bundle"
 if [[ -d "$vendor_bundle" ]]; then
-  install_pair "$vendor_bundle/Contents/Resources"
-  echo "[metallib] refreshed vendored $vendor_bundle (tracked in git — commit if changed)"
+  # The vendor pair is tracked in git; skip the refresh when the existing
+  # stamp already matches this exact build (same sources, same pin) so
+  # routine script runs don't churn the tracked sidecar's built-at line.
+  vendor_stamp="$vendor_bundle/Contents/Resources/$stamp_name"
+  if [[ -f "$vendor_stamp" ]] \
+    && [[ "$(stamp_field "kernel-sources-sha256" "$vendor_stamp")" == "$sources_hash" ]] \
+    && [[ "$(stamp_field "mlx-swift-revision" "$vendor_stamp")" == "$swift_pin_revision" ]] \
+    && [[ "$(stamp_field "mlx-core-version" "$vendor_stamp")" == "$core_version" ]]; then
+    echo "[metallib] vendored $vendor_bundle already current; left untouched"
+  else
+    install_pair "$vendor_bundle/Contents/Resources"
+    ensure_bundle_info_plist "$vendor_bundle"
+    echo "[metallib] refreshed vendored $vendor_bundle (tracked in git — commit if changed)"
+  fi
 fi
 
 echo "[metallib] stamp: mlx core $core_version, mlx-swift $swift_pin_version ($swift_pin_revision)"
