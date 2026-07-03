@@ -79,11 +79,11 @@ final class Qwen3TTSSamplingTests: XCTestCase {
         XCTAssertEqual(token.item(Int.self), expected)
     }
 
-    func testHistoryAppendsAcrossStepsWithoutHostReadback() {
+    func testHistoryAppendsAcrossStepsWithoutHostReadback() throws {
         var context = makeContext(repetitionPenalty: 2.0)
         context.appendHistory(MLXArray([Int32(3)]).reshaped(1, 1))
         context.appendHistory(MLXArray([Int32(7)]).reshaped(1, 1))
-        let history = try! XCTUnwrap(context.history)
+        let history = try XCTUnwrap(context.history)
         XCTAssertEqual(history.asArray(Int32.self), [3, 7])
     }
 

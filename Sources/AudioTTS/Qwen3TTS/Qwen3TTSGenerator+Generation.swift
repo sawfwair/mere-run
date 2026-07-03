@@ -8,6 +8,17 @@ import AudioCodecs
 /// Owns prompt preparation, token generation, and waveform assembly for TTS.
 /// This file is intentionally separate from model loading so the speech
 /// generation flow can be read end-to-end.
+/// Non-Sendable values captured by the pipelined decode's emit closure. The
+/// closure runs synchronously on the generator actor (runPipelinedTalkerLoop
+/// invokes it inline), so no concurrent access exists; the box states that to
+/// the Linux toolchain's region-isolation analysis, which otherwise rejects
+/// the captures with "sending ... risks causing data races".
+private struct Qwen3TTSEmitCaptures: @unchecked Sendable {
+    let referenceCodesBQT: MLXArray?
+    let speechTokenizer: Qwen3TTSSpeechTokenizer
+    let onAudioDelta: (([Float]) -> Void)?
+}
+
 extension Qwen3TTSGenerator {
     func generateVoiceClone(
         request: TTSRequest,
@@ -138,13 +149,17 @@ extension Qwen3TTSGenerator {
                 progressHandler: progressHandler,
                 streamingChunkTokenInterval: streamingChunkTokenInterval,
                 onToken: onToken,
-                emitDelta: { codes, emitted in
+                emitDelta: { [captures = Qwen3TTSEmitCaptures(
+                    referenceCodesBQT: nil,
+                    speechTokenizer: speechTokenizer,
+                    onAudioDelta: onAudioDelta
+                )] codes, emitted in
                     try self.emitStreamingAudioDelta(
                         generatedCodes: codes,
-                        referenceCodesBQT: nil,
-                        speechTokenizer: speechTokenizer,
+                        referenceCodesBQT: captures.referenceCodesBQT,
+                        speechTokenizer: captures.speechTokenizer,
                         emittedSampleCount: &emitted,
-                        onAudioDelta: onAudioDelta
+                        onAudioDelta: captures.onAudioDelta
                     )
                 }
             )
@@ -714,13 +729,17 @@ extension Qwen3TTSGenerator {
                 progressHandler: progressHandler,
                 streamingChunkTokenInterval: streamingChunkTokenInterval,
                 onToken: onToken,
-                emitDelta: { codes, emitted in
+                emitDelta: { [captures = Qwen3TTSEmitCaptures(
+                    referenceCodesBQT: referenceCodesBQT,
+                    speechTokenizer: speechTokenizer,
+                    onAudioDelta: onAudioDelta
+                )] codes, emitted in
                     try self.emitStreamingAudioDelta(
                         generatedCodes: codes,
-                        referenceCodesBQT: referenceCodesBQT,
-                        speechTokenizer: speechTokenizer,
+                        referenceCodesBQT: captures.referenceCodesBQT,
+                        speechTokenizer: captures.speechTokenizer,
                         emittedSampleCount: &emitted,
-                        onAudioDelta: onAudioDelta
+                        onAudioDelta: captures.onAudioDelta
                     )
                 }
             )
