@@ -138,6 +138,11 @@ public final class Krea2Generator: ImageGenerator {
             mu: mu
         )
 
+        // The text context never changes across steps; casting it inside the
+        // loop rebuilt the same bfloat16 tensor every iteration. (The image
+        // tokens intentionally accumulate in float32 with a per-step bfloat16
+        // cast for the transformer — that precision policy stays.)
+        let textContextBF16 = text.hiddenStates.asType(.bfloat16)
         for step in 0..<request.steps {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: request.steps))
@@ -146,7 +151,7 @@ public final class Krea2Generator: ImageGenerator {
             let timestep = MLXArray([tCurrent]).asType(.bfloat16)
             let velocity = transformer(
                 imageTokens: imageTokens.asType(.bfloat16),
-                textContext: text.hiddenStates.asType(.bfloat16),
+                textContext: textContextBF16,
                 timestep: timestep,
                 positionIds: prepared.positionIds,
                 validMask: prepared.validMask

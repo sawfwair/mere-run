@@ -191,10 +191,7 @@ extension Flux2KleinGenerator {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: request.steps))
 
-            // Get sigma for logging and timestep for model
             // mflux passes raw timestep (sigma * 1000), transformer handles scaling conditionally
-            let sigma = scheduler.sigma(at: step)
-            let sigmaValue = sigma.item(Float.self)
             let timestepTensor = scheduler.timestep(at: step).expandedDimensions(axis: 0)
 
             // Run transformer (with CFG if enabled)
@@ -236,6 +233,9 @@ extension Flux2KleinGenerator {
             }
 
             if let debugLog {
+                // Debug-only: the sigma readback lived outside this guard and
+                // forced a GPU sync every denoise step in production runs.
+                let sigmaValue = scheduler.sigma(at: step).item(Float.self)
                 MLX.eval(noisePred)
                 let npMean = noisePred.mean().item(Float.self)
                 let npStd = sqrt((noisePred * noisePred).mean().item(Float.self))

@@ -391,6 +391,18 @@ public final class GLM47FlashModel: Module {
         let hidden = model(inputIds, cache: cache)
         return lmHead(hidden)
     }
+
+    /// Logits for the final position only. Prefill never reads the other
+    /// positions' logits, and skipping them avoids a [prompt, vocab] lm_head
+    /// matmul plus its materialization.
+    func lastPositionLogits(_ inputIds: MLXArray, cache: [KVCache]?) -> MLXArray {
+        var hidden = model(inputIds, cache: cache)
+        let sequenceLength = hidden.dim(1)
+        if sequenceLength > 1 {
+            hidden = hidden[0..., (sequenceLength - 1)..., 0...]
+        }
+        return lmHead(hidden)
+    }
 }
 
 public final class GLM47FlashTransformer: Module {

@@ -108,6 +108,26 @@ Qwen-family MoE blocks stack the gate and up expert weights so each
 to `0`, `false`, or `off` to fall back to separate gate/up gathers. The stack
 keeps a second resident copy of the gate/up expert weights.
 
+### `MERERUN_Q35_FUSED_QKV`
+
+Qwen-family attention concatenates the q/k/v quantized projection weights so
+each attention call issues one fused matmul instead of three. Quantized
+packing is per-output-row, so results are bit-identical to the separate
+projections (greedy outputs verified byte-equal). Enabled by default; set to
+`0`, `false`, or `off` to fall back. On the 35B MoE this measured +1% decode
+throughput for roughly 130 MB of additional resident weight copies —
+attention is a small slice of a MoE's per-token weights, unlike the dense
+Gemma case where the same fusion bought +17%.
+
+### `MERERUN_Q35_BATCHED_GPU_SAMPLING`
+
+Qwen-family continuous-batching decode samples every active request's row on
+GPU (the same sampler the serial pipelined path uses, including the on-GPU
+repetition window) and reads the whole batch back in a single sync per step.
+The legacy path sampled per row on the host — one blocking GPU→CPU readback
+per request per token, scaling linearly with serve concurrency. Enabled by
+default; set to `0`, `false`, or `off` to restore per-row host sampling.
+
 ### `MERERUN_GEMMA4_FUSED_PROJ`
 
 Gemma4 concatenates the q/k/v and gate/up quantized projection weights after
@@ -136,6 +156,18 @@ Opt-in (`1`, `true`, or `on`) MLX-compiled per-layer decode segments. Off by
 default: with mlx-swift 0.31.4 every compiled call serializes on the global
 eval lock, which measured slower than the interpreted path at decode call
 rates. Kept for evaluation against future mlx-swift releases.
+
+### `MERERUN_MAGENTA_NONBLOCKING_PROMPT_SWAP`
+
+Opt-in (`1`, `true`, or `on`): Magenta RT2 mid-session prompt swaps keep the
+render loop generating frames on the previous prompt while the engine encodes
+the new one on its own thread, switching when ready, instead of blocking the
+render thread in a status poll for the whole encode (a guaranteed underrun
+for live audio). Off by default until the vendored engine's Metal-library
+regression is fixed and the gated
+`MagentaRT2PromptSwapTests.testNonBlockingPromptSwapKeepsRendering`
+integration test can validate the behavior live. The blocking wait's poll
+interval is also reduced from 10ms to 1ms.
 
 ### `MERERUN_SAMPLER_TOP_P_PREFILTER`
 
@@ -213,6 +245,23 @@ the buffer-cache cap defaults to 32 GB for text training (a sub-working-set
 cap doubles step time at ~900-token sequences, while uncapped the cache
 balloons past 100 GB), and a `<name>.partial.safetensors` adapter checkpoint
 is written every 100 steps and removed after the final save.
+
+### `MERERUN_STT_DECODE_WINDOW`
+
+Parakeet transducer decoding (TDT and RNN-T) evaluates the joint network for
+this many contiguous encoder frames per batched call (default `16`). The
+decoder state only changes when a token is emitted, so blank frames — the
+majority — scan host-side from a single readback instead of one (RNN-T) or
+two (TDT) scalar readbacks per frame. Greedy semantics are identical to the
+per-frame loop. Set `1` to restore the legacy per-frame readback cadence.
+
+### `MERERUN_STT_PIPELINED_DECODE`
+
+Qwen3 ASR token decoding samples on GPU and pipelines the loop at depth 1:
+the sampled token feeds the next forward as a GPU array and the previous
+step's token is read back while the current step executes (the legacy loop
+synchronized twice per token). Enabled by default; set `0`, `false`, or
+`off` to restore the legacy loop.
 
 ### `MERERUN_TTS_PIPELINED_DECODE`
 

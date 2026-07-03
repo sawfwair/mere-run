@@ -41,6 +41,12 @@ fi
 swift "${swift_app_args[@]}"
 swift "${swift_cli_args[@]}"
 
+# Regenerate + stamp the MLX Metal kernel library from the current checkout.
+# `swift build` never compiles the .metal sources, and shipping a stale
+# leftover metallib silently corrupts inference (gibberish, nondeterministic
+# generation past ~1024 tokens of context). See scripts/build_mlx_metallib.sh.
+"${repo_root}/scripts/build_mlx_metallib.sh" --configuration "$configuration"
+
 build_dir="$(swift "${swift_bin_path_args[@]}")"
 executable="${build_dir}/mere.run.app"
 cli_executable="${build_dir}/mere.run"
@@ -76,11 +82,14 @@ if [[ -d "${repo_root}/skills/use-mere-run" ]]; then
   cp -R "${repo_root}/skills/use-mere-run" "${resources}/skills/use-mere-run"
 fi
 
-# Frameworks/bundles co-located beside the CLI so its @executable_path rpath resolves.
+# Frameworks co-located beside the CLI so its @executable_path rpath resolves.
+# MLX's resource-only .bundle is not embedded here because stricter codesign
+# treats unsigned nested .bundle directories under Helpers as invalid code.
+# The stamped flat Resources/default.metallib layout is enough for runtime
+# lookup and is verified below.
 for asset in \
   "${build_dir}/llama.framework" \
   "${build_dir}/magentart.framework" \
-  "${build_dir}/mlx-swift_Cmlx.bundle" \
   "${build_dir}/Resources"
 do
   if [[ -e "$asset" ]]; then
@@ -94,6 +103,10 @@ if [[ -d "${repo_root}/vendor/ds4" ]]; then
   mkdir -p "${cli_payload}/vendor"
   cp -R "${repo_root}/vendor/ds4" "${cli_payload}/vendor/ds4"
 fi
+
+# Refuse to ship a metallib whose stamp doesn't match the checkout it was
+# supposedly built from.
+"${repo_root}/scripts/build_mlx_metallib.sh" --verify-only "${cli_payload}/Resources"
 
 plutil -create xml1 "${contents}/Info.plist"
 plutil -insert CFBundleExecutable -string "mere.run.app" "${contents}/Info.plist"
@@ -139,8 +152,15 @@ sign() {
   codesign "${args[@]}" "$@"
 }
 
-# 1. Co-located frameworks/bundles — no entitlements.
+# 1. Co-located executable frameworks/bundles — no entitlements. SwiftPM also
+#    places resource-only .bundle directories here; those have no executable
+#    to sign and are sealed as bundle resources in step 3.
 while IFS= read -r -d '' asset; do
+  if [[ "$asset" == *.bundle ]]; then
+    executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \
+      "${asset}/Contents/Info.plist" 2>/dev/null || true)"
+    [[ -n "$executable_name" && -e "${asset}/Contents/MacOS/${executable_name}" ]] || continue
+  fi
   sign "" "$asset"
 done < <(find "$helpers" \( -name '*.framework' -o -name '*.bundle' \) -prune -print0)
 
