@@ -71,6 +71,18 @@ keeps semantic checkpoints ahead of ordinary chunk checkpoints when pruning.
 
 Continuous batching and SSD KV cache are not enabled by this flag.
 
+### `MERERUN_LFM2_PREFIX_KV_CACHE`
+
+Opt-in (`1`): in-memory prompt-prefix reuse for the LFM2 chat runtime,
+mirroring the Qwen-family implementation. Forked layer caches (attention KV
+and short-conv states both support forking) are stored at prefill chunk
+boundaries and the longest matching token prefix seeds later requests, so a
+repeated or extended prompt re-prefills only its tail. Chunk-boundary
+checkpoints only — Gemma4-style semantic chat-template checkpoints are not
+yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
+Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
+end to end.
+
 ### `MERERUN_GEMMA4_MTP`
 
 Gemma 4 12B MTP is enabled by default when the managed

@@ -117,8 +117,15 @@ public class KVCacheSimple: KVCache {
 
     public func fork() -> KVCache {
         let copy = KVCacheSimple(step: step)
-        copy.keys = keys
-        copy.values = values
+        // `update` writes new tokens with subscript assignment, which rebinds
+        // the SAME MLXArray wrapper in place (`_updateInternal`). Sharing the
+        // wrapper objects with a fork means every later write on the parent
+        // mutates the fork too — prefix-KV snapshots stored mid-request were
+        // silently corrupted by the request's remaining prefill and decode.
+        // Fresh wrappers over the current (immutable) arrays isolate the fork;
+        // the parent's rebinds can no longer reach it.
+        copy.keys = keys.map { $0.asType($0.dtype) }
+        copy.values = values.map { $0.asType($0.dtype) }
         copy.offset = offset
         return copy
     }
