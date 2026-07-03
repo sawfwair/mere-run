@@ -11,8 +11,36 @@ private struct LFM2DecodeResult {
     let decodeSeconds: Double
 }
 
+private struct LFM2PrefixKVCacheKey: Hashable {
+    let modelPath: String
+    let tokens: [Int]
+}
+
+private struct LFM2PrefixKVCacheEntry {
+    let caches: [LFM2LayerCache?]
+    let logits: MLXArray
+    let priority: RuntimePrefixCacheEntryPriority
+    var lastAccess: Date
+}
+
 public actor LFM2Generator: ChatGenerator {
     private static let prefillChunkSize = 512
+    private static let prefixKVCacheMaxEntries = 4
+
+    /// Opt-in (MERERUN_LFM2_PREFIX_KV_CACHE=1) in-memory prompt-prefix reuse,
+    /// mirroring the Qwen-family implementation: forked layer caches (both
+    /// attention KV and conv states support forking) are stored at prefill
+    /// chunk boundaries and the longest matching token prefix seeds the next
+    /// request. Chunk-boundary checkpoints only for now — the Gemma4-style
+    /// semantic chat-template checkpoints are not yet derived for LFM2.
+    private static let prefixKVCacheEnabled: Bool =
+        ProcessInfo.processInfo.environment["MERERUN_LFM2_PREFIX_KV_CACHE"] == "1"
+
+    private var prefixKVCache: [LFM2PrefixKVCacheKey: LFM2PrefixKVCacheEntry] = [:]
+    private var prefixKVCacheHits = 0
+    private var prefixKVCacheMisses = 0
+    private var prefixKVCacheStores = 0
+    private var prefixKVCacheReusedTokens = 0
 
     private var model: LFM2Model?
     private var tokenizerAndTemplate: LFM2TokenizerAndTemplate?
@@ -168,11 +196,22 @@ public actor LFM2Generator: ChatGenerator {
             repetitionContextSize: 64
         )
 
-        let layerCaches = makeLayerCaches(config: loadedConfig)
+        var layerCaches = makeLayerCaches(config: loadedConfig)
+        var prefillStartIndex = 0
+        var prefillExistingLogits: MLXArray?
+        if let seed = prefixKVCacheSeed(modelPath: loadedModelPath, promptTokens: promptTokens) {
+            layerCaches = seed.caches
+            prefillStartIndex = seed.tokenCount
+            prefillExistingLogits = seed.logits
+            progressHandler?(ChatProgress(stage: .encoding, message: "Reusing \(seed.tokenCount) prompt KV tokens"))
+        }
         let prefillOutput = try await chunkedPrefill(
             model: model,
             promptTokens: promptTokens,
             cache: layerCaches,
+            modelPath: loadedModelPath,
+            startIndex: prefillStartIndex,
+            existingLogits: prefillExistingLogits,
             progressHandler: progressHandler
         )
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
@@ -280,14 +319,18 @@ public actor LFM2Generator: ChatGenerator {
         model: LFM2Model,
         promptTokens: [Int],
         cache: [LFM2LayerCache?],
+        modelPath: String? = nil,
+        startIndex: Int = 0,
+        existingLogits: MLXArray? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> LFM2PrefillOutput {
         guard !promptTokens.isEmpty else {
             throw LFM2Error.generationFailed("Prompt tokenization produced no tokens.")
         }
 
-        var offset = 0
-        var lastOutput: LFM2ForwardOutput?
+        var offset = startIndex
+        var logits = existingLogits
+        var hidden: MLXArray?
         while offset < promptTokens.count {
             try Task.checkCancellation()
             let end = min(promptTokens.count, offset + Self.prefillChunkSize)
@@ -296,8 +339,18 @@ public actor LFM2Generator: ChatGenerator {
             let output = model.forwardPrefill(input, cache: cache)
             MLX.eval(output.logits)
             MLX.eval(output.hidden)
-            lastOutput = output
+            logits = output.logits
+            hidden = output.hidden
             offset = end
+            if let modelPath {
+                storePrefixKVCache(
+                    modelPath: modelPath,
+                    promptTokens: promptTokens,
+                    tokenCount: end,
+                    cache: cache,
+                    logits: output.logits
+                )
+            }
             progressHandler?(ChatProgress(
                 stage: .encoding,
                 message: "Prefilled \(offset)/\(promptTokens.count) tokens"
@@ -305,10 +358,87 @@ public actor LFM2Generator: ChatGenerator {
             await Task.yield()
         }
 
-        guard let lastOutput else {
+        guard let logits else {
             throw LFM2Error.generationFailed("LFM2 prefill produced no logits.")
         }
-        return LFM2PrefillOutput(logits: lastOutput.logits, hidden: lastOutput.hidden)
+        return LFM2PrefillOutput(logits: logits, hidden: hidden ?? logits)
+    }
+
+    // MARK: - Prefix KV cache
+
+    public func prefixKVCacheStats() -> PrefixKVCacheStats {
+        PrefixKVCacheStats(
+            enabled: Self.prefixKVCacheEnabled,
+            entries: prefixKVCache.count,
+            maxEntries: Self.prefixKVCacheMaxEntries,
+            hits: prefixKVCacheHits,
+            misses: prefixKVCacheMisses,
+            storedPrefixes: prefixKVCacheStores,
+            reusedTokens: prefixKVCacheReusedTokens,
+            storedTokens: prefixKVCache.keys.reduce(0) { $0 + $1.tokens.count }
+        )
+    }
+
+    private func prefixKVCacheSeed(
+        modelPath: String?,
+        promptTokens: [Int]
+    ) -> (tokenCount: Int, caches: [LFM2LayerCache?], logits: MLXArray)? {
+        guard Self.prefixKVCacheEnabled, let modelPath else { return nil }
+        let matchingKey = prefixKVCache.keys
+            .filter { key in
+                key.modelPath == modelPath
+                    && key.tokens.count <= promptTokens.count
+                    && promptTokens.starts(with: key.tokens)
+            }
+            .max { $0.tokens.count < $1.tokens.count }
+
+        guard let matchingKey, var entry = prefixKVCache[matchingKey] else {
+            prefixKVCacheMisses += 1
+            return nil
+        }
+
+        entry.lastAccess = Date()
+        prefixKVCache[matchingKey] = entry
+        prefixKVCacheHits += 1
+        prefixKVCacheReusedTokens += matchingKey.tokens.count
+        return (
+            matchingKey.tokens.count,
+            entry.caches.map { $0?.fork() },
+            entry.logits
+        )
+    }
+
+    private func storePrefixKVCache(
+        modelPath: String,
+        promptTokens: [Int],
+        tokenCount: Int,
+        cache: [LFM2LayerCache?],
+        logits: MLXArray
+    ) {
+        guard Self.prefixKVCacheEnabled, tokenCount > 0 else { return }
+        let key = LFM2PrefixKVCacheKey(
+            modelPath: modelPath,
+            tokens: Array(promptTokens.prefix(tokenCount))
+        )
+        prefixKVCache[key] = LFM2PrefixKVCacheEntry(
+            caches: cache.map { $0?.fork() },
+            logits: logits,
+            priority: .chunk,
+            lastAccess: Date()
+        )
+        prefixKVCacheStores += 1
+        while prefixKVCache.count > Self.prefixKVCacheMaxEntries {
+            let metadata = prefixKVCache.mapValues {
+                RuntimePrefixCacheRetentionMetadata(
+                    priority: $0.priority,
+                    lastAccess: $0.lastAccess
+                )
+            }
+            guard let oldest = RuntimePrefixCacheRetentionPlanner.keyToPrune(entries: metadata) else {
+                return
+            }
+            prefixKVCache.removeValue(forKey: oldest)
+        }
     }
 
     private func resolveModelRoot(
