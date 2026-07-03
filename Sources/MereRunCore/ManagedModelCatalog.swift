@@ -996,6 +996,22 @@ public enum ManagedModelCatalog {
                     "*.safetensors",
                 ]
             ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "tokenizer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "AEmotionStudio/sam3.1",
+                        revision: "main",
+                        patterns: [
+                            "tokenizer.json",
+                            "tokenizer_config.json",
+                            "vocab.json",
+                            "merges.txt",
+                            "special_tokens_map.json",
+                        ]
+                    )
+                ),
+            ],
             upstreamRepoId: "mlx-community/sam3.1-bf16",
             upstreamRevision: "main",
             validationKind: .sam31,

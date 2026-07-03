@@ -141,6 +141,21 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(mounted["scheduler"], "mlx-community/FLUX.2-klein-9B")
     }
 
+    func testSAM31ManagedInstallMountsTokenizerForTextPrompts() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "vision-segment-sam31"))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "mlx-community/sam3.1-bf16")
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("model.safetensors"), true)
+
+        let mounted = Dictionary(uniqueKeysWithValues: spec.mountedHubFallbacks.map {
+            ($0.destinationPath, $0.hubFallback)
+        })
+        let tokenizer = try XCTUnwrap(mounted["tokenizer"])
+        XCTAssertEqual(tokenizer.repoId, "AEmotionStudio/sam3.1")
+        XCTAssertEqual(tokenizer.patterns.contains("tokenizer.json"), true)
+        XCTAssertEqual(tokenizer.patterns.contains("tokenizer_config.json"), true)
+    }
+
     func testBonsaiTernaryUsesPrismMLHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-bonsai-ternary"))
 
