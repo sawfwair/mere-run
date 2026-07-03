@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(Darwin)
 import Darwin
+#endif
 
 /// Environment-tunable training behavior shared by the image-LoRA trainers.
 public enum LoRATrainingEnvironment {
@@ -62,6 +64,7 @@ public enum LoRATrainingEnvironment {
     /// Physical memory footprint (the metric jetsam actually enforces —
     /// resident plus compressed), in gigabytes.
     public static func currentPhysicalFootprintGB() -> Double? {
+        #if canImport(Darwin)
         var usage = rusage_info_current()
         let status = withUnsafeMutablePointer(to: &usage) { pointer in
             pointer.withMemoryRebound(to: (rusage_info_t?).self, capacity: 1) { reboundPointer in
@@ -70,5 +73,8 @@ public enum LoRATrainingEnvironment {
         }
         guard status == 0 else { return nil }
         return Double(usage.ri_phys_footprint) / 1_000_000_000
+        #else
+        return nil
+        #endif
     }
 }

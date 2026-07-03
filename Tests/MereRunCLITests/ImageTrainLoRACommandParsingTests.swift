@@ -49,6 +49,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.sampleSeed)
         XCTAssertFalse(cmd.visualize)
         XCTAssertEqual(cmd.visualizePort, 8787)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
         XCTAssertNil(cmd.loraTargetRanks)
         XCTAssertNil(cmd.loraRankPreset)
         XCTAssertNil(cmd.loraTargetPreset)
@@ -99,6 +101,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--sample-seed", "99",
             "--visualize",
             "--visualize-port", "8899",
+            "--preflight",
+            "--json",
             "--lora-target-ranks", ".attn.to_q=128,.ff.linear_in=64",
             "--timestep-sampling", "shift",
             "--timestep-loss-weighting", "weighted",
@@ -143,6 +147,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.sampleSeed, 99)
         XCTAssertTrue(cmd.visualize)
         XCTAssertEqual(cmd.visualizePort, 8899)
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
         XCTAssertEqual(cmd.loraTargetRanks, ".attn.to_q=128,.ff.linear_in=64")
         XCTAssertNil(cmd.loraRankPreset)
         XCTAssertNil(cmd.loraTargetPreset)
@@ -450,5 +456,121 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         ])
 
         XCTAssertThrowsError(try cmd.resolvedTrainingOptions())
+    }
+
+    func testTrainLoRAPreflightReportsMissingCaptionsAndDisablesTraining() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("not a real png".utf8).write(to: dataset.appendingPathComponent("frame-001.png"))
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-krea", family: .krea, to: model)
+
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", dataset.path,
+            "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            options: try cmd.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.result.dataset.imageCount, 1)
+        XCTAssertEqual(envelope.result.dataset.missingCaptionCount, 1)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "missing_captions" && $0.severity == .blocker })
+
+        let startTraining = try XCTUnwrap(envelope.actions.first { $0.id == "start-training" })
+        XCTAssertFalse(startTraining.enabled)
+        XCTAssertEqual(startTraining.command?.argv.prefix(3), ["mere.run", "image", "train-lora"])
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(LoRATrainingPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded.status, .blocked)
+        XCTAssertEqual(decoded.command, ["image", "train-lora"])
+    }
+
+    func testTrainLoRAPreflightReportsWarningsAndEnabledTrainingAction() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("image 1".utf8).write(to: dataset.appendingPathComponent("frame-001.png"))
+        try Data("image 2".utf8).write(to: dataset.appendingPathComponent("frame-002.png"))
+        try Data("same caption".utf8).write(to: dataset.appendingPathComponent("frame-001.txt"))
+        try Data("same caption".utf8).write(to: dataset.appendingPathComponent("frame-002.txt"))
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-klein", family: .klein, to: model)
+
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", dataset.path,
+            "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path,
+            "--steps", "10",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            options: try cmd.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .warning)
+        XCTAssertEqual(envelope.result.dataset.usablePairCount, 2)
+        XCTAssertEqual(envelope.result.dataset.duplicateCaptionGroupCount, 1)
+        XCTAssertEqual(envelope.result.model.family, "klein")
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "duplicate_captions" && $0.severity == .warning })
+
+        let startTraining = try XCTUnwrap(envelope.actions.first { $0.id == "start-training" })
+        XCTAssertTrue(startTraining.enabled)
+        XCTAssertEqual(startTraining.command?.argv, [
+            "mere.run",
+            "image",
+            "train-lora",
+            "--data",
+            dataset.path,
+            "--output",
+            temp.appendingPathComponent("style.safetensors").path,
+            "--model",
+            model.path,
+            "--training-steps",
+            "10",
+        ])
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-lora-preflight-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        return temp
+    }
+
+    private func writeManifest(
+        id: String,
+        family: MereRunModelManifest.Family,
+        to directory: URL
+    ) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let manifest = MereRunModelManifest(
+            id: id,
+            family: family,
+            variant: .base,
+            precision: .bf16,
+            supports: [.loraTraining]
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(manifest)
+            .write(to: directory.appendingPathComponent(MereRunModelManifest.filename))
     }
 }

@@ -157,6 +157,12 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("visualize-port")], help: "Loopback port for --visualize.")
     var visualizePort: Int = 8787
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the LoRA training request without running training.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "Emit a structured preflight JSON report.")
+    var json: Bool = false
+
     @Option(name: [.customLong("lora-target-ranks")], help: "Klein suffix rank map, e.g. .attn.to_q=128,.ff.linear_in=64.")
     var loraTargetRanks: String?
 
@@ -203,9 +209,79 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     var quiet: Bool = false
 
     func run() async throws {
-        try MLXBundleSupport.ensureAvailable(quiet: quiet)
         let resolvedOptions = try resolvedTrainingOptions()
+        try validateResolvedOptions(resolvedOptions)
 
+        if preflight {
+            try runPreflight(options: resolvedOptions)
+            return
+        }
+
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+
+        let outputURL = URL(fileURLWithPath: output).standardizedFileURL
+        guard outputURL.pathExtension.lowercased() == "safetensors" else {
+            throw ValidationError("--output must end in .safetensors")
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let modelRoot = try resolveModelRoot(model: resolvedOptions.model)
+        let modelManifest = try MereRunModelManifest.loadRequired(from: modelRoot)
+        let visualization = try startVisualizationIfNeeded(
+            outputURL: outputURL,
+            modelRoot: modelRoot,
+            modelManifest: modelManifest,
+            options: resolvedOptions
+        )
+        defer { visualization?.stop() }
+
+        do {
+            switch modelManifest.family {
+            case .krea:
+                try await runKreaTraining(
+                    modelRoot: modelRoot,
+                    outputURL: outputURL,
+                    options: resolvedOptions,
+                    eventLogger: visualization?.logger
+                )
+            case .klein:
+                try await runKleinTraining(
+                    modelRoot: modelRoot,
+                    outputURL: outputURL,
+                    options: resolvedOptions,
+                    eventLogger: visualization?.logger
+                )
+            default:
+                let family = modelManifest.family?.rawValue ?? "unknown"
+                throw ValidationError("Unsupported LoRA training model family: \(family). Use a Krea 2 Raw or FLUX.2 Klein base model.")
+            }
+            try visualization?.logger.record(
+                type: "run_finished",
+                stage: "finished",
+                step: resolvedOptions.trainingSteps,
+                totalSteps: resolvedOptions.trainingSteps,
+                fraction: 1,
+                path: outputURL.path
+            )
+        } catch {
+            try? visualization?.logger.record(
+                type: "run_failed",
+                stage: "failed",
+                message: error.localizedDescription,
+                path: outputURL.path
+            )
+            throw error
+        }
+
+        if benchmarkSteps == nil {
+            print(outputURL.path)
+        }
+    }
+
+    private func validateResolvedOptions(_ resolvedOptions: ResolvedLoRATrainingOptions) throws {
         guard resolvedOptions.width > 0,
               resolvedOptions.height > 0,
               resolvedOptions.width % 16 == 0,
@@ -302,67 +378,193 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         if let adamWeightDecay, adamWeightDecay < 0 {
             throw ValidationError("--adam-weight-decay must be >= 0")
         }
+    }
 
-        let outputURL = URL(fileURLWithPath: output).standardizedFileURL
-        guard outputURL.pathExtension.lowercased() == "safetensors" else {
-            throw ValidationError("--output must end in .safetensors")
-        }
-        try FileManager.default.createDirectory(
-            at: outputURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+    func makePreflightEnvelope(
+        options: ResolvedLoRATrainingOptions,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> LoRATrainingPreflightEnvelope {
+        let input = LoRATrainingPreflightInput(
+            data: data,
+            output: output,
+            recipe: recipe,
+            excludePreviewImages: excludePreviewImages,
+            syntheticSamples: syntheticSamples,
+            options: options,
+            trainingArgv: trainingActionArguments(),
+            cwd: fileManager.currentDirectoryPath
         )
+        return LoRATrainingPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
 
-        let modelRoot = try resolveModelRoot(model: resolvedOptions.model)
-        let modelManifest = try MereRunModelManifest.loadRequired(from: modelRoot)
-        let visualization = try startVisualizationIfNeeded(
-            outputURL: outputURL,
-            modelRoot: modelRoot,
-            modelManifest: modelManifest,
-            options: resolvedOptions
-        )
-        defer { visualization?.stop() }
-
-        do {
-            switch modelManifest.family {
-            case .krea:
-                try await runKreaTraining(
-                    modelRoot: modelRoot,
-                    outputURL: outputURL,
-                    options: resolvedOptions,
-                    eventLogger: visualization?.logger
-                )
-            case .klein:
-                try await runKleinTraining(
-                    modelRoot: modelRoot,
-                    outputURL: outputURL,
-                    options: resolvedOptions,
-                    eventLogger: visualization?.logger
-                )
-            default:
-                let family = modelManifest.family?.rawValue ?? "unknown"
-                throw ValidationError("Unsupported LoRA training model family: \(family). Use a Krea 2 Raw or FLUX.2 Klein base model.")
+    private func runPreflight(options: ResolvedLoRATrainingOptions) throws {
+        let envelope = makePreflightEnvelope(options: options)
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
             }
-            try visualization?.logger.record(
-                type: "run_finished",
-                stage: "finished",
-                step: resolvedOptions.trainingSteps,
-                totalSteps: resolvedOptions.trainingSteps,
-                fraction: 1,
-                path: outputURL.path
-            )
-        } catch {
-            try? visualization?.logger.record(
-                type: "run_failed",
-                stage: "failed",
-                message: error.localizedDescription,
-                path: outputURL.path
-            )
-            throw error
         }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
 
-        if benchmarkSteps == nil {
-            print(outputURL.path)
+    private func trainingActionArguments() -> [String] {
+        var args = ["mere.run", "image", "train-lora"]
+        if let data {
+            args += ["--data", data]
         }
+        args += ["--output", output]
+        if let model {
+            args += ["--model", model]
+        }
+        if let widthOverride {
+            args += ["--width", String(widthOverride)]
+        }
+        if let heightOverride {
+            args += ["--height", String(heightOverride)]
+        }
+        if let trainingStepsOverride {
+            args += ["--training-steps", String(trainingStepsOverride)]
+        }
+        if batchSize != 1 {
+            args += ["--batch-size", String(batchSize)]
+        }
+        if let learningRateOverride {
+            args += ["--learning-rate", String(learningRateOverride)]
+        }
+        if let rankOverride {
+            args += ["--rank", String(rankOverride)]
+        }
+        if let alphaOverride {
+            args += ["--alpha", String(alphaOverride)]
+        }
+        if maxTextLength != 512 {
+            args += ["--max-text-length", String(maxTextLength)]
+        }
+        if schedulerSteps != 1000 {
+            args += ["--scheduler-steps", String(schedulerSteps)]
+        }
+        if let captionDropoutOverride {
+            args += ["--caption-dropout", String(captionDropoutOverride)]
+        }
+        if seed != 0 {
+            args += ["--seed", String(seed)]
+        }
+        if lite {
+            args.append("--lite")
+        }
+        if excludePreviewImages {
+            args.append("--exclude-preview-images")
+        }
+        if let checkpointInterval {
+            args += ["--checkpoint-interval", String(checkpointInterval)]
+        }
+        if let maxResolution {
+            args += ["--max-resolution", String(maxResolution)]
+        }
+        if progressive {
+            args.append("--progressive")
+        }
+        if lowRam {
+            args.append("--low-ram")
+        }
+        if noCompile {
+            args.append("--no-compile")
+        }
+        if gradientCheckpointing {
+            args.append("--gradient-checkpointing")
+        }
+        if let recipe {
+            args += ["--recipe", recipe]
+        }
+        if let benchmarkSteps {
+            args += ["--benchmark-steps", String(benchmarkSteps)]
+        }
+        if benchmarkWarmupSteps != 5 {
+            args += ["--benchmark-warmup-steps", String(benchmarkWarmupSteps)]
+        }
+        if let sampleInterval {
+            args += ["--sample-interval", String(sampleInterval)]
+        }
+        if let samplePrompt {
+            args += ["--sample-prompt", samplePrompt]
+        }
+        if let sampleModel {
+            args += ["--sample-model", sampleModel]
+        }
+        if sampleSteps != 8 {
+            args += ["--sample-steps", String(sampleSteps)]
+        }
+        if sampleGuidanceScale != 1.0 {
+            args += ["--sample-cfg", String(sampleGuidanceScale)]
+        }
+        if sampleLoRAScale != 1.0 {
+            args += ["--sample-lora-scale", String(sampleLoRAScale)]
+        }
+        if let sampleSeed {
+            args += ["--sample-seed", String(sampleSeed)]
+        }
+        if visualize {
+            args.append("--visualize")
+            if visualizePort != 8787 {
+                args += ["--visualize-port", String(visualizePort)]
+            }
+        }
+        if let loraTargetRanks {
+            args += ["--lora-target-ranks", loraTargetRanks]
+        }
+        if let loraRankPreset {
+            args += ["--lora-rank-preset", loraRankPreset]
+        }
+        if let loraTargetPreset {
+            args += ["--lora-target-preset", loraTargetPreset]
+        }
+        if let loraTargetMode {
+            args += ["--lora-target-mode", loraTargetMode]
+        }
+        if let timestepSampling {
+            args += ["--timestep-sampling", timestepSampling]
+        }
+        if let timestepLossWeighting {
+            args += ["--timestep-loss-weighting", timestepLossWeighting]
+        }
+        if let lossWeighting {
+            args += ["--loss-weighting", lossWeighting]
+        }
+        if let timestepLow {
+            args += ["--timestep-low", String(timestepLow)]
+        }
+        if let timestepHigh {
+            args += ["--timestep-high", String(timestepHigh)]
+        }
+        if let lrWarmupSteps {
+            args += ["--lr-warmup-steps", String(lrWarmupSteps)]
+        }
+        if noCosineScheduler {
+            args.append("--no-cosine-scheduler")
+        }
+        if let lrMinFactor {
+            args += ["--lr-min-factor", String(lrMinFactor)]
+        }
+        if let adamWeightDecay {
+            args += ["--adam-weight-decay", String(adamWeightDecay)]
+        }
+        if let syntheticSamples {
+            args += ["--synthetic-samples", String(syntheticSamples)]
+        }
+        if quiet {
+            args.append("--quiet")
+        }
+        return args
     }
 
     private func runKreaTraining(

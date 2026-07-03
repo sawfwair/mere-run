@@ -933,7 +933,27 @@ public enum Flux2KleinLoRATrainer {
             guard let module = layer as? Module else { continue }
             try module.unfreeze(recursive: false, keys: ["loraDown", "loraUp"], strict: true)
         }
-        transformer.gradientCheckpointing = config.gradientCheckpointing
+        // Gradient checkpointing follows the explicit config/CLI flag, with
+        // the shared resolution-aware default as fallback (peak training
+        // pixels decide: capped-resolution recipe runs keep the uncompiled
+        // recompute path off). The cache cap bounds the MLX buffer pool,
+        // which otherwise pins the footprint at the worst transient spike.
+        let peakTrainingPixels: Int = {
+            let target = config.width * config.height
+            if let maxResolution = config.maxResolution {
+                return min(target, maxResolution * maxResolution)
+            }
+            return target
+        }()
+        let effectiveGradientCheckpointing = config.gradientCheckpointing
+            || LoRATrainingEnvironment.gradientCheckpointingEnabled(trainingPixels: peakTrainingPixels)
+        transformer.gradientCheckpointing = effectiveGradientCheckpointing
+        if LoRATrainingEnvironment.trainingCacheLimitGB > 0 {
+            MLX.Memory.cacheLimit = LoRATrainingEnvironment.trainingCacheLimitGB * 1_073_741_824
+        }
+        FileHandle.standardError.write(Data(
+            "[flux2-lora-train] grad_checkpoint=\(effectiveGradientCheckpointing) peak_pixels=\(peakTrainingPixels) cache_limit_gb=\(LoRATrainingEnvironment.trainingCacheLimitGB)\n".utf8
+        ))
 
         MLX.eval(transformer)
         progressHandler?(Flux2KleinLoRATrainingProgress(stage: .injectingLoRA(layerCount: loraLayers.count), fraction: 1))
@@ -1128,8 +1148,11 @@ public enum Flux2KleinLoRATrainer {
                 }
 
                 // Compile the full training step (forward + backward + LoRA update) for this shape.
+                // Checkpointed blocks stay uncompiled: nesting checkpoint
+                // closures inside a compiled step is unproven with this
+                // mlx-swift.
                 var compiledTrainStep: (([MLXArray]) -> [MLXArray])? = nil
-                if config.useCompile {
+                if config.useCompile, !transformer.gradientCheckpointing {
                     let state: [any Updatable] = [loraState]
                     if isEditPhase {
                         // Input arrays: [clean, noise, promptEmbeds, referenceLatents, sigma, timestepLossWeight, lr, oneMinusLrWd]
@@ -1408,6 +1431,14 @@ public enum Flux2KleinLoRATrainer {
 
                         if let lossValue {
                             try metricsLogger.record(step: globalStep + 1, loss: lossValue)
+                            var diagnostics = String(
+                                format: "[flux2-lora-train] step=%d/%d loss=%.6f",
+                                globalStep + 1, config.trainingSteps, lossValue
+                            )
+                            if let footprint = LoRATrainingEnvironment.currentPhysicalFootprintGB() {
+                                diagnostics += String(format: " footprint_gb=%.1f", footprint)
+                            }
+                            FileHandle.standardError.write(Data((diagnostics + "\n").utf8))
                             progressHandler?(Flux2KleinLoRATrainingProgress(
                                 stage: .training(step: globalStep + 1, total: config.trainingSteps, loss: lossValue),
                                 fraction: Float(globalStep + 1) / Float(config.trainingSteps)
