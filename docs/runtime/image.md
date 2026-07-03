@@ -109,6 +109,22 @@ For cleaner public-facing exports, keep the seed and prompt fixed, render at a
 larger matching aspect ratio such as 1280x960 with 24 steps, then downsample to
 1024x768 with a high-quality image resizer.
 
+Run a preflight before spending training time:
+
+```bash
+swift run mere.run image train-lora \
+  --data ./style-dataset \
+  --output ./style-klein.safetensors \
+  --recipe klein-fast-style \
+  --preflight \
+  --json
+```
+
+The preflight path inspects the dataset, resolved recipe, model availability,
+output path, warnings, hard blockers, and next actions without loading the full
+model or starting training. It prints a single JSON report to stdout when
+`--json` is set; diagnostics stay out of stdout.
+
 Add `--visualize` during training to start a loopback dashboard with the live
 loss curve, progress events, samples, checkpoints, and run artifacts. Reopen a
 completed or copied run directory later with:

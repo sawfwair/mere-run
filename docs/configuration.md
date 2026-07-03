@@ -146,6 +146,48 @@ exact full-vocabulary sort. The truncation only affects requests whose top-p
 nucleus would span more than this many tokens, which does not occur at
 practical temperatures.
 
+### `MERERUN_LORA_TRAIN_GRAD_CHECKPOINT`
+
+Gradient checkpointing for image-LoRA training — Krea 2 and FLUX.2 Klein.
+Transformer blocks recompute their activations during backward instead of
+retaining every intermediate. Unset, the default is resolution-aware: it
+engages when the peak training resolution (after `--max-resolution` capping)
+reaches 768×768-equivalent pixels, and stays off below that. Activation memory
+scales with the token count, so capped-resolution recipes (for example
+`klein-fast-style` at 512, or 768×416 runs) fit comfortably without the
+recompute overhead, while a single full-injection step at 1024×1024 peaks
+around 159 GB on the Krea 2 backbone and crashes outright on Klein base
+(183 GB peak observed) on 128 GB machines. Set `1` to force checkpointing on
+everywhere, or `0`/`false`/`off` to force it off. The explicit
+`--gradient-checkpointing` CLI flag still forces it on regardless of the
+environment. Checkpointed training runs the step uncompiled. Each trainer
+prints its decision at startup (`grad_checkpoint=` on stderr).
+
+### `MERERUN_LORA_TRAIN_CACHE_LIMIT_GB`
+
+MLX buffer-cache cap during image-LoRA training, in gigabytes (default `16`;
+`0` leaves the cache unlimited). The cache grows to the transient high-water
+mark and never shrinks, so without a cap the process footprint stays pinned at
+the worst spike of the run. Applies to both image-LoRA trainers.
+
+### `MERERUN_LORA_TRAIN_SYNC_EVAL`
+
+Set to `1` to evaluate each image-LoRA training step synchronously. The
+default overlapped evaluation lets the next step's graph (and its full
+activation set) go live while the current step executes, which can nearly
+double the peak memory footprint at training-sized activations. Synchronous
+mode caps in-flight activations at one step's worth at the cost of graph-build
+overlap, which is negligible next to a training step.
+
+### `MERERUN_LORA_TRAIN_SAVE_EVERY`
+
+Adapter checkpoint cadence, in optimizer steps, for image-LoRA training
+(default `100`; `0` disables). A `<name>.partial.safetensors` file is written
+next to the output and removed once the final save succeeds, so a run killed
+mid-training — for example by memory pressure — no longer loses everything.
+The trainer also logs `step_s` and `footprint_gb` diagnostics at the metrics
+cadence.
+
 ### `MERERUN_GEMMA4_DECODE_TRACE`
 
 Set to `1` to log a per-decode summary to stderr splitting each token's wall

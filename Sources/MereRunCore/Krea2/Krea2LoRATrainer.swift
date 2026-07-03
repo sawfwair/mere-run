@@ -158,6 +158,14 @@ public struct Krea2LoRATrainingProgress: Sendable {
 }
 
 public enum Krea2LoRATrainer {
+    // Shared training knobs (see LoRATrainingEnvironment): a full-injection
+    // Krea 2 training step at 1024x1024 otherwise peaks ~159 GB and thrashes
+    // any 128 GB machine, so gradient checkpointing and the cache cap default
+    // on here.
+    static var synchronousStepEval: Bool { LoRATrainingEnvironment.synchronousStepEval }
+    static var periodicSaveInterval: Int { LoRATrainingEnvironment.periodicSaveInterval }
+    static var trainingCacheLimitGB: Int { LoRATrainingEnvironment.trainingCacheLimitGB }
+
     public static func train(
         modelPath: String,
         examples: [Krea2LoRATrainingExample],
@@ -449,8 +457,23 @@ public enum Krea2LoRATrainer {
             )
             return values
         }
+        let gradientCheckpointing = LoRATrainingEnvironment.gradientCheckpointingEnabled(
+            trainingPixels: config.width * config.height
+        )
+        transformer.gradientCheckpointing = gradientCheckpointing
+        if Self.trainingCacheLimitGB > 0 {
+            MLX.Memory.cacheLimit = Self.trainingCacheLimitGB * 1_073_741_824
+        }
+        FileHandle.standardError.write(Data(
+            "[krea2-lora-train] grad_checkpoint=\(gradientCheckpointing) peak_pixels=\(config.width * config.height) cache_limit_gb=\(Self.trainingCacheLimitGB)\n".utf8
+        ))
+
         let trainStep: ([MLXArray]) -> [MLXArray]
-        if config.useCompile {
+        // Checkpointed blocks are kept outside compile: nesting the
+        // checkpoint closures inside a compiled trainStep is unproven with
+        // this mlx-swift, and the compile win is small next to a training
+        // step.
+        if config.useCompile, !gradientCheckpointing {
             let state: [any Updatable] = [loraState]
             trainStep = compile(inputs: state, outputs: state) { inputs -> [MLXArray] in
                 runTrainStep(inputs, inputs[6], inputs[7])
@@ -461,8 +484,10 @@ public enum Krea2LoRATrainer {
             }
         }
 
+        let partialURL = outputURL.deletingPathExtension().appendingPathExtension("partial.safetensors")
         for step in 0..<config.trainingSteps {
             try Task.checkCancellation()
+            let stepStart = CFAbsoluteTimeGetCurrent()
             let batchSize = min(config.batchSize, prepared.count)
             var cleanParts: [MLXArray] = []
             var noiseParts: [MLXArray] = []
@@ -516,17 +541,65 @@ public enum Krea2LoRATrainer {
             let lr = MLXArray(scheduledLR)
             let oneMinusLrWd = MLXArray(1.0 - scheduledLR * 0.0001)
             let loss = trainStep([cleanBatch, noiseBatch, textBatch, timestepBatch, positionBatch, maskBatch, lr, oneMinusLrWd])[0]
-            MLX.asyncEval(loss, loraState)
+            if Self.synchronousStepEval {
+                // Memory mode: with async evaluation the next step's graph (and
+                // its full activation set) goes live while this step is still
+                // executing — at training-sized activations that can nearly
+                // double the peak footprint. Synchronous eval keeps one step in
+                // flight; the lost overlap is graph-build time, which is noise
+                // next to a training step.
+                MLX.eval(loss, loraState)
+            } else {
+                MLX.asyncEval(loss, loraState)
+            }
 
             let shouldLog = (step + 1) % max(config.logEvery, 1) == 0 || step == config.trainingSteps - 1
             let lossValue = shouldLog ? loss.item(Float.self) : nil
             if let lossValue {
                 try metricsLogger.record(step: step + 1, loss: lossValue)
+                let stepSeconds = CFAbsoluteTimeGetCurrent() - stepStart
+                var diagnostics = String(
+                    format: "[krea2-lora-train] step=%d/%d loss=%.6f step_s=%.1f",
+                    step + 1, config.trainingSteps, lossValue, stepSeconds
+                )
+                if let footprint = LoRATrainingEnvironment.currentPhysicalFootprintGB() {
+                    diagnostics += String(format: " footprint_gb=%.1f", footprint)
+                }
+                FileHandle.standardError.write(Data((diagnostics + "\n").utf8))
             }
             progressHandler?(Krea2LoRATrainingProgress(
                 stage: .training(step: step + 1, total: config.trainingSteps, loss: lossValue),
                 fraction: Float(step + 1) / Float(config.trainingSteps)
             ))
+
+            // Crash insurance: multi-hour runs previously saved nothing until
+            // the end and memory pressure can kill the process silently. The
+            // partial file is removed after the final save succeeds.
+            if Self.periodicSaveInterval > 0,
+               (step + 1) % Self.periodicSaveInterval == 0,
+               step + 1 < config.trainingSteps {
+                try FileManager.default.createDirectory(
+                    at: outputURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                MLX.eval(loraState)
+                try LoRASafetensorsWriter.save(
+                    loraLayers: loraLayers,
+                    to: partialURL,
+                    dtype: config.saveDType,
+                    includeOptimizerState: false,
+                    metadata: [
+                        "format": "mererun.krea2.lora",
+                        "base_model": config.baseModelId,
+                        "recommended_runtime_model": Krea2Resources.modelId,
+                        "step": "\(step + 1)",
+                        "total_steps": "\(config.trainingSteps)",
+                        "seed": "\(effectiveSeed)",
+                        "dataset_fingerprint": datasetFingerprint,
+                        "config_fingerprint": configFingerprint,
+                    ]
+                )
+            }
         }
 
         progressHandler?(Krea2LoRATrainingProgress(stage: .saving, fraction: 0))
@@ -548,6 +621,7 @@ public enum Krea2LoRATrainer {
             includeOptimizerState: false,
             metadata: metadata
         )
+        try? FileManager.default.removeItem(at: partialURL)
 
         let checkpointState = LoRATrainingCheckpointState(
             format: "mererun.krea2.lora",
