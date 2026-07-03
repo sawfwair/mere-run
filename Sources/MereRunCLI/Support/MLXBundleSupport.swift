@@ -41,6 +41,16 @@ enum MLXBundleSupport {
             return
         }
 
+        let flatResourcesURL = execDir.appendingPathComponent("Resources", isDirectory: true)
+        if hasMetallib(resourcesURL: flatResourcesURL) {
+            try validateFlatResources(
+                resourcesURL: flatResourcesURL,
+                executableDir: execDir,
+                quiet: quiet
+            )
+            return
+        }
+
         // No usable bundle next to the executable (missing entirely, or a
         // husk without a metallib inside): copy one in, preferring candidates
         // whose stamp matches this binary.
@@ -68,7 +78,7 @@ enum MLXBundleSupport {
 
         throw ValidationError(
             """
-            Missing mlx-swift Metal shaders (\(bundleName)).
+            Missing mlx-swift Metal shaders (\(bundleName) or Resources/default.metallib).
 
             `swift build` does not generate the Metal kernel library. Build a
             stamped one from the current mlx-swift checkout, then rerun:
@@ -79,6 +89,60 @@ enum MLXBundleSupport {
             is missing.)
             """
         )
+    }
+
+    private static func validateFlatResources(
+        resourcesURL: URL,
+        executableDir: URL,
+        quiet _: Bool
+    ) throws {
+        switch stampStatus(resourcesURL: resourcesURL) {
+        case .matched, .unvalidatable:
+            return
+
+        case .unstamped:
+            CLIStderr.write(
+                """
+                [mererun] WARNING: the MLX Metal shader library has no version stamp:
+                [mererun]   \(resourcesURL.path)
+                [mererun] Its provenance is unknown, so it may not match this binary\(expectedVersionSuffix()).
+                [mererun] A stale metallib silently corrupts output (gibberish, nondeterministic
+                [mererun] generation past ~1024 tokens of context). Rebuild and stamp it with:
+                [mererun]   scripts/build_mlx_metallib.sh
+
+                """
+            )
+
+        case .mismatched(let stamped, let expected):
+            if let replacement = locateCandidateBundle(executableDir: executableDir, matchedOnly: true) {
+                try installCompatibilityMetallibs(bundleURL: replacement, executableDir: executableDir)
+                CLIStderr.write("[mererun] Replaced stale MLX metallib (built for mlx \(stamped), this binary needs \(expected)) with matching copy from \(replacement.path).\n")
+                return
+            }
+
+            if mismatchOverrideEnabled {
+                CLIStderr.write("[mererun] WARNING: running with a mismatched MLX metallib (built for mlx \(stamped), this binary needs \(expected)) because MERERUN_ALLOW_METALLIB_MISMATCH=1. Expect corrupted output.\n")
+                return
+            }
+
+            throw ValidationError(
+                """
+                Stale MLX Metal shader library.
+
+                  metallib built for mlx core: \(stamped)
+                  this binary requires:        \(expected)
+                  resources: \(resourcesURL.path)
+
+                A mismatched metallib produces silently corrupted inference
+                (gibberish, nondeterministic generation past ~1024 tokens of
+                context). Rebuild it from the current checkout:
+
+                  scripts/build_mlx_metallib.sh
+
+                Emergency override (unsafe): MERERUN_ALLOW_METALLIB_MISMATCH=1
+                """
+            )
+        }
     }
 
     private static func validateAndFinish(
@@ -155,13 +219,17 @@ enum MLXBundleSupport {
     }
 
     static func stampStatus(bundleURL: URL) -> MetallibStamp {
+        let resourcesURL = bundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+        return stampStatus(resourcesURL: resourcesURL)
+    }
+
+    private static func stampStatus(resourcesURL: URL) -> MetallibStamp {
         guard let expected = MLXRuntimeVersion.coreVersion.flatMap(normalizedVersion) else {
             return .unvalidatable
         }
-        let stampURL = bundleURL
-            .appendingPathComponent("Contents", isDirectory: true)
-            .appendingPathComponent("Resources", isDirectory: true)
-            .appendingPathComponent(stampName, isDirectory: false)
+        let stampURL = resourcesURL.appendingPathComponent(stampName, isDirectory: false)
         guard let contents = try? String(contentsOf: stampURL, encoding: .utf8),
               let stamped = stampField("mlx-core-version", in: contents).flatMap(normalizedVersion) else {
             return .unstamped
@@ -193,10 +261,14 @@ enum MLXBundleSupport {
     }
 
     private static func hasMetallib(_ bundleURL: URL) -> Bool {
-        let metallibURL = bundleURL
+        let resourcesURL = bundleURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Resources", isDirectory: true)
-            .appendingPathComponent("default.metallib", isDirectory: false)
+        return hasMetallib(resourcesURL: resourcesURL)
+    }
+
+    private static func hasMetallib(resourcesURL: URL) -> Bool {
+        let metallibURL = resourcesURL.appendingPathComponent("default.metallib", isDirectory: false)
         return FileManager.default.fileExists(atPath: metallibURL.path)
     }
 

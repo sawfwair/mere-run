@@ -82,11 +82,14 @@ if [[ -d "${repo_root}/skills/use-mere-run" ]]; then
   cp -R "${repo_root}/skills/use-mere-run" "${resources}/skills/use-mere-run"
 fi
 
-# Frameworks/bundles co-located beside the CLI so its @executable_path rpath resolves.
+# Frameworks co-located beside the CLI so its @executable_path rpath resolves.
+# MLX's resource-only .bundle is not embedded here because stricter codesign
+# treats unsigned nested .bundle directories under Helpers as invalid code.
+# The stamped flat Resources/default.metallib layout is enough for runtime
+# lookup and is verified below.
 for asset in \
   "${build_dir}/llama.framework" \
   "${build_dir}/magentart.framework" \
-  "${build_dir}/mlx-swift_Cmlx.bundle" \
   "${build_dir}/Resources"
 do
   if [[ -e "$asset" ]]; then
@@ -101,9 +104,9 @@ if [[ -d "${repo_root}/vendor/ds4" ]]; then
   cp -R "${repo_root}/vendor/ds4" "${cli_payload}/vendor/ds4"
 fi
 
-# Refuse to ship a bundle whose metallib doesn't match the checkout it was
+# Refuse to ship a metallib whose stamp doesn't match the checkout it was
 # supposedly built from.
-"${repo_root}/scripts/build_mlx_metallib.sh" --verify-only "${cli_payload}/mlx-swift_Cmlx.bundle"
+"${repo_root}/scripts/build_mlx_metallib.sh" --verify-only "${cli_payload}/Resources"
 
 plutil -create xml1 "${contents}/Info.plist"
 plutil -insert CFBundleExecutable -string "mere.run.app" "${contents}/Info.plist"
