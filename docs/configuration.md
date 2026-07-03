@@ -214,6 +214,23 @@ cap doubles step time at ~900-token sequences, while uncapped the cache
 balloons past 100 GB), and a `<name>.partial.safetensors` adapter checkpoint
 is written every 100 steps and removed after the final save.
 
+### `MERERUN_STT_DECODE_WINDOW`
+
+Parakeet transducer decoding (TDT and RNN-T) evaluates the joint network for
+this many contiguous encoder frames per batched call (default `16`). The
+decoder state only changes when a token is emitted, so blank frames — the
+majority — scan host-side from a single readback instead of one (RNN-T) or
+two (TDT) scalar readbacks per frame. Greedy semantics are identical to the
+per-frame loop. Set `1` to restore the legacy per-frame readback cadence.
+
+### `MERERUN_STT_PIPELINED_DECODE`
+
+Qwen3 ASR token decoding samples on GPU and pipelines the loop at depth 1:
+the sampled token feeds the next forward as a GPU array and the previous
+step's token is read back while the current step executes (the legacy loop
+synchronized twice per token). Enabled by default; set `0`, `false`, or
+`off` to restore the legacy loop.
+
 ### `MERERUN_GEMMA4_DECODE_TRACE`
 
 Set to `1` to log a per-decode summary to stderr splitting each token's wall
