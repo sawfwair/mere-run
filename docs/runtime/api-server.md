@@ -306,6 +306,11 @@ Engine compatibility:
 - `text-agent-ornith-35b-mlx`: uses the Qwen-family serving engine for a local
   converted Ornith 1.0 35B Q4 MLX snapshot; start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx`.
+- Both Ornith lanes serve with thinking-enabled generation by default (the
+  models degenerate without it); the reasoning arrives in the response's
+  `reasoning_content` field while `content` carries only the visible answer.
+  When a request sets no explicit `temperature`/`top_p`, these lanes also apply
+  the model's published top-k of 20.
 - `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
   LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
   image content parts.

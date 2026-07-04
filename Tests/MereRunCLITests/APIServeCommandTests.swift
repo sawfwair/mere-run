@@ -1005,4 +1005,59 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(usage.completion_tokens, 7)
         XCTAssertEqual(usage.total_tokens, 7)
     }
+
+    func testChatRequestDefaultsToThinkingForOrnithLanes() throws {
+        let request = OpenAIChatRequest(
+            model: Q35Resources.ornith35BMLXModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            servedModelID: Q35Resources.ornith35BMLXModelId
+        )
+
+        XCTAssertTrue(chatRequest.showThinking)
+        XCTAssertEqual(chatRequest.topK, 20)
+        XCTAssertEqual(chatRequest.temperature, 1.0)
+        XCTAssertEqual(chatRequest.topP, 0.95)
+    }
+
+    func testChatRequestExplicitSamplingSkipsRecommendedTopK() throws {
+        var request = OpenAIChatRequest(
+            model: Q35Resources.ornith35BMLXModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+        request.temperature = 0.2
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            servedModelID: Q35Resources.ornith35BMLXModelId
+        )
+
+        XCTAssertTrue(chatRequest.showThinking)
+        XCTAssertNil(chatRequest.topK)
+        XCTAssertEqual(chatRequest.temperature, 0.2)
+    }
+
+    func testChatRequestKeepsNoThinkDefaultForNonOrnithLanes() throws {
+        let request = OpenAIChatRequest(
+            model: Q35Resources.q36NanoModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            servedModelID: Q35Resources.q36NanoModelId
+        )
+
+        XCTAssertFalse(chatRequest.showThinking)
+        XCTAssertNil(chatRequest.topK)
+    }
 }

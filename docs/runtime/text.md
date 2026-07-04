@@ -82,6 +82,16 @@ smoke tests.
 locally converted Ornith 1.0 35B Q4 MLX directory. It does not auto-download
 from Hugging Face until a converted snapshot is published.
 
+Both Ornith lanes are R1-style reasoning tunes and generate with thinking
+enabled by default in `text chat` and `api serve` — without it the models
+degenerate into repetition loops or signature echo on constrained prompts.
+The reasoning stays hidden in `text chat` unless `--thinking` is passed;
+`--no-thinking` disables reasoning generation entirely. When sampling options
+are not set explicitly, these lanes also use the model's published
+`generation_config.json` sampling (temperature 1.0, top-p 0.95, top-k 20)
+instead of the generic chat defaults. Other Qwen-family lanes such as
+`text-chat-q36-nano` keep the existing no-think default.
+
 ### Local code generation
 
 ```bash

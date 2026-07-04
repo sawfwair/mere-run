@@ -455,10 +455,14 @@ Key options:
 - `--model`: canonical model id
 - `--model-root`: explicit local model root
 - `--max-tokens`
-- `--temperature`
-- `--top-p`
+- `--temperature`: defaults to 0.7, or the model's published value where one
+  exists (Ornith lanes: 1.0)
+- `--top-p`: defaults to 0.9, or the model's published value (Ornith: 0.95)
+- `--top-k`: defaults to no cutoff, or the model's published value (Ornith: 20)
+- `--thinking` / `--no-thinking`: show reasoning output / disable reasoning
+  generation. R1-style lanes (`text-agent-ornith-*`) generate with thinking
+  enabled by default even though the reasoning stays hidden.
 - `--stream`
-- `--thinking`
 - `--stats`: includes Gemma4 MTP state and accept/draft counts when a Gemma4 model is used
 - `--quiet`
 

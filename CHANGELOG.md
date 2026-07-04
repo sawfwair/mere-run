@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Changed
+
+- Ornith lanes (`text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`) now
+  generate with thinking enabled by default in `text chat` and `api serve`,
+  and default to the model's published sampling (temperature 1.0, top-p 0.95,
+  top-k 20) when none is set explicitly. These R1-style tunes degenerate into
+  repetition loops or signature echo without reasoning. `text chat` gains
+  `--no-thinking` to disable reasoning generation and `--top-k` for explicit
+  cutoff control; reasoning output stays hidden unless `--thinking` is passed.
+  Other Qwen-family lanes keep the existing no-think default.
+
 ### Fixed
 
 - Qwen-family (Q35 runtime) MoE routing now renormalizes top-k router scores
