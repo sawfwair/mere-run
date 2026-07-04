@@ -428,6 +428,7 @@ public actor Q35Generator: ChatGenerator {
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
+            topK: request.topK ?? 0,
             topP: Float(request.topP),
             repetitionPenalty: nil,
             repetitionContextSize: 64

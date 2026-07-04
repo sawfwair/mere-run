@@ -758,7 +758,8 @@ enum APIServerContract {
         from openaiRequest: OpenAIChatRequest,
         fallbackLoraPath: String?,
         contextSize: Int,
-        capabilities: APIEngineCapabilities = .localText
+        capabilities: APIEngineCapabilities = .localText,
+        servedModelID: String? = nil
     ) throws -> ChatRequest {
         guard !openaiRequest.messages.isEmpty else {
             throw APIRequestValidationError.invalidField("messages", "must contain at least one message")
@@ -800,12 +801,19 @@ enum APIServerContract {
             lora = nil
         }
 
+        // R1-style lanes degenerate without reasoning; their published top_k
+        // applies only when the client did not set explicit sampling.
+        let laneModelID = servedModelID ?? ""
+        let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
+        let usesExplicitSampling = openaiRequest.temperature != nil || openaiRequest.top_p != nil
+
         return ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
-            showThinking: false,
+            topK: usesExplicitSampling ? nil : recommendedSampling?.topK,
+            showThinking: Q35Resources.thinkingDefault(forModelId: laneModelID),
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,

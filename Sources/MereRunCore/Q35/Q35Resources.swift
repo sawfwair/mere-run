@@ -33,6 +33,37 @@ public struct Q35Resources: Sendable, Hashable {
     public static let infinityParser2ProInt8ModelId = "vision-ocr-infinity-pro-int8"
     public static let defaultModelId = q36NanoModelId
 
+    /// R1-style agent tunes degenerate without reasoning enabled: no-think
+    /// output is signature echo or repetition loops at any temperature
+    /// (HumanEval no-think scored 1/164 on Ornith 35B vs a ~90% thinking-mode
+    /// model card), so these lanes default to thinking-enabled generation.
+    public static func thinkingDefault(forModelId modelId: String) -> Bool {
+        modelId == ornith9BModelId || modelId == ornith35BMLXModelId
+    }
+
+    public struct RecommendedSampling: Sendable, Hashable {
+        public let temperature: Double
+        public let topP: Double
+        public let topK: Int
+
+        public init(temperature: Double, topP: Double, topK: Int) {
+            self.temperature = temperature
+            self.topP = topP
+            self.topK = topK
+        }
+    }
+
+    /// Published `generation_config.json` sampling for lanes whose models ship
+    /// one; callers use it when the user did not set explicit sampling.
+    public static func recommendedSampling(forModelId modelId: String) -> RecommendedSampling? {
+        switch modelId {
+        case ornith9BModelId, ornith35BMLXModelId:
+            return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
+        default:
+            return nil
+        }
+    }
+
     public static let q36NanoUpstreamRepoId = "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"
     public static let q36NanoUpstreamRevision = "63d520640ca7461f31ba66104612135770090340"
     public static let ornith9BUpstreamRepoId = "sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx"

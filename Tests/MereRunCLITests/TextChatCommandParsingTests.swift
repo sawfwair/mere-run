@@ -149,4 +149,45 @@ final class TextChatCommandParsingTests: XCTestCase {
 
         XCTAssertEqual(cleaned, "")
     }
+
+    func testTextChatThinkingFlagParsesAsTriState() throws {
+        let unset = try TextChat.parse(["--prompt", "hi"])
+        XCTAssertNil(unset.thinking)
+
+        let enabled = try TextChat.parse(["--prompt", "hi", "--thinking"])
+        XCTAssertEqual(enabled.thinking, true)
+
+        let disabled = try TextChat.parse(["--prompt", "hi", "--no-thinking"])
+        XCTAssertEqual(disabled.thinking, false)
+    }
+
+    func testTextChatSamplingOptionsDefaultToNilForModelResolution() throws {
+        let cmd = try TextChat.parse(["--prompt", "hi"])
+        XCTAssertNil(cmd.temperature)
+        XCTAssertNil(cmd.topP)
+        XCTAssertNil(cmd.topK)
+
+        let explicit = try TextChat.parse([
+            "--prompt", "hi",
+            "--temperature", "0.2",
+            "--top-p", "0.8",
+            "--top-k", "40",
+        ])
+        XCTAssertEqual(explicit.temperature, 0.2)
+        XCTAssertEqual(explicit.topP, 0.8)
+        XCTAssertEqual(explicit.topK, 40)
+    }
+
+    func testOrnithLanesDefaultToThinkingAndRecommendedSampling() {
+        XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.ornith35BMLXModelId))
+        XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.ornith9BModelId))
+        XCTAssertFalse(Q35Resources.thinkingDefault(forModelId: Q35Resources.q36NanoModelId))
+        XCTAssertFalse(Q35Resources.thinkingDefault(forModelId: Gemma4Resources.twelveB4BitModelId))
+
+        let sampling = Q35Resources.recommendedSampling(forModelId: Q35Resources.ornith35BMLXModelId)
+        XCTAssertEqual(sampling?.temperature, 1.0)
+        XCTAssertEqual(sampling?.topP, 0.95)
+        XCTAssertEqual(sampling?.topK, 20)
+        XCTAssertNil(Q35Resources.recommendedSampling(forModelId: Q35Resources.q36NanoModelId))
+    }
 }
