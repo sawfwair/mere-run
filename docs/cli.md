@@ -1293,8 +1293,9 @@ comparison, not model-quality evaluation.
 
 ### `mere.run model benchmark q36-mtp`
 
-Run a requested-token real-checkpoint Qwen3.6 MTP comparison. The command runs
-`text-chat-q36-nano` with three policies:
+Run a requested-token real-checkpoint Qwen-family MTP comparison. The command
+supports `text-chat-q36-nano` (default), `text-agent-ornith-9b`, and
+`text-agent-ornith-35b-mlx`, and runs the selected model with three policies:
 
 - `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
 - `adaptive`: production long-context policy.
@@ -1388,6 +1389,12 @@ executed. `reasoning_reopened=true` flags a second generated reasoning block,
 which usually indicates a loop or phase restart. Use `--models` and `--tasks`
 to narrow the slice while iterating. Use `--models text-agent-ornith-35b` for
 the larger Ornith GGUF eval target.
+
+Pass `--thinking` to let the model reason before answering (matching
+thinking-enabled published evals). Reasoning is split from the scored code as
+usual; the HumanEval-specific stop sequences are disabled for thinking runs
+because they can fire inside the reasoning block, so pair `--thinking` with a
+larger `--max-tokens` (for example 3072).
 
 For a larger slice from the official HumanEval data, download and decompress
 `HumanEval.jsonl.gz`, then pass the JSONL file with `--humaneval-file`:
