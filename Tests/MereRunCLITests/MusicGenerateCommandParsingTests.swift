@@ -259,4 +259,107 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.prefillSilence)
         XCTAssertEqual(cmd.prefillDuration, 1.5, accuracy: 0.0001)
     }
+
+    func testMusicRealtimeParsesMIDIControls() throws {
+        let cmd = try MusicRealtime.parse([
+            "minimal synth pop",
+            "--midi-input", "OP-1",
+            "--midi-channel", "2",
+            "--midi-note-offset", "12",
+            "--midi-cc", "1=temp:0.2:1.4",
+            "--midi-cc", "2=drums:0:2",
+        ])
+
+        XCTAssertEqual(cmd.prompt, "minimal synth pop")
+        XCTAssertEqual(cmd.midiInput, "OP-1")
+        XCTAssertEqual(cmd.midiChannel, "2")
+        XCTAssertEqual(cmd.midiNoteOffset, 12)
+        XCTAssertEqual(cmd.midiCCMappings, ["1=temp:0.2:1.4", "2=drums:0:2"])
+    }
+
+    func testMusicRealtimeParsesMIDIInputListingWithoutPrompt() throws {
+        let cmd = try MusicRealtime.parse([
+            "--list-midi-inputs",
+        ])
+
+        XCTAssertNil(cmd.prompt)
+        XCTAssertTrue(cmd.listMIDIInputs)
+    }
+
+    func testMagentaRT2MIDICCMappingScalesValues() throws {
+        let mapping = try MagentaRT2MIDICCMapping.parse("1=temp:0.2:1.4")
+
+        XCTAssertEqual(mapping.controller, 1)
+        XCTAssertEqual(mapping.scaledValue(0), 0.2, accuracy: 0.0001)
+        XCTAssertEqual(mapping.scaledValue(127), 1.4, accuracy: 0.0001)
+    }
+
+    func testMagentaRT2LiveControlQueueCollectsMIDINotesAndControls() throws {
+        let queue = MagentaRT2LiveControlQueue(initialControls: MagentaRT2Controls())
+        queue.enqueueNoteOn(60)
+        queue.enqueueNoteOff(64)
+        try MagentaRT2MIDICCMapping.parse("1=temp:0.2:1.4").apply(rawValue: 127, to: queue)
+
+        let snapshot = try XCTUnwrap(queue.snapshot())
+        XCTAssertEqual(snapshot.noteOn, [60])
+        XCTAssertEqual(snapshot.noteOff, [64])
+        let controls = try XCTUnwrap(snapshot.controls)
+        XCTAssertEqual(controls.temperature, Float(1.4), accuracy: 0.0001)
+    }
+
+    private func parsedEvents(
+        _ parser: inout MagentaRT2MIDIStreamParser,
+        _ bytes: [UInt8]
+    ) -> [MagentaRT2MIDIEvent] {
+        var events: [MagentaRT2MIDIEvent] = []
+        parser.consume(bytes) { events.append($0) }
+        return events
+    }
+
+    func testMIDIStreamParserParsesMultipleMessagesPerPacket() {
+        var parser = MagentaRT2MIDIStreamParser()
+        let events = parsedEvents(&parser, [0x90, 60, 100, 0x80, 60, 0, 0xB1, 1, 64])
+
+        XCTAssertEqual(events, [
+            .noteOn(channel: 1, note: 60, velocity: 100),
+            .noteOff(channel: 1, note: 60),
+            .controlChange(channel: 2, controller: 1, value: 64),
+        ])
+    }
+
+    func testMIDIStreamParserHandlesRunningStatus() {
+        var parser = MagentaRT2MIDIStreamParser()
+        // One 0x90 status followed by three note pairs: a chord under
+        // running status, with a velocity-0 pair meaning note-off.
+        let events = parsedEvents(&parser, [0x90, 60, 100, 64, 100, 60, 0])
+
+        XCTAssertEqual(events, [
+            .noteOn(channel: 1, note: 60, velocity: 100),
+            .noteOn(channel: 1, note: 64, velocity: 100),
+            .noteOff(channel: 1, note: 60),
+        ])
+    }
+
+    func testMIDIStreamParserSurvivesInterleavedRealtimeAndPacketBoundaries() {
+        var parser = MagentaRT2MIDIStreamParser()
+        // Clock (0xF8) interrupts a note-on mid-message, and the message's
+        // final byte arrives in the next packet.
+        var events = parsedEvents(&parser, [0x90, 0xF8, 60])
+        XCTAssertTrue(events.isEmpty)
+        events = parsedEvents(&parser, [100])
+        XCTAssertEqual(events, [.noteOn(channel: 1, note: 60, velocity: 100)])
+    }
+
+    func testMIDIStreamParserSkipsUnrelatedMessagesAndSysEx() {
+        var parser = MagentaRT2MIDIStreamParser()
+        let events = parsedEvents(&parser, [
+            0xC0, 5, // program change: 1 data byte, ignored
+            0xE0, 0, 64, // pitch bend: 2 data bytes, ignored
+            0xF0, 1, 2, 3, 0xF7, // sysex: dropped, cancels running status
+            33, 44, // stray data bytes with no status: dropped
+            0x91, 62, 90, // then a normal note-on still parses
+        ])
+
+        XCTAssertEqual(events, [.noteOn(channel: 2, note: 62, velocity: 90)])
+    }
 }
