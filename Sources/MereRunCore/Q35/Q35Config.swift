@@ -117,7 +117,13 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         self.headDim = try container.decode(Int.self, forKey: .headDim)
         self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
         self.numExpertsPerTok = try container.decodeIfPresent(Int.self, forKey: .numExpertsPerTok) ?? 0
-        self.normTopKProb = try container.decodeIfPresent(Bool.self, forKey: .normTopKProb) ?? false
+        // Qwen3.5-family checkpoints omit norm_topk_prob and the architecture
+        // default is TRUE (HF transformers and mlx_lm both renormalize the
+        // top-k router scores). Defaulting to false scales every MoE block's
+        // routed output by the sum of top-k softmax mass (<1), which dampens
+        // the residual stream a few percent per layer and compounds into
+        // repetition-biased logits by mid-stack.
+        self.normTopKProb = try container.decodeIfPresent(Bool.self, forKey: .normTopKProb) ?? true
         self.layerTypes = try container.decode([String].self, forKey: .layerTypes)
         self.mlpOnlyLayers = try container.decodeIfPresent([Int].self, forKey: .mlpOnlyLayers) ?? []
         self.linearNumValueHeads = try container.decode(Int.self, forKey: .linearNumValueHeads)

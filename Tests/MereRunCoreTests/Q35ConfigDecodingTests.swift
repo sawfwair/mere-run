@@ -468,14 +468,18 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         textConfig.removeValue(forKey: "norm_topk_prob")
         configObject["text_config"] = textConfig
 
+        // Qwen3.5-family default is TRUE (HF transformers and mlx_lm both
+        // renormalize top-k router scores when the key is absent). The older
+        // Qwen3-MoE family defaulted to false; porting that default here
+        // dampened every MoE block on checkpoints that omit the key.
         let defaulted = try decodeConfig(configObject)
-        XCTAssertFalse(defaulted.textConfig.normTopKProb)
+        XCTAssertTrue(defaulted.textConfig.normTopKProb)
 
-        textConfig["norm_topk_prob"] = true
+        textConfig["norm_topk_prob"] = false
         configObject["text_config"] = textConfig
 
         let explicit = try decodeConfig(configObject)
-        XCTAssertTrue(explicit.textConfig.normTopKProb)
+        XCTAssertFalse(explicit.textConfig.normTopKProb)
     }
 
     func testQ35DenseFeedForwardRuntimeProducesLogits() throws {

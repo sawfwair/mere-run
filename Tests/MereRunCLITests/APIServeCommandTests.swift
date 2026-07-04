@@ -982,6 +982,30 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(APIServerContract.isStreamingStatusMessage("Actual generated text"))
     }
 
+    func testOpenAIUsageReportsPromptAndCompletionTokenCounts() {
+        let result = ChatResponse(
+            response: "hello",
+            tokensGenerated: 128,
+            promptTokens: 1039
+        )
+
+        let usage = CodeGenServer.openAIUsage(for: result)
+
+        XCTAssertEqual(usage.prompt_tokens, 1039)
+        XCTAssertEqual(usage.completion_tokens, 128)
+        XCTAssertEqual(usage.total_tokens, 1167)
+    }
+
+    func testOpenAIUsageFallsBackToZeroPromptTokensWhenUnreported() {
+        let result = ChatResponse(response: "hello", tokensGenerated: 7)
+
+        let usage = CodeGenServer.openAIUsage(for: result)
+
+        XCTAssertEqual(usage.prompt_tokens, 0)
+        XCTAssertEqual(usage.completion_tokens, 7)
+        XCTAssertEqual(usage.total_tokens, 7)
+    }
+
     func testChatRequestDefaultsToThinkingForOrnithLanes() throws {
         let request = OpenAIChatRequest(
             model: Q35Resources.ornith35BMLXModelId,

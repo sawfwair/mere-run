@@ -106,7 +106,18 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
 }
 
 public actor Q35Generator: ChatGenerator {
-    private static let prefillChunkSize = 512
+    /// MERERUN_Q35_PREFILL_CHUNK_TOKENS overrides the prefill chunk length.
+    /// Larger chunks batch more routed-expert rows per gather matmul: on
+    /// Ornith 35B (M4 Max) a 6.8K-token prefill runs 1116 tok/s at 512,
+    /// 1238 tok/s at 1024, and regresses at 2048; outputs are byte-identical
+    /// across chunk sizes (causal chunking is exact).
+    private static let prefillChunkSize: Int = {
+        if let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFILL_CHUNK_TOKENS"],
+           let value = Int(raw), (64...8192).contains(value) {
+            return value
+        }
+        return 1024
+    }()
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
 
@@ -422,6 +433,10 @@ public actor Q35Generator: ChatGenerator {
         )
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
+        }
+        if let dumpPath = ProcessInfo.processInfo.environment["MERERUN_Q35_DEBUG_PROMPT_TOKENS"] {
+            try? promptTokens.map(String.init).joined(separator: ",")
+                .write(toFile: dumpPath, atomically: true, encoding: .utf8)
         }
 
         let eosSet = Set(loadedConfig.eosTokenIds + [tokenizerAndTemplate.eosTokenId].compactMap { $0 })

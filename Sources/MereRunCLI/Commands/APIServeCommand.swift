@@ -2129,11 +2129,7 @@ actor CodeGenServer {
                     finish_reason: openAIFinishReason(for: result)
                 )
             ],
-            usage: OpenAIUsage(
-                prompt_tokens: 0,
-                completion_tokens: result.tokensGenerated,
-                total_tokens: result.tokensGenerated
-            )
+            usage: Self.openAIUsage(for: result)
         )
 
         let data = try JSONEncoder().encode(response)
@@ -2728,11 +2724,7 @@ actor CodeGenServer {
                         created: Int(Date().timeIntervalSince1970),
                         model: modelID,
                         choices: [],
-                        usage: OpenAIUsage(
-                            prompt_tokens: 0,
-                            completion_tokens: result.tokensGenerated,
-                            total_tokens: result.tokensGenerated
-                        )
+                        usage: Self.openAIUsage(for: result)
                     )
                     if let data = try? encoder.encode(usageChunk),
                        let json = String(data: data, encoding: .utf8) {
@@ -2788,6 +2780,17 @@ actor CodeGenServer {
             return "tool_calls"
         }
         return result.finishReason == .length ? "length" : "stop"
+    }
+
+    /// Generators that don't report a prompt token count fall back to zero
+    /// rather than omitting the usage object, matching OpenAI's schema.
+    nonisolated static func openAIUsage(for result: ChatResponse) -> OpenAIUsage {
+        let promptTokens = result.promptTokens ?? 0
+        return OpenAIUsage(
+            prompt_tokens: promptTokens,
+            completion_tokens: result.tokensGenerated,
+            total_tokens: promptTokens + result.tokensGenerated
+        )
     }
 
     private nonisolated func jsonString(from arguments: [String: String]) -> String {
