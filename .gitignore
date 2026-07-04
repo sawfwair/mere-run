@@ -26,6 +26,7 @@ scripts/upload_release.sh
 .claude/settings.local.json
 .claude/
 .agents/
+live.wav
 
 # Local release/notarization credentials
 .notarize.local.env

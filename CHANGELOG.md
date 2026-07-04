@@ -6,14 +6,88 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.19.0 - 2026-07-04
+
 ### Added
 
+- added native `text train-lora` for reviewed chat-style SFT data, with
+  Gemma4 LoRA injection, loss-masked training batches, JSONL dataset loading,
+  training metrics, generated artifacts, and a loopback viewer through
+  `--visualize`.
+- added `image train-lora --preflight --json`, a typed structured preflight
+  report for expensive LoRA runs. It checks dataset/caption shape, edit-pair
+  mismatches, placeholder text, duplicate captions, model-family support,
+  output overwrite risk, and emits follow-up actions instead of starting
+  training blindly.
 - added CoreMIDI steering for `music realtime` on macOS, including
-  `--list-midi-inputs`, `--midi-input`, channel/note-offset filters, and
-  repeatable `--midi-cc` mappings for Magenta RT2 note and control changes.
+  `--list-midi-inputs`, `--midi-input`, channel/note-offset filters, a robust
+  MIDI 1.0 stream parser, note on/off handling, and repeatable `--midi-cc`
+  mappings for Magenta RT2 note and control changes.
+- added `model benchmark code --thinking` for reasoning-enabled code evals.
+  The benchmark keeps reasoning split away from scored code and disables
+  HumanEval stop sequences that can fire inside a thinking block.
+- added Ornith support to the `model benchmark q36-mtp` lane so MTP sidecar
+  experiments can be measured against `text-agent-ornith-9b` and
+  `text-agent-ornith-35b-mlx` with the existing counters.
+- added an env-gated Q35 reference-parity harness:
+  `MERERUN_Q35_DEBUG_LAYER_DUMP`, `MERERUN_Q35_DEBUG_PROMPT_TOKENS`, and
+  matching mlx_lm dump/compare scripts under `scripts/reference-parity/`.
+  Self-parity gates cannot catch defaults that are wrong the same way on both
+  sides, so this compares against an independent implementation.
+- added `scripts/build_mlx_metallib.sh`, a stamped MLX Metal kernel-library
+  builder/verifier that records the mlx core version, mlx-swift pin, toolchain,
+  and kernel-source hash next to `default.metallib`.
+- added Linux CUDA package hardening for release artifacts: CUDA package
+  suffixes, CUDA runtime/JIT `.deb` dependencies, CUDA CCCL discovery in the
+  installed launcher, and an arm64 release guard that requires
+  `MERERUN_LINUX_ACCEL=cuda` for meaningful arm64 packages.
+- added docs for the mlx-swift fork policy, the measured compiled-call
+  overhead cliff, and why the public repo stays on stock upstream mlx-swift
+  until the fast-path lock removal is proven thread-safe.
+- added image-generation docs for applying Klein LoRAs to reference images with
+  `--ref-image`, including starting strength/LoRA-scale guidance.
 
 ### Changed
 
+- shipped a large decode-performance train across Gemma4 and Q35. Measured
+  highlights include Q35 MoE decode improving from 53.1 to 87.3 tok/s,
+  Q35 prefill from 558-703 to 803-847 tok/s, Gemma4 sampled chat from
+  26.0 to 30-35 tok/s, Gemma4 short-prompt TTFT from 5.4s to 2.7s, and
+  quantized-KV long-context decode copy traffic dropping from about
+  1.4 GB/token to zero.
+- changed Q35 prefill chunking from 512 to 1024 tokens by default, with
+  `MERERUN_Q35_PREFILL_CHUNK_TOKENS` for controlled overrides. Warm Ornith
+  35B MLX prefill now reaches roughly 1350 tok/s in serve mode while keeping
+  greedy output byte-identical across exact causal chunk sizes.
+- optimized native text LoRA training with gathered lm_head loss,
+  logSumExp-minus-gather cross entropy, async loss-readback cadence, a
+  text-appropriate MLX buffer-cache cap, and mid-run partial checkpoints.
+  Long 12B-4bit QLoRA steps improved from about 33.0 to 24.7 s/step while
+  steady memory dropped from about 111 GB to 38 GB.
+- optimized Q35 decode with fused q/k/v quantized projections, batched
+  GPU-side sampling, stacked gate/up expert matmuls, and Q35 prefix/prefill
+  plumbing that keeps sampling and prefill work on the GPU longer.
+- optimized Gemma4 decode with pipelined sampled-token readback, top-p
+  prefiltering, fused quantized projection loads, in-place quantized KV cache
+  growth, single-query sliding-window cache reuse, final-position-only prefill
+  logits, and MTP round batching for greedy verification.
+- optimized LFM2 repeated-prompt serving with opt-in prefix-KV reuse and fork
+  isolation for `KVCacheSimple`; local repeated-prompt TTFT moved from about
+  11.7s to 0.3s in the measured lane.
+- optimized Qwen3 TTS with GPU-side sampling and a depth-1 pipelined talker
+  decode path, yielding roughly 20-25% faster local synthesis in the measured
+  lane.
+- optimized STT, OCR, embeddings, GLM-4.7 Flash, and ACEStep LM paths by
+  reducing readbacks and batching decode/sampler operations; OCR throughput
+  improved by roughly 17% in the measured lane.
+- optimized FalconPerception decode with an O(T) KV cache and gated trace-only
+  heads, replacing repeated full-prefix work in the vision-language path.
+- tightened denoise-loop hygiene across HiDream, Klein, and Krea2 by
+  precomputing sigma/control values, gating debug-only work, and hoisting
+  repeated setup out of inner loops.
+- made Magenta RT2 prompt swaps opt-in non-blocking, with a 1ms prompt-wait
+  poll so realtime audio generation can keep moving while control state
+  changes.
 - Ornith lanes (`text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`) now
   generate with thinking enabled by default in `text chat` and `api serve`,
   and default to the model's published sampling (temperature 1.0, top-p 0.95,
@@ -22,6 +96,15 @@ The format is based on Keep a Changelog.
   `--no-thinking` to disable reasoning generation and `--top-k` for explicit
   cutoff control; reasoning output stays hidden unless `--thinking` is passed.
   Other Qwen-family lanes keep the existing no-think default.
+- improved the macOS Studio interface with a more polished command surface,
+  clearer generated-media handling, and command-catalog coverage for the newer
+  music, benchmark, plugin, and Open WebUI flows.
+- refreshed release and Linux documentation around the supported public
+  boundary: macOS app/DMG remain macOS-only, Linux artifacts stay headless
+  CLI-only, x86_64 CPU/CUDA artifacts are the hosted release lanes, and arm64
+  release packaging is CUDA/self-hosted only.
+- bumped GitHub Actions dependencies, including checkout, upload-artifact, and
+  action-gh-release, to the current major versions used by the release lanes.
 
 ### Fixed
 
@@ -30,19 +113,38 @@ The format is based on Keep a Changelog.
   and mlx_lm. Checkpoints that omit `norm_topk_prob` (Ornith 35B, Qwen3.6
   nano) were previously routed with un-renormalized scores, dampening every
   MoE block's output by the top-k softmax mass and compounding into
-  systematically repetition-biased logits — reasoning models looped instead
+  systematically repetition-biased logits, so reasoning models looped instead
   of terminating. Per-layer hidden states now match the mlx_lm reference to
   within quantized-kernel noise, and greedy decode openings match verbatim.
-- Added an env-gated reference-parity harness: the runtime dumps per-layer
-  hidden-state stats (`MERERUN_Q35_DEBUG_LAYER_DUMP`) and prompt token ids
-  (`MERERUN_Q35_DEBUG_PROMPT_TOKENS`), with matching mlx_lm dump/compare
-  scripts under `scripts/reference-parity/`. Self-referential byte-parity
-  gates cannot catch bugs that are wrong the same way on both sides.
 - `api serve` chat completions now report real `prompt_tokens` in the `usage`
   object for both streaming (`stream_options.include_usage`) and non-streaming
   responses, and `total_tokens` includes the prompt side. Previously
   `prompt_tokens` was always `0` and `total_tokens` only counted completion
   tokens.
+- fixed stale MLX metallib handling. The runtime now detects unstamped or
+  mismatched `default.metallib` resources, can replace stale libraries from a
+  matching build product, fails loudly when no compatible metallib is
+  available, and keeps the app bundle layout notarization-safe by flattening
+  MLX resources under `Contents/Helpers`.
+- fixed the Magenta RT2 engine failure caused by an unhydrated LFS metallib and
+  removed the unsafe swap option that made the failure mode harder to reason
+  about.
+- fixed Linux CUDA Swift support linkage so hosted CUDA package builds can link
+  against prepared native mlx-swift artifacts and explicit CUDA library paths.
+- fixed macOS package bundle path capture in packaging scripts so release
+  workflows inspect and sign the bundle that was actually built.
+- fixed SAM 3.1 text-prompt tokenizer installation so segmentation prompts use
+  the intended tokenizer assets.
+- fixed strict-concurrency and stale test-support issues surfaced by Linux
+  builds after the Qwen3 TTS pipelining work.
+- fixed local generated artifacts by ignoring the root `live.wav` capture file
+  without broadly ignoring audio fixtures.
+
+### Removed
+
+- removed public-repo maintainer release command wrappers after confirming
+  operator-only release flows belong in the private `mere-run-release-tools`
+  repo, not in the public OSS distribution.
 
 ## 0.18.0 - 2026-07-01
 
