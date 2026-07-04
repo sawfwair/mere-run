@@ -21,6 +21,11 @@ The format is based on Keep a Changelog.
   (`MERERUN_Q35_DEBUG_PROMPT_TOKENS`), with matching mlx_lm dump/compare
   scripts under `scripts/reference-parity/`. Self-referential byte-parity
   gates cannot catch bugs that are wrong the same way on both sides.
+- `api serve` chat completions now report real `prompt_tokens` in the `usage`
+  object for both streaming (`stream_options.include_usage`) and non-streaming
+  responses, and `total_tokens` includes the prompt side. Previously
+  `prompt_tokens` was always `0` and `total_tokens` only counted completion
+  tokens.
 
 ## 0.18.0 - 2026-07-01
 
