@@ -33,6 +33,8 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
+        R1-style lanes (text-agent-ornith-*) generate with thinking enabled even
+        when it is hidden; pass --no-thinking to disable reasoning generation.
         Use --models-root or MERERUN_MODELS_DIR to override the model store path.
         """
     )
@@ -49,11 +51,14 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Max new tokens.")
     var maxTokens: Int = 2048
 
-    @Option(name: [.long], help: "Temperature.")
-    var temperature: Double = 0.7
+    @Option(name: [.long], help: "Temperature. Default: 0.7, or the model's published value where one exists (Ornith: 1.0).")
+    var temperature: Double?
 
-    @Option(name: [.long], help: "Top-p.")
-    var topP: Double = 0.9
+    @Option(name: [.long], help: "Top-p. Default: 0.9, or the model's published value where one exists (Ornith: 0.95).")
+    var topP: Double?
+
+    @Option(name: [.customLong("top-k")], help: "Top-k sampling cutoff. Default: no cutoff, or the model's published value where one exists (Ornith: 20).")
+    var topK: Int?
 
     @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform/polar and integer/.5 widths for turboquant.")
     var kvBits: Double?
@@ -119,8 +124,12 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customLong("lora-scale")], help: "LoRA adapter scale.")
     var loraScale: Double = 1.0
 
-    @Flag(name: [.customLong("thinking"), .customLong("show-thinking")], help: "Show model reasoning output.")
-    var thinking: Bool = false
+    @Flag(
+        name: [.customLong("thinking"), .customLong("show-thinking")],
+        inversion: .prefixedNo,
+        help: "Show model reasoning output. R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation."
+    )
+    var thinking: Bool?
 
     @Flag(name: [.customLong("stats")], help: "Print generation timing and tokens/sec.")
     var stats: Bool = false
@@ -189,12 +198,14 @@ struct TextChat: AsyncParsableCommand {
             lora = nil
         }
 
+        let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
-            temperature: temperature,
-            topP: topP,
-            showThinking: thinking,
+            temperature: temperature ?? recommendedSampling?.temperature ?? 0.7,
+            topP: topP ?? recommendedSampling?.topP ?? 0.9,
+            topK: topK ?? recommendedSampling?.topK,
+            showThinking: thinking ?? Q35Resources.thinkingDefault(forModelId: model),
             lora: lora,
             tools: toolDefs
         )
@@ -279,7 +290,7 @@ struct TextChat: AsyncParsableCommand {
                     if stream && streamingOutput.hasWritten {
                         streamingOutput.finishLine()
                     } else {
-                        print(cleanResponse(result.response, showThinking: thinking))
+                        print(cleanResponse(result.response, showThinking: thinking == true))
                     }
                     return
                 }
@@ -289,7 +300,7 @@ struct TextChat: AsyncParsableCommand {
                     .replacingOccurrences(of: "<\\|tool_call>.*?<tool_call\\|>", with: "", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !textBeforeTools.isEmpty {
-                    CLIStderr.write(cleanResponse(textBeforeTools, showThinking: thinking) + "\n")
+                    CLIStderr.write(cleanResponse(textBeforeTools, showThinking: thinking == true) + "\n")
                 }
 
                 loopMessages.append(ChatMessage(role: .assistant, content: result.response))
@@ -358,7 +369,7 @@ struct TextChat: AsyncParsableCommand {
             if stream && streamingOutput.hasWritten {
                 streamingOutput.finishLine()
             } else {
-                print(cleanResponse(result.response, showThinking: thinking))
+                print(cleanResponse(result.response, showThinking: thinking == true))
             }
         }
     }

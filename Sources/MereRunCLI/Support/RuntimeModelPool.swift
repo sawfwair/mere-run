@@ -921,7 +921,8 @@ actor RuntimeModelPool {
             from: effectiveRequest,
             fallbackLoraPath: fallbackLoraPath,
             contextSize: contextSize,
-            capabilities: capabilities
+            capabilities: capabilities,
+            servedModelID: resolved.id
         )
         chatRequest.kvCacheMode = resolved.settings.kvCacheMode
         let includeUsage = try APIServerContract.includeUsageInStreaming(
