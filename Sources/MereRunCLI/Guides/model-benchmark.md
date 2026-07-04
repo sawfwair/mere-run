@@ -136,8 +136,10 @@ benchmark, not a model-quality eval.
 
 ## Qwen3.6 MTP Benchmark
 
-`model benchmark q36-mtp` runs requested-token comparisons for
-`text-chat-q36-nano`:
+`model benchmark q36-mtp` runs requested-token comparisons for Qwen-family
+models with MTP draft heads (`text-chat-q36-nano` by default; `--model` also
+accepts `text-agent-ornith-9b` and `text-agent-ornith-35b-mlx` when an
+`mtp.safetensors` sidecar is present in the model root):
 
 - `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
 - `adaptive`: production policy with the default long-context threshold.

@@ -79,8 +79,15 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         if prompt != nil && promptFile != nil {
             throw ValidationError("Specify either --prompt or --prompt-file, not both.")
         }
-        guard model == Q35Resources.q36NanoModelId else {
-            throw ValidationError("model benchmark q36-mtp only supports \(Q35Resources.q36NanoModelId).")
+        let supportedModels = [
+            Q35Resources.q36NanoModelId,
+            Q35Resources.ornith9BModelId,
+            Q35Resources.ornith35BMLXModelId,
+        ]
+        guard supportedModels.contains(model) else {
+            throw ValidationError(
+                "model benchmark q36-mtp only supports \(supportedModels.joined(separator: ", "))."
+            )
         }
         guard promptRepeat > 0 else {
             throw ValidationError("--prompt-repeat must be greater than zero.")
