@@ -965,6 +965,11 @@ Key options:
 - `--prefill-silence`
 - `--prefill-duration`
 - `--interactive`: read live steering commands from stdin
+- `--list-midi-inputs`: list CoreMIDI input sources and exit
+- `--midi-input`: CoreMIDI source name or unique ID for live note/control steering
+- `--midi-channel`: `all` or `1` through `16`
+- `--midi-note-offset`: transpose incoming MIDI notes before sending them to Magenta RT2
+- `--midi-cc`: repeatable mapping as `cc=target:min:max`, for example `1=temp:0.2:1.4`
 - `--quiet`
 
 Interactive commands:
@@ -998,6 +1003,16 @@ swift run mere.run music realtime \
   --model music-magenta-rt2-small \
   --duration 30 \
   --interactive
+
+swift run mere.run music realtime --list-midi-inputs
+
+swift run mere.run music realtime \
+  "minimal synth pop, dry drums, tape-warped bass" \
+  --model music-magenta-rt2-small \
+  --duration 120 \
+  --midi-input "OP-1" \
+  --midi-cc 1=temp:0.2:1.4 \
+  --midi-cc 2=drums:0:2
 ```
 
 ### `mere.run sfx generate`

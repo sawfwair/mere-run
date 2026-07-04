@@ -76,6 +76,13 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--drumless`: Magenta RT2 drumless generation.
 - `--unmask-width`, `--seed-rotation`: Magenta RT2 generation controls.
 - `--prefill-silence`, `--prefill-duration`: Magenta RT2 realtime prefill controls.
+- `--list-midi-inputs`: list CoreMIDI input sources and exit.
+- `--midi-input`: CoreMIDI source name or unique ID for live note/control steering.
+- `--midi-channel`: MIDI channel to listen to, `1` through `16` or `all`.
+- `--midi-note-offset`: transpose incoming MIDI notes before sending them to Magenta RT2.
+- `--midi-cc`: repeatable CC mapping in the form `cc=target:min:max`; targets
+  include `temp`, `topk`, `mc`, `notes`, `drums`, `drumless`, `unmask`,
+  `seed`, and `onset`.
 - `--quiet`, `-q`: suppress diagnostics.
 
 ACE-Step uses upstream-style native Haar DCW sampler correction by default for
@@ -92,7 +99,9 @@ For realtime Magenta RT2 runs, use `mere.run music realtime`. It accepts the
 same Magenta controls plus `--play` or `--no-play` and optional `--output` WAV
 capture. Add `--interactive` to steer while it runs with stdin commands such as
 `prompt <text>`, `temp <value>`, `noteon <0-131>`, `noteoff <0-131>`,
-`style streaming|full`, `drumless on|off`, `reset`, and `quit`.
+`style streaming|full`, `drumless on|off`, `reset`, and `quit`. On macOS, add
+`--midi-input` to steer notes and mapped controls from a CoreMIDI device such
+as OP-1.
 
 ## Workflow Choices
 
@@ -205,6 +214,17 @@ mere.run music realtime \
   --no-play
 ```
 
+```bash
+mere.run music realtime --list-midi-inputs
+mere.run music realtime \
+  "minimal synth pop, dry drums, tape-warped bass" \
+  --model music-magenta-rt2-small \
+  --duration 120 \
+  --midi-input "OP-1" \
+  --midi-cc 1=temp:0.2:1.4 \
+  --midi-cc 2=drums:0:2
+```
+
 ## Iteration Tips
 
 - First iterate caption and lyrics at 10 to 20 seconds.
@@ -225,6 +245,9 @@ mere.run music realtime \
   `--source-audio`.
 - For Magenta RT2, use `music realtime --output --no-play --duration 2` for a
   fast headless smoke before running an audible session.
+- For MIDI control, run `music realtime --list-midi-inputs` first, then pass a
+  stable source name or unique ID with `--midi-input`. Keep prompt changes on
+  stdin; MIDI is intended for notes and continuous controls.
 
 ## Troubleshooting
 

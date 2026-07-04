@@ -125,6 +125,28 @@ Supported steering commands are `prompt <text>`, `style streaming|full`,
 `drumless on|off`, `unmask <value>`, `seed <value>`, `reset`, `quit`, and
 `help`.
 
+On macOS, `music realtime` can also listen to CoreMIDI input. Use
+`--list-midi-inputs` to find the source name or unique ID, then pass
+`--midi-input` to map incoming note-on/note-off messages to the same Magenta
+RT2 note controls used by stdin:
+
+```bash
+swift run mere.run music realtime --list-midi-inputs
+swift run mere.run music realtime \
+  "minimal synth pop, dry drums, tape-warped bass" \
+  --model music-magenta-rt2-small \
+  --duration 120 \
+  --midi-input "OP-1" \
+  --midi-channel all \
+  --midi-cc 1=temp:0.2:1.4 \
+  --midi-cc 2=drums:0:2
+```
+
+`--midi-cc` mappings use `cc=target:min:max`. Supported targets are `temp`,
+`topk`, `mc`, `notes`, `drums`, `drumless`, `unmask`, `seed`, and `onset`.
+Prompt changes still use stdin and may briefly stall while the prompt encoder
+runs; MIDI is intended for notes and continuous controls.
+
 ## Runtime entrypoints
 
 ### CLI

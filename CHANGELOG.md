@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added CoreMIDI steering for `music realtime` on macOS, including
+  `--list-midi-inputs`, `--midi-input`, channel/note-offset filters, and
+  repeatable `--midi-cc` mappings for Magenta RT2 note and control changes.
+
 ### Changed
 
 - Ornith lanes (`text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`) now

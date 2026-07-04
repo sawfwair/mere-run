@@ -25,7 +25,7 @@ struct MusicRealtime: AsyncParsableCommand {
     )
 
     @Argument(help: "Text prompt describing the target music.")
-    var prompt: String
+    var prompt: String?
 
     @Option(name: [.customShort("m"), .long], help: "Managed Magenta RT2 model id or local Magenta RT2 root.")
     var model: String = MagentaRT2Resources.smallModelId
@@ -75,10 +75,33 @@ struct MusicRealtime: AsyncParsableCommand {
     @Flag(name: [.customLong("interactive")], help: "Read live steering commands from stdin while generation runs.")
     var interactive: Bool = false
 
+    @Flag(name: [.customLong("list-midi-inputs")], help: "List available CoreMIDI input sources and exit.")
+    var listMIDIInputs: Bool = false
+
+    @Option(name: [.customLong("midi-input")], help: "CoreMIDI input source name or unique ID to steer realtime notes and controls.")
+    var midiInput: String?
+
+    @Option(name: [.customLong("midi-channel")], help: "MIDI channel to listen to, 1-16 or all.")
+    var midiChannel: String = "all"
+
+    @Option(name: [.customLong("midi-note-offset")], help: "Transpose incoming MIDI notes before sending them to Magenta RT2.")
+    var midiNoteOffset: Int = 0
+
+    @Option(name: [.customLong("midi-cc")], help: "Map a MIDI CC as cc=target:min:max, for example 1=temp:0.2:1.4.")
+    var midiCCMappings: [String] = []
+
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
     func run() async throws {
+        if listMIDIInputs {
+            try printMIDIInputs()
+            return
+        }
+        guard let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError("Provide a prompt or use --list-midi-inputs.")
+        }
+        let midiConfiguration = try resolvedMIDIConfiguration()
         guard MagentaRT2Resources.isMagentaRT2Model(model)
             || MagentaRT2Resources.looksLikeMagentaRT2Root(URL(fileURLWithPath: model).standardizedFileURL) else {
             throw ValidationError("music realtime requires a Magenta RT2 model id or local Magenta RT2 root.")
@@ -107,29 +130,42 @@ struct MusicRealtime: AsyncParsableCommand {
             try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         }
         let initialControls = try controls()
-        let liveControls = interactive ? MagentaRT2InteractiveControls(initialControls: initialControls) : nil
+        let liveControls = interactive || midiConfiguration != nil
+            ? MagentaRT2LiveControlQueue(initialControls: initialControls)
+            : nil
         let sink = try MagentaRT2RealtimeOutputSink(outputURL: outputURL, play: play)
         defer { try? sink.close() }
+        let midiInputConnection = try liveControls.flatMap { liveControls in
+            try midiConfiguration.map { configuration in
+                try MagentaRT2MIDIInput(configuration: configuration, controls: liveControls)
+            }
+        }
+        defer { midiInputConnection?.stop() }
 
         if !quiet {
             CLIStderr.write("Starting Magenta RT2 realtime model \(resources.modelID)\n")
         }
-        if let liveControls, !quiet {
+        if let liveControls, interactive, !quiet {
             CLIStderr.write(liveControls.helpText)
         }
-        let inputTask = liveControls.map { controls in
-            Task.detached {
-                while let line = readLine(strippingNewline: true) {
-                    let response = controls.applyCommand(line)
-                    if !response.isEmpty {
-                        CLIStderr.write(response + "\n")
-                    }
-                    if controls.shouldStop {
-                        break
+        if let midiInputConnection, !quiet {
+            CLIStderr.write("Connected MIDI input \(midiInputConnection.sourceDisplayName)\n")
+        }
+        let inputTask: Task<Void, Never>? = interactive
+            ? liveControls.map { controls in
+                Task.detached {
+                    while let line = readLine(strippingNewline: true) {
+                        let response = controls.applyCommand(line)
+                        if !response.isEmpty {
+                            CLIStderr.write(response + "\n")
+                        }
+                        if controls.shouldStop {
+                            break
+                        }
                     }
                 }
             }
-        }
+            : nil
         defer { inputTask?.cancel() }
 
         let startedAt = Date()
@@ -141,8 +177,8 @@ struct MusicRealtime: AsyncParsableCommand {
                     durationSeconds: durationSeconds,
                     controls: initialControls
                 ),
-                liveControls: { frameIndex in
-                    liveControls?.snapshot(frameIndex: frameIndex)
+                liveControls: { _ in
+                    liveControls?.snapshot()
                 }
             ) { frameIndex, frame in
                 try sink.consume(frameIndex: frameIndex, frame: frame)
@@ -187,177 +223,41 @@ struct MusicRealtime: AsyncParsableCommand {
         )
     }
 
+    private func resolvedMIDIConfiguration() throws -> MagentaRT2MIDIInputConfiguration? {
+        let trimmedInput = midiInput?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmedInput, !trimmedInput.isEmpty else {
+            if midiChannel.lowercased() != "all" || midiNoteOffset != 0 || !midiCCMappings.isEmpty {
+                throw ValidationError("Use --midi-input when setting MIDI channel, note offset, or CC mappings.")
+            }
+            return nil
+        }
+        return MagentaRT2MIDIInputConfiguration(
+            source: trimmedInput,
+            channel: try MagentaRT2MIDIInputConfiguration.parseChannel(midiChannel),
+            noteOffset: midiNoteOffset,
+            ccMappings: try midiCCMappings.map(MagentaRT2MIDICCMapping.parse)
+        )
+    }
+
+    private func printMIDIInputs() throws {
+        let sources = try MagentaRT2MIDIInput.availableSources()
+        guard !sources.isEmpty else {
+            print("No MIDI input sources found.")
+            return
+        }
+        for source in sources {
+            print(source.displayName)
+        }
+    }
+
     private func paceFrameIfNeeded(frameIndex: Int, startedAt: Date) {
-        guard play || interactive else { return }
+        guard play || interactive || midiInput != nil else { return }
         let targetElapsed = Double(frameIndex + 1) / Double(MagentaRT2Resources.frameRate)
         let actualElapsed = Date().timeIntervalSince(startedAt)
         let sleepSeconds = targetElapsed - actualElapsed
         if sleepSeconds > 0 {
             Thread.sleep(forTimeInterval: sleepSeconds)
         }
-    }
-}
-
-private final class MagentaRT2InteractiveControls: @unchecked Sendable {
-    private let lock = NSLock()
-    private var controls: MagentaRT2Controls
-    private var pendingPrompt: String?
-    private var pendingNoteOn: [Int32] = []
-    private var pendingNoteOff: [Int32] = []
-    private var pendingOnsetMode: Int32?
-    private var pendingControls: Bool = false
-    private var pendingReset: Bool = false
-    private(set) var shouldStop: Bool = false
-
-    let helpText = """
-    Interactive steering enabled. Commands:
-      prompt <text>
-      style streaming|full
-      temp <value> | topk <value> | mc <value> | notes <value> | drums <value>
-      noteon <0-131> | noteoff <0-131> | onset 0|1
-      drumless on|off | unmask <value> | seed <value> | reset | quit | help
-
-    """
-
-    init(initialControls: MagentaRT2Controls) {
-        controls = initialControls
-    }
-
-    func applyCommand(_ rawLine: String) -> String {
-        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty else { return "" }
-        let parts = line.split(maxSplits: 1, whereSeparator: \.isWhitespace).map(String.init)
-        let command = parts[0].lowercased()
-        let value = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespacesAndNewlines) : ""
-
-        lock.lock()
-        defer { lock.unlock() }
-
-        switch command {
-        case "prompt":
-            guard !value.isEmpty else { return "usage: prompt <text>" }
-            pendingPrompt = value
-            return "queued prompt"
-        case "style", "style-conditioning":
-            guard let parsed = MagentaRT2StyleConditioning(rawValue: value.lowercased()) else {
-                return "usage: style streaming|full"
-            }
-            controls.styleConditioning = parsed
-            pendingControls = true
-            return "style-conditioning \(parsed.rawValue)"
-        case "temp", "temperature":
-            guard let parsed = Float(value) else { return "usage: temp <value>" }
-            controls.temperature = parsed
-            pendingControls = true
-            return "temperature \(parsed)"
-        case "topk", "top-k":
-            guard let parsed = Int32(value), parsed >= 0 else { return "usage: topk <value>" }
-            controls.topK = parsed
-            pendingControls = true
-            return "top-k \(parsed)"
-        case "mc", "musiccoca", "cfg-musiccoca":
-            guard let parsed = Float(value) else { return "usage: mc <value>" }
-            controls.cfgMusicCoCa = parsed
-            pendingControls = true
-            return "cfg-musiccoca \(parsed)"
-        case "notes", "cfg-notes":
-            guard let parsed = Float(value) else { return "usage: notes <value>" }
-            controls.cfgNotes = parsed
-            pendingControls = true
-            return "cfg-notes \(parsed)"
-        case "drums", "cfg-drums":
-            guard let parsed = Float(value) else { return "usage: drums <value>" }
-            controls.cfgDrums = parsed
-            pendingControls = true
-            return "cfg-drums \(parsed)"
-        case "drumless":
-            guard let parsed = parseBool(value) else { return "usage: drumless on|off" }
-            controls.drumless = parsed
-            pendingControls = true
-            return "drumless \(parsed ? "on" : "off")"
-        case "unmask", "unmask-width":
-            guard let parsed = Int32(value), parsed >= 0 else { return "usage: unmask <value>" }
-            controls.unmaskWidth = parsed
-            pendingControls = true
-            return "unmask-width \(parsed)"
-        case "seed", "seed-rotation":
-            guard let parsed = Int32(value) else { return "usage: seed <value>" }
-            controls.seedRotation = parsed
-            pendingControls = true
-            return "seed-rotation \(parsed)"
-        case "noteon", "note-on":
-            guard let parsed = parseMIDINote(value) else { return "usage: noteon <0-131>" }
-            pendingNoteOn.append(parsed)
-            return "note on \(parsed)"
-        case "noteoff", "note-off":
-            guard let parsed = parseMIDINote(value) else { return "usage: noteoff <0-131>" }
-            pendingNoteOff.append(parsed)
-            return "note off \(parsed)"
-        case "onset", "onset-mode":
-            guard let parsed = Int32(value), parsed == 0 || parsed == 1 else { return "usage: onset 0|1" }
-            pendingOnsetMode = parsed
-            return "onset \(parsed)"
-        case "reset":
-            pendingReset = true
-            return "queued reset"
-        case "quit", "exit", "stop":
-            shouldStop = true
-            return "stopping"
-        case "help", "?":
-            return helpText
-        default:
-            return "unknown command: \(command)"
-        }
-    }
-
-    func snapshot(frameIndex: Int) -> MagentaRT2LiveControlSnapshot? {
-        _ = frameIndex
-        lock.lock()
-        defer { lock.unlock() }
-        if shouldStop {
-            return MagentaRT2LiveControlSnapshot(shouldStop: true)
-        }
-        guard pendingPrompt != nil
-            || pendingControls
-            || !pendingNoteOn.isEmpty
-            || !pendingNoteOff.isEmpty
-            || pendingOnsetMode != nil
-            || pendingReset else {
-            return nil
-        }
-        let snapshot = MagentaRT2LiveControlSnapshot(
-            prompt: pendingPrompt,
-            controls: pendingControls ? controls : nil,
-            noteOn: pendingNoteOn,
-            noteOff: pendingNoteOff,
-            onsetMode: pendingOnsetMode,
-            resetState: pendingReset
-        )
-        pendingPrompt = nil
-        pendingNoteOn = []
-        pendingNoteOff = []
-        pendingOnsetMode = nil
-        pendingControls = false
-        pendingReset = false
-        return snapshot
-    }
-
-    private func parseBool(_ value: String) -> Bool? {
-        switch value.lowercased() {
-        case "1", "true", "yes", "on":
-            return true
-        case "0", "false", "no", "off":
-            return false
-        default:
-            return nil
-        }
-    }
-
-    private func parseMIDINote(_ value: String) -> Int32? {
-        guard let parsed = Int32(value), parsed >= 0, parsed < 132 else {
-            return nil
-        }
-        return parsed
     }
 }
 
