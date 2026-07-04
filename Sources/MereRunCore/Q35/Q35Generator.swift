@@ -423,6 +423,10 @@ public actor Q35Generator: ChatGenerator {
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
+        if let dumpPath = ProcessInfo.processInfo.environment["MERERUN_Q35_DEBUG_PROMPT_TOKENS"] {
+            try? promptTokens.map(String.init).joined(separator: ",")
+                .write(toFile: dumpPath, atomically: true, encoding: .utf8)
+        }
 
         let eosSet = Set(loadedConfig.eosTokenIds + [tokenizerAndTemplate.eosTokenId].compactMap { $0 })
         let generationConfig = GenerationConfig(

@@ -170,6 +170,7 @@ final class Q35Transformer: Module {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
 
         let fullMask = createAttentionMask(h: hidden, cache: firstFullCache(from: cache))
+        Q35DebugLayerDump.record(stage: "embeddings", hidden)
 
         for (index, layer) in layers.enumerated() {
             let layerCache = cache?[index] ?? nil
@@ -179,9 +180,13 @@ final class Q35Transformer: Module {
                 cache: layerCache,
                 positionIds: positionIds
             )
+            Q35DebugLayerDump.record(stage: "layer\(index)", hidden)
         }
 
-        return norm(hidden)
+        let normed = norm(hidden)
+        Q35DebugLayerDump.record(stage: "final_norm", normed)
+        Q35DebugLayerDump.flush()
+        return normed
     }
 }
 
