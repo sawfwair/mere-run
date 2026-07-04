@@ -58,7 +58,11 @@ jobs:
           MERERUN_NOTARY_TEAM_ID: ${{ secrets.MERERUN_NOTARY_TEAM_ID }}
         run: |
           set -euo pipefail
-          dmg="$(./scripts/package-macos.sh release)"
+          build_log="$(mktemp)"
+          ./scripts/package-macos.sh release 2>&1 | tee "$build_log"
+          dmg="$(awk 'NF { line = $0 } END { print line }' "$build_log")"
+          rm -f "$build_log"
+          test -f "$dmg"
           echo "DMG_PATH=$dmg" >> "$GITHUB_ENV"
 
       - name: Upload DMG artifact
