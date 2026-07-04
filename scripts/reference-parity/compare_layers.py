@@ -30,7 +30,8 @@ def main(ours_path, ref_path, ours_ids, ref_ids):
             print("  (length mismatch)")
 
     ours, ref = load(ours_path), load(ref_path)
-    stages = ["embeddings"] + [f"layer{i}" for i in range(40)] + ["final_norm"]
+    layer_count = sum(1 for k in ref if k.startswith("layer"))
+    stages = ["embeddings"] + [f"layer{i}" for i in range(layer_count)] + ["final_norm"]
     print(f"{'stage':<12}{'ours_norm':>12}{'ref_norm':>12}{'norm_ratio':>12}{'max_head_diff':>15}")
     first_bad = None
     for s in stages:
