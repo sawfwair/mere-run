@@ -32,6 +32,12 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     @Option(name: [.long], help: "Top-p for generation.")
     var topP: Double = 1
 
+    @Flag(
+        name: [.long],
+        help: "Enable model thinking before the answer. Reasoning is split from the scored code; HumanEval-specific stop sequences are disabled because they can fire inside the thinking block."
+    )
+    var thinking: Bool = false
+
     @Option(name: [.long], help: "Generated-code execution timeout in seconds.")
     var executionTimeout: Double = 5
 
@@ -238,9 +244,11 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                 maxTokens: maxTokens,
                 temperature: temperature,
                 topP: topP,
-                showThinking: false,
+                showThinking: thinking,
                 stopOnEOS: true,
-                stopSequences: Self.codeBenchmarkStopSequences
+                stopSequences: thinking
+                    ? TextGenerationStopSequences.defaultRenderedChatStops
+                    : Self.codeBenchmarkStopSequences
             )
             let generationStart = Date()
             do {

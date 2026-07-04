@@ -131,6 +131,16 @@ throughput for roughly 130 MB of additional resident weight copies —
 attention is a small slice of a MoE's per-token weights, unlike the dense
 Gemma case where the same fusion bought +17%.
 
+### `MERERUN_Q35_PREFILL_CHUNK_TOKENS`
+
+Prefill chunk length for Qwen-family models, accepted range 64–8192, default
+1024. Larger chunks batch more routed-expert rows per gather matmul: on the
+Ornith 35B MoE (M4 Max) a 6.8K-token prefill measured 1116 tok/s at 512,
+1238 tok/s at 1024, and regressed at 2048. Chunked causal prefill is exact,
+so outputs are byte-identical across chunk sizes; the setting only trades
+throughput against progress-report granularity and per-chunk activation
+memory.
+
 ### `MERERUN_Q35_BATCHED_GPU_SAMPLING`
 
 Qwen-family continuous-batching decode samples every active request's row on

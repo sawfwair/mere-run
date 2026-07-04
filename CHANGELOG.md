@@ -8,6 +8,19 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- Qwen-family (Q35 runtime) MoE routing now renormalizes top-k router scores
+  by default, matching the Qwen3.5 architecture default in HF transformers
+  and mlx_lm. Checkpoints that omit `norm_topk_prob` (Ornith 35B, Qwen3.6
+  nano) were previously routed with un-renormalized scores, dampening every
+  MoE block's output by the top-k softmax mass and compounding into
+  systematically repetition-biased logits — reasoning models looped instead
+  of terminating. Per-layer hidden states now match the mlx_lm reference to
+  within quantized-kernel noise, and greedy decode openings match verbatim.
+- Added an env-gated reference-parity harness: the runtime dumps per-layer
+  hidden-state stats (`MERERUN_Q35_DEBUG_LAYER_DUMP`) and prompt token ids
+  (`MERERUN_Q35_DEBUG_PROMPT_TOKENS`), with matching mlx_lm dump/compare
+  scripts under `scripts/reference-parity/`. Self-referential byte-parity
+  gates cannot catch bugs that are wrong the same way on both sides.
 - `api serve` chat completions now report real `prompt_tokens` in the `usage`
   object for both streaming (`stream_options.include_usage`) and non-streaming
   responses, and `total_tokens` includes the prompt side. Previously
