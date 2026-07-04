@@ -100,7 +100,7 @@ artifacts. The default GitHub release workflow publishes x86_64/amd64 CPU
 artifacts and x86_64 CUDA artifacts:
 
 ```bash
-scripts/package-linux.sh --version 0.18.0
+scripts/package-linux.sh --version 0.19.0
 ls dist/linux/
 ```
 
@@ -113,7 +113,7 @@ CUDA variants use a suffix so they can ship beside the CPU artifacts:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.18.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.19.0 --artifact-suffix cuda
 ```
 
 That writes artifacts such as

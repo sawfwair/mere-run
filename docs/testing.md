@@ -90,7 +90,7 @@ CPU-oriented Linux manifest path.
 Linux release packaging has its own artifact check:
 
 ```bash
-scripts/package-linux.sh --version 0.18.0
+scripts/package-linux.sh --version 0.19.0
 test -s dist/linux/SHA256SUMS
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
@@ -103,7 +103,7 @@ Linux builder with CUDA development packages:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.18.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.19.0 --artifact-suffix cuda
 tar -tzf dist/linux/mere-run-*-linux-x86_64-cuda.tar.gz | grep '/.mererun-linux-cuda$'
 dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
 ```
@@ -111,7 +111,7 @@ dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
 On Linux arm64, use CUDA for the package check:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.18.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.19.0
 ```
 
 The `linux-release` workflow runs the hosted package and manifest boundary for
