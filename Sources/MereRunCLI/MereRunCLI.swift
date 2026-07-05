@@ -27,6 +27,7 @@ struct MereRunCLI: AsyncParsableCommand {
             Video.self,
             Model.self,
             Status.self,
+            Gate.self,
             Config.self,
             API.self,
             OpenWebUI.self,

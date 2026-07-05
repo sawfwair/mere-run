@@ -101,6 +101,16 @@ enum MLXBundleSupport {
             return
 
         case .unstamped:
+            // Provenance unknown — an unstamped flat copy is exactly how the
+            // pre-stamping era's stale libraries survive purges of the Cmlx
+            // bundle. Self-heal from a stamp-matched candidate when one
+            // exists (the vendored bundle usually does) instead of running
+            // on a library that may silently corrupt output.
+            if let replacement = locateCandidateBundle(executableDir: executableDir, matchedOnly: true) {
+                try installCompatibilityMetallibs(bundleURL: replacement, executableDir: executableDir)
+                CLIStderr.write("[mererun] Replaced unstamped MLX metallib in \(resourcesURL.path) with stamped copy from \(replacement.path).\n")
+                return
+            }
             CLIStderr.write(
                 """
                 [mererun] WARNING: the MLX Metal shader library has no version stamp:
@@ -156,6 +166,17 @@ enum MLXBundleSupport {
             try installCompatibilityMetallibs(bundleURL: bundleURL, executableDir: executableDir)
 
         case .unstamped:
+            // Same self-heal as the flat-Resources path: prefer a
+            // stamp-matched candidate over a bundle of unknown provenance.
+            if !justInstalled,
+               let replacement = locateCandidateBundle(executableDir: executableDir, matchedOnly: true) {
+                let fm = FileManager.default
+                try? fm.removeItem(at: bundleURL)
+                try fm.copyItem(at: replacement, to: bundleURL)
+                CLIStderr.write("[mererun] Replaced unstamped MLX metallib bundle with stamped copy from \(replacement.path).\n")
+                try installCompatibilityMetallibs(bundleURL: bundleURL, executableDir: executableDir)
+                return
+            }
             CLIStderr.write(
                 """
                 [mererun] WARNING: the MLX Metal shader library has no version stamp:
