@@ -25,6 +25,7 @@ private struct Q35PrefillOutput {
 private struct Q35BatchedDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
+    var firstTokenSeconds: Double? = nil
 }
 
 private struct Q35VisionReplacement {
@@ -56,6 +57,7 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
     /// lazily from `repetitionHistory` and appended without host readbacks.
     var repetitionHistoryGPU: MLXArray?
     var repetitionHistoryGPUSeeded = false
+    var firstTokenSeconds: Double?
     var stopped = false
 
     init(
@@ -95,7 +97,8 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
         continuation.resume(
             returning: Q35BatchedDecodeResult(
                 generatedTokens: generatedTokens,
-                decodeSeconds: Date().timeIntervalSince(decodeStart)
+                decodeSeconds: Date().timeIntervalSince(decodeStart),
+                firstTokenSeconds: firstTokenSeconds
             )
         )
     }
@@ -585,7 +588,8 @@ public actor Q35Generator: ChatGenerator {
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
-                decodeSeconds: decodeResult.decodeSeconds
+                decodeSeconds: decodeResult.decodeSeconds,
+                firstTokenSeconds: decodeResult.firstTokenSeconds
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
@@ -745,11 +749,15 @@ public actor Q35Generator: ChatGenerator {
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
         var pendingProgressWhitespace = ""
+        var firstTokenSeconds: Double?
         let decodeStart = Date()
 
         func emit(_ token: Int) {
             generated.append(token)
             repetitionHistory.append(token)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(decodeStart)
+            }
             guard let progressHandler else { return }
             let piece = tokenizerAndTemplate.decode(token: token)
             guard !piece.isEmpty else { return }
@@ -965,7 +973,8 @@ public actor Q35Generator: ChatGenerator {
 
         return Q35BatchedDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            decodeSeconds: Date().timeIntervalSince(decodeStart),
+            firstTokenSeconds: firstTokenSeconds
         )
     }
 
@@ -987,108 +996,47 @@ public actor Q35Generator: ChatGenerator {
             dtype: initialLogits.dtype,
             tokens: generationConfig.bannedTokens
         )
-        var repetitionHistory = repetitionHistoryArray(
-            promptTokens: promptTokens,
-            config: generationConfig
-        )
-        var pendingToken = sampledTokenArray(
-            logits: initialLogits[0, -1, 0...],
-            config: generationConfig,
-            previousTokenIndices: repetitionHistory,
-            banMask: banMask
-        )
-        asyncEval(pendingToken)
 
-        var generated: [Int] = []
-        generated.reserveCapacity(tokenBudget)
-        var pendingProgressWhitespace = ""
-        let decodeStart = Date()
-        let traceEnabled = Gemma4DecodeTrace.enabled
-        var traceBuildSeconds = 0.0
-        var traceWaitSeconds = 0.0
-
-        func emit(_ token: Int) {
-            generated.append(token)
-            guard let progressHandler else { return }
-            let piece = tokenizerAndTemplate.decode(token: token)
-            guard !piece.isEmpty else { return }
-            if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                pendingProgressWhitespace += piece
-                return
-            }
-
-            let visiblePiece: String
-            if pendingProgressWhitespace.isEmpty {
-                visiblePiece = piece
-            } else {
-                visiblePiece = pendingProgressWhitespace + piece
-                pendingProgressWhitespace = ""
-            }
-            progressHandler(ChatProgress(stage: .generating, message: visiblePiece))
-        }
-
-        while generated.count < tokenBudget {
-            try Task.checkCancellation()
-
-            let buildStart = CFAbsoluteTimeGetCurrent()
-            let scheduled: (token: MLXArray, history: MLXArray?)?
-            if generated.count + 1 < tokenBudget {
-                let nextInput = pendingToken.asType(.int32).reshaped(1, 1)
-                let nextLogits = model(
-                    nextInput,
+        // Shared pipelined decode; mRoPE positions derive from the cache
+        // offset, so the step closure computes them per forward.
+        let result = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: initialLogits,
+                generationConfig: generationConfig,
+                eosTokens: eosSet,
+                tokenBudget: tokenBudget,
+                historySeedTokens: promptTokens,
+                banMask: banMask
+            ),
+            stepForward: { token in
+                model(
+                    token,
                     cache: layerCaches,
                     positionIds: decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
                 )
-                let nextHistory = appendingRepetitionHistory(
-                    repetitionHistory,
-                    token: pendingToken,
-                    config: generationConfig
-                )
-                let nextToken = sampledTokenArray(
-                    logits: nextLogits[0, -1, 0...],
-                    config: generationConfig,
-                    previousTokenIndices: nextHistory,
-                    banMask: banMask
-                )
-                asyncEval(nextToken, nextLogits)
-                scheduled = (nextToken, nextHistory)
-            } else {
-                scheduled = nil
-            }
-            let buildEnd = CFAbsoluteTimeGetCurrent()
+            },
+            decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+            emitPiece: { _, piece in
+                progressHandler?(ChatProgress(stage: .generating, message: piece))
+            },
+            checkCancellation: { try Task.checkCancellation() }
+        )
 
-            let token = pendingToken.item(Int.self)
-            if traceEnabled {
-                traceBuildSeconds += buildEnd - buildStart
-                traceWaitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
-            }
-            if eosSet.contains(token) {
-                break
-            }
-
-            emit(token)
-
-            guard let scheduled else {
-                break
-            }
-            pendingToken = scheduled.token
-            repetitionHistory = scheduled.history
-        }
-
-        if traceEnabled, !generated.isEmpty {
-            let count = Double(generated.count)
+        if Gemma4DecodeTrace.enabled, !result.generatedTokens.isEmpty {
+            let count = Double(result.generatedTokens.count)
             Gemma4DecodeTrace.emit(String(
                 format: "[q35-decode-trace] mode=pipelined temp=\(generationConfig.temperature) tokens=%d build=%.2fms/tok wait=%.2fms/tok wall=%.2fms/tok",
-                generated.count,
-                traceBuildSeconds / count * 1000,
-                traceWaitSeconds / count * 1000,
-                Date().timeIntervalSince(decodeStart) / count * 1000
+                result.generatedTokens.count,
+                result.buildSeconds / count * 1000,
+                result.waitSeconds / count * 1000,
+                result.decodeSeconds / count * 1000
             ))
         }
 
         return Q35BatchedDecodeResult(
-            generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            generatedTokens: result.generatedTokens,
+            decodeSeconds: result.decodeSeconds,
+            firstTokenSeconds: result.firstTokenSeconds
         )
     }
 
@@ -1286,6 +1234,9 @@ public actor Q35Generator: ChatGenerator {
                 }
                 row.generatedTokens.append(next)
                 row.repetitionHistory.append(next)
+                if row.firstTokenSeconds == nil {
+                    row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
+                }
                 if let progressHandler = row.progressHandler {
                     let piece = tokenizerAndTemplate.decode(token: next)
                     if !piece.isEmpty {
@@ -1306,6 +1257,9 @@ public actor Q35Generator: ChatGenerator {
                 }
                 row.generatedTokens.append(next)
                 row.repetitionHistory.append(next)
+                if row.firstTokenSeconds == nil {
+                    row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
+                }
                 if let progressHandler = row.progressHandler {
                     let piece = tokenizerAndTemplate.decode(token: next)
                     if !piece.isEmpty {

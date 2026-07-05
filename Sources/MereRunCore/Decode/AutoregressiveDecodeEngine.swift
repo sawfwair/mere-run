@@ -33,6 +33,29 @@ public struct AutoregressiveDecodeRequest {
 public struct AutoregressiveDecodeResult {
     public let generatedTokens: [Int]
     public let decodeSeconds: Double
+    /// Seconds from decode start to the first confirmed token (time to
+    /// first token, excluding prefill). Nil when nothing was generated.
+    public let firstTokenSeconds: Double?
+    /// Host time spent building/scheduling each step's graph (sample +
+    /// forward + asyncEval). With the wait time, callers can emit the same
+    /// build/wait decode-trace lines the hand-rolled loops printed.
+    public let buildSeconds: Double
+    /// Host time spent blocked on step confirmation readbacks.
+    public let waitSeconds: Double
+
+    public init(
+        generatedTokens: [Int],
+        decodeSeconds: Double,
+        firstTokenSeconds: Double? = nil,
+        buildSeconds: Double = 0,
+        waitSeconds: Double = 0
+    ) {
+        self.generatedTokens = generatedTokens
+        self.decodeSeconds = decodeSeconds
+        self.firstTokenSeconds = firstTokenSeconds
+        self.buildSeconds = buildSeconds
+        self.waitSeconds = waitSeconds
+    }
 }
 
 /// The platform's one serial decode loop. Every autoregressive engine that
@@ -65,6 +88,7 @@ public enum AutoregressiveDecodeEngine {
         let start = Date()
         var generated: [Int] = []
         generated.reserveCapacity(request.tokenBudget)
+        var firstTokenSeconds: Double?
         var repetitionHistory = repetitionHistoryArray(
             promptTokens: request.historySeedTokens,
             config: request.generationConfig
@@ -77,6 +101,9 @@ public enum AutoregressiveDecodeEngine {
                 return false
             }
             generated.append(token)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(start)
+            }
             if let decodeToken, let emitPiece {
                 let piece = decodeToken(token)
                 if !piece.isEmpty {
@@ -93,10 +120,13 @@ public enum AutoregressiveDecodeEngine {
 
         var logits = request.initialLogits
         var pending: MLXArray?
+        var buildSeconds = 0.0
+        var waitSeconds = 0.0
 
         while generated.count < request.tokenBudget {
             try checkCancellation?()
 
+            let buildStart = CFAbsoluteTimeGetCurrent()
             let tokenArray = sampledTokenArray(
                 logits: logits[0, -1, 0...],
                 config: request.generationConfig,
@@ -110,13 +140,20 @@ public enum AutoregressiveDecodeEngine {
             )
             logits = try stepForward(tokenArray.asType(.int32).reshaped(1, 1))
             asyncEval([logits, tokenArray])
+            let buildEnd = CFAbsoluteTimeGetCurrent()
+            buildSeconds += buildEnd - buildStart
 
             if let previous = pending {
                 pending = nil
-                guard confirm(previous) else {
+                let confirmed = confirm(previous)
+                waitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
+                guard confirmed else {
                     return AutoregressiveDecodeResult(
                         generatedTokens: generated,
-                        decodeSeconds: Date().timeIntervalSince(start)
+                        decodeSeconds: Date().timeIntervalSince(start),
+                        firstTokenSeconds: firstTokenSeconds,
+                        buildSeconds: buildSeconds,
+                        waitSeconds: waitSeconds
                     )
                 }
             }
@@ -129,7 +166,10 @@ public enum AutoregressiveDecodeEngine {
 
         return AutoregressiveDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(start)
+            decodeSeconds: Date().timeIntervalSince(start),
+            firstTokenSeconds: firstTokenSeconds,
+            buildSeconds: buildSeconds,
+            waitSeconds: waitSeconds
         )
     }
 }

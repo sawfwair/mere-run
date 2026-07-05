@@ -53,6 +53,16 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
             stepForward: scriptedModel([7, 2, 9, eos])
         )
         XCTAssertEqual(result.generatedTokens, [3, 7, 2, 9])
+        let firstToken = try XCTUnwrap(result.firstTokenSeconds)
+        XCTAssertLessThanOrEqual(firstToken, result.decodeSeconds)
+    }
+
+    func testImmediateEOSReportsNoFirstToken() throws {
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: eos, budget: 8),
+            stepForward: scriptedModel([1, 2, 3])
+        )
+        XCTAssertNil(result.firstTokenSeconds)
     }
 
     func testBudgetCutsGenerationExactly() throws {
