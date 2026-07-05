@@ -7,6 +7,7 @@
 - [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
 - [Configuration](./configuration.md)
+- [Quality Gate](./gate.md)
 - [Model Sources](./model-sources.md)
 - [Repository Tour](./repository-tour.md)
 - [Development Workflow](./development-workflow.md)
