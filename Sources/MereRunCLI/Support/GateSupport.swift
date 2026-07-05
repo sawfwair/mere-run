@@ -1,6 +1,10 @@
 import Crypto
 import Foundation
 
+#if canImport(Darwin)
+import Darwin
+#endif
+
 #if canImport(CoreGraphics)
 import CoreGraphics
 import CoreText
@@ -369,11 +373,18 @@ struct GateRunner: Sendable {
     }
 
     static func hardwareModel() -> String {
+        #if canImport(Darwin)
         var size = 0
         sysctlbyname("hw.model", nil, &size, nil, 0)
         var value = [CChar](repeating: 0, count: size)
         sysctlbyname("hw.model", &value, &size, nil, 0)
-        return String(cString: value)
+        let bytes = value.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: UTF8.self)
+        #elseif os(Linux)
+        return "Linux"
+        #else
+        return "Unknown"
+        #endif
     }
 
     /// Hashes only the embedding vectors from a /v1/embeddings-shaped JSON
