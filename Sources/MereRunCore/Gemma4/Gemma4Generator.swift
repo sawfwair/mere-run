@@ -103,6 +103,64 @@ private final class Gemma4BatchedDecodeRow: @unchecked Sendable {
 }
 
 public actor Gemma4Generator: ChatGenerator {
+    /// Draft-model-free speculation for greedy decode when no MTP assistant
+    /// is loaded: drafts are the continuation of the most recent earlier
+    /// occurrence of the current token suffix in the context. Opt-in via
+    /// MERERUN_GEMMA4_PROMPT_LOOKUP=1 because eligible requests leave the
+    /// pipelined loop for the serial one — a large win when generation echoes
+    /// the context (quoted documents, code edits, tool loops), a small tax
+    /// when nothing repeats.
+    private static let promptLookupSpeculationEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_PROMPT_LOOKUP"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw == "1" || raw == "true" || raw == "on"
+    }()
+
+    /// Draft length for prompt-lookup speculation
+    /// (MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK, default 8). Lookup drafts cost
+    /// nothing to produce, so they run longer than assistant-model blocks.
+    private static let promptLookupBlockSize: Int = {
+        if let raw = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK"],
+           let value = Int(raw), value >= 1, value <= 64 {
+            return value
+        }
+        return 8
+    }()
+
+    /// Finds the most recent earlier occurrence of the context's trailing
+    /// 3-gram (falling back to 2-gram) and proposes the tokens that followed
+    /// it. Host-side scan over Ints — microseconds at chat context lengths.
+    static func promptLookupDraft(
+        context: [Int],
+        blockSize: Int,
+        maxMatchLength: Int = 3,
+        minMatchLength: Int = 2
+    ) -> [Int] {
+        guard blockSize >= 1, context.count >= minMatchLength + 2 else { return [] }
+        for matchLength in stride(from: maxMatchLength, through: minMatchLength, by: -1) {
+            guard context.count > matchLength else { continue }
+            let suffixStart = context.count - matchLength
+            var start = suffixStart - 1
+            while start >= 0 {
+                var matched = true
+                for offset in 0..<matchLength where context[start + offset] != context[suffixStart + offset] {
+                    matched = false
+                    break
+                }
+                if matched {
+                    let followStart = start + matchLength
+                    let followEnd = min(followStart + blockSize, context.count)
+                    if followStart < followEnd {
+                        return Array(context[followStart..<followEnd])
+                    }
+                    return []
+                }
+                start -= 1
+            }
+        }
+        return []
+    }
+
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
@@ -816,6 +874,7 @@ public actor Gemma4Generator: ChatGenerator {
         var mtpStats = mtpStatsTemplate
         var firstTokenSeconds: Double?
         var pendingSampledToken: Int?
+        var promptLookupMisses = 0
         var jsonScanner = JSONPrefixScanner()
         let decodeStart = Date()
         let traceEnabled = Gemma4DecodeTrace.enabled
@@ -878,8 +937,9 @@ public actor Gemma4Generator: ChatGenerator {
                 break
             }
 
+            var draftTokens: [Int] = []
+            var speculationBaseCaches: [Gemma4AttentionCache]?
             if let mtpModel, let hidden = previousHidden, !jsonConstrained, !currentSharedKVStates.isEmpty {
-                let baseCaches = layerCaches
                 let blockSize = min(
                     mtpStats.blockSize,
                     max(2, tokenBudget - generated.count + 1)
@@ -901,12 +961,38 @@ public actor Gemma4Generator: ChatGenerator {
                     generationConfig: draftConfig,
                     repetitionHistory: repetitionHistory
                 )
-                if !draft.tokens.isEmpty {
+                draftTokens = draft.tokens
+                speculationBaseCaches = layerCaches
+            } else if mtpModel == nil,
+                      Self.promptLookupSpeculationEnabled,
+                      // Three straight zero-accept rounds mean the text repeats
+                      // n-grams without repeating continuations (common phrases
+                      // in fresh prose); stop paying for verify forwards.
+                      promptLookupMisses < 3,
+                      !jsonConstrained,
+                      generationConfig.temperature <= 0 {
+                // Draft-model-free speculation: if the tokens just generated
+                // echo an earlier stretch of the context (tool loops, quoted
+                // documents, code edits), propose the continuation of that
+                // earlier stretch and let the standard verify pass keep only
+                // exact matches. Free when nothing repeats — no match, no
+                // draft, no extra forward.
+                draftTokens = Self.promptLookupDraft(
+                    context: repetitionHistory,
+                    blockSize: Self.promptLookupBlockSize
+                )
+                if !draftTokens.isEmpty {
+                    speculationBaseCaches = layerCaches
+                    mtpStats.reason = "prompt-lookup speculation"
+                }
+            }
+            if let baseCaches = speculationBaseCaches, !draftTokens.isEmpty {
+                do {
                     mtpStats.rounds += 1
-                    mtpStats.draftedTokens += draft.tokens.count
+                    mtpStats.draftedTokens += draftTokens.count
                     let candidateCaches = forkLayerCaches(baseCaches)
-                    let candidateInput = MLXArray(([next] + draft.tokens).map(Int32.init))
-                        .reshaped(1, draft.tokens.count + 1)
+                    let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
+                        .reshaped(1, draftTokens.count + 1)
                     let candidate = model.forwardForSpeculation(
                         inputIds: candidateInput,
                         cache: candidateCaches
@@ -925,9 +1011,9 @@ public actor Gemma4Generator: ChatGenerator {
                         tokens: generationConfig.bannedTokens
                     )
                     var verifySampleArrays: [MLXArray] = []
-                    verifySampleArrays.reserveCapacity(draft.tokens.count + 1)
+                    verifySampleArrays.reserveCapacity(draftTokens.count + 1)
                     var prospectiveHistory = repetitionHistory
-                    for index in 0...draft.tokens.count {
+                    for index in 0...draftTokens.count {
                         verifySampleArrays.append(sampledTokenArray(
                             logits: candidate.logits[0, index, 0...],
                             config: generationConfig,
@@ -937,8 +1023,8 @@ public actor Gemma4Generator: ChatGenerator {
                             ),
                             banMask: verifyBanMask
                         ))
-                        if index < draft.tokens.count {
-                            prospectiveHistory.append(draft.tokens[index])
+                        if index < draftTokens.count {
+                            prospectiveHistory.append(draftTokens[index])
                         }
                     }
                     let stackedVerify = MLX.stacked(verifySampleArrays)
@@ -947,7 +1033,7 @@ public actor Gemma4Generator: ChatGenerator {
 
                     var accepted = 0
                     var replacement: Int?
-                    for (index, draftToken) in draft.tokens.enumerated() {
+                    for (index, draftToken) in draftTokens.enumerated() {
                         guard verifySamples[index] == draftToken else {
                             replacement = verifySamples[index]
                             mtpStats.rejectedTokens += 1
@@ -955,10 +1041,13 @@ public actor Gemma4Generator: ChatGenerator {
                         }
                         accepted += 1
                     }
+                    if mtpModel == nil {
+                        promptLookupMisses = accepted == 0 ? promptLookupMisses + 1 : 0
+                    }
 
-                    if accepted == draft.tokens.count {
+                    if accepted == draftTokens.count {
                         var hitEOS = false
-                        for token in draft.tokens {
+                        for token in draftTokens {
                             if eosSet.contains(token) {
                                 hitEOS = true
                                 break
@@ -982,14 +1071,14 @@ public actor Gemma4Generator: ChatGenerator {
                         }
                         // The bonus token was already sampled in the batched
                         // verify pass (last position, full-draft history).
-                        pendingSampledToken = verifySamples[draft.tokens.count]
+                        pendingSampledToken = verifySamples[draftTokens.count]
                         if let previousHidden {
                             MLX.eval(previousHidden)
                         }
                         continue
                     }
 
-                    let acceptedPrefix = Array(draft.tokens.prefix(accepted))
+                    let acceptedPrefix = Array(draftTokens.prefix(accepted))
                     var hitEOS = false
                     for token in acceptedPrefix {
                         if eosSet.contains(token) {
@@ -1090,7 +1179,15 @@ public actor Gemma4Generator: ChatGenerator {
         // the CPU before the next forward; everything else can pipeline, sampling
         // included — the token stays on the GPU and only the previous step's
         // readback blocks.
-        mtpModel == nil && !jsonConstrained
+        if mtpModel != nil || jsonConstrained {
+            return false
+        }
+        // Prompt-lookup speculation also needs each confirmed token host-side
+        // to scan for n-gram matches, so eligible requests take the serial loop.
+        if Self.promptLookupSpeculationEnabled, config.temperature <= 0 {
+            return false
+        }
+        return true
     }
 
     private func decodeTokensPipelined(

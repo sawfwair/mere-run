@@ -113,6 +113,26 @@ maximize the match rate. Off by default: with the current assistant the
 acceptance economics measured below the pipelined sampled decode path at long
 context.
 
+### `MERERUN_GEMMA4_PROMPT_LOOKUP`
+
+Opt-in (`1`, `true`, or `on`) draft-model-free speculation for Gemma 4 12B
+greedy (temperature 0) requests when no MTP assistant is active. Drafts are
+the continuation of the most recent earlier occurrence of the trailing token
+3-gram (2-gram fallback) in the context, verified exactly like MTP drafts, so
+outputs are token-identical to plain greedy decode. A large win when
+generation echoes the context — quoted documents, retrieval answers, code
+edits, tool loops (measured 2.2× on an echo workload) — but eligible requests
+leave the pipelined decode loop for the serial one, which costs roughly 15%
+when nothing repeats; three consecutive zero-accept rounds stop further
+lookups for the request. MTP takes precedence when its assistant is active;
+JSON-constrained requests never use lookup.
+
+### `MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK`
+
+Draft length for prompt-lookup speculation (default `8`, range 1–64). Lookup
+drafts cost nothing to produce, so they run longer than assistant-model draft
+blocks.
+
 ### `MERERUN_Q35_FUSED_SWITCH_GLU`
 
 Qwen-family MoE blocks stack the gate and up expert weights so each
