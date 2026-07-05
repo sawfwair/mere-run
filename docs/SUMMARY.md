@@ -27,3 +27,4 @@
   - [CLI and Runtime Internals](./internals/cli-and-runtime.md)
   - [Structured Runs, Preflights, and Declarative Actions](./internals/structured-runs-preflight-actions.md)
   - [Source Layout Reference](./internals/source-layout.md)
+  - [DiT Forward-Pass Performance](./internals/dit-performance.md)
