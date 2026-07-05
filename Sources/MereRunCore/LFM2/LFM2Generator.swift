@@ -27,14 +27,16 @@ public actor LFM2Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
-    /// Opt-in (MERERUN_LFM2_PREFIX_KV_CACHE=1) in-memory prompt-prefix reuse,
-    /// mirroring the Qwen-family implementation: forked layer caches (both
-    /// attention KV and conv states support forking) are stored at prefill
-    /// chunk boundaries and the longest matching token prefix seeds the next
-    /// request. Chunk-boundary checkpoints only for now — the Gemma4-style
-    /// semantic chat-template checkpoints are not yet derived for LFM2.
-    private static let prefixKVCacheEnabled: Bool =
-        ProcessInfo.processInfo.environment["MERERUN_LFM2_PREFIX_KV_CACHE"] == "1"
+    /// In-memory prompt-prefix reuse, mirroring the Qwen-family
+    /// implementation: forked layer caches (both attention KV and conv states
+    /// support forking) are stored at prefill chunk boundaries and the
+    /// longest matching token prefix seeds the next request. Chunk-boundary
+    /// checkpoints only for now — the Gemma4-style semantic chat-template
+    /// checkpoints are not yet derived for LFM2. The serve pool passes
+    /// default-on (MERERUN_LFM2_PREFIX_KV_CACHE=0 opts out, matching the
+    /// Gemma4/Q35 pattern); one-shot CLI processes keep it off since a
+    /// prefix cache cannot outlive the process.
+    private let prefixKVCacheEnabled: Bool
 
     private var prefixKVCache: [LFM2PrefixKVCacheKey: LFM2PrefixKVCacheEntry] = [:]
     private var prefixKVCacheHits = 0
@@ -49,8 +51,13 @@ public actor LFM2Generator: ChatGenerator {
 
     private let modelId: String
 
-    public init(modelId: String = LFM2Resources.defaultModelId) {
+    public init(
+        modelId: String = LFM2Resources.defaultModelId,
+        prefixKVCacheEnabled: Bool =
+            ProcessInfo.processInfo.environment["MERERUN_LFM2_PREFIX_KV_CACHE"] == "1"
+    ) {
         self.modelId = modelId
+        self.prefixKVCacheEnabled = prefixKVCacheEnabled
     }
 
     public func chat(
@@ -368,7 +375,7 @@ public actor LFM2Generator: ChatGenerator {
 
     public func prefixKVCacheStats() -> PrefixKVCacheStats {
         PrefixKVCacheStats(
-            enabled: Self.prefixKVCacheEnabled,
+            enabled: prefixKVCacheEnabled,
             entries: prefixKVCache.count,
             maxEntries: Self.prefixKVCacheMaxEntries,
             hits: prefixKVCacheHits,
@@ -383,7 +390,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String?,
         promptTokens: [Int]
     ) -> (tokenCount: Int, caches: [LFM2LayerCache?], logits: MLXArray)? {
-        guard Self.prefixKVCacheEnabled, let modelPath else { return nil }
+        guard prefixKVCacheEnabled, let modelPath else { return nil }
         let matchingKey = prefixKVCache.keys
             .filter { key in
                 key.modelPath == modelPath
@@ -415,7 +422,7 @@ public actor LFM2Generator: ChatGenerator {
         cache: [LFM2LayerCache?],
         logits: MLXArray
     ) {
-        guard Self.prefixKVCacheEnabled, tokenCount > 0 else { return }
+        guard prefixKVCacheEnabled, tokenCount > 0 else { return }
         let key = LFM2PrefixKVCacheKey(
             modelPath: modelPath,
             tokens: Array(promptTokens.prefix(tokenCount))

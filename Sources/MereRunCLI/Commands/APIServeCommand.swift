@@ -1605,11 +1605,22 @@ actor CodeGenServer {
         self.fallbackLoraPath = fallbackLoraPath
         self.defaultModelID = defaultModelID
         self.requestLimiter = APIRateLimiter(limitPerMinute: rateLimitPerMinute)
+        // Continuous batching follows the request-concurrency setting: any
+        // --max-active-requests above 1 enables it for the engines that
+        // support it, with the per-engine env switches as explicit overrides.
+        // (The previous double-gate — env AND flag — shipped a serve that
+        // silently never batched: /runtime/status showed batchedDecodeSteps=0
+        // under concurrent load until the env was discovered.)
+        let batchingDefault = maxActiveRequests > 1
         let runtimePool = RuntimeModelPool(
             defaultModelID: defaultModelID,
             defaultEngine: engine.runtimeServingEngine,
             startupModelPath: modelPath,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
+            gemma4ContinuousBatchingEnabled:
+                runtimeOptionalEnvironmentFlag("MERERUN_GEMMA4_CONTINUOUS_BATCHING") ?? batchingDefault,
+            q35ContinuousBatchingEnabled:
+                runtimeOptionalEnvironmentFlag("MERERUN_Q35_CONTINUOUS_BATCHING") ?? batchingDefault,
             memoryPressurePolicy: memoryPressurePolicy
         )
         self.pool = runtimePool
