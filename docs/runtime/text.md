@@ -59,10 +59,12 @@ companion as `text-chat-gemma4-12b-mtp`; when it is present, greedy serial
 decode can use native MTP on the decode tail after text or multimodal prefill.
 Sampled requests, prefix-KV seeded requests, continuous batching, raw local
 model paths, and prompts below the MTP threshold fall back to baseline decode.
-When no assistant is active, `MERERUN_GEMMA4_PROMPT_LOOKUP=1` enables
-draft-model-free speculation for greedy requests that drafts from repeated
-context n-grams — output-identical, and worth ~2× when generation echoes the
-prompt (see [Configuration](../configuration.md#mererun_gemma4_prompt_lookup)).
+When no assistant is active, greedy requests use draft-model-free
+prompt-lookup speculation by default: repeated context n-grams are drafted
+and verified in bursts inside the pipelined loop — output-identical, free on
+non-repetitive text, and worth ~2× when generation echoes the prompt
+(`MERERUN_GEMMA4_PROMPT_LOOKUP=0` disables; see
+[Configuration](../configuration.md#mererun_gemma4_prompt_lookup)).
 Use these chat winners by RAM band instead of treating every supported model as
 equally recommended:
 

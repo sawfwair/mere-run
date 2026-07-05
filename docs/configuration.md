@@ -129,16 +129,18 @@ context.
 
 ### `MERERUN_GEMMA4_PROMPT_LOOKUP`
 
-Opt-in (`1`, `true`, or `on`) draft-model-free speculation for Gemma 4 12B
-greedy (temperature 0) requests when no MTP assistant is active. Drafts are
-the continuation of the most recent earlier occurrence of the trailing token
-3-gram (2-gram fallback) in the context, verified exactly like MTP drafts, so
-outputs are token-identical to plain greedy decode. A large win when
-generation echoes the context — quoted documents, retrieval answers, code
-edits, tool loops (measured 2.2× on an echo workload) — but eligible requests
-leave the pipelined decode loop for the serial one, which costs roughly 15%
-when nothing repeats; three consecutive zero-accept rounds stop further
-lookups for the request. MTP takes precedence when its assistant is active;
+Draft-model-free speculation for Gemma 4 12B greedy (temperature 0)
+requests when no MTP assistant is active. Enabled by default; set to `0`,
+`false`, or `off` to disable. When the trailing token 3-gram (2-gram
+fallback) of the generated context recurs earlier in the context, the
+pipelined decode loop runs a burst: the continuation of that earlier
+occurrence is drafted and verified in one batched forward, exactly like an
+MTP draft, so outputs are token-identical to plain greedy decode. A
+no-match token costs one host-side scan and no GPU work — decode speed on
+non-repetitive text is unchanged — while echo-heavy generation (quoted
+documents, retrieval answers, code edits, tool loops) measured 1.9× on an
+echo workload. Three consecutive zero-accept rounds stop further lookups
+for the request. MTP takes precedence when its assistant is active;
 JSON-constrained requests never use lookup.
 
 ### `MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK`
