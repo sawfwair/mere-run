@@ -33,6 +33,19 @@ public struct AutoregressiveDecodeRequest {
 public struct AutoregressiveDecodeResult {
     public let generatedTokens: [Int]
     public let decodeSeconds: Double
+    /// Seconds from decode start to the first confirmed token (time to
+    /// first token, excluding prefill). Nil when nothing was generated.
+    public let firstTokenSeconds: Double?
+
+    public init(
+        generatedTokens: [Int],
+        decodeSeconds: Double,
+        firstTokenSeconds: Double? = nil
+    ) {
+        self.generatedTokens = generatedTokens
+        self.decodeSeconds = decodeSeconds
+        self.firstTokenSeconds = firstTokenSeconds
+    }
 }
 
 /// The platform's one serial decode loop. Every autoregressive engine that
@@ -65,6 +78,7 @@ public enum AutoregressiveDecodeEngine {
         let start = Date()
         var generated: [Int] = []
         generated.reserveCapacity(request.tokenBudget)
+        var firstTokenSeconds: Double?
         var repetitionHistory = repetitionHistoryArray(
             promptTokens: request.historySeedTokens,
             config: request.generationConfig
@@ -77,6 +91,9 @@ public enum AutoregressiveDecodeEngine {
                 return false
             }
             generated.append(token)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(start)
+            }
             if let decodeToken, let emitPiece {
                 let piece = decodeToken(token)
                 if !piece.isEmpty {
@@ -116,7 +133,8 @@ public enum AutoregressiveDecodeEngine {
                 guard confirm(previous) else {
                     return AutoregressiveDecodeResult(
                         generatedTokens: generated,
-                        decodeSeconds: Date().timeIntervalSince(start)
+                        decodeSeconds: Date().timeIntervalSince(start),
+                        firstTokenSeconds: firstTokenSeconds
                     )
                 }
             }
@@ -129,7 +147,8 @@ public enum AutoregressiveDecodeEngine {
 
         return AutoregressiveDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(start)
+            decodeSeconds: Date().timeIntervalSince(start),
+            firstTokenSeconds: firstTokenSeconds
         )
     }
 }

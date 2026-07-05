@@ -9,6 +9,7 @@ private struct LFM2PrefillOutput {
 private struct LFM2DecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
+    var firstTokenSeconds: Double? = nil
 }
 
 private struct LFM2PrefixKVCacheKey: Hashable {
@@ -251,7 +252,8 @@ public actor LFM2Generator: ChatGenerator {
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
-                decodeSeconds: decodeResult.decodeSeconds
+                decodeSeconds: decodeResult.decodeSeconds,
+                firstTokenSeconds: decodeResult.firstTokenSeconds
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count
@@ -293,7 +295,8 @@ public actor LFM2Generator: ChatGenerator {
         )
         return LFM2DecodeResult(
             generatedTokens: result.generatedTokens,
-            decodeSeconds: result.decodeSeconds
+            decodeSeconds: result.decodeSeconds,
+            firstTokenSeconds: result.firstTokenSeconds
         )
     }
 

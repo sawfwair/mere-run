@@ -353,6 +353,9 @@ struct TextChat: AsyncParsableCommand {
                     if let prefillTps = timing.prefillTokensPerSecond {
                         line += String(format: " prefill_tps=%.2f", prefillTps)
                     }
+                    if let firstToken = timing.firstTokenSeconds {
+                        line += String(format: " first_token_s=%.3f", firstToken)
+                    }
                     CLIStderr.write("\(line)\n")
                     if let mtp = lastGemma4MTPStats {
                         CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")

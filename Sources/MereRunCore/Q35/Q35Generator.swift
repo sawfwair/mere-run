@@ -25,6 +25,7 @@ private struct Q35PrefillOutput {
 private struct Q35BatchedDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
+    var firstTokenSeconds: Double? = nil
 }
 
 private struct Q35VisionReplacement {
@@ -56,6 +57,7 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
     /// lazily from `repetitionHistory` and appended without host readbacks.
     var repetitionHistoryGPU: MLXArray?
     var repetitionHistoryGPUSeeded = false
+    var firstTokenSeconds: Double?
     var stopped = false
 
     init(
@@ -95,7 +97,8 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
         continuation.resume(
             returning: Q35BatchedDecodeResult(
                 generatedTokens: generatedTokens,
-                decodeSeconds: Date().timeIntervalSince(decodeStart)
+                decodeSeconds: Date().timeIntervalSince(decodeStart),
+                firstTokenSeconds: firstTokenSeconds
             )
         )
     }
@@ -585,7 +588,8 @@ public actor Q35Generator: ChatGenerator {
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
-                decodeSeconds: decodeResult.decodeSeconds
+                decodeSeconds: decodeResult.decodeSeconds,
+                firstTokenSeconds: decodeResult.firstTokenSeconds
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
@@ -745,11 +749,15 @@ public actor Q35Generator: ChatGenerator {
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
         var pendingProgressWhitespace = ""
+        var firstTokenSeconds: Double?
         let decodeStart = Date()
 
         func emit(_ token: Int) {
             generated.append(token)
             repetitionHistory.append(token)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(decodeStart)
+            }
             guard let progressHandler else { return }
             let piece = tokenizerAndTemplate.decode(token: token)
             guard !piece.isEmpty else { return }
@@ -965,7 +973,8 @@ public actor Q35Generator: ChatGenerator {
 
         return Q35BatchedDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            decodeSeconds: Date().timeIntervalSince(decodeStart),
+            firstTokenSeconds: firstTokenSeconds
         )
     }
 
@@ -1002,6 +1011,7 @@ public actor Q35Generator: ChatGenerator {
         var generated: [Int] = []
         generated.reserveCapacity(tokenBudget)
         var pendingProgressWhitespace = ""
+        var firstTokenSeconds: Double?
         let decodeStart = Date()
         let traceEnabled = Gemma4DecodeTrace.enabled
         var traceBuildSeconds = 0.0
@@ -1009,6 +1019,9 @@ public actor Q35Generator: ChatGenerator {
 
         func emit(_ token: Int) {
             generated.append(token)
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(decodeStart)
+            }
             guard let progressHandler else { return }
             let piece = tokenizerAndTemplate.decode(token: token)
             guard !piece.isEmpty else { return }
@@ -1088,7 +1101,8 @@ public actor Q35Generator: ChatGenerator {
 
         return Q35BatchedDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            decodeSeconds: Date().timeIntervalSince(decodeStart),
+            firstTokenSeconds: firstTokenSeconds
         )
     }
 
@@ -1286,6 +1300,9 @@ public actor Q35Generator: ChatGenerator {
                 }
                 row.generatedTokens.append(next)
                 row.repetitionHistory.append(next)
+                if row.firstTokenSeconds == nil {
+                    row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
+                }
                 if let progressHandler = row.progressHandler {
                     let piece = tokenizerAndTemplate.decode(token: next)
                     if !piece.isEmpty {
@@ -1306,6 +1323,9 @@ public actor Q35Generator: ChatGenerator {
                 }
                 row.generatedTokens.append(next)
                 row.repetitionHistory.append(next)
+                if row.firstTokenSeconds == nil {
+                    row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
+                }
                 if let progressHandler = row.progressHandler {
                     let piece = tokenizerAndTemplate.decode(token: next)
                     if !piece.isEmpty {
