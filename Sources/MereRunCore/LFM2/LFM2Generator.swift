@@ -273,52 +273,27 @@ public actor LFM2Generator: ChatGenerator {
             return LFM2DecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
 
-        var logits = initialLogits
-        var generated: [Int] = []
-        generated.reserveCapacity(tokenBudget)
-        var repetitionHistory = promptTokens
-        var pendingProgressWhitespace = ""
-        let decodeStart = Date()
-
-        func emit(_ token: Int) {
-            generated.append(token)
-            repetitionHistory.append(token)
-            let piece = tokenizerAndTemplate.decode(token: token)
-            guard !piece.isEmpty else { return }
-            if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                pendingProgressWhitespace += piece
-                return
-            }
-            let visiblePiece = pendingProgressWhitespace.isEmpty
-                ? piece
-                : pendingProgressWhitespace + piece
-            pendingProgressWhitespace = ""
-            progressHandler?(ChatProgress(stage: .generating, message: visiblePiece))
-        }
-
-        while generated.count < tokenBudget {
-            try Task.checkCancellation()
-            let next = sampleToken(
-                logits: logits[0, -1, 0...],
-                config: generationConfig,
-                previousTokens: repetitionHistory
-            )
-            if eosSet.contains(next) {
-                break
-            }
-            emit(next)
-
-            guard generated.count < tokenBudget else {
-                break
-            }
-            let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            logits = model(nextInput, cache: layerCaches)
-            MLX.eval(logits)
-        }
-
+        // Shared pipelined decode: GPU-side sampling with an on-GPU
+        // repetition window and a depth-1 lagged readback. The previous
+        // loop sampled on the host and blocked on eval twice per token.
+        let result = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: initialLogits,
+                generationConfig: generationConfig,
+                eosTokens: eosSet,
+                tokenBudget: tokenBudget,
+                historySeedTokens: promptTokens
+            ),
+            stepForward: { token in model(token, cache: layerCaches) },
+            decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+            emitPiece: { _, piece in
+                progressHandler?(ChatProgress(stage: .generating, message: piece))
+            },
+            checkCancellation: { try Task.checkCancellation() }
+        )
         return LFM2DecodeResult(
-            generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            generatedTokens: result.generatedTokens,
+            decodeSeconds: result.decodeSeconds
         )
     }
 
