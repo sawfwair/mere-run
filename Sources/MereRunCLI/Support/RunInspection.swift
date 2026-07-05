@@ -1104,16 +1104,22 @@ struct RunListAnalyzer {
         let runDirectory = envelope.result.runDirectory
         let report = envelope.result.report
         let plan = envelope.result.plan
-        let createdAt = runDirectory?.manifest?.createdAt ??
-            runDirectory?.legacyManifest?.createdAt ??
-            report?.createdAt ??
-            plan?.createdAt
-        let updatedAt = runDirectory?.events.latest?.createdAt ??
-            runDirectory?.legacyManifest?.updatedAt ??
-            runDirectory?.legacyManifest?.createdAt ??
-            runDirectory?.manifest?.createdAt ??
-            report?.createdAt ??
-            plan?.createdAt
+        let manifestCreatedAt = runDirectory?.manifest?.createdAt
+        let legacyCreatedAt = runDirectory?.legacyManifest?.createdAt
+        let reportCreatedAt = report?.createdAt
+        let planCreatedAt = plan?.createdAt
+        let eventCreatedAt = runDirectory?.events.latest?.createdAt
+        let legacyUpdatedAt = runDirectory?.legacyManifest?.updatedAt
+        let createdAt = manifestCreatedAt ??
+            legacyCreatedAt ??
+            reportCreatedAt ??
+            planCreatedAt
+        let updatedAt = eventCreatedAt ??
+            legacyUpdatedAt ??
+            legacyCreatedAt ??
+            manifestCreatedAt ??
+            reportCreatedAt ??
+            planCreatedAt
         return RunListEntry(
             id: Self.entryID(for: relativePath, kind: envelope.result.kind),
             kind: envelope.result.kind,
