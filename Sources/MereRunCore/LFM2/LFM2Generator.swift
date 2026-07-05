@@ -27,14 +27,16 @@ public actor LFM2Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
-    /// Opt-in (MERERUN_LFM2_PREFIX_KV_CACHE=1) in-memory prompt-prefix reuse,
-    /// mirroring the Qwen-family implementation: forked layer caches (both
-    /// attention KV and conv states support forking) are stored at prefill
-    /// chunk boundaries and the longest matching token prefix seeds the next
-    /// request. Chunk-boundary checkpoints only for now — the Gemma4-style
-    /// semantic chat-template checkpoints are not yet derived for LFM2.
-    private static let prefixKVCacheEnabled: Bool =
-        ProcessInfo.processInfo.environment["MERERUN_LFM2_PREFIX_KV_CACHE"] == "1"
+    /// In-memory prompt-prefix reuse, mirroring the Qwen-family
+    /// implementation: forked layer caches (both attention KV and conv states
+    /// support forking) are stored at prefill chunk boundaries and the
+    /// longest matching token prefix seeds the next request. Chunk-boundary
+    /// checkpoints only for now — the Gemma4-style semantic chat-template
+    /// checkpoints are not yet derived for LFM2. The serve pool passes
+    /// default-on (MERERUN_LFM2_PREFIX_KV_CACHE=0 opts out, matching the
+    /// Gemma4/Q35 pattern); one-shot CLI processes keep it off since a
+    /// prefix cache cannot outlive the process.
+    private let prefixKVCacheEnabled: Bool
 
     private var prefixKVCache: [LFM2PrefixKVCacheKey: LFM2PrefixKVCacheEntry] = [:]
     private var prefixKVCacheHits = 0
@@ -49,8 +51,13 @@ public actor LFM2Generator: ChatGenerator {
 
     private let modelId: String
 
-    public init(modelId: String = LFM2Resources.defaultModelId) {
+    public init(
+        modelId: String = LFM2Resources.defaultModelId,
+        prefixKVCacheEnabled: Bool =
+            ProcessInfo.processInfo.environment["MERERUN_LFM2_PREFIX_KV_CACHE"] == "1"
+    ) {
         self.modelId = modelId
+        self.prefixKVCacheEnabled = prefixKVCacheEnabled
     }
 
     public func chat(
@@ -266,52 +273,27 @@ public actor LFM2Generator: ChatGenerator {
             return LFM2DecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
 
-        var logits = initialLogits
-        var generated: [Int] = []
-        generated.reserveCapacity(tokenBudget)
-        var repetitionHistory = promptTokens
-        var pendingProgressWhitespace = ""
-        let decodeStart = Date()
-
-        func emit(_ token: Int) {
-            generated.append(token)
-            repetitionHistory.append(token)
-            let piece = tokenizerAndTemplate.decode(token: token)
-            guard !piece.isEmpty else { return }
-            if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                pendingProgressWhitespace += piece
-                return
-            }
-            let visiblePiece = pendingProgressWhitespace.isEmpty
-                ? piece
-                : pendingProgressWhitespace + piece
-            pendingProgressWhitespace = ""
-            progressHandler?(ChatProgress(stage: .generating, message: visiblePiece))
-        }
-
-        while generated.count < tokenBudget {
-            try Task.checkCancellation()
-            let next = sampleToken(
-                logits: logits[0, -1, 0...],
-                config: generationConfig,
-                previousTokens: repetitionHistory
-            )
-            if eosSet.contains(next) {
-                break
-            }
-            emit(next)
-
-            guard generated.count < tokenBudget else {
-                break
-            }
-            let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            logits = model(nextInput, cache: layerCaches)
-            MLX.eval(logits)
-        }
-
+        // Shared pipelined decode: GPU-side sampling with an on-GPU
+        // repetition window and a depth-1 lagged readback. The previous
+        // loop sampled on the host and blocked on eval twice per token.
+        let result = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: initialLogits,
+                generationConfig: generationConfig,
+                eosTokens: eosSet,
+                tokenBudget: tokenBudget,
+                historySeedTokens: promptTokens
+            ),
+            stepForward: { token in model(token, cache: layerCaches) },
+            decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+            emitPiece: { _, piece in
+                progressHandler?(ChatProgress(stage: .generating, message: piece))
+            },
+            checkCancellation: { try Task.checkCancellation() }
+        )
         return LFM2DecodeResult(
-            generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart)
+            generatedTokens: result.generatedTokens,
+            decodeSeconds: result.decodeSeconds
         )
     }
 
@@ -368,7 +350,7 @@ public actor LFM2Generator: ChatGenerator {
 
     public func prefixKVCacheStats() -> PrefixKVCacheStats {
         PrefixKVCacheStats(
-            enabled: Self.prefixKVCacheEnabled,
+            enabled: prefixKVCacheEnabled,
             entries: prefixKVCache.count,
             maxEntries: Self.prefixKVCacheMaxEntries,
             hits: prefixKVCacheHits,
@@ -383,7 +365,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String?,
         promptTokens: [Int]
     ) -> (tokenCount: Int, caches: [LFM2LayerCache?], logits: MLXArray)? {
-        guard Self.prefixKVCacheEnabled, let modelPath else { return nil }
+        guard prefixKVCacheEnabled, let modelPath else { return nil }
         let matchingKey = prefixKVCache.keys
             .filter { key in
                 key.modelPath == modelPath
@@ -415,7 +397,7 @@ public actor LFM2Generator: ChatGenerator {
         cache: [LFM2LayerCache?],
         logits: MLXArray
     ) {
-        guard Self.prefixKVCacheEnabled, tokenCount > 0 else { return }
+        guard prefixKVCacheEnabled, tokenCount > 0 else { return }
         let key = LFM2PrefixKVCacheKey(
             modelPath: modelPath,
             tokens: Array(promptTokens.prefix(tokenCount))

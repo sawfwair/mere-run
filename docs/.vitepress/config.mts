@@ -48,6 +48,7 @@ export default defineConfig({
           { text: 'CLI Reference', link: '/cli' },
           { text: 'Cookbooks', link: '/cookbooks' },
           { text: 'Configuration', link: '/configuration' },
+          { text: 'Quality Gate', link: '/gate' },
           { text: 'Model Sources', link: '/model-sources' }
         ]
       },

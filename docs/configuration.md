@@ -73,7 +73,9 @@ Continuous batching and SSD KV cache are not enabled by this flag.
 
 ### `MERERUN_LFM2_PREFIX_KV_CACHE`
 
-Opt-in (`1`): in-memory prompt-prefix reuse for the LFM2 chat runtime,
+In-memory prompt-prefix reuse for the LFM2 chat runtime, enabled by default
+in `mere.run api serve` (set `0`, `false`, or `off` to disable; one-shot CLI
+invocations keep it off since a prefix cache cannot outlive the process),
 mirroring the Qwen-family implementation. Forked layer caches (attention KV
 and short-conv states both support forking) are stored at prefill chunk
 boundaries and the longest matching token prefix seeds later requests, so a
@@ -82,6 +84,18 @@ checkpoints only — Gemma4-style semantic chat-template checkpoints are not
 yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
 Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
 end to end.
+
+### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`)
+
+Decode batching for concurrent requests engages automatically when
+`mere.run api serve` runs with `--max-active-requests` above 1 — the
+concurrency flag is the single switch. The per-engine environment variables
+remain as explicit overrides in both directions (`1` forces batching on even
+at concurrency 1, `0` forces the serial path). `/runtime/status` reports
+engagement under `decodeBatching` (`batchedDecodeSteps`, `maxBatchSize`);
+per-model stats include `recentDecodeTokensPerSecond`, a rolling last-10
+window that surfaces mid-flight throughput regressions lifetime averages
+hide.
 
 ### `MERERUN_GEMMA4_MTP`
 
@@ -112,6 +126,26 @@ sampled outputs remain true target-model samples; drafts run greedily to
 maximize the match rate. Off by default: with the current assistant the
 acceptance economics measured below the pipelined sampled decode path at long
 context.
+
+### `MERERUN_GEMMA4_PROMPT_LOOKUP`
+
+Opt-in (`1`, `true`, or `on`) draft-model-free speculation for Gemma 4 12B
+greedy (temperature 0) requests when no MTP assistant is active. Drafts are
+the continuation of the most recent earlier occurrence of the trailing token
+3-gram (2-gram fallback) in the context, verified exactly like MTP drafts, so
+outputs are token-identical to plain greedy decode. A large win when
+generation echoes the context — quoted documents, retrieval answers, code
+edits, tool loops (measured 2.2× on an echo workload) — but eligible requests
+leave the pipelined decode loop for the serial one, which costs roughly 15%
+when nothing repeats; three consecutive zero-accept rounds stop further
+lookups for the request. MTP takes precedence when its assistant is active;
+JSON-constrained requests never use lookup.
+
+### `MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK`
+
+Draft length for prompt-lookup speculation (default `8`, range 1–64). Lookup
+drafts cost nothing to produce, so they run longer than assistant-model draft
+blocks.
 
 ### `MERERUN_Q35_FUSED_SWITCH_GLU`
 

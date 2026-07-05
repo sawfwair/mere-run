@@ -65,16 +65,18 @@ final class Flux2PosEmbed: Module {
     /// - Returns: Rotated tensor
     static func applyRotaryEmb(_ x: MLXArray, freqs: (MLXArray, MLXArray)) -> MLXArray {
         let (freqsCos, freqsSin) = freqs
-        let outDtype = x.dtype
-        let xFloat = x.asType(.float32)
 
+        // Rotate in the tensor's own dtype: the sin/cos tables are computed in
+        // float32 upstream and only the multiply-adds happen here, so a full
+        // fp32 round trip of q/k (2.5x the kernel time at klein shapes) buys
+        // nothing the half-precision rotation doesn't already provide.
         // cos/sin: [seq, dim/2] → [1, 1, seq, dim/2]
-        let cosB = freqsCos.reshaped([1, 1, freqsCos.shape[0], freqsCos.shape[1]])
-        let sinB = freqsSin.reshaped([1, 1, freqsSin.shape[0], freqsSin.shape[1]])
+        let cosB = freqsCos.reshaped([1, 1, freqsCos.shape[0], freqsCos.shape[1]]).asType(x.dtype)
+        let sinB = freqsSin.reshaped([1, 1, freqsSin.shape[0], freqsSin.shape[1]]).asType(x.dtype)
 
         // x: [batch, heads, seq, dim] → [batch, heads, seq, dim/2, 2]
-        let xShape = xFloat.shape
-        let x2 = xFloat.reshaped([xShape[0], xShape[1], xShape[2], -1, 2])
+        let xShape = x.shape
+        let x2 = x.reshaped([xShape[0], xShape[1], xShape[2], -1, 2])
 
         // Complex-like rotation: (real, imag) * (cos, sin)
         let real = x2[0..., 0..., 0..., 0..., 0]  // [B, H, S, D/2]
@@ -87,9 +89,7 @@ final class Flux2PosEmbed: Module {
 
         // Stack and reshape back to [B, H, S, D]
         let out = MLX.stacked([outReal, outImag], axis: -1)
-        let result = out.reshaped(xShape)
-
-        return result.asType(outDtype)
+        return out.reshaped(xShape)
     }
 
     /// Prepare text position IDs (all zeros for 4 axes)

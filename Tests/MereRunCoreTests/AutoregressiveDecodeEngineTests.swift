@@ -1,0 +1,99 @@
+import Foundation
+import MLX
+import XCTest
+@testable import MereRunCore
+
+/// Contract tests for the shared pipelined decode loop, driven by a scripted
+/// fake model: one-hot logits make greedy sampling deterministic, so the
+/// engine's token stream, EOS handling, budget cutoff, and lag semantics are
+/// all directly assertable without a real model.
+final class AutoregressiveDecodeEngineTests: XCTestCase {
+    private let vocab = 16
+    private let eos = 15
+
+    override class func setUp() {
+        super.setUp()
+        MLXTestSupport.ensureMetalLibraryAvailable()
+    }
+
+    private func oneHotLogits(_ token: Int) -> MLXArray {
+        var values = [Float](repeating: -10, count: vocab)
+        values[token] = 10
+        return MLXArray(values).reshaped(1, 1, vocab)
+    }
+
+    /// Scripted model: emits the given tokens in order regardless of input,
+    /// then EOS forever.
+    private func scriptedModel(_ script: [Int]) -> (MLXArray) throws -> MLXArray {
+        var upcoming = script
+        return { _ in
+            let next = upcoming.isEmpty ? self.eos : upcoming.removeFirst()
+            return self.oneHotLogits(next)
+        }
+    }
+
+    private func request(firstToken: Int, budget: Int) -> AutoregressiveDecodeRequest {
+        AutoregressiveDecodeRequest(
+            initialLogits: oneHotLogits(firstToken),
+            generationConfig: GenerationConfig(
+                maxTokens: budget,
+                temperature: 0,
+                topP: 1.0,
+                repetitionPenalty: nil,
+                repetitionContextSize: 0
+            ),
+            eosTokens: [eos],
+            tokenBudget: budget
+        )
+    }
+
+    func testDecodesScriptedSequenceUntilEOS() throws {
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 32),
+            stepForward: scriptedModel([7, 2, 9, eos])
+        )
+        XCTAssertEqual(result.generatedTokens, [3, 7, 2, 9])
+    }
+
+    func testBudgetCutsGenerationExactly() throws {
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 2),
+            stepForward: scriptedModel([7, 2, 9, 4])
+        )
+        XCTAssertEqual(result.generatedTokens, [3, 7])
+    }
+
+    func testImmediateEOSProducesNothing() throws {
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: eos, budget: 8),
+            stepForward: scriptedModel([1, 2, 3])
+        )
+        XCTAssertEqual(result.generatedTokens, [])
+    }
+
+    func testZeroBudgetShortCircuits() throws {
+        var forwardCalls = 0
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 0),
+            stepForward: { _ in
+                forwardCalls += 1
+                return self.oneHotLogits(1)
+            }
+        )
+        XCTAssertEqual(result.generatedTokens, [])
+        XCTAssertEqual(forwardCalls, 0)
+    }
+
+    func testPieceEmissionBuffersWhitespace() throws {
+        var pieces: [String] = []
+        let names = [3: " ", 7: "\n", 2: "hello", 9: "world"]
+        _ = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 8),
+            stepForward: scriptedModel([7, 2, 9, eos]),
+            decodeToken: { names[$0] ?? "" },
+            emitPiece: { _, piece in pieces.append(piece) }
+        )
+        // Whitespace-only pieces buffer until visible text arrives.
+        XCTAssertEqual(pieces, [" \nhello", "world"])
+    }
+}
