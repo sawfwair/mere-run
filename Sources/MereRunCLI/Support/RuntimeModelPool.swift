@@ -4,6 +4,17 @@ import MereRunCore
 import Darwin
 #endif
 
+/// Tri-state environment flag: nil when unset, so callers can supply a
+/// context-dependent default (e.g. continuous batching following
+/// --max-active-requests).
+func runtimeOptionalEnvironmentFlag(_ key: String) -> Bool? {
+    guard let rawValue = ProcessInfo.processInfo.environment[key] else {
+        return nil
+    }
+    let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    return !["0", "false", "no", "off"].contains(normalized)
+}
+
 private func runtimeDefaultOnEnvironmentFlag(_ key: String) -> Bool {
     guard let rawValue = ProcessInfo.processInfo.environment[key] else {
         return true
@@ -56,7 +67,7 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
                 enabled: continuousBatchingEnabled,
                 detail: continuousBatchingEnabled
                     ? "Gemma4 and Qwen-family decode rows are packed when typed cache state is compatible; Qwen linear-only rows may batch across decode positions."
-                    : "Decode batching is available behind MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 and MERERUN_Q35_CONTINUOUS_BATCHING=1; set --max-active-requests above 1 to allow overlap."
+                    : "Decode batching engages automatically when --max-active-requests is above 1; MERERUN_GEMMA4_CONTINUOUS_BATCHING / MERERUN_Q35_CONTINUOUS_BATCHING override per engine."
             ),
             prefixKVReuse: RuntimeCapabilityStatus(
                 available: true,
@@ -131,6 +142,10 @@ struct RuntimeModelBenchmarkStats: Codable, Equatable, Sendable {
     let averageDecodeSeconds: Double?
     let averageTotalSeconds: Double?
     let decodeTokensPerSecond: Double?
+    /// Decode throughput over the most recent completions (rolling window of
+    /// 10) — lifetime averages hide mid-flight regressions on long-running
+    /// servers.
+    let recentDecodeTokensPerSecond: Double?
     let lastCompletedAt: Date?
 
     init(
@@ -140,6 +155,8 @@ struct RuntimeModelBenchmarkStats: Codable, Equatable, Sendable {
         totalLoadSeconds: Double,
         totalPrefillSeconds: Double,
         totalDecodeSeconds: Double,
+        recentDecodeTokens: Int = 0,
+        recentDecodeSeconds: Double = 0,
         lastCompletedAt: Date?
     ) {
         self.completedRequests = completedRequests
@@ -154,6 +171,9 @@ struct RuntimeModelBenchmarkStats: Codable, Equatable, Sendable {
         )
         self.decodeTokensPerSecond = totalDecodeSeconds > 0
             ? Double(generatedTokens) / totalDecodeSeconds
+            : nil
+        self.recentDecodeTokensPerSecond = recentDecodeSeconds > 0
+            ? Double(recentDecodeTokens) / recentDecodeSeconds
             : nil
         self.lastCompletedAt = lastCompletedAt
     }
@@ -694,6 +714,7 @@ actor RuntimeModelPool {
         var totalLoadSeconds: Double = 0
         var totalPrefillSeconds: Double = 0
         var totalDecodeSeconds: Double = 0
+        var recentDecodeSamples: [(tokens: Int, seconds: Double)] = []
         var lastCompletedAt: Date?
 
         var benchmarkStats: RuntimeModelBenchmarkStats {
@@ -704,6 +725,8 @@ actor RuntimeModelPool {
                 totalLoadSeconds: totalLoadSeconds,
                 totalPrefillSeconds: totalPrefillSeconds,
                 totalDecodeSeconds: totalDecodeSeconds,
+                recentDecodeTokens: recentDecodeSamples.reduce(0) { $0 + $1.tokens },
+                recentDecodeSeconds: recentDecodeSamples.reduce(0) { $0 + $1.seconds },
                 lastCompletedAt: lastCompletedAt
             )
         }
@@ -740,6 +763,7 @@ actor RuntimeModelPool {
     private let gemma4ContinuousBatchingEnabled: Bool
     private let q35PrefixKVCacheEnabled: Bool
     private let q35ContinuousBatchingEnabled: Bool
+    private let lfm2PrefixKVCacheEnabled: Bool
     private let currentDate: @Sendable () -> Date
     private let currentMemorySample: @Sendable () -> RuntimeMemorySample
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
@@ -757,6 +781,7 @@ actor RuntimeModelPool {
         gemma4ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_CONTINUOUS_BATCHING"] == "1",
         q35PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_Q35_PREFIX_KV_CACHE"),
         q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
+        lfm2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_LFM2_PREFIX_KV_CACHE"),
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
@@ -770,6 +795,7 @@ actor RuntimeModelPool {
         self.gemma4ContinuousBatchingEnabled = gemma4ContinuousBatchingEnabled
         self.q35PrefixKVCacheEnabled = q35PrefixKVCacheEnabled
         self.q35ContinuousBatchingEnabled = q35ContinuousBatchingEnabled
+        self.lfm2PrefixKVCacheEnabled = lfm2PrefixKVCacheEnabled
         self.currentDate = currentDate
         self.currentMemorySample = currentMemorySample
         self.memoryPressurePolicy = memoryPressurePolicy
@@ -961,6 +987,10 @@ actor RuntimeModelPool {
             state.totalLoadSeconds += timing.loadSeconds
             state.totalPrefillSeconds += timing.prefillSeconds
             state.totalDecodeSeconds += timing.decodeSeconds
+            state.recentDecodeSamples.append((tokens: response.tokensGenerated, seconds: timing.decodeSeconds))
+            if state.recentDecodeSamples.count > 10 {
+                state.recentDecodeSamples.removeFirst(state.recentDecodeSamples.count - 10)
+            }
         }
         state.lastCompletedAt = currentDate()
         state.lastError = nil
@@ -1126,7 +1156,10 @@ actor RuntimeModelPool {
             )
         case .textChatLFM2:
             return .textChatLFM2(
-                LFM2Generator(modelId: resolved.id),
+                LFM2Generator(
+                    modelId: resolved.id,
+                    prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled
+                ),
                 modelPath: resolved.installPath
             )
         case .textChatDeepseekV4Flash:

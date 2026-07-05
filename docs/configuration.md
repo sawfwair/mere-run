@@ -73,7 +73,9 @@ Continuous batching and SSD KV cache are not enabled by this flag.
 
 ### `MERERUN_LFM2_PREFIX_KV_CACHE`
 
-Opt-in (`1`): in-memory prompt-prefix reuse for the LFM2 chat runtime,
+In-memory prompt-prefix reuse for the LFM2 chat runtime, enabled by default
+in `mere.run api serve` (set `0`, `false`, or `off` to disable; one-shot CLI
+invocations keep it off since a prefix cache cannot outlive the process),
 mirroring the Qwen-family implementation. Forked layer caches (attention KV
 and short-conv states both support forking) are stored at prefill chunk
 boundaries and the longest matching token prefix seeds later requests, so a
@@ -82,6 +84,18 @@ checkpoints only — Gemma4-style semantic chat-template checkpoints are not
 yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
 Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
 end to end.
+
+### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`)
+
+Decode batching for concurrent requests engages automatically when
+`mere.run api serve` runs with `--max-active-requests` above 1 — the
+concurrency flag is the single switch. The per-engine environment variables
+remain as explicit overrides in both directions (`1` forces batching on even
+at concurrency 1, `0` forces the serial path). `/runtime/status` reports
+engagement under `decodeBatching` (`batchedDecodeSteps`, `maxBatchSize`);
+per-model stats include `recentDecodeTokensPerSecond`, a rolling last-10
+window that surfaces mid-flight throughput regressions lifetime averages
+hide.
 
 ### `MERERUN_GEMMA4_MTP`
 
