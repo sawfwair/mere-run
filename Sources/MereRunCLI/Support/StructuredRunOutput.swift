@@ -7,6 +7,7 @@ enum StructuredRunMode: String, Codable, Equatable, Sendable {
     case dryRun = "dry_run"
     case status
     case inspection
+    case materialize
 }
 enum StructuredRunStatus: String, Codable, Equatable, Sendable {
     case ok
@@ -86,6 +87,17 @@ struct PreflightDiagnostic: Codable, Equatable, Sendable {
         case locations
         case suggestedActionIDs = "suggested_action_ids"
     }
+
+    func withSuggestedActionIDs(_ actionIDs: [String]) -> PreflightDiagnostic {
+        PreflightDiagnostic(
+            id: id,
+            severity: severity,
+            title: title,
+            message: message,
+            locations: locations,
+            suggestedActionIDs: actionIDs
+        )
+    }
 }
 
 struct DiagnosticLocation: Codable, Equatable, Sendable {
@@ -107,6 +119,7 @@ enum DeclarativeActionKind: String, Codable, Equatable, Sendable {
     case openDirectory = "open_directory"
     case openURL = "open_url"
     case copyText = "copy_text"
+    case select
     case none
 }
 
@@ -129,6 +142,47 @@ struct DeclarativeCommand: Codable, Equatable, Sendable {
     }
 }
 
+struct DeclarativeActionCandidate: Codable, Equatable, Sendable {
+    let id: String
+    let label: String
+    let value: String
+    let path: String?
+    let status: String?
+    let description: String?
+    let command: DeclarativeCommand?
+    let patches: [DeclarativePatch]
+
+    init(
+        id: String,
+        label: String,
+        value: String,
+        path: String? = nil,
+        status: String? = nil,
+        description: String? = nil,
+        command: DeclarativeCommand? = nil,
+        patches: [DeclarativePatch] = []
+    ) {
+        self.id = id
+        self.label = label
+        self.value = value
+        self.path = path
+        self.status = status
+        self.description = description
+        self.command = command
+        self.patches = patches
+    }
+}
+
+enum DeclarativePatchOperation: String, Codable, Equatable, Sendable {
+    case replace
+}
+
+struct DeclarativePatch: Codable, Equatable, Sendable {
+    let op: DeclarativePatchOperation
+    let path: String
+    let value: String
+}
+
 struct DeclarativeAction: Codable, Equatable, Sendable {
     let id: String
     let label: String
@@ -140,6 +194,7 @@ struct DeclarativeAction: Codable, Equatable, Sendable {
     let path: String?
     let url: String?
     let text: String?
+    let candidates: [DeclarativeActionCandidate]
     let requires: [String]
     let confirmation: String?
     let destructive: Bool
@@ -156,6 +211,7 @@ struct DeclarativeAction: Codable, Equatable, Sendable {
         path: String? = nil,
         url: String? = nil,
         text: String? = nil,
+        candidates: [DeclarativeActionCandidate] = [],
         requires: [String] = [],
         confirmation: String? = nil,
         destructive: Bool = false,
@@ -171,6 +227,7 @@ struct DeclarativeAction: Codable, Equatable, Sendable {
         self.path = path
         self.url = url
         self.text = text
+        self.candidates = candidates
         self.requires = requires
         self.confirmation = confirmation
         self.destructive = destructive
@@ -188,6 +245,7 @@ struct DeclarativeAction: Codable, Equatable, Sendable {
         case path
         case url
         case text
+        case candidates
         case requires
         case confirmation
         case destructive

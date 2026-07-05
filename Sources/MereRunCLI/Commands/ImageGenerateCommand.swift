@@ -109,27 +109,31 @@ struct ImageGenerate: AsyncParsableCommand {
     )
     var kreaConditioningLayerWeights: String?
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the image generation request without running generation.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
     @Flag(name: [.short, .long], help: "Print only the output path.")
     var quiet: Bool = false
 
     func run() async throws {
-        try MLXBundleSupport.ensureAvailable(quiet: quiet)
-
-        if let steps, steps <= 0 {
-            throw ValidationError("--steps must be >= 1")
-        }
-        guard width > 0, height > 0 else {
-            throw ValidationError("--width/--height must be > 0")
-        }
-        if let strength, !(0.0...1.0).contains(strength) {
-            throw ValidationError("--strength must be between 0.0 and 1.0")
-        }
+        try validateStaticOptions()
         let kreaConditioningRebalance = try Self.resolveKreaConditioningRebalance(
             multiplier: kreaConditioningMultiplier,
             layerWeights: kreaConditioningLayerWeights
         )
 
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-image", defaultExtension: "png")
+
+        if preflight {
+            try runPreflight(outputURL: outputURL)
+            return
+        }
+
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -214,99 +218,337 @@ struct ImageGenerate: AsyncParsableCommand {
         let effectiveSigmaShift = sigmaShift.map { Float($0) }
             ?? manifest.defaults?.sigmaShift.map { Float($0) }
 
-        var effectivePrompt = prompt
-        var effectiveMaxSequenceLength = maxSequenceLength
-        if structuredPrompt {
-            if !quiet {
-                let backend = StructuredImagePromptAdapter.backendDescription(for: structuredPromptModel)
-                CLIStderr.write("[structured-prompt] Expanding prompt with \(structuredPromptModel) (\(backend))...\n")
-            }
-            let adapterProgressHandler: (@Sendable (String) -> Void)?
-            if quiet {
-                adapterProgressHandler = nil
-            } else {
-                adapterProgressHandler = { message in
-                    CLIStderr.write("[structured-prompt] \(message)\n")
-                }
-            }
-            effectivePrompt = try await Self.expandStructuredPromptWithFallback(
-                prompt: prompt,
-                modelID: structuredPromptModel,
-                modelRoot: structuredPromptModelRoot,
-                maxTokens: structuredPromptMaxTokens,
-                progressHandler: adapterProgressHandler
-            )
-            effectiveMaxSequenceLength = max(
-                effectiveMaxSequenceLength,
-                StructuredImagePromptAdapter.recommendedImagePromptTokens
-            )
-            if let structuredPromptOutput {
-                let jsonURL = URL(fileURLWithPath: structuredPromptOutput).standardizedFileURL
-                try FileManager.default.createDirectory(
-                    at: jsonURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                try Data(effectivePrompt.utf8).write(to: jsonURL)
-                if !quiet {
-                    CLIStderr.write("[structured-prompt] JSON: \(jsonURL.path)\n")
-                }
-            }
-        }
-
-        let request = GenerationRequest(
-            prompt: effectivePrompt,
-            negativePrompt: negativePrompt,
-            referenceImages: conditioning.referenceImages,
-            referenceStrength: conditioning.referenceStrength,
-            width: width,
-            height: height,
-            steps: effectiveSteps,
-            guidanceScale: effectiveCFG,
-            seed: seed,
+        let runEventLogger = try makeRunEventLoggerIfNeeded(
             outputURL: outputURL,
-            model: resolvedModel,
-            maxSequenceLength: effectiveMaxSequenceLength,
-            lora: loraConfig,
-            enhancePrompt: false,
-            inputImage: conditioning.inputImage,
-            strength: conditioning.strength,
-            keepOriginalAspect: keepOriginalAspect,
-            useBetaSigmas: false,
-            sigmaShift: effectiveSigmaShift,
-            kreaConditioningRebalance: kreaConditioningRebalance
+            modelRoot: URL(fileURLWithPath: resolvedModel!),
+            modelManifest: manifest,
+            effectiveSteps: effectiveSteps,
+            effectiveCFGScale: effectiveCFG,
+            effectiveSigmaShift: effectiveSigmaShift,
+            inputMode: Self.inputMode(
+                family: manifest.family,
+                inputImage: inputURL,
+                referenceImages: referenceImageURLs
+            )
         )
 
-        let progressHandler: (@Sendable (GenerationProgress) -> Void)? = quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
-        if !quiet {
-            CLIStderr.write("[runtime] image backend: \(NativeMLXRuntime.backendDescription)\n")
-        }
+        do {
+            var effectivePrompt = prompt
+            var effectiveMaxSequenceLength = maxSequenceLength
+            if structuredPrompt {
+                if !quiet {
+                    let backend = StructuredImagePromptAdapter.backendDescription(for: structuredPromptModel)
+                    CLIStderr.write("[structured-prompt] Expanding prompt with \(structuredPromptModel) (\(backend))...\n")
+                }
+                let adapterProgressHandler: (@Sendable (String) -> Void)?
+                if quiet {
+                    adapterProgressHandler = nil
+                } else {
+                    adapterProgressHandler = { message in
+                        CLIStderr.write("[structured-prompt] \(message)\n")
+                    }
+                }
+                effectivePrompt = try await Self.expandStructuredPromptWithFallback(
+                    prompt: prompt,
+                    modelID: structuredPromptModel,
+                    modelRoot: structuredPromptModelRoot,
+                    maxTokens: structuredPromptMaxTokens,
+                    progressHandler: adapterProgressHandler
+                )
+                effectiveMaxSequenceLength = max(
+                    effectiveMaxSequenceLength,
+                    StructuredImagePromptAdapter.recommendedImagePromptTokens
+                )
+                if let structuredPromptOutput {
+                    let jsonURL = URL(fileURLWithPath: structuredPromptOutput).standardizedFileURL
+                    try FileManager.default.createDirectory(
+                        at: jsonURL.deletingLastPathComponent(),
+                        withIntermediateDirectories: true
+                    )
+                    try Data(effectivePrompt.utf8).write(to: jsonURL)
+                    if !quiet {
+                        CLIStderr.write("[structured-prompt] JSON: \(jsonURL.path)\n")
+                    }
+                }
+            }
 
-        let result: GenerationResult
-        switch manifest.family {
-        case .klein:
-            let generator = Flux2KleinGenerator()
-            result = try await generator.generate(request, progressHandler: progressHandler)
-        case .zimage:
-            let generator = ZImageTurboGenerator()
-            result = try await generator.generate(request, progressHandler: progressHandler)
-        case .hidream:
-            let generator = HiDreamO1Generator()
-            defer { generator.unload() }
-            result = try await generator.generate(request, progressHandler: progressHandler)
-        case .krea:
-            let generator = Krea2Generator()
-            defer { generator.unload() }
-            result = try await generator.generate(request, progressHandler: progressHandler)
-        case .ideogram:
-            let generator = Ideogram4Generator()
-            defer { generator.unload() }
-            result = try await generator.generate(request, progressHandler: progressHandler)
-        case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
-            throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
-        }
+            let request = GenerationRequest(
+                prompt: effectivePrompt,
+                negativePrompt: negativePrompt,
+                referenceImages: conditioning.referenceImages,
+                referenceStrength: conditioning.referenceStrength,
+                width: width,
+                height: height,
+                steps: effectiveSteps,
+                guidanceScale: effectiveCFG,
+                seed: seed,
+                outputURL: outputURL,
+                model: resolvedModel,
+                maxSequenceLength: effectiveMaxSequenceLength,
+                lora: loraConfig,
+                enhancePrompt: false,
+                inputImage: conditioning.inputImage,
+                strength: conditioning.strength,
+                keepOriginalAspect: keepOriginalAspect,
+                useBetaSigmas: false,
+                sigmaShift: effectiveSigmaShift,
+                kreaConditioningRebalance: kreaConditioningRebalance
+            )
 
-        // stdout: machine-readable path (easy for scripts)
-        print(result.outputURL.path)
+            let progressHandler: (@Sendable (GenerationProgress) -> Void)? =
+                quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
+            if !quiet {
+                CLIStderr.write("[runtime] image backend: \(NativeMLXRuntime.backendDescription)\n")
+            }
+
+            let result: GenerationResult
+            switch manifest.family {
+            case .klein:
+                let generator = Flux2KleinGenerator()
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .zimage:
+                let generator = ZImageTurboGenerator()
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .hidream:
+                let generator = HiDreamO1Generator()
+                defer { generator.unload() }
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .krea:
+                let generator = Krea2Generator()
+                defer { generator.unload() }
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .ideogram:
+                let generator = Ideogram4Generator()
+                defer { generator.unload() }
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
+                throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
+            }
+
+            try runEventLogger?.record(
+                type: "run_finished",
+                stage: "finished",
+                step: effectiveSteps,
+                totalSteps: effectiveSteps,
+                fraction: 1,
+                path: result.outputURL.path
+            )
+            // stdout: machine-readable path (easy for scripts)
+            print(result.outputURL.path)
+        } catch {
+            try? runEventLogger?.record(
+                type: "run_failed",
+                stage: "failed",
+                message: error.localizedDescription,
+                path: outputURL.path
+            )
+            throw error
+        }
+    }
+
+    private func validateStaticOptions() throws {
+        if let steps, steps <= 0 {
+            throw ValidationError("--steps must be >= 1")
+        }
+        guard width > 0, height > 0 else {
+            throw ValidationError("--width/--height must be > 0")
+        }
+        if let strength, !(0.0...1.0).contains(strength) {
+            throw ValidationError("--strength must be between 0.0 and 1.0")
+        }
+    }
+
+    func makePreflightEnvelope(
+        outputURL: URL,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> ImageGenerationPreflightEnvelope {
+        let input = ImageGenerationPreflightInput(
+            prompt: prompt,
+            negativePrompt: negativePrompt,
+            outputURL: outputURL,
+            width: width,
+            height: height,
+            steps: steps,
+            seed: seed,
+            model: model,
+            input: input,
+            referenceImages: referenceImages,
+            keepOriginalAspect: keepOriginalAspect,
+            strength: strength,
+            cfgScale: cfgScale,
+            sigmaShift: sigmaShift,
+            maxSequenceLength: maxSequenceLength,
+            structuredPrompt: structuredPrompt,
+            structuredPromptModel: structuredPromptModel,
+            structuredPromptModelRoot: structuredPromptModelRoot,
+            structuredPromptMaxTokens: structuredPromptMaxTokens,
+            structuredPromptOutput: structuredPromptOutput,
+            lora: lora,
+            loraScale: loraScale,
+            kreaConditioningMultiplier: kreaConditioningMultiplier,
+            kreaConditioningLayerWeights: kreaConditioningLayerWeights,
+            generationArgv: generationActionArguments(outputURL: outputURL),
+            cwd: fileManager.currentDirectoryPath
+        )
+        return ImageGenerationPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight(outputURL: URL) throws {
+        let envelope = makePreflightEnvelope(outputURL: outputURL)
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
+
+    private func generationActionArguments(outputURL: URL) -> [String] {
+        var args = ["mere.run", "image", "generate", "--prompt", prompt, "--output", outputURL.path]
+        args += ["--width", String(width), "--height", String(height)]
+        if let negativePrompt {
+            args += ["--negative-prompt", negativePrompt]
+        }
+        if let cfgScale {
+            args += ["--cfg", String(cfgScale)]
+        }
+        if let sigmaShift {
+            args += ["--sigma-shift", String(sigmaShift)]
+        }
+        if let steps {
+            args += ["--steps", String(steps)]
+        }
+        if let seed {
+            args += ["--seed", String(seed)]
+        }
+        if let model {
+            args += ["--model", model]
+        }
+        if let input {
+            args += ["--input", input]
+        }
+        for referenceImage in referenceImages {
+            args += ["--ref-image", referenceImage]
+        }
+        if keepOriginalAspect {
+            args.append("--keep-original-aspect")
+        }
+        if let strength {
+            args += ["--strength", String(strength)]
+        }
+        if maxSequenceLength != 512 {
+            args += ["--max-sequence-length", String(maxSequenceLength)]
+        }
+        if structuredPrompt {
+            args.append("--structured-prompt")
+        }
+        if structuredPromptModel != StructuredImagePromptAdapter.defaultModelID {
+            args += ["--structured-prompt-model", structuredPromptModel]
+        }
+        if let structuredPromptModelRoot {
+            args += ["--structured-prompt-model-root", structuredPromptModelRoot]
+        }
+        if structuredPromptMaxTokens != StructuredImagePromptAdapter.defaultMaxTokens {
+            args += ["--structured-prompt-max-tokens", String(structuredPromptMaxTokens)]
+        }
+        if let structuredPromptOutput {
+            args += ["--structured-prompt-output", structuredPromptOutput]
+        }
+        if let lora {
+            args += ["--lora", lora]
+        }
+        if loraScale != 1.0 {
+            args += ["--lora-scale", String(loraScale)]
+        }
+        if let kreaConditioningMultiplier {
+            args += ["--krea-conditioning-multiplier", String(kreaConditioningMultiplier)]
+        }
+        if let kreaConditioningLayerWeights {
+            args += ["--krea-conditioning-layer-weights", kreaConditioningLayerWeights]
+        }
+        if quiet {
+            args.append("--quiet")
+        }
+        return args
+    }
+
+    func materializedPlanURL(for outputURL: URL) -> URL? {
+        let planURL = outputURL.deletingLastPathComponent().appendingPathComponent("plan.json", isDirectory: false)
+        guard FileManager.default.fileExists(atPath: planURL.path),
+              let plan = try? ImageGenerationRunPlan.decode(from: planURL),
+              URL(fileURLWithPath: plan.arguments.output).standardizedFileURL.path == outputURL.standardizedFileURL.path else {
+            return nil
+        }
+        return planURL
+    }
+
+    func makeRunEventLoggerIfNeeded(
+        outputURL: URL,
+        modelRoot: URL,
+        modelManifest: MereRunModelManifest,
+        effectiveSteps: Int,
+        effectiveCFGScale: Double,
+        effectiveSigmaShift: Float?,
+        inputMode: String
+    ) throws -> LoRATrainingEventLogger? {
+        guard let materializedPlanURL = materializedPlanURL(for: outputURL) else {
+            return nil
+        }
+        let logger = try LoRATrainingEventLogger(
+            baseOutputURL: outputURL,
+            resumeExisting: true
+        )
+        var metadata = [
+            "model_root": modelRoot.path,
+            "model_id": modelManifest.id,
+            "model_family": modelManifest.family?.rawValue ?? "unknown",
+            "output": outputURL.path,
+            "prompt": prompt,
+            "width": String(width),
+            "height": String(height),
+            "steps": String(effectiveSteps),
+            "cfg": String(effectiveCFGScale),
+            "input_mode": inputMode,
+            "plan_file": materializedPlanURL.lastPathComponent,
+            "actions_file": "actions.json",
+        ]
+        if let seed {
+            metadata["seed"] = String(seed)
+        }
+        if let effectiveSigmaShift {
+            metadata["sigma_shift"] = String(effectiveSigmaShift)
+        }
+        if let input {
+            metadata["input"] = input
+        }
+        if !referenceImages.isEmpty {
+            metadata["reference_images"] = referenceImages.joined(separator: "\n")
+        }
+        if let lora {
+            metadata["lora"] = lora
+            metadata["lora_scale"] = String(loraScale)
+        }
+        try logger.record(
+            type: "run_started",
+            stage: "starting",
+            message: "Image generation started.",
+            step: 0,
+            totalSteps: effectiveSteps,
+            fraction: 0,
+            path: outputURL.path,
+            metadata: metadata
+        )
+        return logger
     }
 
     static func expandStructuredPromptWithFallback(
@@ -397,6 +639,26 @@ struct ImageGenerate: AsyncParsableCommand {
             strength: explicitStrength ?? defaultInputStrength,
             referenceStrength: explicitStrength ?? (inputImage == nil ? 0.0 : defaultInputStrength)
         )
+    }
+
+    static func inputMode(
+        family: MereRunModelManifest.Family?,
+        inputImage: URL?,
+        referenceImages: [URL]
+    ) -> String {
+        let hasInput = inputImage != nil
+        let hasReferences = !referenceImages.isEmpty
+        guard hasInput || hasReferences else { return "text_to_image" }
+        if family == .klein {
+            return "reference_image"
+        }
+        if hasInput && hasReferences {
+            return "image_to_image_with_references"
+        }
+        if hasInput {
+            return "image_to_image"
+        }
+        return "reference_image"
     }
 
     static func resolveKreaConditioningRebalance(

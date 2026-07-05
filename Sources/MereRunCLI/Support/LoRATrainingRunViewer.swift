@@ -89,6 +89,7 @@ struct LoRATrainingRunViewer {
             if latestEvent?.type == "run_failed" { return "failed" }
             if latestEvent?.type == "run_finished" { return "finished" }
             if let runManifest, runManifest.step >= runManifest.totalSteps { return "finished" }
+            if latestEvent?.type == "run_planned" { return "planned" }
             if !events.isEmpty { return "running" }
             return "idle"
         }()

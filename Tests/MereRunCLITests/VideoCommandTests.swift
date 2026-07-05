@@ -34,6 +34,19 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNil(cmd.endImage)
         XCTAssertEqual(cmd.endImageStrength, 1.0)
         XCTAssertNil(cmd.modelRoot)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testVideoGenerateParsesPreflightJSONFlags() throws {
+        let cmd = try VideoGenerate.parse([
+            "a cinematic drone flythrough",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
     }
 
     func testVideoGenerateParsesStartAndEndKeyframes() throws {
@@ -83,6 +96,123 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 24), 361)
         XCTAssertEqual(nearestLTXFrameCount(duration: 5, fps: 24), 121)
         XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 8), 121)
+    }
+
+    func testVideoGeneratePreflightReportsResolvedPlan() throws {
+        let modelRoot = try makeValidLTXModelRoot()
+        let sourceImage = try makeTempFile(name: "start.png")
+        let endImage = try makeTempFile(name: "end.png")
+        let output = makeTempOutput(name: "clip.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a flower opens from bud to bloom",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--width", "1025",
+            "--height", "578",
+            "--num-frames", "66",
+            "--image", sourceImage.path,
+            "--end-image", endImage.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.command, ["video", "generate"])
+        XCTAssertEqual(envelope.mode, .preflight)
+        XCTAssertEqual(envelope.result.model.kind, "model_root")
+        XCTAssertTrue(envelope.result.model.installed)
+        XCTAssertEqual(envelope.result.output.path, output.path)
+        XCTAssertEqual(envelope.result.inputs.mode, "directed_image_to_video")
+        XCTAssertEqual(envelope.result.plan.resolvedWidth, 1024)
+        XCTAssertEqual(envelope.result.plan.resolvedHeight, 576)
+        XCTAssertEqual(envelope.result.plan.resolvedNumFrames, 65)
+        XCTAssertEqual(envelope.result.plan.seed, 42)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "dimensions_will_be_adjusted" })
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "num_frames_will_be_adjusted" })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-video-generation" && $0.enabled })
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(VideoGenerationPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded, envelope)
+    }
+
+    func testVideoGeneratePreflightBlocksMissingSourceImage() throws {
+        let modelRoot = try makeValidLTXModelRoot()
+        let output = makeTempOutput(name: "clip.mp4")
+        let missingImage = makeTempOutput(name: "missing.png")
+        let cmd = try VideoGenerate.parse([
+            "woman walking in neon rain",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--image", missingImage.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "source_image_missing" })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-video-generation" && !$0.enabled })
+    }
+
+    func testVideoGeneratePreflightBlocksEndImageWithoutSourceImage() throws {
+        let modelRoot = try makeValidLTXModelRoot()
+        let endImage = try makeTempFile(name: "end.png")
+        let output = makeTempOutput(name: "clip.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a car drives from dawn into sunset",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--end-image", endImage.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "end_image_requires_source_image" })
+    }
+
+    func testVideoGeneratePreflightWarnsForUnifiedAVNon24FPS() throws {
+        let modelRoot = try makeValidLTXModelRoot()
+        let output = makeTempOutput(name: "clip.mp4")
+        let cmd = try VideoGenerate.parse([
+            "dialogue with background music",
+            "--variant", "unified-av",
+            "--fps", "8",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .warning)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "unified_av_fps_unusual" })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-video-generation" && $0.enabled })
     }
 
     func testVideoExportLatentsParsesOverrides() throws {
@@ -144,5 +274,33 @@ final class VideoCommandTests: XCTestCase {
         )
         let data = Data("fixture".utf8)
         try data.write(to: url)
+    }
+
+    private func makeValidLTXModelRoot() throws -> URL {
+        let rootURL = try makeTempDirectory()
+        try createFile(rootURL.appendingPathComponent("text_encoder/config.json"))
+        try createFile(rootURL.appendingPathComponent("text_encoder/model.safetensors.index.json"))
+        try FileManager.default.createDirectory(
+            at: rootURL.appendingPathComponent("tokenizer", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try createFile(rootURL.appendingPathComponent("ltx-2-19b-distilled.safetensors"))
+        try createFile(rootURL.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors"))
+        return rootURL
+    }
+
+    private func makeTempFile(name: String) throws -> URL {
+        let directory = try makeTempDirectory()
+        let url = directory.appendingPathComponent(name)
+        try createFile(url)
+        return url
+    }
+
+    private func makeTempOutput(name: String) -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VideoCommandTests.\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectories.append(directory)
+        return directory.appendingPathComponent(name)
     }
 }

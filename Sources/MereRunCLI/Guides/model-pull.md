@@ -24,15 +24,23 @@ mere.run model list
 - `--force`: re-download even if already installed.
 - `--quiet`, `-q`: suppress progress.
 - `--allow-unsupported`: bypass platform and memory support checks.
+- `--preflight`: inspect support, source, install state, and disk paths without downloading.
+- `--json`: with `--preflight`, emit a structured report for scripts and apps.
 
 ## Usage Patterns
 
 - Run `model capabilities` before large downloads.
+- Use `--preflight --json` before large pulls or `--all` to get structured
+  diagnostics and follow-up actions without downloading.
 - Prefer a single target over `--all`.
 - Use `--force` for a suspected corrupt install.
 - Use external storage with `MERERUN_MODELS_DIR` before pulling very large models.
 
 ## Examples
+
+```bash
+mere.run model pull image-zimage-nano --preflight --json
+```
 
 ```bash
 mere.run model pull text-chat-gemma4-nano

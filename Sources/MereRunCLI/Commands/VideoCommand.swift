@@ -188,10 +188,26 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("end-image-strength")], help: "End keyframe conditioning strength in [0, 1].")
     var endImageStrength: Float = 1.0
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the video generation request without running generation.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
     func run() async throws {
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for video generate.")
+        }
+
+        let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-video", defaultExtension: "mp4")
+        if preflight {
+            try runPreflight(outputURL: outputURL)
+            return
+        }
+
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
             throw ValidationError("Prompt cannot be empty.")
@@ -247,7 +263,6 @@ struct VideoGenerate: AsyncParsableCommand {
             }
         }
 
-        let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-video", defaultExtension: "mp4")
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         let sourceImageURL: URL?
@@ -423,6 +438,94 @@ struct VideoGenerate: AsyncParsableCommand {
 
     private func mediaHasAudioTrack(at url: URL) async -> Bool {
         MediaVideoIO.hasAudioTrack(url)
+    }
+
+    func makePreflightEnvelope(
+        outputURL: URL,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> VideoGenerationPreflightEnvelope {
+        let input = VideoGenerationPreflightInput(
+            prompt: prompt,
+            outputURL: outputURL,
+            model: model,
+            variant: variant,
+            modelRoot: modelRoot,
+            width: width,
+            height: height,
+            numFrames: numFrames,
+            duration: duration,
+            fps: fps,
+            seed: seed,
+            image: image,
+            imageStrength: imageStrength,
+            endImage: endImage,
+            endImageStrength: endImageStrength,
+            generationArgv: generationActionArguments(outputURL: outputURL),
+            cwd: fileManager.currentDirectoryPath
+        )
+        return VideoGenerationPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight(outputURL: URL) throws {
+        let envelope = makePreflightEnvelope(outputURL: outputURL)
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
+
+    private func generationActionArguments(outputURL: URL) -> [String] {
+        var args = [
+            "mere.run",
+            "video",
+            "generate",
+            prompt,
+            "--output",
+            outputURL.path,
+            "--model",
+            model,
+            "--variant",
+            variant.rawValue,
+            "--width",
+            String(width),
+            "--height",
+            String(height),
+            "--num-frames",
+            String(numFrames),
+            "--fps",
+            String(fps),
+        ]
+        if let duration {
+            args += ["--duration", String(duration)]
+        }
+        if let seed {
+            args += ["--seed", String(seed)]
+        }
+        if let modelRoot {
+            args += ["--model-root", modelRoot]
+        }
+        if let image {
+            args += ["--image", image, "--image-strength", String(imageStrength)]
+        }
+        if let endImage {
+            args += ["--end-image", endImage, "--end-image-strength", String(endImageStrength)]
+        }
+        if quiet {
+            args.append("--quiet")
+        }
+        return args
     }
 }
 

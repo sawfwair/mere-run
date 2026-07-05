@@ -54,7 +54,19 @@ struct VisionTrack: AsyncParsableCommand {
     @Flag(name: [.customLong("show-labels")], help: "Reserved for labeled video overlays.")
     var showLabels: Bool = false
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the tracking request without loading SAM or processing video.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
     func validate() throws {
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for vision track.")
+        }
+        if preflight {
+            return
+        }
         guard !prompt.isEmpty || !box.isEmpty || !point.isEmpty else {
             throw ValidationError("Provide at least one --prompt, --box, or --point value.")
         }
@@ -75,17 +87,27 @@ struct VisionTrack: AsyncParsableCommand {
     }
 
     func run() async throws {
+        let videoURL = URL(fileURLWithPath: video).standardizedFileURL
+        let outputVideoURL = Self.resolveOutputURL(output, inputVideoURL: videoURL)
+        let outputJSONURL = Self.resolveJSONOutputURL(jsonOutput, inputVideoURL: videoURL)
+        let maskOutputDirectoryURL = VisionSegment.resolveDirectoryURL(maskOutputDir)
+        if preflight {
+            try runPreflight(
+                videoURL: videoURL,
+                outputVideoURL: outputVideoURL,
+                outputJSONURL: outputJSONURL,
+                maskOutputDirectoryURL: maskOutputDirectoryURL
+            )
+            return
+        }
+
         try MLXBundleSupport.ensureAvailable(quiet: false)
 
-        let videoURL = URL(fileURLWithPath: video).standardizedFileURL
         guard FileManager.default.fileExists(atPath: videoURL.path) else {
             throw ValidationError("Video not found: \(videoURL.path)")
         }
 
         let resolvedModel = try VisionSegment.resolveModelRoot(model)
-        let outputVideoURL = Self.resolveOutputURL(output, inputVideoURL: videoURL)
-        let outputJSONURL = Self.resolveJSONOutputURL(jsonOutput, inputVideoURL: videoURL)
-        let maskOutputDirectoryURL = VisionSegment.resolveDirectoryURL(maskOutputDir)
         let promptSet = try parsedPromptSet()
 
         let segmenter = try SAM31ImageSegmenter(
@@ -146,5 +168,112 @@ struct VisionTrack: AsyncParsableCommand {
         }
         let outputURL = URL(fileURLWithPath: rawOutput).standardizedFileURL
         return outputURL.pathExtension.isEmpty ? outputURL.appendingPathExtension("json") : outputURL
+    }
+
+    func makePreflightEnvelope(
+        videoURL: URL,
+        outputVideoURL: URL,
+        outputJSONURL: URL,
+        maskOutputDirectoryURL: URL?,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> VisionTrackPreflightEnvelope {
+        let input = VisionTrackPreflightInput(
+            videoURL: videoURL,
+            outputVideoURL: outputVideoURL,
+            outputJSONURL: outputJSONURL,
+            maskOutputDirectoryURL: maskOutputDirectoryURL,
+            prompt: prompt,
+            box: box,
+            point: point,
+            model: model,
+            initFrame: initFrame,
+            endFrame: endFrame,
+            threshold: threshold,
+            resolution: resolution,
+            showBoxes: showBoxes,
+            showLabels: showLabels,
+            trackArgv: trackActionArguments(
+                videoURL: videoURL,
+                outputVideoURL: outputVideoURL,
+                outputJSONURL: outputJSONURL,
+                maskOutputDirectoryURL: maskOutputDirectoryURL
+            ),
+            cwd: fileManager.currentDirectoryPath
+        )
+        return VisionTrackPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight(
+        videoURL: URL,
+        outputVideoURL: URL,
+        outputJSONURL: URL,
+        maskOutputDirectoryURL: URL?
+    ) throws {
+        let envelope = makePreflightEnvelope(
+            videoURL: videoURL,
+            outputVideoURL: outputVideoURL,
+            outputJSONURL: outputJSONURL,
+            maskOutputDirectoryURL: maskOutputDirectoryURL
+        )
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
+
+    private func trackActionArguments(
+        videoURL: URL,
+        outputVideoURL: URL,
+        outputJSONURL: URL,
+        maskOutputDirectoryURL: URL?
+    ) -> [String] {
+        var args = [
+            "mere.run",
+            "vision",
+            "track",
+            videoURL.path,
+        ]
+        if !prompt.isEmpty {
+            args.append("--prompt")
+            args.append(contentsOf: prompt)
+        }
+        for boxPrompt in box {
+            args += ["--box", boxPrompt]
+        }
+        for pointPrompt in point {
+            args += ["--point", pointPrompt]
+        }
+        if let model {
+            args += ["--model", model]
+        }
+        args += ["--output", outputVideoURL.path]
+        args += ["--json-output", outputJSONURL.path]
+        if let maskOutputDirectoryURL {
+            args += ["--mask-output-dir", maskOutputDirectoryURL.path]
+        }
+        args += ["--init-frame", String(initFrame)]
+        if let endFrame {
+            args += ["--end-frame", String(endFrame)]
+        }
+        args += ["--threshold", String(threshold), "--resolution", String(resolution)]
+        if showBoxes {
+            args.append("--show-boxes")
+        }
+        if showLabels {
+            args.append("--show-labels")
+        }
+        return args
     }
 }

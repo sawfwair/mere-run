@@ -29,6 +29,10 @@ mere.run vision track --help
 - `--end-frame`: inclusive final frame.
 - `--threshold`: score threshold.
 - `--resolution`: square preprocessing resolution.
+- `--preflight`: inspect the tracking request without loading SAM, extracting
+  frames, or writing outputs.
+- `--json`: with `--preflight`, emit a structured report with diagnostics and
+  declarative follow-up actions.
 - `--show-boxes`: draw boxes.
 - `--show-labels`: reserved overlay option.
 
@@ -37,8 +41,21 @@ mere.run vision track --help
 - Pick an init frame where the object is visible and not motion-blurred.
 - Use geometry prompts for a specific person/object among many similar ones.
 - Track shorter clips first, then expand with `--end-frame`.
+- Use `--preflight --json` to confirm video/model availability, prompt parsing,
+  output destinations, mask export paths, and frame bounds before the SAM runtime
+  loads.
 
 ## Examples
+
+```bash
+mere.run vision track ./clip.mp4 \
+  --prompt "the white dog" \
+  --init-frame 12 \
+  --output ./dog-tracked.mp4 \
+  --json-output ./dog-tracked.json \
+  --preflight \
+  --json
+```
 
 ```bash
 mere.run vision track ./clip.mp4 \

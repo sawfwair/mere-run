@@ -9,6 +9,7 @@ struct LoRATrainingPreflightInput {
     let syntheticSamples: Int?
     let options: ImageTrainLoRA.ResolvedLoRATrainingOptions
     let trainingArgv: [String]
+    let runPlan: LoRATrainingRunPlan
     let cwd: String
 }
 
@@ -42,9 +43,20 @@ struct LoRATrainingPreflightRequest: Codable, Equatable {
 
 struct LoRATrainingPreflightResult: Codable, Equatable {
     let dataset: LoRATrainingDatasetPreflightSummary
+    let datasetDiscovery: LoRATrainingDatasetDiscoveryResult?
     let model: LoRATrainingModelPreflightSummary
     let output: LoRATrainingOutputPreflightSummary
     let plan: LoRATrainingPlanPreflightSummary
+    let runPlan: LoRATrainingRunPlan
+
+    enum CodingKeys: String, CodingKey {
+        case dataset
+        case datasetDiscovery = "dataset_discovery"
+        case model
+        case output
+        case plan
+        case runPlan = "run_plan"
+    }
 }
 
 struct LoRATrainingDatasetPreflightSummary: Codable, Equatable {
@@ -177,12 +189,14 @@ struct LoRATrainingPreflightAnalyzer {
 
     func envelope() -> LoRATrainingPreflightEnvelope {
         var diagnostics: [PreflightDiagnostic] = []
-        let dataset = datasetSummary(diagnostics: &diagnostics)
+        let datasetAnalysis = datasetSummary(diagnostics: &diagnostics)
+        let dataset = datasetAnalysis.summary
+        let datasetDiscovery = datasetAnalysis.discovery
         let model = modelSummary(diagnostics: &diagnostics)
         let output = outputSummary(diagnostics: &diagnostics)
         let plan = planSummary()
         let status = StructuredRunOutput.status(for: diagnostics)
-        let actions = actions(status: status, model: model)
+        let actions = actions(status: status, model: model, datasetDiscovery: datasetDiscovery)
         let summary = summary(status: status, dataset: dataset, diagnostics: diagnostics)
 
         return LoRATrainingPreflightEnvelope(
@@ -209,20 +223,24 @@ struct LoRATrainingPreflightAnalyzer {
             ),
             result: LoRATrainingPreflightResult(
                 dataset: dataset,
+                datasetDiscovery: datasetDiscovery,
                 model: model,
                 output: output,
-                plan: plan
+                plan: plan,
+                runPlan: input.runPlan
             ),
             diagnostics: diagnostics,
             actions: actions
         )
     }
 
-    private func datasetSummary(
-        diagnostics: inout [PreflightDiagnostic]
-    ) -> LoRATrainingDatasetPreflightSummary {
+    private func datasetSummary(diagnostics: inout [PreflightDiagnostic]) -> (
+        summary: LoRATrainingDatasetPreflightSummary,
+        discovery: LoRATrainingDatasetDiscoveryResult?
+    ) {
         if let syntheticSamples = input.syntheticSamples {
-            return LoRATrainingDatasetPreflightSummary(
+            return (
+                LoRATrainingDatasetPreflightSummary(
                 directory: nil,
                 mode: "synthetic",
                 imageCount: 0,
@@ -234,7 +252,9 @@ struct LoRATrainingPreflightAnalyzer {
                 duplicateCaptionCount: 0,
                 excludedPreviewImageCount: 0,
                 placeholderCaptionCount: 0,
-                syntheticSampleCount: syntheticSamples
+                    syntheticSampleCount: syntheticSamples
+                ),
+                nil
             )
         }
 
@@ -247,190 +267,37 @@ struct LoRATrainingPreflightAnalyzer {
                     message: "--data is required unless --synthetic-samples is set."
                 )
             )
-            return emptyDatasetSummary(directory: nil, mode: "missing")
+            return (LoRATrainingDatasetInspector.emptyDatasetSummary(directory: nil, mode: "missing"), nil)
         }
 
         let directory = URL(fileURLWithPath: data).standardizedFileURL
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "dataset_not_found",
-                    severity: .blocker,
-                    title: "Dataset not found",
-                    message: "Dataset directory not found: \(directory.path)",
-                    locations: [.init(kind: "directory", path: directory.path)]
-                )
-            )
-            return emptyDatasetSummary(directory: directory.path, mode: "missing")
-        }
-
-        let contents: [URL]
-        do {
-            contents = try fileManager.contentsOfDirectory(
-                at: directory,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            )
-        } catch {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "dataset_unreadable",
-                    severity: .blocker,
-                    title: "Dataset unreadable",
-                    message: error.localizedDescription,
-                    locations: [.init(kind: "directory", path: directory.path)]
-                )
-            )
-            return emptyDatasetSummary(directory: directory.path, mode: "unreadable")
-        }
-
-        let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "webp"]
-        let regularFiles = contents.filter { url in
-            let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
-            return values?.isRegularFile == true
-        }
-        let allImages = regularFiles
-            .filter { imageExtensions.contains($0.pathExtension.lowercased()) }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        let previewImages = allImages.filter { $0.deletingPathExtension().lastPathComponent.hasPrefix("preview") }
-        let images = input.excludePreviewImages
-            ? allImages.filter { !previewImages.contains($0) }
-            : allImages
-
-        if images.isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "no_training_images",
-                    severity: .blocker,
-                    title: "No training images",
-                    message: "No PNG, JPG, JPEG, or WEBP training images were found in \(directory.path).",
-                    locations: [.init(kind: "directory", path: directory.path)]
-                )
-            )
-        }
-
-        let editOutputs = images.filter { $0.deletingPathExtension().lastPathComponent.hasSuffix("_out") }
-        if !editOutputs.isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "edit_dataset_not_supported",
-                    severity: .blocker,
-                    title: "Edit dataset detected",
-                    message: "image train-lora currently expects image + .txt caption pairs, not *_in/*_out edit pairs.",
-                    locations: editOutputs.prefix(5).map { .init(kind: "file", path: $0.path) }
-                )
-            )
-        }
-
-        if !previewImages.isEmpty, !input.excludePreviewImages {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "preview_images_included",
-                    severity: .warning,
-                    title: "Preview images included",
-                    message: "\(previewImages.count) preview image(s) will be treated as training images. Use --exclude-preview-images if they are generated previews.",
-                    locations: previewImages.prefix(5).map { .init(kind: "file", path: $0.path) }
-                )
-            )
-        }
-
-        var captionCount = 0
-        var usablePairCount = 0
-        var missingCaptions: [URL] = []
-        var emptyCaptions: [URL] = []
-        var placeholderCaptions: [URL] = []
-        var captionsByText: [String: [URL]] = [:]
-
-        for image in images {
-            let captionURL = image.deletingPathExtension().appendingPathExtension("txt")
-            guard fileManager.fileExists(atPath: captionURL.path) else {
-                missingCaptions.append(captionURL)
-                continue
-            }
-            captionCount += 1
-            let captionData: Data
-            do {
-                captionData = try Data(contentsOf: captionURL)
-            } catch {
-                emptyCaptions.append(captionURL)
-                continue
-            }
-            let caption = String(decoding: captionData, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !caption.isEmpty else {
-                emptyCaptions.append(captionURL)
-                continue
-            }
-            usablePairCount += 1
-            captionsByText[caption, default: []].append(captionURL)
-            if Self.isPlaceholderCaption(caption) {
-                placeholderCaptions.append(captionURL)
-            }
-        }
-
-        if !missingCaptions.isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "missing_captions",
-                    severity: .blocker,
-                    title: "Missing captions",
-                    message: "\(missingCaptions.count) image file(s) do not have matching .txt captions.",
-                    locations: missingCaptions.prefix(10).map { .init(kind: "file", path: $0.path) }
-                )
-            )
-        }
-        if !emptyCaptions.isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "empty_captions",
-                    severity: .blocker,
-                    title: "Empty captions",
-                    message: "\(emptyCaptions.count) caption file(s) are empty.",
-                    locations: emptyCaptions.prefix(10).map { .init(kind: "file", path: $0.path) }
-                )
-            )
-        }
-        if !placeholderCaptions.isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "placeholder_captions",
-                    severity: .warning,
-                    title: "Placeholder captions",
-                    message: "\(placeholderCaptions.count) caption file(s) look like placeholders.",
-                    locations: placeholderCaptions.prefix(10).map { .init(kind: "file", path: $0.path) }
-                )
-            )
-        }
-
-        let duplicateGroups = captionsByText.values.filter { $0.count > 1 }
-        let duplicateCaptionCount = duplicateGroups.reduce(0) { $0 + $1.count }
-        if !duplicateGroups.isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "duplicate_captions",
-                    severity: .warning,
-                    title: "Repeated captions",
-                    message: "\(duplicateCaptionCount) caption file(s) are part of \(duplicateGroups.count) exact duplicate group(s).",
-                    locations: duplicateGroups.flatMap { $0 }.prefix(10).map { .init(kind: "file", path: $0.path) }
-                )
-            )
-        }
-
-        return LoRATrainingDatasetPreflightSummary(
-            directory: directory.path,
-            mode: editOutputs.isEmpty ? "image_caption" : "edit_detected",
-            imageCount: images.count,
-            captionCount: captionCount,
-            usablePairCount: usablePairCount,
-            missingCaptionCount: missingCaptions.count,
-            emptyCaptionCount: emptyCaptions.count,
-            duplicateCaptionGroupCount: duplicateGroups.count,
-            duplicateCaptionCount: duplicateCaptionCount,
-            excludedPreviewImageCount: input.excludePreviewImages ? previewImages.count : 0,
-            placeholderCaptionCount: placeholderCaptions.count,
-            syntheticSampleCount: nil
+        let inspection = LoRATrainingDatasetInspector(fileManager: fileManager).inspect(
+            directory: directory,
+            excludePreviewImages: input.excludePreviewImages
         )
+        diagnostics.append(contentsOf: inspection.diagnostics)
+        guard inspection.summary.imageCount == 0,
+              inspection.diagnostics.contains(where: { $0.id == "no_training_images" }) else {
+            return (inspection.summary, nil)
+        }
+
+        let discovery = LoRATrainingDatasetDiscoveryAnalyzer(
+            root: directory.path,
+            maxDepth: 4,
+            excludePreviewImages: input.excludePreviewImages,
+            fileManager: fileManager,
+            cwd: input.cwd,
+            now: now
+        ).analyze().result
+        let suggestedActions = discovery.trainableCandidateCount > 0
+            ? ["discover-datasets", "choose-dataset"]
+            : ["discover-datasets"]
+        diagnostics = diagnostics.map { diagnostic in
+            diagnostic.id == "no_training_images"
+                ? diagnostic.withSuggestedActionIDs(suggestedActions)
+                : diagnostic
+        }
+        return (inspection.summary, discovery)
     }
 
     private func modelSummary(
@@ -590,7 +457,8 @@ struct LoRATrainingPreflightAnalyzer {
 
     private func actions(
         status: StructuredRunStatus,
-        model: LoRATrainingModelPreflightSummary
+        model: LoRATrainingModelPreflightSummary,
+        datasetDiscovery: LoRATrainingDatasetDiscoveryResult?
     ) -> [DeclarativeAction] {
         var actions: [DeclarativeAction] = []
         let blocked = status == .blocked
@@ -641,6 +509,49 @@ struct LoRATrainingPreflightAnalyzer {
             )
         }
 
+        if let data = input.data, let datasetDiscovery {
+            let dataURL = URL(fileURLWithPath: data).standardizedFileURL
+            actions.append(
+                DeclarativeAction(
+                    id: "discover-datasets",
+                    label: "Discover datasets",
+                    kind: .command,
+                    style: .secondary,
+                    command: DeclarativeCommand(
+                        argv: [
+                            "mere.run",
+                            "image",
+                            "dataset",
+                            "discover",
+                            "--root",
+                            dataURL.path,
+                            "--json",
+                        ],
+                        cwd: input.cwd,
+                        commandPath: ["image", "dataset", "discover"]
+                    )
+                )
+            )
+
+            let trainableCandidates = datasetDiscovery.candidates.filter(\.trainable)
+            if !trainableCandidates.isEmpty {
+                actions.append(
+                    DeclarativeAction(
+                        id: "choose-dataset",
+                        label: "Choose dataset",
+                        kind: .select,
+                        style: .primary,
+                        candidates: trainableCandidates.map { candidate in
+                            LoRATrainingDatasetDiscoveryAnalyzer.actionCandidate(
+                                candidate,
+                                patches: LoRATrainingDatasetDiscoveryAnalyzer.datasetSelectionPatches(for: candidate)
+                            )
+                        }
+                    )
+                )
+            }
+        }
+
         return actions
     }
 
@@ -659,23 +570,6 @@ struct LoRATrainingPreflightAnalyzer {
         default:
             return "\(dataset.usablePairCount) usable pair(s), ready to train."
         }
-    }
-
-    private func emptyDatasetSummary(directory: String?, mode: String) -> LoRATrainingDatasetPreflightSummary {
-        LoRATrainingDatasetPreflightSummary(
-            directory: directory,
-            mode: mode,
-            imageCount: 0,
-            captionCount: 0,
-            usablePairCount: 0,
-            missingCaptionCount: 0,
-            emptyCaptionCount: 0,
-            duplicateCaptionGroupCount: 0,
-            duplicateCaptionCount: 0,
-            excludedPreviewImageCount: 0,
-            placeholderCaptionCount: 0,
-            syntheticSampleCount: nil
-        )
     }
 
     private func modelResult(
@@ -731,15 +625,4 @@ struct LoRATrainingPreflightAnalyzer {
         }
     }
 
-    private static func isPlaceholderCaption(_ caption: String) -> Bool {
-        let normalized = caption.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return [
-            "todo",
-            "tbd",
-            "caption",
-            "description",
-            "image",
-            "placeholder",
-        ].contains(normalized)
-    }
 }

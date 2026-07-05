@@ -13,6 +13,96 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.allowUnsupported)
     }
 
+    func testModelPullParsesPreflightJSONOptions() throws {
+        let cmd = try ModelPull.parse([
+            "image-zimage-nano",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertEqual(cmd.target, "image-zimage-nano")
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testModelPullPreflightReportsPullableModel() throws {
+        let temp = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: temp)
+        }
+        let modelStore = temp.appendingPathComponent("models", isDirectory: true)
+        let hubCache = temp.appendingPathComponent("hub", isDirectory: true)
+
+        let cmd = try ModelPull.parse([
+            "image-zimage-nano",
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertNotEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.command, ["model", "pull"])
+        XCTAssertEqual(envelope.result.mode, "single")
+        XCTAssertEqual(envelope.result.models.count, 1)
+        XCTAssertEqual(envelope.result.models.first?.id, "image-zimage-nano")
+        XCTAssertEqual(envelope.result.models.first?.status, "will_download")
+        XCTAssertEqual(envelope.result.models.first?.hasDownloadSource, true)
+        XCTAssertEqual(envelope.result.models.first?.installed, false)
+        XCTAssertEqual(envelope.result.models.first?.willDownload, true)
+        XCTAssertEqual(envelope.result.modelStore.path, modelStore.path)
+        XCTAssertEqual(envelope.result.hubCache.path, hubCache.path)
+
+        let pullModel = try XCTUnwrap(envelope.actions.first { $0.id == "pull-model" })
+        XCTAssertTrue(pullModel.enabled)
+        XCTAssertEqual(pullModel.command?.argv, [
+            "mere.run",
+            "model",
+            "pull",
+            "image-zimage-nano",
+            "--allow-unsupported",
+        ])
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ModelPullPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded.result.models.first?.id, "image-zimage-nano")
+    }
+
+    func testModelPullPreflightBlocksUnknownModel() throws {
+        let cmd = try ModelPull.parse([
+            "image-not-real",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(now: { Date(timeIntervalSince1970: 0) })
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "model_unknown" })
+
+        let pullModel = try XCTUnwrap(envelope.actions.first { $0.id == "pull-model" })
+        XCTAssertFalse(pullModel.enabled)
+    }
+
+    func testModelPullPreflightSupportsAllMode() throws {
+        let cmd = try ModelPull.parse([
+            "--all",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(now: { Date(timeIntervalSince1970: 0) })
+
+        XCTAssertEqual(envelope.result.mode, "all")
+        XCTAssertGreaterThan(envelope.result.models.count, 1)
+        XCTAssertTrue(envelope.result.models.contains { $0.hasDownloadSource })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "pull-models" })
+    }
+
     func testModelCommandExposesCapabilities() {
         let commandNames = Set(Model.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("capabilities"))
@@ -107,5 +197,24 @@ final class ModelPullCommandParsingTests: XCTestCase {
 
         XCTAssertEqual(warnings.count, 1)
         XCTAssertTrue(warnings[0].contains("may have only about"))
+    }
+
+    func testDiskPreflightRequiredBytesIncludesSafetyMargin() {
+        XCTAssertEqual(
+            ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: 2 * ModelPullDiskPreflight.bytesPerGiB),
+            4 * ModelPullDiskPreflight.bytesPerGiB
+        )
+        XCTAssertEqual(
+            ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: 20 * ModelPullDiskPreflight.bytesPerGiB),
+            24 * ModelPullDiskPreflight.bytesPerGiB
+        )
+        XCTAssertNil(ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: nil))
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-model-pull-preflight-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        return temp
     }
 }

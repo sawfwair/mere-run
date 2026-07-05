@@ -230,13 +230,13 @@ struct ImageTrainLoRA: AsyncParsableCommand {
 
         let modelRoot = try resolveModelRoot(model: resolvedOptions.model)
         let modelManifest = try MereRunModelManifest.loadRequired(from: modelRoot)
-        let visualization = try startVisualizationIfNeeded(
+        let runContext = try startRunContextIfNeeded(
             outputURL: outputURL,
             modelRoot: modelRoot,
             modelManifest: modelManifest,
             options: resolvedOptions
         )
-        defer { visualization?.stop() }
+        defer { runContext?.stop() }
 
         do {
             switch modelManifest.family {
@@ -245,20 +245,20 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                     modelRoot: modelRoot,
                     outputURL: outputURL,
                     options: resolvedOptions,
-                    eventLogger: visualization?.logger
+                    eventLogger: runContext?.logger
                 )
             case .klein:
                 try await runKleinTraining(
                     modelRoot: modelRoot,
                     outputURL: outputURL,
                     options: resolvedOptions,
-                    eventLogger: visualization?.logger
+                    eventLogger: runContext?.logger
                 )
             default:
                 let family = modelManifest.family?.rawValue ?? "unknown"
                 throw ValidationError("Unsupported LoRA training model family: \(family). Use a Krea 2 Raw or FLUX.2 Klein base model.")
             }
-            try visualization?.logger.record(
+            try runContext?.logger.record(
                 type: "run_finished",
                 stage: "finished",
                 step: resolvedOptions.trainingSteps,
@@ -267,7 +267,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                 path: outputURL.path
             )
         } catch {
-            try? visualization?.logger.record(
+            try? runContext?.logger.record(
                 type: "run_failed",
                 stage: "failed",
                 message: error.localizedDescription,
@@ -393,6 +393,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             syntheticSamples: syntheticSamples,
             options: options,
             trainingArgv: trainingActionArguments(),
+            runPlan: makeRunPlan(options: options, fileManager: fileManager, now: now),
             cwd: fileManager.currentDirectoryPath
         )
         return LoRATrainingPreflightAnalyzer(
@@ -1059,15 +1060,75 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
     }
 
-    private func startVisualizationIfNeeded(
+    func materializedPlanURL(for outputURL: URL) -> URL? {
+        let planURL = outputURL.deletingLastPathComponent().appendingPathComponent("plan.json", isDirectory: false)
+        guard FileManager.default.fileExists(atPath: planURL.path),
+              let plan = try? LoRATrainingRunPlan.decode(from: planURL),
+              URL(fileURLWithPath: plan.arguments.output).standardizedFileURL.path == outputURL.standardizedFileURL.path else {
+            return nil
+        }
+        return planURL
+    }
+
+    func makeRunEventLoggerIfNeeded(
         outputURL: URL,
         modelRoot: URL,
         modelManifest: MereRunModelManifest,
         options: ResolvedLoRATrainingOptions
-    ) throws -> LoRATrainingVisualization? {
-        guard visualize else { return nil }
-        let logger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
-        let viewer = LoRATrainingRunViewer(runDirectoryURL: outputURL.deletingLastPathComponent())
+    ) throws -> LoRATrainingEventLogger? {
+        let materializedPlanURL = materializedPlanURL(for: outputURL)
+        guard visualize || materializedPlanURL != nil else {
+            return nil
+        }
+        let logger = try LoRATrainingEventLogger(
+            baseOutputURL: outputURL,
+            resumeExisting: materializedPlanURL != nil
+        )
+        var metadata = [
+            "model_root": modelRoot.path,
+            "model_id": modelManifest.id,
+            "model_family": modelManifest.family?.rawValue ?? "unknown",
+            "recipe": recipe ?? "",
+            "data": data ?? "",
+            "output": outputURL.path,
+        ]
+        if let materializedPlanURL {
+            metadata["plan_file"] = materializedPlanURL.lastPathComponent
+            metadata["actions_file"] = "actions.json"
+        }
+        try logger.record(
+            type: "run_started",
+            stage: "starting",
+            message: "LoRA training started.",
+            step: 0,
+            totalSteps: options.trainingSteps,
+            fraction: 0,
+            path: outputURL.path,
+            metadata: metadata
+        )
+        return logger
+    }
+
+    private func startRunContextIfNeeded(
+        outputURL: URL,
+        modelRoot: URL,
+        modelManifest: MereRunModelManifest,
+        options: ResolvedLoRATrainingOptions
+    ) throws -> LoRATrainingRunContext? {
+        guard let logger = try makeRunEventLoggerIfNeeded(
+            outputURL: outputURL,
+            modelRoot: modelRoot,
+            modelManifest: modelManifest,
+            options: options
+        ) else {
+            return nil
+        }
+        guard visualize else {
+            return LoRATrainingRunContext(logger: logger, serverTask: nil)
+        }
+
+        let runDirectoryURL = outputURL.deletingLastPathComponent()
+        let viewer = LoRATrainingRunViewer(runDirectoryURL: runDirectoryURL)
         let host = "127.0.0.1"
         let port = visualizePort
         let task = Task {
@@ -1080,24 +1141,13 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             }
         }
         try logger.record(
-            type: "run_started",
-            stage: "starting",
-            message: "LoRA training started.",
-            step: 0,
-            totalSteps: options.trainingSteps,
-            fraction: 0,
-            path: outputURL.path,
-            metadata: [
-                "viewer_url": "http://\(host):\(port)",
-                "model_root": modelRoot.path,
-                "model_id": modelManifest.id,
-                "model_family": modelManifest.family?.rawValue ?? "unknown",
-                "recipe": recipe ?? "",
-                "data": data ?? "",
-                "output": outputURL.path,
-            ]
+            type: "viewer_started",
+            stage: "visualizing",
+            message: "LoRA training viewer started.",
+            path: runDirectoryURL.path,
+            metadata: ["viewer_url": "http://\(host):\(port)"]
         )
-        return LoRATrainingVisualization(logger: logger, serverTask: task)
+        return LoRATrainingRunContext(logger: logger, serverTask: task)
     }
 
     private func resolveKleinSampleModelPath() throws -> String {
@@ -1363,11 +1413,11 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     }
 }
 
-private struct LoRATrainingVisualization {
+private struct LoRATrainingRunContext {
     let logger: LoRATrainingEventLogger
-    let serverTask: Task<Void, Never>
+    let serverTask: Task<Void, Never>?
 
     func stop() {
-        serverTask.cancel()
+        serverTask?.cancel()
     }
 }

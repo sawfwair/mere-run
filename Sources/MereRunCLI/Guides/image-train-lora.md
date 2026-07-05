@@ -116,6 +116,15 @@ capture fails during the first training step. Large real datasets may also need
 
 ## Train
 
+If your inputs live under a broad project data root, discover trainable dataset
+leaves before choosing `--data`:
+
+```bash
+mere.run image dataset discover \
+  --root ./project-data \
+  --json
+```
+
 Before spending GPU time, run a preflight. It catches missing captions, missing
 models, suspicious repeated captions, output-path issues, and suggested next
 commands without starting the training runtime:
@@ -131,6 +140,33 @@ mere.run image train-lora \
 
 Hard blockers exit nonzero after printing the JSON report, so scripts can
 consume stdout and decide whether to run the emitted `start-training` action.
+The report also includes `result.run_plan`; save that object when you want to
+preflight or run the same normalized request later:
+
+```bash
+mere.run image run-plan ./my-klein-fast-style.plan.json --preflight --json
+mere.run image run-plan ./my-klein-fast-style.plan.json \
+  --materialize ./runs/my-klein-fast-style \
+  --json
+mere.run image run-plan ./my-klein-fast-style.plan.json
+```
+
+Materialization creates `plan.json`, `actions.json`, `run.json`, and an initial
+events file in the run directory, with the adapter output relocated there.
+
+For project roots with many nested datasets, discover candidates first. Add
+`--training-output-root` when you want each selectable dataset candidate to
+carry a ready LoRA preflight command:
+
+```bash
+mere.run image dataset discover \
+  --root ./project-data \
+  --training-output-root ./lora-output \
+  --training-recipe klein-fast-style \
+  --json
+```
+Running the materialized `plan.json` appends status and progress events to the
+same stream.
 
 For the fast Krea style recipe:
 

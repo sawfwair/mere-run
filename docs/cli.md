@@ -40,6 +40,7 @@ Public tree:
 - `mere.run sfx generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
+- `mere.run run { list, inspect }`
 - `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
@@ -261,15 +262,26 @@ Key options:
 - `--structured-prompt-model`: text chat model id for the adapter; defaults to `text-chat-gemma4-12b-4bit`
 - `--structured-prompt-output`: write the generated structured JSON caption to a file
 - `--lora`, `--lora-scale`
+- `--preflight`: inspect the generation request without loading the model or writing an image
+- `--json`: with `--preflight`, emit a structured JSON report
 - `--quiet`
 
 Unless `--quiet` is set, progress diagnostics on stderr include the native image
 backend, for example `native MLX/Metal (default device: gpu)` on Apple Silicon.
+Use `--preflight --json` when scripts or wrappers need model/input/output
+checks and declarative actions before starting generation. The report includes
+structured diagnostics plus actions such as `start-generation`, `pull-model`,
+and `open-output-directory`; hard blockers exit nonzero after printing JSON.
+It also includes `result.run_plan`, which can be saved and replayed without
+reconstructing CLI arguments. Save that object to a file and use
+`image run-plan --materialize` when a wrapper needs a durable run directory
+before generation starts.
 
 Examples:
 
 ```bash
 swift run mere.run image generate --prompt "a black cat on a red sofa"
+swift run mere.run image generate --prompt "a black cat on a red sofa" --preflight --json
 swift run mere.run image generate --model image-zimage-nano --prompt "retro robot illustration" --output ./robot.png
 swift run mere.run image generate --model image-bonsai-binary --prompt "sunlit greenhouse bonsai" --output ./bonsai.png
 swift run mere.run image generate --model image-krea2-turbo --prompt "translucent portable speaker product photo" --steps 8 --output ./speaker.png
@@ -361,6 +373,30 @@ style-dataset/
   002.txt
 ```
 
+If you have a project data root with many nested artifacts, discover trainable
+dataset leaves before preflighting a training run:
+
+```bash
+swift run mere.run image dataset discover \
+  --root ./project-data \
+  --json
+
+swift run mere.run image dataset discover \
+  --root ./project-data \
+  --training-output-root ./lora-output \
+  --training-recipe klein-fast-style \
+  --json
+```
+
+The discovery report scans child directories, reports image/caption counts,
+marks trainable candidates, and returns a `choose-dataset` action for wrappers
+that want to turn a root folder into a concrete dataset selection. Each
+candidate includes patches for `request.data` and `run_plan.arguments.data`.
+With `--training-output-root`, candidates also include an `image train-lora
+--preflight --json` command using a deterministic `.safetensors` path under
+that output root. Add `--training-model` or `--training-recipe` to include those
+options in the emitted per-candidate commands.
+
 Before starting a real LoRA run, use preflight JSON to catch cheap blockers
 without loading the model or allocating the training runtime:
 
@@ -375,9 +411,31 @@ swift run mere.run image train-lora \
 
 The preflight report writes one structured JSON document to stdout. It includes
 dataset counts, model readiness, output-path checks, diagnostics, and
-declarative actions such as `start-training` or `pull-model`. Hard blockers
-exit nonzero after printing the JSON report so scripts and agents can inspect
-the same payload humans do.
+declarative actions such as `start-training` or `pull-model`. It also includes
+`result.run_plan`, a normalized executable plan that wrappers can save and hand
+back to the CLI later. Hard blockers exit nonzero after printing the JSON report
+so scripts and agents can inspect the same payload humans do.
+
+To replay a saved plan, write `result.run_plan` to disk and run:
+
+```bash
+swift run mere.run image run-plan ./style.plan.json --preflight --json
+swift run mere.run image run-plan ./style.plan.json
+```
+
+To create a durable run directory before training, materialize the plan:
+
+```bash
+swift run mere.run image run-plan ./style.plan.json \
+  --materialize ./runs/style \
+  --json
+```
+
+Materialization writes `plan.json`, `actions.json`, `run.json`, and an initial
+events file into the run directory. The copied `plan.json` relocates the output
+adapter path into that directory so later training artifacts land beside it.
+Running the materialized `plan.json` appends `run_started`, progress, and final
+status events to the same event stream.
 
 Key options:
 
@@ -409,6 +467,76 @@ Key options:
 - `--visualize`: start a loopback LoRA training dashboard for the run
 - `--visualize-port`: port for the local dashboard; defaults to `8787`
 - `--quiet`
+
+### `mere.run image run-plan`
+
+Run or preflight a saved image workflow plan. Supported plan kinds are
+`image.generate`, emitted as `result.run_plan` from
+`image generate --preflight --json`, and `image.train_lora`, emitted as
+`result.run_plan` from `image train-lora --preflight --json`.
+
+```bash
+swift run mere.run image run-plan ./render.plan.json --preflight --json
+swift run mere.run image run-plan ./render.plan.json
+swift run mere.run image run-plan ./render.plan.json --materialize ./runs/render --json
+swift run mere.run image run-plan ./style.plan.json --preflight --json
+swift run mere.run image run-plan ./style.plan.json --materialize ./runs/style --json
+swift run mere.run image run-plan ./style.plan.json
+```
+
+`--materialize` writes `plan.json`, `actions.json`, `run.json`, an initial
+events file, and standard artifact directories before execution. For
+`image.generate`, the copied plan relocates the output image and optional
+structured-prompt sidecar into the run directory, and execution appends
+`run_started`, `run_finished`, or `run_failed` events. For `image.train_lora`,
+the same directory also carries checkpoints, samples, loss metrics, and adapter
+artifacts.
+
+### `mere.run run list`
+
+Discover durable run directories, structured report JSON files, and saved
+run-plan JSON files under a workspace root. This is the first headless browse
+step for wrappers that do not already know the exact run/report/plan path.
+
+```bash
+swift run mere.run run list --root ./runs --json
+swift run mere.run run list --root . --max-depth 5 --json
+swift run mere.run run list --root ./render.plan.json --json
+```
+
+Each entry includes its kind, relative path, inspection status, run state where
+available, created/updated timestamps where known, command/format details,
+diagnostic counts, and declarative actions for `run inspect --json`. The
+top-level report also includes an
+`inspect-selected` action for UI pickers. Legacy/plugin run folders are listed
+as warning-level entries when their `run.json` can be identified but is not a
+native mere.run training manifest.
+
+### `mere.run run inspect`
+
+Inspect a durable run directory, structured report JSON file, or saved run-plan
+JSON file. This is the headless readback path for wrappers that need to reopen
+work after `run list`, `--preflight --json`, or `image run-plan --materialize`.
+
+```bash
+swift run mere.run run list --root ./runs --json
+swift run mere.run run inspect ./runs/render --json
+swift run mere.run run inspect ./runs/render
+swift run mere.run run inspect ./render.plan.json --json
+swift run mere.run run inspect ./preflight-report.json --json
+```
+
+For run directories, the JSON report includes `run.json` manifest details,
+`actions.json` summaries, `*.events.jsonl` status, known artifact paths, and
+follow-up actions such as opening the run directory or preflighting the saved
+plan. For report files, it summarizes the original command, mode, status,
+diagnostic count, and action count. For plan files, it reports the plan kind,
+command, creation timestamp, and captured working directory. Legacy/plugin run
+manifests are kept warning-level and expose `legacy_manifest` details such as
+provider, GPU, dataset path/count, recipe id, command, and run status. Run
+directories also include a compact `metrics` object with loss CSV summary,
+latest loss, step range, sample image count, checkpoint count, and adapter
+count.
 
 ### `mere.run image visualize-run`
 
@@ -744,6 +872,8 @@ Key options:
 - `--json-output`: tracking metadata path
 - `--mask-output-dir`: optional per-frame mask export directory
 - `--threshold`: score cutoff, default `0.05`
+- `--preflight`
+- `--json`: only with `--preflight`
 - `--show-boxes`
 - `--show-labels`
 
@@ -757,12 +887,18 @@ Notes:
 - text prompts seed objects on `--init-frame`, then the native tracker reuses geometry prompts for later frames
 - box and point prompts seed explicit tracked objects directly on the init frame
 - `--mask-output-dir` writes per-frame mask PNGs under frame-named subdirectories
-- empty prompt sets still produce an annotated video and JSON summary
+- prompt sets must include at least one text, box, or point prompt
+- `--preflight --json` prints a structured report without loading SAM,
+  extracting frames, writing the annotated video, or writing tracking JSON. The
+  report includes video path state, prompt parse status, model availability,
+  output/json/mask destinations, init/end frame options, threshold, resolution,
+  diagnostics, and declarative actions.
 
 Examples:
 
 ```bash
 swift run mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12
+swift run mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12 --preflight --json
 swift run mere.run vision track ./clip.mp4 --box "40,50,120,180,dog" --box "200,80,320,260,person" --show-boxes
 ```
 
@@ -1092,6 +1228,12 @@ swift run mere.run sfx video generate \
   --output ./hallway-footsteps.wav
 ```
 
+Use `--preflight --json` to inspect input mode, output path state, VFlow/DVFlow
+model availability, raw-video Synchformer requirements, duration, effective
+step count, CFG, renoise schedule, and follow-up actions before loading MLX or
+generating audio. `.npy` feature inputs do not require Synchformer during
+preflight or generation.
+
 ### `mere.run video generate`
 
 Generate MP4 video with the native LTX pipelines.
@@ -1114,6 +1256,8 @@ Key options:
 - `--image-strength`
 - `--end-image`
 - `--end-image-strength`
+- `--preflight`
+- `--json`: only with `--preflight`
 - `--quiet`
 
 Environment:
@@ -1130,6 +1274,18 @@ Use the default `distilled` lane for faster video-only drafts. Use
 `--variant unified-av --model video-ltx23-av-mlx` for the current high-quality
 synchronized audio/video lane.
 
+Preflight mode:
+
+- `--preflight --json` prints a structured plan without loading MLX, loading a
+  video model, creating directories, or writing an MP4.
+- the report includes model availability, output path state, source/end image
+  state, resolved dimensions, resolved frame count/duration, seed, input mode,
+  unified AV audio expectation, diagnostics, and declarative actions.
+- blockers such as a missing model root, missing image, invalid frame rate, or
+  `--end-image` without `--image` produce JSON and a nonzero exit.
+- notes such as dimension/frame snapping remain machine-readable so a UI can
+  explain the exact render that will run.
+
 Examples:
 
 ```bash
@@ -1138,6 +1294,15 @@ swift run mere.run video generate \
   --variant distilled \
   --model video-ltx23-av-mlx \
   --num-frames 65
+
+swift run mere.run video generate \
+  "a cinematic drone flythrough over snowy mountains" \
+  --variant distilled \
+  --model video-ltx23-av-mlx \
+  --num-frames 65 \
+  --output ./clip.mp4 \
+  --preflight \
+  --json
 
 swift run mere.run video generate \
   "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \
@@ -1250,8 +1415,14 @@ machines do not pull models they cannot run and tight disks fail with a useful c
 
 ```bash
 swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --preflight --json
 swift run mere.run model pull --all
 ```
+
+Use `--preflight --json` to check support, install state, download source,
+model store path, hub cache path, disk headroom, and next actions before any
+download starts. The report includes `pull-model` or `pull-models` actions and
+exits nonzero after printing JSON when hard blockers are present.
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
@@ -1530,6 +1701,19 @@ Current endpoint surface:
 - `POST /runtime/models/{id}/unload`
 - `GET/PATCH /runtime/models/{id}/settings`
 
+Preflight mode:
+
+- `--preflight --json` prints a structured serving plan without binding a port,
+  loading a model, or starting the server.
+- the report includes host, port, base URL, loopback/auth status, selected
+  engine, requested/default model, model-store state, runtime limits, KV cache
+  settings, companion model ids, diagnostics, and redacted follow-up actions.
+- non-loopback binds without `--api-key` or `MERERUN_API_KEY` produce a blocked
+  JSON report and nonzero exit so agents can fix configuration without parsing
+  stderr.
+- `--json` is supported with `--preflight` for `api serve`; the long-running
+  server path remains the OpenAI-compatible HTTP surface.
+
 Security defaults:
 
 - loopback binds are local-first and do not require auth
@@ -1636,9 +1820,11 @@ Examples:
 
 ```bash
 swift run mere.run api serve
+swift run mere.run api serve --preflight --json
 swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-chat-lfm2
 swift run mere.run api serve --engine text-code --model ./Qwen3-Coder-Next-Q4_K_M.gguf
+swift run mere.run api serve --host 0.0.0.0 --preflight --json
 swift run mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY" --rate-limit-per-minute 120 --max-active-requests 1
 curl http://127.0.0.1:8080/v1/embeddings \
   -H "Content-Type: application/json" \

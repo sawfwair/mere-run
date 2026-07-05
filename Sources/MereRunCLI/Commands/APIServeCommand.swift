@@ -12,7 +12,7 @@ import MediaIO
 import MereRunCore
 
 struct APIServe: AsyncParsableCommand {
-    private static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+    static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
 
     static let configuration = CommandConfiguration(
         commandName: "serve",
@@ -136,7 +136,21 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Gemma4 token offset at which KV cache quantization begins.")
     var quantizedKVStart: Int?
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect server configuration without starting the API server.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
     func run() async throws {
+        if preflight {
+            try runPreflight()
+            return
+        }
+        guard !json else {
+            throw ValidationError("--json is only supported with --preflight for api serve.")
+        }
+
         let resolvedAPIKey = resolveAPIKey()
         try validateServerSecurity(apiKey: resolvedAPIKey)
         let resolvedModelPath = try resolveModelPath()
@@ -157,7 +171,7 @@ struct APIServe: AsyncParsableCommand {
         try await server.run(host: host, port: port)
     }
 
-    private func defaultRuntimeModelID(modelPath: String?) -> String {
+    func defaultRuntimeModelID(modelPath: String?) -> String {
         if let requested = model?.trimmingCharacters(in: .whitespacesAndNewlines),
            let spec = ManagedModelCatalog.spec(for: requested),
            spec.defaultRuntimeServingEngine == engine.runtimeServingEngine {
@@ -182,7 +196,7 @@ struct APIServe: AsyncParsableCommand {
         }
     }
 
-    private func resolveModelPath() throws -> String? {
+    func resolveModelPath() throws -> String? {
         switch engine {
         case .textCode:
             return model
@@ -269,7 +283,7 @@ struct APIServe: AsyncParsableCommand {
             : Gemma4Resources.defaultQuantizedKVStart)
     }
 
-    private func resolveAPIKey() -> String? {
+    func resolveAPIKey() -> String? {
         if let apiKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty {
             return apiKey
         }
@@ -281,7 +295,7 @@ struct APIServe: AsyncParsableCommand {
         return nil
     }
 
-    private func validateServerSecurity(apiKey: String?) throws {
+    func validateServerSecurity(apiKey: String?) throws {
         guard rateLimitPerMinute > 0 else {
             throw ValidationError("--rate-limit-per-minute must be greater than zero.")
         }
@@ -304,7 +318,7 @@ struct APIServe: AsyncParsableCommand {
         }
     }
 
-    private func resolveMemoryPressurePolicy() throws -> RuntimeMemoryPressurePolicy {
+    func resolveMemoryPressurePolicy() throws -> RuntimeMemoryPressurePolicy {
         let gib = Double(1024 * 1024 * 1024)
         let customCeilingBytes = memoryGuardCustomCeilingGB.map { UInt64(($0 * gib).rounded(.down)) }
         if memoryGuard == .custom, customCeilingBytes == nil {
@@ -316,9 +330,37 @@ struct APIServe: AsyncParsableCommand {
         )
     }
 
-    private static func isLoopbackHost(_ host: String) -> Bool {
+    static func isLoopbackHost(_ host: String) -> Bool {
         let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized == "127.0.0.1" || normalized == "localhost" || normalized == "::1"
+    }
+
+    func makePreflightEnvelope(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        now: @escaping () -> Date = Date.init
+    ) -> APIServePreflightEnvelope {
+        APIServePreflightAnalyzer(
+            command: self,
+            fileManager: fileManager,
+            environment: environment,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight() throws {
+        let envelope = makePreflightEnvelope()
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
     }
 }
 

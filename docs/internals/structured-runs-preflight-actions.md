@@ -373,6 +373,7 @@ run.json
 events.jsonl
 metrics.csv
 actions.json
+plan.json
 artifacts/
 samples/
 checkpoints/
@@ -384,6 +385,8 @@ Required files:
 - `run.json`: latest run envelope and request summary.
 - `events.jsonl`: append-only event stream.
 - `actions.json`: next actions valid for the current run state.
+- `plan.json`: normalized executable request, when the run came from a saved
+  plan.
 
 Optional files:
 
@@ -393,8 +396,13 @@ Optional files:
 - `checkpoints/`: intermediate model artifacts.
 - `logs/`: diagnostic logs, when logs are too large for events.
 
-The first phase can keep the existing LoRA layout. The shared layout should be
-introduced when a second command adopts structured runs.
+The first image slices keep the existing LoRA layout while adding plan
+materialization through `image run-plan --materialize`. That creates `plan.json`,
+`actions.json`, `run.json`, a `*.events.jsonl` stream, and the standard
+`samples/`, `checkpoints/`, `artifacts/`, and `logs/` directories before work
+starts. Executing the materialized `plan.json` resumes that event stream so the
+same directory moves from `run_planned` to `run_started`, progress when the
+workflow emits it, and a final `run_finished` or `run_failed` event.
 
 ## First vertical slice: `image train-lora --preflight --json`
 
@@ -741,15 +749,18 @@ Acceptance:
 ### Phase 6: structured run directories
 
 After the first preflight slice is stable, extend real long-running commands to
-write `run.json`, `actions.json`, and normalized events.
+write `run.json`, `actions.json`, and normalized events. The first image steps
+now materialize saved LoRA training and generation plans into this layout with
+`image run-plan --materialize`.
 
 Start with:
 
 - `image train-lora`, because it already has run artifacts
+- `image generate`, because wrappers need durable output directories before
+  expensive image work starts
 
 Then:
 
-- `image generate`
 - `video generate`
 - `sfx video generate`
 - `vision track`
@@ -770,13 +781,15 @@ High-value commands:
 - `model pull --preflight --json`
   - model size, source, installed state, disk estimate, cache path, actions
 - `api serve --preflight --json`
-  - host, port, auth requirement, selected engine, model availability, actions
+  - implemented: host, port, auth requirement, selected engine, model availability, runtime limits, companion models, actions
 - `image generate --preflight --json`
   - model availability, dimensions, reference images, output path, actions
 - `video generate --preflight --json`
-  - frame count, dimensions, model availability, image inputs, output path
+  - implemented: frame count, dimensions, model availability, image inputs, output path, actions
 - `vision track --preflight --json`
-  - video input readability, model availability, prompt, output path
+  - implemented: video input path, model availability, prompt parsing, output/json/mask destinations, actions
+- `sfx video generate --preflight --json`
+  - implemented: raw video or feature input, VFlow/DVFlow model availability, Synchformer requirement, output path, denoise plan, actions
 - `model benchmark ... --json`
   - benchmark plan, live metrics, final report, rerun action
 
@@ -785,6 +798,27 @@ Lower-value commands can wait.
 ### Phase 8: optional viewers
 
 Only after JSON and run directories are stable, add viewers as thin clients.
+The headless readback layer is `mere.run run list --root <path> --json` plus
+`mere.run run inspect <path> --json`. `run list` discovers durable run
+directories, structured report JSON files, and saved run-plan JSON files under a
+workspace root; `run inspect` drills into one selected artifact. Future viewers
+should treat those reports as their first data source rather than rediscovering
+files or actions themselves.
+
+Legacy/plugin run directories remain explicitly marked as non-native. When
+their `run.json` matches a known plugin manifest shape, `run inspect` emits a
+warning-level `legacy_manifest` summary instead of treating the directory as an
+opaque blocker. Unknown or corrupt manifests still block inspection.
+
+Run-directory inspection also emits a compact `metrics` summary derived from
+loss CSVs and discovered artifacts, so clients can show latest loss, step range,
+sample count, checkpoint count, and adapter count without parsing artifact
+files themselves.
+
+`run list` entries include `created_at` and `updated_at` where those timestamps
+are available from native manifests, event streams, legacy/plugin manifests,
+structured reports, or saved plans. Clients should sort locally rather than
+requiring another CLI mode for each view.
 
 Viewer rule:
 
@@ -808,12 +842,14 @@ This is intentionally not part of the first implementation milestone.
 | Command | `--json` | `--preflight` | actions | run directory | viewer |
 | --- | --- | --- | --- | --- | --- |
 | `image train-lora` | phase 3 | phase 3 | phase 3 | phase 6 | existing, later upgrade |
-| `image generate` | phase 7 | phase 7 | phase 7 | phase 7 | later |
-| `video generate` | phase 7 | phase 7 | phase 7 | phase 7 | later |
-| `sfx video generate` | phase 7 | phase 7 | phase 7 | phase 7 | later |
-| `vision track` | phase 7 | phase 7 | phase 7 | phase 7 | later |
-| `api serve` | phase 7 | phase 7 | phase 7 | not needed | later |
-| `model pull` | phase 7 | phase 7 | phase 7 | not needed | not needed |
+| `image generate` | implemented | implemented | implemented | implemented for saved plans | later |
+| `video generate` | implemented for preflight | implemented | implemented | phase 7 | later |
+| `sfx video generate` | implemented for preflight | implemented | implemented | phase 7 | later |
+| `vision track` | implemented for preflight | implemented | implemented | phase 7 | later |
+| `api serve` | implemented for preflight | implemented | implemented | not needed | later |
+| `model pull` | implemented | implemented | implemented | not needed | not needed |
+| `run list` | implemented | not needed | implemented | discovers existing | not needed |
+| `run inspect` | implemented | not needed | implemented | reads existing | not needed |
 | `model benchmark` | phase 7 | phase 7 | phase 7 | phase 7 | later |
 
 ## Error handling
@@ -901,23 +937,42 @@ Scope:
 
 Scope:
 
-- `model pull --preflight --json`
 - `image generate --preflight --json`
+- generation model/input/LoRA/structured-prompt/output diagnostics
+- `start-generation`, `pull-model`, input/open, LoRA reveal, and output actions
+- `result.run_plan` for `image.generate`
+- `image run-plan` replay, preflight, and materialization for saved generation
+  plans
+- `model pull --preflight --json`
+- pull model/source/support/install/disk diagnostics
+- `pull-model`, `pull-models`, model-store, and hub-cache actions
+- `api serve --preflight --json`
+- serving host/port/auth/model/runtime/KV diagnostics
+- redacted start-server, status, model-store, and pull actions
 - shared model availability diagnostics
 
 ### PR 4: long-running media commands
 
 Scope:
 
-- `video generate`
-- `sfx video generate`
-- `vision track`
+- `video generate --preflight --json`
+- video model/input/output/duration/frame diagnostics
+- `start-video-generation`, `pull-model`, input reveal, and output actions
+- `vision track --preflight --json`
+- tracking video/model/prompt/output/json/mask diagnostics
+- `start-tracking`, `pull-model`, input reveal, output, and mask actions
+- `sfx video generate --preflight --json`
+- VFlow/DVFlow model, raw-video Synchformer, feature-input, output, and denoise diagnostics
+- `start-sfx-video-generation`, `pull-model`, `pull-synchformer`, input reveal, and output actions
 - benchmark commands where useful
 
-### PR 5: optional viewer refresh
+### PR 5: run inspection and optional viewer refresh
 
 Scope:
 
+- generic `run list --json` discovery under workspace roots
+- generic `run inspect --json` readback for run directories, report files, and
+  plan files
 - render actions in the LoRA viewer
 - optionally introduce a generic `run view`
 - keep viewer loopback-only

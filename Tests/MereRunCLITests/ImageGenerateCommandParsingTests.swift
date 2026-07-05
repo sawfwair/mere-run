@@ -166,6 +166,289 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertThrowsError(try ImageGenerate.parseKreaConditioningLayerWeights("1,nope,3"))
     }
 
+    func testParsesImageGenerationPreflightJSONOptions() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a clean product render",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testImageGenerationPreflightReportsReadyLocalRequest() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-zimage", family: .zimage, to: model)
+
+        let input = temp.appendingPathComponent("input.png")
+        let reference = temp.appendingPathComponent("reference.png")
+        let lora = temp.appendingPathComponent("style.safetensors")
+        try Data("input".utf8).write(to: input)
+        try Data("reference".utf8).write(to: reference)
+        try Data("lora".utf8).write(to: lora)
+
+        let output = temp.appendingPathComponent("render.png")
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "turn this into a matte catalog image",
+            "--model", model.path,
+            "--output", output.path,
+            "--input", input.path,
+            "--ref-image", reference.path,
+            "--lora", lora.path,
+            "--lora-scale", "0.8",
+            "--steps", "6",
+            "--seed", "42",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.command, ["image", "generate"])
+        XCTAssertEqual(envelope.result.model.kind, "local_path")
+        XCTAssertEqual(envelope.result.model.family, "zimage")
+        XCTAssertEqual(envelope.result.output.path, output.path)
+        XCTAssertEqual(envelope.result.inputs.inputImage?.path, input.path)
+        XCTAssertEqual(envelope.result.inputs.referenceImages.first?.path, reference.path)
+        XCTAssertEqual(envelope.result.lora?.path, lora.path)
+        XCTAssertEqual(envelope.result.lora?.scale, 0.8)
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, 6)
+        XCTAssertEqual(envelope.result.plan.inputMode, "image_to_image_with_references")
+        XCTAssertEqual(envelope.result.runPlan.kind, ImageGenerationRunPlan.kind)
+        XCTAssertEqual(envelope.result.runPlan.command, ["image", "generate"])
+        XCTAssertEqual(envelope.result.runPlan.arguments.prompt, "turn this into a matte catalog image")
+        XCTAssertEqual(envelope.result.runPlan.arguments.output, output.path)
+        XCTAssertEqual(envelope.result.runPlan.arguments.model, model.path)
+        XCTAssertEqual(envelope.result.runPlan.arguments.steps, 6)
+        XCTAssertEqual(envelope.result.runPlan.arguments.seed, 42)
+        XCTAssertEqual(envelope.result.runPlan.arguments.executableArgv().prefix(3), ["mere.run", "image", "generate"])
+
+        let startGeneration = try XCTUnwrap(envelope.actions.first { $0.id == "start-generation" })
+        XCTAssertTrue(startGeneration.enabled)
+        XCTAssertEqual(startGeneration.command?.argv.prefix(5), [
+            "mere.run",
+            "image",
+            "generate",
+            "--prompt",
+            "turn this into a matte catalog image",
+        ])
+        XCTAssertTrue(startGeneration.command?.argv.contains(output.path) == true)
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ImageGenerationPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded.status, .ok)
+        XCTAssertEqual(decoded.result.model.family, "zimage")
+
+        let encodedPlan = try StructuredRunOutput.encode(envelope.result.runPlan)
+        let planURL = temp.appendingPathComponent("generate.plan.json")
+        try Data(encodedPlan.utf8).write(to: planURL)
+
+        let runPlanCommand = try ImageRunPlan.parse([
+            planURL.path,
+            "--preflight",
+            "--json",
+        ])
+        let loadedWorkflowPlan = try runPlanCommand.loadWorkflowPlan()
+        XCTAssertEqual(loadedWorkflowPlan, .generate(envelope.result.runPlan))
+
+        let commandFromPlan = try runPlanCommand.makeGenerateCommand(from: envelope.result.runPlan)
+        XCTAssertEqual(commandFromPlan.prompt, "turn this into a matte catalog image")
+        XCTAssertEqual(commandFromPlan.output, output.path)
+        XCTAssertEqual(commandFromPlan.model, model.path)
+        XCTAssertEqual(commandFromPlan.input, input.path)
+        XCTAssertEqual(commandFromPlan.referenceImages, [reference.path])
+        XCTAssertEqual(commandFromPlan.lora, lora.path)
+        XCTAssertEqual(commandFromPlan.loraScale, 0.8)
+        XCTAssertEqual(commandFromPlan.steps, 6)
+        XCTAssertEqual(commandFromPlan.seed, 42)
+        XCTAssertFalse(commandFromPlan.preflight)
+        XCTAssertFalse(commandFromPlan.json)
+    }
+
+    func testImageRunPlanMaterializesGenerationRunDirectory() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-zimage", family: .zimage, to: model)
+
+        let output = temp.appendingPathComponent("outside", isDirectory: true)
+            .appendingPathComponent("render.png")
+        let structuredPromptOutput = temp.appendingPathComponent("outside", isDirectory: true)
+            .appendingPathComponent("prompt.json")
+        let generate = try ImageGenerate.parse([
+            "--prompt", "a quiet product photo",
+            "--model", model.path,
+            "--output", output.path,
+            "--steps", "6",
+            "--seed", "42",
+            "--structured-prompt",
+            "--structured-prompt-output", structuredPromptOutput.path,
+        ])
+        let preflight = generate.makePreflightEnvelope(
+            outputURL: output,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        let sourcePlanURL = temp.appendingPathComponent("source.plan.json")
+        try StructuredRunOutput.encode(preflight.result.runPlan)
+            .write(to: sourcePlanURL, atomically: true, encoding: .utf8)
+
+        let runDirectory = temp.appendingPathComponent("runs", isDirectory: true)
+            .appendingPathComponent("render", isDirectory: true)
+        let command = try ImageRunPlan.parse([
+            sourcePlanURL.path,
+            "--materialize",
+            runDirectory.path,
+            "--json",
+        ])
+        let envelope = try command.materializeEnvelope(
+            plan: preflight.result.runPlan,
+            runDirectory: runDirectory.path,
+            now: { Date(timeIntervalSince1970: 10) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.mode, .materialize)
+        XCTAssertEqual(URL(fileURLWithPath: envelope.request.planFile).lastPathComponent, "source.plan.json")
+        XCTAssertEqual(URL(fileURLWithPath: envelope.result.runDirectory).lastPathComponent, "render")
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-generation" })
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "output_relocated" })
+        XCTAssertEqual(URL(fileURLWithPath: try XCTUnwrap(envelope.result.structuredPromptOutputPath)).lastPathComponent, "prompt.json")
+
+        let materializedPlanURL = URL(fileURLWithPath: envelope.result.planPath)
+        let materializedPlan = try ImageGenerationRunPlan.decode(from: materializedPlanURL)
+        XCTAssertEqual(materializedPlan.arguments.output, envelope.result.outputPath)
+        XCTAssertEqual(materializedPlan.arguments.structuredPromptOutput, envelope.result.structuredPromptOutputPath)
+
+        let commandFromPlan = try command.makeGenerateCommand(from: materializedPlan)
+        XCTAssertEqual(commandFromPlan.output, envelope.result.outputPath)
+        XCTAssertEqual(commandFromPlan.structuredPromptOutput, envelope.result.structuredPromptOutputPath)
+
+        let decoder = JSONDecoder()
+        let actionsURL = URL(fileURLWithPath: envelope.result.actionsPath)
+        let actions = try decoder.decode([DeclarativeAction].self, from: Data(contentsOf: actionsURL))
+        let startGeneration = try XCTUnwrap(actions.first { $0.id == "start-generation" })
+        XCTAssertEqual(startGeneration.command?.argv, ["mere.run", "image", "run-plan", materializedPlanURL.path])
+        XCTAssertFalse(actions.contains { $0.id == "visualize-run" })
+
+        let manifestURL = URL(fileURLWithPath: envelope.result.runManifestPath)
+        let manifest = try LoRATrainingRunManifest.decode(from: Data(contentsOf: manifestURL))
+        XCTAssertEqual(manifest.format, ImageGenerationRunPlan.kind)
+        XCTAssertEqual(manifest.step, 0)
+        XCTAssertEqual(manifest.totalSteps, 6)
+        XCTAssertEqual(manifest.seed, 42)
+        XCTAssertEqual(manifest.checkpointFiles["plan"], "plan.json")
+        XCTAssertEqual(manifest.checkpointFiles["actions"], "actions.json")
+        XCTAssertEqual(manifest.checkpointFiles["output_image"], "render.png")
+        XCTAssertEqual(manifest.checkpointFiles["structured_prompt"], "prompt.json")
+        XCTAssertEqual(manifest.configSnapshot?["input_mode"], "text_to_image")
+
+        let eventsURL = URL(fileURLWithPath: envelope.result.eventsPath)
+        let events = try LoRATrainingRunEvent.load(from: eventsURL)
+        XCTAssertEqual(events.first?.type, "run_planned")
+        XCTAssertEqual(events.first?.path, envelope.result.outputPath)
+
+        let viewer = LoRATrainingRunViewer(runDirectoryURL: URL(fileURLWithPath: envelope.result.runDirectory))
+        let snapshot = try viewer.snapshot()
+        XCTAssertEqual(snapshot.status, "planned")
+        XCTAssertEqual(snapshot.events.map(\.type), ["run_planned"])
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "root" && $0.name == "plan.json" })
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "root" && $0.name == "actions.json" })
+
+        let eventLogger = try XCTUnwrap(
+            commandFromPlan.makeRunEventLoggerIfNeeded(
+                outputURL: URL(fileURLWithPath: envelope.result.outputPath),
+                modelRoot: model,
+                modelManifest: MereRunModelManifest(
+                    id: "local-zimage",
+                    family: .zimage,
+                    variant: .distilled,
+                    precision: .bf16,
+                    supports: []
+                ),
+                effectiveSteps: 6,
+                effectiveCFGScale: 1.0,
+                effectiveSigmaShift: nil,
+                inputMode: "text_to_image"
+            )
+        )
+        XCTAssertEqual(try LoRATrainingRunEvent.load(from: eventsURL).map(\.type), ["run_planned", "run_started"])
+        XCTAssertEqual(try viewer.snapshot().status, "running")
+
+        try eventLogger.record(
+            type: "run_finished",
+            stage: "finished",
+            step: 6,
+            totalSteps: 6,
+            fraction: 1,
+            path: envelope.result.outputPath
+        )
+        XCTAssertEqual(try viewer.snapshot().status, "finished")
+    }
+
+    func testImageGenerationPreflightBlocksMissingInputImage() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-zimage", family: .zimage, to: model)
+
+        let missingInput = temp.appendingPathComponent("missing.png")
+        let output = temp.appendingPathComponent("render.png")
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "clean up this image",
+            "--model", model.path,
+            "--output", output.path,
+            "--input", missingInput.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "input_image_missing" })
+
+        let startGeneration = try XCTUnwrap(envelope.actions.first { $0.id == "start-generation" })
+        XCTAssertFalse(startGeneration.enabled)
+        XCTAssertEqual(startGeneration.disabledReason, "Resolve hard blockers first.")
+    }
+
+    func testImageGenerationPreflightBlocksUnsupportedModelFamily() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-gemma", family: .gemma, to: model)
+        let output = temp.appendingPathComponent("render.png")
+
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a clean product render",
+            "--model", model.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "model_family_unsupported" })
+    }
+
     func testStructuredPromptAdapterValidatesPaperSchema() throws {
         let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
 
@@ -321,6 +604,32 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
             "{ed feetization mas Dod asked Lolamente lesser0 or<audio|>"
         ))
         XCTAssertFalse(StructuredImagePromptAdapter.isParseableJSON(""))
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-image-preflight-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        return temp
+    }
+
+    private func writeManifest(
+        id: String,
+        family: MereRunModelManifest.Family,
+        to directory: URL
+    ) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let manifest = MereRunModelManifest(
+            id: id,
+            family: family,
+            variant: .distilled,
+            precision: .bf16,
+            supports: []
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(manifest)
+            .write(to: directory.appendingPathComponent(MereRunModelManifest.filename))
     }
 
     private static let validStructuredCaptionJSON = """

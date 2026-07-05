@@ -50,6 +50,36 @@ swift run mere.run image generate \
   --output ./mug.png
 ```
 
+Preflight the same request when a script, agent, or app needs structured
+model/input/output checks before generation starts:
+
+```bash
+swift run mere.run image generate \
+  --model image-zimage-nano \
+  --prompt "a ceramic mug in soft morning light" \
+  --output ./mug.png \
+  --preflight \
+  --json
+```
+
+The JSON report uses the shared structured-run envelope and includes
+diagnostics plus declarative actions such as `start-generation`, `pull-model`,
+and `open-output-directory`. It also includes `result.run_plan`, a normalized
+`image.generate` plan that can be saved and replayed:
+
+```bash
+swift run mere.run image run-plan ./mug.plan.json --preflight --json
+swift run mere.run image run-plan ./mug.plan.json --materialize ./runs/mug --json
+swift run mere.run image run-plan ./mug.plan.json
+```
+
+Materialized generation directories contain `plan.json`, `actions.json`,
+`run.json`, an initial events file, and artifact folders. The materialized plan
+relocates the output image and optional structured-prompt sidecar into that
+directory; executing it appends `run_started`, `run_finished`, or `run_failed`
+events to the same stream. Hard blockers exit nonzero after the report is
+printed.
+
 ### Klein generation and LoRA training
 
 Klein models run through the native Swift FLUX.2 Klein runtime. Base Klein
@@ -109,6 +139,18 @@ For cleaner public-facing exports, keep the seed and prompt fixed, render at a
 larger matching aspect ratio such as 1280x960 with 24 steps, then downsample to
 1024x768 with a high-quality image resizer.
 
+If you are starting from a project data root instead of a specific dataset
+folder, discover image-caption leaves first:
+
+```bash
+swift run mere.run image dataset discover \
+  --root ./project-data \
+  --json
+```
+
+Use one of the returned candidate paths as `--data` for training. This keeps
+root folders, eval folders, and loose generated images out of the training path.
+
 Run a preflight before spending training time:
 
 ```bash
@@ -123,7 +165,21 @@ swift run mere.run image train-lora \
 The preflight path inspects the dataset, resolved recipe, model availability,
 output path, warnings, hard blockers, and next actions without loading the full
 model or starting training. It prints a single JSON report to stdout when
-`--json` is set; diagnostics stay out of stdout.
+`--json` is set; diagnostics stay out of stdout. The JSON includes
+`result.run_plan`, which can be saved and replayed without reconstructing CLI
+state:
+
+```bash
+swift run mere.run image run-plan ./style.plan.json --preflight --json
+swift run mere.run image run-plan ./style.plan.json --materialize ./runs/style --json
+swift run mere.run image run-plan ./style.plan.json
+```
+
+Materialized LoRA run directories contain `plan.json`, `actions.json`,
+`run.json`, and an initial events file. The materialized `plan.json` moves the
+output adapter path into that run directory so `image visualize-run` has a
+stable folder to watch before training starts. Running that materialized plan
+appends started, progress, finished, or failed events to the same stream.
 
 Add `--visualize` during training to start a loopback dashboard with the live
 loss curve, progress events, samples, checkpoints, and run artifacts. Reopen a

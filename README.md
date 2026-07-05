@@ -236,6 +236,7 @@ swift run mere.run setup
 
 # Pull a Hugging Face-backed model into the local model store
 swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --preflight --json
 swift run mere.run model pull text-chat-lfm25-a1b-8bit
 swift run mere.run model pull text-code-north-mini
 swift run mere.run model pull text-agent-ornith-35b
@@ -245,6 +246,13 @@ swift run mere.run model pull text-agent-ornith-35b
 swift run mere.run image generate \
   --prompt "a ceramic coffee mug in soft morning light" \
   --output ./mug.png
+
+# Preflight the same request as JSON before loading the image model
+swift run mere.run image generate \
+  --prompt "a ceramic coffee mug in soft morning light" \
+  --output ./mug.png \
+  --preflight \
+  --json
 
 # Pull and run the native Swift Bonsai binary or ternary image model
 swift run mere.run model pull image-bonsai-binary
@@ -299,6 +307,11 @@ swift run mere.run image generate \
 # Reopen the local run dashboard later from the run directory.
 swift run mere.run image visualize-run .
 
+# Discover and inspect run artifacts headlessly.
+swift run mere.run run list --root ./runs --json
+swift run mere.run run inspect ./runs/render --json
+swift run mere.run run inspect ./render.plan.json --json
+
 # Run local chat
 swift run mere.run text chat \
   --stream \
@@ -316,6 +329,9 @@ swift run mere.run text anonymize \
 # Serve the OpenAI-compatible local API on loopback
 swift run mere.run api serve --engine text-chat-gemma4
 swift run mere.run api serve --engine text-chat-lfm2
+
+# Inspect the serving plan before starting the server or loading a model
+swift run mere.run api serve --engine text-chat-gemma4 --preflight --json
 
 # In another terminal, confirm the server and served model
 swift run mere.run status
@@ -450,6 +466,7 @@ swift run mere.run vision segment ./image.png --prompt "a person"
 
 # Track prompted objects through a video
 swift run mere.run vision track ./clip.mp4 --prompt "a person"
+swift run mere.run vision track ./clip.mp4 --prompt "a person" --preflight --json
 
 # Record a short camera session and track it
 swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
@@ -529,6 +546,13 @@ swift run mere.run sfx video generate \
   ./silent-hallway.mp4 \
   --model sfx-woosh-dvflow-8s \
   --output ./hallway-footsteps.wav
+swift run mere.run sfx video generate \
+  "footsteps echoing in a hallway" \
+  ./silent-hallway.mp4 \
+  --model sfx-woosh-dvflow-8s \
+  --output ./hallway-footsteps.wav \
+  --preflight \
+  --json
 
 # Generate a fast video-only draft
 swift run mere.run video generate \
@@ -537,6 +561,16 @@ swift run mere.run video generate \
   --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4
+
+# Inspect the same render before loading MLX or writing an MP4
+swift run mere.run video generate \
+  "a cinematic drone flythrough over snowy mountains" \
+  --variant distilled \
+  --model video-ltx23-av-mlx \
+  --num-frames 65 \
+  --output ./clip.mp4 \
+  --preflight \
+  --json
 
 # Anchor the first and last keyframes for directed image-to-video
 swift run mere.run video generate \
@@ -587,6 +621,7 @@ The public CLI is modality-first:
 - `mere.run sfx generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
+- `mere.run run { list, inspect }`
 - `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
 - `mere.run status`
 - `mere.run api serve`
@@ -639,6 +674,9 @@ point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
 
 The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
 
+- `mere.run api serve --preflight --json` reports host/port, auth, model,
+  runtime, and redacted follow-up actions before starting a server or loading a
+  model
 - `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
 - the OpenAI-compatible chat and embedding routes require `Content-Type: application/json`, support `--rate-limit-per-minute` for basic abuse control, decode the common OpenAI request shapes, and reject unsupported high-impact fields before generation
 - API LoRA adapters are operator-controlled with `--lora`; per-request LoRA paths are rejected

@@ -100,6 +100,8 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.endFrame)
         XCTAssertEqual(cmd.threshold, 0.05, accuracy: 0.0001)
         XCTAssertFalse(cmd.showBoxes)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
     }
 
     func testVisionTrackResolvesDefaultOutputPaths() {
@@ -112,6 +114,166 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
             VisionTrack.resolveJSONOutputURL(nil, inputVideoURL: videoURL).path,
             "/tmp/photo_tracked.json"
         )
+    }
+
+    func testVisionTrackParsesPreflightJSONFlags() throws {
+        let cmd = try VisionTrack.parse([
+            "/tmp/video.mp4",
+            "--prompt", "a dog",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testVisionTrackPreflightReportsRunnablePlan() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("sam31", isDirectory: true)
+        try writeMinimalSAM31Model(at: modelRoot)
+        let videoURL = try makeTempFile(name: "clip.mp4", in: temp)
+        let outputURL = temp.appendingPathComponent("clip-tracked.mp4")
+        let jsonURL = temp.appendingPathComponent("clip-tracked.json")
+        let maskDir = temp.appendingPathComponent("masks", isDirectory: true)
+
+        let cmd = try VisionTrack.parse([
+            videoURL.path,
+            "--prompt", "a dog",
+            "--box", "40,50,120,180,dog",
+            "--model", modelRoot.path,
+            "--output", outputURL.path,
+            "--json-output", jsonURL.path,
+            "--mask-output-dir", maskDir.path,
+            "--init-frame", "12",
+            "--end-frame", "24",
+            "--show-boxes",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            videoURL: videoURL,
+            outputVideoURL: outputURL,
+            outputJSONURL: jsonURL,
+            maskOutputDirectoryURL: maskDir,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.command, ["vision", "track"])
+        XCTAssertEqual(envelope.mode, .preflight)
+        XCTAssertEqual(envelope.result.model.kind, "local_path")
+        XCTAssertTrue(envelope.result.model.installed)
+        XCTAssertTrue(envelope.result.video.exists)
+        XCTAssertEqual(envelope.result.prompts.normalizedTextPrompts, ["dog"])
+        XCTAssertEqual(envelope.result.prompts.boxCount, 1)
+        XCTAssertEqual(envelope.result.outputs.annotatedVideo.path, outputURL.path)
+        XCTAssertEqual(envelope.result.outputs.trackingJSON.path, jsonURL.path)
+        XCTAssertEqual(envelope.result.outputs.maskDirectory?.path, maskDir.path)
+        XCTAssertEqual(envelope.result.plan.initFrame, 12)
+        XCTAssertEqual(envelope.result.plan.endFrame, 24)
+        XCTAssertTrue(envelope.result.plan.showBoxes)
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-tracking" && $0.enabled })
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(VisionTrackPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded, envelope)
+    }
+
+    func testVisionTrackPreflightBlocksMissingVideo() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("sam31", isDirectory: true)
+        try writeMinimalSAM31Model(at: modelRoot)
+        let videoURL = temp.appendingPathComponent("missing.mp4")
+        let outputURL = VisionTrack.resolveOutputURL(nil, inputVideoURL: videoURL)
+        let jsonURL = VisionTrack.resolveJSONOutputURL(nil, inputVideoURL: videoURL)
+        let cmd = try VisionTrack.parse([
+            videoURL.path,
+            "--prompt", "a dog",
+            "--model", modelRoot.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            videoURL: videoURL,
+            outputVideoURL: outputURL,
+            outputJSONURL: jsonURL,
+            maskOutputDirectoryURL: nil,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "video_missing" })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-tracking" && !$0.enabled })
+    }
+
+    func testVisionTrackPreflightOwnsEmptyPromptValidation() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("sam31", isDirectory: true)
+        try writeMinimalSAM31Model(at: modelRoot)
+        let videoURL = try makeTempFile(name: "clip.mp4", in: temp)
+        let outputURL = VisionTrack.resolveOutputURL(nil, inputVideoURL: videoURL)
+        let jsonURL = VisionTrack.resolveJSONOutputURL(nil, inputVideoURL: videoURL)
+        let cmd = try VisionTrack.parse([
+            videoURL.path,
+            "--model", modelRoot.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            videoURL: videoURL,
+            outputVideoURL: outputURL,
+            outputJSONURL: jsonURL,
+            maskOutputDirectoryURL: nil,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "prompt_set_empty" })
+    }
+
+    func testVisionTrackPreflightReportsPromptParseFailures() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("sam31", isDirectory: true)
+        try writeMinimalSAM31Model(at: modelRoot)
+        let videoURL = try makeTempFile(name: "clip.mp4", in: temp)
+        let outputURL = VisionTrack.resolveOutputURL(nil, inputVideoURL: videoURL)
+        let jsonURL = VisionTrack.resolveJSONOutputURL(nil, inputVideoURL: videoURL)
+        let cmd = try VisionTrack.parse([
+            videoURL.path,
+            "--box", "not,a,box",
+            "--model", modelRoot.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            videoURL: videoURL,
+            outputVideoURL: outputURL,
+            outputJSONURL: jsonURL,
+            maskOutputDirectoryURL: nil,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "prompt_parse_failed" })
     }
 
     func testVisionTrackLiveParsesDefaults() throws {
@@ -207,5 +369,11 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
+    }
+
+    private func makeTempFile(name: String, in directory: URL) throws -> URL {
+        let url = directory.appendingPathComponent(name)
+        try Data("fixture".utf8).write(to: url)
+        return url
     }
 }

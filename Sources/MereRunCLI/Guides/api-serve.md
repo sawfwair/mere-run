@@ -67,6 +67,9 @@ mere.run status
 
 - Keep loopback binds for local-only tools.
 - For non-loopback hosts, always set `MERERUN_API_KEY` or pass `--api-key`.
+- Use `mere.run api serve --preflight --json` to inspect host/port, auth,
+  engine/model availability, LoRA paths, runtime limits, KV settings, companion
+  model ids, and redacted follow-up actions before starting the server.
 - Choose the engine first, then the model path/id.
 - Use `mere.run status` as the quick `/health` plus `/v1/models` check.
 - Use `mere.run model runtime set` to configure aliases, pinning, TTL, and
@@ -144,6 +147,11 @@ mere.run status
 - Use `stream_options.include_usage` when a client expects the OpenAI streaming usage chunk.
 
 ## Examples
+
+```bash
+mere.run api serve --preflight --json
+mere.run api serve --host 0.0.0.0 --preflight --json
+```
 
 ```bash
 mere.run api serve --engine text-code --port 8080

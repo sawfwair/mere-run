@@ -53,7 +53,41 @@ mere.run guide image generate --model image-zimage-nano
 - `--structured-prompt-output`: write the generated JSON caption for review or reuse.
 - `--lora`, `-l`: LoRA safetensors path.
 - `--lora-scale`: LoRA strength.
+- `--preflight`: inspect model, input, LoRA, structured-prompt, and output paths without running generation.
+- `--json`: with `--preflight`, emit a structured report for scripts and apps.
 - `--quiet`, `-q`: print only the output path.
+
+## Preflight
+
+Use preflight when the caller needs a cheap go/no-go contract before model load
+or image generation. JSON is written to stdout and diagnostics stay structured:
+
+```bash
+mere.run image generate \
+  --model image-zimage-nano \
+  --prompt "macro product photo of a matte black ceramic mug" \
+  --output ./mug.png \
+  --preflight \
+  --json
+```
+
+The report includes `status`, `diagnostics`, resolved model/output summaries,
+input and LoRA file checks, effective sampling settings, and declarative actions
+such as `start-generation`, `pull-model`, and `open-output-directory`. Hard
+blockers exit nonzero after the JSON is printed. Save `result.run_plan` when you
+want to replay the exact normalized generation request later:
+
+```bash
+mere.run image run-plan ./mug.plan.json --preflight --json
+mere.run image run-plan ./mug.plan.json --materialize ./runs/mug --json
+mere.run image run-plan ./mug.plan.json
+```
+
+Materialization writes `plan.json`, `actions.json`, `run.json`, an initial
+events file, and artifact folders before generation starts. The copied plan
+relocates the output image and optional structured-prompt sidecar into the run
+directory, then execution appends started/finished/failed events to the same
+stream.
 
 ## Prompting Patterns
 

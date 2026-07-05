@@ -38,6 +38,10 @@ mere.run video generate --help
 - `--image-strength`: image conditioning strength from `0` to `1`.
 - `--end-image`: optional ending keyframe; requires `--image`.
 - `--end-image-strength`: ending keyframe conditioning strength from `0` to `1`.
+- `--preflight`: inspect the request without loading MLX, loading the model, or
+  writing an MP4.
+- `--json`: with `--preflight`, emit a structured report with diagnostics and
+  declarative follow-up actions.
 - `--quiet`, `-q`: suppress diagnostics.
 
 ## Prompting Patterns
@@ -50,8 +54,22 @@ mere.run video generate --help
 - Use `video-ltx23-av-mlx --variant unified-av --fps 24` for representative
   LTX 2.3 dialogue, score, and SFX checks.
 - Use standard aspect ratios before custom sizes.
+- Use `--preflight --json` before long renders to confirm model availability,
+  keyframe paths, output overwrite risk, resolved dimensions, and resolved
+  frame count/duration.
 
 ## Examples
+
+```bash
+mere.run video generate \
+  "slow cinematic dolly shot through a rainy neon alley, reflections on pavement, moody blue and magenta light" \
+  --variant distilled \
+  --width 768 --height 512 \
+  --num-frames 65 \
+  --output ./alley.mp4 \
+  --preflight \
+  --json
+```
 
 ```bash
 mere.run video generate \

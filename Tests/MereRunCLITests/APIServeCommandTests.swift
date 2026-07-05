@@ -28,6 +28,8 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertNil(cmd.kvQuantScheme)
         XCTAssertNil(cmd.kvGroupSize)
         XCTAssertNil(cmd.quantizedKVStart)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
     }
 
     func testAPIServeParsesOverrides() throws {
@@ -64,6 +66,90 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.kvQuantScheme, "turboquant")
         XCTAssertEqual(cmd.kvGroupSize, 32)
         XCTAssertEqual(cmd.quantizedKVStart, 2048)
+    }
+
+    func testAPIServeParsesPreflightJSONFlags() throws {
+        let cmd = try APIServe.parse([
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testAPIServePreflightReportsLoopbackServerPlan() throws {
+        let cmd = try APIServe.parse([
+            "--host", "127.0.0.1",
+            "--port", "11434",
+            "--engine", "text-chat-q36",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            environment: [:],
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.command, ["api", "serve"])
+        XCTAssertEqual(envelope.mode, .preflight)
+        XCTAssertEqual(envelope.result.server.baseURL, "http://127.0.0.1:11434")
+        XCTAssertTrue(envelope.result.server.loopback)
+        XCTAssertFalse(envelope.result.server.requiresAPIKey)
+        XCTAssertFalse(envelope.result.server.apiKeyPresent)
+        XCTAssertEqual(envelope.result.runtime.engine, "text-chat-q36")
+        XCTAssertEqual(envelope.result.runtime.runtimeServingEngine, "text-chat-q36")
+        XCTAssertEqual(envelope.result.model.defaultModelID, ModelResolver.ModelID.q36Nano.rawValue)
+        XCTAssertEqual(envelope.result.model.kind, "managed_model")
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-api-server" })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "check-status" })
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(APIServePreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded.result.server.port, 11_434)
+        XCTAssertEqual(decoded.request.apiKeySource, "none")
+    }
+
+    func testAPIServePreflightBlocksNonLoopbackWithoutAPIKey() throws {
+        let cmd = try APIServe.parse([
+            "--host", "0.0.0.0",
+            "--port", "11434",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            environment: [:],
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "api_key_required_for_non_loopback" })
+        let startServer = try XCTUnwrap(envelope.actions.first { $0.id == "start-api-server" })
+        XCTAssertFalse(startServer.enabled)
+    }
+
+    func testAPIServePreflightDoesNotExposeAPIKeyInActionArgv() throws {
+        let cmd = try APIServe.parse([
+            "--host", "0.0.0.0",
+            "--port", "11434",
+            "--api-key", "super-secret",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            environment: [:],
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertNotEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.request.apiKeyPresent)
+        XCTAssertEqual(envelope.request.apiKeySource, "argument")
+        let startServer = try XCTUnwrap(envelope.actions.first { $0.id == "start-api-server" })
+        XCTAssertFalse(startServer.command?.argv.contains("super-secret") == true)
+        XCTAssertFalse(startServer.command?.argv.contains("--api-key") == true)
     }
 
     func testAPIServeGemma4TurboModelDefaultsToTurboQuantKVCache() throws {

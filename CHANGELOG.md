@@ -6,6 +6,63 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added `run list --json` and `run inspect --json`, typed readback reports for
+  durable run directories, structured report JSON files, and saved run-plan JSON
+  files. `run list` discovers existing artifacts under a workspace root and
+  emits per-entry inspect actions; `run inspect` summarizes run status,
+  manifests, events, actions, and artifacts without starting a workflow.
+- added legacy/plugin run manifest readback to `run inspect --json`, so older
+  runpod-backed run folders surface provider, GPU, dataset, recipe, command,
+  status, and sample/artifact files as warning-level entries instead of opaque
+  decode blockers.
+- added compact run metrics to `run inspect --json`, including loss CSV summary,
+  latest loss, step range, sample image count, checkpoint count, and adapter
+  count for durable run directories.
+- added `created_at` and `updated_at` fields to `run list --json` entries when
+  known from native manifests, events, legacy/plugin manifests, reports, or
+  saved plans, so wrappers can sort workspace run browsers without extra
+  inspection passes.
+- added optional per-candidate LoRA preflight commands to
+  `image dataset discover --json` via `--training-output-root`,
+  `--training-model`, and `--training-recipe`, so wrappers can turn discovered
+  dataset leaves into concrete `image train-lora --preflight --json` actions.
+- added `image generate --preflight --json`, a typed structured preflight report
+  for local image generation. It checks model availability, input/reference
+  files, LoRA files, structured-prompt paths, output overwrite risk, and emits
+  declarative follow-up actions plus `result.run_plan` before loading the model
+  or writing an image.
+- added `image run-plan` support for saved `image.generate` plans, allowing
+  generation plans emitted by preflight JSON to be preflighted, materialized into
+  durable run directories, or executed later without reconstructing CLI
+  arguments.
+- added `model pull --preflight --json`, a typed structured preflight report for
+  managed model downloads. It checks catalog source availability, machine
+  support, installed state, model-store and hub-cache paths, disk headroom, and
+  emits declarative pull/open actions before downloading.
+- added `api serve --preflight --json`, a typed structured preflight report for
+  the local OpenAI-compatible server. It checks host/port settings, non-loopback
+  auth requirements, selected engine/model availability, LoRA paths, runtime
+  limits, KV cache settings, companion models, and emits redacted start/status
+  actions before starting the server or loading a model.
+- added `video generate --preflight --json`, a typed structured preflight
+  report for native LTX video generation. It checks prompt/options, model root
+  availability, image and end-keyframe paths, output overwrite risk, resolved
+  dimensions, resolved frame count/duration, unified AV fps warnings, and emits
+  declarative start/pull/open/reveal actions before loading MLX or writing MP4s.
+- added `vision track --preflight --json`, a typed structured preflight report
+  for SAM 3.1 video tracking. It checks video path availability, prompt/box/point
+  parsing, init/end frame options, threshold/resolution limits, model
+  availability, output/json/mask destinations, and emits declarative start,
+  pull, reveal, and open actions before loading SAM or extracting frames.
+- added `sfx video generate --preflight --json`, a typed structured preflight
+  report for Woosh video-to-audio generation. It checks raw-video versus `.npy`
+  feature input mode, output WAV state, VFlow/DVFlow model availability, raw
+  video Synchformer requirements, duration/steps/CFG/renoise options, and emits
+  declarative start, pull, reveal, and open actions before loading MLX or
+  generating audio.
+
 ## 0.19.0 - 2026-07-04
 
 ### Added

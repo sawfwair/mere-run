@@ -5,8 +5,114 @@ import XCTest
 final class ImageTrainLoRACommandParsingTests: XCTestCase {
     func testImageCommandExposesTrainLoRA() {
         let commandNames = Set(Image.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("dataset"))
+        XCTAssertTrue(commandNames.contains("run-plan"))
         XCTAssertTrue(commandNames.contains("train-lora"))
         XCTAssertTrue(commandNames.contains("visualize-run"))
+    }
+
+    func testImageDatasetDiscoverFindsNestedTrainableLeaves() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("data", isDirectory: true)
+        let trainable = root
+            .appendingPathComponent("lora-datasets", isDirectory: true)
+            .appendingPathComponent("esf", isDirectory: true)
+            .appendingPathComponent("amelie", isDirectory: true)
+            .appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: trainable, withIntermediateDirectories: true)
+        try Data("image".utf8).write(to: trainable.appendingPathComponent("frame-001.jpg"))
+        try Data("warm cafe frame".utf8).write(to: trainable.appendingPathComponent("frame-001.txt"))
+
+        let needsReview = root
+            .appendingPathComponent("lora-datasets", isDirectory: true)
+            .appendingPathComponent("esf", isDirectory: true)
+            .appendingPathComponent("missing-captions", isDirectory: true)
+            .appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: needsReview, withIntermediateDirectories: true)
+        try Data("image".utf8).write(to: needsReview.appendingPathComponent("frame-001.png"))
+        try Data("".utf8).write(to: needsReview.appendingPathComponent("frame-001.txt"))
+
+        let cmd = try ImageDatasetDiscover.parse([
+            "--root", root.path,
+            "--json",
+        ])
+        let envelope = try cmd.makeEnvelope(now: { Date(timeIntervalSince1970: 0) })
+
+        XCTAssertEqual(envelope.status, .warning)
+        XCTAssertEqual(envelope.command, ["image", "dataset", "discover"])
+        XCTAssertEqual(envelope.result.candidateCount, 2)
+        XCTAssertEqual(envelope.result.trainableCandidateCount, 1)
+        XCTAssertTrue(envelope.result.candidates.contains {
+            $0.relativePath == "lora-datasets/esf/amelie/dataset" && $0.trainable
+        })
+        XCTAssertTrue(envelope.result.candidates.contains {
+            $0.relativePath == "lora-datasets/esf/missing-captions/dataset" && !$0.trainable
+        })
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "dataset_candidates_need_review" })
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(LoRATrainingDatasetDiscoveryEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded.result.trainableCandidateCount, 1)
+        let choose = try XCTUnwrap(decoded.actions.first { $0.id == "choose-dataset" })
+        XCTAssertEqual(choose.candidates.count, 1)
+        XCTAssertEqual(choose.candidates.first?.patches.map(\.path), ["request.data", "run_plan.arguments.data"])
+        XCTAssertNil(choose.candidates.first?.command)
+    }
+
+    func testImageDatasetDiscoverEmitsTrainingPreflightCommands() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("data", isDirectory: true)
+        let trainable = root
+            .appendingPathComponent("lora-datasets", isDirectory: true)
+            .appendingPathComponent("esf", isDirectory: true)
+            .appendingPathComponent("amelie", isDirectory: true)
+            .appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: trainable, withIntermediateDirectories: true)
+        try Data("image".utf8).write(to: trainable.appendingPathComponent("frame-001.jpg"))
+        try Data("warm cafe frame".utf8).write(to: trainable.appendingPathComponent("frame-001.txt"))
+
+        let outputRoot = temp.appendingPathComponent("lora-output", isDirectory: true)
+        let cmd = try ImageDatasetDiscover.parse([
+            "--root", root.path,
+            "--training-output-root", outputRoot.path,
+            "--training-model", "image-krea2-raw",
+            "--training-recipe", "krea-fast-style",
+            "--json",
+        ])
+        let envelope = try cmd.makeEnvelope(now: { Date(timeIntervalSince1970: 0) })
+
+        XCTAssertEqual(envelope.status, .ok)
+        let standardizedOutputRoot = outputRoot.standardizedFileURL
+        XCTAssertEqual(envelope.request.trainingOutputRoot, standardizedOutputRoot.path)
+        XCTAssertEqual(envelope.request.trainingModel, "image-krea2-raw")
+        XCTAssertEqual(envelope.request.trainingRecipe, "krea-fast-style")
+
+        let candidate = try XCTUnwrap(envelope.actions.first { $0.id == "choose-dataset" }?.candidates.first)
+        let command = try XCTUnwrap(candidate.command)
+        let discoveredDataset = try XCTUnwrap(envelope.result.candidates.first?.path)
+        XCTAssertEqual(command.commandPath, ["image", "train-lora"])
+        XCTAssertEqual(command.argv, [
+            "mere.run",
+            "image",
+            "train-lora",
+            "--data",
+            discoveredDataset,
+            "--output",
+            standardizedOutputRoot.appendingPathComponent("lora-datasets-esf-amelie-dataset.safetensors").path,
+            "--model",
+            "image-krea2-raw",
+            "--recipe",
+            "krea-fast-style",
+            "--preflight",
+            "--json",
+        ])
+        XCTAssertEqual(candidate.patches.map(\.path), ["request.data", "run_plan.arguments.data"])
     }
 
     func testTrainLoRAParsesDefaults() throws {
@@ -404,6 +510,14 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(options.lrWarmupSteps, 20)
         XCTAssertEqual(options.useCosineScheduler, true)
         XCTAssertEqual(options.lrMinFactor, 0)
+
+        let plan = cmd.makeRunPlan(options: options, now: { Date(timeIntervalSince1970: 0) })
+        XCTAssertEqual(plan.arguments.sourceRecipe, "krea-cinematic-style")
+        XCTAssertEqual(plan.arguments.model, "image-krea2-raw")
+        XCTAssertEqual(plan.arguments.width, 768)
+        XCTAssertEqual(plan.arguments.height, 416)
+        XCTAssertTrue(plan.arguments.noCompile)
+        XCTAssertFalse(plan.arguments.trainLoRAArguments().contains("--recipe"))
     }
 
     func testTrainLoRAKreaSchedulerCanBeDisabled() throws {
@@ -498,6 +612,65 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(decoded.command, ["image", "train-lora"])
     }
 
+    func testTrainLoRAPreflightDiscoversChildDatasetsForRootFolder() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent("animatic-data", isDirectory: true)
+        let dataset = root
+            .appendingPathComponent("lora-datasets", isDirectory: true)
+            .appendingPathComponent("esf", isDirectory: true)
+            .appendingPathComponent("spirited-away", isDirectory: true)
+            .appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("image".utf8).write(to: dataset.appendingPathComponent("frame-001.jpg"))
+        try Data("bathhouse bridge at dusk".utf8).write(to: dataset.appendingPathComponent("frame-001.txt"))
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-krea", family: .krea, to: model)
+
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", root.path,
+            "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            options: try cmd.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.result.dataset.imageCount, 0)
+        XCTAssertEqual(envelope.result.datasetDiscovery?.trainableCandidateCount, 1)
+        XCTAssertEqual(
+            envelope.result.datasetDiscovery?.candidates.first?.relativePath,
+            "lora-datasets/esf/spirited-away/dataset"
+        )
+
+        let noImages = try XCTUnwrap(envelope.diagnostics.first { $0.id == "no_training_images" })
+        XCTAssertTrue(noImages.suggestedActionIDs.contains("discover-datasets"))
+        XCTAssertTrue(noImages.suggestedActionIDs.contains("choose-dataset"))
+
+        let discover = try XCTUnwrap(envelope.actions.first { $0.id == "discover-datasets" })
+        XCTAssertEqual(discover.command?.argv, [
+            "mere.run",
+            "image",
+            "dataset",
+            "discover",
+            "--root",
+            root.resolvingSymlinksInPath().path,
+            "--json",
+        ])
+
+        let choose = try XCTUnwrap(envelope.actions.first { $0.id == "choose-dataset" })
+        XCTAssertEqual(choose.kind, .select)
+        XCTAssertEqual(choose.candidates.first?.label, "lora-datasets/esf/spirited-away/dataset")
+        XCTAssertEqual(choose.candidates.first?.patches.map(\.path), ["request.data", "run_plan.arguments.data"])
+        XCTAssertEqual(choose.candidates.first?.patches.first?.value, envelope.result.datasetDiscovery?.candidates.first?.path)
+    }
+
     func testTrainLoRAPreflightReportsWarningsAndEnabledTrainingAction() throws {
         let temp = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -546,6 +719,146 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--training-steps",
             "10",
         ])
+
+        let plan = envelope.result.runPlan
+        XCTAssertEqual(plan.kind, LoRATrainingRunPlan.kind)
+        XCTAssertEqual(plan.command, ["image", "train-lora"])
+        XCTAssertEqual(plan.arguments.data, dataset.path)
+        XCTAssertEqual(plan.arguments.output, temp.appendingPathComponent("style.safetensors").path)
+        XCTAssertEqual(plan.arguments.model, model.path)
+        XCTAssertEqual(plan.arguments.trainingSteps, 10)
+        XCTAssertEqual(plan.arguments.executableArgv().prefix(3), ["mere.run", "image", "train-lora"])
+        XCTAssertTrue(plan.arguments.executableArgv().contains("--model"))
+
+        let encodedPlan = try StructuredRunOutput.encode(plan)
+        let planURL = temp.appendingPathComponent("style.plan.json")
+        try Data(encodedPlan.utf8).write(to: planURL)
+
+        let runPlan = try ImageRunPlan.parse([
+            planURL.path,
+            "--preflight",
+            "--json",
+        ])
+        let loadedPlan = try runPlan.loadPlan()
+        XCTAssertEqual(loadedPlan, plan)
+
+        let commandFromPlan = try runPlan.makeTrainLoRACommand(from: loadedPlan)
+        XCTAssertEqual(commandFromPlan.data, dataset.path)
+        XCTAssertEqual(commandFromPlan.output, temp.appendingPathComponent("style.safetensors").path)
+        XCTAssertEqual(commandFromPlan.model, model.path)
+        XCTAssertEqual(commandFromPlan.trainingSteps, 10)
+        XCTAssertFalse(commandFromPlan.preflight)
+        XCTAssertFalse(commandFromPlan.json)
+    }
+
+    func testImageRunPlanMaterializesDurableRunDirectory() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("image".utf8).write(to: dataset.appendingPathComponent("frame-001.png"))
+        try Data("materialized frame".utf8).write(to: dataset.appendingPathComponent("frame-001.txt"))
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-krea", family: .krea, to: model)
+
+        let originalOutput = temp.appendingPathComponent("outside.safetensors")
+        let train = try ImageTrainLoRA.parse([
+            "--data", dataset.path,
+            "--output", originalOutput.path,
+            "--model", model.path,
+            "--steps", "10",
+        ])
+        let plan = train.makeRunPlan(
+            options: try train.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        let sourcePlanURL = temp.appendingPathComponent("source.plan.json")
+        try StructuredRunOutput.encode(plan).write(to: sourcePlanURL, atomically: true, encoding: .utf8)
+
+        let runDirectory = temp.appendingPathComponent("runs", isDirectory: true)
+            .appendingPathComponent("style", isDirectory: true)
+        let command = try ImageRunPlan.parse([
+            sourcePlanURL.path,
+            "--materialize",
+            runDirectory.path,
+            "--json",
+        ])
+        let envelope = try command.materializeEnvelope(
+            plan: try command.loadPlan(),
+            runDirectory: runDirectory.path,
+            now: { Date(timeIntervalSince1970: 10) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.mode, .materialize)
+        XCTAssertEqual(URL(fileURLWithPath: envelope.request.planFile).lastPathComponent, "source.plan.json")
+        XCTAssertEqual(URL(fileURLWithPath: envelope.result.runDirectory).lastPathComponent, "style")
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-training" })
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "output_relocated" })
+
+        let materializedPlanURL = URL(fileURLWithPath: envelope.result.planPath)
+        let materializedPlan = try LoRATrainingRunPlan.decode(from: materializedPlanURL)
+        XCTAssertEqual(materializedPlan.arguments.output, envelope.result.outputPath)
+        XCTAssertEqual(materializedPlan.arguments.data, dataset.path)
+
+        let commandFromPlan = try command.makeTrainLoRACommand(from: materializedPlan)
+        XCTAssertEqual(commandFromPlan.output, envelope.result.outputPath)
+        XCTAssertEqual(commandFromPlan.data, dataset.path)
+
+        let decoder = JSONDecoder()
+        let actionsURL = URL(fileURLWithPath: envelope.result.actionsPath)
+        let actions = try decoder.decode([DeclarativeAction].self, from: Data(contentsOf: actionsURL))
+        let startTraining = try XCTUnwrap(actions.first { $0.id == "start-training" })
+        XCTAssertEqual(startTraining.command?.argv, ["mere.run", "image", "run-plan", materializedPlanURL.path])
+
+        let manifestURL = URL(fileURLWithPath: envelope.result.runManifestPath)
+        let manifest = try LoRATrainingRunManifest.decode(from: Data(contentsOf: manifestURL))
+        XCTAssertEqual(manifest.format, LoRATrainingRunPlan.kind)
+        XCTAssertEqual(manifest.step, 0)
+        XCTAssertEqual(manifest.totalSteps, 10)
+        XCTAssertEqual(manifest.checkpointFiles["plan"], "plan.json")
+        XCTAssertEqual(manifest.checkpointFiles["actions"], "actions.json")
+
+        let eventsURL = URL(fileURLWithPath: envelope.result.eventsPath)
+        let events = try LoRATrainingRunEvent.load(from: eventsURL)
+        XCTAssertEqual(events.first?.type, "run_planned")
+        XCTAssertEqual(events.first?.path, envelope.result.outputPath)
+
+        let viewer = LoRATrainingRunViewer(runDirectoryURL: URL(fileURLWithPath: envelope.result.runDirectory))
+        let snapshot = try viewer.snapshot()
+        XCTAssertEqual(snapshot.status, "planned")
+        XCTAssertEqual(snapshot.events.map(\.type), ["run_planned"])
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "root" && $0.name == "plan.json" })
+        XCTAssertTrue(snapshot.artifacts.contains { $0.kind == "root" && $0.name == "actions.json" })
+
+        let eventLogger = try XCTUnwrap(
+            commandFromPlan.makeRunEventLoggerIfNeeded(
+                outputURL: URL(fileURLWithPath: envelope.result.outputPath),
+                modelRoot: model,
+                modelManifest: MereRunModelManifest(
+                    id: "local-krea",
+                    family: .krea,
+                    variant: .base,
+                    precision: .bf16,
+                    supports: [.loraTraining]
+                ),
+                options: try commandFromPlan.resolvedTrainingOptions()
+            )
+        )
+        XCTAssertEqual(try LoRATrainingRunEvent.load(from: eventsURL).map(\.type), ["run_planned", "run_started"])
+        XCTAssertEqual(try viewer.snapshot().status, "running")
+
+        try eventLogger.record(
+            type: "run_finished",
+            stage: "finished",
+            step: 10,
+            totalSteps: 10,
+            fraction: 1,
+            path: envelope.result.outputPath
+        )
+        XCTAssertEqual(try viewer.snapshot().status, "finished")
     }
 
     private func makeTemporaryDirectory() throws -> URL {

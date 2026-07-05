@@ -57,10 +57,27 @@ struct SFXVideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("sync-batch-size")], help: "Synchformer segment batch size for raw video input.")
     var syncBatchSize: Int = 1
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the SFX video request without loading MLX or generating audio.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
     func run() async throws {
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for sfx video generate.")
+        }
+
+        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
+        let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-sfx-video", defaultExtension: "wav")
+        if preflight {
+            try runPreflight(inputURL: inputURL, outputURL: outputURL)
+            return
+        }
+
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
         guard durationSeconds > 0 else {
             throw ValidationError("--duration must be > 0")
@@ -79,11 +96,9 @@ struct SFXVideoGenerate: AsyncParsableCommand {
             throw ValidationError("--sync-batch-size must be >= 1")
         }
 
-        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
             throw ValidationError("Input not found: \(input)")
         }
-        let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-sfx-video", defaultExtension: "wav")
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         let resolved = try await SFXWooshRuntime.resolve(model: model, quiet: quiet)
@@ -207,5 +222,85 @@ struct SFXVideoGenerate: AsyncParsableCommand {
             throw ValidationError("Expected video features with shape [frames, 768] or [1, frames, 768]; got \(features.shape)")
         }
         return features
+    }
+
+    func makePreflightEnvelope(
+        inputURL: URL,
+        outputURL: URL,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> SFXVideoPreflightEnvelope {
+        let preflightInput = SFXVideoPreflightInput(
+            prompt: prompt,
+            inputURL: inputURL,
+            outputURL: outputURL,
+            model: model,
+            synchformerModel: synchformerModel,
+            durationSeconds: durationSeconds,
+            steps: steps,
+            guidanceScale: guidanceScale,
+            seed: seed,
+            renoise: renoise,
+            syncBatchSize: syncBatchSize,
+            generationArgv: generationActionArguments(inputURL: inputURL, outputURL: outputURL),
+            cwd: fileManager.currentDirectoryPath
+        )
+        return SFXVideoPreflightAnalyzer(
+            input: preflightInput,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight(inputURL: URL, outputURL: URL) throws {
+        let envelope = makePreflightEnvelope(inputURL: inputURL, outputURL: outputURL)
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
+
+    private func generationActionArguments(inputURL: URL, outputURL: URL) -> [String] {
+        var args = [
+            "mere.run",
+            "sfx",
+            "video",
+            "generate",
+            prompt,
+            inputURL.path,
+            "--output",
+            outputURL.path,
+            "--model",
+            model,
+            "--synchformer-model",
+            synchformerModel,
+            "--duration",
+            String(durationSeconds),
+            "--sync-batch-size",
+            String(syncBatchSize),
+        ]
+        if let steps {
+            args += ["--steps", String(steps)]
+        }
+        if let guidanceScale {
+            args += ["--cfg", String(guidanceScale)]
+        }
+        if let seed {
+            args += ["--seed", String(seed)]
+        }
+        if let renoise {
+            args += ["--renoise", renoise]
+        }
+        if quiet {
+            args.append("--quiet")
+        }
+        return args
     }
 }

@@ -70,6 +70,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
             "music",
             "sfx",
             "video",
+            "run",
             "model",
             "status",
             "api",

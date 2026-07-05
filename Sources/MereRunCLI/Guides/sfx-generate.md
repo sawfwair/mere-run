@@ -46,8 +46,13 @@ mere.run guide sfx generate --model sfx-woosh-dflow
   The default 4-step DFlow schedule is `0,0.5,0.5,0.3`.
 - `--seed`: deterministic MLX random seed.
 - `--output`, `-o`: output WAV path.
+- `--preflight`: for `sfx video generate`, inspect inputs, model requirements,
+  output path, and denoise settings without loading MLX or generating audio.
+- `--json`: with `--preflight`, emit a structured report with diagnostics and
+  declarative follow-up actions.
 - `sfx video generate` takes a raw video file by default. It can also take a
   feature `.npy` with shape `[frames, 768]` or `[1, frames, 768]`.
+  Raw video inputs require `sfx-woosh-synchformer`; `.npy` feature inputs do not.
 
 ## Examples
 
@@ -101,6 +106,16 @@ mere.run sfx video generate \
   silent-hallway.mp4 \
   --model sfx-woosh-dvflow-8s \
   -o hallway-footsteps.wav
+```
+
+```bash
+mere.run sfx video generate \
+  "footsteps echoing in a hallway" \
+  silent-hallway.mp4 \
+  --model sfx-woosh-dvflow-8s \
+  -o hallway-footsteps.wav \
+  --preflight \
+  --json
 ```
 
 ## Notes

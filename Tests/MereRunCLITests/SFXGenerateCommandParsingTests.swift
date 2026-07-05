@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
@@ -127,5 +128,232 @@ final class SFXGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(try cmd.parseRenoiseSchedule(steps: 4), [0, 0.5, 0.5, 0.3])
         XCTAssertEqual(cmd.output, "/tmp/video-sfx.wav")
         XCTAssertTrue(cmd.quiet)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
+    }
+
+    func testSFXVideoGenerateParsesPreflightJSONFlags() throws {
+        let cmd = try SFXVideoGenerate.parse([
+            "footsteps echoing in a hallway",
+            "/tmp/synch.npy",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
+    }
+
+    func testSFXVideoPreflightReportsRawVideoPlan() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("woosh", isDirectory: true)
+        try writeMinimalWooshModel(at: modelRoot, variant: .dvflow8s)
+        let synchformerRoot = temp.appendingPathComponent("synchformer", isDirectory: true)
+        try writeMinimalSynchformer(at: synchformerRoot)
+        let videoURL = try makeTempFile(name: "silent-hallway.mp4", in: temp)
+        let outputURL = temp.appendingPathComponent("hallway-footsteps.wav")
+        let cmd = try SFXVideoGenerate.parse([
+            "footsteps echoing in a hallway",
+            videoURL.path,
+            "--model", modelRoot.path,
+            "--synchformer-model", synchformerRoot.path,
+            "--duration", "8",
+            "--renoise", "0,0.5,0.5,0.3",
+            "--output", outputURL.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            inputURL: videoURL,
+            outputURL: outputURL,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.command, ["sfx", "video", "generate"])
+        XCTAssertEqual(envelope.mode, .preflight)
+        XCTAssertEqual(envelope.result.input.kind, "video")
+        XCTAssertTrue(envelope.result.input.requiresSynchformer)
+        XCTAssertEqual(envelope.result.model.kind, "local_path")
+        XCTAssertEqual(envelope.result.model.variant, WooshVariant.dvflow8s.rawValue)
+        XCTAssertTrue(envelope.result.model.installed)
+        XCTAssertEqual(envelope.result.synchformer?.kind, "local_path")
+        XCTAssertTrue(envelope.result.synchformer?.installed == true)
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, 4)
+        XCTAssertEqual(envelope.result.plan.effectiveGuidanceScale, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(envelope.result.plan.renoiseSchedule, [0, 0.5, 0.5, 0.3])
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-sfx-video-generation" && $0.enabled })
+
+        let encoded = try StructuredRunOutput.encode(envelope)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(SFXVideoPreflightEnvelope.self, from: Data(encoded.utf8))
+        XCTAssertEqual(decoded, envelope)
+    }
+
+    func testSFXVideoPreflightFeatureInputDoesNotRequireSynchformer() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("woosh", isDirectory: true)
+        try writeMinimalWooshModel(at: modelRoot, variant: .vflow8s)
+        let featuresURL = try makeTempFile(name: "features.npy", in: temp)
+        let outputURL = temp.appendingPathComponent("features.wav")
+        let cmd = try SFXVideoGenerate.parse([
+            "mechanical whir",
+            featuresURL.path,
+            "--model", modelRoot.path,
+            "--synchformer-model", temp.appendingPathComponent("missing-synchformer").path,
+            "--steps", "2",
+            "--cfg", "4.25",
+            "--output", outputURL.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            inputURL: featuresURL,
+            outputURL: outputURL,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.input.kind, "features")
+        XCTAssertFalse(envelope.result.input.requiresSynchformer)
+        XCTAssertNil(envelope.result.synchformer)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "feature_shape_unverified" })
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, 2)
+        XCTAssertEqual(envelope.result.plan.effectiveGuidanceScale, 4.25, accuracy: 0.0001)
+    }
+
+    func testSFXVideoPreflightBlocksMissingInput() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("woosh", isDirectory: true)
+        try writeMinimalWooshModel(at: modelRoot, variant: .dvflow8s)
+        let synchformerRoot = temp.appendingPathComponent("synchformer", isDirectory: true)
+        try writeMinimalSynchformer(at: synchformerRoot)
+        let inputURL = temp.appendingPathComponent("missing.mp4")
+        let outputURL = temp.appendingPathComponent("out.wav")
+        let cmd = try SFXVideoGenerate.parse([
+            "footsteps echoing in a hallway",
+            inputURL.path,
+            "--model", modelRoot.path,
+            "--synchformer-model", synchformerRoot.path,
+            "--output", outputURL.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            inputURL: inputURL,
+            outputURL: outputURL,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "input_missing" })
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-sfx-video-generation" && !$0.enabled })
+    }
+
+    func testSFXVideoPreflightBlocksWrongWooshVariant() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("woosh", isDirectory: true)
+        try writeMinimalWooshModel(at: modelRoot, variant: .dflow)
+        let featuresURL = try makeTempFile(name: "features.npy", in: temp)
+        let outputURL = temp.appendingPathComponent("out.wav")
+        let cmd = try SFXVideoGenerate.parse([
+            "mechanical whir",
+            featuresURL.path,
+            "--model", modelRoot.path,
+            "--output", outputURL.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            inputURL: featuresURL,
+            outputURL: outputURL,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "model_not_video_to_audio" })
+    }
+
+    func testSFXVideoPreflightBlocksInvalidRenoiseSchedule() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("woosh", isDirectory: true)
+        try writeMinimalWooshModel(at: modelRoot, variant: .dvflow8s)
+        let featuresURL = try makeTempFile(name: "features.npy", in: temp)
+        let outputURL = temp.appendingPathComponent("out.wav")
+        let cmd = try SFXVideoGenerate.parse([
+            "mechanical whir",
+            featuresURL.path,
+            "--model", modelRoot.path,
+            "--steps", "4",
+            "--renoise", "0.1,0.2",
+            "--output", outputURL.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            inputURL: featuresURL,
+            outputURL: outputURL,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "renoise_invalid" })
+    }
+
+    private func makeTempDir() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mererun-sfx-tests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    private func makeTempFile(name: String, in directory: URL) throws -> URL {
+        let url = directory.appendingPathComponent(name)
+        try Data("fixture".utf8).write(to: url)
+        return url
+    }
+
+    private func writeMinimalWooshModel(at root: URL, variant: WooshVariant) throws {
+        for component in variant.requiredComponents {
+            let componentRoot = root.appendingPathComponent(component, isDirectory: true)
+            try FileManager.default.createDirectory(at: componentRoot, withIntermediateDirectories: true)
+            try Data("fixture".utf8).write(to: componentRoot.appendingPathComponent("config.yaml"))
+            try Data("fixture".utf8).write(to: componentRoot.appendingPathComponent("weights.safetensors"))
+        }
+        let conditioner = variant == .vflow8s || variant == .dvflow8s ? "TextConditionerV" : "TextConditionerA"
+        let tokenizer = root
+            .appendingPathComponent(conditioner, isDirectory: true)
+            .appendingPathComponent("tokenizer", isDirectory: true)
+        try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: tokenizer.appendingPathComponent("tokenizer.json"))
+    }
+
+    private func writeMinimalSynchformer(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("fixture".utf8).write(
+            to: root.appendingPathComponent(WooshResources.synchformerFilename)
+        )
     }
 }

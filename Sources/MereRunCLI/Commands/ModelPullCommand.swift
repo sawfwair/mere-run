@@ -23,6 +23,12 @@ struct ModelPull: AsyncParsableCommand {
     @Flag(name: [.long], help: "Bypass the Apple Silicon and unified-memory support check.")
     var allowUnsupported: Bool = false
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect support, source, disk, and install state without downloading.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
     func validate() throws {
         if target == nil && !all {
             throw ValidationError("Provide a model id or use --all.")
@@ -30,9 +36,17 @@ struct ModelPull: AsyncParsableCommand {
         if target != nil && all {
             throw ValidationError("Specify either a model id or --all, not both.")
         }
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for model pull.")
+        }
     }
 
     func run() async throws {
+        if preflight {
+            try runPreflight()
+            return
+        }
+
         if all {
             for spec in ManagedModelCatalog.allSpecs {
                 let support = ManagedModelCapabilityCatalog.support(for: spec)
@@ -186,6 +200,63 @@ struct ModelPull: AsyncParsableCommand {
     private func stderrRaw(_ message: String) {
         CLIStderr.write(message)
     }
+
+    func makePreflightEnvelope(
+        fileManager: FileManager = .default,
+        hubCacheURL: URL? = nil,
+        modelStoreURL: URL? = nil,
+        now: @escaping () -> Date = Date.init
+    ) -> ModelPullPreflightEnvelope {
+        let input = ModelPullPreflightInput(
+            target: target,
+            all: all,
+            force: force,
+            allowUnsupported: allowUnsupported,
+            pullArgv: pullActionArguments(),
+            cwd: fileManager.currentDirectoryPath
+        )
+        return ModelPullPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            hubCacheURL: hubCacheURL,
+            modelStoreURL: modelStoreURL,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight() throws {
+        let envelope = makePreflightEnvelope()
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
+
+    private func pullActionArguments() -> [String] {
+        var args = ["mere.run", "model", "pull"]
+        if all {
+            args.append("--all")
+        } else if let target {
+            args.append(target)
+        }
+        if force {
+            args.append("--force")
+        }
+        if quiet {
+            args.append("--quiet")
+        }
+        if allowUnsupported {
+            args.append("--allow-unsupported")
+        }
+        return args
+    }
 }
 
 struct ModelPullInstallError: LocalizedError, Sendable {
@@ -217,6 +288,11 @@ struct ModelPullDiskPreflight {
     static let safetyMarginBytes: Int64 = 2 * bytesPerGiB
     static let lowHeadroomWarningBytes: Int64 = 10 * bytesPerGiB
     static let minimumModelStoreBytes: Int64 = 64 * 1_048_576
+
+    static func requiredBytes(estimatedDownloadBytes: Int64?) -> Int64? {
+        guard let estimatedDownloadBytes else { return nil }
+        return estimatedDownloadBytes + max(safetyMarginBytes, estimatedDownloadBytes / 5)
+    }
 
     static func check(
         spec: ManagedModelSpec,
@@ -274,7 +350,7 @@ struct ModelPullDiskPreflight {
             return warnings
         }
 
-        let requiredBytes = estimatedDownloadBytes + max(safetyMarginBytes, estimatedDownloadBytes / 5)
+        let requiredBytes = requiredBytes(estimatedDownloadBytes: estimatedDownloadBytes) ?? estimatedDownloadBytes
         if hubCacheAvailableBytes < requiredBytes {
             throw ValidationError(
                 """
