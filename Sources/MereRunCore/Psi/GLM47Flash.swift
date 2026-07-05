@@ -75,39 +75,17 @@ public final class GLM47Flash: @unchecked Sendable {
             repetitionContextSize: 32
         )
 
-        // Depth-1 pipelined decode; see generateStream for the shape. The
-        // legacy loop synchronized twice per token.
-        var repetitionHistory = repetitionHistoryArray(promptTokens: tokens, config: genConfig)
-        var pendingToken: MLXArray?
-        for _ in 0..<maxNewTokens {
-            let lastLogits = logits[0, -1, 0...]
-            let tokenArray = sampledTokenArray(
-                logits: lastLogits,
-                config: genConfig,
-                previousTokenIndices: repetitionHistory,
-                banMask: nil
-            )
-            repetitionHistory = appendingRepetitionHistory(repetitionHistory, token: tokenArray, config: genConfig)
-            logits = model(tokenArray.asType(.int32).reshaped(1, 1), cache: cache)
-            asyncEval([logits, tokenArray])
-
-            if let previous = pendingToken {
-                pendingToken = nil
-                let value = previous.item(Int.self)
-                if eosTokens.contains(value) {
-                    let decoded = tokenizer.decode(tokens: generatedTokens)
-                    return (decoded.trimmingCharacters(in: .whitespacesAndNewlines), generatedTokens.count)
-                }
-                generatedTokens.append(value)
-            }
-            pendingToken = tokenArray
-        }
-        if let previous = pendingToken {
-            let value = previous.item(Int.self)
-            if !eosTokens.contains(value) {
-                generatedTokens.append(value)
-            }
-        }
+        let result = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: logits,
+                generationConfig: genConfig,
+                eosTokens: eosTokens,
+                tokenBudget: maxNewTokens,
+                historySeedTokens: tokens
+            ),
+            stepForward: { token in model(token, cache: cache) }
+        )
+        generatedTokens = result.generatedTokens
 
         let decoded = tokenizer.decode(tokens: generatedTokens)
         return (decoded.trimmingCharacters(in: .whitespacesAndNewlines), generatedTokens.count)
@@ -142,48 +120,23 @@ public final class GLM47Flash: @unchecked Sendable {
             repetitionContextSize: 32
         )
 
-        // Depth-1 pipelined decode: GPU-side sampling with an on-GPU
-        // repetition window, the sampled token feeding the next forward
-        // directly, and the previous step's token read back while the
-        // current step executes. The legacy loop synchronized twice per
-        // token (sample readback plus a blocking logits eval).
-        var repetitionHistory = repetitionHistoryArray(promptTokens: tokens, config: genConfig)
-        var pendingToken: MLXArray?
-        for _ in 0..<maxNewTokens {
-            let lastLogits = logits[0, -1, 0...]
-            let tokenArray = sampledTokenArray(
-                logits: lastLogits,
-                config: genConfig,
-                previousTokenIndices: repetitionHistory,
-                banMask: nil
-            )
-            repetitionHistory = appendingRepetitionHistory(repetitionHistory, token: tokenArray, config: genConfig)
-            logits = model(tokenArray.asType(.int32).reshaped(1, 1), cache: cache)
-            asyncEval([logits, tokenArray])
-
-            if let previous = pendingToken {
-                pendingToken = nil
-                let value = previous.item(Int.self)
-                if eosTokens.contains(value) {
-                    let decoded = tokenizer.decode(tokens: generatedTokens)
-                    return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                generatedTokens.append(value)
-                if let onUpdate {
-                    onUpdate(tokenizer.decode(tokens: generatedTokens))
-                }
+        var streamed: [Int] = []
+        let result = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: logits,
+                generationConfig: genConfig,
+                eosTokens: eosTokens,
+                tokenBudget: maxNewTokens,
+                historySeedTokens: tokens
+            ),
+            stepForward: { token in model(token, cache: cache) },
+            decodeToken: { self.tokenizer.decode(tokens: [$0]) },
+            emitPiece: { token, _ in
+                streamed.append(token)
+                onUpdate?(self.tokenizer.decode(tokens: streamed))
             }
-            pendingToken = tokenArray
-        }
-        if let previous = pendingToken {
-            let value = previous.item(Int.self)
-            if !eosTokens.contains(value) {
-                generatedTokens.append(value)
-                if let onUpdate {
-                    onUpdate(tokenizer.decode(tokens: generatedTokens))
-                }
-            }
-        }
+        )
+        generatedTokens = result.generatedTokens
 
         let decoded = tokenizer.decode(tokens: generatedTokens)
         return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
