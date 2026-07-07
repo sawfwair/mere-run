@@ -519,10 +519,17 @@ swift run mere.run music realtime \
 # Steer realtime Magenta RT2 from a CoreMIDI controller such as OP-1
 swift run mere.run music realtime --list-midi-inputs
 swift run mere.run music realtime \
+  --midi-monitor \
+  --midi-input "OP-1 Bluetooth" \
+  --midi-log-raw \
+  --duration 30
+swift run mere.run music realtime \
   "minimal synth pop, dry drums, tape-warped bass" \
   --model music-magenta-rt2-small \
   --duration 120 \
-  --midi-input "OP-1" \
+  --midi-input "OP-1 Bluetooth" \
+  --midi-channel all \
+  --midi-log-events \
   --midi-cc 1=temp:0.2:1.4 \
   --midi-cc 2=drums:0:2
 

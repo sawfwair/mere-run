@@ -5,6 +5,7 @@ final class MagentaRT2LiveControlQueue: @unchecked Sendable {
     private let lock = NSLock()
     private var controls: MagentaRT2Controls
     private var pendingPrompt: String?
+    private var pendingNoteEvents: [MagentaRT2LiveNoteEvent] = []
     private var pendingNoteOn: [Int32] = []
     private var pendingNoteOff: [Int32] = []
     private var pendingOnsetMode: Int32?
@@ -116,6 +117,7 @@ final class MagentaRT2LiveControlQueue: @unchecked Sendable {
     func enqueueNoteOn(_ note: Int32) {
         guard (0..<132).contains(note) else { return }
         lock.lock()
+        pendingNoteEvents.append(.on(note))
         pendingNoteOn.append(note)
         lock.unlock()
     }
@@ -123,6 +125,7 @@ final class MagentaRT2LiveControlQueue: @unchecked Sendable {
     func enqueueNoteOff(_ note: Int32) {
         guard (0..<132).contains(note) else { return }
         lock.lock()
+        pendingNoteEvents.append(.off(note))
         pendingNoteOff.append(note)
         lock.unlock()
     }
@@ -149,8 +152,7 @@ final class MagentaRT2LiveControlQueue: @unchecked Sendable {
         }
         guard pendingPrompt != nil
             || pendingControls
-            || !pendingNoteOn.isEmpty
-            || !pendingNoteOff.isEmpty
+            || !pendingNoteEvents.isEmpty
             || pendingOnsetMode != nil
             || pendingReset else {
             return nil
@@ -158,12 +160,14 @@ final class MagentaRT2LiveControlQueue: @unchecked Sendable {
         let snapshot = MagentaRT2LiveControlSnapshot(
             prompt: pendingPrompt,
             controls: pendingControls ? controls : nil,
+            noteEvents: pendingNoteEvents,
             noteOn: pendingNoteOn,
             noteOff: pendingNoteOff,
             onsetMode: pendingOnsetMode,
             resetState: pendingReset
         )
         pendingPrompt = nil
+        pendingNoteEvents = []
         pendingNoteOn = []
         pendingNoteOff = []
         pendingOnsetMode = nil

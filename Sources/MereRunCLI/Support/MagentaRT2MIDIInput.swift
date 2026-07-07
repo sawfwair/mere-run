@@ -147,7 +147,7 @@ struct MagentaRT2MIDICCMapping: Equatable {
 
 /// Channel-voice events surfaced to the realtime control queue. Note-on with
 /// velocity zero is normalized to note-off per the MIDI 1.0 specification.
-enum MagentaRT2MIDIEvent: Equatable {
+enum MagentaRT2MIDIEvent: Equatable, Sendable {
     case noteOn(channel: Int, note: UInt8, velocity: UInt8)
     case noteOff(channel: Int, note: UInt8)
     case controlChange(channel: Int, controller: UInt8, value: UInt8)
@@ -253,6 +253,8 @@ final class MagentaRT2MIDIInput: @unchecked Sendable {
     private let configuration: MagentaRT2MIDIInputConfiguration
     private let controls: MagentaRT2LiveControlQueue
     private let ccMappings: [UInt8: MagentaRT2MIDICCMapping]
+    private let eventHandler: (@Sendable (MagentaRT2MIDIEvent) -> Void)?
+    private let rawPacketHandler: (@Sendable ([UInt8]) -> Void)?
     private let sourceEndpoint: MIDIEndpointRef
     private var client = MIDIClientRef()
     private var inputPort = MIDIPortRef()
@@ -261,9 +263,16 @@ final class MagentaRT2MIDIInput: @unchecked Sendable {
 
     let sourceDisplayName: String
 
-    init(configuration: MagentaRT2MIDIInputConfiguration, controls: MagentaRT2LiveControlQueue) throws {
+    init(
+        configuration: MagentaRT2MIDIInputConfiguration,
+        controls: MagentaRT2LiveControlQueue,
+        eventHandler: (@Sendable (MagentaRT2MIDIEvent) -> Void)? = nil,
+        rawPacketHandler: (@Sendable ([UInt8]) -> Void)? = nil
+    ) throws {
         self.configuration = configuration
         self.controls = controls
+        self.eventHandler = eventHandler
+        self.rawPacketHandler = rawPacketHandler
         var mappings: [UInt8: MagentaRT2MIDICCMapping] = [:]
         for mapping in configuration.ccMappings {
             mappings[mapping.controller] = mapping
@@ -399,13 +408,16 @@ final class MagentaRT2MIDIInput: @unchecked Sendable {
                 start: UnsafeRawPointer(packetPtr) + dataOffset,
                 count: length
             )
-            parser.consume(data) { [self] event in
+            let bytes = Array(data)
+            rawPacketHandler?(bytes)
+            parser.consume(bytes) { [self] event in
                 handle(event: event)
             }
         }
     }
 
     private func handle(event: MagentaRT2MIDIEvent) {
+        eventHandler?(event)
         switch event {
         case .noteOn(let channel, let note, _):
             guard accepts(channel: channel) else { return }
@@ -431,9 +443,16 @@ final class MagentaRT2MIDIInput: @unchecked Sendable {
 final class MagentaRT2MIDIInput: @unchecked Sendable {
     let sourceDisplayName = ""
 
-    init(configuration: MagentaRT2MIDIInputConfiguration, controls: MagentaRT2LiveControlQueue) throws {
+    init(
+        configuration: MagentaRT2MIDIInputConfiguration,
+        controls: MagentaRT2LiveControlQueue,
+        eventHandler: (@Sendable (MagentaRT2MIDIEvent) -> Void)? = nil,
+        rawPacketHandler: (@Sendable ([UInt8]) -> Void)? = nil
+    ) throws {
         _ = configuration
         _ = controls
+        _ = eventHandler
+        _ = rawPacketHandler
         throw MagentaRT2MIDIInputError.unsupportedPlatform
     }
 

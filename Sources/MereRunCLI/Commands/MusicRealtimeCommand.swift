@@ -78,6 +78,15 @@ struct MusicRealtime: AsyncParsableCommand {
     @Flag(name: [.customLong("list-midi-inputs")], help: "List available CoreMIDI input sources and exit.")
     var listMIDIInputs: Bool = false
 
+    @Flag(name: [.customLong("midi-monitor")], help: "Monitor a CoreMIDI input source without loading the Magenta RT2 model.")
+    var midiMonitor: Bool = false
+
+    @Flag(name: [.customLong("midi-log-events")], help: "Log incoming MIDI note and CC events to stderr while realtime generation runs.")
+    var midiLogEvents: Bool = false
+
+    @Flag(name: [.customLong("midi-log-raw")], help: "Log raw CoreMIDI packet bytes to stderr for MIDI input debugging.")
+    var midiLogRaw: Bool = false
+
     @Option(name: [.customLong("midi-input")], help: "CoreMIDI input source name or unique ID to steer realtime notes and controls.")
     var midiInput: String?
 
@@ -98,16 +107,20 @@ struct MusicRealtime: AsyncParsableCommand {
             try printMIDIInputs()
             return
         }
-        guard let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw ValidationError("Provide a prompt or use --list-midi-inputs.")
+        guard durationSeconds > 0 else {
+            throw ValidationError("--duration must be > 0")
         }
-        let midiConfiguration = try resolvedMIDIConfiguration()
+        let midiConfiguration = try resolvedMIDIConfiguration(requiresInput: midiMonitor)
+        if midiMonitor {
+            try await runMIDIMonitor(configuration: midiConfiguration)
+            return
+        }
+        guard let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError("Provide a prompt or use --list-midi-inputs/--midi-monitor.")
+        }
         guard MagentaRT2Resources.isMagentaRT2Model(model)
             || MagentaRT2Resources.looksLikeMagentaRT2Root(URL(fileURLWithPath: model).standardizedFileURL) else {
             throw ValidationError("music realtime requires a Magenta RT2 model id or local Magenta RT2 root.")
-        }
-        guard durationSeconds > 0 else {
-            throw ValidationError("--duration must be > 0")
         }
         guard play || output != nil else {
             throw ValidationError("Use --play or provide --output when --no-play is set.")
@@ -135,11 +148,13 @@ struct MusicRealtime: AsyncParsableCommand {
             : nil
         let sink = try MagentaRT2RealtimeOutputSink(outputURL: outputURL, play: play)
         defer { try? sink.close() }
-        let midiInputConnection = try liveControls.flatMap { liveControls in
-            try midiConfiguration.map { configuration in
-                try MagentaRT2MIDIInput(configuration: configuration, controls: liveControls)
-            }
-        }
+        let midiEventLogger = midiLogEvents && !quiet ? MagentaRT2MIDIEventLogger() : nil
+        let midiInputConnection = try makeMIDIInputConnection(
+            configuration: midiConfiguration,
+            liveControls: liveControls,
+            eventLogger: midiEventLogger,
+            logsRawPackets: midiLogRaw && !quiet
+        )
         defer { midiInputConnection?.stop() }
 
         if !quiet {
@@ -223,11 +238,18 @@ struct MusicRealtime: AsyncParsableCommand {
         )
     }
 
-    private func resolvedMIDIConfiguration() throws -> MagentaRT2MIDIInputConfiguration? {
+    private func resolvedMIDIConfiguration(requiresInput: Bool = false) throws -> MagentaRT2MIDIInputConfiguration? {
         let trimmedInput = midiInput?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let trimmedInput, !trimmedInput.isEmpty else {
-            if midiChannel.lowercased() != "all" || midiNoteOffset != 0 || !midiCCMappings.isEmpty {
-                throw ValidationError("Use --midi-input when setting MIDI channel, note offset, or CC mappings.")
+            if requiresInput {
+                throw ValidationError("Use --midi-input with --midi-monitor.")
+            }
+            if midiChannel.lowercased() != "all"
+                || midiNoteOffset != 0
+                || !midiCCMappings.isEmpty
+                || midiLogEvents
+                || midiLogRaw {
+                throw ValidationError("Use --midi-input when setting MIDI channel, note offset, CC mappings, or MIDI logging.")
             }
             return nil
         }
@@ -237,6 +259,56 @@ struct MusicRealtime: AsyncParsableCommand {
             noteOffset: midiNoteOffset,
             ccMappings: try midiCCMappings.map(MagentaRT2MIDICCMapping.parse)
         )
+    }
+
+    private func runMIDIMonitor(configuration: MagentaRT2MIDIInputConfiguration?) async throws {
+        guard let configuration else {
+            throw ValidationError("Use --midi-input with --midi-monitor.")
+        }
+        let queue = MagentaRT2LiveControlQueue(initialControls: try controls())
+        let logger = MagentaRT2MIDIEventLogger()
+        let input = try MagentaRT2MIDIInput(
+            configuration: configuration,
+            controls: queue,
+            eventHandler: { event in logger.log(event) },
+            rawPacketHandler: rawMIDIHandler(enabled: midiLogRaw && !quiet)
+        )
+        defer { input.stop() }
+        if !quiet {
+            CLIStderr.write("Monitoring MIDI input \(input.sourceDisplayName) for \(durationSeconds)s\n")
+        }
+        try await Task.sleep(nanoseconds: UInt64(durationSeconds * 1_000_000_000))
+        if !quiet {
+            CLIStderr.write("MIDI monitor received \(logger.count) events\n")
+        }
+    }
+
+    private func makeMIDIInputConnection(
+        configuration: MagentaRT2MIDIInputConfiguration?,
+        liveControls: MagentaRT2LiveControlQueue?,
+        eventLogger: MagentaRT2MIDIEventLogger?,
+        logsRawPackets: Bool
+    ) throws -> MagentaRT2MIDIInput? {
+        guard let configuration, let liveControls else { return nil }
+        let eventHandler: (@Sendable (MagentaRT2MIDIEvent) -> Void)?
+        if let eventLogger {
+            eventHandler = { event in eventLogger.log(event) }
+        } else {
+            eventHandler = nil
+        }
+        return try MagentaRT2MIDIInput(
+            configuration: configuration,
+            controls: liveControls,
+            eventHandler: eventHandler,
+            rawPacketHandler: rawMIDIHandler(enabled: logsRawPackets)
+        )
+    }
+
+    private func rawMIDIHandler(enabled: Bool) -> (@Sendable ([UInt8]) -> Void)? {
+        guard enabled else { return nil }
+        return { bytes in
+            MagentaRT2MIDIEventLogger.logRaw(bytes)
+        }
     }
 
     private func printMIDIInputs() throws {
@@ -257,6 +329,42 @@ struct MusicRealtime: AsyncParsableCommand {
         let sleepSeconds = targetElapsed - actualElapsed
         if sleepSeconds > 0 {
             Thread.sleep(forTimeInterval: sleepSeconds)
+        }
+    }
+}
+
+private final class MagentaRT2MIDIEventLogger: @unchecked Sendable {
+    private let lock = NSLock()
+    private var eventCount = 0
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return eventCount
+    }
+
+    func log(_ event: MagentaRT2MIDIEvent) {
+        lock.lock()
+        eventCount += 1
+        lock.unlock()
+        CLIStderr.write("MIDI \(event.diagnosticDescription)\n")
+    }
+
+    static func logRaw(_ bytes: [UInt8]) {
+        let rendered = bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+        CLIStderr.write("MIDI raw \(rendered)\n")
+    }
+}
+
+private extension MagentaRT2MIDIEvent {
+    var diagnosticDescription: String {
+        switch self {
+        case .noteOn(let channel, let note, let velocity):
+            return "note-on ch=\(channel) note=\(note) velocity=\(velocity)"
+        case .noteOff(let channel, let note):
+            return "note-off ch=\(channel) note=\(note)"
+        case .controlChange(let channel, let controller, let value):
+            return "cc ch=\(channel) controller=\(controller) value=\(value)"
         }
     }
 }

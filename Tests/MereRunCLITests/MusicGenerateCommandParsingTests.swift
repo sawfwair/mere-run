@@ -264,6 +264,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         let cmd = try MusicRealtime.parse([
             "minimal synth pop",
             "--midi-input", "OP-1",
+            "--midi-log-events",
+            "--midi-log-raw",
             "--midi-channel", "2",
             "--midi-note-offset", "12",
             "--midi-cc", "1=temp:0.2:1.4",
@@ -272,6 +274,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
 
         XCTAssertEqual(cmd.prompt, "minimal synth pop")
         XCTAssertEqual(cmd.midiInput, "OP-1")
+        XCTAssertTrue(cmd.midiLogEvents)
+        XCTAssertTrue(cmd.midiLogRaw)
         XCTAssertEqual(cmd.midiChannel, "2")
         XCTAssertEqual(cmd.midiNoteOffset, 12)
         XCTAssertEqual(cmd.midiCCMappings, ["1=temp:0.2:1.4", "2=drums:0:2"])
@@ -284,6 +288,35 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
 
         XCTAssertNil(cmd.prompt)
         XCTAssertTrue(cmd.listMIDIInputs)
+    }
+
+    func testMusicRealtimeParsesMIDIMonitorWithoutPrompt() throws {
+        let cmd = try MusicRealtime.parse([
+            "--midi-monitor",
+            "--midi-input", "OP-1",
+            "--midi-log-raw",
+            "--duration", "3",
+        ])
+
+        XCTAssertNil(cmd.prompt)
+        XCTAssertTrue(cmd.midiMonitor)
+        XCTAssertEqual(cmd.midiInput, "OP-1")
+        XCTAssertTrue(cmd.midiLogRaw)
+        XCTAssertEqual(cmd.durationSeconds, 3.0, accuracy: 0.0001)
+    }
+
+    func testMusicRealtimeRequiresMIDIInputForLogging() async throws {
+        let cmd = try MusicRealtime.parse([
+            "minimal synth pop",
+            "--midi-log-events",
+        ])
+
+        do {
+            try await cmd.run()
+            XCTFail("Expected --midi-log-events without --midi-input to fail")
+        } catch {
+            XCTAssertTrue(String(describing: error).contains("Use --midi-input"))
+        }
     }
 
     func testMagentaRT2MIDICCMappingScalesValues() throws {
@@ -301,10 +334,23 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         try MagentaRT2MIDICCMapping.parse("1=temp:0.2:1.4").apply(rawValue: 127, to: queue)
 
         let snapshot = try XCTUnwrap(queue.snapshot())
+        XCTAssertEqual(snapshot.noteEvents, [.on(60), .off(64)])
         XCTAssertEqual(snapshot.noteOn, [60])
         XCTAssertEqual(snapshot.noteOff, [64])
         let controls = try XCTUnwrap(snapshot.controls)
         XCTAssertEqual(controls.temperature, Float(1.4), accuracy: 0.0001)
+    }
+
+    func testMagentaRT2LiveControlQueuePreservesShortMIDITapOrder() throws {
+        let queue = MagentaRT2LiveControlQueue(initialControls: MagentaRT2Controls())
+        queue.enqueueNoteOn(43)
+        queue.enqueueNoteOff(43)
+
+        let snapshot = try XCTUnwrap(queue.snapshot())
+
+        XCTAssertEqual(snapshot.noteEvents, [.on(43), .off(43)])
+        XCTAssertEqual(snapshot.noteOn, [43])
+        XCTAssertEqual(snapshot.noteOff, [43])
     }
 
     private func parsedEvents(

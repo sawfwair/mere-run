@@ -1102,6 +1102,9 @@ Key options:
 - `--prefill-duration`
 - `--interactive`: read live steering commands from stdin
 - `--list-midi-inputs`: list CoreMIDI input sources and exit
+- `--midi-monitor`: monitor a CoreMIDI input without loading Magenta RT2
+- `--midi-log-events`: log parsed MIDI note and CC events to stderr
+- `--midi-log-raw`: log raw CoreMIDI packet bytes to stderr
 - `--midi-input`: CoreMIDI source name or unique ID for live note/control steering
 - `--midi-channel`: `all` or `1` through `16`
 - `--midi-note-offset`: transpose incoming MIDI notes before sending them to Magenta RT2
@@ -1143,10 +1146,18 @@ swift run mere.run music realtime \
 swift run mere.run music realtime --list-midi-inputs
 
 swift run mere.run music realtime \
+  --midi-monitor \
+  --midi-input "OP-1 Bluetooth" \
+  --midi-log-raw \
+  --duration 30
+
+swift run mere.run music realtime \
   "minimal synth pop, dry drums, tape-warped bass" \
   --model music-magenta-rt2-small \
   --duration 120 \
-  --midi-input "OP-1" \
+  --midi-input "OP-1 Bluetooth" \
+  --midi-channel all \
+  --midi-log-events \
   --midi-cc 1=temp:0.2:1.4 \
   --midi-cc 2=drums:0:2
 ```

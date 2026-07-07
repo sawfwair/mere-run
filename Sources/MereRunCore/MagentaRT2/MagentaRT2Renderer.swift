@@ -27,9 +27,15 @@ public struct MagentaRT2RenderRequest: Hashable, Sendable {
     }
 }
 
+public enum MagentaRT2LiveNoteEvent: Hashable, Sendable {
+    case on(Int32)
+    case off(Int32)
+}
+
 public struct MagentaRT2LiveControlSnapshot: Sendable {
     public let prompt: String?
     public let controls: MagentaRT2Controls?
+    public let noteEvents: [MagentaRT2LiveNoteEvent]
     public let noteOn: [Int32]
     public let noteOff: [Int32]
     public let onsetMode: Int32?
@@ -39,6 +45,7 @@ public struct MagentaRT2LiveControlSnapshot: Sendable {
     public init(
         prompt: String? = nil,
         controls: MagentaRT2Controls? = nil,
+        noteEvents: [MagentaRT2LiveNoteEvent]? = nil,
         noteOn: [Int32] = [],
         noteOff: [Int32] = [],
         onsetMode: Int32? = nil,
@@ -47,6 +54,7 @@ public struct MagentaRT2LiveControlSnapshot: Sendable {
     ) {
         self.prompt = prompt
         self.controls = controls
+        self.noteEvents = noteEvents ?? noteOff.map(MagentaRT2LiveNoteEvent.off) + noteOn.map(MagentaRT2LiveNoteEvent.on)
         self.noteOn = noteOn
         self.noteOff = noteOff
         self.onsetMode = onsetMode
@@ -146,8 +154,14 @@ public enum MagentaRT2Renderer {
                         if let onsetMode = snapshot.onsetMode {
                             mrt2_engine_set_onset_mode(engine, onsetMode)
                         }
-                        snapshot.noteOff.forEach { mrt2_engine_set_note_off(engine, $0) }
-                        snapshot.noteOn.forEach { mrt2_engine_set_note_on(engine, $0) }
+                        for event in snapshot.noteEvents {
+                            switch event {
+                            case .on(let note):
+                                mrt2_engine_set_note_on(engine, note)
+                            case .off(let note):
+                                mrt2_engine_set_note_off(engine, note)
+                            }
+                        }
                         if snapshot.resetState {
                             mrt2_engine_reset_state(engine)
                         }

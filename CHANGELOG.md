@@ -78,8 +78,9 @@ The format is based on Keep a Changelog.
   training blindly.
 - added CoreMIDI steering for `music realtime` on macOS, including
   `--list-midi-inputs`, `--midi-input`, channel/note-offset filters, a robust
-  MIDI 1.0 stream parser, note on/off handling, and repeatable `--midi-cc`
-  mappings for Magenta RT2 note and control changes.
+  MIDI 1.0 stream parser, note on/off handling, repeatable `--midi-cc`
+  mappings, and `--midi-monitor`/MIDI logging flags for diagnosing live
+  controller input before loading Magenta RT2.
 - added `model benchmark code --thinking` for reasoning-enabled code evals.
   The benchmark keeps reasoning split away from scored code and disables
   HumanEval stop sequences that can fire inside a thinking block.

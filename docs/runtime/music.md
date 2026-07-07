@@ -128,24 +128,33 @@ Supported steering commands are `prompt <text>`, `style streaming|full`,
 On macOS, `music realtime` can also listen to CoreMIDI input. Use
 `--list-midi-inputs` to find the source name or unique ID, then pass
 `--midi-input` to map incoming note-on/note-off messages to the same Magenta
-RT2 note controls used by stdin:
+RT2 note controls used by stdin. Use `--midi-monitor` with `--midi-log-raw`
+when checking a controller before loading Magenta RT2:
 
 ```bash
 swift run mere.run music realtime --list-midi-inputs
 swift run mere.run music realtime \
+  --midi-monitor \
+  --midi-input "OP-1 Bluetooth" \
+  --midi-log-raw \
+  --duration 30
+swift run mere.run music realtime \
   "minimal synth pop, dry drums, tape-warped bass" \
   --model music-magenta-rt2-small \
   --duration 120 \
-  --midi-input "OP-1" \
+  --midi-input "OP-1 Bluetooth" \
   --midi-channel all \
+  --midi-log-events \
   --midi-cc 1=temp:0.2:1.4 \
   --midi-cc 2=drums:0:2
 ```
 
 `--midi-cc` mappings use `cc=target:min:max`. Supported targets are `temp`,
 `topk`, `mc`, `notes`, `drums`, `drumless`, `unmask`, `seed`, and `onset`.
-Prompt changes still use stdin and may briefly stall while the prompt encoder
-runs; MIDI is intended for notes and continuous controls.
+`--midi-log-events` writes parsed note and CC events to stderr during realtime
+runs, while `--midi-log-raw` writes raw packet bytes. Prompt changes still use
+stdin and may briefly stall while the prompt encoder runs; MIDI is intended for
+notes and continuous controls.
 
 ## Runtime entrypoints
 
