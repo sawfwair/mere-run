@@ -49,7 +49,7 @@ Make the bundle structurally valid, signable, notarizable, Gatekeeper-clean, cra
 - **TCC & camera safety** — add usage strings; gate `track-live` behind `AVCaptureDevice.requestAccess` before launch.
 - **Signing & notarization** — `MereRun.entitlements` (notarized-unsandboxed first); Developer ID + `--options runtime --timestamp`, inside-out signing; `scripts/package-macos.sh` (DMG → `notarytool submit --wait` → `stapler staple`).
 - **Bundle layout** — frameworks → `Contents/Frameworks`, helper executables → `Contents/MacOS`/`Helpers`; update `CLIResolver.bundledCandidates()`.
-- **macOS CI** — `macos-release.yml` mirroring `linux-release.yml`; per-PR `build_mere_run_app.sh debug` job; version from git tag + commit count.
+- **macOS packaging** — `scripts/package-macos.sh`; per-PR `build_mere_run_app.sh debug` job; version from git tag + commit count.
 - **Process lifecycle** — `applicationShouldTerminate` kills all children; UTF-8 fix; README correction.
 
 **Exit:** downloaded DMG opens clean (`spctl --assess` passes); `track-live` prompts for camera; `notarytool` accepts; quit kills all children; CI publishes a notarized DMG.

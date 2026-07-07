@@ -120,32 +120,14 @@ struct ModelPull: AsyncParsableCommand {
         }
 
         let result: ManagedModelResolver.InstallResult
+        let progressPrinter = ModelPullProgressPrinter(modelID: spec.id)
         do {
             result = try await ManagedModelResolver.installManagedModel(
                 id: spec.id,
                 force: force,
                 progress: { progress in
                     guard !quiet else { return }
-                    switch progress {
-                    case .downloadingBytes(let completed, let total):
-                        let done = ByteCountFormatter.string(fromByteCount: completed, countStyle: .file)
-                        if let total, total > 0 {
-                            let totalText = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
-                            let pct = min(100, max(0, Int(Double(completed) / Double(total) * 100)))
-                            stderrRaw("\r[\(spec.id)] \(pct)%  \(done) / \(totalText)          ")
-                        } else {
-                            stderrRaw("\r[\(spec.id)] \(done)          ")
-                        }
-                    case .downloadingPercent(let percent, let speed):
-                        if let speed, speed > 0 {
-                            let speedText = ByteCountFormatter.string(fromByteCount: Int64(speed), countStyle: .file)
-                            stderrRaw("\r[\(spec.id)] \(percent)%  (\(speedText)/s)          ")
-                        } else {
-                            stderrRaw("\r[\(spec.id)] \(percent)%          ")
-                        }
-                    case .extracting:
-                        stderrRaw("\r[\(spec.id)] extracting…          ")
-                    }
+                    stderrRaw("\r\(progressPrinter.render(progress))          ")
                 }
             )
         } catch let error as ManagedModelResolver.ResolverError {

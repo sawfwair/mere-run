@@ -57,9 +57,7 @@ The public OSS repo currently supports:
 
 ## Install the latest release
 
-The `macos-release` workflow builds, Developer ID-signs, and notarizes the DMG (with a
-hardened runtime) and attaches it to each GitHub release. The latest signed build is
-mirrored at:
+The latest signed macOS build is mirrored at:
 
 ```bash
 curl -L https://mere.run/releases/mere-run.dmg -o mere-run.dmg
@@ -80,37 +78,10 @@ cd /Volumes/mere.run/.mere-run
 The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
-Linux release artifacts are headless CLI-only. The default release workflow
-publishes portable tarballs and Debian packages for x86_64/amd64 Ubuntu-style
-hosts, plus x86_64 CUDA artifacts for remote GPU workers such as RunPod. Linux
-arm64 is CUDA-only for release packaging and requires a real arm64 CUDA host or
-self-hosted runner; CPU arm64 packages are just local smoke-test artifacts. See
-the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the current
-validation boundary, CUDA notes, and first commands:
-
-```bash
-tag=v0.19.0
-version="${tag#v}"
-
-# Portable tarball
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64.tar.gz" -o mere-run-linux.tar.gz
-tar -xzf mere-run-linux.tar.gz
-cd "mere-run-${tag}-linux-x86_64"
-./install.sh
-
-# Debian package
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_amd64.deb" -o mere-run.deb
-sudo apt install ./mere-run.deb
-
-# CUDA portable tarball for x86_64 GPU workers
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64-cuda.tar.gz" -o mere-run-linux-cuda.tar.gz
-```
-
-Linux packages install the `mere.run` CLI plus colocated runtime assets; they do
-not include the macOS SwiftUI studio or DMG layout. The hosted x86_64 CUDA lane
-builds the CUDA package on a CPU-only GitHub runner with CUDA development
-packages and skips only the GPU execution example; runtime CUDA smoke still
-belongs on a real GPU host. On Linux arm64, if a distro Clang shadows Swift's
+Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
+colocated runtime assets; they do not include the macOS SwiftUI studio or DMG
+layout. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the
+current validation boundary, CUDA notes, and first commands. On Linux arm64, if a distro Clang shadows Swift's
 bundled Clang and cannot compile MLX bf16 headers, the Linux scripts select a
 bf16-capable C++ driver or report the `CXX` override to use. Linux arm64 release
 packages should be built with CUDA enabled on a host with the CUDA Toolkit
@@ -124,7 +95,7 @@ during NVRTC JIT compilation:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.19.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.20.0 --artifact-suffix cuda
 ```
 
 Current CUDA validation should be treated as limited to the exact hosts that
@@ -169,7 +140,7 @@ swift run mere.run --help
 To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
-scripts/package-linux.sh --version 0.19.0
+scripts/package-linux.sh --version 0.20.0
 ls dist/linux/
 ```
 
@@ -178,14 +149,14 @@ builder with CUDA development packages:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.19.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.20.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 
 On Linux arm64, use a CUDA-provisioned host:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.19.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.20.0
 ```
 
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio

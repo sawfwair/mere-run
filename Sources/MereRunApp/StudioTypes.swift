@@ -981,8 +981,8 @@ enum StudioProgressParser {
 
         var fraction: Double?
         let tokens = rest.split(separator: " ").map(String.init)
-        if let first = tokens.first, first.hasSuffix("%"), let pct = Int(first.dropLast()) {
-            fraction = Double(min(100, max(0, pct))) / 100.0
+        if let first = tokens.first, first.hasSuffix("%"), let pct = Double(first.dropLast()) {
+            fraction = min(100, max(0, pct)) / 100.0
             rest = tokens.dropFirst().joined(separator: " ").trimmingCharacters(in: .whitespaces)
         }
 

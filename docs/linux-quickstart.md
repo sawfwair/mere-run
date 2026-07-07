@@ -1,47 +1,43 @@
 # Linux QuickStart
 
-This page is for installing the released headless `mere.run` CLI on Linux.
-The default published release path is x86_64/amd64 Linux packages on GitHub
-Releases. The release workflow also publishes x86_64 CUDA artifacts for GPU
-workers. Linux arm64 packages are CUDA-only and must be built on a real arm64
-CUDA host or self-hosted runner.
+This page is for installing or building the headless `mere.run` CLI on Linux.
+Linux package artifacts are CLI-only and must be validated on the host class
+they target. CUDA artifacts must be built and smoke-tested on matching CUDA
+hardware before being treated as supported.
 
 The macOS path remains the primary hands-on development and runtime validation
-environment for this repo. The Linux release path is real, but intentionally
+environment for this repo. The Linux package path is real, but intentionally
 narrow: CLI-only packages, Ubuntu-style hosts, x86_64 CPU and CUDA package
 manifests, and CUDA-gated arm64 package work.
 
 ## Current validation boundary
 
-- Published default Linux release packages are built for x86_64/amd64 hosts.
-- The release workflow validates the portable tarball, Debian package, runtime
-  library bundling, and package manifests on Ubuntu x86_64 in GitHub Actions.
-- The x86_64 CUDA release lane builds on hosted CPU runners with CUDA
-  development packages and skips only the GPU execution example. Treat it as a
-  build artifact lane; runtime smoke still requires a real CUDA GPU host.
+- Linux package artifacts are headless CLI-only.
+- Package validation must cover the portable tarball, Debian package, runtime
+  library bundling, and package manifests on the target Linux host class.
+- CUDA package validation must include a real CUDA GPU host.
 - Linux packages do not include `MereRun.app`, the SwiftUI studio, the macOS
   installer UI, or the DMG layout.
 - Linux arm64 package builds must use `MERERUN_LINUX_ACCEL=cuda`; CPU arm64
   packages are only local smoke-test artifacts.
-- The optional arm64 CUDA workflow lane targets self-hosted runners labeled
-  `self-hosted`, `linux`, `arm64`, and `cuda`.
+- NVIDIA GB10/DGX Spark is a valid arm64 CUDA target when the package is built
+  and smoke-tested on matching hardware.
 - Current CUDA validation should be treated as limited to the exact hosts that
   have run the CUDA package and smoke path.
 
 ## Install with apt
 
-Use this path on Debian or Ubuntu-style systems:
+Use this path on Debian or Ubuntu-style systems after building a matching
+`.deb`, or when a matching `.deb` is attached to a release:
 
 ```bash
-tag=v0.19.0
-version="${tag#v}"
+version=0.20.0
 case "$(uname -m)" in
   x86_64|amd64) deb_arch=amd64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
 esac
 
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_${deb_arch}.deb" -o mere-run.deb
-sudo apt install ./mere-run.deb
+sudo apt install "./dist/linux/mere-run_${version}_${deb_arch}.deb"
 mere.run --version
 mere.run status
 ```
@@ -51,18 +47,18 @@ assets that the CLI needs at runtime.
 
 ## Install the portable tarball
 
-Use this path when you do not want to install a Debian package:
+Use this path after building a matching tarball, or when a matching tarball is
+attached to a release:
 
 ```bash
-tag=v0.19.0
+version=0.20.0
 case "$(uname -m)" in
   x86_64|amd64) linux_arch=x86_64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
 esac
 
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-${linux_arch}.tar.gz" -o mere-run-linux.tar.gz
-tar -xzf mere-run-linux.tar.gz
-cd "mere-run-${tag}-linux-${linux_arch}"
+tar -xzf "./dist/linux/mere-run-${version}-linux-${linux_arch}.tar.gz"
+cd "mere-run-${version}-linux-${linux_arch}"
 ./install.sh
 mere.run --version
 mere.run status
@@ -79,13 +75,13 @@ explicit path while JIT-compiling in the installed package.
 ## Install the x86_64 CUDA tarball
 
 Use this artifact for GPU worker images, remote trainers, and other x86_64 CUDA
-hosts:
+hosts after building it, or when a matching CUDA tarball is attached to a
+release:
 
 ```bash
-tag=v0.19.0
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-x86_64-cuda.tar.gz" -o mere-run-linux-cuda.tar.gz
-tar -xzf mere-run-linux-cuda.tar.gz
-cd "mere-run-${tag}-linux-x86_64-cuda"
+version=0.20.0
+tar -xzf "./dist/linux/mere-run-${version}-linux-x86_64-cuda.tar.gz"
+cd "mere-run-${version}-linux-x86_64-cuda"
 ./install.sh
 mere.run --version
 mere.run status
@@ -128,13 +124,13 @@ export MERERUN_FFPROBE=/usr/bin/ffprobe
 
 ## Linux x86_64 CUDA package path
 
-The standard release workflow builds x86_64 CUDA artifacts on hosted Linux using
-CUDA development packages and `MERERUN_SKIP_MLX_CUDA_EXAMPLE=1`. To reproduce
-that build locally on a Linux x86_64 CUDA development host:
+The package script can build x86_64 CUDA artifacts with CUDA development
+packages and `MERERUN_SKIP_MLX_CUDA_EXAMPLE=1`. To build locally on a Linux
+x86_64 CUDA development host:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.19.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.20.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 
@@ -148,7 +144,7 @@ MERERUN_LINUX_ACCEL=cuda \
 MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
 MERERUN_NATIVE_BUILD_JOBS=14 \
 MERERUN_CUDA_ARCHITECTURES="86-real;90-virtual" \
-  scripts/package-linux.sh --version 0.19.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.20.0 --artifact-suffix cuda
 ```
 
 Run a real GPU smoke on the target runtime class before widening support claims.
@@ -165,7 +161,7 @@ repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.19.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.20.0
 ls dist/linux/
 ```
 
@@ -181,18 +177,14 @@ MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
 swift build --product mere.run
 ```
 
-The GitHub-hosted `ubuntu-22.04-arm` runner is CPU-only for this purpose. The
-arm64 CUDA workflow lane is intentionally self-hosted so the package build runs
-against a real CUDA-capable arm64 machine.
-
 Do not describe a CUDA configuration as supported unless it has been run on that
 matching host.
 
 ### Spark CUDA smoke status
 
-The current arm64 CUDA smoke pass has been validated on an NVIDIA GB10 Spark
-host after installing the package and pulling public managed models. MLX-backed
-image, speech, vision, music, SFX, video, embedding, anonymization, and dense Gemma
+The arm64 CUDA smoke path has been validated on NVIDIA GB10/DGX Spark after
+installing the package and pulling public managed models. MLX-backed image,
+speech, vision, music, SFX, video, embedding, anonymization, and dense Gemma
 chat paths are expected to run there with the packaged CUDA setup. The packaged
 Linux CUDA build also carries the matching `llama-cli`; `mere.run text code`
 uses that subprocess on Linux so GGUF coding models do not share a process with
@@ -239,10 +231,11 @@ studio, and DMG packaging are macOS-only.
 
 ## Verify release assets
 
-Each Linux release includes `SHA256SUMS` beside the tarball and `.deb`:
+When a Linux release includes `SHA256SUMS`, place it beside the matching
+tarball or `.deb` before checking it:
 
 ```bash
-tag=v0.19.0
+tag=v0.20.0
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
 sha256sum -c SHA256SUMS

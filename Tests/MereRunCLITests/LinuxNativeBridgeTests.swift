@@ -115,26 +115,19 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(toolchainScript.contains("clang-17"))
     }
 
-    func testLinuxReleaseWorkflowKeepsArm64OnCudaRunner() throws {
-        let workflow = try readRepositoryFile(".github/workflows/linux-release.yml")
+    func testReleaseArtifactsAreNotBuiltByPublicGitHubActions() throws {
         let packageTest = try readRepositoryFile("scripts/test-package-linux.sh")
+        let packageScript = try readRepositoryFile("scripts/package-linux.sh")
+        let macOSPackageScript = try readRepositoryFile("scripts/package-macos.sh")
 
-        XCTAssertTrue(workflow.contains("runs-on: ubuntu-22.04"))
-        XCTAssertFalse(workflow.contains("ubuntu-22.04-arm"))
-        XCTAssertTrue(workflow.contains("Build Linux x86_64"))
-        XCTAssertTrue(workflow.contains("Build Linux arm64 CUDA"))
-        XCTAssertTrue(workflow.contains("runs-on: [self-hosted, linux, arm64, cuda]"))
-        XCTAssertTrue(workflow.contains("MERERUN_LINUX_ACCEL: cuda"))
-        XCTAssertTrue(workflow.contains("cuda-cccl-13-0"))
-        XCTAssertTrue(workflow.contains("libcudnn9-dev-cuda-13"))
-        XCTAssertTrue(workflow.contains("libnccl-dev"))
-        XCTAssertTrue(workflow.contains("python3-pip"))
-        XCTAssertTrue(workflow.contains("cmake>=3.25,<4"))
-        XCTAssertTrue(workflow.contains("MERERUN_RELEASE_ARM64_CUDA == '1'"))
-        XCTAssertTrue(workflow.contains("build_arm64_cuda"))
-        XCTAssertTrue(workflow.contains("pattern: mere-run-linux-*-packages"))
-        XCTAssertTrue(workflow.contains("Build combined checksum manifest"))
-        XCTAssertTrue(workflow.contains("files: dist/linux/*"))
+        XCTAssertFalse(repositoryFileExists(".github/workflows/linux-release.yml"))
+        XCTAssertFalse(repositoryFileExists(".github/workflows/macos-release.yml"))
+        XCTAssertTrue(packageScript.contains("Build Linux release artifacts for the headless mere.run CLI."))
+        XCTAssertTrue(packageScript.contains("--artifact-suffix NAME"))
+        XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ACCEL"))
+        XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ACCEL=cuda"))
+        XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE"))
+        XCTAssertTrue(macOSPackageScript.contains("scripts/build_mere_run_app.sh"))
         XCTAssertTrue(packageTest.contains("platform_arch=\"arm64\""))
         XCTAssertTrue(packageTest.contains("linux-${platform_arch}.tar.gz"))
         XCTAssertTrue(packageTest.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1"))
@@ -144,5 +137,11 @@ final class LinuxNativeBridgeTests: XCTestCase {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath, isDirectory: false)
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func repositoryFileExists(_ relativePath: String) -> Bool {
+        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(relativePath, isDirectory: false)
+        return FileManager.default.fileExists(atPath: url.path)
     }
 }
