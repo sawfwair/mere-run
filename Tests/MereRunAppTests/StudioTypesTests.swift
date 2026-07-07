@@ -250,6 +250,12 @@ final class StudioTypesTests: XCTestCase {
         let speed = StudioProgressParser.parse("[m] 10%  (45 MB/s)")
         XCTAssertEqual(speed?.fractionCompleted ?? -1, 0.10, accuracy: 0.001)
 
+        let fractional = StudioProgressParser.parse(
+            "[image-zimage-nano] 0.4%  4 MB / 1 GB  2 MB/s  ETA 8m 18s"
+        )
+        XCTAssertEqual(fractional?.fractionCompleted ?? -1, 0.004, accuracy: 0.0001)
+        XCTAssertEqual(fractional?.detail, "4 MB / 1 GB 2 MB/s ETA 8m 18s")
+
         // Non-progress lines are not misclassified.
         XCTAssertNil(StudioProgressParser.parse("just a normal log line"))
         XCTAssertNil(StudioProgressParser.parse("[info] starting up"))

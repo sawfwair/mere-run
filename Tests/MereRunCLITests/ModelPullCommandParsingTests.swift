@@ -168,6 +168,72 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertFalse(message.contains("Usage:"))
     }
 
+    func testModelPullProgressFormatterShowsFractionalPercentSpeedAndETA() {
+        var formatter = ModelPullProgressFormatterState()
+        let totalBytes: Int64 = 1_000_000_000
+
+        _ = formatter.render(
+            modelID: "image-zimage-nano",
+            progress: .downloadingBytes(completed: 0, total: totalBytes),
+            now: Date(timeIntervalSince1970: 0)
+        )
+        let line = formatter.render(
+            modelID: "image-zimage-nano",
+            progress: .downloadingBytes(completed: 4_000_000, total: totalBytes),
+            now: Date(timeIntervalSince1970: 2)
+        )
+
+        XCTAssertTrue(line.contains("[image-zimage-nano]"))
+        XCTAssertTrue(line.contains("0.4%"), line)
+        XCTAssertTrue(line.contains(" / "), line)
+        XCTAssertTrue(line.contains("/s"), line)
+        XCTAssertTrue(line.contains("ETA "), line)
+    }
+
+    func testModelPullProgressFormatterHandlesUnknownTotalWithoutETA() {
+        var formatter = ModelPullProgressFormatterState()
+
+        _ = formatter.render(
+            modelID: "text-chat-gemma4-max",
+            progress: .downloadingBytes(completed: 0, total: nil),
+            now: Date(timeIntervalSince1970: 0)
+        )
+        let line = formatter.render(
+            modelID: "text-chat-gemma4-max",
+            progress: .downloadingBytes(completed: 4_000_000, total: nil),
+            now: Date(timeIntervalSince1970: 2)
+        )
+
+        XCTAssertTrue(line.contains("[text-chat-gemma4-max]"))
+        XCTAssertFalse(line.contains("%"), line)
+        XCTAssertFalse(line.contains("ETA"), line)
+        XCTAssertTrue(line.contains("/s"), line)
+    }
+
+    func testModelPullProgressFormatterResetsSpeedWhenByteCounterRestarts() {
+        var formatter = ModelPullProgressFormatterState()
+
+        _ = formatter.render(
+            modelID: "image-klein-base",
+            progress: .downloadingBytes(completed: 0, total: 100_000_000),
+            now: Date(timeIntervalSince1970: 0)
+        )
+        _ = formatter.render(
+            modelID: "image-klein-base",
+            progress: .downloadingBytes(completed: 10_000_000, total: 100_000_000),
+            now: Date(timeIntervalSince1970: 2)
+        )
+        let resetLine = formatter.render(
+            modelID: "image-klein-base",
+            progress: .downloadingBytes(completed: 0, total: 20_000_000),
+            now: Date(timeIntervalSince1970: 3)
+        )
+
+        XCTAssertTrue(resetLine.contains("0%"), resetLine)
+        XCTAssertFalse(resetLine.contains("/s"), resetLine)
+        XCTAssertFalse(resetLine.contains("ETA"), resetLine)
+    }
+
     func testDiskPreflightFailsWhenHubCacheCannotFitEstimatedModel() throws {
         XCTAssertThrowsError(
             try ModelPullDiskPreflight.evaluate(

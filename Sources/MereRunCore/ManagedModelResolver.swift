@@ -337,10 +337,19 @@ public enum ManagedModelResolver {
                 )
             )
             return try await snapshot.prepare { snapshotProgress in
-                let percent = min(100, max(0, Int(snapshotProgress.fractionCompleted * 100)))
-                progress?(.downloadingPercent(
-                    percent: percent,
-                    speedBytesPerSecond: snapshotProgress.estimatedSpeedBytesPerSecond
+                guard !config.patterns.isEmpty else {
+                    let percent = min(100, max(0, Int(snapshotProgress.fractionCompleted * 100)))
+                    progress?(.downloadingPercent(
+                        percent: percent,
+                        speedBytesPerSecond: snapshotProgress.estimatedSpeedBytesPerSecond
+                    ))
+                    return
+                }
+
+                let total = snapshotProgress.totalUnitCount > 0 ? snapshotProgress.totalUnitCount : nil
+                progress?(.downloadingBytes(
+                    completed: max(0, snapshotProgress.completedUnitCount),
+                    total: total
                 ))
             }
         } catch {
