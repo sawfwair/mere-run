@@ -11,6 +11,7 @@ docs/.vitepress/dist/
 
 # Build artifacts
 dist/
+logs/
 
 # Maintainer-only release helpers
 scripts/build_release.sh
