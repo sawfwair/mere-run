@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.20.0 - 2026-07-07
+
 ### Added
 
 - added `run list --json` and `run inspect --json`, typed readback reports for
@@ -62,6 +64,17 @@ The format is based on Keep a Changelog.
   video Synchformer requirements, duration/steps/CFG/renoise options, and emits
   declarative start, pull, reveal, and open actions before loading MLX or
   generating audio.
+
+### Changed
+
+- clarified that NVIDIA GB10/DGX Spark remains a supported Linux arm64 CUDA
+  package target when artifacts are built and smoke-tested on matching hardware.
+
+### Removed
+
+- removed GitHub Actions workflows that produced release artifacts from the
+  public repository; local macOS and Linux packaging scripts remain available
+  for reproducible builds.
 
 ## 0.19.0 - 2026-07-04
 
@@ -200,9 +213,8 @@ The format is based on Keep a Changelog.
 
 ### Removed
 
-- removed public-repo maintainer release command wrappers after confirming
-  operator-only release flows belong in the private `mere-run-release-tools`
-  repo, not in the public OSS distribution.
+- removed public-repo maintainer release command wrappers; release orchestration
+  now stays outside the public OSS distribution.
 
 ## 0.18.0 - 2026-07-01
 

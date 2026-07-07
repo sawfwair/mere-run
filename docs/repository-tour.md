@@ -34,10 +34,9 @@ The Linux compatibility boundary is the headless `mere.run` CLI and reusable
 library code. `mere.run.app`, SwiftUI views, app bundling, installer behavior,
 and DMG packaging remain macOS-only.
 
-Linux release packaging follows the same boundary: release artifacts are
-headless CLI tarballs and Debian packages, not app bundles. The hosted release
-workflow publishes x86_64/amd64 CPU and CUDA artifacts; arm64 package artifacts
-are CUDA-only and require the self-hosted arm64 CUDA lane.
+Linux release packaging follows the same boundary: package artifacts are
+headless CLI tarballs and Debian packages, not app bundles. Build and validate
+them on the Linux host class they target.
 
 ## Source tree
 
@@ -149,12 +148,9 @@ Builds Linux release artifacts for the headless CLI on Linux:
   `mere-run-<version>-linux-x86_64-cuda.tar.gz`
 - `dist/linux/SHA256SUMS`
 
-The companion `.github/workflows/linux-release.yml` workflow runs the x86_64
-CPU and CUDA package paths in the Swift 6.0 Ubuntu container, verifies the
-tarball and `.deb` manifests, and uploads package artifacts. The x86_64 CUDA
-lane builds on hosted CPU runners with CUDA development packages and skips only
-the GPU example. The arm64 package lane is CUDA-only and targets a self-hosted
-Linux runner with `arm64` and `cuda` labels.
+Run the package script on the Linux host class you intend to validate. CUDA
+package artifacts need matching CUDA hardware for meaningful runtime smoke
+coverage.
 
 ## Vendor artifacts
 

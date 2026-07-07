@@ -100,38 +100,23 @@ The studio is macOS-only. Linux users and Linux CI should exercise the CLI and
 local API surfaces directly rather than trying to build or launch
 `mere.run.app`.
 
-## Install Linux release artifacts
+## Build Linux package artifacts
 
-Linux release artifacts are headless CLI-only. When a release publishes Linux
-packages, use the GitHub Release assets rather than the macOS DMG URL. For a
-Linux-only setup path, first commands, release checks, and CUDA validation
-limits, see [Linux QuickStart](./linux-quickstart.md).
+Linux package artifacts are headless CLI-only. They install the `mere.run` CLI
+plus colocated runtime assets; they do not include `mere.run.app`, SwiftUI
+studio flows, or the macOS DMG layout. For a Linux-only setup path, first
+commands, package checks, and CUDA validation limits, see
+[Linux QuickStart](./linux-quickstart.md).
 
 ```bash
-tag=v0.19.0
-version="${tag#v}"
-case "$(uname -m)" in
-  x86_64|amd64) linux_arch=x86_64; deb_arch=amd64 ;;
-  *) echo "use the Linux arm64 CUDA package path on arm64" >&2; exit 1 ;;
-esac
-
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run-${tag}-linux-${linux_arch}.tar.gz" -o mere-run-linux.tar.gz
-tar -xzf mere-run-linux.tar.gz
-cd "mere-run-${tag}-linux-${linux_arch}"
-./install.sh
-
-curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/mere-run_${version}_${deb_arch}.deb" -o mere-run.deb
-sudo apt install ./mere-run.deb
+scripts/package-linux.sh --version 0.20.0
+ls dist/linux/
 ```
 
-The tarball and `.deb` install the `mere.run` CLI plus colocated runtime assets.
-They do not include `mere.run.app`, SwiftUI studio flows, or the macOS DMG
-layout. The default published Linux release packages are built for
-x86_64/amd64. Releases also publish an x86_64 CUDA tarball named like
-`mere-run-<tag>-linux-x86_64-cuda.tar.gz` for GPU workers and remote-runner
-build packs. Linux arm64 packages are CUDA-only and should be built on a real
-arm64 CUDA host with `MERERUN_LINUX_ACCEL=cuda`; CPU arm64 packages are local
-smoke artifacts, not useful release targets.
+CUDA packages must be built and smoke-tested on matching CUDA hardware before
+being treated as supported. Linux arm64 packages are CUDA-only and should be
+built on a real arm64 CUDA host with `MERERUN_LINUX_ACCEL=cuda`; CPU arm64
+packages are local smoke artifacts, not useful release targets.
 
 ## Understand the command tree
 
