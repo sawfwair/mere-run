@@ -796,6 +796,7 @@ struct StudioModelCapability: Equatable {
 struct StudioModelCapabilityReport: Equatable {
     let capabilitiesByID: [String: StudioModelCapability]
     let recommendedChatModelID: String?
+    let recommendedCodeModelID: String?
 }
 
 enum ModelCapabilitiesParser {
@@ -805,7 +806,8 @@ enum ModelCapabilitiesParser {
         }
         return StudioModelCapabilityReport(
             capabilitiesByID: capabilities(from: output),
-            recommendedChatModelID: nil
+            recommendedChatModelID: nil,
+            recommendedCodeModelID: nil
         )
     }
 
@@ -844,6 +846,10 @@ enum ModelCapabilitiesParser {
             struct ChatBand: Decodable {
                 let modelID: String
             }
+            struct RecommendedModel: Decodable {
+                let id: String?
+                let modelID: String?
+            }
             struct Model: Decodable {
                 let id: String
                 let supported: Bool
@@ -854,6 +860,7 @@ enum ModelCapabilitiesParser {
             }
 
             let recommendedChatModel: ChatBand?
+            let recommendedCodeModel: RecommendedModel?
             let models: [Model]
         }
 
@@ -873,7 +880,9 @@ enum ModelCapabilitiesParser {
         })
         return StudioModelCapabilityReport(
             capabilitiesByID: capabilities,
-            recommendedChatModelID: payload.recommendedChatModel?.modelID
+            recommendedChatModelID: payload.recommendedChatModel?.modelID,
+            recommendedCodeModelID: payload.recommendedCodeModel?.modelID
+                ?? payload.recommendedCodeModel?.id
         )
     }
 

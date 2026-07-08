@@ -739,6 +739,50 @@ public enum ManagedModelCapabilityCatalog {
         ]
     }
 
+    public static func recommendedCodeModelReport(
+        on machine: MereRunMachineProfile = .current
+    ) -> ManagedModelSupportReport? {
+        let candidateIDs: [String]
+        if machine.unifiedMemoryGB >= 64 {
+            candidateIDs = [
+                CodeGenResources.defaultModelId,
+                NorthMiniCodeResources.modelId,
+                AgentModelResources.qwen35NineBModelId,
+            ]
+        } else if machine.unifiedMemoryGB >= 24 {
+            candidateIDs = [
+                NorthMiniCodeResources.modelId,
+                AgentModelResources.qwen35NineBModelId,
+            ]
+        } else {
+            candidateIDs = [
+                AgentModelResources.qwen35NineBModelId,
+            ]
+        }
+
+        return candidateIDs.compactMap { modelID -> ManagedModelSupportReport? in
+            guard let spec = ManagedModelCatalog.spec(for: modelID) else { return nil }
+            let report = support(for: spec, on: machine)
+            return report.isSupported ? report : nil
+        }.first
+    }
+
+    public static func supportedCodeBenchmarkModelIDs(
+        on machine: MereRunMachineProfile = .current
+    ) -> [String] {
+        [
+            Q35Resources.ornith9BModelId,
+            NorthMiniCodeResources.modelId,
+            CodeGenResources.defaultModelId,
+        ].filter { modelID in
+            guard let spec = ManagedModelCatalog.spec(for: modelID),
+                  spec.category == .textCode else {
+                return false
+            }
+            return support(for: spec, on: machine).isSupported
+        }
+    }
+
     private static func descriptor(
         _ modelID: String,
         _ title: String,

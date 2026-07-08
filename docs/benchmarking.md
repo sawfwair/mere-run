@@ -104,10 +104,14 @@ command requires `--allow-code-execution` unless you are using `--dry-run`.
 
 ```bash
 swift run mere.run model benchmark code \
-  --models text-agent-ornith-9b,text-code-north-mini,text-code-qwen3 \
   --allow-code-execution \
   --json
 ```
+
+Without `--models`, the code benchmark uses the supported members of the default
+comparison lane for the current machine. On 32 GB Macs that means
+`text-agent-ornith-9b` and `text-code-north-mini`; `text-code-qwen3` joins the
+default comparison on 64 GB and larger machines.
 
 By default, `--sandbox auto` uses `sandbox-exec` on macOS and `bubblewrap` on
 Linux when available. Use `--sandbox none` only for trusted local smokes where

@@ -50,6 +50,29 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertFalse(cmd.json)
     }
 
+    func testCodeBenchmarkDefaultModelsAdaptToMachineMemory() {
+        let thirtyTwoGB = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4",
+            isAppleSiliconMac: true
+        )
+        let sixtyFourGB = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        XCTAssertEqual(ModelBenchmarkCode.defaultModelIDs(on: thirtyTwoGB), [
+            Q35Resources.ornith9BModelId,
+            NorthMiniCodeResources.modelId,
+        ])
+        XCTAssertEqual(ModelBenchmarkCode.defaultModelIDs(on: sixtyFourGB), [
+            Q35Resources.ornith9BModelId,
+            NorthMiniCodeResources.modelId,
+            CodeGenResources.defaultModelId,
+        ])
+    }
+
     func testCodeBenchmarkParsesOverrides() throws {
         let cmd = try ModelBenchmarkCode.parse([
             "--models", "text-agent-ornith-35b-mlx,text-code-north-mini",

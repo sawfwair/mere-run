@@ -390,6 +390,11 @@ struct StudioRootView: View {
             controller.applyRecommendedDefaults(to: &draft, for: mode)
             refreshReadiness()
         }
+        .onChange(of: controller.recommendedCodeModelID) { _, _ in
+            guard mode == .code, activeConversationID == nil else { return }
+            controller.applyRecommendedDefaults(to: &draft, for: mode)
+            refreshReadiness()
+        }
         .onChange(of: selectedLibraryID) { _, id in
             // Selecting a thread of the current conversation mode opens it in the canvas.
             guard mode.isConversational,

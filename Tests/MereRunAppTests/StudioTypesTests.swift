@@ -18,12 +18,12 @@ final class StudioTypesTests: XCTestCase {
 
     func testCodeStudioDefaultsUsePublicModelID() throws {
         let codeTemplate = try XCTUnwrap(CommandCatalog.template(id: .textCode))
-        XCTAssertEqual(codeTemplate.defaultModel, "text-code-qwen3")
+        XCTAssertEqual(codeTemplate.defaultModel, StudioCodeDefaults.fallbackModelID)
 
         var draft = StudioDraft()
         draft.reset(for: .code)
-        XCTAssertEqual(draft.model, "text-code-qwen3")
-        XCTAssertEqual(StudioCommandAdapter.requiredModel(for: .code, draft: draft), "text-code-qwen3")
+        XCTAssertEqual(draft.model, StudioCodeDefaults.fallbackModelID)
+        XCTAssertEqual(StudioCommandAdapter.requiredModel(for: .code, draft: draft), StudioCodeDefaults.fallbackModelID)
     }
 
     func testChatStudioDefaultsToStreamingOutput() throws {
@@ -636,6 +636,9 @@ final class StudioTypesTests: XCTestCase {
           "recommendedChatModel" : {
             "modelID" : "text-chat-q36-nano"
           },
+          "recommendedCodeModel" : {
+            "id" : "text-code-north-mini"
+          },
           "models" : [
             {
               "download" : "hugging-face",
@@ -661,6 +664,7 @@ final class StudioTypesTests: XCTestCase {
 
         let report = ModelCapabilitiesParser.report(from: output)
         XCTAssertEqual(report.recommendedChatModelID, "text-chat-q36-nano")
+        XCTAssertEqual(report.recommendedCodeModelID, "text-code-north-mini")
         let q36 = try XCTUnwrap(report.capabilitiesByID["text-chat-q36-nano"])
         let gemma = try XCTUnwrap(report.capabilitiesByID["text-chat-gemma4"])
 

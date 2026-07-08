@@ -296,11 +296,13 @@ mere.run model benchmark tool-calls \
 
 `model benchmark code` runs a tiny, fixed HumanEval slice against local coding
 models. It is a real functional-code eval slice, not a full pass@k benchmark or
-leaderboard substitute. The default comparison is:
+leaderboard substitute. The default comparison auto-selects the supported
+members of this lane for the current machine:
 
 - `text-agent-ornith-9b`: native Q35/MLX OptiQ coding-agent target.
 - `text-code-north-mini`: native llama.cpp/GGUF North Mini Code target.
-- `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline.
+- `text-code-qwen3`: native llama.cpp/GGUF Qwen3-Coder baseline, included by
+  default only on 64 GB and larger machines.
 
 For larger explicit Ornith runs, pass `--models text-agent-ornith-35b-mlx` for
 the local native MLX Q4 conversion or `--models text-agent-ornith-35b` for the
@@ -436,7 +438,7 @@ mere.run model benchmark vlm \
 ## Notes
 
 - Pull `text-chat-gemma4-turbo` before running the benchmark.
-- Pull `text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`
+- Pull the supported models shown by `mere.run model benchmark code --dry-run`
   before running the default code benchmark comparison.
 - Pull `text-agent-ornith-35b` before running larger explicit Ornith code evals.
 - Pull `vision-chat-gemma4-12b` before using it in the VLM benchmark.

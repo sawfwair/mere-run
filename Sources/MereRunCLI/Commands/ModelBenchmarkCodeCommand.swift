@@ -56,12 +56,6 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     @Flag(name: [.long], help: "Emit machine-readable JSON.")
     var json: Bool = false
 
-    private static let defaultModelIDs = [
-        Q35Resources.ornith9BModelId,
-        NorthMiniCodeResources.modelId,
-        CodeGenResources.defaultModelId,
-    ]
-
     func validate() throws {
         guard maxTokens > 0 else {
             throw ValidationError("--max-tokens must be greater than zero.")
@@ -126,12 +120,20 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     private func selectedModelIDs() throws -> [String] {
         let rawModels = models?.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        } ?? Self.defaultModelIDs
+        } ?? Self.defaultModelIDs()
         let modelIDs = rawModels.filter { !$0.isEmpty }
         guard !modelIDs.isEmpty else {
             throw ValidationError("--models must include at least one model id.")
         }
         return modelIDs
+    }
+
+    static func defaultModelIDs(on machine: MereRunMachineProfile = .current) -> [String] {
+        let supported = ManagedModelCapabilityCatalog.supportedCodeBenchmarkModelIDs(on: machine)
+        if !supported.isEmpty {
+            return supported
+        }
+        return [Q35Resources.ornith9BModelId]
     }
 
     private func selectedTasks() throws -> [CodeBenchmarkTask] {

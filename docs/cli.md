@@ -1566,8 +1566,11 @@ single decode steps, and whether SSD KV cache is available. Use
 
 Run a small real coding-eval slice against installed local coding models. The
 default suite is `humaneval-slice`, a three-task HumanEval subset covering
-`HumanEval/0`, `HumanEval/3`, and `HumanEval/8`. The default model comparison is
-`text-agent-ornith-9b`, `text-code-north-mini`, and `text-code-qwen3`.
+`HumanEval/0`, `HumanEval/3`, and `HumanEval/8`. The default model comparison
+uses the supported members of the coding comparison lane for this machine:
+`text-agent-ornith-9b` and `text-code-north-mini` on 32 GB Macs, with
+`text-code-qwen3` added on 64 GB and larger machines. Pass `--models` to force a
+specific explicit comparison.
 
 ```bash
 swift run mere.run model benchmark code \
