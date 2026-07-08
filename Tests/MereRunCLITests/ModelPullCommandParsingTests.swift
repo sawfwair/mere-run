@@ -128,6 +128,9 @@ final class ModelPullCommandParsingTests: XCTestCase {
             recommendedChatModel: bands
                 .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
                 .map { .init($0, machine: machine) },
+            recommendedCodeModel: ManagedModelCapabilityCatalog
+                .recommendedCodeModelReport(on: machine)
+                .map(ModelCapabilitiesModel.init),
             setupAgent: MereRunAgentModelCatalog
                 .recommendation(for: .tier, on: machine)
                 .map(ModelCapabilitiesSetupAgent.init),
@@ -148,6 +151,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
             "text-chat-q36-nano",
         ])
         XCTAssertTrue(decoded.recommendedChatModel?.currentMachine == true)
+        XCTAssertEqual(decoded.recommendedCodeModel?.id, "text-code-north-mini")
         XCTAssertEqual(decoded.setupAgent?.id, "text-chat-gemma4-12b-4bit")
     }
 

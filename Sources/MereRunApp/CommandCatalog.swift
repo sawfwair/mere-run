@@ -162,6 +162,24 @@ enum StudioChatDefaults {
     }
 }
 
+enum StudioCodeDefaults {
+    static let fallbackModelID = "text-code-north-mini"
+
+    static func shouldReplaceModelDefault(_ modelID: String, oldRecommendation: String? = nil) -> Bool {
+        let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty { return true }
+        var replaceable: Set<String> = [
+            fallbackModelID,
+            "text-agent-qwen35-9b",
+            "text-code-qwen3",
+        ]
+        if let oldRecommendation, !oldRecommendation.isBlank {
+            replaceable.insert(oldRecommendation)
+        }
+        return replaceable.contains(normalized)
+    }
+}
+
 struct CommandDraft: Equatable {
     var prompt = ""
     var secondaryText = ""
@@ -735,7 +753,7 @@ enum CommandCatalog {
             title: "Agent onboarding",
             subtitle: "Check local readiness and prepare Pi integration",
             systemImage: "person.crop.circle.badge.gearshape",
-            defaultModel: "text-code-qwen3"
+            defaultModel: StudioCodeDefaults.fallbackModelID
         ),
         CommandTemplate(
             id: .agentInstallPi,
@@ -810,7 +828,7 @@ enum CommandCatalog {
             promptLabel: "Prompt",
             secondaryLabel: "System",
             defaultPrompt: "Write a tiny Swift function that formats byte counts.",
-            defaultModel: "text-code-qwen3"
+            defaultModel: StudioCodeDefaults.fallbackModelID
         ),
         CommandTemplate(
             id: .textEmbed,

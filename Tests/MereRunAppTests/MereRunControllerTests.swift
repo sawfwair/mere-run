@@ -115,7 +115,7 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.modelCapabilitiesByID["image-zimage-nano"]?.minimumUnifiedMemoryGB, 12)
     }
 
-    func testReadinessCapturesRecommendedChatModelFromJSONCapabilities() async throws {
+    func testReadinessCapturesRecommendedModelsFromJSONCapabilities() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
@@ -133,6 +133,7 @@ final class MereRunControllerTests: XCTestCase {
 
         runner.starts[0].stdout(jsonCapabilitiesOutput(
             recommendedChatModelID: "text-agent-deepseek-v4-flash",
+            recommendedCodeModelID: "text-code-north-mini",
             supportedModelID: StudioChatDefaults.fallbackModelID
         ))
         runner.starts[0].termination(0)
@@ -140,6 +141,7 @@ final class MereRunControllerTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(controller.recommendedChatModelID, "text-agent-deepseek-v4-flash")
+        XCTAssertEqual(controller.recommendedCodeModelID, "text-code-north-mini")
         XCTAssertEqual(controller.draft.model, "text-agent-deepseek-v4-flash")
         XCTAssertEqual(runner.starts.count, 2)
     }
@@ -635,11 +637,18 @@ private func supportedCapabilitiesOutput(for modelID: String, minimum: Int) -> S
     """
 }
 
-private func jsonCapabilitiesOutput(recommendedChatModelID: String, supportedModelID: String) -> String {
+private func jsonCapabilitiesOutput(
+    recommendedChatModelID: String,
+    recommendedCodeModelID: String = "text-code-north-mini",
+    supportedModelID: String
+) -> String {
     """
     {
       "recommendedChatModel" : {
         "modelID" : "\(recommendedChatModelID)"
+      },
+      "recommendedCodeModel" : {
+        "id" : "\(recommendedCodeModelID)"
       },
       "models" : [
         {

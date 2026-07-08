@@ -20,6 +20,7 @@ struct ModelCapabilities: ParsableCommand {
     func run() throws {
         let machine = MereRunMachineProfile.current
         let reports = ManagedModelCapabilityCatalog.supportReports(on: machine)
+        let recommendedCodeReport = ManagedModelCapabilityCatalog.recommendedCodeModelReport(on: machine)
         let visibleReports = reports.filter { report in
             if recommended {
                 return report.isSupported
@@ -43,6 +44,7 @@ struct ModelCapabilities: ParsableCommand {
                 recommendedChatModel: chatBands
                     .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
                     .map { .init($0, machine: machine) },
+                recommendedCodeModel: recommendedCodeReport.map(ModelCapabilitiesModel.init),
                 setupAgent: MereRunAgentModelCatalog
                     .recommendation(for: .tier, on: machine)
                     .map(ModelCapabilitiesSetupAgent.init),
@@ -71,6 +73,12 @@ struct ModelCapabilities: ParsableCommand {
                     print("    alternatives: \(band.alternateModelIDs.joined(separator: ", "))")
                 }
             }
+        }
+
+        if let recommendedCodeReport {
+            print("\nRecommended code model")
+            print("  \(CLICommandDisplay.command("model pull \(recommendedCodeReport.spec.id)"))")
+            print("  \(recommendedCodeReport.descriptor.title): \(recommendedCodeReport.descriptor.summary)")
         }
 
         if let agent = MereRunAgentModelCatalog.recommendation(for: .tier, on: machine) {
@@ -129,6 +137,7 @@ struct ModelCapabilitiesOutput: Codable, Equatable {
     let machine: ModelCapabilitiesMachine
     let chatBands: [ModelCapabilitiesChatBand]
     let recommendedChatModel: ModelCapabilitiesChatBand?
+    let recommendedCodeModel: ModelCapabilitiesModel?
     let setupAgent: ModelCapabilitiesSetupAgent?
     let recommendedSetupModels: [ModelCapabilitiesModel]
     let unavailableRecommendedModelIDs: [String]

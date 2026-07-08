@@ -461,6 +461,12 @@ final class MereRunController: ObservableObject {
             applyRecommendedChatDefaultsToCurrentDraft(replacing: oldValue)
         }
     }
+    @Published private(set) var recommendedCodeModelID: String? = nil {
+        didSet {
+            guard oldValue != recommendedCodeModelID else { return }
+            applyRecommendedCodeDefaultsToCurrentDraft(replacing: oldValue)
+        }
+    }
     @Published var cliPath: String {
         didSet { UserDefaults.standard.set(cliPath, forKey: Keys.cliPath) }
     }
@@ -589,6 +595,7 @@ final class MereRunController: ObservableObject {
     func defaultDraft(for template: CommandTemplate) -> CommandDraft {
         var nextDraft = template.defaultDraft()
         applyRecommendedChatDefaults(to: &nextDraft, templateID: template.id, replacing: nil)
+        applyRecommendedCodeDefaults(to: &nextDraft, templateID: template.id, replacing: nil)
         return nextDraft
     }
 
@@ -596,16 +603,37 @@ final class MereRunController: ObservableObject {
         recommendedChatModelID ?? StudioChatDefaults.fallbackModelID
     }
 
+    func recommendedCodeModelForStudioDefault() -> String {
+        recommendedCodeModelID ?? StudioCodeDefaults.fallbackModelID
+    }
+
     func applyRecommendedDefaults(to studioDraft: inout StudioDraft, for mode: StudioMode) {
-        guard mode == .chat else { return }
-        let recommended = recommendedChatModelForStudioDefault()
-        if StudioChatDefaults.shouldReplaceModelDefault(studioDraft.model) {
-            studioDraft.model = recommended
+        switch mode {
+        case .chat:
+            let recommended = recommendedChatModelForStudioDefault()
+            if StudioChatDefaults.shouldReplaceModelDefault(studioDraft.model) {
+                studioDraft.model = recommended
+            }
+        case .code:
+            let recommended = recommendedCodeModelForStudioDefault()
+            if StudioCodeDefaults.shouldReplaceModelDefault(studioDraft.model) {
+                studioDraft.model = recommended
+            }
+        default:
+            break
         }
     }
 
     private func applyRecommendedChatDefaultsToCurrentDraft(replacing oldRecommendation: String?) {
         applyRecommendedChatDefaults(
+            to: &draft,
+            templateID: selectedTemplate.id,
+            replacing: oldRecommendation
+        )
+    }
+
+    private func applyRecommendedCodeDefaultsToCurrentDraft(replacing oldRecommendation: String?) {
+        applyRecommendedCodeDefaults(
             to: &draft,
             templateID: selectedTemplate.id,
             replacing: oldRecommendation
@@ -632,6 +660,22 @@ final class MereRunController: ObservableObject {
                 oldRecommendation: oldRecommendation
             ) {
                 draft.engine = StudioChatDefaults.servingEngine(for: recommended)
+            }
+        default:
+            break
+        }
+    }
+
+    private func applyRecommendedCodeDefaults(
+        to draft: inout CommandDraft,
+        templateID: CommandTemplateID,
+        replacing oldRecommendation: String?
+    ) {
+        let recommended = recommendedCodeModelForStudioDefault()
+        switch templateID {
+        case .textCode, .agentOnboard:
+            if StudioCodeDefaults.shouldReplaceModelDefault(draft.model, oldRecommendation: oldRecommendation) {
+                draft.model = recommended
             }
         default:
             break
@@ -950,6 +994,10 @@ final class MereRunController: ObservableObject {
                         if let recommendedChatModelID = report.recommendedChatModelID,
                            !recommendedChatModelID.isBlank {
                             self.recommendedChatModelID = recommendedChatModelID
+                        }
+                        if let recommendedCodeModelID = report.recommendedCodeModelID,
+                           !recommendedCodeModelID.isBlank {
+                            self.recommendedCodeModelID = recommendedCodeModelID
                         }
 
                         if let message = self.modelCapabilitiesByID[modelID]?.unavailableMessage {

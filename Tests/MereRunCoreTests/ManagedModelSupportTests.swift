@@ -101,6 +101,47 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
+    func testRecommendedCodeModelUsesNorthMiniOnThirtyTwoGB() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4",
+            isAppleSiliconMac: true
+        )
+
+        let recommendation = try XCTUnwrap(ManagedModelCapabilityCatalog.recommendedCodeModelReport(on: machine))
+
+        XCTAssertEqual(recommendation.spec.id, NorthMiniCodeResources.modelId)
+        XCTAssertTrue(recommendation.isSupported)
+    }
+
+    func testRecommendedCodeModelUsesQwen3CoderOnSixtyFourGB() throws {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let recommendation = try XCTUnwrap(ManagedModelCapabilityCatalog.recommendedCodeModelReport(on: machine))
+
+        XCTAssertEqual(recommendation.spec.id, CodeGenResources.defaultModelId)
+        XCTAssertTrue(recommendation.isSupported)
+    }
+
+    func testSupportedCodeBenchmarkModelsExcludeQwen3BelowSixtyFourGB() {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4",
+            isAppleSiliconMac: true
+        )
+
+        let modelIDs = ManagedModelCapabilityCatalog.supportedCodeBenchmarkModelIDs(on: machine)
+
+        XCTAssertEqual(modelIDs, [
+            Q35Resources.ornith9BModelId,
+            NorthMiniCodeResources.modelId,
+        ])
+    }
+
     func testOrnith9BIsSupportedOnTwentyFourGBAndStartableThroughQ35() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith9BModelId))
         let machine = MereRunMachineProfile(
