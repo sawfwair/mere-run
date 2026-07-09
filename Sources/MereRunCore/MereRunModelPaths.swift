@@ -195,6 +195,15 @@ public enum MereRunModelPaths {
             )
         }
 
+        if source == .processOverride || source == .environment {
+            return ModelStoreResolution(
+                source: source,
+                activeModelsDir: standardized,
+                configuredModelsDir: standardized,
+                isFallbackToDefault: false
+            )
+        }
+
         if isReadableDirectory(standardized, fileManager: fileManager) {
             return ModelStoreResolution(
                 source: source,

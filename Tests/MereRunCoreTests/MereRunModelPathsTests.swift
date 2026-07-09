@@ -61,6 +61,21 @@ final class MereRunModelPathsTests: XCTestCase {
         )
     }
 
+    func testModelStoreResolutionUsesMissingProcessOverrideWithoutFallback() throws {
+        let temp = try makeTemporaryDirectory(named: "mererun-models-missing-process-parent")
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let missingRoot = temp.appendingPathComponent("models", isDirectory: true)
+
+        MereRunModelPaths.setProcessModelsDirOverride(missingRoot)
+
+        let resolution = MereRunModelPaths.modelStoreResolution()
+
+        XCTAssertEqual(resolution.source, .processOverride)
+        XCTAssertEqual(resolution.activeModelsDir.standardizedFileURL.path, missingRoot.standardizedFileURL.path)
+        XCTAssertEqual(resolution.configuredModelsDir?.standardizedFileURL.path, missingRoot.standardizedFileURL.path)
+        XCTAssertFalse(resolution.isFallbackToDefault)
+    }
+
     func testModelStoreResolutionUsesEnvironmentOverride() throws {
         let fm = FileManager.default
         let envRoot = try makeTemporaryDirectory(named: "mererun-models-env")
@@ -72,6 +87,21 @@ final class MereRunModelPathsTests: XCTestCase {
 
         XCTAssertEqual(resolution.source, .environment)
         XCTAssertEqual(resolution.activeModelsDir.standardizedFileURL, envRoot.standardizedFileURL)
+        XCTAssertFalse(resolution.isFallbackToDefault)
+    }
+
+    func testModelStoreResolutionUsesMissingEnvironmentOverrideWithoutFallback() throws {
+        let temp = try makeTemporaryDirectory(named: "mererun-models-missing-env-parent")
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let missingRoot = temp.appendingPathComponent("models", isDirectory: true)
+
+        setenv(MereRunModelPaths.modelsDirEnvironmentKey, missingRoot.path, 1)
+
+        let resolution = MereRunModelPaths.modelStoreResolution()
+
+        XCTAssertEqual(resolution.source, .environment)
+        XCTAssertEqual(resolution.activeModelsDir.standardizedFileURL.path, missingRoot.standardizedFileURL.path)
+        XCTAssertEqual(resolution.configuredModelsDir?.standardizedFileURL.path, missingRoot.standardizedFileURL.path)
         XCTAssertFalse(resolution.isFallbackToDefault)
     }
 

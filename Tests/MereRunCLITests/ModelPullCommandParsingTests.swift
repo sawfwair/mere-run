@@ -74,6 +74,43 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(decoded.result.models.first?.id, "image-zimage-nano")
     }
 
+    func testModelPullPreflightUsesMissingProcessModelStoreOverride() throws {
+        let temp = try makeTemporaryDirectory()
+        let fileManager = FileManager.default
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? fileManager.removeItem(at: temp)
+        }
+
+        let missingModelStore = temp.appendingPathComponent("models", isDirectory: true)
+        let hubCache = temp.appendingPathComponent("hub", isDirectory: true)
+        try fileManager.createDirectory(at: hubCache, withIntermediateDirectories: true)
+        MereRunModelPaths.setProcessModelsDirOverride(missingModelStore)
+
+        let cmd = try ModelPull.parse([
+            "image-zimage-nano",
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            fileManager: fileManager,
+            hubCacheURL: hubCache,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertFalse(fileManager.fileExists(atPath: missingModelStore.path))
+        XCTAssertEqual(envelope.result.modelStore.path, missingModelStore.standardizedFileURL.path)
+        XCTAssertEqual(
+            envelope.result.models.first?.installPath,
+            missingModelStore
+                .appendingPathComponent("image-zimage-nano", isDirectory: true)
+                .standardizedFileURL
+                .path
+        )
+        XCTAssertEqual(envelope.result.models.first?.status, "will_download")
+    }
+
     func testModelPullPreflightBlocksUnknownModel() throws {
         let cmd = try ModelPull.parse([
             "image-not-real",
