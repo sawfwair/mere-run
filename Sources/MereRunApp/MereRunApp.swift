@@ -31,7 +31,10 @@ struct MereRunApp: App {
         WindowGroup {
             MereRunRootView()
                 .environmentObject(controller)
-                .frame(minWidth: 880, minHeight: 600)
+                .frame(
+                    minWidth: StudioLayoutPolicy.minimumWindowWidth,
+                    minHeight: StudioLayoutPolicy.minimumWindowHeight
+                )
                 .onAppear {
                     appDelegate.onTerminate = { [weak controller] in
                         MainActor.assumeIsolated {

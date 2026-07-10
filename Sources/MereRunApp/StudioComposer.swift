@@ -5,6 +5,7 @@ import SwiftUI
 /// depth (attachment, model, options) folded into quiet affordances around it.
 struct StudioComposer: View {
     let mode: StudioMode
+    var isCompact = false
     @Binding var draft: StudioDraft
     @Binding var showOptions: Bool
     let isRunning: Bool
@@ -97,78 +98,14 @@ struct StudioComposer: View {
     }
 
     private var composerBar: some View {
-        HStack(spacing: MereRunTheme.Spacing.sm) {
-            HStack(spacing: 2) {
-                Button(action: onAttach) {
-                    Image(systemName: mode.requiresAttachment ? "paperclip.badge.ellipsis" : "paperclip")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.mereIcon)
-                .disabled(mode.acceptedTypes.isEmpty)
-                .opacity(mode.acceptedTypes.isEmpty ? 0.35 : 1)
-                .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
-                .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
-
-                if mode.acceptedTypes.contains(.image) {
-                    Button(action: onPaste) {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.mereIcon)
-                    .help("Paste image from clipboard (⌘V)")
-                    .accessibilityLabel("Paste image from clipboard")
-                }
-            }
-
-            if mode == .listen {
-                Text(mode.promptPlaceholder)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        Group {
+            if isCompact {
+                compactComposerContent
             } else {
-                TextField(mode.promptPlaceholder, text: $draft.prompt, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15, weight: .medium))
-                    .lineLimit(1...5)
-                    .focused(promptFocus)
-                    .onSubmit(onRun)
-            }
-
-            HStack(spacing: 6) {
-                modelMenu
-
-                Button {
-                    showOptions.toggle()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(showOptions ? MereRunTheme.accent : MereRunTheme.textSecondary)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.mereIcon)
-                .help("Options")
-                .accessibilityLabel("Options")
-                .popover(isPresented: $showOptions, arrowEdge: .top) {
-                    StudioOptionsPanel(mode: mode, draft: $draft)
-                }
-
-                if isRunning {
-                    Button(action: onStop) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.mereIcon(tint: MereRunTheme.red))
-                    .help("Stop current run (⌘.)")
-                    .accessibilityLabel("Stop current run")
-                }
-
-                sendButton
+                regularComposerContent
             }
         }
-        .padding(.horizontal, MereRunTheme.Spacing.md)
+        .padding(.horizontal, isCompact ? MereRunTheme.Spacing.sm : MereRunTheme.Spacing.md)
         .padding(.vertical, MereRunTheme.Spacing.sm)
         .background {
             RoundedRectangle(cornerRadius: MereRunTheme.Radius.xxl)
@@ -180,6 +117,108 @@ struct StudioComposer: View {
                 .mereShadow(radius: 18, y: 8)
         }
         .mereFocusRing(promptFocus.wrappedValue, cornerRadius: MereRunTheme.Radius.xxl)
+    }
+
+    private var regularComposerContent: some View {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            attachmentControls
+            promptEntry
+
+            HStack(spacing: 6) {
+                modelMenu
+                optionsButton
+                if isRunning { stopButton }
+                sendButton
+            }
+        }
+    }
+
+    private var compactComposerContent: some View {
+        VStack(spacing: 5) {
+            HStack(spacing: MereRunTheme.Spacing.xs) {
+                promptEntry
+                sendButton
+            }
+
+            HStack(spacing: 4) {
+                attachmentControls
+                modelMenu
+                Spacer(minLength: 0)
+                optionsButton
+                if isRunning { stopButton }
+            }
+        }
+    }
+
+    private var attachmentControls: some View {
+        HStack(spacing: 2) {
+            Button(action: onAttach) {
+                Image(systemName: mode.requiresAttachment ? "paperclip.badge.ellipsis" : "paperclip")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.mereIcon)
+            .disabled(mode.acceptedTypes.isEmpty)
+            .opacity(mode.acceptedTypes.isEmpty ? 0.35 : 1)
+            .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
+            .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
+
+            if mode.acceptedTypes.contains(.image) {
+                Button(action: onPaste) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.mereIcon)
+                .help("Paste image from clipboard (⌘V)")
+                .accessibilityLabel("Paste image from clipboard")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var promptEntry: some View {
+        if mode == .listen {
+            Text(mode.promptPlaceholder)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            TextField(mode.promptPlaceholder, text: $draft.prompt, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .medium))
+                .lineLimit(1...5)
+                .focused(promptFocus)
+                .onSubmit(onRun)
+        }
+    }
+
+    private var optionsButton: some View {
+        Button {
+            showOptions.toggle()
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(showOptions ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.mereIcon)
+        .help("Options")
+        .accessibilityLabel("Options")
+        .popover(isPresented: $showOptions, arrowEdge: .top) {
+            StudioOptionsPanel(mode: mode, draft: $draft)
+        }
+    }
+
+    private var stopButton: some View {
+        Button(action: onStop) {
+            Image(systemName: "stop.fill")
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.mereIcon(tint: MereRunTheme.red))
+        .help("Stop current run (⌘.)")
+        .accessibilityLabel("Stop current run")
     }
 
     private var sendButton: some View {
