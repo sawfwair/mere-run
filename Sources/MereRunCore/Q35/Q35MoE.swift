@@ -46,12 +46,20 @@ final class Q35SwitchLinear: Module {
         self.groupSize = groupSize
         self.bits = bits
 
-        let scale = sqrt(1.0 / Float(max(1, inputDims)))
-        self._weight.wrappedValue = MLXRandom.uniform(
-            low: -scale,
-            high: scale,
-            [numExperts, outputDims, inputDims]
-        )
+        if quantized {
+            let packedInputDims = (inputDims * bits + 31) / 32
+            self._weight.wrappedValue = MLXArray.zeros(
+                [numExperts, outputDims, packedInputDims],
+                dtype: .uint32
+            )
+        } else {
+            let scale = sqrt(1.0 / Float(max(1, inputDims)))
+            self._weight.wrappedValue = MLXRandom.uniform(
+                low: -scale,
+                high: scale,
+                [numExperts, outputDims, inputDims]
+            )
+        }
         let groups = max(1, (inputDims + groupSize - 1) / groupSize)
         self._scales.wrappedValue = quantized
             ? MLXArray.zeros([numExperts, outputDims, groups])
