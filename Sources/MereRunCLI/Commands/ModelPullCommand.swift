@@ -187,6 +187,7 @@ struct ModelPull: AsyncParsableCommand {
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
         modelStoreURL: URL? = nil,
+        diskAvailableBytes: ((URL) -> Int64?)? = nil,
         now: @escaping () -> Date = Date.init
     ) -> ModelPullPreflightEnvelope {
         let input = ModelPullPreflightInput(
@@ -202,6 +203,7 @@ struct ModelPull: AsyncParsableCommand {
             fileManager: fileManager,
             hubCacheURL: hubCacheURL,
             modelStoreURL: modelStoreURL,
+            diskAvailableBytes: diskAvailableBytes,
             now: now
         ).envelope()
     }

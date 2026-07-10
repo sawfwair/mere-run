@@ -57,6 +57,22 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testPullableCatalogSpecsHaveDiskEstimates() {
+        var specs = ManagedModelCatalog.allSpecs
+        let companionSpecs = ManagedModelCatalog.allSpecs
+            .flatMap(\.companionModelIDs)
+            .compactMap { ManagedModelCatalog.spec(for: $0) }
+        specs.append(contentsOf: companionSpecs)
+
+        for spec in specs where spec.hasAnyManagedDownloadSource() {
+            XCTAssertGreaterThan(
+                spec.estimatedDownloadBytes ?? 0,
+                0,
+                "Pullable model \(spec.id) should have a byte estimate for disk-space preflight."
+            )
+        }
+    }
+
     func testMediaOnboardingModelsHaveDiskEstimates() throws {
         for id in ["speech-asr-parakeet", "text-embed-qwen3-0.6b"] {
             let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
