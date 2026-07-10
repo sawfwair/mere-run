@@ -92,6 +92,74 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxDiff, 0.001)
     }
 
+    func testQ35SwitchLinearAcross1024TokenBoundary() throws {
+        let numExperts = 16
+        let inputDims = 32
+        let outputDims = 16
+        let topK = 8
+        let denseWeight = MLXArray(
+            (0..<(numExperts * outputDims * inputDims)).map {
+                Float(($0 % 37) - 18) / 24.0
+            },
+            [numExperts, outputDims, inputDims]
+        )
+        let (weight, scales, biases) = MLX.quantized(
+            denseWeight,
+            groupSize: 32,
+            bits: 4
+        )
+        let layer = Q35SwitchLinear(
+            inputDims: inputDims,
+            outputDims: outputDims,
+            numExperts: numExperts,
+            groupSize: 32,
+            bits: 4,
+            quantized: true,
+            bias: false
+        )
+        var updates = [
+            ("weight", weight),
+            ("scales", scales),
+        ]
+        if let biases {
+            updates.append(("biases", biases))
+        }
+        try layer.update(parameters: ModuleParameters.unflattened(updates), verify: .none)
+
+        for tokenCount in [1000, 1240] {
+            let input = MLXArray(
+                (0..<(tokenCount * inputDims)).map {
+                    Float(($0 % 29) - 14) / 17.0
+                },
+                [1, tokenCount, inputDims]
+            ).asType(.bfloat16)
+            let indices = MLXArray(
+                (0..<(tokenCount * topK)).map { Int32(($0 * 5 + 3) % numExperts) },
+                [1, tokenCount, topK]
+            )
+
+            let actual = layer(input, indices: indices).asType(.float32)
+            let expandedInput = MLX.expandedDimensions(input, axes: [-2, -3])
+            let expected = portableGatherQuantizedMM(
+                expandedInput,
+                weight,
+                scales: scales,
+                biases: biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: 32,
+                bits: 4,
+                mode: .affine,
+                sortedIndices: false,
+                forceDequantizedFallback: true
+            ).squeezed(axis: -2).asType(.float32)
+            MLX.eval(actual, expected)
+
+            let maxDiff = MLX.max(MLX.abs(actual - expected)).item(Float.self)
+            XCTAssertLessThan(maxDiff, 0.02, "GatherQMM diverged at tokenCount=\(tokenCount)")
+        }
+    }
+
     func testQ35SwitchLinearSortedRouteMatchesUnsortedRoute() throws {
         let routeCount = 64
         let inputDims = 4
