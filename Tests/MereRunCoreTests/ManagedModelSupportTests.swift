@@ -231,6 +231,54 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testLingBotDenseIsSupportedAtNativeMemoryThreshold() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoDense13B.rawValue)
+        )
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertEqual(report.reasons, [])
+    }
+
+    func testLingBotMoESourceRequiresConversionWithEnoughMemory() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoMoE30BA3B.rawValue)
+        )
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 192 * 1_073_741_824,
+            processorName: "M4 Ultra",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertFalse(report.isSupported)
+        XCTAssertTrue(report.reasons.joined(separator: " ").contains("model quantize"))
+    }
+
+    func testQuantizedLingBotMoEIsSupportedAtNativeMemoryThreshold() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoMoE30BA3B4Bit.rawValue)
+        )
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Ultra",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertEqual(report.reasons, [])
+    }
+
     func testRecommendedSetupOnlyContainsSupportedModels() {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 16 * 1_073_741_824,

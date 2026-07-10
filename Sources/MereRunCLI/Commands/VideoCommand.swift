@@ -7,6 +7,7 @@ import MereRunCore
 enum LTXVideoVariant: String, CaseIterable, ExpressibleByArgument {
     case unifiedAV = "unified-av"
     case distilled = "distilled"
+    case lingbot = "lingbot"
 }
 
 struct Video: AsyncParsableCommand {
@@ -126,7 +127,7 @@ struct VideoExportLatents: AsyncParsableCommand {
 struct VideoGenerate: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "generate",
-        abstract: "Generate MP4 video with native Swift/MLX LTX.",
+        abstract: "Generate MP4 video with native Swift/MLX video pipelines.",
         discussion: """
         Prints the output MP4 path to stdout.
         Progress and diagnostics are printed to stderr.
@@ -143,8 +144,11 @@ struct VideoGenerate: AsyncParsableCommand {
         """
     )
 
-    @Argument(help: "Prompt for video generation.")
-    var prompt: String
+    @Argument(help: "Prompt for video generation. Optional when --prompt-json is provided.")
+    var prompt: String?
+
+    @Option(name: [.customLong("prompt-json")], help: "LingBot structured prompt JSON; its caption and optional duration follow the released runner contract.")
+    var promptJSON: String?
 
     @Option(name: [.customShort("o"), .long], help: "Output MP4 path (default: ./mererun-video-<timestamp>.mp4).")
     var output: String?
@@ -152,20 +156,20 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LTX model root.")
     var model: String = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
 
-    @Option(name: [.customLong("variant")], help: "Native LTX lane: distilled for faster video-only drafts, unified-av for synchronized audio/video.")
+    @Option(name: [.customLong("variant")], help: "Native pipeline: distilled, unified-av, or lingbot. LingBot model ids select lingbot automatically.")
     var variant: LTXVideoVariant = .distilled
 
     @Option(name: [.customLong("model-root")], help: "Local LTX model root. Takes precedence over --model.")
     var modelRoot: String?
 
     @Option(name: [.long], help: "Output width (must be divisible by 64; auto-snapped down).")
-    var width: Int = 768
+    var width: Int?
 
     @Option(name: [.long], help: "Output height (must be divisible by 64; auto-snapped down).")
-    var height: Int = 512
+    var height: Int?
 
     @Option(name: [.customLong("num-frames")], help: "Frame count (must be 8n+1; auto-adjusted).")
-    var numFrames: Int = 65
+    var numFrames: Int?
 
     @Option(name: [.long], help: "Target output duration in seconds. Overrides --num-frames by choosing the nearest 8n+1 frame count for --fps.")
     var duration: Double?
@@ -175,6 +179,63 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Seed value.")
     var seed: Int?
+
+    @Option(name: [.long], help: "LingBot denoising step count.")
+    var steps: Int = 40
+
+    @Option(name: [.customLong("guidance-scale")], help: "LingBot classifier-free guidance scale.")
+    var guidanceScale: Float = 3
+
+    @Option(name: [.long], help: "LingBot Flow-UniPC timestep shift.")
+    var shift: Float = 3
+
+    @Flag(
+        name: [.customLong("batch-cfg")],
+        help: "Run LingBot positive and negative CFG branches as one masked MLX batch."
+    )
+    var batchCFG: Bool = false
+
+    @Option(name: [.customLong("negative-prompt")], help: "Optional LingBot negative prompt; defaults to the upstream universal negative JSON.")
+    var negativePrompt: String?
+
+    @Option(name: [.customLong("negative-prompt-json")], help: "LingBot auto-negative JSON file, compacted with source key order preserved.")
+    var negativePromptJSON: String?
+
+    @Flag(name: [.customLong("temporal-probe")], help: "Decode an early LingBot denoised estimate at full duration, then stop.")
+    var temporalProbe: Bool = false
+
+    @Option(name: [.customLong("temporal-probe-step")], help: "LingBot denoiser step to decode for --temporal-probe.")
+    var temporalProbeStep: Int = 4
+
+    @Flag(name: [.customLong("refiner")], help: "Run the LingBot MoE second-stage refiner and write the refined MP4.")
+    var refiner: Bool = false
+
+    @Option(name: [.customLong("refiner-width")], help: "LingBot refiner output width (default: 1920).")
+    var refinerWidth: Int?
+
+    @Option(name: [.customLong("refiner-height")], help: "LingBot refiner output height (default: 1088).")
+    var refinerHeight: Int?
+
+    @Option(name: [.customLong("refiner-steps")], help: "LingBot refiner requested step count.")
+    var refinerSteps: Int = 8
+
+    @Option(name: [.customLong("refiner-guidance-scale")], help: "LingBot refiner classifier-free guidance scale.")
+    var refinerGuidanceScale: Float = 3
+
+    @Option(name: [.customLong("refiner-shift")], help: "LingBot refiner Flow-UniPC timestep shift.")
+    var refinerShift: Float = 3
+
+    @Option(name: [.customLong("refiner-threshold")], help: "LingBot refiner re-noising threshold.")
+    var refinerThreshold: Float = 0.85
+
+    @Option(name: [.customLong("refiner-sigma-tail-steps")], help: "LingBot refiner low-noise tail sigma count.")
+    var refinerSigmaTailSteps: Int = 2
+
+    @Flag(
+        name: [.customLong("refiner-batch-cfg")],
+        help: "Run LingBot refiner CFG branches as one masked MLX batch."
+    )
+    var refinerBatchCFG: Bool = false
 
     @Option(name: [.long], help: "Optional source image path (enables image-to-video).")
     var image: String?
@@ -208,27 +269,44 @@ struct VideoGenerate: AsyncParsableCommand {
             return
         }
 
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveVariant = effectiveVariant
+        if promptJSON != nil, effectiveVariant != .lingbot {
+            throw ValidationError("--prompt-json is supported only by the native LingBot pipeline.")
+        }
+        if negativePrompt != nil, negativePromptJSON != nil {
+            throw ValidationError("Use either --negative-prompt or --negative-prompt-json, not both.")
+        }
+        if negativePromptJSON != nil, effectiveVariant != .lingbot {
+            throw ValidationError("--negative-prompt-json is supported only by the native LingBot pipeline.")
+        }
+        let resolvedPrompt = try resolvePrompt()
+        let trimmedPrompt = resolvedPrompt.caption.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
-            throw ValidationError("Prompt cannot be empty.")
+            throw ValidationError("Provide a non-empty prompt or --prompt-json.")
         }
 
         guard fps > 0 else {
             throw ValidationError("--fps must be >= 1")
         }
-        if let duration {
-            guard duration > 0 else {
+        let effectiveDuration = duration ?? resolvedPrompt.duration
+        if let effectiveDuration {
+            guard effectiveDuration > 0 else {
                 throw ValidationError("--duration must be > 0")
             }
         }
-        guard width >= 64 else {
-            throw ValidationError("--width must be >= 64")
+        let dimensionMultiple = effectiveVariant == .lingbot ? 16 : 64
+        let minimumFrames = effectiveVariant == .lingbot ? 5 : 9
+        let requestedWidth = width ?? (effectiveVariant == .lingbot ? 320 : 768)
+        let requestedHeight = height ?? (effectiveVariant == .lingbot ? 192 : 512)
+        let requestedFrameOption = numFrames ?? (effectiveVariant == .lingbot ? 9 : 65)
+        guard requestedWidth >= dimensionMultiple else {
+            throw ValidationError("--width must be >= \(dimensionMultiple)")
         }
-        guard height >= 64 else {
-            throw ValidationError("--height must be >= 64")
+        guard requestedHeight >= dimensionMultiple else {
+            throw ValidationError("--height must be >= \(dimensionMultiple)")
         }
-        guard numFrames >= 9 else {
-            throw ValidationError("--num-frames must be >= 9")
+        guard requestedFrameOption >= minimumFrames else {
+            throw ValidationError("--num-frames must be >= \(minimumFrames)")
         }
         guard (0...1).contains(imageStrength) else {
             throw ValidationError("--image-strength must be between 0 and 1")
@@ -239,24 +317,101 @@ struct VideoGenerate: AsyncParsableCommand {
         if endImage != nil, image == nil {
             throw ValidationError("--end-image requires --image (the start keyframe)")
         }
-
-        let resolvedWidth = max(64, (width / 64) * 64)
-        let resolvedHeight = max(64, (height / 64) * 64)
-        let requestedNumFrames = duration.map { nearestLTXFrameCount(duration: $0, fps: fps) } ?? numFrames
-        let resolvedNumFrames = max(9, ((requestedNumFrames - 1) / 8) * 8 + 1)
-        if !quiet {
-            if resolvedWidth != width || resolvedHeight != height {
-                CLIStderr.write("Adjusted size to \(resolvedWidth)x\(resolvedHeight) (must be divisible by 64)\n")
+        if effectiveVariant == .lingbot, image != nil || endImage != nil {
+            throw ValidationError("The native LingBot pipeline currently supports text-to-video only.")
+        }
+        if effectiveVariant == .lingbot {
+            guard steps >= 1 else {
+                throw ValidationError("--steps must be >= 1")
             }
-            if let duration {
+            guard guidanceScale > 0 else {
+                throw ValidationError("--guidance-scale must be > 0")
+            }
+            guard shift > 0 else {
+                throw ValidationError("--shift must be > 0")
+            }
+        }
+        if refiner, effectiveVariant != .lingbot {
+            throw ValidationError("--refiner is supported only by the native LingBot pipeline.")
+        }
+        if batchCFG, effectiveVariant != .lingbot {
+            throw ValidationError("--batch-cfg is supported only by the native LingBot pipeline.")
+        }
+        if refinerBatchCFG, effectiveVariant != .lingbot {
+            throw ValidationError("--refiner-batch-cfg is supported only by the native LingBot pipeline.")
+        }
+        if refinerBatchCFG, !refiner {
+            throw ValidationError("--refiner-batch-cfg requires --refiner.")
+        }
+        if temporalProbe, effectiveVariant != .lingbot {
+            throw ValidationError("--temporal-probe is supported only by the native LingBot pipeline.")
+        }
+        if temporalProbe, !(1...steps).contains(temporalProbeStep) {
+            throw ValidationError("--temporal-probe-step must be between 1 and --steps")
+        }
+        if (refinerWidth == nil) != (refinerHeight == nil) {
+            throw ValidationError("--refiner-width and --refiner-height must be provided together.")
+        }
+        if refiner {
+            if let refinerWidth, refinerWidth < 16 {
+                throw ValidationError("--refiner-width must be >= 16")
+            }
+            if let refinerHeight, refinerHeight < 16 {
+                throw ValidationError("--refiner-height must be >= 16")
+            }
+            guard refinerSteps >= 1 else {
+                throw ValidationError("--refiner-steps must be >= 1")
+            }
+            guard refinerGuidanceScale > 0 else {
+                throw ValidationError("--refiner-guidance-scale must be > 0")
+            }
+            guard refinerShift > 0 else {
+                throw ValidationError("--refiner-shift must be > 0")
+            }
+            guard refinerThreshold > 0, refinerThreshold <= 1 else {
+                throw ValidationError("--refiner-threshold must be in (0, 1]")
+            }
+            guard refinerSigmaTailSteps >= 0 else {
+                throw ValidationError("--refiner-sigma-tail-steps must be >= 0")
+            }
+        }
+
+        let resolvedWidth = max(dimensionMultiple, (requestedWidth / dimensionMultiple) * dimensionMultiple)
+        let resolvedHeight = max(dimensionMultiple, (requestedHeight / dimensionMultiple) * dimensionMultiple)
+        let resolvedRefinerWidth = refiner
+            ? max(16, ((refinerWidth ?? 1_920) / 16) * 16)
+            : nil
+        let resolvedRefinerHeight = refiner
+            ? max(16, ((refinerHeight ?? 1_088) / 16) * 16)
+            : nil
+        let requestedNumFrames = effectiveDuration.map {
+            effectiveVariant == .lingbot
+                ? nearestLingBotFrameCount(duration: $0, fps: fps)
+                : nearestLTXFrameCount(duration: $0, fps: fps)
+        } ?? requestedFrameOption
+        let frameStride = effectiveVariant == .lingbot ? 4 : 8
+        let resolvedNumFrames = max(minimumFrames, ((requestedNumFrames - 1) / frameStride) * frameStride + 1)
+        if !quiet {
+            if resolvedWidth != requestedWidth || resolvedHeight != requestedHeight {
+                CLIStderr.write("Adjusted size to \(resolvedWidth)x\(resolvedHeight) (must be divisible by \(dimensionMultiple))\n")
+            }
+            if refiner, let resolvedRefinerWidth, let resolvedRefinerHeight {
+                CLIStderr.write("Refiner output size: \(resolvedRefinerWidth)x\(resolvedRefinerHeight)\n")
+            }
+            if temporalProbe {
+                CLIStderr.write(
+                    "Temporal probe: full-duration base estimate at step \(temporalProbeStep); refiner will not run.\n"
+                )
+            }
+            if let effectiveDuration {
                 let resolvedSeconds = Double(resolvedNumFrames) / Double(fps)
                 CLIStderr.write(
-                    "Resolved duration \(String(format: "%.2f", duration))s to \(resolvedNumFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 8n+1)\n"
+                    "Resolved duration \(String(format: "%.2f", effectiveDuration))s to \(resolvedNumFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy \(frameStride)n+1)\n"
                 )
-            } else if resolvedNumFrames != numFrames {
-                CLIStderr.write("Adjusted frame count to \(resolvedNumFrames) (must satisfy 8n+1)\n")
+            } else if resolvedNumFrames != requestedFrameOption {
+                CLIStderr.write("Adjusted frame count to \(resolvedNumFrames) (must satisfy \(frameStride)n+1)\n")
             }
-            if variant == .unifiedAV && fps != 24 {
+            if effectiveVariant == .unifiedAV && fps != 24 {
                 CLIStderr.write(
                     "Warning: LTX unified AV is trained for 24 fps; --fps \(fps) can make generated motion look time-stretched relative to audio.\n"
                 )
@@ -290,7 +445,7 @@ struct VideoGenerate: AsyncParsableCommand {
         let resolvedModelRoot = try await resolveVideoModelRoot(
             explicitModelRoot: modelRoot,
             requestedModel: model,
-            variant: variant
+            variant: effectiveVariant
         ).path
 
         try await runNativeGenerate(
@@ -300,11 +455,13 @@ struct VideoGenerate: AsyncParsableCommand {
             numFrames: resolvedNumFrames,
             fps: fps,
             seed: seed ?? 42,
-            variant: variant,
+            variant: effectiveVariant,
             sourceImageURL: sourceImageURL,
             imageStrength: imageStrength,
             endImageURL: endImageURL,
             endImageStrength: endImageStrength,
+            refinerWidth: resolvedRefinerWidth,
+            refinerHeight: resolvedRefinerHeight,
             modelRoot: resolvedModelRoot,
             outputURL: outputURL
         )
@@ -322,11 +479,17 @@ struct VideoGenerate: AsyncParsableCommand {
         imageStrength: Float,
         endImageURL: URL?,
         endImageStrength: Float,
+        refinerWidth: Int?,
+        refinerHeight: Int?,
         modelRoot: String,
         outputURL: URL
     ) async throws {
         let rootURL = URL(fileURLWithPath: modelRoot).standardizedFileURL
-        try validateNativeModelRoot(rootURL)
+        if variant == .lingbot {
+            _ = try LingBotVideoResources(rootURL: rootURL)
+        } else {
+            try validateNativeModelRoot(rootURL)
+        }
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         if !quiet {
@@ -428,6 +591,94 @@ struct VideoGenerate: AsyncParsableCommand {
                 await generator.unload()
                 throw error
             }
+        case .lingbot:
+            if !quiet {
+                let resources = try LingBotVideoResources(rootURL: rootURL)
+                let architecture = resources.transformerConfig.numExperts > 0 ? "MoE" : "Dense"
+                CLIStderr.write("Loading native LingBot-Video \(architecture) pipeline...\n")
+            }
+            let pipeline = LingBotVideoPipeline()
+            let shouldReportProgress = !quiet
+            let progressHandler: (@Sendable (LingBotVideoGenerationProgress) -> Void)?
+            if shouldReportProgress {
+                progressHandler = { progress in
+                    if let branch = progress.branch, progress.blockIndex > 0 {
+                        let phase = progress.stage == .refining ? "refining" : "denoising"
+                        CLIStderr.write(
+                            "LingBot \(phase) \(progress.stepIndex)/\(progress.totalSteps) "
+                                + "\(branch.rawValue) block \(progress.blockIndex)/\(progress.totalBlocks)\n"
+                        )
+                    } else if progress.stage == .denoising {
+                        CLIStderr.write("LingBot denoising \(progress.stepIndex)/\(progress.totalSteps)\n")
+                    } else if progress.stage == .refining {
+                        CLIStderr.write("LingBot refining \(progress.stepIndex)/\(progress.totalSteps)\n")
+                    } else {
+                        CLIStderr.write("LingBot stage: \(progress.stage.rawValue)\n")
+                    }
+                }
+            } else {
+                progressHandler = nil
+            }
+            let result = try await pipeline.generate(
+                modelRoot: rootURL,
+                options: LingBotVideoGenerationOptions(
+                    prompt: prompt,
+                    negativePrompt: try resolveNegativePrompt()
+                        ?? LingBotVideoPipeline.defaultNegativePrompt,
+                    width: width,
+                    height: height,
+                    numFrames: numFrames,
+                    fps: fps,
+                    steps: steps,
+                    guidanceScale: guidanceScale,
+                    shift: shift,
+                    batchCFG: batchCFG,
+                    seed: seed,
+                    temporalProbe: temporalProbe,
+                    temporalProbeStep: temporalProbeStep,
+                    runRefiner: refiner,
+                    refinerWidth: refinerWidth,
+                    refinerHeight: refinerHeight,
+                    refinerSteps: refinerSteps,
+                    refinerGuidanceScale: refinerGuidanceScale,
+                    refinerShift: refinerShift,
+                    refinerThreshold: refinerThreshold,
+                    refinerSigmaTailSteps: refinerSigmaTailSteps,
+                    refinerBatchCFG: refinerBatchCFG
+                ),
+                progressHandler: progressHandler
+            )
+            if !quiet {
+                CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
+                if result.temporalProbe {
+                    CLIStderr.write("LingBot temporal probe complete at denoiser step \(temporalProbeStep).\n")
+                }
+                if result.refined {
+                    CLIStderr.write("LingBot refiner pass complete.\n")
+                }
+                CLIStderr.write("Writing MP4...\n")
+            }
+            try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+            let temporalMetrics = LingBotVideoTemporalMetrics.analyze(frames: result.frames)
+            if !quiet {
+                CLIStderr.write(
+                    String(
+                        format: "Temporal luma: delta_mean=%.2f delta_peak=%.2f spatial_std=%.2f\n",
+                        temporalMetrics.meanLumaDelta,
+                        temporalMetrics.peakLumaDelta,
+                        temporalMetrics.lumaStandardDeviation
+                    )
+                )
+                if !temporalMetrics.isInformative {
+                    CLIStderr.write(
+                        "Temporal verdict: inconclusive low-contrast estimate; increase --temporal-probe-step.\n"
+                    )
+                } else if temporalMetrics.isLikelyUnstable {
+                    CLIStderr.write("Temporal verdict: unstable; do not start the full run.\n")
+                } else {
+                    CLIStderr.write("Temporal verdict: stable enough to inspect and continue.\n")
+                }
+            }
         }
 
         if !quiet {
@@ -445,22 +696,65 @@ struct VideoGenerate: AsyncParsableCommand {
         fileManager: FileManager = .default,
         now: @escaping () -> Date = Date.init
     ) -> VideoGenerationPreflightEnvelope {
+        let promptResolution: ResolvedVideoPrompt?
+        let promptResolutionError: String?
+        do {
+            promptResolution = try resolvePrompt()
+            promptResolutionError = nil
+        } catch {
+            promptResolution = nil
+            promptResolutionError = error.localizedDescription
+        }
+        let resolvedInputPrompt = promptResolution?.caption ?? prompt ?? ""
+        let negativePromptResolution: String?
+        let negativePromptResolutionError: String?
+        do {
+            negativePromptResolution = try resolveNegativePrompt()
+            negativePromptResolutionError = nil
+        } catch {
+            negativePromptResolution = nil
+            negativePromptResolutionError = error.localizedDescription
+        }
+        let resolvedInputDuration = duration ?? promptResolution?.duration
+        let requestedWidth = width ?? (effectiveVariant == .lingbot ? 320 : 768)
+        let requestedHeight = height ?? (effectiveVariant == .lingbot ? 192 : 512)
+        let requestedFrames = numFrames ?? (effectiveVariant == .lingbot ? 9 : 65)
         let input = VideoGenerationPreflightInput(
-            prompt: prompt,
+            prompt: resolvedInputPrompt,
+            promptJSON: promptJSON,
+            promptJSONError: promptResolutionError,
+            negativePromptJSON: negativePromptJSON,
+            negativePromptJSONError: negativePromptResolutionError,
             outputURL: outputURL,
             model: model,
-            variant: variant,
+            variant: effectiveVariant,
             modelRoot: modelRoot,
-            width: width,
-            height: height,
-            numFrames: numFrames,
-            duration: duration,
+            width: requestedWidth,
+            height: requestedHeight,
+            numFrames: requestedFrames,
+            duration: resolvedInputDuration,
             fps: fps,
             seed: seed,
             image: image,
             imageStrength: imageStrength,
             endImage: endImage,
             endImageStrength: endImageStrength,
+            steps: steps,
+            guidanceScale: guidanceScale,
+            shift: shift,
+            batchCFG: batchCFG,
+            negativePrompt: negativePromptResolution,
+            temporalProbe: temporalProbe,
+            temporalProbeStep: temporalProbeStep,
+            refiner: refiner,
+            refinerWidth: refinerWidth,
+            refinerHeight: refinerHeight,
+            refinerSteps: refinerSteps,
+            refinerGuidanceScale: refinerGuidanceScale,
+            refinerShift: refinerShift,
+            refinerThreshold: refinerThreshold,
+            refinerSigmaTailSteps: refinerSigmaTailSteps,
+            refinerBatchCFG: refinerBatchCFG,
             generationArgv: generationActionArguments(outputURL: outputURL),
             cwd: fileManager.currentDirectoryPath
         )
@@ -491,21 +785,36 @@ struct VideoGenerate: AsyncParsableCommand {
             "mere.run",
             "video",
             "generate",
-            prompt,
+        ]
+        if let promptJSON {
+            args += ["--prompt-json", promptJSON]
+        } else if let prompt {
+            args.append(prompt)
+        }
+        let requestedWidth = width ?? (effectiveVariant == .lingbot ? 320 : 768)
+        let requestedHeight = height ?? (effectiveVariant == .lingbot ? 192 : 512)
+        let requestedFrames = numFrames ?? (effectiveVariant == .lingbot ? 9 : 65)
+        args += [
             "--output",
             outputURL.path,
             "--model",
             model,
             "--variant",
-            variant.rawValue,
+            effectiveVariant.rawValue,
             "--width",
-            String(width),
+            String(requestedWidth),
             "--height",
-            String(height),
+            String(requestedHeight),
             "--num-frames",
-            String(numFrames),
+            String(requestedFrames),
             "--fps",
             String(fps),
+            "--steps",
+            String(steps),
+            "--guidance-scale",
+            String(guidanceScale),
+            "--shift",
+            String(shift),
         ]
         if let duration {
             args += ["--duration", String(duration)]
@@ -522,10 +831,82 @@ struct VideoGenerate: AsyncParsableCommand {
         if let endImage {
             args += ["--end-image", endImage, "--end-image-strength", String(endImageStrength)]
         }
+        if let negativePrompt {
+            args += ["--negative-prompt", negativePrompt]
+        } else if let negativePromptJSON {
+            args += ["--negative-prompt-json", negativePromptJSON]
+        }
+        if temporalProbe {
+            args += ["--temporal-probe", "--temporal-probe-step", String(temporalProbeStep)]
+        }
+        if batchCFG {
+            args.append("--batch-cfg")
+        }
+        if refiner {
+            args += [
+                "--refiner",
+                "--refiner-steps", String(refinerSteps),
+                "--refiner-guidance-scale", String(refinerGuidanceScale),
+                "--refiner-shift", String(refinerShift),
+                "--refiner-threshold", String(refinerThreshold),
+                "--refiner-sigma-tail-steps", String(refinerSigmaTailSteps),
+            ]
+            if let refinerWidth, let refinerHeight {
+                args += ["--refiner-width", String(refinerWidth), "--refiner-height", String(refinerHeight)]
+            }
+            if refinerBatchCFG {
+                args.append("--refiner-batch-cfg")
+            }
+        }
         if quiet {
             args.append("--quiet")
         }
         return args
+    }
+
+    private func resolvePrompt() throws -> ResolvedVideoPrompt {
+        if let promptJSON = promptJSON?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !promptJSON.isEmpty {
+            let url = URL(fileURLWithPath: promptJSON).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("LingBot prompt JSON not found: \(url.path)")
+            }
+            let sample = try LingBotVideoPromptSample.load(from: url)
+            return ResolvedVideoPrompt(caption: sample.caption, duration: sample.duration)
+        }
+        return ResolvedVideoPrompt(caption: prompt ?? "", duration: nil)
+    }
+
+    private func resolveNegativePrompt() throws -> String? {
+        if negativePrompt != nil, negativePromptJSON != nil {
+            throw ValidationError("Use either --negative-prompt or --negative-prompt-json, not both.")
+        }
+        guard let negativePromptJSON = negativePromptJSON?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !negativePromptJSON.isEmpty
+        else {
+            return negativePrompt
+        }
+        let url = URL(fileURLWithPath: negativePromptJSON).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ValidationError("LingBot negative prompt JSON not found: \(url.path)")
+        }
+        return try LingBotVideoPromptSample.compactJSONDocument(Data(contentsOf: url))
+    }
+
+    var effectiveVariant: LTXVideoVariant {
+        if variant == .lingbot || Self.isLingBotModel(model) {
+            return .lingbot
+        }
+        return variant
+    }
+
+    private static func isLingBotModel(_ model: String) -> Bool {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == ModelResolver.ModelID.lingBotVideoDense13B.rawValue
+            || normalized == ModelResolver.ModelID.lingBotVideoMoE30BA3B.rawValue
+            || normalized == LingBotVideoMoEQuantizer.defaultOutputModelID
+            || normalized == "robbyant/lingbot-video-dense-1.3b"
+            || normalized == "robbyant/lingbot-video-moe-30b-a3b"
     }
 }
 
@@ -591,8 +972,18 @@ private func resolveVideoModelRoot(
         return URL(fileURLWithPath: explicitModelRoot).standardizedFileURL
     }
 
-    let trimmedModel = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    var trimmedModel = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    if variant == .lingbot,
+       trimmedModel.isEmpty || trimmedModel == ModelResolver.ModelID.ltxVideo23AVMLX.rawValue {
+        trimmedModel = ModelResolver.ModelID.lingBotVideoDense13B.rawValue
+    }
     if !trimmedModel.isEmpty {
+        if trimmedModel == LingBotVideoMoEQuantizer.defaultOutputModelID {
+            let convertedRoot = MereRunModelPaths.modelDir(trimmedModel)
+            if FileManager.default.fileExists(atPath: convertedRoot.path) {
+                return convertedRoot
+            }
+        }
         let explicitModelURL = URL(fileURLWithPath: trimmedModel).standardizedFileURL
         if FileManager.default.fileExists(atPath: explicitModelURL.path)
             || trimmedModel.lowercased() != ModelResolver.ModelID.ltxVideoAV.rawValue
@@ -627,6 +1018,12 @@ private func resolveVideoModelRoot(
 }
 
 private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
+    if variant == .lingbot,
+       let envPath = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LINGBOT_MODEL_ROOT"],
+       !envPath.isEmpty,
+       isLingBotVideoModelRootAvailable(at: envPath) {
+        return envPath
+    }
     if let envPath = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_MODEL_ROOT"], !envPath.isEmpty,
        isNativeVideoModelRootAvailable(at: envPath) {
         return envPath
@@ -654,11 +1051,24 @@ private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
                 home.appendingPathComponent("models/LTX-2-mlx-av", isDirectory: true).path,
                 home.appendingPathComponent("Models/LTX-2-mlx-av", isDirectory: true).path,
             ]
+        case .lingbot:
+            return [
+                zeroModels.appendingPathComponent(LingBotVideoMoEQuantizer.defaultOutputModelID, isDirectory: true).path,
+                zeroModels.appendingPathComponent(ModelResolver.ModelID.lingBotVideoDense13B.rawValue, isDirectory: true).path,
+                home.appendingPathComponent("models/\(ModelResolver.ModelID.lingBotVideoDense13B.rawValue)", isDirectory: true).path,
+                home.appendingPathComponent("Models/\(ModelResolver.ModelID.lingBotVideoDense13B.rawValue)", isDirectory: true).path,
+            ]
         }
     }()
 
-    for candidate in candidates where isNativeVideoModelRootAvailable(at: candidate) {
-        return candidate
+    for candidate in candidates {
+        if variant == .lingbot {
+            if isLingBotVideoModelRootAvailable(at: candidate) {
+                return candidate
+            }
+        } else if isNativeVideoModelRootAvailable(at: candidate) {
+            return candidate
+        }
     }
     return nil
 }
@@ -669,6 +1079,16 @@ func nearestLTXFrameCount(duration: Double, fps: Int) -> Int {
     return chunks * 8 + 1
 }
 
+func nearestLingBotFrameCount(duration: Double, fps: Int) -> Int {
+    let frameCount = max(1, Int(duration * Double(max(1, fps))))
+    return max(5, ((frameCount - 1) / 4 + 1) * 4 + 1)
+}
+
+private struct ResolvedVideoPrompt {
+    let caption: String
+    let duration: Double?
+}
+
 private func isNativeVideoModelRootAvailable(at path: String) -> Bool {
     let rootURL = URL(fileURLWithPath: path).standardizedFileURL
     do {
@@ -677,4 +1097,9 @@ private func isNativeVideoModelRootAvailable(at path: String) -> Bool {
     } catch {
         return false
     }
+}
+
+private func isLingBotVideoModelRootAvailable(at path: String) -> Bool {
+    let rootURL = URL(fileURLWithPath: path).standardizedFileURL
+    return (try? LingBotVideoResources(rootURL: rootURL)) != nil
 }

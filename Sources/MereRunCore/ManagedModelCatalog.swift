@@ -52,6 +52,10 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case wooshSynchformer
     case ltxVideo
     case ltxVideo23MLX
+    case lingBotVideoDense
+    case lingBotVideoMoE
+    case lingBotVideoMoEQuantized
+    case lingBotRewriterLoRA
     case hfTextChat
 }
 
@@ -253,6 +257,26 @@ public enum ManagedModelCatalog {
         "special_tokens_map.json",
         "generation_config.json",
     ]
+    private static let lingBotVideoDenseUpstreamRepoId = "robbyant/lingbot-video-dense-1.3b"
+    private static let lingBotVideoMoEUpstreamRepoId = "robbyant/lingbot-video-moe-30b-a3b"
+    private static let lingBotVideoRewriterLoRARepoId = "robbyant/lingbot-video-rewriter-lora"
+    private static let lingBotVideoSnapshotPatterns = [
+        "model_index.json",
+        "processor/*",
+        "scheduler/*",
+        "scheduling_flow_unipc.py",
+        "text_encoder/*",
+        "transformer/*",
+        "vae/*",
+    ]
+    private static let lingBotVideoMoESnapshotPatterns = lingBotVideoSnapshotPatterns + [
+        "refiner/*",
+    ]
+    private static let lingBotVideoRewriterLoRAPatterns = [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "additional_config.json",
+    ]
 
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
@@ -266,6 +290,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: kleinNanoUpstreamRepoId,
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 4_627_979_498,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -279,6 +304,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-4B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 15_980_131_745,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -297,6 +323,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "mlx-community/FLUX.2-klein-9B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 34_722_771_551,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -310,6 +337,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-base-4B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 15_980_131_711,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -427,6 +455,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 5_907_438_792,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -442,6 +471,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 32_848_305_533,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -457,6 +487,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 20_538_488_559,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -485,6 +516,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 35_231_213_079,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -513,6 +545,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 35_231_213_079,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -589,6 +622,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.defaultUpstreamModelId,
             validationKind: .gemma4,
             resolutionFallbackIDs: ["text-chat-gemma4-max", "text-chat-gemma4-nano"],
+            estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
@@ -657,6 +691,7 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Gemma4Resources.nanoUpstreamModelId,
             validationKind: .gemma4,
+            estimatedDownloadBytes: 16_024_791_983,
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
@@ -669,6 +704,7 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
             validationKind: .gemma4,
+            estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
@@ -712,6 +748,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: AgentModelResources.qwen35NineBRepoId,
             upstreamRevision: AgentModelResources.qwen35NineBRevision,
             validationKind: .codegenGGUF,
+            estimatedDownloadBytes: 5_680_522_464,
             defaultCLICommands: ["api serve", "text code"]
         ),
         ManagedModelSpec(
@@ -764,6 +801,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: DeepseekV4FlashResources.defaultRepoId,
             upstreamRevision: DeepseekV4FlashResources.defaultRevision,
             validationKind: .deepseekV4FlashIMatrixGGUF,
+            estimatedDownloadBytes: 86_720_111_488,
             defaultCLICommands: ["api serve", "agent"]
         ),
         ManagedModelSpec(
@@ -801,6 +839,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
             upstreamRevision: "main",
             validationKind: .qwen3TTS,
+            estimatedDownloadBytes: 4_520_158_972,
             defaultCLICommands: ["speech synthesize"]
         ),
         ManagedModelSpec(
@@ -823,6 +862,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
             upstreamRevision: "main",
             validationKind: .qwen3TTS,
+            estimatedDownloadBytes: 4_520_159_459,
             defaultCLICommands: ["speech synthesize"]
         ),
         ManagedModelSpec(
@@ -850,6 +890,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .qwen3ASR,
             normalizationKind: .qwen3ASRNested,
+            estimatedDownloadBytes: 2_467_855_342,
             defaultCLICommands: ["speech transcribe"]
         ),
         ManagedModelSpec(
@@ -885,6 +926,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: CodeGenResources.defaultRevision,
             validationKind: .codegenGGUF,
             aliasKind: .codegenGGUF,
+            estimatedDownloadBytes: 48_410_992_032,
             defaultCLICommands: ["text code"]
         ),
         ManagedModelSpec(
@@ -921,6 +963,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: OpenAIPrivacyFilterCatalog.defaultRepoId,
             upstreamRevision: OpenAIPrivacyFilterCatalog.defaultRevision,
             validationKind: .privacyFilter,
+            estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
         ),
         ManagedModelSpec(
@@ -980,6 +1023,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "lightonai/LightOnOCR-2-1B",
             upstreamRevision: "main",
             validationKind: .lightOnOCR,
+            estimatedDownloadBytes: 2_022_801_518,
             defaultCLICommands: ["vision ocr"]
         ),
         ManagedModelSpec(
@@ -1016,6 +1060,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 3_498_072_777,
             defaultCLICommands: ["vision segment"]
         ),
         ManagedModelSpec(
@@ -1040,6 +1085,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .falconPerception,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 2_534_591_776,
             defaultCLICommands: ["vision ground"]
         ),
         ManagedModelSpec(
@@ -1061,6 +1107,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
+            estimatedDownloadBytes: 10_092_095_357,
             defaultCLICommands: ["music generate", "music analyze"]
         ),
         ManagedModelSpec(
@@ -1342,6 +1389,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "mlx-community/LTX-2-distilled-bf16",
             upstreamRevision: "main",
             validationKind: .ltxVideo,
+            estimatedDownloadBytes: 93_069_609_104,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
@@ -1360,6 +1408,48 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: 120 * 1_073_741_824,
             defaultCLICommands: ["video generate"],
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.lingBotVideoDense13B.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: lingBotVideoDenseUpstreamRepoId,
+                revision: "main",
+                patterns: lingBotVideoSnapshotPatterns
+            ),
+            upstreamRepoId: lingBotVideoDenseUpstreamRepoId,
+            upstreamRevision: "main",
+            validationKind: .lingBotVideoDense,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 12_198_406_770,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.lingBotVideoMoE30BA3B.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: lingBotVideoMoEUpstreamRepoId,
+                revision: "main",
+                patterns: lingBotVideoMoESnapshotPatterns
+            ),
+            upstreamRepoId: lingBotVideoMoEUpstreamRepoId,
+            upstreamRevision: "main",
+            validationKind: .lingBotVideoMoE,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 129_952_392_104
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.lingBotVideoMoE30BA3B4Bit.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            upstreamRepoId: lingBotVideoMoEUpstreamRepoId,
+            upstreamRevision: "main",
+            validationKind: .lingBotVideoMoEQuantized,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 46_600_000_000,
+            defaultCLICommands: ["video generate"]
         ),
     ]
 
@@ -1413,6 +1503,21 @@ private extension ManagedModelCatalog {
                 validationKind: .hfTextChat,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: 8 * 1_073_741_824
+            ),
+            ManagedModelSpec(
+                id: ModelResolver.ModelID.lingBotVideoRewriterLoRA.rawValue,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: lingBotVideoRewriterLoRARepoId,
+                    revision: "main",
+                    patterns: lingBotVideoRewriterLoRAPatterns
+                ),
+                upstreamRepoId: lingBotVideoRewriterLoRARepoId,
+                upstreamRevision: "main",
+                validationKind: .lingBotRewriterLoRA,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: 467_077_516
             ),
         ]
     }
@@ -1531,6 +1636,23 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23MLX:
             return Self.missingLTXVideo23MLXPaths(in: rootURL, fileManager: fileManager)
+        case .lingBotVideoDense:
+            return Self.missingLingBotVideoPaths(in: rootURL, requiresRefiner: false, fileManager: fileManager)
+        case .lingBotVideoMoE:
+            return Self.missingLingBotVideoPaths(in: rootURL, requiresRefiner: true, fileManager: fileManager)
+        case .lingBotVideoMoEQuantized:
+            var missing = Self.missingLingBotVideoPaths(
+                in: rootURL,
+                requiresRefiner: true,
+                fileManager: fileManager
+            )
+            let quantization = rootURL.appendingPathComponent(LingBotVideoQuantizationConfig.filename)
+            if !fileManager.fileExists(atPath: quantization.path) {
+                missing.append(quantization)
+            }
+            return missing
+        case .lingBotRewriterLoRA:
+            return Self.missingLingBotRewriterLoRAPaths(in: rootURL, fileManager: fileManager)
         case .hfTextChat:
             return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }
@@ -1550,6 +1672,28 @@ public extension ManagedModelSpec {
                 in: normalizedRootURL(rootURL, fileManager: fileManager),
                 fileManager: fileManager
             ).map { "Missing required LTX 2.3 MLX file: \($0.path)" }
+        case .lingBotVideoDense:
+            return Self.missingLingBotVideoPaths(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                requiresRefiner: false,
+                fileManager: fileManager
+            ).map { "Missing required LingBot-Video file: \($0.path)" }
+        case .lingBotVideoMoE:
+            return Self.missingLingBotVideoPaths(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                requiresRefiner: true,
+                fileManager: fileManager
+            ).map { "Missing required LingBot-Video file: \($0.path)" }
+        case .lingBotVideoMoEQuantized:
+            return missingPaths(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            ).map { "Missing required quantized LingBot-Video file: \($0.path)" }
+        case .lingBotRewriterLoRA:
+            return Self.missingLingBotRewriterLoRAPaths(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            ).map { "Missing required LingBot rewriter LoRA file: \($0.path)" }
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(
                 modelID: id,
@@ -1888,6 +2032,84 @@ public extension ManagedModelSpec {
             "temporal_upscaler_x2_v1_0_config.json",
         ]
         return relativePaths
+            .map { rootURL.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private static func missingLingBotVideoPaths(
+        in rootURL: URL,
+        requiresRefiner: Bool,
+        fileManager: FileManager
+    ) -> [URL] {
+        let processorDir = rootURL.appendingPathComponent("processor", isDirectory: true)
+        let schedulerDir = rootURL.appendingPathComponent("scheduler", isDirectory: true)
+        let textEncoderDir = rootURL.appendingPathComponent("text_encoder", isDirectory: true)
+        let transformerDir = rootURL.appendingPathComponent("transformer", isDirectory: true)
+        let vaeDir = rootURL.appendingPathComponent("vae", isDirectory: true)
+
+        var required = [
+            rootURL.appendingPathComponent("model_index.json"),
+            rootURL.appendingPathComponent("scheduling_flow_unipc.py"),
+            processorDir.appendingPathComponent("tokenizer_config.json"),
+            processorDir.appendingPathComponent("tokenizer.json"),
+            schedulerDir.appendingPathComponent("scheduler_config.json"),
+            textEncoderDir.appendingPathComponent("config.json"),
+            transformerDir.appendingPathComponent("config.json"),
+            vaeDir.appendingPathComponent("config.json"),
+        ]
+        if requiresRefiner {
+            required.append(rootURL.appendingPathComponent("refiner/config.json"))
+        }
+
+        var missing = required.filter { !fileManager.fileExists(atPath: $0.path) }
+        missing += missingLingBotSafetensorGroup(
+            in: textEncoderDir,
+            basename: "model",
+            fileManager: fileManager
+        )
+        missing += missingLingBotSafetensorGroup(
+            in: transformerDir,
+            basename: "diffusion_pytorch_model",
+            fileManager: fileManager
+        )
+        missing += missingLingBotSafetensorGroup(
+            in: vaeDir,
+            basename: "diffusion_pytorch_model",
+            fileManager: fileManager
+        )
+        if requiresRefiner {
+            missing += missingLingBotSafetensorGroup(
+                in: rootURL.appendingPathComponent("refiner", isDirectory: true),
+                basename: "diffusion_pytorch_model",
+                fileManager: fileManager
+            )
+        }
+        return missing
+    }
+
+    private static func missingLingBotSafetensorGroup(
+        in directoryURL: URL,
+        basename: String,
+        fileManager: FileManager
+    ) -> [URL] {
+        let single = directoryURL.appendingPathComponent("\(basename).safetensors")
+        if fileManager.fileExists(atPath: single.path) {
+            return []
+        }
+
+        let index = directoryURL.appendingPathComponent("\(basename).safetensors.index.json")
+        guard fileManager.fileExists(atPath: index.path) else {
+            return [index]
+        }
+        return missingShardPaths(indexURL: index, fileManager: fileManager)
+    }
+
+    private static func missingLingBotRewriterLoRAPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
+        [
+            "adapter_config.json",
+            "adapter_model.safetensors",
+            "additional_config.json",
+        ]
             .map { rootURL.appendingPathComponent($0, isDirectory: false) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
     }

@@ -6,6 +6,31 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added managed catalog entries for the LingBot-Video Hugging Face collection:
+  `video-lingbot-dense-1.3b`, `video-lingbot-moe-30b-a3b`, and the hidden
+  `text-rewriter-lingbot-video-lora` adapter. The Dense 1.3B model now runs
+  text-to-video through a native Swift/MLX pipeline with Qwen3-VL prompt
+  embeddings, Flow-UniPC CFG denoising, causal streaming Wan VAE decode, and
+  MP4 output. `model quantize` converts the 30B-A3B transformer's routed
+  experts shard by shard to native MLX 4-bit affine weights, with resumable
+  conversion, group-limited routing, and quantized MoE generation. `video
+  generate --refiner` now runs the released second-stage MoE refiner with
+  bicubic pixel upscaling, causal Wan VAE posterior re-encoding, thresholded
+  re-noising, and the upstream low-noise sigma tail. The separate rewriter
+  adapter is not applied during generation.
+- aligned native LingBot T2V with the released runner's structured
+  `--prompt-json` and `--negative-prompt-json` inputs, source-ordered compact JSON
+  conditioning, duration-to-`4n+1` round-up, legal-shape validation, and
+  1920x1088 refiner default. `video generate --temporal-probe` provides early
+  predicted-clean MP4 scoring, and long steps now report completed DiT blocks
+  for each CFG branch.
+- accelerated native LingBot transformer execution with fused MLX normalization
+  and cached QKV/gate-up projections. Added upstream-compatible `--batch-cfg`
+  and `--refiner-batch-cfg` masked execution, plus preflight video-token counts,
+  CFG pass counts, and quadratic global-attention warnings for large runs.
+
 ## 0.20.0 - 2026-07-07
 
 ### Added

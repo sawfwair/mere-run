@@ -42,6 +42,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Adapted runtime source
+
+### LingBot-Video native pipeline
+
+- purpose: Swift/MLX implementation of the LingBot-Video Dense transformer,
+  Flow-UniPC scheduler, prompt-conditioning contract, and Wan VAE streaming semantics
+- upstream project: [`Robbyant/lingbot-video`](https://github.com/Robbyant/lingbot-video)
+- source revision reviewed for the port: `a2bb04b78edd848500dc27a26e035a95442ae186`
+- model weights: [`robbyant/lingbot-video-dense-1.3b`](https://huggingface.co/robbyant/lingbot-video-dense-1.3b)
+- license: Apache License 2.0
+
+The full Apache License 2.0 text is available in the upstream repository and at
+<https://www.apache.org/licenses/LICENSE-2.0>.
+
 ## Vendored artifacts
 
 ### `vendor/llama.xcframework`

@@ -161,6 +161,16 @@ Video generation:
   - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
   - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 
+LingBot-Video Dense and quantized MoE generation:
+
+- Runtime root: `Sources/MereRunCore/LingBotVideo/LingBotVideoPipeline.swift`
+- Read next:
+  - `Sources/MereRunCore/LingBotVideo/LingBotVideoResources.swift`
+  - `Sources/MereRunCore/LingBotVideo/LingBotVideoPromptEncoder.swift`
+  - `Sources/MereRunCore/LingBotVideo/LingBotVideoTransformer.swift`
+  - `Sources/MereRunCore/LingBotVideo/LingBotVideoScheduler.swift`
+  - `Sources/MereRunCore/LingBotVideo/LingBotVideoMoEQuantizer.swift`
+
 The LTX runtime combines public generation flow with lower-level model
 definitions. Read it in this order:
 

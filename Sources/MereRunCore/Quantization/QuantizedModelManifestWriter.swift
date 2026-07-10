@@ -61,6 +61,8 @@ public enum QuantizedModelManifestWriter {
             case .aceStep, .magentaRT2: return .music
             case .woosh: return .sfx
             case .ltxVideo: return .video
+            case .lingBotVideo: return .video
+            case .peftLoRA: return .adapter
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
             }
@@ -125,6 +127,10 @@ public enum QuantizedModelManifestWriter {
                     return [.soundEffectGeneration]
                 case .ltxVideo:
                     return [.videoGeneration]
+                case .lingBotVideo:
+                    return [.videoGeneration]
+                case .peftLoRA:
+                    return [.loraInference]
                 case .psiChat:
                     return [.chat]
                 case .deepseekV4Flash:
@@ -134,13 +140,16 @@ public enum QuantizedModelManifestWriter {
             return baseline.filter { $0 != .loraTraining }
         }()
 
-        let components = baseManifest.components ?? MereRunModelManifest.Components(
-            tokenizer: .local(path: "tokenizer"),
-            textEncoder: .local(path: "text_encoder"),
-            transformer: .local(path: "transformer"),
-            vae: .local(path: "vae"),
-            scheduler: .local(path: "scheduler")
-        )
+        let components = baseManifest.components ?? {
+            let tokenizerPath = engine == .lingBotVideo ? "processor" : "tokenizer"
+            return MereRunModelManifest.Components(
+                tokenizer: .local(path: tokenizerPath),
+                textEncoder: .local(path: "text_encoder"),
+                transformer: .local(path: "transformer"),
+                vae: .local(path: "vae"),
+                scheduler: .local(path: "scheduler")
+            )
+        }()
 
         let residualRank: Int? = {
             guard let svdResidualRank, svdResidualRank > 0 else { return nil }
@@ -198,10 +207,12 @@ public enum QuantizedModelManifestWriter {
             case .samSegmentation, .falconPerception:
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter,
-                 .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .psiChat, .deepseekV4Flash:
+                 .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .peftLoRA, .psiChat, .deepseekV4Flash:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)
+            case .lingBotVideo:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 3.0)
             }
         }
 

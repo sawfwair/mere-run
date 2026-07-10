@@ -95,4 +95,54 @@ final class SDPAVectorKernelTests: MereRunCoreTestCase {
             }
         }
     }
+
+    func testFullSequenceAttentionAcross1024Boundary() throws {
+        try skipUnlessGPU()
+
+        let headCount = 16
+        let headDim = 128
+        let scale = 1.0 / Float(Double(headDim).squareRoot())
+
+        for sequenceLength in [1000, 1240] {
+            MLXRandom.seed(0)
+            let queries = (MLXRandom.normal([1, headCount, sequenceLength, headDim]) * 0.5)
+                .asType(.bfloat16)
+            let keys = (MLXRandom.normal([1, headCount, sequenceLength, headDim]) * 0.5)
+                .asType(.bfloat16)
+            let values = (MLXRandom.normal([1, headCount, sequenceLength, headDim]) * 0.5)
+                .asType(.bfloat16)
+
+            let output = MLXFast.scaledDotProductAttention(
+                queries: queries,
+                keys: keys,
+                values: values,
+                scale: scale,
+                mask: .none
+            )
+            MLX.eval(output)
+
+            let queryIndices = MLXArray([
+                Int32(0),
+                Int32(sequenceLength / 2),
+                Int32(sequenceLength - 1),
+            ])
+            let selectedQueries = queries.take(queryIndices, axis: 2)
+            let selectedOutput = output.take(queryIndices, axis: 2).asType(.float32)
+            let reference = referenceAttention(
+                queries: selectedQueries,
+                keys: keys,
+                values: values,
+                scale: scale
+            )
+            MLX.eval(reference)
+
+            let referenceError = MLX.abs(selectedOutput - reference).max().item(Float.self)
+            XCTAssertFalse(referenceError.isNaN, "SDPA produced NaN at sequenceLength=\(sequenceLength)")
+            XCTAssertLessThanOrEqual(
+                referenceError,
+                0.02,
+                "full-sequence SDPA diverged at sequenceLength=\(sequenceLength)"
+            )
+        }
+    }
 }

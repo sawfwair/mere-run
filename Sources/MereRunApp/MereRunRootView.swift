@@ -21,11 +21,12 @@ struct AdvancedControlSurface: View {
     /// detached shows the full three-pane (sidebar · editor · console).
     var docked = false
     var onDetach: (() -> Void)?
+    var onClose: (() -> Void)?
 
     var body: some View {
         Group {
             if docked {
-                DockedAdvancedEditor(onDetach: onDetach)
+                DockedAdvancedEditor(onDetach: onDetach, onClose: onClose)
             } else {
                 fullSurface
             }
@@ -63,6 +64,7 @@ struct AdvancedControlSurface: View {
 private struct DockedAdvancedEditor: View {
     @EnvironmentObject private var controller: MereRunController
     var onDetach: (() -> Void)?
+    var onClose: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -101,11 +103,22 @@ private struct DockedAdvancedEditor: View {
 
             Spacer(minLength: 0)
 
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.mereIcon)
+                .help("Hide Advanced (⌃⌘E)")
+                .accessibilityLabel("Hide Advanced")
+            }
+
             if let onDetach {
                 Button(action: onDetach) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.mereIcon)
                 .help("Detach to the full control surface")
                 .accessibilityLabel("Detach to the full control surface")
             }

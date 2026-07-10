@@ -540,6 +540,51 @@ swift run mere.run video generate \
   --num-frames 65 \
   --output ./clip.mp4
 
+# Generate a native Swift/MLX LingBot-Video Dense smoke clip
+swift run mere.run model pull video-lingbot-dense-1.3b
+swift run mere.run video generate \
+  "a dexterous robot folds a blue towel on a workbench" \
+  --model video-lingbot-dense-1.3b \
+  --width 320 \
+  --height 192 \
+  --num-frames 9 \
+  --output ./lingbot-smoke.mp4
+
+# Pull and convert LingBot-Video 30B-A3B to native 4-bit routed experts
+swift run mere.run model pull video-lingbot-moe-30b-a3b --allow-unsupported
+swift run mere.run model quantize video-lingbot-moe-30b-a3b
+swift run mere.run video generate \
+  "a dexterous robot folds a red towel on a workbench" \
+  --model video-lingbot-moe-30b-a3b-4bit \
+  --width 448 \
+  --height 256 \
+  --num-frames 9 \
+  --refiner \
+  --refiner-width 960 \
+  --refiner-height 544 \
+  --output ./lingbot-moe-refined.mp4
+
+# Check temporal stability after four steps before committing to the full run
+swift run mere.run video generate \
+  "a red paper airplane glides through a bright art studio" \
+  --model video-lingbot-moe-30b-a3b-4bit \
+  --width 448 \
+  --height 256 \
+  --num-frames 17 \
+  --temporal-probe \
+  --temporal-probe-step 4 \
+  --output ./lingbot-temporal-probe.mp4
+
+# Exercise the released 5-second T2V shape with a prepared structured caption
+swift run mere.run video generate \
+  --prompt-json ./prompt.json \
+  --model video-lingbot-dense-1.3b \
+  --width 832 \
+  --height 480 \
+  --temporal-probe \
+  --temporal-probe-step 1 \
+  --output ./lingbot-reference-probe.mp4
+
 # Inspect the same render before loading MLX or writing an MP4
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
@@ -570,6 +615,16 @@ swift run mere.run video generate \
   --fps 24 \
   --output ./clip-av.mp4
 ```
+
+LingBot accepts the released runner's dimension and `4n+1` frame contracts
+without imposing an extra geometry heuristic. `--prompt-json` reads the
+structured caption and duration produced by the upstream rewriter;
+`--negative-prompt-json` reads Auto Negative output. Use `--preflight --json`
+to confirm the resulting frame count and global-attention token count before
+model loading, then use a temporal probe before committing to all 40 denoising
+steps. The official 832x480x121 base shape contains 48,360 video tokens before
+text conditioning; attention work grows roughly with the square of that count,
+and guidance above 1 runs both positive and negative transformer branches.
 
 ## Command tree
 

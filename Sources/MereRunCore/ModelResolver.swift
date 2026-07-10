@@ -71,6 +71,10 @@ public struct ModelResolver {
         case wooshDVFlow8s = "sfx-woosh-dvflow-8s"
         case ltxVideoAV = "video-ltx-av"
         case ltxVideo23AVMLX = "video-ltx23-av-mlx"
+        case lingBotVideoDense13B = "video-lingbot-dense-1.3b"
+        case lingBotVideoMoE30BA3B = "video-lingbot-moe-30b-a3b"
+        case lingBotVideoMoE30BA3B4Bit = "video-lingbot-moe-30b-a3b-4bit"
+        case lingBotVideoRewriterLoRA = "text-rewriter-lingbot-video-lora"
     }
 
     public enum Source: String, Hashable, Sendable {

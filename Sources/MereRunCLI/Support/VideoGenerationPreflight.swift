@@ -3,6 +3,10 @@ import MereRunCore
 
 struct VideoGenerationPreflightInput {
     let prompt: String
+    let promptJSON: String?
+    let promptJSONError: String?
+    let negativePromptJSON: String?
+    let negativePromptJSONError: String?
     let outputURL: URL
     let model: String
     let variant: LTXVideoVariant
@@ -17,12 +21,30 @@ struct VideoGenerationPreflightInput {
     let imageStrength: Float
     let endImage: String?
     let endImageStrength: Float
+    let steps: Int
+    let guidanceScale: Float
+    let shift: Float
+    let batchCFG: Bool
+    let negativePrompt: String?
+    let temporalProbe: Bool
+    let temporalProbeStep: Int
+    let refiner: Bool
+    let refinerWidth: Int?
+    let refinerHeight: Int?
+    let refinerSteps: Int
+    let refinerGuidanceScale: Float
+    let refinerShift: Float
+    let refinerThreshold: Float
+    let refinerSigmaTailSteps: Int
+    let refinerBatchCFG: Bool
     let generationArgv: [String]
     let cwd: String
 }
 
 struct VideoGenerationPreflightRequest: Codable, Equatable {
     let prompt: String
+    let promptJSON: String?
+    let negativePromptJSON: String?
     let output: String
     let model: String
     let variant: String
@@ -37,9 +59,27 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let imageStrength: Float
     let endImage: String?
     let endImageStrength: Float
+    let steps: Int
+    let guidanceScale: Float
+    let shift: Float
+    let batchCFG: Bool
+    let negativePrompt: String?
+    let temporalProbe: Bool
+    let temporalProbeStep: Int
+    let refiner: Bool
+    let refinerWidth: Int?
+    let refinerHeight: Int?
+    let refinerSteps: Int
+    let refinerGuidanceScale: Float
+    let refinerShift: Float
+    let refinerThreshold: Float
+    let refinerSigmaTailSteps: Int
+    let refinerBatchCFG: Bool
 
     enum CodingKeys: String, CodingKey {
         case prompt
+        case promptJSON = "prompt_json"
+        case negativePromptJSON = "negative_prompt_json"
         case output
         case model
         case variant
@@ -54,6 +94,22 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case imageStrength = "image_strength"
         case endImage = "end_image"
         case endImageStrength = "end_image_strength"
+        case steps
+        case guidanceScale = "guidance_scale"
+        case shift
+        case batchCFG = "batch_cfg"
+        case negativePrompt = "negative_prompt"
+        case temporalProbe = "temporal_probe"
+        case temporalProbeStep = "temporal_probe_step"
+        case refiner
+        case refinerWidth = "refiner_width"
+        case refinerHeight = "refiner_height"
+        case refinerSteps = "refiner_steps"
+        case refinerGuidanceScale = "refiner_guidance_scale"
+        case refinerShift = "refiner_shift"
+        case refinerThreshold = "refiner_threshold"
+        case refinerSigmaTailSteps = "refiner_sigma_tail_steps"
+        case refinerBatchCFG = "refiner_batch_cfg"
     }
 }
 
@@ -150,6 +206,24 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let resolvedDurationSeconds: Double?
     let seed: Int
     let writesAudio: Bool
+    let steps: Int?
+    let guidanceScale: Float?
+    let shift: Float?
+    let batchCFG: Bool
+    let cfgPassesPerStep: Int?
+    let videoTokenCount: Int?
+    let temporalProbe: Bool
+    let temporalProbeStep: Int?
+    let refiner: Bool
+    let refinerWidth: Int?
+    let refinerHeight: Int?
+    let refinerSteps: Int?
+    let refinerGuidanceScale: Float?
+    let refinerShift: Float?
+    let refinerThreshold: Float?
+    let refinerSigmaTailSteps: Int?
+    let refinerBatchCFG: Bool
+    let refinerVideoTokenCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case variant
@@ -165,6 +239,24 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
         case resolvedDurationSeconds = "resolved_duration_seconds"
         case seed
         case writesAudio = "writes_audio"
+        case steps
+        case guidanceScale = "guidance_scale"
+        case shift
+        case batchCFG = "batch_cfg"
+        case cfgPassesPerStep = "cfg_passes_per_step"
+        case videoTokenCount = "video_token_count"
+        case temporalProbe = "temporal_probe"
+        case temporalProbeStep = "temporal_probe_step"
+        case refiner
+        case refinerWidth = "refiner_width"
+        case refinerHeight = "refiner_height"
+        case refinerSteps = "refiner_steps"
+        case refinerGuidanceScale = "refiner_guidance_scale"
+        case refinerShift = "refiner_shift"
+        case refinerThreshold = "refiner_threshold"
+        case refinerSigmaTailSteps = "refiner_sigma_tail_steps"
+        case refinerBatchCFG = "refiner_batch_cfg"
+        case refinerVideoTokenCount = "refiner_video_token_count"
     }
 }
 
@@ -221,6 +313,8 @@ struct VideoGenerationPreflightAnalyzer {
     private func request() -> VideoGenerationPreflightRequest {
         VideoGenerationPreflightRequest(
             prompt: input.prompt,
+            promptJSON: input.promptJSON,
+            negativePromptJSON: input.negativePromptJSON,
             output: input.outputURL.path,
             model: input.model,
             variant: input.variant.rawValue,
@@ -234,11 +328,67 @@ struct VideoGenerationPreflightAnalyzer {
             image: input.image,
             imageStrength: input.imageStrength,
             endImage: input.endImage,
-            endImageStrength: input.endImageStrength
+            endImageStrength: input.endImageStrength,
+            steps: input.steps,
+            guidanceScale: input.guidanceScale,
+            shift: input.shift,
+            batchCFG: input.batchCFG,
+            negativePrompt: input.negativePrompt,
+            temporalProbe: input.temporalProbe,
+            temporalProbeStep: input.temporalProbeStep,
+            refiner: input.refiner,
+            refinerWidth: input.refinerWidth,
+            refinerHeight: input.refinerHeight,
+            refinerSteps: input.refinerSteps,
+            refinerGuidanceScale: input.refinerGuidanceScale,
+            refinerShift: input.refinerShift,
+            refinerThreshold: input.refinerThreshold,
+            refinerSigmaTailSteps: input.refinerSigmaTailSteps,
+            refinerBatchCFG: input.refinerBatchCFG
         )
     }
 
     private func validateStaticOptions(diagnostics: inout [PreflightDiagnostic]) {
+        if let error = input.promptJSONError {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_prompt_json_invalid",
+                    severity: .blocker,
+                    title: "LingBot prompt JSON is invalid",
+                    message: error
+                )
+            )
+        }
+        if input.promptJSON != nil, input.variant != .lingbot {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_prompt_json_wrong_variant",
+                    severity: .blocker,
+                    title: "Prompt JSON requires LingBot",
+                    message: "--prompt-json is supported only by the native LingBot pipeline."
+                )
+            )
+        }
+        if let error = input.negativePromptJSONError {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_negative_prompt_json_invalid",
+                    severity: .blocker,
+                    title: "LingBot negative prompt JSON is invalid",
+                    message: error
+                )
+            )
+        }
+        if input.negativePromptJSON != nil, input.variant != .lingbot {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_negative_prompt_json_wrong_variant",
+                    severity: .blocker,
+                    title: "Negative prompt JSON requires LingBot",
+                    message: "--negative-prompt-json is supported only by the native LingBot pipeline."
+                )
+            )
+        }
         if input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(
                 PreflightDiagnostic(
@@ -269,33 +419,35 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        if input.width < 64 {
+        let minimumDimension = input.variant == .lingbot ? 16 : 64
+        let minimumFrames = input.variant == .lingbot ? 5 : 9
+        if input.width < minimumDimension {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "width_too_small",
                     severity: .blocker,
                     title: "Width is too small",
-                    message: "--width must be >= 64."
+                    message: "--width must be >= \(minimumDimension)."
                 )
             )
         }
-        if input.height < 64 {
+        if input.height < minimumDimension {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "height_too_small",
                     severity: .blocker,
                     title: "Height is too small",
-                    message: "--height must be >= 64."
+                    message: "--height must be >= \(minimumDimension)."
                 )
             )
         }
-        if input.numFrames < 9 {
+        if input.numFrames < minimumFrames {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "num_frames_too_small",
                     severity: .blocker,
                     title: "Frame count is too small",
-                    message: "--num-frames must be >= 9."
+                    message: "--num-frames must be >= \(minimumFrames)."
                 )
             )
         }
@@ -326,6 +478,136 @@ struct VideoGenerationPreflightAnalyzer {
                     severity: .blocker,
                     title: "End keyframe needs a source image",
                     message: "--end-image requires --image so the start keyframe is anchored."
+                )
+            )
+        }
+        if input.variant == .lingbot, input.image != nil || input.endImage != nil {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_image_conditioning_unsupported",
+                    severity: .blocker,
+                    title: "LingBot image conditioning is not wired",
+                    message: "The native LingBot pipeline currently supports text-to-video only."
+                )
+            )
+        }
+        if input.variant == .lingbot, input.steps < 1 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_steps_invalid",
+                    severity: .blocker,
+                    title: "Step count is invalid",
+                    message: "--steps must be >= 1."
+                )
+            )
+        }
+        if input.variant == .lingbot, input.guidanceScale <= 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_guidance_invalid",
+                    severity: .blocker,
+                    title: "Guidance scale is invalid",
+                    message: "--guidance-scale must be > 0."
+                )
+            )
+        }
+        if input.variant == .lingbot, input.shift <= 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_shift_invalid",
+                    severity: .blocker,
+                    title: "Scheduler shift is invalid",
+                    message: "--shift must be > 0."
+                )
+            )
+        }
+        if input.refiner, input.variant != .lingbot {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_wrong_variant",
+                    severity: .blocker,
+                    title: "Refiner requires LingBot",
+                    message: "--refiner is supported only by the native LingBot pipeline."
+                )
+            )
+        }
+        if input.temporalProbe, input.variant != .lingbot {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_temporal_probe_wrong_variant",
+                    severity: .blocker,
+                    title: "Temporal probe requires LingBot",
+                    message: "--temporal-probe is supported only by the native LingBot pipeline."
+                )
+            )
+        }
+        if input.temporalProbe, !(1...max(input.steps, 1)).contains(input.temporalProbeStep) {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_temporal_probe_step_invalid",
+                    severity: .blocker,
+                    title: "Temporal probe step is invalid",
+                    message: "--temporal-probe-step must be between 1 and --steps."
+                )
+            )
+        }
+        if (input.refinerWidth == nil) != (input.refinerHeight == nil) {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_dimensions_incomplete",
+                    severity: .blocker,
+                    title: "Refiner dimensions are incomplete",
+                    message: "--refiner-width and --refiner-height must be provided together."
+                )
+            )
+        }
+        if input.refiner, input.refinerSteps < 1 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_steps_invalid",
+                    severity: .blocker,
+                    title: "Refiner step count is invalid",
+                    message: "--refiner-steps must be >= 1."
+                )
+            )
+        }
+        if input.refiner, input.refinerGuidanceScale <= 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_guidance_invalid",
+                    severity: .blocker,
+                    title: "Refiner guidance is invalid",
+                    message: "--refiner-guidance-scale must be > 0."
+                )
+            )
+        }
+        if input.refiner, input.refinerShift <= 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_shift_invalid",
+                    severity: .blocker,
+                    title: "Refiner shift is invalid",
+                    message: "--refiner-shift must be > 0."
+                )
+            )
+        }
+        if input.refiner, !(0 < input.refinerThreshold && input.refinerThreshold <= 1) {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_threshold_invalid",
+                    severity: .blocker,
+                    title: "Refiner threshold is invalid",
+                    message: "--refiner-threshold must be in (0, 1]."
+                )
+            )
+        }
+        if input.refiner, input.refinerSigmaTailSteps < 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "lingbot_refiner_tail_invalid",
+                    severity: .blocker,
+                    title: "Refiner sigma tail is invalid",
+                    message: "--refiner-sigma-tail-steps must be >= 0."
                 )
             )
         }
@@ -438,7 +720,7 @@ struct VideoGenerationPreflightAnalyzer {
         }
 
         do {
-            try validateNativeModelRoot(url)
+            try validateModelRoot(url)
             return modelResult(
                 requested: requested,
                 kind: kind,
@@ -473,7 +755,7 @@ struct VideoGenerationPreflightAnalyzer {
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationModelPreflightSummary {
         do {
-            try validateNativeModelRoot(path)
+            try validateModelRoot(path)
             return modelResult(
                 requested: requested,
                 kind: "managed_model",
@@ -534,7 +816,24 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func videoLayout(at url: URL) -> String? {
-        isLTX23SplitModelRoot(url, fileManager: fileManager) ? "ltx23_split" : "ltx_merged"
+        if input.variant == .lingbot {
+            return (try? LingBotVideoResources(rootURL: url, fileManager: fileManager)) == nil
+                ? "lingbot"
+                : "lingbot_dense"
+        }
+        return isLTX23SplitModelRoot(url, fileManager: fileManager) ? "ltx23_split" : "ltx_merged"
+    }
+
+    private func validateModelRoot(_ url: URL) throws {
+        if input.variant == .lingbot {
+            let resources = try LingBotVideoResources(rootURL: url, fileManager: fileManager)
+            try resources.validateForInference()
+            if input.refiner, !input.temporalProbe {
+                try resources.validateForRefiner(fileManager: fileManager)
+            }
+        } else {
+            try validateNativeModelRoot(url)
+        }
     }
 
     private func outputSummary(
@@ -646,12 +945,26 @@ struct VideoGenerationPreflightAnalyzer {
         inputs: VideoGenerationInputPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationPlanPreflightSummary {
-        let resolvedWidth = max(64, (input.width / 64) * 64)
-        let resolvedHeight = max(64, (input.height / 64) * 64)
-        let requestedFrames = input.duration.map { nearestLTXFrameCount(duration: $0, fps: input.fps) } ?? input.numFrames
-        let resolvedFrames = max(9, ((requestedFrames - 1) / 8) * 8 + 1)
-
-        if input.width >= 64, input.height >= 64, (resolvedWidth != input.width || resolvedHeight != input.height) {
+        let dimensionMultiple = input.variant == .lingbot ? 16 : 64
+        let minimumFrames = input.variant == .lingbot ? 5 : 9
+        let frameStride = input.variant == .lingbot ? 4 : 8
+        let resolvedWidth = max(dimensionMultiple, (input.width / dimensionMultiple) * dimensionMultiple)
+        let resolvedHeight = max(dimensionMultiple, (input.height / dimensionMultiple) * dimensionMultiple)
+        let resolvedRefinerWidth = input.refiner && !input.temporalProbe
+            ? max(16, ((input.refinerWidth ?? 1_920) / 16) * 16)
+            : nil
+        let resolvedRefinerHeight = input.refiner && !input.temporalProbe
+            ? max(16, ((input.refinerHeight ?? 1_088) / 16) * 16)
+            : nil
+        let requestedFrames = input.duration.map {
+            input.variant == .lingbot
+                ? nearestLingBotFrameCount(duration: $0, fps: input.fps)
+                : nearestLTXFrameCount(duration: $0, fps: input.fps)
+        } ?? input.numFrames
+        let resolvedFrames = max(minimumFrames, ((requestedFrames - 1) / frameStride) * frameStride + 1)
+        if input.width >= dimensionMultiple,
+           input.height >= dimensionMultiple,
+           resolvedWidth != input.width || resolvedHeight != input.height {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "dimensions_will_be_adjusted",
@@ -661,13 +974,13 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        if input.numFrames >= 9, input.duration == nil, resolvedFrames != input.numFrames {
+        if input.numFrames >= minimumFrames, input.duration == nil, resolvedFrames != input.numFrames {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "num_frames_will_be_adjusted",
                     severity: .note,
                     title: "Frame count will be adjusted",
-                    message: "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy 8n+1."
+                    message: "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy \(frameStride)n+1."
                 )
             )
         }
@@ -689,6 +1002,39 @@ struct VideoGenerationPreflightAnalyzer {
             )
         }
 
+        let videoTokenCount: Int?
+        let cfgPassesPerStep: Int?
+        if input.variant == .lingbot {
+            let latentFrames = (resolvedFrames - 1) / 4 + 1
+            videoTokenCount = latentFrames * (resolvedHeight / 16) * (resolvedWidth / 16)
+            cfgPassesPerStep = input.guidanceScale > 1 ? 2 : 1
+            if let videoTokenCount, videoTokenCount >= 20_000 {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "lingbot_global_attention_large",
+                        severity: .warning,
+                        title: "LingBot global-attention run is large",
+                        message: "The base transformer receives \(videoTokenCount) video tokens and "
+                            + "global-attention work grows roughly with the square of this count. "
+                            + "Each denoising step runs \(cfgPassesPerStep ?? 1) CFG transformer pass(es); "
+                            + "run --temporal-probe --temporal-probe-step 1 before the full render."
+                    )
+                )
+            }
+        } else {
+            videoTokenCount = nil
+            cfgPassesPerStep = nil
+        }
+        let refinerVideoTokenCount: Int?
+        if input.variant == .lingbot, input.refiner, !input.temporalProbe,
+           let refinerWidth = resolvedRefinerWidth,
+           let refinerHeight = resolvedRefinerHeight {
+            let latentFrames = (resolvedFrames - 1) / 4 + 1
+            refinerVideoTokenCount = latentFrames * (refinerHeight / 16) * (refinerWidth / 16)
+        } else {
+            refinerVideoTokenCount = nil
+        }
+
         return VideoGenerationPlanPreflightSummary(
             variant: input.variant.rawValue,
             inputMode: inputs.mode,
@@ -702,7 +1048,25 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0 ? Double(resolvedFrames) / Double(input.fps) : nil,
             seed: input.seed ?? 42,
-            writesAudio: input.variant == .unifiedAV
+            writesAudio: input.variant == .unifiedAV,
+            steps: input.variant == .lingbot ? input.steps : nil,
+            guidanceScale: input.variant == .lingbot ? input.guidanceScale : nil,
+            shift: input.variant == .lingbot ? input.shift : nil,
+            batchCFG: input.variant == .lingbot && input.batchCFG,
+            cfgPassesPerStep: cfgPassesPerStep,
+            videoTokenCount: videoTokenCount,
+            temporalProbe: input.temporalProbe,
+            temporalProbeStep: input.temporalProbe ? input.temporalProbeStep : nil,
+            refiner: input.refiner && !input.temporalProbe,
+            refinerWidth: resolvedRefinerWidth,
+            refinerHeight: resolvedRefinerHeight,
+            refinerSteps: input.refiner && !input.temporalProbe ? input.refinerSteps : nil,
+            refinerGuidanceScale: input.refiner && !input.temporalProbe ? input.refinerGuidanceScale : nil,
+            refinerShift: input.refiner && !input.temporalProbe ? input.refinerShift : nil,
+            refinerThreshold: input.refiner && !input.temporalProbe ? input.refinerThreshold : nil,
+            refinerSigmaTailSteps: input.refiner && !input.temporalProbe ? input.refinerSigmaTailSteps : nil,
+            refinerBatchCFG: input.refiner && !input.temporalProbe && input.refinerBatchCFG,
+            refinerVideoTokenCount: refinerVideoTokenCount
         )
     }
 

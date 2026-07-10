@@ -624,6 +624,34 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 96,
                 recommended: 128
             ),
+            descriptor(
+                ModelResolver.ModelID.lingBotVideoDense13B.rawValue,
+                "LingBot-Video Dense",
+                "Runs LingBot-Video Dense 1.3B text-to-video through the native Swift/MLX pipeline.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                ModelResolver.ModelID.lingBotVideoMoE30BA3B.rawValue,
+                "LingBot-Video MoE",
+                "Installs the LingBot-Video 30B-A3B MoE and refiner source checkpoint for native 4-bit MLX conversion.",
+                minimum: 128,
+                recommended: 192
+            ),
+            descriptor(
+                ModelResolver.ModelID.lingBotVideoMoE30BA3B4Bit.rawValue,
+                "LingBot-Video MoE 4-bit",
+                "Runs the converted LingBot-Video 30B-A3B routed experts through the native Swift/MLX pipeline.",
+                minimum: 64,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.lingBotVideoRewriterLoRA.rawValue,
+                "LingBot-Video Rewriter LoRA",
+                "Installs the LingBot prompt-rewriter LoRA adapter used by the upstream structured-caption workflow.",
+                minimum: 16,
+                recommended: 32
+            ),
         ]
         return Dictionary(uniqueKeysWithValues: descriptors.map { ($0.modelID, $0) })
     }()
@@ -656,6 +684,14 @@ public enum ManagedModelCapabilityCatalog {
 
         if spec.validationKind == .magentaRT2 && !machine.isAppleSiliconMac {
             reasons.append("Magenta RT2 requires Apple Silicon macOS.")
+        }
+
+        if spec.validationKind == .lingBotVideoMoE {
+            reasons.append("The raw BF16 MoE must be converted with `mere.run model quantize` before native inference.")
+        }
+
+        if spec.validationKind == .lingBotRewriterLoRA {
+            reasons.append("LingBot rewriter LoRA is an adapter artifact; mere.run does not serve the required rewriter base VLM yet.")
         }
 
         if machine.unifiedMemoryGB < descriptor.minimumUnifiedMemoryGB {

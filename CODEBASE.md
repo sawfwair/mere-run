@@ -17,6 +17,7 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 - `Sources/MereRunApp/`: macOS GUI forms, command templates, and CLI process launching
 - `Sources/MereRunCore/`: model paths, manifests, source config, shared runtime helpers, and modality runtime implementations
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output
+- `Sources/MereRunCore/LingBotVideo/`: native LingBot-Video Dense and quantized MoE Swift/MLX pipeline
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic
 - `Sources/AudioSTT/Qwen3ASR/`: Qwen3 ASR config, tokenizer, model, and generator path
 - `Sources/AudioTTS/Qwen3TTS/`: Qwen3 TTS tokenizer, model, and generation path

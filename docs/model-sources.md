@@ -86,6 +86,9 @@ from the runtime catalog used by `mere.run model list`,
 | `sfx` | `sfx-woosh-dvflow-8s` |
 | `video` | `video-ltx-av` |
 | `video` | `video-ltx23-av-mlx` |
+| `video` | `video-lingbot-dense-1.3b` |
+| `video` | `video-lingbot-moe-30b-a3b` |
+| `video` | `video-lingbot-moe-30b-a3b-4bit` |
 <!-- managed-model-catalog:end -->
 
 Most catalog IDs have managed Hugging Face sources and can be installed with
@@ -532,3 +535,40 @@ VAE files, BWE vocoder, and MLX-native tensor layouts. Use this model for the
 current high-quality synchronized audio/video lane.
 The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane
 and is not loaded by the native MLX video runtime.
+
+### LingBot-Video
+
+The LingBot-Video collection is cataloged with native Dense 1.3B generation:
+
+```bash
+mere.run model pull video-lingbot-dense-1.3b
+mere.run model pull video-lingbot-moe-30b-a3b --allow-unsupported
+```
+
+- `video-lingbot-dense-1.3b` pulls `robbyant/lingbot-video-dense-1.3b`,
+  including `processor/`, `scheduler/`, `text_encoder/`, `transformer/`,
+  `vae/`, and `scheduling_flow_unipc.py`.
+- `video-lingbot-moe-30b-a3b` pulls
+  `robbyant/lingbot-video-moe-30b-a3b`, including the same base layout plus
+  the `refiner/` checkpoint shards.
+- the optional hidden `text-rewriter-lingbot-video-lora` source remains
+  cataloged separately; it is not pulled with either video checkpoint because
+  the required Qwen3.6-27B rewriter base is not a native runtime dependency.
+
+`mere.run video generate --model video-lingbot-dense-1.3b` executes the released
+checkpoint through the Swift-owned MLX implementation of its Qwen3-VL prompt
+encoder, Dense joint DiT, Flow-UniPC scheduler, Wan VAE, and MP4 writer. Convert
+the pulled MoE source before generation:
+
+```bash
+mere.run model quantize video-lingbot-moe-30b-a3b
+mere.run video generate \
+  "a camera tracks a red paper airplane through a bright studio" \
+  --model video-lingbot-moe-30b-a3b-4bit \
+  --width 320 --height 192 --num-frames 9
+```
+
+The conversion keeps non-expert tensors at their released precision and writes
+the routed expert matrices as MLX 4-bit affine weights with group size 64. The
+converted refiner is stored by default for forward compatibility; the current
+generation path executes the base MoE transformer only.

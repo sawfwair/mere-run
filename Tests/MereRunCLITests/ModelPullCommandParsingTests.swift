@@ -143,6 +143,22 @@ final class ModelPullCommandParsingTests: XCTestCase {
     func testModelCommandExposesCapabilities() {
         let commandNames = Set(Model.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("capabilities"))
+        XCTAssertTrue(commandNames.contains("quantize"))
+    }
+
+    func testModelQuantizeParsesLingBotConversionOptions() throws {
+        let cmd = try ModelQuantize.parse([
+            "video-lingbot-moe-30b-a3b",
+            "--output", "/tmp/lingbot-moe-4bit",
+            "--group-size", "32",
+            "--skip-refiner",
+        ])
+
+        XCTAssertEqual(cmd.source, "video-lingbot-moe-30b-a3b")
+        XCTAssertEqual(cmd.output, "/tmp/lingbot-moe-4bit")
+        XCTAssertEqual(cmd.bits, 4)
+        XCTAssertEqual(cmd.groupSize, 32)
+        XCTAssertTrue(cmd.skipRefiner)
     }
 
     func testModelCapabilitiesParsesJsonRecommendationFlags() throws {

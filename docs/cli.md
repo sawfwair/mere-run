@@ -86,7 +86,7 @@ are:
 - Vision grounding: `vision-ground-falcon-perception`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-lingbot-dense-1.3b`, `video-lingbot-moe-30b-a3b`
 
 For subsystem-specific implementation guides, see:
 
@@ -1247,15 +1247,15 @@ preflight or generation.
 
 ### `mere.run video generate`
 
-Generate MP4 video with the native LTX pipelines.
+Generate MP4 video with the native LTX or LingBot-Video Dense/MoE pipelines.
 
 ```bash
-swift run mere.run video generate "<prompt>" [options]
+swift run mere.run video generate ["<prompt>"] [options]
 ```
 
 Key options:
 
-- `--variant`: `distilled` or `unified-av`
+- `--variant`: `distilled`, `unified-av`, or `lingbot`; LingBot model IDs select it automatically
 - `--model-root`
 - `--output`
 - `--width`, `--height`
@@ -1263,6 +1263,18 @@ Key options:
 - `--duration`
 - `--fps`
 - `--seed`
+- `--steps`, `--guidance-scale`, `--shift`: LingBot sampling controls
+- `--prompt-json`: upstream LingBot structured caption JSON; positional prompt becomes optional
+- `--negative-prompt`: optional LingBot negative conditioning override
+- `--negative-prompt-json`: upstream Auto Negative JSON; mutually exclusive with `--negative-prompt`
+- `--batch-cfg`: run LingBot positive/negative CFG as one masked batch; opt-in because it does not reduce FLOPs and may use more memory
+- `--temporal-probe`: decode an early predicted-clean LingBot sample and stop
+- `--temporal-probe-step`: denoiser checkpoint for the probe; defaults to 4
+- `--refiner`: run the LingBot MoE second-stage refiner
+- `--refiner-width`, `--refiner-height`: refined output size; defaults to 1920x1088
+- `--refiner-steps`, `--refiner-guidance-scale`, `--refiner-shift`
+- `--refiner-threshold`, `--refiner-sigma-tail-steps`
+- `--refiner-batch-cfg`: opt-in masked CFG batch for the LingBot refiner
 - `--image`
 - `--image-strength`
 - `--end-image`
@@ -1274,6 +1286,8 @@ Key options:
 Environment:
 
 - `MERERUN_VIDEO_LTX_MODEL_ROOT`
+- `MERERUN_VIDEO_LINGBOT_MODEL_ROOT`
+- `MERERUN_LINGBOT_FUSED_PROJECTIONS=0` disables LingBot fused QKV and gate/up projections for diagnostics
 - `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` for an external
   `mlx-community/gemma-3-12b-it-4bit` checkout used by `video-ltx23-av-mlx`
 
@@ -1284,6 +1298,18 @@ for clip length so the CLI can choose the nearest legal `8n+1` frame count.
 Use the default `distilled` lane for faster video-only drafts. Use
 `--variant unified-av --model video-ltx23-av-mlx` for the current high-quality
 synchronized audio/video lane.
+
+LingBot matches the released runner's multiple-of-16 dimension and `4n+1`
+frame validation. Duration uses the same round-up rule as upstream. A structured
+prompt's `duration` is used unless an explicit `--duration` overrides it. Use
+`--temporal-probe` to inspect and score temporal stability before starting all
+40 steps or the refiner. Long steps report conditional and unconditional
+transformer block progress. Preflight includes the resolved LingBot video-token
+count and CFG passes per step; it warns for large global-attention runs. The
+official 832x480x121 shape has 48,360 video tokens before text, and global
+attention scales roughly with the square of sequence length. `--batch-cfg`
+matches the upstream single-device batching option but remains opt-in because it
+does not reduce that work.
 
 Preflight mode:
 
@@ -1300,6 +1326,45 @@ Preflight mode:
 Examples:
 
 ```bash
+swift run mere.run video generate \
+  --prompt-json ./prompt.json \
+  --negative-prompt-json ./negative.json \
+  --model video-lingbot-dense-1.3b \
+  --width 832 \
+  --height 480 \
+  --temporal-probe \
+  --temporal-probe-step 1 \
+  --output ./lingbot-reference-probe.mp4
+
+swift run mere.run video generate \
+  "a dexterous robot folds a blue towel on a workbench" \
+  --model video-lingbot-dense-1.3b \
+  --width 320 \
+  --height 192 \
+  --num-frames 9 \
+  --output ./lingbot-smoke.mp4
+
+swift run mere.run video generate \
+  "a red paper airplane glides through a bright art studio" \
+  --model video-lingbot-moe-30b-a3b-4bit \
+  --width 448 \
+  --height 256 \
+  --num-frames 9 \
+  --refiner \
+  --refiner-width 960 \
+  --refiner-height 544 \
+  --output ./lingbot-moe-refined.mp4
+
+swift run mere.run video generate \
+  "a red paper airplane glides through a bright art studio" \
+  --model video-lingbot-moe-30b-a3b-4bit \
+  --width 448 \
+  --height 256 \
+  --num-frames 17 \
+  --temporal-probe \
+  --temporal-probe-step 4 \
+  --output ./lingbot-temporal-probe.mp4
+
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant distilled \
@@ -1436,6 +1501,26 @@ download starts. The report includes `pull-model` or `pull-models` actions and
 exits nonzero after printing JSON when hard blockers are present.
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
+
+### `mere.run model quantize`
+
+Convert a pulled LingBot-Video 30B-A3B MoE checkpoint into a native MLX model
+with 4-bit routed experts. Conversion is shard-streamed and resumable; unchanged
+components are hard-linked when the model store and source cache share a file
+system.
+
+```bash
+swift run mere.run model quantize video-lingbot-moe-30b-a3b
+swift run mere.run model quantize /path/to/lingbot-moe \
+  --output /path/to/lingbot-moe-4bit \
+  --group-size 64
+```
+
+The default output is `video-lingbot-moe-30b-a3b-4bit` in the configured model
+store. Pass `--skip-refiner` together with an explicit `--output` for a base-only
+conversion, or `--force` to replace the output instead of reusing complete
+shards. Supported group sizes are 32, 64, and 128; the output bit width is
+currently fixed at 4.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.

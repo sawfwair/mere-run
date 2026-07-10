@@ -57,6 +57,22 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testPullableCatalogSpecsHaveDiskEstimates() {
+        var specs = ManagedModelCatalog.allSpecs
+        let companionSpecs = ManagedModelCatalog.allSpecs
+            .flatMap(\.companionModelIDs)
+            .compactMap { ManagedModelCatalog.spec(for: $0) }
+        specs.append(contentsOf: companionSpecs)
+
+        for spec in specs where spec.hasAnyManagedDownloadSource() {
+            XCTAssertGreaterThan(
+                spec.estimatedDownloadBytes ?? 0,
+                0,
+                "Pullable model \(spec.id) should have a byte estimate for disk-space preflight."
+            )
+        }
+    }
+
     func testMediaOnboardingModelsHaveDiskEstimates() throws {
         for id in ["speech-asr-parakeet", "text-embed-qwen3-0.6b"] {
             let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
@@ -816,6 +832,139 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
     }
 
+    func testLingBotVideoSpecsUseRobbyantDiffusersSources() throws {
+        let dense = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoDense13B.rawValue))
+        let moe = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoMoE30BA3B.rawValue))
+        let quantized = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoMoE30BA3B4Bit.rawValue)
+        )
+
+        XCTAssertEqual(dense.category, .video)
+        XCTAssertEqual(dense.hubFallback?.repoId, "robbyant/lingbot-video-dense-1.3b")
+        XCTAssertEqual(dense.hubFallback?.revision, "main")
+        XCTAssertEqual(dense.validationKind, .lingBotVideoDense)
+        XCTAssertEqual(dense.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(dense.estimatedDownloadBytes, 12_198_406_770)
+        XCTAssertEqual(dense.defaultCLICommands, ["video generate"])
+        XCTAssertEqual(dense.companionModelIDs, [])
+        XCTAssertEqual(dense.hubFallback?.patterns.contains("processor/*"), true)
+        XCTAssertEqual(dense.hubFallback?.patterns.contains("scheduling_flow_unipc.py"), true)
+        XCTAssertEqual(dense.hubFallback?.patterns.contains("refiner/*"), false)
+
+        XCTAssertEqual(moe.category, .video)
+        XCTAssertEqual(moe.hubFallback?.repoId, "robbyant/lingbot-video-moe-30b-a3b")
+        XCTAssertEqual(moe.hubFallback?.revision, "main")
+        XCTAssertEqual(moe.validationKind, .lingBotVideoMoE)
+        XCTAssertEqual(moe.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(moe.estimatedDownloadBytes, 129_952_392_104)
+        XCTAssertEqual(moe.defaultCLICommands, [])
+        XCTAssertEqual(moe.companionModelIDs, [])
+        XCTAssertEqual(moe.hubFallback?.patterns.contains("refiner/*"), true)
+
+        XCTAssertEqual(quantized.category, .video)
+        XCTAssertNil(quantized.hubFallback)
+        XCTAssertEqual(quantized.validationKind, .lingBotVideoMoEQuantized)
+        XCTAssertEqual(quantized.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(quantized.defaultCLICommands, ["video generate"])
+    }
+
+    func testLingBotRewriterLoRASpecIsKnownButHidden() throws {
+        let companionID = ModelResolver.ModelID.lingBotVideoRewriterLoRA.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
+
+        XCTAssertFalse(ManagedModelCatalog.allModelIDs.contains(companionID))
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.hubFallback?.repoId, "robbyant/lingbot-video-rewriter-lora")
+        XCTAssertEqual(spec.hubFallback?.patterns, [
+            "adapter_config.json",
+            "adapter_model.safetensors",
+            "additional_config.json",
+        ])
+        XCTAssertEqual(spec.validationKind, .lingBotRewriterLoRA)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 467_077_516)
+    }
+
+    func testLingBotDenseRootValidationRequiresDiffusersComponents() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoDense13B.rawValue))
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLingBotVideoRoot(at: root, includesRefiner: false)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent("processor/tokenizer.json"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["tokenizer.json"]
+        )
+    }
+
+    func testLingBotMoERootValidationRequiresRefinerComponents() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoMoE30BA3B.rawValue))
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLingBotVideoRoot(at: root, includesRefiner: true)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent("refiner/diffusion_pytorch_model.safetensors"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["diffusion_pytorch_model.safetensors.index.json"]
+        )
+    }
+
+    func testQuantizedLingBotMoERootRequiresSidecarAndRefiner() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.lingBotVideoMoE30BA3B4Bit.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLingBotVideoRoot(at: root, includesRefiner: true)
+        try Data("{}".utf8).write(
+            to: root.appendingPathComponent(LingBotVideoQuantizationConfig.filename)
+        )
+
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+        try FileManager.default.removeItem(
+            at: root.appendingPathComponent(LingBotVideoQuantizationConfig.filename)
+        )
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            [LingBotVideoQuantizationConfig.filename]
+        )
+    }
+
+    func testLingBotManifestsUseDedicatedEngines() {
+        let dense = MereRunModelManifest.template(
+            for: .lingBotVideoDense13B,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(dense.engine, .lingBotVideo)
+        XCTAssertEqual(dense.family, .video)
+        XCTAssertEqual(dense.supports, [.videoGeneration])
+        XCTAssertEqual(dense.upstreamRepoId, "robbyant/lingbot-video-dense-1.3b@main")
+
+        let quantized = MereRunModelManifest.template(
+            for: .lingBotVideoMoE30BA3B4Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(quantized.engine, .lingBotVideo)
+        XCTAssertEqual(quantized.precision, .int4)
+        XCTAssertEqual(quantized.quantization?.scheme, "mlx-affine-routed-experts")
+
+        let rewriter = MereRunModelManifest.template(
+            for: .lingBotVideoRewriterLoRA,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(rewriter.engine, .peftLoRA)
+        XCTAssertEqual(rewriter.family, .adapter)
+        XCTAssertEqual(rewriter.supports, [.loraInference])
+    }
+
     func testHFTextRootValidationRequiresShardsNamedByIndex() throws {
         let companionID = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
@@ -936,6 +1085,46 @@ final class ManagedModelCatalogTests: XCTestCase {
             XCTAssertTrue(FileManager.default.createFile(
                 atPath: root.appendingPathComponent(file).path,
                 contents: contents
+            ))
+        }
+    }
+
+    private func writeMinimalLingBotVideoRoot(at root: URL, includesRefiner: Bool) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for directory in ["processor", "scheduler", "text_encoder", "transformer", "vae"] {
+            try FileManager.default.createDirectory(
+                at: root.appendingPathComponent(directory, isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
+        if includesRefiner {
+            try FileManager.default.createDirectory(
+                at: root.appendingPathComponent("refiner", isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
+
+        let files = [
+            "model_index.json",
+            "scheduling_flow_unipc.py",
+            "processor/tokenizer_config.json",
+            "processor/tokenizer.json",
+            "scheduler/scheduler_config.json",
+            "text_encoder/config.json",
+            "text_encoder/model.safetensors",
+            "transformer/config.json",
+            "transformer/diffusion_pytorch_model.safetensors",
+            "vae/config.json",
+            "vae/diffusion_pytorch_model.safetensors",
+        ] + (includesRefiner ? [
+            "refiner/config.json",
+            "refiner/diffusion_pytorch_model.safetensors",
+        ] : [])
+
+        for file in files {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data("{}".utf8)
             ))
         }
     }

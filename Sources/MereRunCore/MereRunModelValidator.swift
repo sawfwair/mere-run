@@ -139,7 +139,11 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .wooshClap
             || spec?.validationKind == .wooshSynchformer
             || spec?.validationKind == .ltxVideo
-            || spec?.validationKind == .ltxVideo23MLX {
+            || spec?.validationKind == .ltxVideo23MLX
+            || spec?.validationKind == .lingBotVideoDense
+            || spec?.validationKind == .lingBotVideoMoE
+            || spec?.validationKind == .lingBotVideoMoEQuantized
+            || spec?.validationKind == .lingBotRewriterLoRA {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -373,8 +377,10 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=music expects ace-step or magenta-rt2.")
             case .sfx where engine != .woosh:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh.")
-            case .video where engine != .ltxVideo:
-                warnings.append("Manifest engine mismatch: family=video expects ltx-video.")
+            case .video where engine != .ltxVideo && engine != .lingBotVideo:
+                warnings.append("Manifest engine mismatch: family=video expects ltx-video or lingbot-video.")
+            case .adapter where engine != .peftLoRA:
+                warnings.append("Manifest engine mismatch: family=adapter expects peft-lora.")
             case .psi where engine != .psiChat:
                 warnings.append("Manifest engine mismatch: family=psi expects psi-chat.")
             default:
@@ -447,7 +453,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .woosh?, .ltxVideo?:
+            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .woosh?, .ltxVideo?, .lingBotVideo?, .peftLoRA?:
                 return true
             default:
                 return false

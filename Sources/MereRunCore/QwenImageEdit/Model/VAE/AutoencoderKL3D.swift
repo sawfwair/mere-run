@@ -93,6 +93,7 @@ private final class CausalConv3d: Module {
     let padding: (Int, Int, Int)
     let temporalPadding: Int
     let hasBias: Bool
+    private var featureCache: MLXArray?
 
     init(
         inputChannels: Int,
@@ -117,7 +118,10 @@ private final class CausalConv3d: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, useFeatureCache: Bool = false) -> MLXArray {
+        if useFeatureCache {
+            return callStreaming(x)
+        }
         if x.dim(2) == 1 && stride.0 == 1 {
             return callSingleFrame(x)
         }
@@ -151,6 +155,48 @@ private final class CausalConv3d: Module {
             hidden = hidden + b.reshaped(1, -1, 1, 1, 1)
         }
 
+        return hidden
+    }
+
+    func clearFeatureCache() {
+        featureCache = nil
+    }
+
+    private func callStreaming(_ x: MLXArray) -> MLXArray {
+        var hidden = x
+        if temporalPadding > 0 {
+            let historyCount = featureCache?.dim(2) ?? 0
+            if let featureCache {
+                hidden = concatenated([featureCache, hidden], axis: 2)
+            }
+            let missingHistory = max(0, temporalPadding - historyCount)
+            if missingHistory > 0 {
+                let zeros = MLX.zeros(
+                    [hidden.dim(0), hidden.dim(1), missingHistory, hidden.dim(3), hidden.dim(4)],
+                    dtype: hidden.dtype
+                )
+                hidden = concatenated([zeros, hidden], axis: 2)
+            }
+
+            let cacheSource = featureCache.map { concatenated([$0, x], axis: 2) } ?? x
+            let cacheStart = max(0, cacheSource.dim(2) - temporalPadding)
+            featureCache = cacheSource[0..., 0..., cacheStart..., 0..., 0...]
+        }
+
+        if padding.1 > 0 || padding.2 > 0 {
+            hidden = padded(hidden, widths: [
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [padding.1, padding.1],
+                [padding.2, padding.2]
+            ])
+        }
+
+        hidden = conv3d(hidden, weight, stride: [stride.0, stride.1, stride.2])
+        if let bias {
+            hidden = hidden + bias.reshaped(1, -1, 1, 1, 1)
+        }
         return hidden
     }
 
@@ -223,14 +269,20 @@ private final class VAE3DResnetBlock: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, streaming: Bool = false) -> MLXArray {
         var hidden = silu(norm1(x))
-        hidden = conv1(hidden)
+        hidden = conv1(hidden, useFeatureCache: streaming)
         hidden = silu(norm2(hidden))
-        hidden = conv2(hidden)
+        hidden = conv2(hidden, useFeatureCache: streaming)
 
         let residual = hasShortcut ? convShortcut!(x) : x
         return residual + hidden
+    }
+
+    func clearFeatureCache() {
+        conv1.clearFeatureCache()
+        conv2.clearFeatureCache()
+        convShortcut?.clearFeatureCache()
     }
 }
 
@@ -340,13 +392,19 @@ private final class VAE3DMidBlock: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        var hidden = resnets[0](x)
+    func callAsFunction(_ x: MLXArray, streaming: Bool = false) -> MLXArray {
+        var hidden = resnets[0](x, streaming: streaming)
         if !attentions.isEmpty {
             hidden = attentions[0](hidden)
         }
-        hidden = resnets[1](hidden)
+        hidden = resnets[1](hidden, streaming: streaming)
         return hidden
+    }
+
+    func clearFeatureCache() {
+        for resnet in resnets {
+            resnet.clearFeatureCache()
+        }
     }
 }
 
@@ -384,21 +442,20 @@ private final class VAE3DUpsampler: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        streaming: Bool = false,
+        firstChunk: Bool = false
+    ) -> MLXArray {
         var hidden = x  // [B, C, T, H, W]
-        let (b, _, t, h, w) = (hidden.dim(0), hidden.dim(1), hidden.dim(2), hidden.dim(3), hidden.dim(4))
+        let (b, t) = (hidden.dim(0), hidden.dim(2))
 
-        // Temporal upsample first (if needed AND T > 1)
-        // Skip temporal upsampling for single-image (T=1) inputs
-        if hasTimeConv, let tc = timeConv, t > 1 {
+        let shouldUpsampleTime = hasTimeConv && (streaming ? !firstChunk : t > 1)
+        if shouldUpsampleTime, let tc = timeConv {
             // time_conv: [B, C, T, H, W] -> [B, C*scale, T, H, W]
-            hidden = tc(hidden)
+            hidden = tc(hidden, useFeatureCache: streaming)
             // Pixel shuffle in time: [B, C*scale, T, H, W] -> [B, C, T*scale, H, W]
-            let currentT = hidden.dim(2)
-            let newC = hidden.dim(1) / temporalScale
-            hidden = hidden.reshaped(b, newC, temporalScale, currentT, h, w)
-            hidden = hidden.transposed(0, 1, 3, 2, 4, 5)  // [B, C, T, scale, H, W]
-            hidden = hidden.reshaped(b, newC, currentT * temporalScale, h, w)
+            hidden = wanTemporalPixelShuffle(hidden, scale: temporalScale)
         }
 
         // Spatial upsample: nearest neighbor 2x
@@ -426,6 +483,10 @@ private final class VAE3DUpsampler: Module {
         return hidden
     }
 
+    func clearFeatureCache() {
+        timeConv?.clearFeatureCache()
+    }
+
     private func upsampleNearest2xChannelsLast(_ x: MLXArray) -> MLXArray {
         // x: [B, H, W, C] - channels-last
         let b = x.dim(0)
@@ -438,6 +499,21 @@ private final class VAE3DUpsampler: Module {
         expanded = tiled(expanded, repetitions: [1, 1, 2, 1, 2, 1])  // [B, H, 2, W, 2, C]
         return expanded.reshaped(b, h * 2, w * 2, c)
     }
+}
+
+func wanTemporalPixelShuffle(_ x: MLXArray, scale: Int) -> MLXArray {
+    precondition(x.ndim == 5, "Wan temporal pixel shuffle expects [B,C,T,H,W].")
+    precondition(scale > 0 && x.dim(1) % scale == 0, "Wan temporal scale must divide channels.")
+
+    let batch = x.dim(0)
+    let channels = x.dim(1) / scale
+    let frames = x.dim(2)
+    let height = x.dim(3)
+    let width = x.dim(4)
+    return x
+        .reshaped(batch, scale, channels, frames, height, width)
+        .transposed(0, 2, 3, 1, 4, 5)
+        .reshaped(batch, channels, frames * scale, height, width)
 }
 
 // MARK: - Up Block
@@ -470,15 +546,28 @@ private final class VAE3DUpBlock: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        streaming: Bool = false,
+        firstChunk: Bool = false
+    ) -> MLXArray {
         var hidden = x
         for resnet in resnets {
-            hidden = resnet(hidden)
+            hidden = resnet(hidden, streaming: streaming)
         }
         for upsampler in upsamplers {
-            hidden = upsampler(hidden)
+            hidden = upsampler(hidden, streaming: streaming, firstChunk: firstChunk)
         }
         return hidden
+    }
+
+    func clearFeatureCache() {
+        for resnet in resnets {
+            resnet.clearFeatureCache()
+        }
+        for upsampler in upsamplers {
+            upsampler.clearFeatureCache()
+        }
     }
 }
 
@@ -552,6 +641,25 @@ private final class VAE3DDecoder: Module {
         hidden = silu(normalized)
         hidden = convOut(hidden)
         return hidden
+    }
+
+    func decodeStreamingChunk(_ latents: MLXArray, firstChunk: Bool) -> MLXArray {
+        var hidden = convIn(latents, useFeatureCache: true)
+        hidden = midBlock(hidden, streaming: true)
+        for block in upBlocks {
+            hidden = block(hidden, streaming: true, firstChunk: firstChunk)
+        }
+        hidden = silu(normOut(hidden))
+        return convOut(hidden, useFeatureCache: true)
+    }
+
+    func clearFeatureCache() {
+        convIn.clearFeatureCache()
+        midBlock.clearFeatureCache()
+        for block in upBlocks {
+            block.clearFeatureCache()
+        }
+        convOut.clearFeatureCache()
     }
 }
 
@@ -657,14 +765,20 @@ private final class VAE3DEncoderResnetBlock: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, streaming: Bool = false) -> MLXArray {
         var hidden = silu(norm1(x))
-        hidden = conv1(hidden)
+        hidden = conv1(hidden, useFeatureCache: streaming)
         hidden = silu(norm2(hidden))
-        hidden = conv2(hidden)
+        hidden = conv2(hidden, useFeatureCache: streaming)
 
-        let residual = hasShortcut ? convShortcut!(x) : x
+        let residual = hasShortcut ? convShortcut!(x, useFeatureCache: streaming) : x
         return residual + hidden
+    }
+
+    func clearFeatureCache() {
+        conv1.clearFeatureCache()
+        conv2.clearFeatureCache()
+        convShortcut?.clearFeatureCache()
     }
 }
 
@@ -675,6 +789,7 @@ private final class VAE3DEncoderDownsampleBlock: Module {
 
     let channels: Int
     let hasTimeConv: Bool
+    private var timeFeatureCache: MLXArray?
 
     init(channels: Int, temporalDownsample: Bool) {
         self.channels = channels
@@ -695,21 +810,14 @@ private final class VAE3DEncoderDownsampleBlock: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, streaming: Bool = false) -> MLXArray {
         var hidden = x
-        let (b, c, t, _, _) = (hidden.dim(0), hidden.dim(1), hidden.dim(2), hidden.dim(3), hidden.dim(4))
-
-        // Temporal downsample first (if needed AND T > 1)
-        if hasTimeConv, let tc = timeConv, t > 1 {
-            hidden = tc(hidden)
-        }
-
-        let newT = hidden.dim(2)
+        let (b, c, t) = (hidden.dim(0), hidden.dim(1), hidden.dim(2))
         let currentH = hidden.dim(3)
         let currentW = hidden.dim(4)
 
-        // Reshape to channels-last for Conv2d
-        hidden = hidden.transposed(0, 2, 3, 4, 1).reshaped(b * newT, currentH, currentW, c)
+        // The released Wan resampler applies spatial downsampling before its temporal convolution.
+        hidden = hidden.transposed(0, 2, 3, 4, 1).reshaped(b * t, currentH, currentW, c)
         hidden = qwenAsymmetricDownsamplePad(hidden)
 
         let conv = requireConv2d(resample[0], context: "VAE3DEncoderDownsampleBlock.resample[0]")
@@ -717,9 +825,26 @@ private final class VAE3DEncoderDownsampleBlock: Module {
 
         let newH = hidden.dim(1)
         let newW = hidden.dim(2)
-        hidden = hidden.reshaped(b, newT, newH, newW, c).transposed(0, 4, 1, 2, 3)
+        hidden = hidden.reshaped(b, t, newH, newW, c).transposed(0, 4, 1, 2, 3)
+
+        if hasTimeConv, let timeConv {
+            if streaming {
+                let currentTail = hidden[0..., 0..., (hidden.dim(2) - 1)..., 0..., 0...]
+                if let timeFeatureCache {
+                    hidden = timeConv(MLX.concatenated([timeFeatureCache, hidden], axis: 2))
+                }
+                self.timeFeatureCache = currentTail
+            } else if hidden.dim(2) > 1 {
+                hidden = timeConv(hidden)
+            }
+        }
 
         return hidden
+    }
+
+    func clearFeatureCache() {
+        timeFeatureCache = nil
+        timeConv?.clearFeatureCache()
     }
 }
 
@@ -794,22 +919,32 @@ private final class VAE3DEncoder: Module {
         super.init()
     }
 
-    func callAsFunction(_ images: MLXArray) -> MLXArray {
-        var hidden = convIn(images)
+    func callAsFunction(_ images: MLXArray, streaming: Bool = false) -> MLXArray {
+        var hidden = convIn(images, useFeatureCache: streaming)
 
         for block in downBlocks {
             if let resnet = block as? VAE3DEncoderResnetBlock {
-                hidden = resnet(hidden)
+                hidden = resnet(hidden, streaming: streaming)
             } else if let downsample = block as? VAE3DEncoderDownsampleBlock {
-                hidden = downsample(hidden)
+                hidden = downsample(hidden, streaming: streaming)
             }
         }
 
-        hidden = midBlock(hidden)
+        hidden = midBlock(hidden, streaming: streaming)
         hidden = silu(normOut(hidden))
-        hidden = convOut(hidden)
+        hidden = convOut(hidden, useFeatureCache: streaming)
 
         return hidden
+    }
+
+    func clearFeatureCache() {
+        convIn.clearFeatureCache()
+        for block in downBlocks {
+            (block as? VAE3DEncoderResnetBlock)?.clearFeatureCache()
+            (block as? VAE3DEncoderDownsampleBlock)?.clearFeatureCache()
+        }
+        midBlock.clearFeatureCache()
+        convOut.clearFeatureCache()
     }
 }
 
@@ -845,15 +980,57 @@ public final class AutoencoderKL3D: Module {
     /// - Parameter images: [B, C, T, H, W] in [-1, 1] range
     /// - Returns: [B, latent_channels, T/temporalScale, H/spatialScale, W/spatialScale] latent representation
     public func encode(_ images: MLXArray) -> MLXArray {
-        let encoded = quantConv(encoder(images))
+        let encoded = encodeStreamingMoments(images)
         // Take first half of channels (mean), ignore logvar
         let mean = encoded[0..., 0..<config.latentChannels, 0..., 0..., 0...]
-        // Scale latents
-        var scaled = mean * MLXArray(config.scalingFactor)
+        return scaleEncoderLatents(mean)
+    }
+
+    /// Encode images by sampling the released diagonal Gaussian posterior.
+    public func encodeSampled(_ images: MLXArray, key: MLXArray) -> MLXArray {
+        let encoded = encodeStreamingMoments(images)
+        let mean = encoded[0..., 0..<config.latentChannels, 0..., 0..., 0...]
+        let logVariance = MLX.clip(
+            encoded[0..., config.latentChannels..<(config.latentChannels * 2), 0..., 0..., 0...],
+            min: -30,
+            max: 20
+        )
+        let deviation = MLX.exp(logVariance * 0.5)
+        let noise = MLXRandom.normal(mean.shape, key: key).asType(mean.dtype)
+        return scaleEncoderLatents(mean + deviation * noise)
+    }
+
+    private func scaleEncoderLatents(_ latents: MLXArray) -> MLXArray {
+        var scaled = latents * MLXArray(config.scalingFactor)
         if config.shiftFactor != 0 {
             scaled = scaled - MLXArray(config.shiftFactor)
         }
         return scaled
+    }
+
+    private func encodeStreamingMoments(_ images: MLXArray) -> MLXArray {
+        precondition(images.ndim == 5, "Streaming VAE encode expects [B,C,T,H,W] images.")
+        precondition((images.dim(2) - 1) % 4 == 0, "Streaming VAE encode expects a 4n+1 frame count.")
+
+        encoder.clearFeatureCache()
+        var chunks: [MLXArray] = []
+        chunks.reserveCapacity((images.dim(2) - 1) / 4 + 1)
+        var ranges = [0..<1]
+        ranges.append(contentsOf: stride(from: 1, to: images.dim(2), by: 4).map {
+            $0..<min($0 + 4, images.dim(2))
+        })
+        for range in ranges {
+            let chunk = encoder(
+                images[0..., 0..., range, 0..., 0...],
+                streaming: true
+            )
+            MLX.eval(chunk)
+            chunks.append(chunk)
+            Memory.clearCache()
+        }
+        encoder.clearFeatureCache()
+        let encoded = chunks.count == 1 ? chunks[0] : MLX.concatenated(chunks, axis: 2)
+        return quantConv(encoded)
     }
 
     /// Encode single image (convenience)
@@ -878,6 +1055,33 @@ public final class AutoencoderKL3D: Module {
         }
         let postQuantized = postQuantConv(x)
         return decoder(postQuantized)
+    }
+
+    /// Decode Wan-style video latents one frame at a time while preserving causal convolution history.
+    /// The first latent frame produces one image and each later latent frame produces four images.
+    public func decodeStreaming(_ latents: MLXArray) -> MLXArray {
+        precondition(latents.ndim == 5, "Streaming VAE decode expects [B,C,T,H,W] latents.")
+
+        var x = latents / MLXArray(config.scalingFactor)
+        if config.shiftFactor != 0 {
+            x = x + MLXArray(config.shiftFactor)
+        }
+        x = postQuantConv(x)
+
+        decoder.clearFeatureCache()
+        var chunks: [MLXArray] = []
+        chunks.reserveCapacity(x.dim(2))
+        for index in 0..<x.dim(2) {
+            let chunk = decoder.decodeStreamingChunk(
+                x[0..., 0..., index..<(index + 1), 0..., 0...],
+                firstChunk: index == 0
+            )
+            MLX.eval(chunk)
+            chunks.append(chunk)
+            Memory.clearCache()
+        }
+        decoder.clearFeatureCache()
+        return chunks.count == 1 ? chunks[0] : MLX.concatenated(chunks, axis: 2)
     }
 
     /// Decode single image (convenience)

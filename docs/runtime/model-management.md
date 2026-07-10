@@ -9,6 +9,7 @@ the model-management commands.
 - `mere.run model capabilities`
 - `mere.run model info`
 - `mere.run model pull`
+- `mere.run model quantize`
 - `mere.run model remove`
 - `mere.run model repair-manifests`
 - `mere.run status`
@@ -44,7 +45,7 @@ Examples:
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - sfx: `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s`
-- video: `video-ltx-av`, `video-ltx23-av-mlx`
+- video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-lingbot-dense-1.3b`, `video-lingbot-moe-30b-a3b`
 
 The public runtime resolves these IDs directly, so docs and examples should use
 the canonical names shown by `mere.run model list`.
@@ -84,6 +85,13 @@ Downloads a managed model from its cataloged Hugging Face source. Pulls are
 checked against the managed capability catalog before download so low-memory
 machines do not fetch models they cannot run. Pass `--allow-unsupported` only
 when you intentionally accept that risk or are using external hardware.
+
+### `mere.run model quantize`
+
+Converts a pulled LingBot-Video MoE source checkpoint into resumable native MLX
+4-bit routed-expert shards. The default output is written beside managed models;
+unchanged processor, text encoder, scheduler, and VAE files are hard-linked when
+possible. See [Video Runtime](./video.md) for the generation workflow.
 
 ### `mere.run setup`
 

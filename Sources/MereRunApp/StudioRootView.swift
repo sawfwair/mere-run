@@ -3,12 +3,16 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct StudioRootView: View {
+    private static let orderedModes = StudioModeGroup.allCases.flatMap(\.modes)
+
     @EnvironmentObject private var controller: MereRunController
     @StateObject private var library = StudioLibraryStore()
     // Persisted per scene so relaunch restores the last mode and panel layout.
     @SceneStorage("studio.mode") private var mode: StudioMode = .createImage
     @SceneStorage("studio.showLibrary") private var showLibrary = true
     @SceneStorage("studio.showAdvanced") private var showAdvanced = false
+    @State private var layoutClass: StudioLayoutClass = .regular
+    @State private var showCompactLibrary = false
     @State private var draft = StudioDraft()
     @State private var showOptions = false
     @State private var showModels = false
@@ -109,66 +113,180 @@ struct StudioRootView: View {
     }
 
     private var shell: some View {
+        GeometryReader { geometry in
+            let layout = StudioLayoutPolicy.layoutClass(for: geometry.size.width)
+
+            adaptiveShell(layout: layout, availableWidth: geometry.size.width)
+                .onAppear { updateLayoutClass(layout) }
+                .onChange(of: layout) { _, nextLayout in
+                    updateLayoutClass(nextLayout)
+                }
+        }
+        .background(MereRunTheme.background.ignoresSafeArea())
+    }
+
+    private func adaptiveShell(layout: StudioLayoutClass, availableWidth: CGFloat) -> some View {
         ZStack(alignment: .trailing) {
             HStack(spacing: 0) {
-                StudioSidebar(
-                    mode: $mode,
-                    modeCapabilities: modeCapabilities,
-                    serverStatus: controller.serverStatus,
-                    resolvedCLI: controller.resolvedCLI,
-                    onShowModels: { showModels = true },
-                    onShowHelp: { showHelp = true }
-                )
+                if !layout.isCompact {
+                    regularNavigation
 
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.4))
+                    Divider()
+                        .overlay(MereRunTheme.border.opacity(0.4))
+                }
 
-                if showLibrary {
-                    StudioLibraryPanel(
-                        items: library.items,
-                        selectedID: $selectedLibraryID,
-                        isVisible: $showLibrary,
-                        onDelete: { id in
-                            library.delete(id: id)
-                            if selectedLibraryID == id { selectedLibraryID = nil }
-                        },
-                        onRename: { id, title in
-                            library.rename(id: id, title: title)
-                        },
-                        onQuickLook: { QuickLookCoordinator.shared.preview($0) }
-                    )
-                    .frame(width: 272)
+                if !layout.isCompact, showLibrary {
+                    regularLibrary
 
                     Divider()
                         .overlay(MereRunTheme.border.opacity(0.5))
                 }
 
-                contentColumn
+                contentColumn(isCompact: layout.isCompact)
+            }
+
+            if layout.isCompact, showCompactLibrary {
+                compactDismissLayer { showCompactLibrary = false }
+
+                HStack(spacing: 0) {
+                    compactLibraryPanel(availableWidth: availableWidth)
+                    Spacer(minLength: 0)
+                }
+                .transition(.move(edge: .leading).combined(with: .opacity))
+                .zIndex(1)
             }
 
             if showAdvanced {
-                advancedPanel
+                advancedPanel(layout: layout, availableWidth: availableWidth)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-                    .zIndex(1)
+                    .zIndex(2)
             }
         }
         .background(MereRunTheme.background.ignoresSafeArea())
     }
 
-    private var advancedPanel: some View {
-        HStack(spacing: 0) {
-            advancedResizeHandle
-            AdvancedControlSurface(docked: true, onDetach: { advancedDetached = true })
-                .frame(width: advancedWidth)
-                .clipped()
+    private var regularNavigation: some View {
+        StudioSidebar(
+            mode: $mode,
+            modeCapabilities: modeCapabilities,
+            serverStatus: controller.serverStatus,
+            resolvedCLI: controller.resolvedCLI,
+            onShowModels: { showModels = true },
+            onShowHelp: { showHelp = true }
+        )
+        .frame(width: StudioLayoutPolicy.sidebarWidth)
+    }
+
+    private var regularLibrary: some View {
+        StudioLibraryPanel(
+            items: library.items,
+            selectedID: $selectedLibraryID,
+            isVisible: $showLibrary,
+            onDelete: deleteLibraryItem,
+            onRename: library.rename,
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) }
+        )
+        .frame(width: StudioLayoutPolicy.libraryWidth)
+    }
+
+    private func compactLibraryPanel(availableWidth: CGFloat) -> some View {
+        StudioLibraryPanel(
+            items: library.items,
+            selectedID: compactLibrarySelection,
+            isVisible: $showCompactLibrary,
+            onDelete: deleteLibraryItem,
+            onRename: library.rename,
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) }
+        )
+        .frame(
+            width: StudioLayoutPolicy.compactPanelWidth(
+                availableWidth: availableWidth,
+                preferredWidth: 320
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.xl))
+        .mereShadow(radius: 24, y: 0)
+        .padding(StudioLayoutPolicy.compactPanelInset)
+    }
+
+    private func compactDismissLayer(action: @escaping () -> Void) -> some View {
+        MereRunTheme.textPrimary.opacity(0.06)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: action)
+            .transition(.opacity)
+            .zIndex(0)
+            .accessibilityHidden(true)
+    }
+
+    private func advancedPanel(layout: StudioLayoutClass, availableWidth: CGFloat) -> some View {
+        Group {
+            if layout.isCompact {
+                AdvancedControlSurface(
+                    docked: true,
+                    onClose: { showAdvanced = false }
+                )
+                    .frame(
+                        width: StudioLayoutPolicy.compactPanelWidth(
+                            availableWidth: availableWidth,
+                            preferredWidth: advancedWidth
+                        )
+                    )
+                    .clipped()
+            } else {
+                HStack(spacing: 0) {
+                    advancedResizeHandle
+                    AdvancedControlSurface(
+                        docked: true,
+                        onDetach: { advancedDetached = true },
+                        onClose: { showAdvanced = false }
+                    )
+                        .frame(width: advancedWidth)
+                        .clipped()
+                }
+            }
         }
         .background(MereRunTheme.background)
         .mereShadow(radius: 24, y: 0)
     }
 
-    private var contentColumn: some View {
+    private var compactLibrarySelection: Binding<UUID?> {
+        Binding(
+            get: { selectedLibraryID },
+            set: { nextSelection in
+                selectedLibraryID = nextSelection
+                if nextSelection != nil { showCompactLibrary = false }
+            }
+        )
+    }
+
+    private var visibleLibraryBinding: Binding<Bool> {
+        Binding(
+            get: { layoutClass.isCompact ? showCompactLibrary : showLibrary },
+            set: { isVisible in
+                if layoutClass.isCompact {
+                    showCompactLibrary = isVisible
+                    if isVisible { showAdvanced = false }
+                } else {
+                    showLibrary = isVisible
+                }
+            }
+        )
+    }
+
+    private func deleteLibraryItem(_ id: UUID) {
+        library.delete(id: id)
+        if selectedLibraryID == id { selectedLibraryID = nil }
+    }
+
+    private func updateLayoutClass(_ nextLayout: StudioLayoutClass) {
+        guard layoutClass != nextLayout else { return }
+        layoutClass = nextLayout
+        if nextLayout == .regular { showCompactLibrary = false }
+    }
+
+    private func contentColumn(isCompact: Bool) -> some View {
         VStack(spacing: 0) {
-            topBar
+            topBar(isCompact: isCompact)
 
             Divider()
                 .overlay(MereRunTheme.border.opacity(0.45))
@@ -182,13 +300,13 @@ struct StudioRootView: View {
                 .padding(.top, 10)
             }
 
-            canvas
+            canvas(isCompact: isCompact)
 
-            composer
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+            composer(isCompact: isCompact)
+                .padding(.horizontal, isCompact ? 12 : 24)
+                .padding(.bottom, isCompact ? 12 : 20)
         }
-        .frame(minWidth: 620)
+        .frame(minWidth: isCompact ? 0 : StudioLayoutPolicy.minimumCanvasWidth)
         .background {
             ZStack {
                 MereRunTheme.background
@@ -228,9 +346,10 @@ struct StudioRootView: View {
         .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
     }
 
-    private var canvas: some View {
+    private func canvas(isCompact: Bool) -> some View {
         StudioCanvas(
             mode: mode,
+            isCompact: isCompact,
             item: selectedItem,
             conversationItem: activeConversationItem,
             conversationLiveText: activeConversationLiveText,
@@ -259,9 +378,10 @@ struct StudioRootView: View {
         )
     }
 
-    private var composer: some View {
+    private func composer(isCompact: Bool) -> some View {
         StudioComposer(
             mode: mode,
+            isCompact: isCompact,
             draft: $draft,
             showOptions: $showOptions,
             isRunning: controller.isRunning,
@@ -322,7 +442,7 @@ struct StudioRootView: View {
                 .frame(width: 1_260, height: 780)
                 .environmentObject(controller)
             }
-            .focusedSceneValue(\.showLibrary, $showLibrary)
+            .focusedSceneValue(\.showLibrary, visibleLibraryBinding)
             .focusedSceneValue(\.showAdvanced, $showAdvanced)
             .focusedSceneValue(\.showModels, $showModels)
     }
@@ -364,7 +484,10 @@ struct StudioRootView: View {
     private var navigationObservedShell: some View {
         lifecycleShell
         .onChange(of: showAdvanced) { _, isShown in
-            if isShown { syncAdvancedToStudio() }
+            if isShown {
+                if layoutClass.isCompact { showCompactLibrary = false }
+                syncAdvancedToStudio()
+            }
         }
         .onChange(of: mode) { _, newMode in
             var nextDraft = freshDraft(for: newMode)
@@ -508,38 +631,47 @@ struct StudioRootView: View {
 
     /// The slim, contextual header for the content column: which mode you're in, and the two
     /// panel toggles. Machine-wide status lives in the sidebar; blocking states own the canvas.
-    private var topBar: some View {
+    private func topBar(isCompact: Bool) -> some View {
         HStack(spacing: MereRunTheme.Spacing.sm) {
-            Image(systemName: mode.systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(mode.title)
+            if isCompact {
+                compactModePicker
+            } else {
+                Image(systemName: mode.systemImage)
                     .font(.system(size: 15, weight: .semibold))
-                Text(mode.subtitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textMuted)
+                    .foregroundStyle(MereRunTheme.accent)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(mode.title)
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(mode.subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
             }
 
             Spacer()
 
             Button {
                 withAnimation(MereRunTheme.Motion.standard) {
-                    showLibrary.toggle()
+                    toggleLibrary(isCompact: isCompact)
                 }
             } label: {
                 Image(systemName: "rectangle.stack")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                    .foregroundStyle(
+                        libraryIsVisible(isCompact: isCompact)
+                            ? MereRunTheme.accent
+                            : MereRunTheme.textSecondary
+                    )
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.mereIcon)
-            .help(showLibrary ? "Hide library (⌃⌘L)" : "Show library (⌃⌘L)")
-            .accessibilityLabel(showLibrary ? "Hide library" : "Show library")
+            .help(libraryIsVisible(isCompact: isCompact) ? "Hide library (⌃⌘L)" : "Show library (⌃⌘L)")
+            .accessibilityLabel(libraryIsVisible(isCompact: isCompact) ? "Hide library" : "Show library")
 
             Button {
                 withAnimation(MereRunTheme.Motion.standard) {
+                    if isCompact { showCompactLibrary = false }
                     showAdvanced.toggle()
                 }
             } label: {
@@ -552,9 +684,80 @@ struct StudioRootView: View {
             .help(showAdvanced ? "Hide Advanced (⌃⌘E)" : "Show Advanced (⌃⌘E)")
             .accessibilityLabel(showAdvanced ? "Hide Advanced" : "Show Advanced")
         }
-        .padding(.horizontal, MereRunTheme.Spacing.lg)
+        .padding(.horizontal, isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.lg)
         .frame(height: 52)
         .background(VisualEffectBackground())
+    }
+
+    private var compactModePicker: some View {
+        Menu {
+            ForEach(StudioModeGroup.allCases) { group in
+                Section(group.rawValue) {
+                    ForEach(group.modes) { candidate in
+                        Button {
+                            mode = candidate
+                        } label: {
+                            if candidate == mode {
+                                Label(candidate.title, systemImage: "checkmark")
+                            } else {
+                                Label(candidate.title, systemImage: candidate.systemImage)
+                            }
+                        }
+                        .disabled(modeCapabilities[candidate]?.unavailableMessage != nil)
+                        .modifier(
+                            StudioModeShortcut(
+                                number: Self.orderedModes.firstIndex(of: candidate).flatMap { index in
+                                    index < 9 ? index + 1 : nil
+                                }
+                            )
+                        )
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: mode.systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.accent)
+                    .frame(width: 20)
+                Text(mode.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                    .fill(MereRunTheme.surface.opacity(0.62))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                            .strokeBorder(MereRunTheme.border.opacity(0.45), lineWidth: 1)
+                    }
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Switch creation mode")
+        .accessibilityLabel("Mode")
+        .accessibilityValue(mode.title)
+    }
+
+    private func libraryIsVisible(isCompact: Bool) -> Bool {
+        isCompact ? showCompactLibrary : showLibrary
+    }
+
+    private func toggleLibrary(isCompact: Bool) {
+        if isCompact {
+            showAdvanced = false
+            showCompactLibrary.toggle()
+        } else {
+            showLibrary.toggle()
+        }
     }
 
     private func runStudioCommand() {

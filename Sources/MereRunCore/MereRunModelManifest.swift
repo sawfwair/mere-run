@@ -58,6 +58,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case woosh = "woosh"
         /// LTX video family.
         case ltxVideo = "ltx-video"
+        /// LingBot-Video Diffusers checkpoint family.
+        case lingBotVideo = "lingbot-video"
+        /// PEFT / LoRA adapter checkpoint family.
+        case peftLoRA = "peft-lora"
         /// Psi agent chat family.
         case psiChat = "psi-chat"
         /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
@@ -84,6 +88,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case music
         case sfx
         case video
+        case adapter
         case psi
         case deepseek
     }
@@ -1354,6 +1359,55 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.videoGeneration],
                 components: nil,
                 upstreamRepoId: isLTX23 ? "dgrauet/ltx-2.3-mlx@main" : "mlx-community/LTX-2-distilled-bf16",
+                createdAt: createdAt
+            )
+        case .lingBotVideoDense13B, .lingBotVideoMoE30BA3B:
+            let isMoE = modelID == .lingBotVideoMoE30BA3B
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lingBotVideo,
+                family: .video,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: Defaults(steps: 40, cfg: 3.0),
+                supports: [.videoGeneration],
+                components: nil,
+                upstreamRepoId: isMoE
+                    ? "robbyant/lingbot-video-moe-30b-a3b@main"
+                    : "robbyant/lingbot-video-dense-1.3b@main",
+                createdAt: createdAt
+            )
+        case .lingBotVideoMoE30BA3B4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lingBotVideo,
+                family: .video,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 64,
+                    scheme: "mlx-affine-routed-experts"
+                ),
+                defaults: Defaults(steps: 40, cfg: 3.0),
+                supports: [.videoGeneration],
+                components: nil,
+                upstreamRepoId: "robbyant/lingbot-video-moe-30b-a3b@main",
+                createdAt: createdAt
+            )
+        case .lingBotVideoRewriterLoRA:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .peftLoRA,
+                family: .adapter,
+                tier: .latest,
+                variant: .standard,
+                precision: .unknown,
+                supports: [.loraInference],
+                components: nil,
+                upstreamRepoId: "robbyant/lingbot-video-rewriter-lora@main",
                 createdAt: createdAt
             )
         }

@@ -245,6 +245,32 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    private func writeMinimalValidLingBotDenseModel(at root: URL) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: .lingBotVideoDense13B,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+
+        try TestFileSystem.writeFile(root.appendingPathComponent("model_index.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("scheduling_flow_unipc.py"), contents: Data())
+        for directory in ["processor", "scheduler", "text_encoder", "transformer", "vae"] {
+            try TestFileSystem.createDirectory(root.appendingPathComponent(directory, isDirectory: true))
+        }
+        try TestFileSystem.writeFile(root.appendingPathComponent("processor/tokenizer.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("processor/tokenizer_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("scheduler/scheduler_config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("text_encoder/config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("text_encoder/model.safetensors"), contents: Data())
+        try TestFileSystem.writeFile(root.appendingPathComponent("transformer/config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent("transformer/diffusion_pytorch_model.safetensors"),
+            contents: Data()
+        )
+        try TestFileSystem.writeFile(root.appendingPathComponent("vae/config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("vae/diffusion_pytorch_model.safetensors"), contents: Data())
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -327,6 +353,23 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.engine, .ltxVideo)
         XCTAssertEqual(report.manifest?.family, .video)
         XCTAssertEqual(report.manifest?.upstreamRepoId, "dgrauet/ltx-2.3-mlx@main")
+    }
+
+    func testLingBotDenseOfficialProcessorLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.lingBotVideoDense13B.rawValue, isDirectory: true)
+        try writeMinimalValidLingBotDenseModel(at: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.lingBotVideoDense13B.rawValue
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.engine, .lingBotVideo)
+        XCTAssertEqual(report.manifest?.family, .video)
     }
 
     func testMissingWeightsFails() throws {
