@@ -5,6 +5,7 @@ import SwiftUI
 /// empty / running / readiness states layered as needed.
 struct StudioCanvas: View {
     let mode: StudioMode
+    var isCompact = false
     let item: StudioLibraryItem?
     let conversationItem: StudioLibraryItem?
     let conversationLiveText: String?
@@ -69,11 +70,16 @@ struct StudioCanvas: View {
                     onQuickLook: onQuickLook,
                     onCopy: onCopy
                 )
-                .padding(MereRunTheme.Spacing.xxxl)
+                .padding(isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xxxl)
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             } else {
-                StudioEmptyState(mode: mode, onUseExample: onUseExample, onAttach: onAttach)
-                    .padding(MereRunTheme.Spacing.xxxl)
+                StudioEmptyState(
+                    mode: mode,
+                    isCompact: isCompact,
+                    onUseExample: onUseExample,
+                    onAttach: onAttach
+                )
+                .padding(isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xxxl)
             }
 
             if isRunning && visibleLiveOutputText == nil && !mode.isConversational {
@@ -96,7 +102,7 @@ struct StudioCanvas: View {
                     onPullModel: onPullModel,
                     onShowDetails: onShowDetails
                 )
-                .padding(MereRunTheme.Spacing.xxxl)
+                .padding(isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xxxl)
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
@@ -110,15 +116,16 @@ struct StudioCanvas: View {
 /// click straight into the composer.
 struct StudioEmptyState: View {
     let mode: StudioMode
+    var isCompact = false
     var onUseExample: ((String) -> Void)?
     var onAttach: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: MereRunTheme.Spacing.xl) {
+        VStack(spacing: isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xl) {
             Image(systemName: mode.systemImage)
-                .font(.system(size: 42, weight: .medium))
+                .font(.system(size: isCompact ? 28 : 42, weight: .medium))
                 .foregroundStyle(MereRunTheme.accent)
-                .frame(width: 96, height: 96)
+                .frame(width: isCompact ? 64 : 96, height: isCompact ? 64 : 96)
                 .background {
                     Circle().fill(MereRunTheme.accentSoft.opacity(0.75))
                 }
@@ -128,7 +135,7 @@ struct StudioEmptyState: View {
 
             VStack(spacing: MereRunTheme.Spacing.xs) {
                 Text(mode.emptyTitle)
-                    .font(MereRunTheme.displayFont)
+                    .font(isCompact ? MereRunTheme.displaySmallFont : MereRunTheme.displayFont)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .multilineTextAlignment(.center)
                 Text(mode.emptyMessage)
@@ -146,15 +153,28 @@ struct StudioEmptyState: View {
             }
 
             if !mode.examplePrompts.isEmpty, let onUseExample {
-                HStack(spacing: MereRunTheme.Spacing.xs) {
-                    ForEach(mode.examplePrompts, id: \.self) { example in
-                        StudioExampleChip(text: example) { onUseExample(example) }
+                Group {
+                    if isCompact {
+                        VStack(spacing: 6) {
+                            examplePrompts(onUseExample: onUseExample)
+                        }
+                    } else {
+                        HStack(spacing: MereRunTheme.Spacing.xs) {
+                            examplePrompts(onUseExample: onUseExample)
+                        }
                     }
                 }
                 .frame(maxWidth: 720)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func examplePrompts(onUseExample: @escaping (String) -> Void) -> some View {
+        ForEach(mode.examplePrompts, id: \.self) { example in
+            StudioExampleChip(text: example) { onUseExample(example) }
+        }
     }
 
     private var attachLabel: String {

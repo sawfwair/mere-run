@@ -179,7 +179,7 @@ private struct StudioSidebarRow: View {
 }
 
 /// Applies ⌘1…⌘9 to the first nine modes without duplicating the row body per branch.
-private struct StudioModeShortcut: ViewModifier {
+struct StudioModeShortcut: ViewModifier {
     let number: Int?
 
     func body(content: Content) -> some View {
