@@ -42,6 +42,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         let envelope = cmd.makePreflightEnvelope(
             hubCacheURL: hubCache,
             modelStoreURL: modelStore,
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB },
             now: { Date(timeIntervalSince1970: 0) }
         )
 

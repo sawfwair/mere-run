@@ -112,6 +112,7 @@ struct ModelPullPreflightAnalyzer {
     let fileManager: FileManager
     let hubCacheURL: URL?
     let modelStoreURL: URL?
+    let diskAvailableBytes: (URL) -> Int64?
     let now: () -> Date
 
     init(
@@ -119,12 +120,16 @@ struct ModelPullPreflightAnalyzer {
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
         modelStoreURL: URL? = nil,
+        diskAvailableBytes: ((URL) -> Int64?)? = nil,
         now: @escaping () -> Date = Date.init
     ) {
         self.input = input
         self.fileManager = fileManager
         self.hubCacheURL = hubCacheURL
         self.modelStoreURL = modelStoreURL
+        self.diskAvailableBytes = diskAvailableBytes ?? {
+            ModelPullDiskPreflight.availableBytes(onFileSystemContaining: $0, fileManager: fileManager)
+        }
         self.now = now
     }
 
@@ -305,14 +310,8 @@ struct ModelPullPreflightAnalyzer {
         modelStore: URL,
         diagnostics: inout [PreflightDiagnostic]
     ) {
-        let hubCacheAvailable = ModelPullDiskPreflight.availableBytes(
-            onFileSystemContaining: hubCache,
-            fileManager: fileManager
-        )
-        let modelStoreAvailable = ModelPullDiskPreflight.availableBytes(
-            onFileSystemContaining: modelStore,
-            fileManager: fileManager
-        )
+        let hubCacheAvailable = diskAvailableBytes(hubCache)
+        let modelStoreAvailable = diskAvailableBytes(modelStore)
         let requiredBytes = aggregateRequiredBytes(for: models)
         let estimatedDownloadBytes = aggregateDownloadBytes(for: models)
 
@@ -399,14 +398,8 @@ struct ModelPullPreflightAnalyzer {
     ) -> ModelPullPreflightResult {
         let estimatedDownloadBytes = aggregateDownloadBytes(for: models)
         let requiredBytes = aggregateRequiredBytes(for: models)
-        let hubCacheAvailable = ModelPullDiskPreflight.availableBytes(
-            onFileSystemContaining: hubCache,
-            fileManager: fileManager
-        )
-        let modelStoreAvailable = ModelPullDiskPreflight.availableBytes(
-            onFileSystemContaining: modelStore,
-            fileManager: fileManager
-        )
+        let hubCacheAvailable = diskAvailableBytes(hubCache)
+        let modelStoreAvailable = diskAvailableBytes(modelStore)
 
         return ModelPullPreflightResult(
             mode: input.all ? "all" : "single",

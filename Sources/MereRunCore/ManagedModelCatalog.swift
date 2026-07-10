@@ -266,6 +266,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: kleinNanoUpstreamRepoId,
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 4_627_979_498,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -279,6 +280,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-4B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 15_980_131_745,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -297,6 +299,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "mlx-community/FLUX.2-klein-9B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 34_722_771_551,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -310,6 +313,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-base-4B",
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 15_980_131_711,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -427,6 +431,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 20_538_488_559,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -442,6 +447,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 32_848_305_533,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -457,6 +463,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 5_907_438_792,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -485,6 +492,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 35_231_213_079,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -513,6 +521,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 35_231_213_079,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -589,6 +598,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.defaultUpstreamModelId,
             validationKind: .gemma4,
             resolutionFallbackIDs: ["text-chat-gemma4-max", "text-chat-gemma4-nano"],
+            estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
@@ -657,6 +667,7 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Gemma4Resources.nanoUpstreamModelId,
             validationKind: .gemma4,
+            estimatedDownloadBytes: 16_024_791_983,
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
@@ -669,6 +680,7 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
             validationKind: .gemma4,
+            estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["api serve"]
         ),
         ManagedModelSpec(
@@ -712,6 +724,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: AgentModelResources.qwen35NineBRepoId,
             upstreamRevision: AgentModelResources.qwen35NineBRevision,
             validationKind: .codegenGGUF,
+            estimatedDownloadBytes: 5_680_522_464,
             defaultCLICommands: ["api serve", "text code"]
         ),
         ManagedModelSpec(
@@ -764,6 +777,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: DeepseekV4FlashResources.defaultRepoId,
             upstreamRevision: DeepseekV4FlashResources.defaultRevision,
             validationKind: .deepseekV4FlashIMatrixGGUF,
+            estimatedDownloadBytes: 86_720_111_488,
             defaultCLICommands: ["api serve", "agent"]
         ),
         ManagedModelSpec(
@@ -801,6 +815,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
             upstreamRevision: "main",
             validationKind: .qwen3TTS,
+            estimatedDownloadBytes: 4_520_158_972,
             defaultCLICommands: ["speech synthesize"]
         ),
         ManagedModelSpec(
@@ -823,6 +838,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
             upstreamRevision: "main",
             validationKind: .qwen3TTS,
+            estimatedDownloadBytes: 4_520_159_459,
             defaultCLICommands: ["speech synthesize"]
         ),
         ManagedModelSpec(
@@ -850,6 +866,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .qwen3ASR,
             normalizationKind: .qwen3ASRNested,
+            estimatedDownloadBytes: 2_467_855_342,
             defaultCLICommands: ["speech transcribe"]
         ),
         ManagedModelSpec(
@@ -885,6 +902,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: CodeGenResources.defaultRevision,
             validationKind: .codegenGGUF,
             aliasKind: .codegenGGUF,
+            estimatedDownloadBytes: 48_410_992_032,
             defaultCLICommands: ["text code"]
         ),
         ManagedModelSpec(
@@ -921,6 +939,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: OpenAIPrivacyFilterCatalog.defaultRepoId,
             upstreamRevision: OpenAIPrivacyFilterCatalog.defaultRevision,
             validationKind: .privacyFilter,
+            estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
         ),
         ManagedModelSpec(
@@ -980,6 +999,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "lightonai/LightOnOCR-2-1B",
             upstreamRevision: "main",
             validationKind: .lightOnOCR,
+            estimatedDownloadBytes: 2_022_801_518,
             defaultCLICommands: ["vision ocr"]
         ),
         ManagedModelSpec(
@@ -1016,6 +1036,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 3_498_072_777,
             defaultCLICommands: ["vision segment"]
         ),
         ManagedModelSpec(
@@ -1040,6 +1061,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .falconPerception,
             runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 2_534_591_776,
             defaultCLICommands: ["vision ground"]
         ),
         ManagedModelSpec(
@@ -1061,6 +1083,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
+            estimatedDownloadBytes: 10_092_095_357,
             defaultCLICommands: ["music generate", "music analyze"]
         ),
         ManagedModelSpec(
@@ -1342,6 +1365,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: "mlx-community/LTX-2-distilled-bf16",
             upstreamRevision: "main",
             validationKind: .ltxVideo,
+            estimatedDownloadBytes: 93_069_609_104,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
