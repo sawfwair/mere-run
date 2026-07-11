@@ -32,12 +32,20 @@ private final class RecordingSpeechKVCache: KVCache {
     }
 }
 
-final class SpeechGroupedQueryAttentionTests: XCTestCase {
-    private let hidden = MLXArray((0..<24).map { Float($0) / 24 }, [1, 3, 8])
-    private let positionEmbeddings = (
-        cos: MLX.ones([1, 3, 2], dtype: .float32),
-        sin: MLX.zeros([1, 3, 2], dtype: .float32)
-    )
+final class SpeechGroupedQueryAttentionTests: MereRunCoreTestCase {
+    // XCTest constructs test-case instances during discovery, before
+    // `invokeTest` can install MLX's bundled metallib. Keep device arrays lazy
+    // so a clean runner does not initialize Metal while discovering tests.
+    private var hidden: MLXArray {
+        MLXArray((0..<24).map { Float($0) / 24 }, [1, 3, 8])
+    }
+
+    private var positionEmbeddings: (cos: MLXArray, sin: MLXArray) {
+        (
+            cos: MLX.ones([1, 3, 2], dtype: .float32),
+            sin: MLX.zeros([1, 3, 2], dtype: .float32)
+        )
+    }
 
     func testASRStoresCompactGroupedQueryHeads() {
         let config = Qwen3ASRDecoderConfig(
