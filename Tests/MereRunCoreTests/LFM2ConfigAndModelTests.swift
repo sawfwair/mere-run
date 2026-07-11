@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
 import MLX
+import MLXFast
+import MLXNN
 import MLXRandom
 @testable import MereRunCore
 
@@ -174,6 +176,52 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
         XCTAssertEqual(logits.shape, [1, 3, config.vocabSize])
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testNativeGroupedQueryAttentionMatchesExpandedReference() throws {
+        MLXRandom.seed(812)
+        let config = try makeTinyConfig()
+        let attention = LFM2Attention(config: config)
+        let input = MLXRandom.normal([2, 7, config.hiddenSize]).asType(.float32)
+
+        let actual = attention(input, mask: .causal, cache: nil)
+
+        let batch = input.dim(0)
+        let sequence = input.dim(1)
+        var queries = attention.qLayerNorm(
+            attention.qProj(input).reshaped(batch, sequence, config.numAttentionHeads, config.headDim)
+        ).transposed(0, 2, 1, 3)
+        var keys = attention.kLayerNorm(
+            attention.kProj(input).reshaped(batch, sequence, config.numKeyValueHeads, config.headDim)
+        ).transposed(0, 2, 1, 3)
+        var values = attention.vProj(input)
+            .reshaped(batch, sequence, config.numKeyValueHeads, config.headDim)
+            .transposed(0, 2, 1, 3)
+        let rope = RoPE(
+            dimensions: config.headDim,
+            traditional: false,
+            base: config.ropeParameters?.ropeTheta ?? config.ropeTheta
+        )
+        queries = rope(queries, offset: 0)
+        keys = rope(keys, offset: 0)
+        let repeats = config.numAttentionHeads / config.numKeyValueHeads
+        keys = MLX.repeated(keys, count: repeats, axis: 1)
+        values = MLX.repeated(values, count: repeats, axis: 1)
+        let expanded = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: Float(config.headDim).squareRoot().reciprocal,
+            mask: .causal
+        )
+        let expected = attention.outProj(
+            expanded.transposed(0, 2, 1, 3)
+                .reshaped(batch, sequence, config.numAttentionHeads * config.headDim)
+        )
+
+        MLX.eval(actual, expected)
+        let maxDifference = MLX.max(MLX.abs(actual - expected)).item(Float.self)
+        XCTAssertLessThan(maxDifference, 1e-5)
     }
 
     func testTransposesConvertedConvWeightsWhenNeeded() {

@@ -61,7 +61,25 @@ private func falconPerceptionManualAttention(
     } else {
         weights = softmax(scores, axis: -1)
     }
-    return MLX.matmul(weights, valuesF32).asType(queries.dtype)
+    if weights.dim(1) == valuesF32.dim(1) {
+        return MLX.matmul(weights, valuesF32).asType(queries.dtype)
+    }
+
+    let queryHeads = weights.dim(1)
+    let valueHeads = valuesF32.dim(1)
+    precondition(queryHeads.isMultiple(of: valueHeads), "Falcon query heads must group over value heads.")
+    let groups = queryHeads / valueHeads
+    let groupedWeights = weights.reshaped(
+        weights.dim(0),
+        valueHeads,
+        groups,
+        weights.dim(2),
+        weights.dim(3)
+    )
+    let groupedValues = MLX.expandedDimensions(valuesF32, axis: 2)
+    return MLX.matmul(groupedWeights, groupedValues)
+        .reshaped(weights.dim(0), queryHeads, weights.dim(2), valuesF32.dim(3))
+        .asType(queries.dtype)
 }
 
 final class FalconPerceptionKVCache: @unchecked Sendable {
@@ -88,12 +106,16 @@ final class FalconPerceptionKVCache: @unchecked Sendable {
 
         if needsGrowth {
             let batch = newKeys.dim(0)
-            let heads = newKeys.dim(1)
+            let keyHeads = newKeys.dim(1)
+            let valueHeads = newValues.dim(1)
             let keyDim = newKeys.dim(3)
             let valueDim = newValues.dim(3)
             let chunks = (required + step - 1) / step
-            let grownKeys = MLXArray.zeros([batch, heads, chunks * step, keyDim], dtype: newKeys.dtype)
-            let grownValues = MLXArray.zeros([batch, heads, chunks * step, valueDim], dtype: newValues.dtype)
+            let grownKeys = MLXArray.zeros([batch, keyHeads, chunks * step, keyDim], dtype: newKeys.dtype)
+            let grownValues = MLXArray.zeros(
+                [batch, valueHeads, chunks * step, valueDim],
+                dtype: newValues.dtype
+            )
             if let currentKeys = keys, let currentValues = values, previous > 0 {
                 grownKeys[.ellipsis, ..<previous, 0...] = currentKeys[.ellipsis, ..<previous, 0...]
                 grownValues[.ellipsis, ..<previous, 0...] = currentValues[.ellipsis, ..<previous, 0...]
@@ -263,9 +285,11 @@ final class FalconPerceptionAttention: Module {
         queries = falconPerceptionRMSNorm(queries, weight: normWQK, eps: eps)
         keys = falconPerceptionRMSNorm(keys, weight: normWQK, eps: eps)
 
+        // Falcon's learned 2D RoPE has distinct frequencies for every query
+        // head, so keys must be expanded before that rotation. Values have no
+        // head-specific transform and remain compact in the persistent cache.
         if numRepeats > 1 {
             keys = falconPerceptionRepeatAlongHeads(keys, heads: numRepeats)
-            values = falconPerceptionRepeatAlongHeads(values, heads: numRepeats)
         }
 
         if captureDebugStages {
@@ -337,10 +361,13 @@ final class FalconPerceptionAttention: Module {
                 sinks: sinks
             )
         } else {
+            let attentionValues = numRepeats > 1
+                ? falconPerceptionRepeatAlongHeads(values, heads: numRepeats)
+                : values
             MLXFast.scaledDotProductAttention(
                 queries: queries,
                 keys: keys,
-                values: values,
+                values: attentionValues,
                 scale: scale,
                 mask: attentionMask,
                 sinks: sinks

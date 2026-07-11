@@ -9,10 +9,6 @@ private func lfm2Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
     MLXNN.silu(gate) * up
 }
 
-private func lfm2RepeatAlongHeads(_ x: MLXArray, heads: Int) -> MLXArray {
-    MLX.repeated(x, count: heads, axis: 1)
-}
-
 public final class LFM2ConvCache: @unchecked Sendable {
     var state: MLXArray?
 
@@ -118,12 +114,6 @@ final class LFM2Attention: Module {
             let cached = cache.update(keys: keys, values: values)
             keys = cached.0
             values = cached.1
-        }
-
-        let repeats = max(1, numHeads / max(1, numKVHeads))
-        if repeats > 1 {
-            keys = lfm2RepeatAlongHeads(keys, heads: repeats)
-            values = lfm2RepeatAlongHeads(values, heads: repeats)
         }
 
         let attended = MLXFast.scaledDotProductAttention(

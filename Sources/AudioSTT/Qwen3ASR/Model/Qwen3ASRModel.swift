@@ -536,21 +536,18 @@ final class Qwen3ASRDecoderAttention: Module {
             values = cachedValues
         }
 
-        // Attention (use float32 for stability, matches Qwen text encoder)
-        let queriesF32 = queries.asType(.float32)
-        let keysF32 = keys.asType(.float32)
-        let valuesF32 = values.asType(.float32)
-        var output = MLXFast.scaledDotProductAttention(
-            queries: queriesF32,
-            keys: keysF32,
-            values: valuesF32,
+        // MLX performs the SDPA softmax in float32 while retaining the native
+        // projection/cache dtype for Q/K/V and its optimized decode kernel.
+        let output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
             scale: scale,
             mask: mask
         )
-        output = output.asType(queries.dtype)
 
-        output = output.transposed(0, 2, 1, 3).reshaped(B, L, -1)
-        return oProj(output)
+        let flattened = output.transposed(0, 2, 1, 3).reshaped(B, L, -1)
+        return oProj(flattened)
     }
 
 }

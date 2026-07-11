@@ -324,6 +324,7 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
         let cachedModel = FalconPerceptionModel(config: config)
         MLXRandom.seed(99)
         let fullModel = FalconPerceptionModel(config: config)
+        cachedModel.languageModel.model.layers[0].selfAttn.captureDebugStages = true
 
         let promptPositionData = FalconPerceptionModel.computePositionData(
             inputIDs: promptIDs,
@@ -358,6 +359,11 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
         )
         MLX.eval(cachedLogits)
         XCTAssertTrue(caches.allSatisfy { $0?.offset == promptTokens.count + 1 })
+        let cacheCapture = try? XCTUnwrap(
+            cachedModel.languageModel.model.layers[0].selfAttn.lastDebugCapture
+        )
+        XCTAssertEqual(cacheCapture?.keysAfterCache?.dim(1), config.textConfig.numAttentionHeads)
+        XCTAssertEqual(cacheCapture?.valuesAfterCache?.dim(1), config.textConfig.numKeyValueHeads)
 
         let fullPositionData = FalconPerceptionModel.computePositionData(
             inputIDs: fullIDs,
