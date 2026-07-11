@@ -177,6 +177,21 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
+    func testParsesProgressJSONFlag() throws {
+        let defaulted = try ImageGenerate.parse([
+            "--prompt", "a clean product render",
+        ])
+        XCTAssertFalse(defaulted.progressJson)
+
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a clean product render",
+            "--progress-json",
+            "--quiet",
+        ])
+        XCTAssertTrue(cmd.progressJson)
+        XCTAssertTrue(cmd.quiet)
+    }
+
     func testImageGenerationPreflightReportsReadyLocalRequest() throws {
         let temp = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }

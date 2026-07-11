@@ -118,6 +118,12 @@ struct ImageGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Print only the output path.")
     var quiet: Bool = false
 
+    @Flag(
+        name: [.customLong("progress-json")],
+        help: "Stream progress to stderr as JSON lines (one object per event) instead of human-readable text. Takes precedence over --quiet for progress output."
+    )
+    var progressJson: Bool = false
+
     func run() async throws {
         try validateStaticOptions()
         let kreaConditioningRebalance = try Self.resolveKreaConditioningRebalance(
@@ -295,8 +301,14 @@ struct ImageGenerate: AsyncParsableCommand {
                 kreaConditioningRebalance: kreaConditioningRebalance
             )
 
-            let progressHandler: (@Sendable (GenerationProgress) -> Void)? =
-                quiet ? nil : CLIGenerationProgressPrinter.makeProgressHandler()
+            let progressHandler: (@Sendable (GenerationProgress) -> Void)?
+            if progressJson {
+                progressHandler = CLIGenerationProgressPrinter.makeJSONProgressHandler()
+            } else if quiet {
+                progressHandler = nil
+            } else {
+                progressHandler = CLIGenerationProgressPrinter.makeProgressHandler()
+            }
             if !quiet {
                 CLIStderr.write("[runtime] image backend: \(NativeMLXRuntime.backendDescription)\n")
             }
