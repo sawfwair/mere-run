@@ -207,8 +207,8 @@ public final class AffineQuantizedKVCache: KVCache {
 
     public func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray) {
         precondition(keys.ndim == 4 && values.ndim == 4, "Affine KV cache expects [B,H,T,D] tensors.")
-        precondition(keys.dim(3) % groupSize == 0, "Key head width must divide the affine KV group size.")
-        precondition(values.dim(3) % groupSize == 0, "Value head width must divide the affine KV group size.")
+        precondition(keys.dim(3) % groupSize == 0, "Affine KV group size must divide the key head width.")
+        precondition(values.dim(3) % groupSize == 0, "Affine KV group size must divide the value head width.")
         precondition(keys.dim(2) == values.dim(2), "Key/value token counts must match.")
 
         if let storedKeys = self.keys, let storedValues = self.values {

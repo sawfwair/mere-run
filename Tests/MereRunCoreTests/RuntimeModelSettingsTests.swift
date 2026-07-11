@@ -114,6 +114,28 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertEqual(resolved.quantizedStart, 0)
     }
 
+    func testAffineEightUsesAdditiveDowngradeSafeSettingsKey() throws {
+        let document = RuntimeModelSettingsDocument(models: [
+            Q35Resources.defaultModelId: RuntimeModelSettings(kvCacheMode: .affine8),
+        ])
+        let data = try JSONEncoder().encode(document)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let models = try XCTUnwrap(object["models"] as? [String: Any])
+        let settings = try XCTUnwrap(models[Q35Resources.defaultModelId] as? [String: Any])
+
+        XCTAssertEqual(settings["kvCacheModeV2"] as? String, "affine8")
+        XCTAssertNil(settings["kvCacheMode"])
+        XCTAssertEqual(
+            try JSONDecoder().decode(RuntimeModelSettingsDocument.self, from: data)
+                .models[Q35Resources.defaultModelId]?.kvCacheMode,
+            .affine8
+        )
+        XCTAssertNil(
+            try JSONDecoder().decode(LegacyRuntimeModelSettingsDocument.self, from: data)
+                .models[Q35Resources.defaultModelId]?.kvCacheMode
+        )
+    }
+
     func testQ36DefaultRuntimeEngineAcceptsLegacyQ35Alias() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -162,4 +184,18 @@ final class RuntimeModelSettingsTests: XCTestCase {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
+}
+
+private enum LegacyRuntimeKVCacheMode: String, Decodable {
+    case `default`
+    case polar2
+    case auto
+}
+
+private struct LegacyRuntimeModelSettings: Decodable {
+    let kvCacheMode: LegacyRuntimeKVCacheMode?
+}
+
+private struct LegacyRuntimeModelSettingsDocument: Decodable {
+    let models: [String: LegacyRuntimeModelSettings]
 }
