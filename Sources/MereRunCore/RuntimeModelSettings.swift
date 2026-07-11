@@ -228,10 +228,10 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
                     .textChatLFM2,
                 ]
                 guard engine.map(supportedEngines.contains) == true else {
-                    throw RuntimeModelSettingsError.incompatibleKVCacheModeForEngines(
-                        modelID: spec.id,
-                        requested: kvCacheMode,
-                        expectedEngines: supportedEngines
+                    let supported = supportedEngines.map(\.rawValue).joined(separator: ", ")
+                    throw RuntimeModelSettingsError.invalidValue(
+                        "KV cache mode '\(kvCacheMode.rawValue)' is not compatible with model "
+                            + "'\(spec.id)' (supported engines: \(supported))"
                     )
                 }
             case .polar2, .auto:
@@ -279,11 +279,6 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
         requested: RuntimeKVCacheMode,
         expectedEngine: RuntimeServingEngine
     )
-    case incompatibleKVCacheModeForEngines(
-        modelID: String,
-        requested: RuntimeKVCacheMode,
-        expectedEngines: [RuntimeServingEngine]
-    )
 
     public var errorDescription: String? {
         switch self {
@@ -300,9 +295,6 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
             return "Engine override '\(requested.rawValue)' is not compatible with model '\(modelID)' (expected \(expectedText))."
         case .incompatibleKVCacheMode(let modelID, let requested, let expectedEngine):
             return "KV cache mode '\(requested.rawValue)' is not compatible with model '\(modelID)' (expected \(expectedEngine.rawValue))."
-        case .incompatibleKVCacheModeForEngines(let modelID, let requested, let expectedEngines):
-            let expected = expectedEngines.map(\.rawValue).joined(separator: ", ")
-            return "KV cache mode '\(requested.rawValue)' is not compatible with model '\(modelID)' (supported engines: \(expected))."
         }
     }
 }

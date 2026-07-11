@@ -92,13 +92,19 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertThrowsError(
             try store.writeSettings(RuntimeModelSettings(kvCacheMode: .polar2), for: Q35Resources.defaultModelId)
         ) { error in
+            let expected = RuntimeModelSettingsError.incompatibleKVCacheMode(
+                modelID: Q35Resources.defaultModelId,
+                requested: .polar2,
+                expectedEngine: .textChatGemma4
+            )
             XCTAssertEqual(
                 error as? RuntimeModelSettingsError,
-                .incompatibleKVCacheMode(
-                    modelID: Q35Resources.defaultModelId,
-                    requested: .polar2,
-                    expectedEngine: .textChatGemma4
-                )
+                expected
+            )
+            XCTAssertEqual(
+                error.localizedDescription,
+                "KV cache mode 'polar2' is not compatible with model "
+                    + "'\(Q35Resources.defaultModelId)' (expected \(RuntimeServingEngine.textChatGemma4.rawValue))."
             )
         }
     }
@@ -114,13 +120,21 @@ final class RuntimeModelSettingsTests: XCTestCase {
                 for: CodeGenResources.defaultModelId
             )
         ) { error in
+            let reason = "KV cache mode 'affine8' is not compatible with model "
+                + "'\(CodeGenResources.defaultModelId)' (supported engines: "
+                + [
+                    RuntimeServingEngine.textChatGemma4,
+                    .textChatQ36,
+                    .textChatLFM2,
+                ].map(\.rawValue).joined(separator: ", ")
+                + ")"
             XCTAssertEqual(
                 error as? RuntimeModelSettingsError,
-                .incompatibleKVCacheModeForEngines(
-                    modelID: CodeGenResources.defaultModelId,
-                    requested: .affine8,
-                    expectedEngines: [.textChatGemma4, .textChatQ36, .textChatLFM2]
-                )
+                .invalidValue(reason)
+            )
+            XCTAssertEqual(
+                error.localizedDescription,
+                "Invalid runtime setting: \(reason)."
             )
         }
     }
