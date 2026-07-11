@@ -1,6 +1,8 @@
 import Foundation
 
 public enum MediaAudioIO {
+    public typealias FloatSampleProvider = (_ sampleRange: Range<Int>) throws -> [Float]
+
     public static func decode(
         _ url: URL,
         targetSampleRate: Int,
@@ -19,35 +21,91 @@ public enum MediaAudioIO {
         channels: Int,
         to url: URL
     ) throws {
+        try writeFloatWAV(
+            sampleCount: samples.count,
+            sampleRate: sampleRate,
+            channels: channels,
+            to: url
+        ) { range in
+            Array(samples[range])
+        }
+    }
+
+    /// Writes a float WAV incrementally. The provider receives ascending,
+    /// channel-aligned sample ranges so device-backed producers never need a
+    /// whole-output host array or a second whole-file `Data` allocation.
+    public static func writeFloatWAV(
+        sampleCount: Int,
+        sampleRate: Int,
+        channels: Int,
+        chunkSampleCount: Int = 65_536,
+        to url: URL,
+        samplesAt sampleProvider: FloatSampleProvider
+    ) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        var data = Data()
         let channelCount = max(1, channels)
+        guard sampleCount >= 0, sampleCount.isMultiple(of: channelCount) else {
+            throw MediaIOError.audioEncodeFailed(url, "Sample count must contain complete interleaved frames.")
+        }
         let bitsPerSample = 32
         let byteRate = max(1, sampleRate) * channelCount * bitsPerSample / 8
         let blockAlign = channelCount * bitsPerSample / 8
-        let dataSize = samples.count * MemoryLayout<Float>.size
+        let (dataSize, overflow) = sampleCount.multipliedReportingOverflow(
+            by: MemoryLayout<Float>.size
+        )
+        guard !overflow, dataSize <= Int(UInt32.max) - 36 else {
+            throw MediaIOError.audioEncodeFailed(url, "Float WAV output exceeds the RIFF size limit.")
+        }
         let riffSize = 36 + dataSize
 
-        data.append(contentsOf: Array("RIFF".utf8))
-        data.appendLE(UInt32(riffSize))
-        data.append(contentsOf: Array("WAVE".utf8))
-        data.append(contentsOf: Array("fmt ".utf8))
-        data.appendLE(UInt32(16))
-        data.appendLE(UInt16(3))
-        data.appendLE(UInt16(channelCount))
-        data.appendLE(UInt32(max(1, sampleRate)))
-        data.appendLE(UInt32(byteRate))
-        data.appendLE(UInt16(blockAlign))
-        data.appendLE(UInt16(bitsPerSample))
-        data.append(contentsOf: Array("data".utf8))
-        data.appendLE(UInt32(dataSize))
-        samples.withUnsafeBufferPointer { ptr in
-            data.append(contentsOf: UnsafeRawBufferPointer(ptr))
+        var header = Data()
+        header.append(contentsOf: Array("RIFF".utf8))
+        header.appendLE(UInt32(riffSize))
+        header.append(contentsOf: Array("WAVE".utf8))
+        header.append(contentsOf: Array("fmt ".utf8))
+        header.appendLE(UInt32(16))
+        header.appendLE(UInt16(3))
+        header.appendLE(UInt16(channelCount))
+        header.appendLE(UInt32(max(1, sampleRate)))
+        header.appendLE(UInt32(byteRate))
+        header.appendLE(UInt16(blockAlign))
+        header.appendLE(UInt16(bitsPerSample))
+        header.append(contentsOf: Array("data".utf8))
+        header.appendLE(UInt32(dataSize))
+
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
         }
-        try data.write(to: url)
+        _ = FileManager.default.createFile(atPath: url.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: url)
+        do {
+            try handle.write(contentsOf: header)
+            let requestedChunk = max(channelCount, chunkSampleCount)
+            let alignedChunk = max(channelCount, (requestedChunk / channelCount) * channelCount)
+            var lowerBound = 0
+            while lowerBound < sampleCount {
+                let upperBound = min(sampleCount, lowerBound + alignedChunk)
+                let range = lowerBound..<upperBound
+                let samples = try sampleProvider(range)
+                guard samples.count == range.count else {
+                    throw MediaIOError.invalidBufferSize(
+                        expected: range.count * MemoryLayout<Float>.size,
+                        actual: samples.count * MemoryLayout<Float>.size
+                    )
+                }
+                let bytes = samples.withUnsafeBytes { Data($0) }
+                try handle.write(contentsOf: bytes)
+                lowerBound = upperBound
+            }
+            try handle.close()
+        } catch {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
     }
 
     public static func transcode(

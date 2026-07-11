@@ -75,8 +75,13 @@ public enum LTXVideoMP4Writer {
             do {
                 try writeVideoOnly(frames: frames, fps: fps, to: tempVideoURL)
 
-                let preparedAudio = try prepareAudio(audioWaveform)
-                try writeWAV(interleaved: preparedAudio.interleaved, channels: preparedAudio.channels, sampleRate: audioSampleRate, to: tempAudioURL)
+                let preparedAudio = try prepareAudioTensor(audioWaveform)
+                try writeWAV(
+                    sampleChannel: preparedAudio.tensor,
+                    channels: preparedAudio.channels,
+                    sampleRate: audioSampleRate,
+                    to: tempAudioURL
+                )
                 try mux(
                     videoURL: tempVideoURL,
                     audioURL: tempAudioURL,
@@ -179,6 +184,15 @@ public enum LTXVideoMP4Writer {
     }
 
     static func prepareAudio(_ audio: MLXArray) throws -> (interleaved: [Float], channels: Int) {
+        let prepared = try prepareAudioTensor(audio)
+        var encodedSamples = prepared.tensor.asType(.float32).reshaped(-1).asArray(Float.self)
+        try validateAndClamp(samples: &encodedSamples)
+        return (encodedSamples, prepared.channels)
+    }
+
+    private static func prepareAudioTensor(
+        _ audio: MLXArray
+    ) throws -> (tensor: MLXArray, channels: Int) {
         var sampleChannel = audio
         if sampleChannel.ndim == 1 {
             sampleChannel = sampleChannel.reshaped(sampleChannel.dim(0), 1)
@@ -211,18 +225,21 @@ public enum LTXVideoMP4Writer {
         guard channels >= 1 else {
             throw WriterError.unsupportedAudioShape(audio.shape)
         }
-        let floatSamples = sampleChannel.asType(.float32).reshaped(-1).asArray(Float.self)
-        let encodedSamples = try floatSamples.map { sample -> Float in
+        return (sampleChannel, channels)
+    }
+
+    private static func validateAndClamp(samples: inout [Float]) throws {
+        for index in samples.indices {
+            let sample = samples[index]
             guard sample.isFinite else {
                 throw WriterError.nonFiniteAudioSample
             }
-            return min(1.0, max(-1.0, sample))
+            samples[index] = min(1.0, max(-1.0, sample))
         }
-        return (encodedSamples, channels)
     }
 
     private static func writeWAV(
-        interleaved: [Float],
+        sampleChannel: MLXArray,
         channels: Int,
         sampleRate: Int,
         to url: URL
@@ -233,12 +250,31 @@ public enum LTXVideoMP4Writer {
         }
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 
+        let flattened = sampleChannel.asType(.float32).reshaped(-1)
+        let sampleCount = flattened.dim(0)
+        let requestedChunk = 65_536
+        let chunkSampleCount = max(channels, (requestedChunk / channels) * channels)
+        var pendingRange = 0..<min(sampleCount, chunkSampleCount)
+        var pendingSamples = flattened[pendingRange]
+        asyncEval(pendingSamples)
         try MediaAudioIO.writeFloatWAV(
-            samples: interleaved,
+            sampleCount: sampleCount,
             sampleRate: sampleRate,
             channels: channels,
+            chunkSampleCount: chunkSampleCount,
             to: url
-        )
+        ) { range in
+            precondition(range == pendingRange, "Float WAV provider requested samples out of order")
+            let currentSamples = pendingSamples
+            if range.upperBound < sampleCount {
+                pendingRange = range.upperBound..<min(sampleCount, range.upperBound + chunkSampleCount)
+                pendingSamples = flattened[pendingRange]
+                asyncEval(pendingSamples)
+            }
+            var hostSamples = currentSamples.asArray(Float.self)
+            try validateAndClamp(samples: &hostSamples)
+            return hostSamples
+        }
     }
 
     private static func mux(
