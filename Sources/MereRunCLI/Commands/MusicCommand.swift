@@ -8,6 +8,7 @@ struct Music: ParsableCommand {
             MusicAnalyze.self,
             MusicGenerate.self,
             MusicRealtime.self,
+            MusicTranscribe.self,
         ]
     )
 }

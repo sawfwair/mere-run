@@ -48,6 +48,7 @@ enum CommandTemplateID: String, CaseIterable {
     case visionTrackLive
     case musicGenerate
     case musicAnalyze
+    case musicTranscribe
     case musicRealtime
     case videoGenerate
     case videoExportLatents
@@ -636,6 +637,12 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.all { args.append("--include-raw-lm") }
             if draft.quiet { args.append("--quiet") }
 
+        case .musicTranscribe:
+            args = ["music", "transcribe", draft.inputPath]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if draft.quiet { args.append("--quiet") }
+
         case .musicRealtime:
             args = ["music", "realtime", draft.prompt]
             if !draft.model.isBlank { args += ["--model", draft.model] }
@@ -1036,6 +1043,16 @@ enum CommandCatalog {
             systemImage: "waveform.badge.magnifyingglass",
             inputKind: .audio,
             defaultModel: "music-acestep"
+        ),
+        CommandTemplate(
+            id: .musicTranscribe,
+            category: .media,
+            title: "Transcribe to MIDI",
+            subtitle: "MuScriptor full-mix audio to instrument tracks",
+            systemImage: "pianokeys",
+            inputKind: .audio,
+            outputKind: .file("mid"),
+            defaultModel: "music-muscriptor-medium"
         ),
         CommandTemplate(
             id: .musicRealtime,

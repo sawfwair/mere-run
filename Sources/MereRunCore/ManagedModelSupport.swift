@@ -569,6 +569,27 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                ModelResolver.ModelID.muScriptorSmall.rawValue,
+                "MuScriptor small",
+                "Transcribes full music mixes into instrument-separated MIDI with the 103M MuScriptor model.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                ModelResolver.ModelID.muScriptorMedium.rawValue,
+                "MuScriptor medium",
+                "Transcribes full music mixes with the default 307M MuScriptor quality/speed trade-off.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
+                ModelResolver.ModelID.muScriptorLarge.rawValue,
+                "MuScriptor large",
+                "Runs the highest-accuracy 1.4B MuScriptor transcription checkpoint.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 ModelResolver.ModelID.wooshDFlow.rawValue,
                 "Woosh DFlow",
                 "Generates Foley and sound effects from text prompts with Sony Research Woosh.",

@@ -78,6 +78,9 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-acestep-xl-turbo-lm4b` |
 | `music` | `music-magenta-rt2-small` |
 | `music` | `music-magenta-rt2-base` |
+| `music` | `music-muscriptor-small` |
+| `music` | `music-muscriptor-medium` |
+| `music` | `music-muscriptor-large` |
 | `sfx` | `sfx-woosh-dflow` |
 | `sfx` | `sfx-woosh-flow` |
 | `sfx` | `sfx-woosh-clap` |
@@ -443,6 +446,18 @@ Raw `checkpoints/*.safetensors` files are not a complete `mere.run` layout.
 `mere.run music generate --model music-magenta-rt2-small` renders an offline
 WAV. `mere.run music realtime --model music-magenta-rt2-small` plays on the
 default macOS audio device and can capture to WAV with `--output`.
+
+### `music-muscriptor-small`, `music-muscriptor-medium`, and `music-muscriptor-large`
+
+MuScriptor checkpoints come from the gated `MuScriptor/muscriptor-{size}`
+Hugging Face repositories. Each managed root contains `config.json` and
+`model.safetensors`. The weights are CC BY-NC 4.0 and require accepting the
+upstream access terms before `mere.run model pull` can download them.
+
+`mere.run music transcribe` decodes input audio to mono 16 kHz, runs the exact
+published five-second HTK mel frontend and native MLX transformer, then writes
+a format-1 MIDI file with one track per detected instrument. JSON and JSONL
+event output are also available.
 
 ### `sfx-woosh-dflow`
 

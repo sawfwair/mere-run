@@ -198,6 +198,16 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    private func writeMinimalValidMuScriptorModel(
+        at root: URL,
+        modelID: ModelResolver.ModelID = .muScriptorLarge
+    ) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data("{}".utf8))
+        try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
+    }
+
     private func writeMinimalValidWooshDFlowModel(at root: URL) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: .wooshDFlow, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -274,6 +284,41 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.engine, .magentaRT2)
         XCTAssertEqual(report.manifest?.family, .music)
         XCTAssertEqual(report.manifest?.tier, .small)
+    }
+
+    func testMuScriptorRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.muScriptorLarge.rawValue, isDirectory: true)
+        try writeMinimalValidMuScriptorModel(at: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.muScriptorLarge.rawValue
+        )
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertFalse(report.warnings.contains { $0.contains("engine mismatch") })
+        XCTAssertEqual(report.manifest?.engine, .muScriptor)
+        XCTAssertEqual(report.manifest?.family, .music)
+        XCTAssertEqual(report.manifest?.tier, .max)
+    }
+
+    func testMuScriptorMissingWeightsFailsValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.muScriptorLarge.rawValue, isDirectory: true)
+        try writeMinimalValidMuScriptorModel(at: root)
+        try FileManager.default.removeItem(at: root.appendingPathComponent("model.safetensors"))
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.muScriptorLarge.rawValue
+        )
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { $0.contains("model.safetensors") })
     }
 
     func testWooshDFlowRootLayoutPassesValidation() throws {

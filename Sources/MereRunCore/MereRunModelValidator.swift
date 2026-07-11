@@ -135,6 +135,7 @@ public enum MereRunModelValidator {
             tokenizerDir = nil
         } else if spec?.validationKind == .aceStep
             || spec?.validationKind == .magentaRT2
+            || spec?.validationKind == .muScriptor
             || spec?.validationKind == .woosh
             || spec?.validationKind == .wooshClap
             || spec?.validationKind == .wooshSynchformer
@@ -369,8 +370,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=code expects qwen3-coder, north-mini-code, or qwen3.5-hybrid-moe.")
             case .ocr where engine != .lightOnOCR && engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr or qwen3.5-hybrid-moe.")
-            case .music where engine != .aceStep && engine != .magentaRT2:
-                warnings.append("Manifest engine mismatch: family=music expects ace-step or magenta-rt2.")
+            case .music where engine != .aceStep && engine != .magentaRT2 && engine != .muScriptor:
+                warnings.append("Manifest engine mismatch: family=music expects ace-step, magenta-rt2, or muscriptor.")
             case .sfx where engine != .woosh:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh.")
             case .video where engine != .ltxVideo:
@@ -447,7 +448,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .woosh?, .ltxVideo?:
+            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .ltxVideo?:
                 return true
             default:
                 return false

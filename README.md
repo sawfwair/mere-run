@@ -469,6 +469,10 @@ swift run mere.run music analyze ./song.mp3 \
   --lm-subdirectory acestep-5Hz-lm-4B \
   > ./song-analysis.json
 
+# Transcribe a full mix into instrument-separated MIDI with MuScriptor
+swift run mere.run model pull music-muscriptor-medium
+swift run mere.run music transcribe ./song.mp3 --output ./song.mid
+
 # Generate a style-transfer cover from a source song
 swift run mere.run music generate \
   "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \
@@ -596,6 +600,7 @@ The public CLI is modality-first:
 - `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
+- `mere.run music transcribe`
 - `mere.run sfx generate`
 - `mere.run video generate`
 - `mere.run video export-latents`

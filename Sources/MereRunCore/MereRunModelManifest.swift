@@ -54,6 +54,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case aceStep = "ace-step"
         /// Magenta RealTime 2 streaming music family.
         case magentaRT2 = "magenta-rt2"
+        /// MuScriptor multi-instrument audio transcription family.
+        case muScriptor = "muscriptor"
         /// Sony Research Woosh sound-effect generation family.
         case woosh = "woosh"
         /// LTX video family.
@@ -131,6 +133,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case visionChat = "vision_chat"
         case visionOCR = "vision_ocr"
         case musicGeneration = "music_generation"
+        case musicTranscription = "music_transcription"
         case videoGeneration = "video_generation"
         case loraInference = "lora_inference"
         case loraTraining = "lora_training"
@@ -1271,6 +1274,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.musicGeneration],
                 components: nil,
                 upstreamRepoId: "google/magenta-realtime-2@010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc",
+                createdAt: createdAt
+            )
+        case .muScriptorSmall, .muScriptorMedium, .muScriptorLarge:
+            let muScriptorVariant = MuScriptorVariant.resolve(modelID: modelID.rawValue)!
+            let muScriptorTier: Tier = switch muScriptorVariant {
+            case .small: .small
+            case .medium: .base
+            case .large: .max
+            }
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .muScriptor,
+                family: .music,
+                tier: muScriptorTier,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.musicTranscription],
+                components: nil,
+                upstreamRepoId: "MuScriptor/muscriptor-\(muScriptorVariant.rawValue)",
                 createdAt: createdAt
             )
         case .wooshDFlow, .wooshFlow, .wooshVFlow8s, .wooshDVFlow8s:

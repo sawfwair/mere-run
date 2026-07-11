@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added native MuScriptor full-mix audio-to-MIDI transcription through
+  `music transcribe`, with managed small/medium/large checkpoints, exact HTK
+  mel preprocessing, MLX transformer inference, instrument conditioning,
+  JSON/JSONL note events, and multi-track MIDI output.
+
 ## 0.20.0 - 2026-07-07
 
 ### Added

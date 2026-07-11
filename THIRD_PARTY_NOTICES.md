@@ -6,6 +6,9 @@ extra bootstrap step.
 
 It also includes small third-party evaluation fixtures where noted below.
 
+Some native runtime implementations are ports of upstream open-source model
+code; those source-derived implementations are noted below as well.
+
 When any vendored artifact changes, update this file in the same pull request
 with the new upstream source, version or commit when known, and license data.
 
@@ -22,6 +25,39 @@ with the new upstream source, version or commit when known, and license data.
 The MIT License
 
 Copyright (c) OpenAI (https://openai.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Source-derived runtime implementations
+
+### MuScriptor
+
+- purpose: native MLX audio-to-MIDI model, tokenizer, event decoder, and MIDI behavior
+- upstream project: [`muscriptor/muscriptor`](https://github.com/muscriptor/muscriptor)
+- upstream commit used for the port: `964e2350d5677eb3c3ca4d29e0e03286671e910a`
+- license: MIT (model weights are separate and remain CC BY-NC 4.0)
+
+```
+MIT License
+
+Copyright (c) 2026 Kyutai x Mirelo
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

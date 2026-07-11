@@ -9,6 +9,7 @@ mere.run guide image generate
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-magenta-rt2-small
+mere.run guide music transcribe --model music-muscriptor-medium
 mere.run guide sfx generate --model sfx-woosh-dflow
 mere.run guide open-webui
 mere.run guide video generate --json
@@ -41,6 +42,7 @@ Creative and runtime workflows:
 - `vision ocr`
 - `music analyze`
 - `music generate`
+- `music transcribe`
 - `sfx generate`
 - `video generate`
 - `video export-latents`
@@ -72,6 +74,7 @@ mere.run guide text chat --model text-chat-gemma4
 mere.run guide speech transcribe --model speech-asr-parakeet
 mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
+mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
 If the model does not belong to the topic, the command prints a validation error
