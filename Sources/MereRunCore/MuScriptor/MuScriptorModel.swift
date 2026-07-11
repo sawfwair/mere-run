@@ -176,6 +176,10 @@ public final class MuScriptorModel: Module {
 
     public let configuration: MuScriptorConfiguration
 
+    var inferenceDType: DType {
+        tokenEmbedding.weight.dtype
+    }
+
     public init(configuration: MuScriptorConfiguration) {
         self.configuration = configuration
         self._conditionProvider.wrappedValue = MuScriptorConditionProvider(configuration: configuration)

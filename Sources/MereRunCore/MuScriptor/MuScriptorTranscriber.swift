@@ -53,9 +53,16 @@ public final class MuScriptorTranscriber {
 
     private let model: MuScriptorModel
     private let melSpectrogram: MuScriptorMelSpectrogram
-    private let memoryScale: Int
+    let memoryScale: Int
 
-    public init(model: MuScriptorModel, memoryScale: Int = 1) {
+    public convenience init(model: MuScriptorModel) {
+        self.init(
+            model: model,
+            memoryScale: Self.memoryScale(for: model.inferenceDType)
+        )
+    }
+
+    public init(model: MuScriptorModel, memoryScale: Int) {
         self.model = model
         self.melSpectrogram = MuScriptorMelSpectrogram()
         self.memoryScale = max(1, memoryScale)
@@ -72,10 +79,7 @@ public final class MuScriptorTranscriber {
             variant: variant,
             dtype: dtype
         )
-        return MuScriptorTranscriber(
-            model: model,
-            memoryScale: memoryScale(for: dtype)
-        )
+        return MuScriptorTranscriber(model: model)
     }
 
     static func memoryScale(for dtype: DType) -> Int {
@@ -443,11 +447,18 @@ public final class MuScriptorTranscriber {
 
 enum MuScriptorBeamBatching {
     /// Structural scheduler evidence: legacy beam search issued one model
-    /// forward per live beam; the batched path issues one per non-empty step.
-    static func modelDispatchCounts(activeRowsPerStep: [Int]) -> (legacy: Int, batched: Int) {
-        (
+    /// forward per live beam; the batched path issues one per bounded row group.
+    static func modelDispatchCounts(
+        activeRowsPerStep: [Int],
+        maximumRows: Int = .max
+    ) -> (legacy: Int, batched: Int) {
+        let maximumRows = max(1, maximumRows)
+        return (
             legacy: activeRowsPerStep.reduce(0) { $0 + max(0, $1) },
-            batched: activeRowsPerStep.filter { $0 > 0 }.count
+            batched: activeRowsPerStep.reduce(0) { count, rows in
+                guard rows > 0 else { return count }
+                return count + 1 + (rows - 1) / maximumRows
+            }
         )
     }
 

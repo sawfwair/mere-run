@@ -3,7 +3,7 @@ import MLX
 @testable import MereRunCore
 import XCTest
 
-final class LTXVideoMP4WriterTests: XCTestCase {
+final class LTXVideoMP4WriterTests: MereRunCoreTestCase {
     func testBGRAFrameConversionRunsPerFrameOnDevice() {
         let frames = MLXArray([
             UInt8(1), 2, 3,

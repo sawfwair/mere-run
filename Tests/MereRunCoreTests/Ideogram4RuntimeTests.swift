@@ -3,7 +3,7 @@ import MLXRandom
 import XCTest
 @testable import MereRunCore
 
-final class Ideogram4RuntimeTests: XCTestCase {
+final class Ideogram4RuntimeTests: MereRunCoreTestCase {
     func testQwenEncoderWeightMapperStripsUpstreamModelPrefix() {
         let value = MLXArray([Float(1)], [1])
 

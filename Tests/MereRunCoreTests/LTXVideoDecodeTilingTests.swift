@@ -2,7 +2,7 @@ import MLX
 @testable import MereRunCore
 import XCTest
 
-final class LTXVideoDecodeTilingTests: XCTestCase {
+final class LTXVideoDecodeTilingTests: MereRunCoreTestCase {
     func testGPUBlendAccumulatorMatchesWeightedOverlapReference() {
         let output = MLX.zeros([1, 3, 1, 1, 3], dtype: .float32)
         let weights = MLX.zeros([1, 1, 1, 1, 3], dtype: .float32)

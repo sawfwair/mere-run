@@ -4,7 +4,7 @@ import MLX
 @testable import MereRunCore
 import XCTest
 
-final class MuScriptorTests: XCTestCase {
+final class MuScriptorTests: MereRunCoreTestCase {
     func testPublishedConfigurations() throws {
         XCTAssertEqual(MuScriptorConfiguration.small.dim, 768)
         XCTAssertEqual(MuScriptorConfiguration.medium.numLayers, 24)
@@ -17,6 +17,9 @@ final class MuScriptorTests: XCTestCase {
     func testModelParameterNamesMatchPublishedCheckpointAndRoundTrip() throws {
         let config = MuScriptorConfiguration(dim: 8, numHeads: 2, numLayers: 1, card: 1_393)
         let model = MuScriptorModel(configuration: config)
+        XCTAssertEqual(model.inferenceDType, .float32)
+        XCTAssertEqual(MuScriptorTranscriber(model: model).memoryScale, 2)
+        XCTAssertEqual(MuScriptorTranscriber(model: model, memoryScale: 1).memoryScale, 1)
         let arrays = Dictionary(uniqueKeysWithValues: model.parameters().flattened())
         let keys = Set(arrays.keys)
         XCTAssertTrue(keys.contains("condition_provider.conditioners.self_wav.output_proj.weight"))
@@ -41,6 +44,13 @@ final class MuScriptorTests: XCTestCase {
             variant: .small,
             dtype: .float32
         )
+        XCTAssertEqual(loaded.inferenceDType, .float32)
+        let loadedBFloat16 = try MuScriptorModel.load(
+            resources: MuScriptorResources(rootURL: root),
+            variant: .small,
+            dtype: .bfloat16
+        )
+        XCTAssertEqual(loadedBFloat16.inferenceDType, .bfloat16)
         let prefix = try loaded.conditioningPrefix(
             mel: MLX.zeros([1, 501, 512]),
             instruments: ["acoustic_piano", "drums"]
@@ -147,13 +157,19 @@ final class MuScriptorTests: XCTestCase {
         )
     }
 
-    func testBeamBatchingCollapsesOneDispatchPerBeamIntoOnePerStep() {
+    func testBeamBatchingCollapsesDispatchesWithinLaneBudget() {
         let counts = MuScriptorBeamBatching.modelDispatchCounts(
             activeRowsPerStep: [8, 8, 6, 3, 1, 0]
         )
 
         XCTAssertEqual(counts.legacy, 26)
         XCTAssertEqual(counts.batched, 5)
+        let microbatchedCounts = MuScriptorBeamBatching.modelDispatchCounts(
+            activeRowsPerStep: [18, 8, 0],
+            maximumRows: 8
+        )
+        XCTAssertEqual(microbatchedCounts.legacy, 26)
+        XCTAssertEqual(microbatchedCounts.batched, 4)
         XCTAssertEqual(
             MuScriptorBeamBatching.microbatchRanges(rowCount: 18, maximumRows: 8),
             [0..<8, 8..<16, 16..<18]

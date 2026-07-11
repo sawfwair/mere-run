@@ -55,10 +55,13 @@ sampling. `--chunk-batch-size` is an upper bound on independent chunks batched
 in every decode mode. The runtime reduces it when the model/beam combination
 would saturate useful parallelism or current MLX allocation plus a system
 reserve leaves insufficient unified-memory headroom. Set it to `1` to preserve
-the lowest-memory single-chunk path. Beam mode packs all live beams for the
-effective chunk group into one model forward per step and drops ended rows
-before the next step. If one requested beam is wider than the live-lane budget,
-its forwards are microbatched without changing the search width. `--strict-eos`
+the lowest-memory single-chunk path. Beam mode packs live beams for the
+effective chunk group into as few bounded model forwards as the lane budget
+allows and drops ended rows before the next step. If one requested beam is
+wider than that budget, its forwards are microbatched without changing the
+search width; persistent beam cache state still scales with that width. The
+policy reduces cross-chunk pressure but cannot make a single requested beam
+fit when it exceeds available memory. `--strict-eos`
 turns a chunk that reaches the generation limit into an error instead of
 returning the decoded prefix.
 

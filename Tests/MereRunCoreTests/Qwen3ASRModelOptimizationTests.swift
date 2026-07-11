@@ -2,7 +2,7 @@ import MLX
 import XCTest
 @testable import AudioSTT
 
-final class Qwen3ASRModelOptimizationTests: XCTestCase {
+final class Qwen3ASRModelOptimizationTests: MereRunCoreTestCase {
     func testPrefillProjectsOnlyTheFinalPosition() {
         let textConfig = Qwen3ASRDecoderConfig(
             vocabSize: 32,

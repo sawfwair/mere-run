@@ -106,7 +106,9 @@ preserving the requested search width. The effective chunk group is selected
 once after model load at transcription start. The memory clamp is skipped when
 a unified-memory profile is unavailable, including non-Apple Linux hosts; the
 model-complexity limit still applies. Explicit `--chunk-batch-size 1` always
-preserves the lowest-memory single-chunk path.
+preserves the lowest-memory single-chunk path. Persistent cache state still
+scales with the requested beam width, so the policy reduces cross-chunk and
+forward pressure but does not guarantee admission when one beam cannot fit.
 
 The cap reflects a matched warm M4 Max 128 GB measurement with
 `music-muscriptor-large`, 20 seconds/four chunks, beam size 4, and 64 maximum
@@ -120,9 +122,9 @@ larger. Lower-headroom systems fall back to one chunk, which measured about
 4.8x faster than baseline at about 2.5x its peak footprint.
 
 Greedy and sampling pipeline selected tokens into the next model step. Beam
-search packs all live beams across the effective chunk group into one forward
-per step, keeps an independently forked typed cache lane for every beam, and
-removes ended beams from later forwards.
+search packs live beams across the effective chunk group into as few bounded
+forwards per step as the lane budget allows, keeps an independently forked
+typed cache lane for every beam, and removes ended beams from later forwards.
 
 ACE-Step generation uses the upstream CLI turbo shift default (`--shift 3.0`)
 and the native Haar DCW sampler correction (`double`, low `0.05`, high `0.02`)
