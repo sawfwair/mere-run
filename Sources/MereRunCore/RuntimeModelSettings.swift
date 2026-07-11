@@ -220,25 +220,30 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         }
         if let kvCacheMode = settings.kvCacheMode, kvCacheMode != .default {
             let engine = spec.defaultRuntimeServingEngine?.canonical
-            let compatible: Bool
-            let supportedEngines: [RuntimeServingEngine]
             switch kvCacheMode {
             case .affine8:
-                supportedEngines = [.textChatGemma4, .textChatQ36, .textChatLFM2]
-                compatible = engine.map(supportedEngines.contains) ?? false
+                let supportedEngines: [RuntimeServingEngine] = [
+                    .textChatGemma4,
+                    .textChatQ36,
+                    .textChatLFM2,
+                ]
+                guard engine.map(supportedEngines.contains) == true else {
+                    throw RuntimeModelSettingsError.incompatibleKVCacheModeForEngines(
+                        modelID: spec.id,
+                        requested: kvCacheMode,
+                        expectedEngines: supportedEngines
+                    )
+                }
             case .polar2, .auto:
-                supportedEngines = [.textChatGemma4]
-                compatible = engine == .textChatGemma4
+                guard engine == .textChatGemma4 else {
+                    throw RuntimeModelSettingsError.incompatibleKVCacheMode(
+                        modelID: spec.id,
+                        requested: kvCacheMode,
+                        expectedEngine: .textChatGemma4
+                    )
+                }
             case .default:
-                supportedEngines = []
-                compatible = true
-            }
-            if !compatible {
-                throw RuntimeModelSettingsError.incompatibleKVCacheMode(
-                    modelID: spec.id,
-                    requested: kvCacheMode,
-                    expectedEngines: supportedEngines
-                )
+                break
             }
         }
         return settings
@@ -272,6 +277,11 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
     case incompatibleKVCacheMode(
         modelID: String,
         requested: RuntimeKVCacheMode,
+        expectedEngine: RuntimeServingEngine
+    )
+    case incompatibleKVCacheModeForEngines(
+        modelID: String,
+        requested: RuntimeKVCacheMode,
         expectedEngines: [RuntimeServingEngine]
     )
 
@@ -288,7 +298,9 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
         case .incompatibleEngine(let modelID, let requested, let expected):
             let expectedText = expected?.rawValue ?? "none"
             return "Engine override '\(requested.rawValue)' is not compatible with model '\(modelID)' (expected \(expectedText))."
-        case .incompatibleKVCacheMode(let modelID, let requested, let expectedEngines):
+        case .incompatibleKVCacheMode(let modelID, let requested, let expectedEngine):
+            return "KV cache mode '\(requested.rawValue)' is not compatible with model '\(modelID)' (expected \(expectedEngine.rawValue))."
+        case .incompatibleKVCacheModeForEngines(let modelID, let requested, let expectedEngines):
             let expected = expectedEngines.map(\.rawValue).joined(separator: ", ")
             return "KV cache mode '\(requested.rawValue)' is not compatible with model '\(modelID)' (supported engines: \(expected))."
         }

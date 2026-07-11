@@ -92,7 +92,36 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertThrowsError(
             try store.writeSettings(RuntimeModelSettings(kvCacheMode: .polar2), for: Q35Resources.defaultModelId)
         ) { error in
-            XCTAssertTrue(error.localizedDescription.contains("KV cache mode"))
+            XCTAssertEqual(
+                error as? RuntimeModelSettingsError,
+                .incompatibleKVCacheMode(
+                    modelID: Q35Resources.defaultModelId,
+                    requested: .polar2,
+                    expectedEngine: .textChatGemma4
+                )
+            )
+        }
+    }
+
+    func testAffineEightReportsAllCompatibleEngines() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        XCTAssertThrowsError(
+            try store.writeSettings(
+                RuntimeModelSettings(kvCacheMode: .affine8),
+                for: CodeGenResources.defaultModelId
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? RuntimeModelSettingsError,
+                .incompatibleKVCacheModeForEngines(
+                    modelID: CodeGenResources.defaultModelId,
+                    requested: .affine8,
+                    expectedEngines: [.textChatGemma4, .textChatQ36, .textChatLFM2]
+                )
+            )
         }
     }
 

@@ -17,6 +17,13 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         XCTAssertEqual(MLXCUDAQuant.parseMode("off"), .dense)
     }
 
+    func testLegacyCUDAQuantPreferenceRemainsSourceCompatible() {
+        XCTAssertEqual(
+            MLXCUDAQuant.preferNativeQuant,
+            MLXCUDAQuant.mode == .native
+        )
+    }
+
     func testQ35SwitchLinearDenseExpertPathTransposesWeights() throws {
         let weight = MLXArray([
             1.0, 2.0, 3.0,

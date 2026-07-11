@@ -117,6 +117,9 @@ The format is based on Keep a Changelog.
 - pinned the Linux CUDA CMake bridge to the exact `mlx-swift` checkout selected
   by SwiftPM under the active Linux Swift toolchain;
   `MLX_SWIFT_CUDA_COMMIT` remains an explicit diagnostic override.
+- gated default CUDA `.deb` metadata on a linked CUDA 13 `libcudart` SONAME;
+  other or unknown toolkit majors now fail closed unless a maintainer supplies
+  the complete `MERERUN_PACKAGE_LINUX_DEPS` override. Tar packaging is unchanged.
 
 ## 0.20.0 - 2026-07-07
 

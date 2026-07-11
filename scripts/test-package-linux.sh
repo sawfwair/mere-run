@@ -68,6 +68,10 @@ cat >"$fake_bin/ldd" <<LDD
 cat <<'EOF'
 	libopenblas.so.0 => $fake_libs/libopenblas.so.0 (0x0000000000000000)
 EOF
+if [[ -n "\${FAKE_CUDA_MAJOR:-}" ]]; then
+  printf '\tlibcudart.so.%s => /usr/local/cuda/lib64/libcudart.so.%s (0x0000000000000000)\n' \
+    "\$FAKE_CUDA_MAJOR" "\$FAKE_CUDA_MAJOR"
+fi
 LDD
 chmod +x "$fake_bin/ldd"
 
@@ -133,6 +137,7 @@ echo "[test-package-linux] package runtime library symlink test passed."
 
 cuda_output_dir="$fixture_root/output-cuda"
 PATH="$fake_bin:$PATH" \
+  FAKE_CUDA_MAJOR=13 \
   MERERUN_LINUX_ACCEL=cuda \
   MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
   bash scripts/package-linux.sh \
@@ -162,3 +167,91 @@ if [[ "$(dpkg-deb --field "$cuda_deb" Package)" != "mere-run-cuda" ]]; then
 fi
 
 echo "[test-package-linux] CUDA deb dependency test passed."
+
+cuda12_output_dir="$fixture_root/output-cuda12"
+set +e
+cuda12_error="$(
+  PATH="$fake_bin:$PATH" \
+    FAKE_CUDA_MAJOR=12 \
+    MERERUN_LINUX_ACCEL=cuda \
+    MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
+    bash scripts/package-linux.sh \
+      --version 0.0.0+cuda12-fixture \
+      --artifact-suffix cuda \
+      --configuration release \
+      --skip-build \
+      --skip-native \
+      --output-dir "$cuda12_output_dir" 2>&1
+)"
+cuda12_status=$?
+set -e
+if [[ "$cuda12_status" -ne 70 ]] || ! grep -q 'built binary links libcudart.so.12' <<<"$cuda12_error"; then
+  echo "[test-package-linux] expected a clean CUDA 12 .deb compatibility failure:" >&2
+  printf '%s\n' "$cuda12_error" >&2
+  exit 1
+fi
+[[ -f "$cuda12_output_dir/mere-run-0.0.0+cuda12-fixture-linux-${platform_arch}-cuda.tar.gz" ]]
+if compgen -G "$cuda12_output_dir/*.deb" >/dev/null; then
+  echo "[test-package-linux] CUDA 12 gate emitted a misleading .deb." >&2
+  exit 1
+fi
+
+cuda12_override_output_dir="$fixture_root/output-cuda12-override"
+PATH="$fake_bin:$PATH" \
+  FAKE_CUDA_MAJOR=12 \
+  MERERUN_LINUX_ACCEL=cuda \
+  MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
+  MERERUN_PACKAGE_LINUX_DEPS="ffmpeg, cuda-cudart-12-4" \
+  bash scripts/package-linux.sh \
+    --version 0.0.0+cuda12-override-fixture \
+    --artifact-suffix cuda \
+    --configuration release \
+    --skip-build \
+    --skip-native \
+    --output-dir "$cuda12_override_output_dir" >/dev/null
+cuda12_override_deb="$cuda12_override_output_dir/mere-run-cuda_0.0.0+cuda12-override-fixture_${deb_arch}.deb"
+[[ -f "$cuda12_override_deb" ]]
+if [[ "$(dpkg-deb --field "$cuda12_override_deb" Depends)" != "ffmpeg, cuda-cudart-12-4" ]]; then
+  echo "[test-package-linux] explicit CUDA 12 dependency override was not preserved exactly:" >&2
+  dpkg-deb --field "$cuda12_override_deb" Depends >&2
+  exit 1
+fi
+
+unknown_cuda_output_dir="$fixture_root/output-cuda-unknown"
+set +e
+unknown_cuda_error="$(
+  PATH="$fake_bin:$PATH" \
+    MERERUN_LINUX_ACCEL=cuda \
+    MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
+    bash scripts/package-linux.sh \
+      --version 0.0.0+cuda-unknown-fixture \
+      --artifact-suffix cuda \
+      --configuration release \
+      --skip-build \
+      --skip-native \
+      --output-dir "$unknown_cuda_output_dir" 2>&1
+)"
+unknown_cuda_status=$?
+set -e
+if [[ "$unknown_cuda_status" -ne 70 ]] || ! grep -q 'could not determine the built CUDA toolkit major' <<<"$unknown_cuda_error"; then
+  echo "[test-package-linux] expected a clean unknown-CUDA-major .deb failure:" >&2
+  printf '%s\n' "$unknown_cuda_error" >&2
+  exit 1
+fi
+
+unknown_tar_output_dir="$fixture_root/output-cuda-unknown-tar"
+PATH="$fake_bin:$PATH" \
+  MERERUN_LINUX_ACCEL=cuda \
+  MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
+  bash scripts/package-linux.sh \
+    --version 0.0.0+cuda-unknown-tar-fixture \
+    --artifact-suffix cuda \
+    --configuration release \
+    --skip-build \
+    --skip-native \
+    --skip-deb \
+    --output-dir "$unknown_tar_output_dir" >/dev/null
+[[ -f "$unknown_tar_output_dir/mere-run-0.0.0+cuda-unknown-tar-fixture-linux-${platform_arch}-cuda.tar.gz" ]]
+(cd "$unknown_tar_output_dir" && sha256sum -c SHA256SUMS >/dev/null)
+
+echo "[test-package-linux] CUDA toolkit-major gates and explicit override passed."

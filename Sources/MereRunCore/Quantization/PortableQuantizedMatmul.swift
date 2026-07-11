@@ -39,6 +39,12 @@ public enum MLXCUDAQuant {
         ProcessInfo.processInfo.environment["MERERUN_MLX_CUDA_NATIVE_QUANT"]
     )
 
+    /// Compatibility view of the pre-automatic policy. Automatic probing is
+    /// intentionally not reported as a forced native preference because each
+    /// operation may independently fall back to dense execution.
+    @available(*, deprecated, message: "Use MLXCUDAQuant.mode; automatic mode probes each operation independently.")
+    public static let preferNativeQuant = mode == .native
+
     public static func parseMode(_ raw: String?) -> Mode {
         switch raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case nil, "", "auto", "automatic":

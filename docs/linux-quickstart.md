@@ -165,9 +165,16 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.20.0
 ls dist/linux/
 ```
 
-CUDA `.deb` packages declare the CUDA 13 runtime/JIT packages they need:
+CUDA `.deb` packages are currently gated to binaries linked against CUDA 13.
+The packager reads the `libcudart.so` SONAME from the built executable and
+refuses to emit a `.deb` when the toolkit major is unknown or is not 13, rather
+than attaching incorrect runtime dependencies. CUDA 13 packages declare:
 `cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
 `libcublas-13-0`, `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
+For a CUDA 12 build, pass `--skip-deb` and distribute the tarball only after a
+runtime smoke on a matching CUDA 12 host. Maintainers who supply an exact
+`MERERUN_PACKAGE_LINUX_DEPS` value deliberately bypass this gate; that override
+is copied verbatim into `Depends`, so the caller owns package compatibility.
 
 For source-only CUDA checks, prepare native artifacts and then export the
 environment printed by the script before building:
