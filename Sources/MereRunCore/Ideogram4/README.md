@@ -11,6 +11,11 @@ This module owns:
 - packed text/image sample construction with Ideogram role indicators and MRoPE
   position ids
 - the Ideogram 4 flow transformer topology
+- experimental Apple-Silicon fused QKV/AdaLN kernels, opt-in with
+  `MERERUN_IDEOGRAM4_FUSED_KERNELS=1`; the exact portable graph remains the
+  default until checkpoint-level end-to-end performance clears the release gate
+- uniform-segment attention that avoids the redundant quadratic mask emitted
+  by the supported single-sample packer
 - positive/unconditional CFG denoising, scheduler presets, latent normalization,
   and Flux2-style VAE decode for `image generate`
 

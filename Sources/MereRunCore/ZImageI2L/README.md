@@ -9,3 +9,6 @@ Image-to-latent support for ZImage workflows.
 
 Keep model-specific tensor preparation here and public command behavior in the
 CLI layer.
+
+Supported attention shapes use MLX fused SDPA by default. Set
+`MERERUN_FUSED_SDPA=0` to restore materialized attention for diagnosis.

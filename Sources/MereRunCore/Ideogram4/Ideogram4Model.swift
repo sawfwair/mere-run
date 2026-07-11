@@ -49,17 +49,19 @@ final class Ideogram4Attention: Module {
     let numHeads: Int
     let headDim: Int
     let scale: Float
+    let fusedKernelsEnabled: Bool
 
     @ModuleInfo(key: "qkv") var qkv: Linear
     @ModuleInfo(key: "norm_q") var normQ: RMSNorm
     @ModuleInfo(key: "norm_k") var normK: RMSNorm
     @ModuleInfo(key: "o") var output: Linear
 
-    init(hiddenSize: Int, numHeads: Int, headDim: Int, eps: Float) {
+    init(hiddenSize: Int, numHeads: Int, headDim: Int, eps: Float, fusedKernelsEnabled: Bool) {
         self.hiddenSize = hiddenSize
         self.numHeads = numHeads
         self.headDim = headDim
         self.scale = 1.0 / sqrt(Float(headDim))
+        self.fusedKernelsEnabled = fusedKernelsEnabled
         self._qkv.wrappedValue = Linear(hiddenSize, hiddenSize * 3, bias: false)
         self._normQ.wrappedValue = RMSNorm(dimensions: headDim, eps: eps)
         self._normK.wrappedValue = RMSNorm(dimensions: headDim, eps: eps)
@@ -69,21 +71,37 @@ final class Ideogram4Attention: Module {
 
     func callAsFunction(
         _ x: MLXArray,
-        segmentIds: MLXArray,
+        segmentIds: MLXArray?,
         cos: MLXArray,
         sin: MLXArray
     ) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
-        let qkvParts = MLX.split(qkv(x), parts: 3, axis: -1)
-
-        var queries = qkvParts[0].reshaped(batch, sequenceLength, numHeads, headDim)
-        var keys = qkvParts[1].reshaped(batch, sequenceLength, numHeads, headDim)
-        var values = qkvParts[2].reshaped(batch, sequenceLength, numHeads, headDim)
-
-        queries = normQ(queries).transposed(0, 2, 1, 3)
-        keys = normK(keys).transposed(0, 2, 1, 3)
-        values = values.transposed(0, 2, 1, 3)
+        let projected = qkv(x)
+        var queries: MLXArray
+        var keys: MLXArray
+        let values: MLXArray
+        if fusedKernelsEnabled,
+           let fused = Ideogram4FusedKernels.qkvNorms(
+               qkv: projected,
+               qWeight: normQ.weight,
+               kWeight: normK.weight,
+               eps: normQ.eps,
+               numHeads: numHeads,
+               headDim: headDim
+           ) {
+            queries = fused.queries
+            keys = fused.keys
+            values = fused.values
+        } else {
+            let qkvParts = MLX.split(projected, parts: 3, axis: -1)
+            queries = normQ(qkvParts[0].reshaped(batch, sequenceLength, numHeads, headDim))
+                .transposed(0, 2, 1, 3)
+            keys = normK(qkvParts[1].reshaped(batch, sequenceLength, numHeads, headDim))
+                .transposed(0, 2, 1, 3)
+            values = qkvParts[2].reshaped(batch, sequenceLength, numHeads, headDim)
+                .transposed(0, 2, 1, 3)
+        }
 
         (queries, keys) = applyRotaryPosEmb(queries, keys, cos: cos, sin: sin)
 
@@ -91,9 +109,21 @@ final class Ideogram4Attention: Module {
             queries.asType(.float32),
             keys.asType(.float32).transposed(0, 1, 3, 2)
         ) * MLXArray(scale)
-        let mask = blockDiagonalAttentionMask(segmentIds: segmentIds, dtype: scores.dtype)
-        let maskedScores = MLX.where(mask, scores, MLX.zeros(scores.shape, dtype: scores.dtype) + MLXArray(-Float.greatestFiniteMagnitude))
-        let attention = softmax(maskedScores, axis: -1)
+        let attention: MLXArray
+        if let segmentIds {
+            let mask = blockDiagonalAttentionMask(segmentIds: segmentIds)
+            let maskedScores = MLX.where(
+                mask,
+                scores,
+                MLX.zeros(scores.shape, dtype: scores.dtype) + MLXArray(-Float.greatestFiniteMagnitude)
+            )
+            attention = softmax(maskedScores, axis: -1)
+        } else {
+            // Samples built by Ideogram4SampleBuilder contain one valid segment.
+            // Skipping its all-true O(sequence^2) mask avoids both the mask and
+            // the masked-score materialization in every denoiser layer.
+            attention = softmax(scores, axis: -1)
+        }
         let attended = MLX.matmul(attention, values.asType(.float32))
             .asType(x.dtype)
             .transposed(0, 2, 1, 3)
@@ -101,7 +131,7 @@ final class Ideogram4Attention: Module {
         return output(attended)
     }
 
-    private func blockDiagonalAttentionMask(segmentIds: MLXArray, dtype: DType) -> MLXArray {
+    private func blockDiagonalAttentionMask(segmentIds: MLXArray) -> MLXArray {
         let batch = segmentIds.dim(0)
         let sequenceLength = segmentIds.dim(1)
         let rows = segmentIds.reshaped(batch, sequenceLength, 1)
@@ -132,6 +162,7 @@ final class Ideogram4MLP: Module {
 
 final class Ideogram4TransformerBlock: Module {
     let hiddenSize: Int
+    let fusedKernelsEnabled: Bool
 
     @ModuleInfo(key: "attention") var attention: Ideogram4Attention
     @ModuleInfo(key: "feed_forward") var feedForward: Ideogram4MLP
@@ -141,13 +172,15 @@ final class Ideogram4TransformerBlock: Module {
     @ModuleInfo(key: "ffn_norm2") var ffnNorm2: RMSNorm
     @ModuleInfo(key: "adaln_modulation") var adalnModulation: Linear
 
-    init(configuration: Ideogram4TransformerConfiguration) {
+    init(configuration: Ideogram4TransformerConfiguration, fusedKernelsEnabled: Bool) {
         self.hiddenSize = configuration.embeddingDim
+        self.fusedKernelsEnabled = fusedKernelsEnabled
         self._attention.wrappedValue = Ideogram4Attention(
             hiddenSize: configuration.embeddingDim,
             numHeads: configuration.numAttentionHeads,
             headDim: configuration.attentionHeadDim,
-            eps: 1e-5
+            eps: 1e-5,
+            fusedKernelsEnabled: fusedKernelsEnabled
         )
         self._feedForward.wrappedValue = Ideogram4MLP(
             dim: configuration.embeddingDim,
@@ -163,26 +196,63 @@ final class Ideogram4TransformerBlock: Module {
 
     func callAsFunction(
         _ x: MLXArray,
-        segmentIds: MLXArray,
+        segmentIds: MLXArray?,
         cos: MLXArray,
         sin: MLXArray,
         adalnInput: MLXArray
     ) -> MLXArray {
-        let modulation = MLX.split(adalnModulation(adalnInput), parts: 4, axis: -1)
-        let scaleMSA = 1 + modulation[0]
-        let gateMSA = MLX.tanh(modulation[1])
-        let scaleMLP = 1 + modulation[2]
-        let gateMLP = MLX.tanh(modulation[3])
+        let modulation = adalnModulation(adalnInput)
+        let modulationParts = MLX.split(modulation, parts: 4, axis: -1)
+        let scaleMSA = 1 + modulationParts[0]
+        let gateMSA = MLX.tanh(modulationParts[1])
+        let scaleMLP = 1 + modulationParts[2]
+        let gateMLP = MLX.tanh(modulationParts[3])
 
+        let attentionInput = fusedKernelsEnabled
+            ? Ideogram4FusedKernels.scaledRMSNorm(
+                x,
+                weight: attentionNorm1.weight,
+                modulation: modulation,
+                modulationIndex: 0,
+                eps: attentionNorm1.eps
+            ) ?? (attentionNorm1(x) * scaleMSA)
+            : attentionNorm1(x) * scaleMSA
         let attnOut = attention(
-            attentionNorm1(x) * scaleMSA,
+            attentionInput,
             segmentIds: segmentIds,
             cos: cos,
             sin: sin
         )
-        var out = x + gateMSA * attentionNorm2(attnOut)
-        let mlpOut = feedForward(ffnNorm1(out) * scaleMLP)
-        out = out + gateMLP * ffnNorm2(mlpOut)
+        var out = fusedKernelsEnabled
+            ? Ideogram4FusedKernels.gatedResidualRMSNorm(
+                attnOut,
+                residual: x,
+                weight: attentionNorm2.weight,
+                modulation: modulation,
+                modulationIndex: 1,
+                eps: attentionNorm2.eps
+            ) ?? (x + gateMSA * attentionNorm2(attnOut))
+            : x + gateMSA * attentionNorm2(attnOut)
+        let mlpInput = fusedKernelsEnabled
+            ? Ideogram4FusedKernels.scaledRMSNorm(
+                out,
+                weight: ffnNorm1.weight,
+                modulation: modulation,
+                modulationIndex: 2,
+                eps: ffnNorm1.eps
+            ) ?? (ffnNorm1(out) * scaleMLP)
+            : ffnNorm1(out) * scaleMLP
+        let mlpOut = feedForward(mlpInput)
+        out = fusedKernelsEnabled
+            ? Ideogram4FusedKernels.gatedResidualRMSNorm(
+                mlpOut,
+                residual: out,
+                weight: ffnNorm2.weight,
+                modulation: modulation,
+                modulationIndex: 3,
+                eps: ffnNorm2.eps
+            ) ?? (out + gateMLP * ffnNorm2(mlpOut))
+            : out + gateMLP * ffnNorm2(mlpOut)
         return out
     }
 }
@@ -207,6 +277,7 @@ final class Ideogram4FinalLayer: Module {
 
 public final class Ideogram4Transformer: Module {
     public let configuration: Ideogram4TransformerConfiguration
+    let fusedKernelsEnabled: Bool
 
     @ModuleInfo(key: "input_proj") var inputProj: Linear
     @ModuleInfo(key: "llm_cond_norm") var llmCondNorm: RMSNorm
@@ -219,8 +290,16 @@ public final class Ideogram4Transformer: Module {
 
     let rotaryEmbedding: Qwen3VLRotaryEmbedding
 
-    public init(configuration: Ideogram4TransformerConfiguration) {
+    public convenience init(configuration: Ideogram4TransformerConfiguration) {
+        self.init(
+            configuration: configuration,
+            fusedKernelsEnabled: Ideogram4FusedKernelPolicy.enabled
+        )
+    }
+
+    init(configuration: Ideogram4TransformerConfiguration, fusedKernelsEnabled: Bool) {
         self.configuration = configuration
+        self.fusedKernelsEnabled = fusedKernelsEnabled
         self._inputProj.wrappedValue = Linear(configuration.inChannels, configuration.embeddingDim, bias: true)
         self._llmCondNorm.wrappedValue = RMSNorm(dimensions: configuration.llmFeaturesDim, eps: 1e-6)
         self._llmCondProj.wrappedValue = Linear(configuration.llmFeaturesDim, configuration.embeddingDim, bias: true)
@@ -228,7 +307,10 @@ public final class Ideogram4Transformer: Module {
         self._adalnProj.wrappedValue = Linear(configuration.embeddingDim, configuration.adalnDim, bias: true)
         self._imageIndicatorEmbedding.wrappedValue = Embedding(embeddingCount: 2, dimensions: configuration.embeddingDim)
         self._layers.wrappedValue = (0..<configuration.numLayers).map { _ in
-            Ideogram4TransformerBlock(configuration: configuration)
+            Ideogram4TransformerBlock(
+                configuration: configuration,
+                fusedKernelsEnabled: fusedKernelsEnabled
+            )
         }
         self._finalLayer.wrappedValue = Ideogram4FinalLayer(
             hiddenSize: configuration.embeddingDim,
@@ -250,7 +332,8 @@ public final class Ideogram4Transformer: Module {
             timestep: timestep,
             positionIds: sample.positionIds,
             segmentIds: sample.segmentIds,
-            indicator: sample.indicator
+            indicator: sample.indicator,
+            segmentsAreUniform: true
         )
     }
 
@@ -261,6 +344,26 @@ public final class Ideogram4Transformer: Module {
         positionIds: MLXArray,
         segmentIds: MLXArray,
         indicator: MLXArray
+    ) -> MLXArray {
+        callAsFunction(
+            llmFeatures: llmFeatures,
+            x: x,
+            timestep: timestep,
+            positionIds: positionIds,
+            segmentIds: segmentIds,
+            indicator: indicator,
+            segmentsAreUniform: false
+        )
+    }
+
+    func callAsFunction(
+        llmFeatures: MLXArray,
+        x: MLXArray,
+        timestep: MLXArray,
+        positionIds: MLXArray,
+        segmentIds: MLXArray,
+        indicator: MLXArray,
+        segmentsAreUniform: Bool
     ) -> MLXArray {
         let outputMask = roleMask(indicator, role: Ideogram4SampleBuilder.outputImageIndicator, dtype: x.dtype)
         let llmMask = roleMask(indicator, role: Ideogram4SampleBuilder.llmTokenIndicator, dtype: x.dtype)
@@ -282,7 +385,13 @@ public final class Ideogram4Transformer: Module {
         let normalizedPositionIds = normalizePositionIds(positionIds)
         let (cos, sin) = rotaryEmbedding(positionIds: normalizedPositionIds, dtype: hidden.dtype)
         for layer in layers {
-            hidden = layer(hidden, segmentIds: segmentIds, cos: cos, sin: sin, adalnInput: adalnInput)
+            hidden = layer(
+                hidden,
+                segmentIds: segmentsAreUniform ? nil : segmentIds,
+                cos: cos,
+                sin: sin,
+                adalnInput: adalnInput
+            )
         }
         return finalLayer(hidden, conditioning: adalnInput).asType(.float32)
     }

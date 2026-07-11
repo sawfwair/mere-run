@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 // MARK: - SigLIP2 Vision Encoder
@@ -261,11 +262,26 @@ final class MultiHeadAttentionPooling: Module {
         let kReshaped = k.reshaped(batch, seqLen, numHeads, headDim).transposed(0, 2, 1, 3)
         let vReshaped = v.reshaped(batch, seqLen, numHeads, headDim).transposed(0, 2, 1, 3)
 
-        // Attention
+        // A single 96-wide probe query uses MLX's fused vector-attention
+        // kernel; the main SigLIP2 tower remains on its parity-tested graph.
         let scale = 1.0 / sqrt(Float(headDim))
-        var attn = MLX.matmul(qReshaped, kReshaped.transposed(0, 1, 3, 2)) * scale
-        attn = softmax(attn, axis: -1)
-        var out = MLX.matmul(attn, vReshaped)
+        var out: MLXArray
+        if FusedAttentionPolicy.enabled {
+            out = MLXFast.scaledDotProductAttention(
+                queries: qReshaped,
+                keys: kReshaped,
+                values: vReshaped,
+                scale: scale,
+                mask: .none
+            )
+        } else {
+            var attention = MLX.matmul(
+                qReshaped,
+                kReshaped.transposed(0, 1, 3, 2)
+            ) * scale
+            attention = softmax(attention, axis: -1)
+            out = MLX.matmul(attention, vReshaped)
+        }
 
         // Reshape back
         out = out.transposed(0, 2, 1, 3).reshaped(batch, 1, hiddenSize)
