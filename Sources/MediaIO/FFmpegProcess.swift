@@ -74,6 +74,76 @@ enum FFmpegProcess {
         return Result(stdout: stdout, stderr: stderr)
     }
 
+    /// Runs a tool while the caller incrementally produces standard input.
+    /// stdout/stderr are file-backed so neither side of the pipe can deadlock
+    /// on an unread diagnostic buffer while large media inputs are encoded.
+    static func runStreamingInput(
+        tool: String,
+        arguments: [String],
+        writeInput: (FileHandle) throws -> Void
+    ) throws -> Result {
+        let executable = try resolveTool(tool)
+        let effectiveArguments = argumentsWithDisabledStdin(
+            for: executable,
+            rawTool: tool,
+            arguments: arguments
+        )
+        let scratchID = UUID().uuidString
+        let tempRoot = FileManager.default.temporaryDirectory
+        let stdoutURL = tempRoot.appendingPathComponent("mererun-ffmpeg-\(scratchID).stdout")
+        let stderrURL = tempRoot.appendingPathComponent("mererun-ffmpeg-\(scratchID).stderr")
+        _ = FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+        defer {
+            try? FileManager.default.removeItem(at: stdoutURL)
+            try? FileManager.default.removeItem(at: stderrURL)
+        }
+
+        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+        let stdinPipe = Pipe()
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = effectiveArguments
+        process.standardInput = stdinPipe
+        process.standardOutput = stdoutHandle
+        process.standardError = stderrHandle
+
+        do {
+            try process.run()
+        } catch {
+            try? stdoutHandle.close()
+            try? stderrHandle.close()
+            throw MediaIOError.missingTool(tool)
+        }
+
+        do {
+            try writeInput(stdinPipe.fileHandleForWriting)
+            try stdinPipe.fileHandleForWriting.close()
+        } catch {
+            try? stdinPipe.fileHandleForWriting.close()
+            process.terminate()
+            process.waitUntilExit()
+            try? stdoutHandle.close()
+            try? stderrHandle.close()
+            throw error
+        }
+
+        process.waitUntilExit()
+        try stdoutHandle.close()
+        try stderrHandle.close()
+        let stdout = try Data(contentsOf: stdoutURL)
+        let stderr = String(decoding: try Data(contentsOf: stderrURL), as: UTF8.self)
+        guard process.terminationStatus == 0 else {
+            throw MediaIOError.processFailed(
+                tool: tool,
+                status: process.terminationStatus,
+                stderr: stderr
+            )
+        }
+        return Result(stdout: stdout, stderr: stderr)
+    }
+
     private static func resolveTool(_ tool: String) throws -> URL {
         let raw = tool
         if raw.contains("/") {

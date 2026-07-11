@@ -1,9 +1,25 @@
 import MLX
-import MediaIO
+@testable import MediaIO
 @testable import MereRunCore
 import XCTest
 
 final class LTXVideoMP4WriterTests: XCTestCase {
+    func testBGRAFrameConversionRunsPerFrameOnDevice() {
+        let frames = MLXArray([
+            UInt8(1), 2, 3,
+            10, 20, 30,
+            100, 110, 120,
+            200, 210, 220,
+        ]).reshaped(2, 1, 2, 3)
+
+        let first = LTXVideoMP4Writer.bgraFrame(frames, at: 0)
+        let second = LTXVideoMP4Writer.bgraFrame(frames, at: 1)
+        MLX.eval(first, second)
+
+        XCTAssertEqual(first.asArray(UInt8.self), [3, 2, 1, 255, 30, 20, 10, 255])
+        XCTAssertEqual(second.asArray(UInt8.self), [120, 110, 100, 255, 220, 210, 200, 255])
+    }
+
     func testPrepareAudioClampsStereoSamplesBeforeEncoding() throws {
         var raw = [Float](repeating: 0, count: 20)
         raw[0] = 2.0
@@ -95,6 +111,37 @@ final class LTXVideoMP4WriterTests: XCTestCase {
         let outputURL = tempDir.appendingPathComponent("odd-frames.mp4")
         try LTXVideoMP4Writer.writeMP4(frames: frames, fps: fps, to: outputURL)
 
+        XCTAssertEqual(try ffprobeVideoFrameCount(outputURL), frameCount)
+    }
+
+    func testFFmpegFrameProviderStreamsInOrderWhenAvailable() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are not available")
+        }
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ltx-streaming-writer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let width = 16
+        let height = 16
+        let frameCount = 5
+        var requestedFrames: [Int] = []
+        let outputURL = tempDir.appendingPathComponent("streamed.mp4")
+        try FFmpegMediaIO.writeMP4(
+            bgra32FrameAt: { frameIndex in
+                requestedFrames.append(frameIndex)
+                return [UInt8](repeating: UInt8(frameIndex * 30), count: width * height * 4)
+            },
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: 8,
+            to: outputURL
+        )
+
+        XCTAssertEqual(requestedFrames, Array(0..<frameCount))
         XCTAssertEqual(try ffprobeVideoFrameCount(outputURL), frameCount)
     }
 

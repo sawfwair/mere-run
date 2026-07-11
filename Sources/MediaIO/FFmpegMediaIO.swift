@@ -168,6 +168,51 @@ enum FFmpegMediaIO {
         )
     }
 
+    static func writeMP4(
+        bgra32FrameAt frameProvider: MediaVideoIO.BGRAFrameProvider,
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Int,
+        to outputURL: URL
+    ) throws {
+        guard width > 0, height > 0, frameCount > 0, fps > 0 else {
+            throw MediaIOError.videoOperationFailed("Invalid MP4 dimensions or frame rate.")
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let frameStride = width * height * 4
+        _ = try FFmpegProcess.runStreamingInput(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error",
+                "-y",
+                "-f", "rawvideo",
+                "-pix_fmt", "bgra",
+                "-s", "\(width)x\(height)",
+                "-r", "\(fps)",
+                "-i", "pipe:0",
+                "-an",
+                "-c:v", "libx264",
+                "-crf", "18",
+                "-pix_fmt", "yuv420p",
+                outputURL.path,
+            ],
+            writeInput: { handle in
+                for frameIndex in 0..<frameCount {
+                    let frame = try frameProvider(frameIndex)
+                    guard frame.count == frameStride else {
+                        throw MediaIOError.invalidBufferSize(expected: frameStride, actual: frame.count)
+                    }
+                    try handle.write(contentsOf: Data(frame))
+                }
+            }
+        )
+    }
+
     static func mux(
         videoURL: URL,
         audioURL: URL,

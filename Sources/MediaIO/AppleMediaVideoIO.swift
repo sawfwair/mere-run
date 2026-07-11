@@ -11,12 +11,80 @@ private typealias AppleVideoSettings = Dictionary<String, Any>
 
 enum AppleMediaVideoIO {
     static func writeMP4(
+        bgra32FrameAt frameProvider: MediaVideoIO.BGRAFrameProvider,
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Int,
+        to outputURL: URL
+    ) throws {
+        try writeMP4(
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: fps,
+            to: outputURL
+        ) { frameIndex, destination, bytesPerRow in
+            let frame = try frameProvider(frameIndex)
+            let frameStride = width * height * 4
+            guard frame.count == frameStride else {
+                throw MediaIOError.invalidBufferSize(expected: frameStride, actual: frame.count)
+            }
+            frame.withUnsafeBufferPointer { source in
+                guard let sourceAddress = source.baseAddress else { return }
+                let rowBytes = width * 4
+                for row in 0..<height {
+                    destination.advanced(by: row * bytesPerRow).update(
+                        from: sourceAddress.advanced(by: row * rowBytes),
+                        count: rowBytes
+                    )
+                }
+            }
+        }
+    }
+
+    static func writeMP4(
         rgb24: [UInt8],
         width: Int,
         height: Int,
         frameCount: Int,
         fps: Int,
         to outputURL: URL
+    ) throws {
+        let frameStride = width * height * 3
+        guard rgb24.count == frameStride * frameCount else {
+            throw MediaIOError.invalidBufferSize(expected: frameStride * frameCount, actual: rgb24.count)
+        }
+        try writeMP4(
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: fps,
+            to: outputURL
+        ) { frameIndex, destination, bytesPerRow in
+            let srcOffset = frameIndex * frameStride
+            for y in 0..<height {
+                let dstRow = destination.advanced(by: y * bytesPerRow)
+                let srcRow = srcOffset + (y * width * 3)
+                for x in 0..<width {
+                    let src = srcRow + (x * 3)
+                    let out = x * 4
+                    dstRow[out] = rgb24[src + 2]
+                    dstRow[out + 1] = rgb24[src + 1]
+                    dstRow[out + 2] = rgb24[src]
+                    dstRow[out + 3] = 255
+                }
+            }
+        }
+    }
+
+    private static func writeMP4(
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Int,
+        to outputURL: URL,
+        fillFrame: (_ frameIndex: Int, _ destination: UnsafeMutablePointer<UInt8>, _ bytesPerRow: Int) throws -> Void
     ) throws {
         guard fps >= 1, width > 0, height > 0, frameCount > 0 else {
             throw MediaIOError.videoOperationFailed("Invalid MP4 dimensions or frame rate.")
@@ -64,11 +132,6 @@ enum AppleMediaVideoIO {
             throw MediaIOError.videoOperationFailed("AVAssetWriter did not provide a pixel buffer pool.")
         }
 
-        let frameStride = width * height * 3
-        guard rgb24.count == frameStride * frameCount else {
-            throw MediaIOError.invalidBufferSize(expected: frameStride * frameCount, actual: rgb24.count)
-        }
-
         for frameIndex in 0..<frameCount {
             while !input.isReadyForMoreMediaData {
                 Thread.sleep(forTimeInterval: 0.001)
@@ -85,18 +148,11 @@ enum AppleMediaVideoIO {
             }
             let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
             let dst = base.bindMemory(to: UInt8.self, capacity: bytesPerRow * height)
-            let srcOffset = frameIndex * frameStride
-            for y in 0..<height {
-                let dstRow = dst.advanced(by: y * bytesPerRow)
-                let srcRow = srcOffset + (y * width * 3)
-                for x in 0..<width {
-                    let src = srcRow + (x * 3)
-                    let out = x * 4
-                    dstRow[out] = rgb24[src + 2]
-                    dstRow[out + 1] = rgb24[src + 1]
-                    dstRow[out + 2] = rgb24[src]
-                    dstRow[out + 3] = 255
-                }
+            do {
+                try fillFrame(frameIndex, dst, bytesPerRow)
+            } catch {
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+                throw error
             }
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
             let time = CMTime(value: Int64(frameIndex), timescale: CMTimeScale(fps))
