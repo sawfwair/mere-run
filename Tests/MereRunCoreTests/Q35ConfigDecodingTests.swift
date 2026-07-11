@@ -81,6 +81,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxDiff, 1e-4)
     }
 
+    #if os(macOS)
     func testQ35GatedDeltaMetalMatchesOpsReference() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("Q35 gated-delta Metal parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
@@ -135,6 +136,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(outputMaxDiff, 0, accuracy: 1e-5)
         XCTAssertEqual(stateMaxDiff, 0, accuracy: 1e-5)
     }
+    #endif
 
     func testQ35RMSNormOffsetConversionSkipsLinearAttentionGateNorm() {
         XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.0.input_layernorm.weight"))

@@ -24,7 +24,8 @@ The format is based on Keep a Changelog.
   beam search retains its independent-cache path.
 - changed Linux CUDA quantized matmul selection to probe native
   `quantized_mm` and `GatherQMM` independently, retaining an automatic dense
-  fallback for runtimes that do not provide either kernel.
+  fallback for runtimes that do not provide either kernel; Linux native
+  preparation also skips unused llama tools and server targets.
 - added memory-aware batched classifier-free guidance to Qwen Image Edit, with
   `MERERUN_QWEN_IMAGE_BATCHED_CFG` overrides for forced batched or serial runs.
 - moved LTX tiled VAE overlap blending from per-tile CPU readbacks and Swift
