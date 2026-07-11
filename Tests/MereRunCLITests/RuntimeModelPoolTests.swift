@@ -1056,6 +1056,68 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertEqual(snapshot.totalCancelledRequests, 0)
     }
 
+    func testRequestAdmissionRechecksCapacityAfterSuspendedPressureSample() async throws {
+        let pressure = RuntimeSuspendedMemoryPressureProbe(suspendedCallCount: 2)
+        let heldLeases = RuntimeAdmissionHoldProbe()
+        let admission = RuntimeRequestAdmission(maxActiveRequests: 1) {
+            await pressure.current()
+        }
+
+        let firstTask = Task {
+            let lease = try await admission.acquire()
+            await heldLeases.hold(lease)
+        }
+        for _ in 0..<50 {
+            if await pressure.callCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let secondTask = Task {
+            let lease = try await admission.acquire()
+            await heldLeases.hold(lease)
+        }
+        for _ in 0..<50 {
+            if await pressure.callCount() == 2 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let suspendedSamples = await pressure.callCount()
+        XCTAssertEqual(suspendedSamples, 2)
+
+        await pressure.releaseAll()
+        var snapshot = await admission.snapshot()
+        for _ in 0..<50 {
+            if snapshot.activeRequests == 1,
+               snapshot.queuedRequests == 1,
+               snapshot.totalAdmittedRequests == 1 {
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+            snapshot = await admission.snapshot()
+        }
+
+        let initiallyHeld = await heldLeases.count()
+        XCTAssertEqual(initiallyHeld, 1)
+        XCTAssertEqual(snapshot.activeRequests, 1)
+        XCTAssertEqual(snapshot.queuedRequests, 1)
+        XCTAssertEqual(snapshot.totalAdmittedRequests, 1)
+
+        await heldLeases.releaseNext()
+        for _ in 0..<50 {
+            if await heldLeases.count() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        snapshot = await admission.snapshot()
+        XCTAssertEqual(snapshot.activeRequests, 1)
+        XCTAssertEqual(snapshot.queuedRequests, 0)
+        XCTAssertEqual(snapshot.totalAdmittedRequests, 2)
+
+        await heldLeases.releaseNext()
+        _ = try await (firstTask.value, secondTask.value)
+        snapshot = await admission.snapshot()
+        XCTAssertEqual(snapshot.activeRequests, 0)
+        XCTAssertEqual(snapshot.totalCompletedRequests, 2)
+    }
+
     func testRequestAdmissionPausesAdditionalWorkUnderPressure() async throws {
         let pressure = RuntimeMemoryPressureProbe(.elevated)
         let admission = RuntimeRequestAdmission(maxActiveRequests: 2) {
@@ -1155,6 +1217,54 @@ private actor RuntimeMemoryPressureProbe {
 
     func current() -> RuntimeMemoryPressureLevel {
         level
+    }
+}
+
+private actor RuntimeSuspendedMemoryPressureProbe {
+    private let suspendedCallCount: Int
+    private var calls = 0
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    init(suspendedCallCount: Int) {
+        self.suspendedCallCount = suspendedCallCount
+    }
+
+    func current() async -> RuntimeMemoryPressureLevel {
+        calls += 1
+        if calls <= suspendedCallCount {
+            await withCheckedContinuation { continuation in
+                continuations.append(continuation)
+            }
+        }
+        return .nominal
+    }
+
+    func callCount() -> Int {
+        calls
+    }
+
+    func releaseAll() {
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
+}
+
+private actor RuntimeAdmissionHoldProbe {
+    private var leases: [RuntimeRequestAdmissionLease] = []
+
+    func hold(_ lease: RuntimeRequestAdmissionLease) {
+        leases.append(lease)
+    }
+
+    func count() -> Int {
+        leases.count
+    }
+
+    func releaseNext() async {
+        guard !leases.isEmpty else { return }
+        let lease = leases.removeFirst()
+        await lease.release()
     }
 }
 

@@ -1888,7 +1888,7 @@ actor RuntimeRequestAdmission {
 
     func acquire() async throws -> RuntimeRequestAdmissionLease {
         await drain()
-        if await canAdmitNow() {
+        if await canAdmitNow(requireEmptyQueue: true) {
             return admit()
         }
 
@@ -1981,6 +1981,12 @@ actor RuntimeRequestAdmission {
             guard await canAdmitNow() else {
                 return
             }
+            // Pressure sampling yields the actor. A concurrent drain may have
+            // consumed capacity or cancellation may have emptied the FIFO, so
+            // revalidate both before removing its first waiter.
+            guard activeRequests < maxActiveRequests, !waiters.isEmpty else {
+                return
+            }
             let waiter = waiters.removeFirst()
             guard waiterStates[waiter.id] != .cancelled else {
                 waiterStates.removeValue(forKey: waiter.id)
@@ -1998,11 +2004,18 @@ actor RuntimeRequestAdmission {
         return RuntimeRequestAdmissionLease(admission: self)
     }
 
-    private func canAdmitNow() async -> Bool {
-        guard activeRequests < maxActiveRequests else {
+    private func canAdmitNow(requireEmptyQueue: Bool = false) async -> Bool {
+        guard activeRequests < maxActiveRequests,
+              !requireEmptyQueue || waiters.isEmpty else {
             return false
         }
         let pressure = await pressureProvider()
+        // `pressureProvider` is an actor reentrancy point. Never rely on the
+        // capacity/FIFO snapshot taken before it suspended.
+        guard activeRequests < maxActiveRequests,
+              !requireEmptyQueue || waiters.isEmpty else {
+            return false
+        }
         guard admissionPaused(for: pressure) else {
             return true
         }
