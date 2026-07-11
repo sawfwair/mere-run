@@ -1,6 +1,6 @@
 # Vision Runtime
 
-This page covers captioning, inspection, grounding, segmentation, tracking, and OCR.
+This page covers captioning, inspection, grounding, segmentation, tracking, pose extraction, optical flow, and OCR.
 
 ## Public surface
 
@@ -10,6 +10,8 @@ This page covers captioning, inspection, grounding, segmentation, tracking, and 
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
+- `mere.run vision pose`
+- `mere.run vision flow`
 - `mere.run vision ocr`
 
 ## Model family
@@ -110,6 +112,30 @@ swift run mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12
 swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
 ```
 
+### Extract pose landmarks
+
+```bash
+swift run mere.run vision pose ./person.png \
+  --json-output ./person-pose.json \
+  --minimum-confidence 0.2
+```
+
+The native pose result contains body, hand, and face subjects. Landmark
+coordinates use a normalized bottom-left coordinate system and retain per-point
+confidence for downstream temporal filtering and motion export.
+
+### Generate a dense motion pass
+
+```bash
+swift run mere.run vision flow ./frame-001.png ./frame-002.png \
+  --output ./frame-001-to-002.flo \
+  --accuracy high
+```
+
+The two images must have equal dimensions. Output vectors use the Middlebury
+`.flo` format and preserve full-resolution 32-bit horizontal and vertical
+motion components.
+
 ## Output artifacts
 
 ### `vision ground`
@@ -154,6 +180,21 @@ The tracking JSON includes:
 - stable tracked object metadata
 - per-frame detections with `objectID`, `label`, `score`, `visible`, `box`, `maskAreaPixels`, and optional `maskPath`
 
+### `vision pose`
+
+- JSON metadata written to `<stem>_pose.json` unless `--json-output` is provided
+- typed body, hand, and face subjects with stable point names
+- normalized coordinates, image dimensions, and confidence values
+- no separately installed model package on Apple platforms; inference is owned
+  by the native platform runtime in `MereRunCore`
+
+### `vision flow`
+
+- dense full-resolution two-component optical-flow vectors
+- standard Middlebury `.flo` output plus typed JSON metadata
+- selectable native accuracy and magnitude statistics
+- explicit equal-dimension validation
+
 ### OCR
 
 ```bash
@@ -180,7 +221,17 @@ swift run mere.run vision ocr ./page.png \
 - `Sources/MereRunCLI/Commands/VisionSegmentCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionTrackCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionTrackLiveCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionPoseCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionFlowCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionOCRCommand.swift`
+
+### Pose runtime
+
+- `Sources/MereRunCore/Pose/NativePoseDetector.swift`
+
+### Optical-flow runtime
+
+- `Sources/MereRunCore/OpticalFlow/NativeOpticalFlowGenerator.swift`
 
 ### OCR runtime
 

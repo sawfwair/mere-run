@@ -332,6 +332,20 @@ enum GuideRegistry {
             resourceName: "vision-track-live.md"
         ),
         GuideTopic(
+            topic: "vision-pose",
+            title: "Vision Pose",
+            commandPaths: [["vision", "pose"]],
+            models: [],
+            resourceName: "vision-pose.md"
+        ),
+        GuideTopic(
+            topic: "vision-flow",
+            title: "Vision Flow",
+            commandPaths: [["vision", "flow"]],
+            models: [],
+            resourceName: "vision-flow.md"
+        ),
+        GuideTopic(
             topic: "vision-ocr",
             title: "Vision OCR",
             commandPaths: [["vision", "ocr"]],

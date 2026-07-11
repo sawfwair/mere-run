@@ -220,6 +220,9 @@ let linuxNativeLinkerSettings: [LinkerSetting] = isLinuxPackage
 var mereRunCoreLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
 if !isLinuxPackage {
   mereRunCoreLinkerSettings.append(.linkedFramework("Metal"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("Vision"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("ImageIO"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("CoreVideo"))
 }
 
 var audioCodecsDependencies: [Target.Dependency] = mlxDependency("MLX")
@@ -290,6 +293,8 @@ targets.append(contentsOf: [
       "LoRA/README.md",
       "MagentaRT2/README.md",
       "PrivacyFilter/README.md",
+      "Pose/README.md",
+      "OpticalFlow/README.md",
       "Psi/README.md",
       "Q35/README.md",
       "Quantization/README.md",

@@ -33,6 +33,8 @@ Public tree:
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
+- `mere.run vision pose`
+- `mere.run vision flow`
 - `mere.run vision ocr`
 - `mere.run music analyze`
 - `mere.run music generate`
@@ -937,6 +939,46 @@ Notes:
 - live tracking searches a short warm-up window after the init frame so startup exposure or motion blur does not silently produce an unsegmented output
 - live mode accepts text prompts only in the current implementation
 - `--output` is required; `--json-output` is optional
+
+### `mere.run vision pose`
+
+Detect body, hand, and face landmarks in a local image through the native
+platform runtime. Coordinates are normalized with a bottom-left origin and the
+JSON payload records image dimensions, subject kinds, point names, and
+confidence values.
+
+```bash
+swift run mere.run vision pose ./person.png
+swift run mere.run vision pose ./person.png --no-face --minimum-confidence 0.25 --json
+```
+
+Key options:
+
+- `--json-output`: output path; defaults to `<image>_pose.json`
+- `--no-body`, `--no-hands`, `--no-face`: disable individual landmark groups
+- `--max-hands`: maximum hand observations
+- `--minimum-confidence`: filter weak landmarks
+- `--json`: print the complete payload on stdout as well as writing it
+
+On platforms without the Apple Vision framework, the command reports the
+unsupported native runtime explicitly.
+
+### `mere.run vision flow`
+
+Generate dense optical flow between two equal-size images through the native
+platform runtime. The output is a standard Middlebury `.flo` file containing
+one 32-bit horizontal/vertical vector per pixel.
+
+```bash
+swift run mere.run vision flow ./frame-001.png ./frame-002.png \
+  --output ./frame-001-to-002.flo \
+  --json-output ./frame-001-to-002.json \
+  --accuracy high
+```
+
+Metadata includes dimensions, vector count, accuracy, mean magnitude, and
+maximum magnitude. Accuracy values are `low`, `medium`, `high`, and
+`very-high`.
 
 ### `mere.run vision ocr`
 
