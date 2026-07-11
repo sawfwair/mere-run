@@ -16,6 +16,7 @@ private struct LFM2DecodeResult {
 
 private struct LFM2PrefixKVCacheKey: Hashable {
     let modelPath: String
+    let cacheMode: RuntimeKVCacheMode
     let tokens: [Int]
 }
 
@@ -297,10 +298,17 @@ public actor LFM2Generator: ChatGenerator {
             repetitionContextSize: 64
         )
 
-        var layerCaches = makeLayerCaches(config: loadedConfig)
+        let effectiveKVCacheMode: RuntimeKVCacheMode = request.kvCacheMode == .affine8
+            ? .affine8
+            : .default
+        var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
         var prefillStartIndex = 0
         var prefillExistingLogits: MLXArray?
-        if let seed = prefixKVCacheSeed(modelPath: loadedModelPath, promptTokens: promptTokens) {
+        if let seed = prefixKVCacheSeed(
+            modelPath: loadedModelPath,
+            promptTokens: promptTokens,
+            cacheMode: effectiveKVCacheMode
+        ) {
             layerCaches = seed.caches
             prefillStartIndex = seed.tokenCount
             prefillExistingLogits = seed.logits
@@ -347,7 +355,10 @@ public actor LFM2Generator: ChatGenerator {
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
                 decodeSeconds: decodeResult.decodeSeconds,
-                firstTokenSeconds: decodeResult.firstTokenSeconds
+                firstTokenSeconds: decodeResult.firstTokenSeconds,
+                kvCacheMode: effectiveKVCacheMode,
+                prefillKVCache: effectiveKVCacheMode.genericCacheLabel,
+                decodeKVCache: effectiveKVCacheMode.genericCacheLabel
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count
@@ -765,12 +776,14 @@ public actor LFM2Generator: ChatGenerator {
 
     private func prefixKVCacheSeed(
         modelPath: String?,
-        promptTokens: [Int]
+        promptTokens: [Int],
+        cacheMode: RuntimeKVCacheMode
     ) -> (tokenCount: Int, caches: [LFM2LayerCache?], logits: MLXArray)? {
         guard prefixKVCacheEnabled, let modelPath else { return nil }
         let matchingKey = prefixKVCache.keys
             .filter { key in
                 key.modelPath == modelPath
+                    && key.cacheMode == cacheMode
                     && key.tokens.count <= promptTokens.count
                     && promptTokens.starts(with: key.tokens)
             }
@@ -802,6 +815,7 @@ public actor LFM2Generator: ChatGenerator {
         guard prefixKVCacheEnabled, tokenCount > 0 else { return }
         let key = LFM2PrefixKVCacheKey(
             modelPath: modelPath,
+            cacheMode: cacheMode(for: cache),
             tokens: Array(promptTokens.prefix(tokenCount))
         )
         prefixKVCache[key] = LFM2PrefixKVCacheEntry(
@@ -857,13 +871,33 @@ public actor LFM2Generator: ChatGenerator {
         }
     }
 
-    private func makeLayerCaches(config: LFM2Config) -> [LFM2LayerCache?] {
+    private func makeLayerCaches(
+        config: LFM2Config,
+        kvCacheMode: RuntimeKVCacheMode = .default
+    ) -> [LFM2LayerCache?] {
         let attentionLayers = config.fullAttentionLayerIndexes
         return (0..<config.numHiddenLayers).map { layerIndex in
             if attentionLayers.contains(layerIndex) {
+                if kvCacheMode == .affine8 {
+                    return .attention(AffineQuantizedKVCache(
+                        groupSize: Self.affineKVGroupSize(headDimension: config.headDim),
+                        step: 256
+                    ))
+                }
                 return .attention(KVCacheSimple(step: 256))
             }
             return .conv(LFM2ConvCache())
         }
+    }
+
+    private func cacheMode(for caches: [LFM2LayerCache?]) -> RuntimeKVCacheMode {
+        caches.contains { entry in
+            guard case .attention(let cache)? = entry else { return false }
+            return cache is AffineQuantizedKVCache
+        } ? .affine8 : .default
+    }
+
+    private static func affineKVGroupSize(headDimension: Int) -> Int {
+        [64, 32, 16, 8].first { headDimension % $0 == 0 } ?? 1
     }
 }

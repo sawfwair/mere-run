@@ -25,6 +25,9 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
 
 public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendable {
     case `default`
+    /// Affine 8-bit resident K/V. This is an explicit memory/quality tradeoff
+    /// for native text engines without a model-specific packed cache kernel.
+    case affine8
     case polar2
     case auto
 
@@ -37,6 +40,13 @@ public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendabl
         switch self {
         case .default:
             return fallback
+        case .affine8:
+            return Gemma4KVCacheQuantization(
+                bits: 8,
+                scheme: .uniform,
+                groupSize: fallback.groupSize,
+                quantizedStart: 0
+            )
         case .polar2:
             return Self.gemma4Polar2Quantization(fallback: fallback)
         case .auto:
@@ -56,6 +66,15 @@ public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendabl
             groupSize: fallback.groupSize,
             quantizedStart: 0
         )
+    }
+
+    var genericCacheLabel: String {
+        switch self {
+        case .affine8:
+            return "resident-affine-8bit"
+        case .default, .polar2, .auto:
+            return "native"
+        }
     }
 }
 
@@ -135,14 +154,28 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
                 expected: expected
             )
         }
-        if let kvCacheMode = settings.kvCacheMode,
-           kvCacheMode != .default,
-           spec.defaultRuntimeServingEngine != .textChatGemma4 {
-            throw RuntimeModelSettingsError.incompatibleKVCacheMode(
-                modelID: spec.id,
-                requested: kvCacheMode,
-                expectedEngine: .textChatGemma4
-            )
+        if let kvCacheMode = settings.kvCacheMode, kvCacheMode != .default {
+            let engine = spec.defaultRuntimeServingEngine?.canonical
+            let compatible: Bool
+            let supportedEngines: [RuntimeServingEngine]
+            switch kvCacheMode {
+            case .affine8:
+                supportedEngines = [.textChatGemma4, .textChatQ36, .textChatLFM2]
+                compatible = engine.map(supportedEngines.contains) ?? false
+            case .polar2, .auto:
+                supportedEngines = [.textChatGemma4]
+                compatible = engine == .textChatGemma4
+            case .default:
+                supportedEngines = []
+                compatible = true
+            }
+            if !compatible {
+                throw RuntimeModelSettingsError.incompatibleKVCacheMode(
+                    modelID: spec.id,
+                    requested: kvCacheMode,
+                    expectedEngine: supportedEngines[0]
+                )
+            }
         }
         if spec.isAPISidecarRuntimeModel {
             guard settings.alias == nil,

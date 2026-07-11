@@ -87,6 +87,33 @@ final class RuntimeModelSettingsTests: XCTestCase {
         }
     }
 
+    func testAffineEightKVModeIsAcceptedByNativeAttentionEngines() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        for modelID in [
+            Gemma4Resources.defaultModelId,
+            Q35Resources.defaultModelId,
+            LFM2Resources.defaultModelId,
+        ] {
+            try store.writeSettings(RuntimeModelSettings(kvCacheMode: .affine8), for: modelID)
+            XCTAssertEqual(try store.settings(for: modelID).kvCacheMode, .affine8)
+        }
+    }
+
+    func testGemmaAffineEightMapsToUniformQuantization() {
+        let fallback = Gemma4KVCacheQuantization(bits: nil, scheme: .uniform, groupSize: 64, quantizedStart: 128)
+        let resolved = RuntimeKVCacheMode.affine8.gemma4Quantization(
+            fallback: fallback,
+            promptTokenCount: 10
+        )
+        XCTAssertEqual(resolved.scheme, .uniform)
+        XCTAssertEqual(resolved.bits, 8)
+        XCTAssertEqual(resolved.groupSize, 64)
+        XCTAssertEqual(resolved.quantizedStart, 0)
+    }
+
     func testQ36DefaultRuntimeEngineAcceptsLegacyQ35Alias() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -42,4 +42,13 @@ final class ModelRuntimeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.kvCacheMode, .auto)
         XCTAssertTrue(cmd.json)
     }
+
+    func testRuntimeSetParsesAffineEightKVMode() throws {
+        let cmd = try ModelRuntimeSet.parse([
+            "text-chat-q36-nano",
+            "--kv-cache-mode", "affine8",
+        ])
+
+        XCTAssertEqual(cmd.kvCacheMode, .affine8)
+    }
 }
