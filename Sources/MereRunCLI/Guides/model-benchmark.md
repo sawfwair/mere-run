@@ -157,14 +157,16 @@ probabilistic speculative path.
 
 `model benchmark api-workload` replays streaming `/v1/chat/completions`
 requests against an already-running `mere.run api serve` process. It is the
-serving-path benchmark for prefix reuse, request admission, and opt-in decode
-batching. The built-in workload uses a deterministic stable system prefix with
-different final user turns so prefix-cache hits, TTFT, and active-request
-behavior are visible in `/runtime/status`.
+serving-path benchmark for prefix reuse, request admission, and supported
+automatic decode batching. The built-in workload uses a deterministic stable
+system prefix with different final user turns so prefix-cache hits, TTFT, and
+active-request behavior are visible in `/runtime/status`.
 
 Run the same workload twice, with prefix reuse disabled for the baseline and
-then default prefix reuse plus opt-in batching enabled, before promoting cache
-or batching changes:
+then default prefix reuse plus `--max-active-requests 4`, before promoting cache
+or batching changes. Gemma4, Qwen-family, and LFM2 automatically engage their
+compatible-row batching implementations above concurrency `1`; their
+engine-specific variables are force-on/force-off overrides for explicit A/Bs:
 
 ```bash
 MERERUN_GEMMA4_PREFIX_KV_CACHE=0 \
@@ -177,7 +179,6 @@ mere.run model benchmark api-workload \
   --model text-chat-gemma4-turbo \
   --json
 
-MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 \
 mere.run api serve \
   --engine text-chat-gemma4 \
   --model text-chat-gemma4-turbo \

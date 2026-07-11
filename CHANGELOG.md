@@ -10,7 +10,9 @@ The format is based on Keep a Changelog.
 
 - added explicit affine 8-bit resident KV caches for Gemma4, Qwen-family, and
   LFM2 plus opt-in compressed-MLA and fused sparse-MoE execution for the native
-  Psi/GLM runtime, with numerical, structural-memory, and policy tests.
+  Psi/GLM runtime, with numerical, structural-memory, and policy tests. Affine
+  8-bit is a memory control relative to full-precision KV; Gemma Turbo's default
+  4-bit TurboQuant cache remains smaller.
 - added native MuScriptor full-mix audio-to-MIDI transcription through
   `music transcribe`, with managed small/medium/large checkpoints, exact HTK
   mel preprocessing, MLX transformer inference, instrument conditioning,
@@ -23,29 +25,54 @@ The format is based on Keep a Changelog.
   projection, pipelined GPU sampling, compact grouped-query caches, and true
   cached Falcon grounding.
 - generalized batched MuScriptor decode across independent audio chunks;
-  `music transcribe --chunk-batch-size` controls greedy, sampling, and beam
-  widths, while beam search packs all live beams into one forward per step and
-  preserves independent typed cache lanes.
-- added opt-in LFM2 continuous decode batching with ragged row-offset-aware KV
-  lanes, batched short-conv state, one sampling readback per step, immediate
-  finished-row compaction, and exact serial fallback for incompatible caches.
+  `music transcribe --chunk-batch-size` controls chunk groups in greedy,
+  sampling, and beam modes, while beam search packs all live beams into one
+  forward per step and preserves independent typed cache lanes.
+- enabled compatible-row continuous decode batching automatically for Gemma4,
+  Qwen-family, and LFM2 serving when `--max-active-requests` is above `1`.
+  Engine-specific environment variables remain force-on/force-off overrides;
+  LFM2 uses ragged row-offset-aware KV lanes, batched short-conv state, one
+  sampling readback per step, immediate finished-row compaction, and exact
+  serial fallback for incompatible caches.
 - changed Linux CUDA quantized matmul selection to probe native
   `quantized_mm` and `GatherQMM` independently, retaining an automatic dense
   fallback for runtimes that do not provide either kernel; Linux native
   preparation also skips unused llama tools and server targets.
-- generalized memory-aware batched classifier-free guidance across Qwen Image
-  Edit, Z-Image, FLUX.2 Klein, and HiDream O1, with a shared policy plus
-  model-specific overrides and exact serial fallbacks under memory or shape
-  pressure.
+- generalized batched classifier-free guidance across Qwen Image Edit, Z-Image,
+  FLUX.2 Klein, and HiDream O1, with a shared policy, model-specific overrides,
+  an automatic estimated-MLX-allocation-headroom gate, and exact serial shape
+  fallbacks. Forced batching bypasses the estimate and can increase peak memory
+  or exhaust unified memory.
 - moved LTX tiled VAE overlap blending from per-tile CPU readbacks and Swift
   pixel loops to device-side MLX accumulation and normalization.
+- streamed LTX video frames directly to FFmpeg stdin or AVAssetWriter one frame
+  at a time while overlapping the next device transfer, avoiding a monolithic
+  host frame buffer or raw-video spool. LTX audio is transferred and written in
+  aligned chunks, and float WAV output supports incremental writes without a
+  second whole-file `Data` copy.
+- enabled supported fused scaled-dot-product attention shapes by default for
+  SAM 3.1, LightOn OCR, and selected vision encoders, with
+  `MERERUN_FUSED_SDPA=0` as the portable fallback. Installed release checks
+  measured about 3% lower SAM text-prompt latency with 13.2% lower peak
+  footprint, and 1.46x LightOn OCR throughput with 55% lower peak footprint;
+  RSS stayed effectively flat in both cases.
+- removed Ideogram 4's redundant single-segment block mask by default. Custom
+  Ideogram QKV-normalization, AdaLN, and residual kernels remain opt-in through
+  `MERERUN_IDEOGRAM4_FUSED_KERNELS=1`: microbenchmarks improved, but the
+  installed-checkpoint warm path was 1.65x slower with no MLX peak-memory win.
 - kept the most recently used image, image-edit, TTS, and ASR sidecar runtimes
   resident in `api serve`; matching requests now reuse loaded model state,
   concurrent use of mutable generators is serialized, and switching models
   unloads the previous resident before loading its replacement. Sidecars use a
-  bounded five-minute idle TTL, honor managed-model `pinned` and `ttlSeconds`
-  settings, join memory-pressure eviction, and report residency/counters under
-  `/runtime/status` and `mere.run status` without evicting active work.
+  bounded five-minute idle TTL with autonomous expiry, poll live managed-model
+  `pinned` and `ttlSeconds` changes while idle, join memory-pressure eviction,
+  and report residency/readiness/counters under `/runtime/status` and
+  `mere.run status` without evicting active or queued work. The special
+  `qwen-image-edit` repository lane is resident but currently uses default
+  lifecycle settings because it is not configurable through `model runtime`.
+- pinned the Linux CUDA CMake bridge to the exact `mlx-swift` checkout selected
+  by SwiftPM under the active Linux Swift toolchain;
+  `MLX_SWIFT_CUDA_COMMIT` remains an explicit diagnostic override.
 
 ## 0.20.0 - 2026-07-07
 

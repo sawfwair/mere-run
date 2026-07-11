@@ -177,6 +177,13 @@ MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
 swift build --product mere.run
 ```
 
+The preparation script first lets SwiftPM resolve dependencies under the active
+Linux Swift toolchain, then builds the CMake CUDA bridge from that exact
+`mlx-swift` checkout. This keeps the bridge aligned when an older Swift
+toolchain selects a compatibility revision different from a Mac checkout.
+`MLX_SWIFT_CUDA_COMMIT` is available only as a deliberate maintainer diagnostic
+override; normal source builds should use the SwiftPM-selected revision.
+
 Do not describe a CUDA configuration as supported unless it has been run on that
 matching host.
 

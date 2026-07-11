@@ -164,27 +164,34 @@ swift run mere.run api serve \
   `/v1/audio/transcriptions` are sidecar routes over existing native CLI
   runtime paths. Installed image, TTS, and ASR sidecar catalog ids are listed in
   `/v1/models` even though they are not chat-serving engines.
-- the server keeps one most-recently-used image or image-edit runtime, one TTS
-  runtime, and one ASR runtime resident. Repeated requests for the same model
-  reuse loaded components; mutable generators execute exclusively, and a model
-  or ASR-backend switch unloads the previous runtime before loading the next one
-  so request-selected local paths cannot grow residency without bound.
-- sidecars default to a 300-second idle TTL. Managed image, TTS, and ASR models
-  accept `model runtime set <id> --ttl-seconds <seconds>` and `--pinned`; those
-  residency settings override the default or exempt the resident from automatic
-  eviction. Sidecar-specific settings reject text-only sampling, engine, alias,
-  context, and KV controls.
-- sidecar maintenance uses the same `--memory-guard` pressure level as the text
-  pool. Elevated pressure evicts the oldest idle unpinned sidecar after TTL
-  expirations; critical pressure evicts all eligible idle sidecars. The
-  nonblocking eviction lease skips active or queued work.
+- the server keeps one most-recently-used image lane shared by generation and
+  editing, one TTS lane, and one ASR lane resident. Repeated requests for the
+  same model reuse loaded components; mutable generators execute exclusively,
+  and a model or ASR-backend switch unloads the previous runtime before loading
+  the next one so request-selected local paths cannot grow residency without
+  bound.
+- sidecars default to a 300-second idle TTL. Per-lane autonomous timers expire
+  idle residents without waiting for another request and re-read managed
+  `pinned` and `ttlSeconds` settings while idle, so live settings changes take
+  effect. Managed image, TTS, and ASR models accept
+  `model runtime set <id> --ttl-seconds <seconds>` and `--pinned`;
+  sidecar-specific settings reject text-only sampling, engine, alias, context,
+  and KV controls. The special `qwen-image-edit` repository lane is resident but
+  currently uses the default lifecycle policy because it is not configurable
+  through `model runtime`.
+- sidecar admission samples the same `--memory-guard` policy before and after an
+  operation. Under pressure it gives idle unpinned text runtimes the first
+  opportunity to unload, one at a time with pressure re-sampled after each
+  eviction; the idle startup default is eligible for this sidecar admission
+  path. If pressure remains, eligible idle sidecars are evicted oldest first.
+  Active, queued, or pinned residents are protected throughout.
 - chat completions pass through a fair FIFO request admission actor; the default
   `--max-active-requests 1` preserves serialized local inference and exposes
   queue depth in status; queued client cancellations are removed from the FIFO
   instead of being admitted later
-- Gemma4 and Qwen-family prefills are chunked with cancellation and progress checkpoints
-  before decode; this is cooperative single-request prefill, not continuous
-  batching
+- Gemma4, Qwen-family, and LFM2 prefills are chunked with cancellation and
+  progress checkpoints before decode; this is cooperative single-request
+  prefill, not continuous batching
 - Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
   cache entries, hits, and reused tokens when the Gemma4 model is loaded; the
@@ -200,33 +207,40 @@ swift run mere.run api serve \
   for greedy serial decode-tail speculation after prefill; sampled requests,
   raw local model paths, prefix-KV seeded requests, and continuous batching stay
   on baseline decode.
-- Gemma4 and Qwen-family chat have opt-in decode batching prototypes behind
-  `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` and
-  `MERERUN_Q35_CONTINUOUS_BATCHING=1`; set `--max-active-requests` above `1` to
-  allow overlapping rows, and `/runtime/status` reports actual batched decode
-  steps instead of assuming the scheduler is active; Gemma4 full-attention rows
-  remain same-position because that engine still uses scalar RoPE/cache offsets,
-  while Qwen-family full-attention rows use row-offset-aware ragged KV caches and Qwen-family
-  linear rows use typed recurrent state so compatible Qwen-family rows may batch across
-  decode positions; the scheduler services the earliest decode position first,
-  batching compatible rows there or advancing a single lower-offset row until it
-  can join one
+- Gemma4, Qwen-family, and LFM2 decode batching engages automatically when
+  `--max-active-requests` is above `1`. Their engine-specific continuous-batching
+  variables can force the implementation on or force the serial path, and
+  `/runtime/status` reports actual batched decode steps instead of assuming the
+  scheduler is active. Gemma4 full-attention rows remain same-position because
+  that engine still uses scalar RoPE/cache offsets. Qwen-family and LFM2
+  full-attention rows use row-offset-aware ragged KV caches; Qwen-family linear
+  attention and LFM2 short-convolution layers use typed recurrent state, so
+  compatible rows may batch across decode positions. The scheduler services the
+  earliest decode position first, batching compatible rows there or advancing a
+  single lower-offset row until it can join one
 - Gemma4 has an experimental packed PolarKV path behind
   `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
   long-context synthetic decode testing. It is not the default until checkpoint
   benchmarks prove the end-to-end model path.
 - Gemma4, Qwen-family, and LFM2 runtime settings can set `kvCacheMode` to
-  explicit memory-oriented `affine8`. Gemma4 additionally accepts `polar2` or
-  `auto`; `auto` keeps the default KV path below 1024 prompt tokens and switches
-  to decode-deferred packed PolarKV at or above that threshold.
+  explicit `affine8` as a memory control relative to full-precision KV.
+  Qwen-family and LFM2 dequantize the generic cache for attention. Gemma Turbo
+  already defaults to a smaller 4-bit TurboQuant cache, so forcing affine 8-bit
+  can increase its KV residency. `default` restores the engine/model/server
+  default, not necessarily full precision. Gemma additionally accepts `polar2`
+  or `auto`; `auto` keeps the default KV path below 1024 prompt tokens and
+  switches to decode-deferred packed PolarKV at or above that threshold.
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
   steps across loaded models under `cacheStats`; it also reports completed chat
   request counts, generated tokens, and average load/prefill/decode timings
   under `benchmarkStats`. The additive `sidecars` object reports the image,
   speech, and transcription resident model/path, active and queued requests,
-  load/access/eviction timestamps, TTL/pinned state, and lifecycle counters;
-  older status clients can ignore it. SSD KV persistence remains unavailable
-  until the in-memory counters justify it
+  load/access/eviction timestamps, TTL/pinned state, readiness, and lifecycle
+  counters. For text and sidecar entries, `loaded` remains the compatibility
+  signal that a resident object exists; additive `ready: false` means text
+  preparation is in progress or a sidecar's first operation is loading or
+  failed. Older payloads can omit `ready`, and older clients can ignore it. SSD
+  KV persistence remains unavailable until the in-memory counters justify it
 - runtime settings are stored at
   `<active model store>/.mere-run/runtime-model-settings.json`
 - the runtime pool applies `ttlSeconds` opportunistically when handling pool
@@ -264,14 +278,21 @@ The control endpoints use the same bearer-token behavior as `/v1/models`,
 - `GET /runtime/status`: server health, pool entries, active request counts,
   request admission state, runtime capability flags, memory snapshot, settings
   path, aggregate cache stats, per-model prefix KV cache stats, per-model decode
-  batching stats when enabled, and aggregate benchmark stats measured from
-  completed native chat requests.
+  batching stats when enabled, text/sidecar residency and readiness, and
+  aggregate benchmark stats measured from completed native chat requests.
 - `POST /runtime/models/{id}/load`: explicitly load an installed API-capable
-  catalog model.
-- `POST /runtime/models/{id}/unload`: unload a model; returns `409` while
-  active requests are using it.
-- `GET /runtime/models/{id}/settings`: read typed runtime defaults.
-- `PATCH /runtime/models/{id}/settings`: replace typed runtime defaults.
+  text-pool catalog model.
+- `POST /runtime/models/{id}/unload`: unload a text-pool model; returns `409`
+  while active requests are using it.
+- `GET /runtime/models/{id}/settings`: read typed text-pool runtime defaults.
+- `PATCH /runtime/models/{id}/settings`: replace typed text-pool runtime
+  defaults.
+
+These four `/runtime/models/{id}` HTTP operations address the chat/text runtime
+pool only. Managed image, TTS, and ASR sidecar TTL/pinning is configured with
+`mere.run model runtime set` (or the settings file); there is no sidecar HTTP
+load/unload/settings endpoint. Sidecars still appear in `/v1/models` and in the
+`sidecars` object returned by `/runtime/status`.
 
 `GET /v1/models` returns installed API-servable chat managed IDs, configured
 aliases, and installed native sidecar model ids for embeddings, image, TTS, and
@@ -733,19 +754,21 @@ The CLI cookbook has the longer copy-paste recipe:
 mere.run guide open-webui
 ```
 
-Fair FIFO request admission is part of the runtime pool now, and Gemma4/Qwen-family chat use
-engine-specific chunked prefill checkpoints. Gemma4 and Qwen-family prefix KV reuse are
-available as opt-in in-memory prototypes; Qwen-family reuse is limited to text-only
-requests. Gemma4 and Qwen-family decode batching are also available as opt-in
-prototypes: they merge typed cache rows for actual batched decode calls, then
-split the rows back so each request keeps its own state. Gemma4 and Qwen-family
-status reports same-position versus variable-position batched steps separately.
-Qwen-family full-attention rows can batch across different decode positions through
-row-offset-aware ragged KV caches, and Qwen-family linear rows can do the same when typed
-linear cache state is compatible. Gemma4 full-attention rows still require
-matching scalar offsets. SSD KV persistence remains later, measured work; use
-`cacheStats` plus `benchmarkStats` to decide whether that experiment is worth
-expanding on a real machine.
+Fair FIFO request admission is part of the runtime pool now, and Gemma4,
+Qwen-family, and LFM2 chat use engine-specific chunked prefill checkpoints.
+Matching text prefixes reuse in-memory KV by default for all three families;
+Qwen-family vision requests remain excluded, and the engine-specific prefix
+variables can disable reuse for an A/B. Decode batching also engages for all
+three when `--max-active-requests` is above `1`, with force-on/force-off
+environment overrides. The implementations merge compatible typed cache rows
+for actual batched decode calls, then split them so each request retains its own
+state. Qwen-family and LFM2 full-attention rows can batch across positions with
+row-offset-aware ragged KV caches; Qwen-family linear state and LFM2
+short-convolution state are batched when their typed shapes are compatible.
+Gemma4 full-attention rows still require matching scalar offsets. SSD KV
+persistence remains later, measured work; use `cacheStats` plus
+`benchmarkStats` to decide whether that experiment is worth expanding on a real
+machine.
 
 If you are working on this area, read [CLI and Runtime Internals](../internals/cli-and-runtime.md) after the command source.
 

@@ -41,6 +41,22 @@ Segmentation and tracking run natively through the Swift/MLX SAM 3.1 stack in
 - offline video tracking currently uses native prompt propagation built on top of the image segmenter rather than a full SAM memory-bank tracker
 - live capture is text-prompt seeded only in the current CLI surface
 
+## Fused attention policy
+
+Supported SAM 3.1, LightOn OCR, and selected vision-encoder attention shapes use
+MLX fused scaled-dot-product attention by default. Unsupported shapes retain
+their portable implementation. Set `MERERUN_FUSED_SDPA=0` for an emergency
+compatibility fallback or a controlled A/B.
+
+The installed-model gate on 2026-07-11 used release binaries on an M4 Max with
+128 GB unified memory. A SAM 3.1 text-prompt segmentation run was about 3%
+faster (1.36s to 1.32s) and reduced peak footprint by 13.2%; all 11 exported
+masks were bit-exact, with only negligible score/box deltas. A warm LightOn OCR
+run improved from 2.87s to 1.97s (1.46x throughput) and reduced peak footprint
+by 55%, with byte-identical text. Process RSS was effectively flat in both
+comparisons, so these measurements are not presented as general RSS savings or
+as guarantees for other models, prompts, or shapes.
+
 ## Typical workflows
 
 ### Caption an image

@@ -9,29 +9,34 @@ theoretically faster.
 
 ### Broader resident KV compression
 
-`RuntimeKVCacheMode.affine8` stores attention keys and values as groupwise
-affine 8-bit buffers for Gemma4, Qwen-family full-attention layers, and LFM2
-full-attention layers. Qwen hybrid linear-attention state and LFM2 convolution
-state keep their native representations.
+`RuntimeKVCacheMode.affine8` selects groupwise affine 8-bit attention K/V for
+Gemma4, Qwen-family full-attention layers, and LFM2 full-attention layers. Gemma
+uses its existing model-specific quantized cache path. Qwen hybrid
+linear-attention state and LFM2 convolution state keep their native
+representations.
 
-The generic cache supports prefix-cache forks, same-offset decode batching,
-and row splitting. It dequantizes for attention because these engines do not
-have a packed KV-attention kernel. Consequently it is an explicit
-memory/quality control, not an automatic speed policy. Structural tests compare
-materialized packed bytes with BF16 and numerical tests bound the 8-bit
-round-trip error.
+The generic Qwen/LFM2 cache supports prefix-cache forks, same-offset decode
+batching, and row splitting. It dequantizes for attention because those engines
+do not have a packed KV-attention kernel. Consequently affine 8-bit is an
+explicit memory/quality control relative to full-precision KV, not an automatic
+speed policy. Structural tests compare materialized packed bytes with BF16 and
+numerical tests bound the 8-bit round-trip error.
 
-For BF16 K/V with group size 64, packed weights plus affine scales and biases
-occupy 53.125% of the native resident buffers at equal allocation capacity: a
-46.875% persistent-cache reduction. Temporary dequantized attention inputs are
-not counted as resident cache savings.
+For the generic Qwen/LFM2 cache, BF16 K/V with group size 64 versus packed
+weights plus affine scales and biases yields 53.125% of the full-precision
+resident bytes at equal allocation capacity: a 46.875% persistent-cache
+reduction. Temporary dequantized attention inputs are not counted as resident
+cache savings. This ratio does not apply to `text-chat-gemma4-turbo`: its
+engine default is already a smaller 4-bit TurboQuant cache, so forcing affine
+8-bit can increase KV residency.
 
 ```bash
 swift run mere.run model runtime set text-chat-q36-nano \
   --kv-cache-mode affine8
 ```
 
-Use `default` for an output-quality or throughput baseline.
+Use `default` for the selected engine/model/server baseline; it does not promise
+native full precision.
 
 Real-checkpoint gate (2026-07-11, M4 Max 128 GB,
 `LiquidAI/LFM2.5-8B-A1B-MLX-8bit@984aa3f`): after one warmup per mode, a

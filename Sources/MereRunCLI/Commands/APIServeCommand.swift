@@ -112,7 +112,13 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Global request limit for /v1/chat/completions and /v1/embeddings per rolling minute.")
     var rateLimitPerMinute: Int = 60
 
-    @Option(name: [.long], help: "Maximum chat completions admitted at once. Defaults to 1 for serialized local inference.")
+    @Option(
+        name: [.long],
+        help: """
+        Maximum chat completions admitted at once. Defaults to 1; values above 1 automatically enable \
+        supported Gemma4, Qwen-family, and LFM2 decode batching unless overridden by environment.
+        """
+    )
     var maxActiveRequests: Int = 1
 
     @Option(name: [.long], help: "Runtime memory guard tier: off, safe, balanced, aggressive, or custom.")

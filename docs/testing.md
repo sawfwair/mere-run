@@ -85,7 +85,13 @@ swift build --target mere.run
 
 In this mode `Package.swift` imports the CMake-built `mlx-swift` Swift modules
 and static libraries instead of rebuilding `mlx-swift` through SwiftPM's
-CPU-oriented Linux manifest path.
+CPU-oriented Linux manifest path. The preparation script checks out the exact
+`mlx-swift` revision selected by SwiftPM under the active Linux Swift toolchain,
+keeping the CMake bridge and Swift package graph aligned even when that
+toolchain resolves a compatibility revision different from a Mac checkout.
+`MLX_SWIFT_CUDA_COMMIT` is a deliberate diagnostic override for maintainers,
+not part of normal setup. This pin removes source drift; it does not count as
+CUDA validation on a host that has not run the path.
 
 Linux release packaging has its own artifact check:
 

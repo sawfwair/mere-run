@@ -336,6 +336,23 @@ adapter is enabled, the CLI raises the image prompt token budget to 2048 unless
 the user already requested a larger value. Use `--structured-prompt-output` to
 save the generated JSON for review or later refinement.
 
+The supported packer emits one uniform segment, so Ideogram skips the redundant
+block mask exactly and by default. At a representative 1024x1024 shape with
+4096 image tokens, 64 text tokens, and 18 heads, this avoids a 16.50 MiB
+one-byte mask plus a 1.160 GiB float32 masked-score graph intermediate per
+layer. Those are avoided transient allocation and memory-traffic estimates, not
+a guaranteed RSS reduction; layer buffers are reused, so the per-layer number
+must not be multiplied by the model's 34 layers to predict peak memory.
+
+Custom QKV-normalization, AdaLN, and residual Metal kernels remain opt-in with
+`MERERUN_IDEOGRAM4_FUSED_KERNELS=1`. Although their isolated microbenchmarks
+were faster, a fixed 256x256, one-step installed-checkpoint release A/B measured
+the warm portable graph at 2.532s and the custom path at 4.169s, 1.65x slower,
+with the same roughly 2.94 GiB warm incremental MLX peak. The two paths were
+internally deterministic and visually close but not bit-exact, so the portable
+graph remains the production default. The exact uniform-mask removal is
+independent of this experimental switch.
+
 ### Deterministic validation
 
 ```bash
@@ -395,9 +412,12 @@ swift run mere.run image validate --family klein --test pipeline
 
 Qwen Image Edit, Z-Image, FLUX.2 Klein, and HiDream O1 automatically combine
 unconditional and conditional CFG into one transformer batch on Apple silicon
-Macs with sufficient live headroom for the requested resolution. HiDream masks
-the padding used to align different prompt lengths; Z-Image keeps the serial
-path when the two encoded prompt shapes cannot be paired exactly. The
+Macs with at least 24 GiB of physical memory and sufficient estimated MLX
+allocation headroom for the requested resolution. The estimate subtracts MLX
+active and cache allocations from physical memory; it is not host-wide
+available-memory or operating-system pressure telemetry. HiDream masks the
+padding used to align different prompt lengths; Z-Image keeps the serial path
+when the two encoded prompt shapes cannot be paired exactly. The
 memory-constrained FLUX.2 iOS pipeline also keeps its serial two-pass path.
 
 Set `MERERUN_IMAGE_BATCHED_CFG=batched` to force the throughput policy or
@@ -407,7 +427,8 @@ model-specific `MERERUN_QWEN_IMAGE_BATCHED_CFG`,
 `MERERUN_HIDREAM_BATCHED_CFG` variables take precedence. Unset the variables
 (or use `auto`) for the memory-aware default. A forced batched policy bypasses
 the headroom check but still falls back to serial execution when conditioning
-shapes are incompatible.
+shapes are incompatible. Because forced batching ignores the estimate, it can
+increase peak memory or exhaust unified memory at large resolutions.
 
 ## How image generation flows
 
