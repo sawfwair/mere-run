@@ -59,4 +59,9 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         XCTAssertThrowsError(try command.validate())
     }
 
+    func testHelpDescribesChunkBatchSizeAsAdaptiveMaximum() {
+        let help = MusicTranscribe.helpMessage()
+        XCTAssertTrue(help.contains("Maximum five-second chunks"))
+        XCTAssertTrue(help.contains("live-beam limits may reduce it"))
+    }
 }

@@ -1095,8 +1095,10 @@ Key options:
 - `--max-tokens-per-chunk`
 - `--strict-eos`
 - `--beam-size`
-- `--chunk-batch-size`: independent five-second chunks decoded together for
-  greedy, sampling, or beam mode (default `4`; live beams share one forward)
+- `--chunk-batch-size`: upper bound on independent five-second chunks decoded
+  together for greedy, sampling, or beam mode (default `4`). The runtime may
+  reduce it for current unified-memory headroom and model/beam saturation;
+  `1` always selects the single-chunk path.
 - `--dtype`: `bfloat16`, `float16`, or `float32`
 - `--quiet`
 

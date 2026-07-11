@@ -53,10 +53,12 @@ public final class MuScriptorTranscriber {
 
     private let model: MuScriptorModel
     private let melSpectrogram: MuScriptorMelSpectrogram
+    private let memoryScale: Int
 
-    public init(model: MuScriptorModel) {
+    public init(model: MuScriptorModel, memoryScale: Int = 1) {
         self.model = model
         self.melSpectrogram = MuScriptorMelSpectrogram()
+        self.memoryScale = max(1, memoryScale)
     }
 
     public static func load(
@@ -65,11 +67,19 @@ public final class MuScriptorTranscriber {
         dtype: DType = .bfloat16
     ) throws -> MuScriptorTranscriber {
         let resources = MuScriptorResources(rootURL: rootURL)
-        return try MuScriptorTranscriber(model: .load(
+        let model = try MuScriptorModel.load(
             resources: resources,
             variant: variant,
             dtype: dtype
-        ))
+        )
+        return MuScriptorTranscriber(
+            model: model,
+            memoryScale: memoryScale(for: dtype)
+        )
+    }
+
+    static func memoryScale(for dtype: DType) -> Int {
+        max(1, (dtype.size + 1) / 2)
     }
 
     public func transcribe(
@@ -86,10 +96,20 @@ public final class MuScriptorTranscriber {
         var chunkTokens: [[Int]] = []
         chunkTokens.reserveCapacity(chunkCount)
         progress?(0, chunkCount)
+        let machine = MereRunMachineProfile.current
+        let effectiveChunkBatchSize = MuScriptorBatchPolicy.effectiveChunkBatchSize(
+            requested: options.chunkBatchSize,
+            configuration: model.configuration,
+            beamSize: options.beamSize,
+            physicalMemoryBytes: machine.isAppleSiliconMac ? machine.physicalMemoryBytes : nil,
+            activeMemoryBytes: Memory.activeMemory,
+            cacheMemoryBytes: Memory.cacheMemory,
+            memoryScale: memoryScale
+        )
 
         if options.beamSize > 1 {
-            for batchStart in stride(from: 0, to: chunkCount, by: options.chunkBatchSize) {
-                let batchEnd = min(chunkCount, batchStart + options.chunkBatchSize)
+            for batchStart in stride(from: 0, to: chunkCount, by: effectiveChunkBatchSize) {
+                let batchEnd = min(chunkCount, batchStart + effectiveChunkBatchSize)
                 let indices = Array(batchStart..<batchEnd)
                 let prefixes = try indices.map { chunkIndex in
                     try conditioningPrefix(
@@ -110,8 +130,8 @@ public final class MuScriptorTranscriber {
                 }
             }
         } else {
-            for batchStart in stride(from: 0, to: chunkCount, by: options.chunkBatchSize) {
-                let batchEnd = min(chunkCount, batchStart + options.chunkBatchSize)
+            for batchStart in stride(from: 0, to: chunkCount, by: effectiveChunkBatchSize) {
+                let batchEnd = min(chunkCount, batchStart + effectiveChunkBatchSize)
                 let indices = Array(batchStart..<batchEnd)
                 let prefixes = try indices.map { chunkIndex in
                     try conditioningPrefix(
@@ -273,7 +293,8 @@ public final class MuScriptorTranscriber {
     func generateChunksWithBeamSearch(
         indices: [Int],
         prefix: MLXArray,
-        options: MuScriptorTranscriptionOptions
+        options: MuScriptorTranscriptionOptions,
+        maximumLiveLanes: Int? = nil
     ) throws -> [[Int]] {
         guard !indices.isEmpty else { return [] }
         let width = options.beamSize
@@ -313,38 +334,49 @@ public final class MuScriptorTranscriber {
                 }
                 if active.isEmpty { break }
 
-                guard let batchedCaches = MuScriptorBeamBatching.batch(
-                    active.map { $0.beam.caches }
-                ) else {
-                    preconditionFailure("MuScriptor active beam caches could not be batched")
-                }
-                let activeTokens = MLXArray(active.map { Int32($0.beam.currentToken) })
-                    .reshaped(active.count, 1)
-                let logits = model.batchedLogits(
-                    tokenIDs: activeTokens,
-                    prefix: nil,
-                    caches: batchedCaches
-                )
-                MLX.eval(logits)
-                guard let advancedCacheRows = MuScriptorBeamBatching.split(
-                    caches: batchedCaches,
-                    rowCount: active.count
-                ) else {
-                    preconditionFailure("MuScriptor advanced beam cache rows could not be split")
-                }
-                let nextCandidates = topLogProbabilitiesByRow(logits, count: width)
                 var candidatesByChunk = chunkBeams.map { $0.filter(\.ended) }
-                for (activeRow, entry) in active.enumerated() {
-                    for next in nextCandidates[activeRow] {
-                        var tokens = entry.beam.tokens
-                        if next.token != 1 { tokens.append(next.token) }
-                        candidatesByChunk[entry.chunkRow].append(Beam(
-                            tokens: tokens,
-                            currentToken: next.token,
-                            score: entry.beam.score + next.logProbability,
-                            caches: fork(advancedCacheRows[activeRow]),
-                            ended: next.token == 1
-                        ))
+                let liveLaneLimit = max(
+                    1,
+                    maximumLiveLanes
+                        ?? Int(MuScriptorBatchPolicy.maximumLiveLanes(configuration: model.configuration))
+                )
+                for range in MuScriptorBeamBatching.microbatchRanges(
+                    rowCount: active.count,
+                    maximumRows: liveLaneLimit
+                ) {
+                    let microbatch = active[range]
+                    guard let batchedCaches = MuScriptorBeamBatching.batch(
+                        microbatch.map { $0.beam.caches }
+                    ) else {
+                        preconditionFailure("MuScriptor active beam caches could not be batched")
+                    }
+                    let activeTokens = MLXArray(microbatch.map { Int32($0.beam.currentToken) })
+                        .reshaped(microbatch.count, 1)
+                    let logits = model.batchedLogits(
+                        tokenIDs: activeTokens,
+                        prefix: nil,
+                        caches: batchedCaches
+                    )
+                    MLX.eval(logits)
+                    guard let advancedCacheRows = MuScriptorBeamBatching.split(
+                        caches: batchedCaches,
+                        rowCount: microbatch.count
+                    ) else {
+                        preconditionFailure("MuScriptor advanced beam cache rows could not be split")
+                    }
+                    let nextCandidates = topLogProbabilitiesByRow(logits, count: width)
+                    for (activeRow, entry) in microbatch.enumerated() {
+                        for next in nextCandidates[activeRow] {
+                            var tokens = entry.beam.tokens
+                            if next.token != 1 { tokens.append(next.token) }
+                            candidatesByChunk[entry.chunkRow].append(Beam(
+                                tokens: tokens,
+                                currentToken: next.token,
+                                score: entry.beam.score + next.logProbability,
+                                caches: fork(advancedCacheRows[activeRow]),
+                                ended: next.token == 1
+                            ))
+                        }
                     }
                 }
                 chunkBeams = candidatesByChunk.map { candidates in
@@ -417,6 +449,14 @@ enum MuScriptorBeamBatching {
             legacy: activeRowsPerStep.reduce(0) { $0 + max(0, $1) },
             batched: activeRowsPerStep.filter { $0 > 0 }.count
         )
+    }
+
+    static func microbatchRanges(rowCount: Int, maximumRows: Int) -> [Range<Int>] {
+        guard rowCount > 0 else { return [] }
+        let maximumRows = max(1, maximumRows)
+        return stride(from: 0, to: rowCount, by: maximumRows).map { start in
+            start..<min(rowCount, start + maximumRows)
+        }
     }
 
     static func batch(_ rowCaches: [[KVCacheSimple]]) -> [KVCacheSimple]? {

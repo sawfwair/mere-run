@@ -154,6 +154,10 @@ final class MuScriptorTests: XCTestCase {
 
         XCTAssertEqual(counts.legacy, 26)
         XCTAssertEqual(counts.batched, 5)
+        XCTAssertEqual(
+            MuScriptorBeamBatching.microbatchRanges(rowCount: 18, maximumRows: 8),
+            [0..<8, 8..<16, 16..<18]
+        )
     }
 
     func testBeamBatchCacheMergeAndSplitPreserveIndependentRows() throws {
@@ -214,10 +218,205 @@ final class MuScriptorTests: XCTestCase {
         XCTAssertEqual(batched, [first[0], second[0]])
     }
 
+    func testOversizedBeamMicrobatchMatchesUnboundedForward() throws {
+        let config = MuScriptorConfiguration(dim: 8, numHeads: 2, numLayers: 1, card: 1_393)
+        let transcriber = MuScriptorTranscriber(model: MuScriptorModel(configuration: config))
+        let firstPrefix = MLXArray((0..<24).map { Float($0) / 24 }, [1, 3, 8])
+        let secondPrefix = MLXArray((0..<24).map { Float(24 - $0) / 24 }, [1, 3, 8])
+        let prefix = MLX.concatenated([firstPrefix, secondPrefix], axis: 0)
+        let options = MuScriptorTranscriptionOptions(
+            maxTokensPerChunk: 4,
+            beamSize: 9,
+            chunkBatchSize: 2
+        )
+
+        let microbatched = try transcriber.generateChunksWithBeamSearch(
+            indices: [0, 1],
+            prefix: prefix,
+            options: options,
+            maximumLiveLanes: 8
+        )
+        let unbounded = try transcriber.generateChunksWithBeamSearch(
+            indices: [0, 1],
+            prefix: prefix,
+            options: options,
+            maximumLiveLanes: 32
+        )
+
+        XCTAssertEqual(microbatched, unbounded)
+    }
+
     func testTranscriptionOptionsValidateChunkBatchSize() throws {
         try MuScriptorTranscriptionOptions(chunkBatchSize: 4).validate()
         XCTAssertThrowsError(
             try MuScriptorTranscriptionOptions(chunkBatchSize: 0).validate()
+        )
+    }
+
+    func testBatchPolicyScalesLiveBeamBudgetWithModelComplexity() {
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.maximumLiveLanes(configuration: .large),
+            8
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.maximumLiveLanes(configuration: .medium),
+            32
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.maximumLiveLanes(configuration: .small),
+            32
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.estimatedBytesPerChunk(
+                configuration: .large,
+                beamSize: 4
+            ),
+            18 * MuScriptorBatchPolicy.gibibyte
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 9,
+                physicalMemoryBytes: nil,
+                activeMemoryBytes: nil,
+                cacheMemoryBytes: nil
+            ),
+            1
+        )
+    }
+
+    func testBatchPolicySelectsMeasuredLargeBeamEnvelopeOn128GB() {
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 128 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: 8 * Int(MuScriptorBatchPolicy.gibibyte),
+                cacheMemoryBytes: 2 * Int(MuScriptorBatchPolicy.gibibyte)
+            ),
+            2
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 64 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: 6 * Int(MuScriptorBatchPolicy.gibibyte),
+                cacheMemoryBytes: 4 * Int(MuScriptorBatchPolicy.gibibyte)
+            ),
+            2
+        )
+    }
+
+    func testBatchPolicyClampsLargeBeamEnvelopeWithMemoryHeadroom() {
+        let allocatedBytes = 10 * Int(MuScriptorBatchPolicy.gibibyte)
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 64 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: allocatedBytes,
+                cacheMemoryBytes: 0
+            ),
+            2
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 32 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: allocatedBytes,
+                cacheMemoryBytes: 0
+            ),
+            1
+        )
+        XCTAssertEqual(MuScriptorTranscriber.memoryScale(for: .bfloat16), 1)
+        XCTAssertEqual(MuScriptorTranscriber.memoryScale(for: .float16), 1)
+        XCTAssertEqual(MuScriptorTranscriber.memoryScale(for: .float32), 2)
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 64 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: allocatedBytes,
+                cacheMemoryBytes: 0,
+                memoryScale: 2
+            ),
+            1
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 64 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: 30 * Int(MuScriptorBatchPolicy.gibibyte),
+                cacheMemoryBytes: 4 * Int(MuScriptorBatchPolicy.gibibyte)
+            ),
+            1
+        )
+    }
+
+    func testBatchPolicyPreservesExplicitOneAndUnknownPhysicalProfile() {
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 1,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 128 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: 0,
+                cacheMemoryBytes: 0
+            ),
+            1
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .medium,
+                beamSize: 1,
+                physicalMemoryBytes: nil,
+                activeMemoryBytes: nil,
+                cacheMemoryBytes: nil
+            ),
+            4
+        )
+    }
+
+    func testBatchPolicyFallsBackToModelEstimateAndHandlesOverflow() {
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: 4,
+                configuration: .large,
+                beamSize: 4,
+                physicalMemoryBytes: 32 * MuScriptorBatchPolicy.gibibyte,
+                activeMemoryBytes: nil,
+                cacheMemoryBytes: nil
+            ),
+            1
+        )
+
+        let oversized = MuScriptorConfiguration(
+            dim: Int.max,
+            numHeads: 1,
+            numLayers: Int.max,
+            card: Int.max
+        )
+        XCTAssertEqual(
+            MuScriptorBatchPolicy.effectiveChunkBatchSize(
+                requested: Int.max,
+                configuration: oversized,
+                beamSize: Int.max,
+                physicalMemoryBytes: UInt64.max,
+                activeMemoryBytes: Int.max,
+                cacheMemoryBytes: Int.max
+            ),
+            1
         )
     }
 
