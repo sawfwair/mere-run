@@ -4,6 +4,19 @@ import XCTest
 @testable import MereRunCore
 
 final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
+    func testCUDAQuantModeParsingDefaultsToAutomatic() {
+        XCTAssertEqual(MLXCUDAQuant.parseMode(nil), .automatic)
+        XCTAssertEqual(MLXCUDAQuant.parseMode(""), .automatic)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("auto"), .automatic)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("unexpected"), .automatic)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("1"), .native)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("native"), .native)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("YES"), .native)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("0"), .dense)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("dense"), .dense)
+        XCTAssertEqual(MLXCUDAQuant.parseMode("off"), .dense)
+    }
+
     func testQ35SwitchLinearDenseExpertPathTransposesWeights() throws {
         let weight = MLXArray([
             1.0, 2.0, 3.0,
