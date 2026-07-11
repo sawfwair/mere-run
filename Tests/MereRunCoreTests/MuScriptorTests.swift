@@ -54,6 +54,69 @@ final class MuScriptorTests: XCTestCase {
         XCTAssertEqual(logits.shape, [1_393])
     }
 
+    func testBatchedLogitsMatchIndependentChunkLanes() {
+        let config = MuScriptorConfiguration(dim: 8, numHeads: 2, numLayers: 1, card: 1_393)
+        let model = MuScriptorModel(configuration: config)
+        let firstPrefix = MLXArray((0..<24).map { Float($0) / 24 }, [1, 3, 8])
+        let secondPrefix = MLXArray((0..<24).map { Float(24 - $0) / 24 }, [1, 3, 8])
+        let batchPrefix = MLX.concatenated([firstPrefix, secondPrefix], axis: 0)
+        let batchCaches = model.makeCaches()
+        let firstCaches = model.makeCaches()
+        let secondCaches = model.makeCaches()
+
+        let batchPrefill = model.batchedLogits(
+            tokenIDs: MLXArray([Int32(config.card), Int32(config.card)]).reshaped(2, 1),
+            prefix: batchPrefix,
+            caches: batchCaches
+        )
+        let firstPrefill = model.logits(
+            tokenID: config.card,
+            prefix: firstPrefix,
+            caches: firstCaches
+        )
+        let secondPrefill = model.logits(
+            tokenID: config.card,
+            prefix: secondPrefix,
+            caches: secondCaches
+        )
+        MLX.eval(batchPrefill, firstPrefill, secondPrefill)
+
+        XCTAssertEqual(batchPrefill.shape, [2, 1_393])
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batchPrefill[0] - firstPrefill)).item(Float.self),
+            1e-4
+        )
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batchPrefill[1] - secondPrefill)).item(Float.self),
+            1e-4
+        )
+
+        let batchDecode = model.batchedLogits(
+            tokenIDs: MLXArray([Int32(12), Int32(27)]).reshaped(2, 1),
+            prefix: nil,
+            caches: batchCaches
+        )
+        let firstDecode = model.logits(tokenID: 12, prefix: nil, caches: firstCaches)
+        let secondDecode = model.logits(tokenID: 27, prefix: nil, caches: secondCaches)
+        MLX.eval(batchDecode, firstDecode, secondDecode)
+
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batchDecode[0] - firstDecode)).item(Float.self),
+            1e-4
+        )
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batchDecode[1] - secondDecode)).item(Float.self),
+            1e-4
+        )
+    }
+
+    func testTranscriptionOptionsValidateChunkBatchSize() throws {
+        try MuScriptorTranscriptionOptions(chunkBatchSize: 4).validate()
+        XCTAssertThrowsError(
+            try MuScriptorTranscriptionOptions(chunkBatchSize: 0).validate()
+        )
+    }
+
     func testMelFrontendMatchesPublishedShapeAndSilenceFloor() {
         let mel = MuScriptorMelSpectrogram().extract(
             from: [Float](repeating: 0, count: MuScriptorMelSpectrogram.chunkSampleCount)

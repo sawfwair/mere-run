@@ -65,6 +65,9 @@ struct MusicTranscribe: ParsableCommand {
     @Option(name: [.customLong("beam-size")], help: "Beam-search width (1 disables beam search).")
     var beamSize: Int = 1
 
+    @Option(name: [.customLong("chunk-batch-size")], help: "Independent five-second chunks decoded together (greedy/sampling only).")
+    var chunkBatchSize: Int = 4
+
     @Option(name: [.long], help: "Model compute type: bfloat16, float16, or float32.")
     var dtype: String = "bfloat16"
 
@@ -81,6 +84,7 @@ struct MusicTranscribe: ParsableCommand {
             throw ValidationError("--temperature must be positive with --sampling")
         }
         guard beamSize > 0 else { throw ValidationError("--beam-size must be positive") }
+        guard chunkBatchSize > 0 else { throw ValidationError("--chunk-batch-size must be positive") }
         guard beamSize == 1 || !sampling else {
             throw ValidationError("--beam-size greater than 1 cannot be combined with --sampling")
         }
@@ -131,6 +135,7 @@ struct MusicTranscribe: ParsableCommand {
             maxTokensPerChunk: maxTokensPerChunk,
             strictEOS: strictEOS,
             beamSize: beamSize,
+            chunkBatchSize: chunkBatchSize,
             instruments: resolvedInstruments
         )
         let progress: MuScriptorTranscriber.ProgressHandler?

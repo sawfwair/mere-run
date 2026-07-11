@@ -8,6 +8,7 @@ public struct MuScriptorTranscriptionOptions: Hashable, Sendable {
     public var maxTokensPerChunk: Int
     public var strictEOS: Bool
     public var beamSize: Int
+    public var chunkBatchSize: Int
     public var instruments: [String]?
 
     public init(
@@ -16,6 +17,7 @@ public struct MuScriptorTranscriptionOptions: Hashable, Sendable {
         maxTokensPerChunk: Int = 2_000,
         strictEOS: Bool = false,
         beamSize: Int = 1,
+        chunkBatchSize: Int = 4,
         instruments: [String]? = nil
     ) {
         self.useSampling = useSampling
@@ -23,6 +25,7 @@ public struct MuScriptorTranscriptionOptions: Hashable, Sendable {
         self.maxTokensPerChunk = maxTokensPerChunk
         self.strictEOS = strictEOS
         self.beamSize = beamSize
+        self.chunkBatchSize = chunkBatchSize
         self.instruments = instruments
     }
 
@@ -35,6 +38,9 @@ public struct MuScriptorTranscriptionOptions: Hashable, Sendable {
         }
         guard beamSize > 0 else {
             throw MuScriptorError.malformedTokenStream("beam size must be positive")
+        }
+        guard chunkBatchSize > 0 else {
+            throw MuScriptorError.malformedTokenStream("chunk batch size must be positive")
         }
         guard beamSize == 1 || !useSampling else {
             throw MuScriptorError.malformedTokenStream("beam search cannot be combined with sampling")
@@ -81,53 +87,129 @@ public final class MuScriptorTranscriber {
         chunkTokens.reserveCapacity(chunkCount)
         progress?(0, chunkCount)
 
-        for chunkIndex in 0..<chunkCount {
-            let start = chunkIndex * chunkSize
-            let end = min(samples.count, start + chunkSize)
-            let mel = melSpectrogram.extract(from: Array(samples[start..<end]))
-            let prefix = try model.conditioningPrefix(mel: mel, instruments: options.instruments)
-            let tokens = try generateChunk(
-                index: chunkIndex,
-                prefix: prefix,
-                options: options
-            )
-            chunkTokens.append(tokens)
-            progress?(chunkIndex + 1, chunkCount)
+        if options.beamSize > 1 {
+            for chunkIndex in 0..<chunkCount {
+                let prefix = try conditioningPrefix(
+                    samples: samples,
+                    chunkIndex: chunkIndex,
+                    chunkSize: chunkSize,
+                    instruments: options.instruments
+                )
+                let tokens = try generateChunkWithBeamSearch(
+                    index: chunkIndex,
+                    prefix: prefix,
+                    options: options
+                )
+                chunkTokens.append(tokens)
+                progress?(chunkIndex + 1, chunkCount)
+            }
+        } else {
+            for batchStart in stride(from: 0, to: chunkCount, by: options.chunkBatchSize) {
+                let batchEnd = min(chunkCount, batchStart + options.chunkBatchSize)
+                let indices = Array(batchStart..<batchEnd)
+                let prefixes = try indices.map { chunkIndex in
+                    try conditioningPrefix(
+                        samples: samples,
+                        chunkIndex: chunkIndex,
+                        chunkSize: chunkSize,
+                        instruments: options.instruments
+                    )
+                }
+                let batchPrefix = MLX.concatenated(prefixes, axis: 0)
+                let generated = try generateChunks(
+                    indices: indices,
+                    prefix: batchPrefix,
+                    options: options
+                )
+                for tokens in generated {
+                    chunkTokens.append(tokens)
+                    progress?(chunkTokens.count, chunkCount)
+                }
+            }
         }
         return try MuScriptorTokenDecoder().decode(chunks: chunkTokens)
     }
 
-    private func generateChunk(
-        index: Int,
+    private func conditioningPrefix(
+        samples: [Float],
+        chunkIndex: Int,
+        chunkSize: Int,
+        instruments: [String]?
+    ) throws -> MLXArray {
+        let start = chunkIndex * chunkSize
+        let end = min(samples.count, start + chunkSize)
+        let mel = melSpectrogram.extract(from: Array(samples[start..<end]))
+        return try model.conditioningPrefix(mel: mel, instruments: instruments)
+    }
+
+    private func generateChunks(
+        indices: [Int],
         prefix: MLXArray,
         options: MuScriptorTranscriptionOptions
-    ) throws -> [Int] {
-        if options.beamSize > 1 {
-            return try generateChunkWithBeamSearch(index: index, prefix: prefix, options: options)
-        }
+    ) throws -> [[Int]] {
+        let batchSize = indices.count
         let caches = model.makeCaches()
-        var currentToken = model.configuration.card
-        var condition: MLXArray? = prefix
-        var tokens: [Int] = []
+        let initialTokens = MLXArray(
+            [Int32](repeating: Int32(model.configuration.card), count: batchSize)
+        ).reshaped(batchSize, 1)
+        var logits = model.batchedLogits(
+            tokenIDs: initialTokens,
+            prefix: prefix,
+            caches: caches
+        )
+        MLX.eval(logits)
 
-        for _ in 0..<options.maxTokensPerChunk {
-            let logits = model.logits(tokenID: currentToken, prefix: condition, caches: caches)
-            condition = nil
-            let next: Int
+        var generated = [[Int]](repeating: [], count: batchSize)
+        var ended = [Bool](repeating: false, count: batchSize)
+
+        for step in 0..<options.maxTokensPerChunk {
+            let sampled: MLXArray
             if options.useSampling {
-                next = MLX.categorical(logits / options.temperature).item(Int.self)
+                sampled = MLX.categorical(logits / options.temperature).asType(.int32)
             } else {
-                next = MLX.argMax(logits, axis: -1).item(Int.self)
+                sampled = MLX.argMax(logits, axis: -1).asType(.int32)
             }
-            if next == 1 { return tokens }
-            tokens.append(next)
-            currentToken = next
+            let endedMask = MLXArray(ended.map { $0 ? Int32(1) : Int32(0) }) .> 0
+            let nextTokens = MLX.where(endedMask, MLXArray(Int32(1)), sampled)
+
+            let nextLogits: MLXArray?
+            if step + 1 < options.maxTokensPerChunk {
+                let value = model.batchedLogits(
+                    tokenIDs: nextTokens.reshaped(batchSize, 1),
+                    prefix: nil,
+                    caches: caches
+                )
+                asyncEval([value, nextTokens])
+                nextLogits = value
+            } else {
+                asyncEval(nextTokens)
+                nextLogits = nil
+            }
+
+            let values = nextTokens.asArray(Int32.self)
+            for row in 0..<batchSize where !ended[row] {
+                let token = Int(values[row])
+                if token == 1 {
+                    ended[row] = true
+                } else {
+                    generated[row].append(token)
+                }
+            }
+            if ended.allSatisfy({ $0 }) {
+                return generated
+            }
+            if let nextLogits {
+                logits = nextLogits
+            }
         }
 
-        if options.strictEOS {
-            throw MuScriptorError.generationLimit(chunk: index, limit: options.maxTokensPerChunk)
+        if options.strictEOS, let row = ended.firstIndex(of: false) {
+            throw MuScriptorError.generationLimit(
+                chunk: indices[row],
+                limit: options.maxTokensPerChunk
+            )
         }
-        return tokens
+        return generated
     }
 
     private struct Beam {

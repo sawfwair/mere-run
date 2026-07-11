@@ -10,6 +10,7 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.format, .midi)
         XCTAssertEqual(command.dtype, "bfloat16")
         XCTAssertFalse(command.sampling)
+        XCTAssertEqual(command.chunkBatchSize, 4)
     }
 
     func testParsesStructuredOutputAndConditioning() throws {
@@ -22,6 +23,7 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
             "--sampling",
             "--temperature", "0.8",
             "--strict-eos",
+            "--chunk-batch-size", "2",
             "--dtype", "float32",
         ])
         XCTAssertEqual(command.model, ModelResolver.ModelID.muScriptorSmall.rawValue)
@@ -32,6 +34,7 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.temperature, 0.8, accuracy: 1e-6)
         XCTAssertTrue(command.strictEOS)
         XCTAssertEqual(command.beamSize, 1)
+        XCTAssertEqual(command.chunkBatchSize, 2)
         XCTAssertEqual(command.dtype, "float32")
     }
 
@@ -48,6 +51,12 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         let command = try MusicTranscribe.parse(["--list-instruments"])
         XCTAssertTrue(command.listInstruments)
         XCTAssertNil(command.audio)
+    }
+
+    func testRejectsInvalidChunkBatchSize() throws {
+        var command = try MusicTranscribe.parse(["song.wav"])
+        command.chunkBatchSize = 0
+        XCTAssertThrowsError(try command.validate())
     }
 
 }
