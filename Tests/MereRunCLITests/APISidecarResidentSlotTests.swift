@@ -63,6 +63,180 @@ final class APISidecarResidentSlotTests: XCTestCase {
         XCTAssertEqual(maximumConcurrentUses, 1)
     }
 
+    func testColdSidecarOperationsAreExclusiveWhileWarmLanesOverlap() async throws {
+        let probe = APISidecarSlotProbe()
+        let coordinator = APISidecarOperationCoordinator()
+        let image = APISidecarResidentSlot<String, Int>()
+        let speech = APISidecarResidentSlot<String, Int>()
+
+        async let coldImage = image.withValue(
+            for: "image",
+            operationCoordinator: coordinator,
+            make: { await probe.makeValue(1) },
+            unload: { value in await probe.unload(value) },
+            operation: { value in try await probe.use(value, nanoseconds: 60_000_000) }
+        )
+        async let coldSpeech = speech.withValue(
+            for: "speech",
+            operationCoordinator: coordinator,
+            make: { await probe.makeValue(2) },
+            unload: { value in await probe.unload(value) },
+            operation: { value in try await probe.use(value, nanoseconds: 60_000_000) }
+        )
+
+        let coldValues = try await [coldImage, coldSpeech]
+        let coldMaximum = await probe.maximumConcurrentUses()
+        XCTAssertEqual(coldValues, [1, 2])
+        XCTAssertEqual(coldMaximum, 1)
+
+        await probe.resetMaximumConcurrentUses()
+        async let warmImage = image.withValue(
+            for: "image",
+            operationCoordinator: coordinator,
+            make: { await probe.makeValue(3) },
+            unload: { value in await probe.unload(value) },
+            operation: { value in try await probe.use(value, nanoseconds: 60_000_000) }
+        )
+        async let warmSpeech = speech.withValue(
+            for: "speech",
+            operationCoordinator: coordinator,
+            make: { await probe.makeValue(4) },
+            unload: { value in await probe.unload(value) },
+            operation: { value in try await probe.use(value, nanoseconds: 60_000_000) }
+        )
+
+        let warmValues = try await [warmImage, warmSpeech]
+        let warmMaximum = await probe.maximumConcurrentUses()
+        XCTAssertEqual(warmValues, [1, 2])
+        XCTAssertEqual(warmMaximum, 2)
+    }
+
+    func testSinglePostPassRunsAfterResidentSlotReleasesExecution() async throws {
+        let gib = UInt64(1_073_741_824)
+        let slotProbe = APISidecarSlotProbe()
+        let nominal = RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 10 * gib)
+        let critical = RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib)
+        let pressureProbe = APISidecarPressureReliefProbe(sample: nominal, relievedSample: nominal)
+        let slot = APISidecarResidentSlot<String, Int>()
+        let pool = APISidecarModelPool(
+            memoryPressurePolicy: RuntimeMemoryPressurePolicy(tier: .balanced),
+            currentMemorySample: { pressureProbe.currentSample() },
+            relieveTextModelPressure: {
+                pressureProbe.relieve()
+                _ = await slot.evictIfIdle(
+                    expectedKey: "image",
+                    reason: .memoryPressure,
+                    using: { value in await slotProbe.unload(value) }
+                )
+            }
+        )
+
+        let result = try await pool.withSidecarPressureCoordination(excluding: []) {
+            try await slot.withValue(
+                for: "image",
+                make: { await slotProbe.makeValue(9) },
+                unload: { value in await slotProbe.unload(value) },
+                operation: { value in
+                    pressureProbe.setSample(critical)
+                    return value
+                }
+            )
+        }
+
+        let state = await slot.state()
+        let unloadedValues = await slotProbe.unloadedValues()
+        XCTAssertEqual(result, 9)
+        XCTAssertNil(state.residentKey)
+        XCTAssertEqual(state.lastEvictionReason, .memoryPressure)
+        XCTAssertEqual(unloadedValues, [9])
+        XCTAssertEqual(pressureProbe.reliefCount(), 1)
+    }
+
+    func testForcedColdWarmImageSkipsResidentReloadClassification() async throws {
+        let preparation = APISidecarColdPreparationProbe()
+        let coordinator = APISidecarOperationCoordinator()
+        let slot = APISidecarResidentSlot<String, Int>()
+
+        for _ in 0..<2 {
+            _ = try await slot.withValue(
+                for: "image",
+                operationCoordinator: coordinator,
+                forceColdOperation: true,
+                prepareForColdOperation: { residentNeedsLoad in
+                    await preparation.record(residentNeedsLoad)
+                },
+                make: { 4 },
+                unload: { _ in },
+                operation: { $0 }
+            )
+        }
+
+        let classifications = await preparation.classifications()
+        XCTAssertEqual(classifications, [true, false])
+    }
+
+    func testColdReplacementUnloadsOutgoingResidentBeforeHeadroomPreparation() async throws {
+        let slotProbe = APISidecarSlotProbe()
+        let preparation = APISidecarReplacementPreparationProbe()
+        let coordinator = APISidecarOperationCoordinator()
+        let slot = APISidecarResidentSlot<String, Int>()
+
+        for (key, value) in [("image-a", 1), ("image-b", 2)] {
+            _ = try await slot.withValue(
+                for: key,
+                operationCoordinator: coordinator,
+                prepareForColdOperation: { _ in
+                    await preparation.record(
+                        unloadedValues: await slotProbe.unloadedValues()
+                    )
+                },
+                make: { await slotProbe.makeValue(value) },
+                unload: { unloaded in await slotProbe.unload(unloaded) },
+                operation: { $0 }
+            )
+        }
+
+        let observations = await preparation.observations()
+        XCTAssertEqual(observations, [[], [1]])
+    }
+
+    func testCancellationDuringColdPreparationDoesNotConstructResident() async throws {
+        let preparation = APISidecarColdPreparationGate()
+        let probe = APISidecarSlotProbe()
+        let slot = APISidecarResidentSlot<String, Int>()
+        let task = Task {
+            try await slot.withValue(
+                for: "image",
+                operationCoordinator: APISidecarOperationCoordinator(),
+                prepareForColdOperation: { _ in await preparation.wait() },
+                make: { await probe.makeValue(1) },
+                unload: { value in await probe.unload(value) },
+                operation: { $0 }
+            )
+        }
+
+        for _ in 0..<50 {
+            if await preparation.hasStarted() { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        let preparationStarted = await preparation.hasStarted()
+        XCTAssertTrue(preparationStarted)
+        task.cancel()
+        await preparation.release()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation during cold preparation")
+        } catch is CancellationError {
+            // Expected.
+        }
+        let state = await slot.state()
+        let madeValues = await probe.madeValues()
+        XCTAssertNil(state.residentKey)
+        XCTAssertEqual(state.activeRequests, 0)
+        XCTAssertTrue(madeValues.isEmpty)
+    }
+
     func testASRRoutingUsesResidentExecutorWithoutConstructingGenerator() async throws {
         let executor = APISidecarASRExecutorProbe()
         let request = ASRRequest(
@@ -111,13 +285,16 @@ final class APISidecarResidentSlotTests: XCTestCase {
         XCTAssertEqual(unloadedValues, [9])
     }
 
-    func testResidentReadinessDistinguishesFailedFirstLoadFromSuccessfulReuse() async throws {
+    func testFailedNotReadyResidentUnloadsImmediatelyEvenWhenPinned() async throws {
+        let probe = APISidecarSlotProbe()
         let slot = APISidecarResidentSlot<String, Int>()
         do {
             let _: Int = try await slot.withValue(
                 for: "image",
-                make: { 5 },
-                unload: { _ in },
+                idleTTL: .seconds(300),
+                pinned: true,
+                make: { await probe.makeValue(5) },
+                unload: { value in await probe.unload(value) },
                 operation: { _ in throw APISidecarSlotTestError.loadFailed }
             )
             XCTFail("Expected the first operation to fail")
@@ -125,17 +302,21 @@ final class APISidecarResidentSlotTests: XCTestCase {
             // Expected.
         }
         var state = await slot.state()
-        XCTAssertEqual(state.residentKey, "image")
+        XCTAssertNil(state.residentKey)
         XCTAssertFalse(state.ready)
+        let firstUnloads = await probe.unloadedValues()
+        XCTAssertEqual(firstUnloads, [5])
 
         _ = try await slot.withValue(
             for: "image",
-            make: { 6 },
-            unload: { _ in },
+            make: { await probe.makeValue(6) },
+            unload: { value in await probe.unload(value) },
             operation: { $0 }
         )
         state = await slot.state()
         XCTAssertTrue(state.ready)
+        let madeValues = await probe.madeValues()
+        XCTAssertEqual(madeValues, [5, 6])
     }
 
     func testIdleTTLEvictsAutonomouslyWithoutStatusOrAnotherRequest() async throws {
@@ -352,7 +533,8 @@ final class APISidecarResidentSlotTests: XCTestCase {
         XCTAssertEqual(status.loadedCount, 0)
         XCTAssertEqual(status.activeRequests, 0)
         XCTAssertEqual(status.queuedRequests, 0)
-        XCTAssertEqual(status.residents.count, 3)
+        XCTAssertEqual(status.residents.count, 4)
+        XCTAssertTrue(status.residents.contains { $0.kind == .embedding })
         XCTAssertTrue(status.residents.allSatisfy { $0.ttlSeconds == 42 && !$0.loaded })
     }
 
@@ -393,6 +575,174 @@ final class APISidecarResidentSlotTests: XCTestCase {
         XCTAssertEqual(value, 17)
         XCTAssertEqual(probe.reliefCount(), 1)
         XCTAssertGreaterThanOrEqual(probe.sampleCount(), 3)
+    }
+
+    func testProjectedCriticalColdLoadProactivelyReleasesIdleTextModels() async throws {
+        let gib = UInt64(1024 * 1024 * 1024)
+        let initial = RuntimeMemorySample(
+            physicalBytes: 100 * gib,
+            residentBytes: 80 * gib,
+            availableBytes: 20 * gib
+        )
+        let relieved = RuntimeMemorySample(
+            physicalBytes: 100 * gib,
+            residentBytes: 10 * gib,
+            availableBytes: 90 * gib
+        )
+        let probe = APISidecarPressureReliefProbe(sample: initial, relievedSample: relieved)
+        let pool = APISidecarModelPool(
+            memoryPressurePolicy: RuntimeMemoryPressurePolicy(tier: .balanced),
+            currentMemorySample: { probe.currentSample() },
+            releaseOneIdleTextModelForLoad: {
+                probe.relieve()
+                return true
+            }
+        )
+
+        try await pool.prepareForColdSidecarLoadForTesting(
+            estimatedLoadBytes: 15 * gib
+        )
+
+        XCTAssertEqual(probe.reliefCount(), 1)
+        XCTAssertGreaterThanOrEqual(probe.sampleCount(), 2)
+    }
+
+    func testProjectedCriticalColdLoadIsRejectedWhenHeadroomCannotBeRecovered() async throws {
+        let gib = UInt64(1024 * 1024 * 1024)
+        let constrained = RuntimeMemorySample(
+            physicalBytes: 100 * gib,
+            residentBytes: 80 * gib,
+            availableBytes: 20 * gib
+        )
+        let pool = APISidecarModelPool(
+            memoryPressurePolicy: RuntimeMemoryPressurePolicy(tier: .balanced),
+            currentMemorySample: { constrained }
+        )
+
+        do {
+            try await pool.prepareForColdSidecarLoadForTesting(
+                estimatedLoadBytes: 15 * gib
+            )
+            XCTFail("Expected projected critical pressure to reject the cold load")
+        } catch let error as APISidecarModelPoolError {
+            XCTAssertEqual(error, .memoryPressure)
+        }
+    }
+
+    func testImageLoadProjectionUsesFamilyAndPixelScaledHeadroom() throws {
+        let gib = UInt64(1_073_741_824)
+        let pool = APISidecarModelPool()
+        let missingPath = "/tmp/mere-run-missing-image-model-\(UUID().uuidString)"
+
+        XCTAssertEqual(
+            pool.estimatedImageLoadBytesForTesting(
+                kind: .flux2Klein,
+                modelID: "image-klein-nano",
+                modelPath: missingPath,
+                width: 1_024,
+                height: 1_024,
+                residentNeedsLoad: true
+            ),
+            10 * gib
+        )
+        XCTAssertEqual(
+            pool.estimatedImageLoadBytesForTesting(
+                kind: .zImageTurbo,
+                modelID: "image-zimage-nano",
+                modelPath: missingPath,
+                width: 1_536,
+                height: 1_024,
+                residentNeedsLoad: true
+            ),
+            24 * gib
+        )
+        XCTAssertEqual(
+            pool.estimatedImageLoadBytesForTesting(
+                kind: .qwenImageEdit,
+                modelID: "qwen-image-edit",
+                modelPath: missingPath,
+                width: 2_048,
+                height: 1_024,
+                residentNeedsLoad: true
+            ),
+            32 * gib
+        )
+        XCTAssertEqual(
+            pool.estimatedImageLoadBytesForTesting(
+                kind: .qwenImageEdit,
+                modelID: "qwen-image-edit",
+                modelPath: missingPath,
+                width: 2_048,
+                height: 1_024,
+                residentNeedsLoad: false
+            ),
+            16 * gib
+        )
+        XCTAssertEqual(
+            pool.estimatedImageLoadBytesForTesting(
+                kind: .hiDreamO1,
+                modelID: "image-hidream-o1",
+                modelPath: missingPath,
+                width: 1_024,
+                height: 1_024,
+                residentNeedsLoad: true
+            ),
+            64 * gib
+        )
+        XCTAssertEqual(
+            pool.estimatedImageLoadBytesForTesting(
+                kind: .hiDreamO1,
+                modelID: "image-hidream-o1",
+                modelPath: missingPath,
+                width: 1,
+                height: 1,
+                residentNeedsLoad: false
+            ),
+            32 * gib
+        )
+    }
+
+    func testQwenImageEditUsesCanonicalResidentIdentity() {
+        XCTAssertEqual(
+            APISidecarModelPool.canonicalImageModelID(
+                kind: .qwenImageEdit,
+                modelID: "Qwen/Qwen-Image-Edit"
+            ),
+            "qwen-image-edit"
+        )
+        XCTAssertEqual(
+            APISidecarModelPool.canonicalImageModelID(
+                kind: .zImageTurbo,
+                modelID: "image-zimage-nano"
+            ),
+            "image-zimage-nano"
+        )
+    }
+
+    func testQwenImageEditLoadProjectionAccountsForResolvedModelRoot() throws {
+        let gib = UInt64(1_073_741_824)
+        let modelRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-qwen-edit-estimate-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: modelRoot) }
+
+        let weights = modelRoot.appendingPathComponent("weights.safetensors")
+        XCTAssertTrue(FileManager.default.createFile(atPath: weights.path, contents: Data()))
+        let handle = try FileHandle(forWritingTo: weights)
+        let logicalSize = 17 * gib + 123
+        try handle.truncate(atOffset: logicalSize)
+        try handle.close()
+
+        let estimate = APISidecarModelPool().estimatedImageLoadBytesForTesting(
+            kind: .qwenImageEdit,
+            modelID: "qwen-image-edit",
+            modelPath: modelRoot.path,
+            width: 1_024,
+            height: 1_024,
+            residentNeedsLoad: true
+        )
+
+        XCTAssertEqual(estimate, logicalSize)
     }
 }
 
@@ -435,6 +785,10 @@ private actor APISidecarSlotProbe {
         maxActiveUses
     }
 
+    func resetMaximumConcurrentUses() {
+        maxActiveUses = activeUses
+    }
+
     func activeUseCount() -> Int {
         activeUses
     }
@@ -470,6 +824,51 @@ private actor APISidecarASRExecutorProbe: CLIASRTranscriptionExecutor {
 
     func parakeetRequestCount() -> Int {
         parakeet.count
+    }
+}
+
+private actor APISidecarColdPreparationProbe {
+    private var values: [Bool] = []
+
+    func record(_ residentNeedsLoad: Bool) {
+        values.append(residentNeedsLoad)
+    }
+
+    func classifications() -> [Bool] {
+        values
+    }
+}
+
+private actor APISidecarColdPreparationGate {
+    private var started = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        started = true
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func hasStarted() -> Bool {
+        started
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private actor APISidecarReplacementPreparationProbe {
+    private var values: [[Int]] = []
+
+    func record(unloadedValues: [Int]) {
+        values.append(unloadedValues)
+    }
+
+    func observations() -> [[Int]] {
+        values
     }
 }
 

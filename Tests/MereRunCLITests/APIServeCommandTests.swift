@@ -311,6 +311,32 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertThrowsError(try APIServerContract.embeddingTexts(from: emptyRequest)) { error in
             XCTAssertTrue(error.localizedDescription.contains("input"))
         }
+
+        let tooManyInputs = OpenAIEmbeddingRequest(
+            model: "text-embed-qwen3-0.6b",
+            input: .array(
+                Array(
+                    repeating: "x",
+                    count: APIServerContract.maxEmbeddingInputCount + 1
+                )
+            )
+        )
+        XCTAssertThrowsError(try APIServerContract.embeddingTexts(from: tooManyInputs)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("at most 256 texts"))
+        }
+
+        let oversizedInput = OpenAIEmbeddingRequest(
+            model: "text-embed-qwen3-0.6b",
+            input: .string(
+                String(
+                    repeating: "x",
+                    count: APIServerContract.maxEmbeddingInputUTF8Bytes + 1
+                )
+            )
+        )
+        XCTAssertThrowsError(try APIServerContract.embeddingTexts(from: oversizedInput)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("UTF-8 content"))
+        }
     }
 
     func testEmbeddingContractUsesOpenAICompatibleResponseShape() {
@@ -398,6 +424,85 @@ final class APIServeCommandTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("size"))
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(
+                    prompt: "hello",
+                    steps: APIServerContract.maxImageInferenceSteps + 1
+                )
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("between 1 and 100"))
+        }
+    }
+
+    func testSidecarJSONDecodingMapsMalformedPayloadsToValidationErrors() {
+        XCTAssertThrowsError(
+            try APIServerContract.decodeImageGenerationRequest(
+                from: Data(#"{"prompt":42}"#.utf8)
+            )
+        ) { error in
+            XCTAssertEqual(error as? APIRequestValidationError, .invalidPayload)
+            XCTAssertEqual(error.localizedDescription, "Invalid request payload.")
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.decodeSpeechRequest(
+                from: Data(#"{"input":["not","text"]}"#.utf8)
+            )
+        ) { error in
+            XCTAssertEqual(error as? APIRequestValidationError, .invalidPayload)
+            XCTAssertEqual(error.localizedDescription, "Invalid request payload.")
+        }
+    }
+
+    func testImageGenerationContractBoundsDimensionsAndPixelAreaWithoutOverflow() throws {
+        let boundary = try APIServerContract.imageGenerationPlan(
+            from: OpenAIImageGenerationRequest(prompt: "hello", size: "4096x1024")
+        )
+        XCTAssertEqual(boundary.width, 4_096)
+        XCTAssertEqual(boundary.height, 1_024)
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", size: "4097x1")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("at most 4096"))
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", size: "4096x1025")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("total image area"))
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", size: "\(Int.max)x2")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("at most 4096"))
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", size: "1x1")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("at least 16"))
+        }
+
+        XCTAssertThrowsError(
+            try APIServerContract.imageGenerationPlan(
+                from: OpenAIImageGenerationRequest(prompt: "hello", size: "1000x1000")
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("divisible by 16"))
         }
     }
 
@@ -507,6 +612,21 @@ final class APIServeCommandTests: XCTestCase {
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("response_format"))
         }
+
+
+        XCTAssertThrowsError(
+            try APIServerContract.speechPlan(
+                from: OpenAIAudioSpeechRequest(
+                    input: "hello",
+                    instructions: String(
+                        repeating: "x",
+                        count: APIServerContract.maxSpeechPromptUTF8Bytes
+                    )
+                )
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("UTF-8 bytes"))
+        }
     }
 
     func testMultipartFormDataParserExtractsFieldsAndFile() throws {
@@ -578,6 +698,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(plan.responseFormat, "verbose_json")
         XCTAssertEqual(plan.task, .transcribe)
         XCTAssertEqual(plan.maxTokens, 448)
+
+        let oversizedMaxTokens = MultipartFormData(parts: [
+            MultipartFormData.Part(
+                name: "max_tokens",
+                filename: nil,
+                contentType: nil,
+                body: Data(String(APIServerContract.maxTranscriptionTokens + 1).utf8)
+            ),
+        ])
+        XCTAssertThrowsError(
+            try APIServerContract.transcriptionPlan(from: oversizedMaxTokens)
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("between 1 and 4096"))
+        }
 
         let response = APIServerContract.transcriptionResponse(
             from: ASRResult(

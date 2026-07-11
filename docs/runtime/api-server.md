@@ -162,10 +162,10 @@ swift run mere.run api serve \
   listed in `/v1/models` when installed even though it is not a chat-serving engine
 - `/v1/images/generations`, `/v1/images/edits`, `/v1/audio/speech`, and
   `/v1/audio/transcriptions` are sidecar routes over existing native CLI
-  runtime paths. Installed image, TTS, and ASR sidecar catalog ids are listed in
+  runtime paths. Installed embedding, image, TTS, and ASR sidecar catalog ids are listed in
   `/v1/models` even though they are not chat-serving engines.
-- the server keeps one most-recently-used image lane shared by generation and
-  editing, one TTS lane, and one ASR lane resident. Repeated requests for the
+- the server keeps one most-recently-used embedding lane, one image lane shared
+  by generation and editing, one TTS lane, and one ASR lane resident. Repeated requests for the
   same model reuse loaded components; mutable generators execute exclusively,
   and a model or ASR-backend switch unloads the previous runtime before loading
   the next one so request-selected local paths cannot grow residency without
@@ -173,22 +173,32 @@ swift run mere.run api serve \
 - sidecars default to a 300-second idle TTL. Per-lane autonomous timers expire
   idle residents without waiting for another request and re-read managed
   `pinned` and `ttlSeconds` settings while idle, so live settings changes take
-  effect. Managed image, TTS, and ASR models accept
+  effect. Managed embedding, image, TTS, and ASR models accept
   `model runtime set <id> --ttl-seconds <seconds>` and `--pinned`;
   sidecar-specific settings reject text-only sampling, engine, alias, context,
   and KV controls. The special `qwen-image-edit` repository lane is resident but
   currently uses the default lifecycle policy because it is not configurable
   through `model runtime`.
 - sidecar admission samples the same `--memory-guard` policy before and after an
-  operation. Under pressure it gives idle unpinned text runtimes the first
+  operation. Cold sidecar operations are exclusive across lanes, preventing two
+  model loads from racing each other or an already-running warm sidecar. Image
+  operations remain exclusive because staged image pipelines can reload
+  components even when their resident generator is warm. Before a new resident loads, the
+  catalog estimate (or resolved local directory size) is projected against the
+  hard guard with conservative per-family working-set floors; idle unpinned residents are proactively released, and the request
+  fails with a memory-pressure error if adequate headroom cannot be recovered.
+  Under pressure, admission gives idle unpinned text runtimes the first
   opportunity to unload, one at a time with pressure re-sampled after each
   eviction; the idle startup default is eligible for this sidecar admission
   path. If pressure remains, eligible idle sidecars are evicted oldest first.
   Active, queued, or pinned residents are protected throughout.
-- chat completions pass through a fair FIFO request admission actor; the default
-  `--max-active-requests 1` preserves serialized local inference and exposes
-  queue depth in status; queued client cancellations are removed from the FIFO
-  instead of being admitted later
+- chat, embedding, image, TTS, and ASR inference pass through a fair FIFO request
+  admission actor; the default `--max-active-requests 1` serializes local
+  inference across text and media activation peaks and exposes queue depth in
+  status. Raising it is an explicit throughput and unified-memory tradeoff;
+  queued client cancellations are removed from the FIFO instead of being
+  admitted later. Explicit runtime model load/unload maintenance shares the
+  same queue
 - Gemma4, Qwen-family, and LFM2 prefills are chunked with cancellation and
   progress checkpoints before decode; this is cooperative single-request
   prefill, not continuous batching
@@ -233,8 +243,8 @@ swift run mere.run api serve \
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
   steps across loaded models under `cacheStats`; it also reports completed chat
   request counts, generated tokens, and average load/prefill/decode timings
-  under `benchmarkStats`. The additive `sidecars` object reports the image,
-  speech, and transcription resident model/path, active and queued requests,
+  under `benchmarkStats`. The additive `sidecars` object reports the embedding,
+  image, speech, and transcription resident model/path, active and queued requests,
   load/access/eviction timestamps, TTL/pinned state, readiness, and lifecycle
   counters. For text and sidecar entries, `loaded` remains the compatibility
   signal that a resident object exists; additive `ready: false` means text
@@ -247,7 +257,8 @@ swift run mere.run api serve \
   operations; expired idle models unload automatically unless their settings are
   pinned. Explicit unload remains available for pinned models.
 - memory-pressure LRU uses the API server's `--memory-guard` tier. The guard
-  derives soft/hard ceilings from process resident memory, host memory
+  derives soft/hard ceilings from Darwin physical footprint (RSS elsewhere),
+  host memory
   headroom, and a tier reserve (`safe`, `balanced`, `aggressive`, or
   `custom`). Elevated pressure pauses extra concurrent admissions and evicts the
   least-recently-used idle unpinned model; critical pressure evicts every idle
@@ -289,7 +300,7 @@ The control endpoints use the same bearer-token behavior as `/v1/models`,
   defaults.
 
 These four `/runtime/models/{id}` HTTP operations address the chat/text runtime
-pool only. Managed image, TTS, and ASR sidecar TTL/pinning is configured with
+pool only. Managed embedding, image, TTS, and ASR sidecar TTL/pinning is configured with
 `mere.run model runtime set` (or the settings file); there is no sidecar HTTP
 load/unload/settings endpoint. Sidecars still appear in `/v1/models` and in the
 `sidecars` object returned by `/runtime/status`.
@@ -374,6 +385,10 @@ chunk before `[DONE]`.
 - `encoding_format`: omitted or `float`
 - `user`: accepted as request context
 
+One request may contain at most 256 texts and 2 MiB of UTF-8 input. The native
+runtime caps each row at 8,192 tokens, length-packs rows into sequential batches
+with at most 8,192 padded tokens, and restores response order after evaluation.
+
 The route returns `object: "list"`, one `embedding` object per input, and
 `prompt_tokens`/`total_tokens` usage counts. Dimension overrides and base64
 embedding encoding are rejected with `invalid_request_error` because the native
@@ -386,10 +401,13 @@ Qwen3 embedding model has a fixed vector size and returns float vectors.
 - `model`: a mere.run image model id, local image model path, or an OpenAI image
   model name such as `dall-e-3` mapped to `image-zimage-nano`
 - `prompt`: required text prompt
-- `size`: `WIDTHxHEIGHT`; defaults to `1024x1024`
+- `size`: `WIDTHxHEIGHT`; defaults to `1024x1024`; each dimension must be a
+  multiple of 16 from 16 through 4,096 pixels, with total area limited to
+  4,194,304 pixels
 - `n`: only `1`
 - `response_format`: `b64_json` by default, or `url` for a local `file://` URL
-- local extensions: `seed`, `negative_prompt`, `steps`, and `guidance_scale`
+- local extensions: `seed`, `negative_prompt`, `steps` (1 through 100), and
+  `guidance_scale`
 
 `POST /v1/images/edits` accepts multipart form fields:
 
@@ -400,11 +418,13 @@ Qwen3 embedding model has a fixed vector size and returns float vectors.
   or an OpenAI image model name such as `gpt-image-1` mapped to
   `image-zimage-nano`
 - `prompt`: required edit instruction
-- `size`: `WIDTHxHEIGHT`; defaults to `1024x1024`
+- `size`: `WIDTHxHEIGHT`; defaults to `1024x1024`; each dimension must be a
+  multiple of 16 from 16 through 4,096 pixels, with total area limited to
+  4,194,304 pixels
 - `n`: only `1`
 - `response_format`: `b64_json` by default, or `url` for a local `file://` URL
-- local extensions: `strength`, `seed`, `negative_prompt`, `steps`, and
-  `guidance_scale`
+- local extensions: `strength`, `seed`, `negative_prompt`, `steps` (1 through
+  100), and `guidance_scale`
 
 Masks are accepted for client compatibility. Current native edit models use
 whole-image conditioning rather than strict masked inpainting.
@@ -420,6 +440,9 @@ whole-image conditioning rather than strict masked inpainting.
 - `response_format`: `wav`, `mp3`, `opus`, `aac`, or `flac`; non-WAV formats
   require `ffmpeg`
 
+The normalized input and voice instructions may total at most 32 KiB of UTF-8
+text.
+
 `POST /v1/audio/transcriptions` accepts multipart form fields:
 
 - `file`: required audio file part
@@ -428,7 +451,7 @@ whole-image conditioning rather than strict masked inpainting.
 - `language`
 - `task`: `transcribe` or `translate`
 - `response_format`: `json`, `text`, `verbose_json`, `srt`, or `vtt`
-- `max_tokens`
+- `max_tokens`: 1 through 4,096; defaults to 448
 
 Unsupported format choices return OpenAI-style `invalid_request_error` payloads
 instead of being ignored.

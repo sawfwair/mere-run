@@ -61,14 +61,15 @@ mere.run status --json
 - `ttlSeconds` unloads an idle, loaded model after that many seconds during the
   pool's opportunistic eviction passes. `pinned` exempts the model from
   automatic TTL/LRU eviction, but explicit unload still works.
-- Managed image, TTS, and ASR API sidecars accept only `pinned` and
+- Managed embedding, image, TTS, and ASR API sidecars accept only `pinned` and
   `ttlSeconds`. They use an autonomous 300-second idle TTL when none is
   configured, re-read settings changes while idle, and reject aliases plus
   text-only context, sampling, engine, and KV controls. The special
   `qwen-image-edit` repository lane is resident but is not a managed
   runtime-settings target, so it currently uses the default lifecycle policy.
 - Memory-pressure LRU uses the API server's `--memory-guard` tier. The guard
-  derives soft/hard ceilings from process resident memory, host memory
+  derives soft/hard ceilings from Darwin physical footprint (RSS elsewhere),
+  host memory
   headroom, and a tier reserve (`safe`, `balanced`, `aggressive`, or
   `custom`). Elevated pressure evicts the least-recently-used idle unpinned
   model; critical pressure evicts every idle unpinned model. Active requests
@@ -94,6 +95,7 @@ mere.run model runtime get chat-default --json
 
 ```bash
 mere.run model runtime set image-zimage-nano --ttl-seconds 45
+mere.run model runtime set text-embed-qwen3-0.6b --ttl-seconds 120
 mere.run model runtime set speech-asr-qwen3 --pinned
 ```
 
@@ -102,8 +104,8 @@ mere.run model runtime set speech-asr-qwen3 --pinned
 - Unknown model: run `mere.run model list` and use a managed id or an existing
   alias.
 - Unsupported model: residency settings apply only to API-resident text models
-  and supported image, TTS, or ASR sidecars; vision, music, and video ids are
-  rejected.
+  and supported embedding, image, TTS, or ASR sidecars; vision, music, and
+  video ids are rejected.
 - Missing model at request time: run `mere.run model pull <id>` before selecting
   it through the matching chat, image, speech, or transcription endpoint.
 

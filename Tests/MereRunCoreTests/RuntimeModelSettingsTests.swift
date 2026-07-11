@@ -67,11 +67,20 @@ final class RuntimeModelSettingsTests: XCTestCase {
             RuntimeModelSettings(pinned: true, ttlSeconds: 45),
             for: "image-zimage-nano"
         )
+        try store.writeSettings(
+            RuntimeModelSettings(pinned: true, ttlSeconds: 90),
+            for: Qwen3EmbeddingCatalog.modelId
+        )
         let settings = try store.settings(for: "image-zimage-nano")
+        let embeddingSettings = try store.settings(for: Qwen3EmbeddingCatalog.modelId)
 
         XCTAssertTrue(settings.pinned)
         XCTAssertEqual(settings.ttlSeconds, 45)
         XCTAssertTrue(try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+            .supportsRuntimeResidencySettings)
+        XCTAssertTrue(embeddingSettings.pinned)
+        XCTAssertEqual(embeddingSettings.ttlSeconds, 90)
+        XCTAssertTrue(try XCTUnwrap(ManagedModelCatalog.spec(for: Qwen3EmbeddingCatalog.modelId))
             .supportsRuntimeResidencySettings)
     }
 

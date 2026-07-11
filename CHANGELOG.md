@@ -60,16 +60,36 @@ The format is based on Keep a Changelog.
   Ideogram QKV-normalization, AdaLN, and residual kernels remain opt-in through
   `MERERUN_IDEOGRAM4_FUSED_KERNELS=1`: microbenchmarks improved, but the
   installed-checkpoint warm path was 1.65x slower with no MLX peak-memory win.
-- kept the most recently used image, image-edit, TTS, and ASR sidecar runtimes
-  resident in `api serve`; matching requests now reuse loaded model state,
-  concurrent use of mutable generators is serialized, and switching models
-  unloads the previous resident before loading its replacement. Sidecars use a
+- kept the most recently used embedding, image, image-edit, TTS, and ASR
+  sidecar runtimes resident in `api serve`; matching requests now reuse loaded
+  model state, concurrent use of mutable generators is serialized, and
+  switching models unloads the previous resident before loading its
+  replacement. Cold sidecar work is exclusive across lanes, and catalog/path
+  size estimates plus conservative working-set floors trigger proactive idle-resident eviction or reject a load
+  projected to cross the configured hard memory guard. Sidecars use a
   bounded five-minute idle TTL with autonomous expiry, poll live managed-model
   `pinned` and `ttlSeconds` changes while idle, join memory-pressure eviction,
   and report residency/readiness/counters under `/runtime/status` and
   `mere.run status` without evicting active or queued work. The special
   `qwen-image-edit` repository lane is resident but currently uses default
   lifecycle settings because it is not configurable through `model runtime`.
+- extended fair FIFO request admission to every local inference route, so the
+  default `--max-active-requests 1` serializes chat and media activation peaks;
+  explicit runtime model load/unload maintenance shares the same queue, and
+  higher concurrency remains an explicit throughput and unified-memory choice.
+- bounded API embedding requests to 256 texts and 2 MiB of UTF-8 content, then
+  length-packed 8,192-token-capped rows into sequential batches with at most
+  8,192 padded tokens while preserving response order.
+- bounded OpenAI-compatible image generation and edit requests to dimensions
+  divisible by 16 from 16 through 4,096 pixels and 4,194,304 total pixels, and
+  return malformed image/TTS JSON as `400 invalid_request_error` responses
+  rather than server errors.
+- bounded explicit image inference to 100 steps, ASR decode to 4,096 tokens,
+  and combined TTS input/voice instructions to 32 KiB of UTF-8 text so one API
+  request cannot grow compute or prompt tensors without limit.
+- switched Darwin memory-guard decisions to `ri_phys_footprint`, which accounts
+  for unified-memory allocations that RSS can miss; status retains RSS for
+  compatibility and other platforms continue to use it as the fallback.
 - pinned the Linux CUDA CMake bridge to the exact `mlx-swift` checkout selected
   by SwiftPM under the active Linux Swift toolchain;
   `MLX_SWIFT_CUDA_COMMIT` remains an explicit diagnostic override.

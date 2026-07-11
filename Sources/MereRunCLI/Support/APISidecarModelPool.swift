@@ -3,6 +3,7 @@ import AudioCore
 import AudioSTT
 import AudioTTS
 import MereRunCore
+import MLX
 
 /// A bounded, exclusive resident slot for mutable inference runtimes.
 ///
@@ -31,6 +32,184 @@ struct APISidecarResidentSlotState<Key: Equatable & Sendable>: Sendable {
 struct APISidecarResidentIdlePolicy: Sendable {
     let pinned: Bool
     let ttl: Duration
+}
+
+enum APISidecarOperationMode: Equatable, Sendable {
+    case warm
+    case cold
+}
+
+/// A fair async reader/writer gate for the four native sidecar lanes.
+///
+/// Warm operations may overlap across lanes. A cold operation is exclusive:
+/// it waits for in-flight warm work and blocks later warm requests so model
+/// loading cannot overlap another sidecar's inference or a second cold load.
+actor APISidecarOperationCoordinator {
+    private struct Waiter {
+        let id: UUID
+        let mode: APISidecarOperationMode
+        let continuation: CheckedContinuation<APISidecarOperationLease, Error>
+    }
+
+    private enum WaiterState {
+        case pending
+        case waiting
+        case cancelled
+    }
+
+    private var activeWarmOperations = 0
+    private var coldOperationActive = false
+    private var waiters: [Waiter] = []
+    private var waiterStates: [UUID: WaiterState] = [:]
+
+    func acquire(_ mode: APISidecarOperationMode) async throws -> APISidecarOperationLease {
+        if waiters.isEmpty, canAdmit(mode) {
+            return admit(mode)
+        }
+
+        let waiterID = UUID()
+        waiterStates[waiterID] = .pending
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                enqueueWaiter(id: waiterID, mode: mode, continuation: continuation)
+            }
+        } onCancel: { [weak self] in
+            guard let self else { return }
+            Task {
+                await self.cancelWaiter(id: waiterID)
+            }
+        }
+    }
+
+    fileprivate func release(_ mode: APISidecarOperationMode) {
+        switch mode {
+        case .warm:
+            activeWarmOperations = max(0, activeWarmOperations - 1)
+        case .cold:
+            coldOperationActive = false
+        }
+        drain()
+    }
+
+    private func enqueueWaiter(
+        id: UUID,
+        mode: APISidecarOperationMode,
+        continuation: CheckedContinuation<APISidecarOperationLease, Error>
+    ) {
+        if waiterStates[id] == .cancelled {
+            waiterStates.removeValue(forKey: id)
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        waiterStates[id] = .waiting
+        waiters.append(Waiter(id: id, mode: mode, continuation: continuation))
+        drain()
+    }
+
+    private func cancelWaiter(id: UUID) {
+        switch waiterStates[id] {
+        case .pending:
+            waiterStates[id] = .cancelled
+        case .waiting:
+            guard let index = waiters.firstIndex(where: { $0.id == id }) else {
+                waiterStates.removeValue(forKey: id)
+                return
+            }
+            let waiter = waiters.remove(at: index)
+            waiterStates.removeValue(forKey: id)
+            waiter.continuation.resume(throwing: CancellationError())
+            drain()
+        case .cancelled, nil:
+            return
+        }
+    }
+
+    private func drain() {
+        guard !coldOperationActive, !waiters.isEmpty else { return }
+        if activeWarmOperations > 0 {
+            admitLeadingWarmWaiters()
+            return
+        }
+
+        if waiters[0].mode == .cold {
+            resumeFirstWaiter()
+        } else {
+            admitLeadingWarmWaiters()
+        }
+    }
+
+    private func admitLeadingWarmWaiters() {
+        while let waiter = waiters.first, waiter.mode == .warm, !coldOperationActive {
+            resumeFirstWaiter()
+        }
+    }
+
+    private func resumeFirstWaiter() {
+        let waiter = waiters.removeFirst()
+        guard waiterStates[waiter.id] != .cancelled else {
+            waiterStates.removeValue(forKey: waiter.id)
+            waiter.continuation.resume(throwing: CancellationError())
+            drain()
+            return
+        }
+        waiterStates.removeValue(forKey: waiter.id)
+        waiter.continuation.resume(returning: admit(waiter.mode))
+    }
+
+    private func canAdmit(_ mode: APISidecarOperationMode) -> Bool {
+        guard !coldOperationActive else { return false }
+        switch mode {
+        case .warm:
+            return true
+        case .cold:
+            return activeWarmOperations == 0
+        }
+    }
+
+    private func admit(_ mode: APISidecarOperationMode) -> APISidecarOperationLease {
+        switch mode {
+        case .warm:
+            activeWarmOperations += 1
+        case .cold:
+            precondition(activeWarmOperations == 0 && !coldOperationActive)
+            coldOperationActive = true
+        }
+        return APISidecarOperationLease(coordinator: self, mode: mode)
+    }
+}
+
+final class APISidecarOperationLease: @unchecked Sendable {
+    private let coordinator: APISidecarOperationCoordinator
+    private let mode: APISidecarOperationMode
+    private let lock = NSLock()
+    private var released = false
+
+    init(coordinator: APISidecarOperationCoordinator, mode: APISidecarOperationMode) {
+        self.coordinator = coordinator
+        self.mode = mode
+    }
+
+    deinit {
+        guard markReleased() else { return }
+        let coordinator = coordinator
+        let mode = mode
+        Task {
+            await coordinator.release(mode)
+        }
+    }
+
+    func release() async {
+        guard markReleased() else { return }
+        await coordinator.release(mode)
+    }
+
+    private func markReleased() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !released else { return false }
+        released = true
+        return true
+    }
 }
 
 actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
@@ -70,6 +249,9 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
         pinned: Bool = false,
         currentIdlePolicy: (@Sendable (Key) -> APISidecarResidentIdlePolicy)? = nil,
         idlePolicyPollInterval: Duration = .seconds(1),
+        operationCoordinator: APISidecarOperationCoordinator? = nil,
+        forceColdOperation: Bool = false,
+        prepareForColdOperation: (@Sendable (_ residentNeedsLoad: Bool) async throws -> Void)? = nil,
         make: @Sendable () async throws -> Value,
         unload: @escaping @Sendable (Value) async -> Void,
         operation: @Sendable (Value) async throws -> Result
@@ -85,8 +267,25 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
         }
         queuedRequests = max(0, queuedRequests - 1)
         activeRequests += 1
+        let residentNeedsLoad = resident?.key != key || resident?.ready != true
+        let mode: APISidecarOperationMode = !forceColdOperation
+            && !residentNeedsLoad
+            ? .warm
+            : .cold
+        var operationLease: APISidecarOperationLease?
         do {
+            operationLease = try await operationCoordinator?.acquire(mode)
+            try Task.checkCancellation()
+            if mode == .cold {
+                if residentNeedsLoad {
+                    await unloadResidentBeforeColdLoad(replacingWith: key, unload: unload)
+                }
+                try Task.checkCancellation()
+                try await prepareForColdOperation?(residentNeedsLoad)
+                try Task.checkCancellation()
+            }
             let value = try await value(for: key, make: make, unload: unload)
+            try Task.checkCancellation()
             let result = try await operation(value)
             completedRequests += 1
             markReady(key: key)
@@ -102,9 +301,11 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
                 pollInterval: idlePolicyPollInterval,
                 unload: unload
             )
+            await operationLease?.release()
             return result
         } catch {
             failedRequests += 1
+            _ = await unloadResidentIfNotReady(for: key, unload: unload)
             let idleGeneration = touch(key: key)
             activeRequests = max(0, activeRequests - 1)
             await lease.release()
@@ -117,6 +318,7 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
                 pollInterval: idlePolicyPollInterval,
                 unload: unload
             )
+            await operationLease?.release()
             throw error
         }
     }
@@ -210,6 +412,40 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
         lastAccess = now
         loadCount += 1
         return value
+    }
+
+    private func unloadResidentBeforeColdLoad(
+        replacingWith key: Key,
+        unload: @Sendable (Value) async -> Void
+    ) async {
+        guard let resident else { return }
+        self.resident = nil
+        invalidateIdleEviction()
+        lastKey = resident.key
+        lastLoadedAt = resident.loadedAt
+        lastAccess = resident.lastAccess
+        if resident.key != key {
+            replacementCount += 1
+        }
+        await unload(resident.value)
+    }
+
+    private func unloadResidentIfNotReady(
+        for key: Key,
+        unload: @Sendable (Value) async -> Void
+    ) async -> Bool {
+        guard let resident,
+              resident.key == key,
+              !resident.ready else {
+            return false
+        }
+        self.resident = nil
+        invalidateIdleEviction()
+        lastKey = resident.key
+        lastLoadedAt = resident.loadedAt
+        lastAccess = resident.lastAccess
+        await unload(resident.value)
+        return true
     }
 
     private func touch(key: Key) -> UInt64? {
@@ -318,10 +554,27 @@ private struct APISidecarASRKey: Hashable, Sendable {
     let modelPath: String?
 }
 
+private struct APISidecarEmbeddingKey: Hashable, Sendable {
+    let modelID: String
+    let modelPath: String
+}
+
 enum APISidecarLane: Int, CaseIterable, Hashable, Sendable {
     case image
     case speech
     case transcription
+    case embedding
+}
+
+enum APISidecarModelPoolError: LocalizedError, Equatable {
+    case memoryPressure
+
+    var errorDescription: String? {
+        switch self {
+        case .memoryPressure:
+            return "Memory guard blocked a cold media-model load while process pressure remained critical."
+        }
+    }
 }
 
 struct APISidecarEvictionCandidate: Equatable, Sendable {
@@ -378,6 +631,22 @@ enum APISidecarEvictionPlanner {
         return decisions
     }
 
+    static func nextMemoryPressureDecision(
+        candidates: [APISidecarEvictionCandidate],
+        excluding excludedLanes: Set<APISidecarLane> = []
+    ) -> APISidecarEvictionDecision? {
+        candidates.filter {
+            $0.loaded
+                && !excludedLanes.contains($0.lane)
+                && !$0.pinned
+                && $0.activeRequests == 0
+                && $0.queuedRequests == 0
+        }
+        .sorted(by: oldestFirst)
+        .first
+        .map { APISidecarEvictionDecision(lane: $0.lane, reason: .memoryPressure) }
+    }
+
     private static func oldestFirst(
         _ lhs: APISidecarEvictionCandidate,
         _ rhs: APISidecarEvictionCandidate
@@ -407,23 +676,44 @@ private enum APISidecarASRGenerator: Sendable {
     case parakeet(ParakeetGenerator)
 }
 
+private final class APISidecarEmbeddingRuntime: @unchecked Sendable {
+    private(set) var model: Qwen3EmbeddingModel?
+
+    init(model: Qwen3EmbeddingModel) {
+        self.model = model
+    }
+
+    func unload() {
+        model = nil
+        Memory.clearCache()
+    }
+}
+
+struct APISidecarEmbeddingResult: Sendable {
+    let embeddings: [[Float]]
+    let tokenCounts: [Int]
+}
+
 /// Resident runtimes for the non-chat OpenAI-compatible endpoints.
 ///
-/// One image runtime, one TTS runtime, and one ASR runtime may be resident at a
-/// time. This bounds memory even when callers provide different local model
-/// paths, while repeated requests avoid model reloads.
+/// One embedding runtime, one image runtime, one TTS runtime, and one ASR
+/// runtime may be resident at a time. This bounds memory even when callers
+/// provide different local model paths, while repeated requests avoid reloads.
 struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
     static let defaultIdleTTLSeconds = 300
 
     private let imageSlot: APISidecarResidentSlot<APISidecarImageKey, APISidecarImageGenerator>
     private let speechSlot: APISidecarResidentSlot<APISidecarSpeechKey, Qwen3TTSGenerator>
     private let asrSlot: APISidecarResidentSlot<APISidecarASRKey, APISidecarASRGenerator>
+    private let embeddingSlot: APISidecarResidentSlot<APISidecarEmbeddingKey, APISidecarEmbeddingRuntime>
+    private let operationCoordinator: APISidecarOperationCoordinator
     private let settingsURL: URL
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
     private let defaultIdleTTLSeconds: Int
     private let currentDate: @Sendable () -> Date
     private let currentMemorySample: @Sendable () -> RuntimeMemorySample
     private let relieveTextModelPressure: @Sendable () async -> Void
+    private let releaseOneIdleTextModelForLoad: @Sendable () async -> Bool
 
     init(
         settingsURL: URL = RuntimeModelSettingsStore.defaultURL(),
@@ -431,7 +721,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         defaultIdleTTLSeconds: Int = APISidecarModelPool.defaultIdleTTLSeconds,
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
-        relieveTextModelPressure: @escaping @Sendable () async -> Void = {}
+        relieveTextModelPressure: @escaping @Sendable () async -> Void = {},
+        releaseOneIdleTextModelForLoad: @escaping @Sendable () async -> Bool = { false }
     ) {
         precondition(defaultIdleTTLSeconds > 0, "Sidecar idle TTL must be positive")
         self.settingsURL = settingsURL
@@ -440,9 +731,12 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         self.currentDate = currentDate
         self.currentMemorySample = currentMemorySample
         self.relieveTextModelPressure = relieveTextModelPressure
+        self.releaseOneIdleTextModelForLoad = releaseOneIdleTextModelForLoad
         self.imageSlot = APISidecarResidentSlot(currentDate: currentDate)
         self.speechSlot = APISidecarResidentSlot(currentDate: currentDate)
         self.asrSlot = APISidecarResidentSlot(currentDate: currentDate)
+        self.embeddingSlot = APISidecarResidentSlot(currentDate: currentDate)
+        self.operationCoordinator = APISidecarOperationCoordinator()
     }
 
     func generateImage(
@@ -451,13 +745,14 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         modelPath: String,
         request: GenerationRequest
     ) async throws -> GenerationResult {
+        let residentModelID = Self.canonicalImageModelID(kind: kind, modelID: modelID)
         let key = APISidecarImageKey(
             kind: kind,
-            modelID: modelID,
+            modelID: residentModelID,
             modelPath: normalizedPath(modelPath)
         )
         return try await withSidecarPressureCoordination(excluding: [.image]) {
-            let lifecycle = lifecycleSettings(modelID: modelID, settings: loadedSettings())
+            let lifecycle = lifecycleSettings(modelID: residentModelID, settings: loadedSettings())
             return try await imageSlot.withValue(
                 for: key,
                 idleTTL: .seconds(lifecycle.ttlSeconds),
@@ -470,6 +765,26 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     return APISidecarResidentIdlePolicy(
                         pinned: current.pinned,
                         ttl: .seconds(current.ttlSeconds)
+                    )
+                },
+                operationCoordinator: operationCoordinator,
+                // Image pipelines may intentionally release and reload staged
+                // components between requests (for example Qwen Image Edit's
+                // text encoder), so slot readiness alone cannot prove a warm
+                // operation is allocation-free.
+                forceColdOperation: true,
+                prepareForColdOperation: { residentNeedsLoad in
+                    let estimate = estimatedImageLoadBytes(
+                        kind: kind,
+                        modelID: residentModelID,
+                        modelPath: key.modelPath,
+                        width: request.width,
+                        height: request.height,
+                        residentNeedsLoad: residentNeedsLoad
+                    )
+                    try await prepareForColdSidecarLoad(
+                        excluding: [.image],
+                        estimatedLoadBytes: estimate
                     )
                 },
                 make: {
@@ -549,6 +864,17 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         ttl: .seconds(current.ttlSeconds)
                     )
                 },
+                operationCoordinator: operationCoordinator,
+                prepareForColdOperation: { _ in
+                    try await prepareForColdSidecarLoad(
+                        excluding: [.speech],
+                        estimatedLoadBytes: estimatedLoadBytes(
+                            modelID: modelID,
+                            modelPath: modelPath,
+                            minimumBytes: 10 * 1_073_741_824
+                        )
+                    )
+                },
                 make: { Qwen3TTSGenerator(modelId: modelID) },
                 unload: { generator in await generator.unload() },
                 operation: { generator in
@@ -617,6 +943,17 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         ttl: .seconds(current.ttlSeconds)
                     )
                 },
+                operationCoordinator: operationCoordinator,
+                prepareForColdOperation: { _ in
+                    try await prepareForColdSidecarLoad(
+                        excluding: [.transcription],
+                        estimatedLoadBytes: estimatedLoadBytes(
+                            modelID: key.modelID,
+                            modelPath: key.modelPath,
+                            minimumBytes: 5 * 1_073_741_824
+                        )
+                    )
+                },
                 make: {
                     switch key.backend {
                     case .qwen:
@@ -653,6 +990,70 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         }
     }
 
+    func embed(
+        modelID: String,
+        modelPath: String,
+        texts: [String]
+    ) async throws -> APISidecarEmbeddingResult {
+        let key = APISidecarEmbeddingKey(
+            modelID: modelID,
+            modelPath: normalizedPath(modelPath)
+        )
+        return try await withSidecarPressureCoordination(excluding: [.embedding]) {
+            let lifecycle = lifecycleSettings(modelID: modelID, settings: loadedSettings())
+            return try await embeddingSlot.withValue(
+                for: key,
+                idleTTL: .seconds(lifecycle.ttlSeconds),
+                pinned: lifecycle.pinned,
+                currentIdlePolicy: { key in
+                    let current = lifecycleSettings(
+                        modelID: key.modelID,
+                        settings: loadedSettings()
+                    )
+                    return APISidecarResidentIdlePolicy(
+                        pinned: current.pinned,
+                        ttl: .seconds(current.ttlSeconds)
+                    )
+                },
+                operationCoordinator: operationCoordinator,
+                prepareForColdOperation: { _ in
+                    try await prepareForColdSidecarLoad(
+                        excluding: [.embedding],
+                        estimatedLoadBytes: estimatedLoadBytes(
+                            modelID: modelID,
+                            modelPath: key.modelPath,
+                            minimumBytes: 3 * 1_073_741_824
+                        )
+                    )
+                },
+                make: {
+                    APISidecarEmbeddingRuntime(
+                        model: try Qwen3EmbeddingModel(
+                            resources: Qwen3EmbeddingResources(
+                                rootURL: URL(fileURLWithPath: key.modelPath, isDirectory: true)
+                            )
+                        )
+                    )
+                },
+                unload: { runtime in runtime.unload() },
+                operation: { runtime in
+                    guard let model = runtime.model else {
+                        throw CancellationError()
+                    }
+                    let result = try model.embed(
+                        texts: texts,
+                        maxTokens: Qwen3EmbeddingModel.defaultMaxPaddedTokensPerBatch,
+                        maxPaddedTokensPerBatch: Qwen3EmbeddingModel.defaultMaxPaddedTokensPerBatch
+                    )
+                    return APISidecarEmbeddingResult(
+                        embeddings: result.embeddings,
+                        tokenCounts: result.tokenCounts
+                    )
+                }
+            )
+        }
+    }
+
     func status(
         now: Date? = nil,
         memorySample: RuntimeMemorySample? = nil
@@ -677,16 +1078,19 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         let image: APISidecarResidentSlotState<APISidecarImageKey>
         let speech: APISidecarResidentSlotState<APISidecarSpeechKey>
         let transcription: APISidecarResidentSlotState<APISidecarASRKey>
+        let embedding: APISidecarResidentSlotState<APISidecarEmbeddingKey>
     }
 
     private func states() async -> SlotStates {
         async let image = imageSlot.state()
         async let speech = speechSlot.state()
         async let transcription = asrSlot.state()
+        async let embedding = embeddingSlot.state()
         return await SlotStates(
             image: image,
             speech: speech,
-            transcription: transcription
+            transcription: transcription,
+            embedding: embedding
         )
     }
 
@@ -711,6 +1115,49 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         await evictIdleResidents(excluding: excludedLanes)
     }
 
+    /// Cold sidecar work is exclusive across media lanes. Re-sample pressure
+    /// under that exclusive lease and release idle text/sidecar residents when
+    /// the configured guard is already elevated. Nominal high-memory systems
+    /// retain warm peers; the post-cold-load pass handles any pressure caused
+    /// by the new resident itself.
+    private func prepareForColdSidecarLoad(
+        excluding excludedLanes: Set<APISidecarLane>,
+        estimatedLoadBytes: UInt64?
+    ) async throws {
+        let initialSample = currentMemorySample()
+        let initialPressure = memoryPressurePolicy.pressure(for: initialSample)
+        let projectedPressure = estimatedLoadBytes.map {
+            memoryPressurePolicy.projectedPressure(for: initialSample, additionalBytes: $0)
+        }
+
+        if projectedPressure == .critical, let estimatedLoadBytes {
+            while memoryPressurePolicy.projectedPressure(
+                for: currentMemorySample(),
+                additionalBytes: estimatedLoadBytes
+            ) == .critical {
+                if await releaseOneIdleTextModelForLoad() {
+                    continue
+                }
+                guard await evictOneIdleResident(excluding: excludedLanes) else {
+                    break
+                }
+                await Task.yield()
+            }
+        } else if initialPressure == .elevated || initialPressure == .critical {
+            await relieveTextModelPressure()
+            await evictIdleResidents(excluding: excludedLanes)
+        }
+
+        let finalSample = currentMemorySample()
+        let finalPressure = memoryPressurePolicy.pressure(for: finalSample)
+        let finalProjectedPressure = estimatedLoadBytes.map {
+            memoryPressurePolicy.projectedPressure(for: finalSample, additionalBytes: $0)
+        }
+        if finalPressure == .critical || finalProjectedPressure == .critical {
+            throw APISidecarModelPoolError.memoryPressure
+        }
+    }
+
     func withSidecarPressureCoordination<Result: Sendable>(
         excluding excludedLanes: Set<APISidecarLane>,
         operation: @Sendable () async throws -> Result
@@ -718,10 +1165,10 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         await prepareForSidecarLoad(excluding: excludedLanes)
         do {
             let result = try await operation()
-            await rebalanceAfterSidecarLoad(excluding: excludedLanes)
+            await rebalanceAfterSidecarLoad(excluding: [])
             return result
         } catch {
-            await rebalanceAfterSidecarLoad(excluding: excludedLanes)
+            await rebalanceAfterSidecarLoad(excluding: [])
             throw error
         }
     }
@@ -778,7 +1225,58 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     reason: decision.reason,
                     using: Self.unloadASR
                 )
+            case .embedding:
+                guard let key = states.embedding.residentKey else { continue }
+                _ = await embeddingSlot.evictIfIdle(
+                    expectedKey: key,
+                    reason: decision.reason,
+                    using: { runtime in runtime.unload() }
+                )
             }
+        }
+    }
+
+    private func evictOneIdleResident(
+        excluding excludedLanes: Set<APISidecarLane>
+    ) async -> Bool {
+        let states = await states()
+        let settings = loadedSettings()
+        guard let decision = APISidecarEvictionPlanner.nextMemoryPressureDecision(
+            candidates: evictionCandidates(states: states, settings: settings),
+            excluding: excludedLanes
+        ) else {
+            return false
+        }
+
+        switch decision.lane {
+        case .image:
+            guard let key = states.image.residentKey else { return false }
+            return await imageSlot.evictIfIdle(
+                expectedKey: key,
+                reason: decision.reason,
+                using: Self.unloadImage
+            )
+        case .speech:
+            guard let key = states.speech.residentKey else { return false }
+            return await speechSlot.evictIfIdle(
+                expectedKey: key,
+                reason: decision.reason,
+                using: { generator in await generator.unload() }
+            )
+        case .transcription:
+            guard let key = states.transcription.residentKey else { return false }
+            return await asrSlot.evictIfIdle(
+                expectedKey: key,
+                reason: decision.reason,
+                using: Self.unloadASR
+            )
+        case .embedding:
+            guard let key = states.embedding.residentKey else { return false }
+            return await embeddingSlot.evictIfIdle(
+                expectedKey: key,
+                reason: decision.reason,
+                using: { runtime in runtime.unload() }
+            )
         }
     }
 
@@ -796,6 +1294,10 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         )
         let transcriptionSettings = lifecycleSettings(
             modelID: states.transcription.residentKey?.modelID,
+            settings: settings
+        )
+        let embeddingSettings = lifecycleSettings(
+            modelID: states.embedding.residentKey?.modelID,
             settings: settings
         )
         return [
@@ -826,6 +1328,15 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 pinned: transcriptionSettings.pinned,
                 ttlSeconds: transcriptionSettings.ttlSeconds
             ),
+            APISidecarEvictionCandidate(
+                lane: .embedding,
+                loaded: states.embedding.residentKey != nil,
+                lastAccess: states.embedding.lastAccess,
+                activeRequests: states.embedding.activeRequests,
+                queuedRequests: states.embedding.queuedRequests,
+                pinned: embeddingSettings.pinned,
+                ttlSeconds: embeddingSettings.ttlSeconds
+            ),
         ]
     }
 
@@ -836,6 +1347,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         let imageKey = states.image.residentKey ?? states.image.lastKey
         let speechKey = states.speech.residentKey ?? states.speech.lastKey
         let transcriptionKey = states.transcription.residentKey ?? states.transcription.lastKey
+        let embeddingKey = states.embedding.residentKey ?? states.embedding.lastKey
         return [
             residentSnapshot(
                 kind: .image,
@@ -862,6 +1374,15 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 variant: transcriptionKey?.backend.rawValue,
                 loaded: states.transcription.residentKey != nil,
                 state: states.transcription,
+                settings: settings
+            ),
+            residentSnapshot(
+                kind: .embedding,
+                modelID: embeddingKey?.modelID,
+                modelPath: embeddingKey?.modelPath,
+                variant: "qwen3-embedding",
+                loaded: states.embedding.residentKey != nil,
+                state: states.embedding,
                 settings: settings
             ),
         ]
@@ -941,6 +1462,152 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             await generator.unload()
         }
     }
+
+    private func estimatedLoadBytes(
+        modelID: String,
+        modelPath: String?,
+        minimumBytes: UInt64
+    ) -> UInt64? {
+        var estimate = minimumBytes
+        if let catalogEstimate = ManagedModelCatalog.spec(for: modelID)?.estimatedDownloadBytes,
+           catalogEstimate > 0 {
+            updateMaximum(&estimate, candidate: UInt64(catalogEstimate))
+        }
+        if let modelPath {
+            let url = URL(fileURLWithPath: modelPath, isDirectory: true).standardizedFileURL
+            if FileManager.default.fileExists(atPath: url.path) {
+                let bytes = FileSystemHelper.directorySize(at: url)
+                if bytes > 0 {
+                    updateMaximum(&estimate, candidate: UInt64(bytes))
+                }
+            }
+        }
+        return estimate > 0 ? estimate : nil
+    }
+
+    private func estimatedImageLoadBytes(
+        kind: APISidecarImageKind,
+        modelID: String,
+        modelPath: String,
+        width: Int,
+        height: Int,
+        residentNeedsLoad: Bool
+    ) -> UInt64? {
+        let baseBytes = residentNeedsLoad
+            ? Self.imageBaseLoadBytes(for: kind)
+            : 8 * Self.gibibyte
+        let dimensions = Self.effectiveImageLoadDimensions(
+            for: kind,
+            width: width,
+            height: height
+        )
+        let minimumBytes = Self.scaledImageLoadBytes(
+            baseBytes: baseBytes,
+            width: dimensions.width,
+            height: dimensions.height
+        )
+        guard residentNeedsLoad else {
+            // Warm staged pipelines can temporarily reload components, but
+            // their checkpoint is already resident/accounted for. Avoid an
+            // unnecessary directory walk and project only activation/staging
+            // headroom for the requested pixel count.
+            return minimumBytes
+        }
+        return estimatedLoadBytes(
+            modelID: modelID,
+            modelPath: modelPath,
+            minimumBytes: minimumBytes
+        )
+    }
+
+    private static let gibibyte: UInt64 = 1_073_741_824
+    private static let referenceImagePixels: UInt64 = 1_024 * 1_024
+
+    static func canonicalImageModelID(
+        kind: APISidecarImageKind,
+        modelID: String
+    ) -> String {
+        kind == .qwenImageEdit ? QwenImageEditRepository.modelId : modelID
+    }
+
+    private static func imageBaseLoadBytes(for kind: APISidecarImageKind) -> UInt64 {
+        switch kind {
+        case .flux2Klein:
+            return 10 * gibibyte
+        case .zImageTurbo:
+            return 12 * gibibyte
+        case .hiDreamO1, .krea2, .ideogram4, .qwenImageEdit:
+            return 16 * gibibyte
+        }
+    }
+
+    private static func effectiveImageLoadDimensions(
+        for kind: APISidecarImageKind,
+        width: Int,
+        height: Int
+    ) -> (width: Int, height: Int) {
+        switch kind {
+        case .hiDreamO1:
+            let resolution = HiDreamO1SampleBuilder.closestResolution(
+                width: width,
+                height: height
+            )
+            return (resolution.width, resolution.height)
+        case .flux2Klein, .zImageTurbo, .krea2, .ideogram4, .qwenImageEdit:
+            return (width, height)
+        }
+    }
+
+    private static func scaledImageLoadBytes(
+        baseBytes: UInt64,
+        width: Int,
+        height: Int
+    ) -> UInt64 {
+        guard width > 0, height > 0 else {
+            return baseBytes
+        }
+        let (pixelCount, pixelOverflow) = UInt64(width).multipliedReportingOverflow(by: UInt64(height))
+        guard !pixelOverflow else {
+            return UInt64.max
+        }
+        let wholeUnits = pixelCount / referenceImagePixels
+        let scale = max(1, wholeUnits + (pixelCount % referenceImagePixels == 0 ? 0 : 1))
+        let (scaledBytes, byteOverflow) = baseBytes.multipliedReportingOverflow(by: scale)
+        return byteOverflow ? UInt64.max : scaledBytes
+    }
+
+    private func updateMaximum(_ value: inout UInt64, candidate: UInt64) {
+        value = max(value, candidate)
+    }
+
+    #if DEBUG
+    func estimatedImageLoadBytesForTesting(
+        kind: APISidecarImageKind,
+        modelID: String,
+        modelPath: String,
+        width: Int,
+        height: Int,
+        residentNeedsLoad: Bool
+    ) -> UInt64? {
+        estimatedImageLoadBytes(
+            kind: kind,
+            modelID: modelID,
+            modelPath: modelPath,
+            width: width,
+            height: height,
+            residentNeedsLoad: residentNeedsLoad
+        )
+    }
+
+    func prepareForColdSidecarLoadForTesting(
+        estimatedLoadBytes: UInt64?
+    ) async throws {
+        try await prepareForColdSidecarLoad(
+            excluding: [],
+            estimatedLoadBytes: estimatedLoadBytes
+        )
+    }
+    #endif
 
     private func normalizedPath(_ value: String) -> String {
         guard (value as NSString).isAbsolutePath else {

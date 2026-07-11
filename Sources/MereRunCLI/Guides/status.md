@@ -8,7 +8,7 @@ managed models installed there.
 When `/runtime/status` is available, the snapshot also includes runtime pool
 entries, active request counts, request admission queue depth, memory pressure,
 runtime capability flags, aggregate cache stats, per-model prefix KV cache
-stats, per-model decode batching stats when enabled, image/TTS/ASR sidecar
+stats, per-model decode batching stats when enabled, embedding/image/TTS/ASR sidecar
 residency and readiness, and the settings file path. In JSON, `loaded` is the
 backward-compatible resident-object signal; additive `ready: false` means a text
 model is still preparing or a sidecar's first operation is loading or failed.

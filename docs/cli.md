@@ -1400,7 +1400,7 @@ When the server exposes the native runtime pool, JSON status also includes pool
 entries, active request counts, request admission queue depth, the memory
 snapshot, runtime capability flags, aggregate cache stats, per-model prefix KV
 cache stats, per-model decode batching stats when enabled, aggregate benchmark
-stats from completed native chat requests, image/TTS/ASR sidecar residency and
+stats from completed native chat requests, embedding/image/TTS/ASR sidecar residency and
 readiness, and the runtime settings path. `loaded` remains the
 backward-compatible resident-object field; additive `ready: false` means a text
 model is still preparing or a sidecar's first operation is loading or failed.
@@ -1462,11 +1462,12 @@ accepts `polar2` and `auto`; non-Gemma4 models reject PolarKV runtime modes.
 pool's opportunistic eviction passes, while `--pinned` protects a model from
 automatic TTL/LRU eviction without blocking explicit unload. Memory-pressure LRU
 uses the API server's `--memory-guard` tier. The guard derives soft/hard
-ceilings from process resident memory, host memory headroom, and a tier reserve;
+ceilings from Darwin physical footprint (RSS elsewhere), host memory headroom,
+and a tier reserve;
 elevated pressure evicts the least-recently-used idle unpinned model, while
 critical pressure evicts every idle unpinned model.
 
-Managed image, TTS, and ASR sidecar models accept only the residency controls
+Managed embedding, image, TTS, and ASR sidecar models accept only the residency controls
 `--pinned`, `--unpinned`, `--ttl-seconds`, and `--clear-ttl`. Their default idle
 TTL is 300 seconds. Text-only alias, context, sampling, engine, and KV settings
 are rejected for sidecars. The special `qwen-image-edit` repository lane is
@@ -1771,7 +1772,7 @@ Current endpoint surface:
 - `GET/PATCH /runtime/models/{id}/settings`
 
 The four `/runtime/models/{id}` load, unload, and settings operations target the
-chat/text runtime pool only. Managed image, TTS, and ASR sidecar TTL/pinning is
+chat/text runtime pool only. Managed embedding, image, TTS, and ASR sidecar TTL/pinning is
 configured through `mere.run model runtime set` or the settings file; sidecars
 remain visible through `/v1/models` and `/runtime/status`.
 
@@ -1798,10 +1799,13 @@ Security defaults:
   `POST /v1/audio/transcriptions` require `multipart/form-data`
 - `--rate-limit-per-minute` applies basic request throttling to the
   OpenAI-compatible routes
-- `--max-active-requests` controls fair FIFO chat admission; the default `1`
-  preserves serialized local inference while exposing queue depth in status;
+- `--max-active-requests` controls fair FIFO admission for chat, embedding,
+  image, TTS, and ASR inference; the default `1` serializes local inference
+  across text and media activation peaks while exposing queue depth in status;
   queued client cancellations are removed from the FIFO instead of running
-  later. Values above `1` automatically engage supported Gemma4, Qwen-family,
+  later. Raising it is an explicit throughput and unified-memory tradeoff.
+  Explicit runtime model load/unload maintenance shares the same queue.
+  Values above `1` automatically engage supported Gemma4, Qwen-family,
   and LFM2 decode batching unless an engine-specific environment variable forces
   the serial path
 - `--memory-guard` controls runtime memory pressure behavior. Accepted values
@@ -1809,14 +1813,17 @@ Security defaults:
   requires `--memory-guard-custom-ceiling-gb`.
 - elevated or critical memory pressure pauses extra concurrent admissions while
   letting one request run so the server can make progress
-- image/image-edit, TTS, and ASR sidecar endpoints each keep only their most
-  recently used runtime resident. Matching requests reuse loaded model state
+- embedding, image/image-edit, TTS, and ASR sidecar endpoints each keep only
+  their most recently used runtime resident. Matching requests reuse loaded model state
   through an exclusive queue; selecting another model or ASR backend unloads
   the previous runtime before loading its replacement. Idle sidecars default to
   a 300-second TTL with autonomous expiry, re-read managed-model pin/TTL changes
   while idle, and participate in the same memory-pressure policy without
-  evicting active or queued work. Managed image generation, TTS, and ASR catalog
-  IDs honor those settings; the special `qwen-image-edit` repository ID uses the
+  evicting active or queued work. Cold loads are exclusive across lanes and
+  project the catalog/path size against the hard guard before allocating;
+  requests that still lack headroom after idle-resident eviction are rejected.
+  Managed embedding, image generation, TTS, and ASR catalog IDs honor those
+  settings; the special `qwen-image-edit` repository ID uses the
   default policy because `model runtime set` does not address it. Runtime status
   reports identities, residency, readiness, load/access state, queues, and
   counters.
@@ -1893,6 +1900,9 @@ OpenAI chat compatibility:
 OpenAI embeddings compatibility:
 
 - `POST /v1/embeddings` serves native `text-embed-qwen3-0.6b` embeddings.
+- Requests are bounded to 256 texts and 2 MiB of UTF-8 input. Rows are capped
+  at 8,192 tokens and evaluated in length-aware batches with at most 8,192
+  padded tokens before response order is restored.
 - `input` may be a string or array of strings.
 - `encoding_format` may be omitted or set to `float`; base64 encoding and
   dimension overrides are rejected.
@@ -1901,18 +1911,24 @@ OpenAI image/audio compatibility:
 
 - `POST /v1/images/generations` serves native image generation models such as
   `image-zimage-nano`; it supports `prompt`, `size`, `n=1`, `response_format`
-  `b64_json` or `url`, and local extensions such as `seed`.
+  `b64_json` or `url`, and local extensions such as `seed`. Each image
+  dimension must be a multiple of 16 from 16 through 4,096 pixels, and total
+  area is limited to 4,194,304 pixels; explicit inference steps are limited to
+  1 through 100.
 - `POST /v1/images/edits` accepts multipart `image` uploads, Open WebUI-style
   `image[]` repeated uploads, an optional `mask`, and an edit `prompt`; it uses
-  the same image runtime with input-image conditioning. Masks are accepted for
-  client compatibility; current native edit models use whole-image conditioning.
+  the same image runtime with input-image conditioning and the same size
+  limits. Masks are accepted for client compatibility; current native edit
+  models use whole-image conditioning.
 - `POST /v1/audio/speech` serves `speech-tts-qwen3-nano` and returns WAV by
   default, with `mp3`, `opus`, `aac`, and `flac` available when `ffmpeg` is
-  installed. OpenAI model names such as `tts-1` map to the local default.
+  installed. OpenAI model names such as `tts-1` map to the local default;
+  normalized input plus voice instructions may total at most 32 KiB of UTF-8.
 - `POST /v1/audio/transcriptions` accepts multipart uploads for
   `speech-asr-parakeet` or `speech-asr-qwen3`, with `json`, `text`,
   `verbose_json`, `srt`, and `vtt` response formats. OpenAI model names such as
-  `whisper-1` map to the local default.
+  `whisper-1` map to the local default; `max_tokens` is limited to 1 through
+  4,096.
 
 Examples:
 
