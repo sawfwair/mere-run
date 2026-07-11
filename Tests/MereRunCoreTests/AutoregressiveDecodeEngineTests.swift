@@ -24,7 +24,7 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
 
     /// Scripted model: emits the given tokens in order regardless of input,
     /// then EOS forever.
-    private func scriptedModel(_ script: [Int]) -> (MLXArray) throws -> MLXArray {
+    private func scriptedModel(_ script: [Int]) -> (MLXArray) -> MLXArray {
         var upcoming = script
         return { _ in
             let next = upcoming.isEmpty ? self.eos : upcoming.removeFirst()
@@ -105,5 +105,33 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         )
         // Whitespace-only pieces buffer until visible text arrives.
         XCTAssertEqual(pieces, [" \nhello", "world"])
+    }
+
+    func testStatefulDecodeProcessesConfirmedTokenHistory() {
+        var processedHistories: [[Int]] = []
+        var sampled: [Int] = []
+        let result = AutoregressiveDecodeEngine.decodeStateful(
+            request(firstToken: 3, budget: 8),
+            processLogits: { logits, tokens in
+                processedHistories.append(tokens)
+                return logits
+            },
+            stepForward: scriptedModel([7, 2, eos]),
+            didSampleToken: { sampled.append($0) }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3, 7, 2])
+        XCTAssertEqual(processedHistories, [[], [3], [3, 7], [3, 7, 2]])
+        XCTAssertEqual(sampled, [3, 7, 2, eos])
+    }
+
+    func testStatefulDecodeCanRejectSampleBeforeAppendingIt() {
+        let result = AutoregressiveDecodeEngine.decodeStateful(
+            request(firstToken: 3, budget: 8),
+            stepForward: scriptedModel([7, 2, eos]),
+            shouldContinue: { $0 != 7 }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3])
     }
 }

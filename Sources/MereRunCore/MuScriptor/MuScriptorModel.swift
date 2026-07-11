@@ -274,7 +274,8 @@ public final class MuScriptorModel: Module {
         )
         hidden = transformer(hidden, caches: caches)
         hidden = outputNorm(hidden)
-        return outputProjection(hidden)[0, -1, 0..<1_393].asType(.float32)
+        let lastHidden = hidden[0..., (hidden.dim(1) - 1)..., 0...]
+        return outputProjection(lastHidden)[0, 0, 0..<1_393].asType(.float32)
     }
 
     private func positionalEmbedding(

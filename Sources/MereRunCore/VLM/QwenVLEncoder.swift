@@ -239,7 +239,8 @@ public final class QwenVLEncoder: Module {
             cache: cache,
             positionIds: positionIds,
             visualPosMask: visualPosMask,
-            deepstackFeatures: deepstackFeatures
+            deepstackFeatures: deepstackFeatures,
+            lastPositionOnly: true
         )
         MLX.eval(logits)
 
@@ -430,7 +431,8 @@ extension QwenEncoder {
         cache: [KVCache]?,
         positionIds: MLXArray? = nil,
         visualPosMask: MLXArray? = nil,
-        deepstackFeatures: [MLXArray] = []
+        deepstackFeatures: [MLXArray] = [],
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
         var h = embeddings
         let n = h.dim(1)
@@ -457,6 +459,9 @@ extension QwenEncoder {
         }
 
         h = norm(h)
+        if lastPositionOnly && h.dim(1) > 1 {
+            h = h[0..., (h.dim(1) - 1)..., 0...]
+        }
         return embedTokens.asLinear(h)
     }
 

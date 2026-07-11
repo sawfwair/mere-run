@@ -210,15 +210,19 @@ public final class Qwen3ASRThinker: Module {
         inputIds: MLXArray,
         audioFeatures: MLXArray? = nil,
         cache: [KVCache]? = nil,
-        positionIds: MLXArray? = nil
+        positionIds: MLXArray? = nil,
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
-        let hidden = model(
+        var hidden = model(
             inputIds: inputIds,
             audioFeatures: audioFeatures,
             audioTokenId: config.audioTokenId,
             cache: cache,
             positionIds: positionIds
         )
+        if lastPositionOnly && hidden.dim(1) > 1 {
+            hidden = hidden[0..., (hidden.dim(1) - 1)..., 0...]
+        }
         if let lmHead {
             return lmHead(hidden)
         }

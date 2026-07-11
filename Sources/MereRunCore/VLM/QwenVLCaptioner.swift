@@ -141,7 +141,11 @@ public final class QwenVLCaptioner: @unchecked Sendable {
 
         // Embed and forward
         let embeddings = encoder.textEncoder.encoder.embed(inputIds: inputIds)
-        var logits = encoder.textEncoder.encoder.forwardCausal(embeddings: embeddings, cache: cache)
+        var logits = encoder.textEncoder.encoder.forwardCausal(
+            embeddings: embeddings,
+            cache: cache,
+            lastPositionOnly: true
+        )
         MLX.eval(logits)
 
         var tokens = promptTokens

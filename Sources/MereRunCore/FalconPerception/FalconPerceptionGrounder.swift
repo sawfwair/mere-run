@@ -424,7 +424,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                 inputsEmbeds: inputsEmbeds,
                 mask: positionData.attentionMask,
                 positionIDs: positionData.positionIDs,
-                posHW: positionData.posHW
+                posHW: positionData.posHW,
+                lastPositionOnly: true
             )
             MLX.eval(logits)
             return logits

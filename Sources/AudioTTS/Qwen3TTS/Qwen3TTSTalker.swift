@@ -550,7 +550,10 @@ final class Qwen3TTSTalkerCodePredictor: Module {
         }
 
         let hidden = model(embeds, positionIds: positionIds, mask: mask, cache: cache)
-        let logits = lmHead[generationStep](hidden)
+        let lastHidden = hidden.dim(1) > 1
+            ? hidden[0..., (hidden.dim(1) - 1)..., 0...]
+            : hidden
+        let logits = lmHead[generationStep](lastHidden)
         return (logits, cache, generationStep + 1)
     }
 
@@ -597,7 +600,10 @@ final class Qwen3TTSTalkerForConditionalGeneration: Module {
         mask: MLXFast.ScaledDotProductAttentionMaskMode? = nil,
         cache: [KVCache]? = nil
     ) -> (logits: MLXArray, hidden: MLXArray) {
-        let hidden = model(inputsEmbeds, positionIds: positionIds, mask: mask, cache: cache)
+        var hidden = model(inputsEmbeds, positionIds: positionIds, mask: mask, cache: cache)
+        if hidden.dim(1) > 1 {
+            hidden = hidden[0..., (hidden.dim(1) - 1)..., 0...]
+        }
         let logits = codecHead(hidden)
         return (logits, hidden)
     }

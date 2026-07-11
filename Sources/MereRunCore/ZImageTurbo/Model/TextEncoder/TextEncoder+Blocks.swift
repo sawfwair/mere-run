@@ -14,6 +14,7 @@ public final class QwenAttention: Module {
   let headDim: Int
   let numKeyValueGroups: Int
   let scale: Float
+  let cachedDecodeAttentionMode: QwenCachedDecodeAttentionMode
 
   @ModuleInfo(key: "q_proj") var qProj: Linear
   @ModuleInfo(key: "k_proj") var kProj: Linear
@@ -34,6 +35,12 @@ public final class QwenAttention: Module {
     self.headDim = configuration.headDim
     self.numKeyValueGroups = configuration.numAttentionHeads / configuration.numKeyValueHeads
     self.scale = pow(Float(configuration.headDim), -0.5)
+    switch configuration.cachedDecodeAttentionMode {
+    case .automatic:
+      self.cachedDecodeAttentionMode = configuration.mropeSection?.isEmpty == false ? .reference : .native
+    case .native, .reference:
+      self.cachedDecodeAttentionMode = configuration.cachedDecodeAttentionMode
+    }
 
     self._qProj.wrappedValue = Linear(hiddenSize, numAttentionHeads * headDim, bias: false)
     self._kProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: false)
@@ -143,10 +150,10 @@ public final class QwenAttention: Module {
     let queriesF32 = queries.asType(.float32)
 
     let output: MLXArray
-    if cache != nil && L == 1 {
-      // Qwen3-VL decode diverges after prefill on the fast single-token path.
-      // Fall back to explicit attention for cached 1-token decode, which matches
-      // the upstream reference more closely while keeping prefill on the fast kernel.
+    if cache != nil && L == 1 && cachedDecodeAttentionMode == .reference {
+      // Qwen3-VL MRoPE decode diverges after prefill on the native
+      // single-token path. Keep its explicit reference attention selectable
+      // while text-only Qwen users retain compact GQA heads end to end.
       if numKeyValueHeads != numAttentionHeads {
         keys = expandKeyValue(keys, repeats: numKeyValueGroups)
         values = expandKeyValue(values, repeats: numKeyValueGroups)
@@ -509,7 +516,12 @@ extension QwenEncoder {
     return embedTokens(tokenIds).asType(.bfloat16)
   }
 
-  public func forwardCausal(inputIds: MLXArray, cache: [KVCache]?, positionIds: MLXArray? = nil) -> MLXArray {
+  public func forwardCausal(
+    inputIds: MLXArray,
+    cache: [KVCache]?,
+    positionIds: MLXArray? = nil,
+    lastPositionOnly: Bool = false
+  ) -> MLXArray {
     var tokenIds = inputIds
     if tokenIds.dtype != .int32 {
       tokenIds = tokenIds.asType(.int32)
@@ -523,6 +535,9 @@ extension QwenEncoder {
     }
 
     h = norm(h)
+    if lastPositionOnly && h.dim(1) > 1 {
+      h = h[0..., (h.dim(1) - 1)..., 0...]
+    }
     return embedTokens.asLinear(h)
   }
 

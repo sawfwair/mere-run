@@ -639,7 +639,8 @@ final class FalconPerceptionLanguageModel: Module {
         mask: MLXArray?,
         caches: [FalconPerceptionKVCache?]?,
         positionIDs: MLXArray?,
-        posHW: MLXArray?
+        posHW: MLXArray?,
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
         let sequenceLength = inputsEmbeds?.dim(1) ?? inputIDs.dim(1)
         let cacheOffset = caches?.first??.offset ?? 0
@@ -658,7 +659,10 @@ final class FalconPerceptionLanguageModel: Module {
             positionIDs: resolvedInputs.positionIDs,
             posHW: resolvedInputs.posHW
         )
-        return lmHead(hidden)
+        let projectedHidden = lastPositionOnly && hidden.dim(1) > 1
+            ? hidden[0..., (hidden.dim(1) - 1)..., 0...]
+            : hidden
+        return lmHead(projectedHidden)
     }
 }
 
@@ -894,7 +898,8 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         mask: MLXArray? = nil,
         caches: [FalconPerceptionKVCache?]? = nil,
         positionIDs: MLXArray? = nil,
-        posHW: MLXArray? = nil
+        posHW: MLXArray? = nil,
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
         let embeds: MLXArray
         if let inputsEmbeds {
@@ -911,7 +916,8 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
             mask: mask,
             caches: caches,
             positionIDs: positionIDs,
-            posHW: posHW
+            posHW: posHW,
+            lastPositionOnly: lastPositionOnly
         )
     }
 

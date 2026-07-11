@@ -85,7 +85,8 @@ extension LightOnOCRGenerator {
         var logits = textDecoder.encoder.forwardCausal(
             embeddings: inputEmbeds,
             cache: cache,
-            positionIds: positionIds
+            positionIds: positionIds,
+            lastPositionOnly: true
         )
         MLX.eval(logits)
         log("[Gen] Prefill logits shape: \(logits.shape)")
