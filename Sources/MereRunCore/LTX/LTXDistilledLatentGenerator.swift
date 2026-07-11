@@ -2463,6 +2463,59 @@ private func mapTemporalOutputSlice(
     return (start, length, mask)
 }
 
+func accumulateLTXDecodedTile(
+    output: MLXArray,
+    weights: MLXArray,
+    tileDecoded: MLXArray,
+    outputFrameStart: Int,
+    outputHeightStart: Int,
+    outputWidthStart: Int,
+    temporalMask: [Float],
+    heightMask: [Float],
+    widthMask: [Float]
+) {
+    let tileFrames = min(tileDecoded.dim(2), min(temporalMask.count, output.dim(2) - outputFrameStart))
+    let tileHeight = min(tileDecoded.dim(3), min(heightMask.count, output.dim(3) - outputHeightStart))
+    let tileWidth = min(tileDecoded.dim(4), min(widthMask.count, output.dim(4) - outputWidthStart))
+    guard tileFrames > 0, tileHeight > 0, tileWidth > 0 else { return }
+
+    let temporal = MLXArray(Array(temporalMask.prefix(tileFrames)))
+        .asType(output.dtype)
+        .reshaped(1, 1, tileFrames, 1, 1)
+    let vertical = MLXArray(Array(heightMask.prefix(tileHeight)))
+        .asType(output.dtype)
+        .reshaped(1, 1, 1, tileHeight, 1)
+    let horizontal = MLXArray(Array(widthMask.prefix(tileWidth)))
+        .asType(output.dtype)
+        .reshaped(1, 1, 1, 1, tileWidth)
+    let blend = temporal * vertical * horizontal
+    let frameRange = outputFrameStart..<(outputFrameStart + tileFrames)
+    let heightRange = outputHeightStart..<(outputHeightStart + tileHeight)
+    let widthRange = outputWidthStart..<(outputWidthStart + tileWidth)
+    let tile = tileDecoded[0..., 0..<3, 0..<tileFrames, 0..<tileHeight, 0..<tileWidth]
+        .asType(output.dtype)
+
+    output[0..., 0..., frameRange, heightRange, widthRange] =
+        output[0..., 0..., frameRange, heightRange, widthRange] + (tile * blend)
+    weights[0..., 0..., frameRange, heightRange, widthRange] =
+        weights[0..., 0..., frameRange, heightRange, widthRange] + blend
+}
+
+func finalizeLTXDecodedTiles(output: MLXArray, weights: MLXArray) -> MLXArray {
+    let epsilon: Float = weights.dtype == .float16 ? 1e-4 : 1e-8
+    let denominator = MLX.maximum(weights, MLXArray(epsilon).asType(weights.dtype))
+    var video = (output / denominator)[0]
+    video = video.transposed(1, 2, 3, 0)
+    let zero = MLXArray(Float(0)).asType(video.dtype)
+    let one = MLXArray(Float(1)).asType(video.dtype)
+    video = MLX.clip(
+        (video + one) / MLXArray(Float(2)).asType(video.dtype),
+        min: zero,
+        max: one
+    )
+    return (video * MLXArray(Float(255)).asType(video.dtype)).asType(.uint8)
+}
+
 private func decodeWithTiling(
     decoder: LTXVideoDecoder,
     latents: MLXArray,
@@ -2506,12 +2559,10 @@ private func decodeWithTiling(
         widthIntervals = LTXIntervals(starts: [0], ends: [latentW], leftRamps: [0], rightRamps: [0])
     }
 
-    let framePlane = outH * outW
-    let perChannel = outFrames * framePlane
-    let totalRGB = 3 * perChannel
-
-    var output = [Float](repeating: 0, count: totalRGB)
-    var weights = [Float](repeating: 0, count: perChannel)
+    let totalRGB = 3 * outFrames * outH * outW
+    let accumulatorDType: DType = totalRGB >= 128_000_000 ? .float16 : .float32
+    let output = MLX.zeros([1, 3, outFrames, outH, outW], dtype: accumulatorDType)
+    let weights = MLX.zeros([1, 1, outFrames, outH, outW], dtype: accumulatorDType)
 
     for tIndex in 0..<temporalIntervals.starts.count {
         let tStart = temporalIntervals.starts[tIndex]
@@ -2557,61 +2608,27 @@ private func decodeWithTiling(
 
                 let tileLatents = latents[0..., 0..., tStart..<tEnd, hStart..<hEnd, wStart..<wEnd]
                 let tileDecoded = decoder.decode(sample: tileLatents, timestep: nil).asType(.float32)
-                MLX.eval(tileDecoded)
-
-                let tileF = min(tileDecoded.dim(2), min(expectedOutT, outFrames - outTStart))
-                let tileH = min(tileDecoded.dim(3), min(expectedOutH, outH - outHStart))
-                let tileW = min(tileDecoded.dim(4), min(expectedOutW, outW - outWStart))
-                if tileF > 0, tileH > 0, tileW > 0 {
-                    let tileValues = tileDecoded.asArray(Float.self)
-                    for f in 0..<tileF {
-                        let tWeight = tMask[f]
-                        let frameBase = (outTStart + f) * framePlane
-                        for y in 0..<tileH {
-                            let yWeight = hMask[y]
-                            let outY = outHStart + y
-                            let outRowBase = frameBase + outY * outW
-                            for x in 0..<tileW {
-                                let weight = tWeight * yWeight * wMask[x]
-                                let outX = outWStart + x
-                                let outIndex = outRowBase + outX
-                                weights[outIndex] += weight
-
-                                let baseTile = ((f * tileH + y) * tileW + x)
-                                for c in 0..<3 {
-                                    let tileIndex = c * tileF * tileH * tileW + baseTile
-                                    let outputIndex = c * perChannel + outIndex
-                                    output[outputIndex] += tileValues[tileIndex] * weight
-                                }
-                            }
-                        }
-                    }
-                }
+                accumulateLTXDecodedTile(
+                    output: output,
+                    weights: weights,
+                    tileDecoded: tileDecoded,
+                    outputFrameStart: outTStart,
+                    outputHeightStart: outHStart,
+                    outputWidthStart: outWStart,
+                    temporalMask: Array(tMask.prefix(expectedOutT)),
+                    heightMask: Array(hMask.prefix(expectedOutH)),
+                    widthMask: Array(wMask.prefix(expectedOutW))
+                )
+                MLX.eval(output, weights)
 
                 Memory.clearCache()
             }
         }
     }
 
-    var frames = [UInt8](repeating: 0, count: outFrames * framePlane * 3)
-    for f in 0..<outFrames {
-        let frameBase = f * framePlane
-        for y in 0..<outH {
-            let rowBase = frameBase + y * outW
-            for x in 0..<outW {
-                let idx = rowBase + x
-                let denom = max(weights[idx], 1e-8)
-                let outRGBBase = ((f * outH + y) * outW + x) * 3
-                for c in 0..<3 {
-                    let decoded = output[c * perChannel + idx] / denom
-                    let normalized = min(1.0, max(0.0, (decoded + 1.0) * 0.5))
-                    frames[outRGBBase + c] = UInt8(min(255.0, max(0.0, normalized * 255.0)))
-                }
-            }
-        }
-    }
-
-    return MLXArray(frames).reshaped(outFrames, outH, outW, 3)
+    let frames = finalizeLTXDecodedTiles(output: output, weights: weights)
+    MLX.eval(frames)
+    return frames
 }
 
 func mapLTXDecoderWeight(

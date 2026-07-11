@@ -1,8 +1,70 @@
 import Foundation
+import MLX
 import XCTest
 @testable import MereRunCore
 
 final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
+    func testCFGExecutionModeParsing() {
+        XCTAssertEqual(QwenImageEditCFGExecutionMode.parse(nil), .automatic)
+        XCTAssertEqual(QwenImageEditCFGExecutionMode.parse("auto"), .automatic)
+        XCTAssertEqual(QwenImageEditCFGExecutionMode.parse("on"), .batched)
+        XCTAssertEqual(QwenImageEditCFGExecutionMode.parse("batched"), .batched)
+        XCTAssertEqual(QwenImageEditCFGExecutionMode.parse("off"), .serial)
+        XCTAssertEqual(QwenImageEditCFGExecutionMode.parse("serial"), .serial)
+    }
+
+    func testCFGAutoBatchingRequiresUnifiedMemoryHeadroom() {
+        let gibibyte = UInt64(1_073_741_824)
+        XCTAssertTrue(QwenImageEditCFGExecution.shouldBatch(
+            mode: .automatic,
+            width: 1_024,
+            height: 1_024,
+            physicalMemoryBytes: 64 * gibibyte,
+            activeMemoryBytes: 20 * Int(gibibyte),
+            cacheMemoryBytes: 2 * Int(gibibyte),
+            isUnifiedMemory: true
+        ))
+        XCTAssertFalse(QwenImageEditCFGExecution.shouldBatch(
+            mode: .automatic,
+            width: 1_024,
+            height: 1_024,
+            physicalMemoryBytes: 24 * gibibyte,
+            activeMemoryBytes: 20 * Int(gibibyte),
+            cacheMemoryBytes: 1 * Int(gibibyte),
+            isUnifiedMemory: true
+        ))
+        XCTAssertFalse(QwenImageEditCFGExecution.shouldBatch(
+            mode: .automatic,
+            width: 1_024,
+            height: 1_024,
+            physicalMemoryBytes: 64 * gibibyte,
+            activeMemoryBytes: 0,
+            cacheMemoryBytes: 0,
+            isUnifiedMemory: false
+        ))
+        XCTAssertTrue(QwenImageEditCFGExecution.shouldBatch(
+            mode: .batched,
+            width: 4_096,
+            height: 4_096,
+            physicalMemoryBytes: gibibyte,
+            activeMemoryBytes: Int(gibibyte),
+            cacheMemoryBytes: 0,
+            isUnifiedMemory: false
+        ))
+    }
+
+    func testBatchedCFGCombinationPreservesSerialFormula() {
+        let predictions = MLXArray([Float(1), 2, 4, 8], [2, 1, 1, 2])
+        let combined = QwenImageEditCFGExecution.combinePredictions(
+            predictions,
+            guidanceScale: 3
+        )
+        MLX.eval(combined)
+
+        XCTAssertEqual(combined.shape, [1, 1, 1, 2])
+        XCTAssertEqual(combined.asArray(Float.self), [10, 20])
+    }
+
     func testResolveInstalledModelRootFindsDirectRoot() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
