@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitepress'
 import { existsSync } from 'node:fs'
+import { mereMarkdown } from './theme/mere/markdown'
 
 function resolveBase(): string {
   const explicit = process.env.DOCS_BASE?.trim()
@@ -26,6 +27,7 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   srcExclude: ['README.md', 'SUMMARY.md'],
+  markdown: mereMarkdown(),
   themeConfig: {
     siteTitle: 'mere.run Docs',
     search: {
