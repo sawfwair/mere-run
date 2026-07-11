@@ -14,6 +14,34 @@ private struct LFM2DecodeResult {
     var firstTokenSeconds: Double? = nil
 }
 
+struct LFM2DecodeLoopEpochState: Equatable, Sendable {
+    private(set) var residencyEpoch: UInt64 = 0
+    private(set) var runningEpoch: UInt64?
+
+    @discardableResult
+    mutating func beginResidencyTransition() -> UInt64 {
+        residencyEpoch &+= 1
+        return residencyEpoch
+    }
+
+    mutating func startLoopIfCurrent(epoch: UInt64) -> Bool {
+        guard epoch == residencyEpoch, runningEpoch != epoch else {
+            return false
+        }
+        runningEpoch = epoch
+        return true
+    }
+
+    mutating func finishLoop(epoch: UInt64) {
+        guard runningEpoch == epoch else { return }
+        runningEpoch = nil
+    }
+
+    func isCurrent(_ epoch: UInt64) -> Bool {
+        epoch == residencyEpoch
+    }
+}
+
 private struct LFM2PrefixKVCacheKey: Hashable {
     let modelPath: String
     let cacheMode: RuntimeKVCacheMode
@@ -29,6 +57,7 @@ private struct LFM2PrefixKVCacheEntry {
 
 private final class LFM2BatchedDecodeRow: @unchecked Sendable {
     let id: UUID
+    let residencyEpoch: UInt64
     let eosSet: Set<Int>
     let generationConfig: GenerationConfig
     let tokenBudget: Int
@@ -48,6 +77,7 @@ private final class LFM2BatchedDecodeRow: @unchecked Sendable {
 
     init(
         id: UUID,
+        residencyEpoch: UInt64,
         logits: MLXArray,
         layerCaches: [LFM2LayerCache?],
         eosSet: Set<Int>,
@@ -59,6 +89,7 @@ private final class LFM2BatchedDecodeRow: @unchecked Sendable {
         continuation: CheckedContinuation<LFM2DecodeResult, Error>
     ) {
         self.id = id
+        self.residencyEpoch = residencyEpoch
         self.logits = logits
         self.layerCaches = layerCaches
         self.eosSet = eosSet
@@ -120,7 +151,7 @@ public actor LFM2Generator: ChatGenerator {
 
     private var decodeQueue: [LFM2BatchedDecodeRow] = []
     private var activeDecodeRows: [LFM2BatchedDecodeRow] = []
-    private var decodeLoopRunning = false
+    private var decodeLoopEpochState = LFM2DecodeLoopEpochState()
     private var batchedDecodeSteps = 0
     private var samePositionBatchedSteps = 0
     private var variablePositionBatchedSteps = 0
@@ -176,12 +207,7 @@ public actor LFM2Generator: ChatGenerator {
     }
 
     public func unload() {
-        failQueuedDecodeRows(CancellationError())
-        model = nil
-        tokenizerAndTemplate = nil
-        loadedModelPath = nil
-        loadedConfig = nil
-        Memory.clearCache()
+        beginResidencyTransition()
     }
 
     public func continuousBatchingStats() -> LFM2ContinuousBatchingStats {
@@ -198,6 +224,12 @@ public actor LFM2Generator: ChatGenerator {
         )
     }
 
+    #if DEBUG
+    func decodeLoopEpochStateForTesting() -> LFM2DecodeLoopEpochState {
+        decodeLoopEpochState
+    }
+    #endif
+
     private func ensureLoaded(
         rootURL: URL,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
@@ -206,6 +238,7 @@ public actor LFM2Generator: ChatGenerator {
         if loadedModelPath == normalizedRoot.path, model != nil, tokenizerAndTemplate != nil {
             return
         }
+        let loadEpoch = beginResidencyTransition()
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
@@ -216,6 +249,8 @@ public actor LFM2Generator: ChatGenerator {
             from: normalizedRoot,
             maxLengthOverride: min(LFM2Resources.defaultContextLength, config.maxPositionEmbeddings)
         )
+        try Task.checkCancellation()
+        try requireCurrentResidency(loadEpoch)
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 weights"))
         let lfm2Model = LFM2Model(config: config)
@@ -248,6 +283,8 @@ public actor LFM2Generator: ChatGenerator {
             )
         }
 
+        try Task.checkCancellation()
+        try requireCurrentResidency(loadEpoch)
         self.model = lfm2Model
         self.tokenizerAndTemplate = tokenizer
         self.loadedConfig = config
@@ -263,6 +300,7 @@ public actor LFM2Generator: ChatGenerator {
               let loadedConfig else {
             throw LFM2Error.modelNotLoaded
         }
+        let residencyEpoch = decodeLoopEpochState.residencyEpoch
 
         let requestedContextLength = request.maxContextTokens ?? LFM2Resources.defaultContextLength
         guard requestedContextLength > 0 else {
@@ -321,8 +359,10 @@ public actor LFM2Generator: ChatGenerator {
             modelPath: loadedModelPath,
             startIndex: prefillStartIndex,
             existingLogits: prefillExistingLogits,
+            residencyEpoch: residencyEpoch,
             progressHandler: progressHandler
         )
+        try requireCurrentResidency(residencyEpoch)
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
 
@@ -337,6 +377,7 @@ public actor LFM2Generator: ChatGenerator {
             tokenBudget: tokenBudget,
             prefillTokenCount: promptTokens.count,
             promptTokens: promptTokens,
+            residencyEpoch: residencyEpoch,
             progressHandler: progressHandler
         )
 
@@ -375,6 +416,7 @@ public actor LFM2Generator: ChatGenerator {
         tokenBudget: Int,
         prefillTokenCount: Int,
         promptTokens: [Int],
+        residencyEpoch: UInt64,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> LFM2DecodeResult {
         guard tokenBudget > 0 else {
@@ -396,10 +438,13 @@ public actor LFM2Generator: ChatGenerator {
 
         let rowID = UUID()
         let initialLogitsBox = RuntimeUncheckedSendable(initialLogits)
+        try Task.checkCancellation()
+        try requireCurrentResidency(residencyEpoch)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let row = LFM2BatchedDecodeRow(
                     id: rowID,
+                    residencyEpoch: residencyEpoch,
                     logits: initialLogitsBox.value,
                     layerCaches: layerCaches,
                     eosSet: eosSet,
@@ -465,8 +510,16 @@ public actor LFM2Generator: ChatGenerator {
         model: LFM2Model,
         tokenizerAndTemplate: LFM2TokenizerAndTemplate
     ) {
+        guard decodeLoopEpochState.isCurrent(row.residencyEpoch) else {
+            row.fail(CancellationError())
+            return
+        }
         decodeQueue.append(row)
-        startDecodeLoopIfNeeded(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+        startDecodeLoopIfNeeded(
+            epoch: row.residencyEpoch,
+            model: model,
+            tokenizerAndTemplate: tokenizerAndTemplate
+        )
     }
 
     private func cancelDecodeRow(id: UUID) {
@@ -480,30 +533,44 @@ public actor LFM2Generator: ChatGenerator {
     }
 
     private func startDecodeLoopIfNeeded(
+        epoch: UInt64,
         model: LFM2Model,
         tokenizerAndTemplate: LFM2TokenizerAndTemplate
     ) {
-        guard !decodeLoopRunning else { return }
-        decodeLoopRunning = true
+        guard decodeLoopEpochState.startLoopIfCurrent(epoch: epoch) else { return }
         Task {
-            await runDecodeLoop(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+            await runDecodeLoop(
+                epoch: epoch,
+                model: model,
+                tokenizerAndTemplate: tokenizerAndTemplate
+            )
         }
     }
 
     private func runDecodeLoop(
+        epoch: UInt64,
         model: LFM2Model,
         tokenizerAndTemplate: LFM2TokenizerAndTemplate
     ) async {
         defer {
-            decodeLoopRunning = false
-            if !decodeQueue.isEmpty || !activeDecodeRows.isEmpty {
-                startDecodeLoopIfNeeded(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+            decodeLoopEpochState.finishLoop(epoch: epoch)
+            if decodeLoopEpochState.isCurrent(epoch),
+               (!decodeQueue.isEmpty || !activeDecodeRows.isEmpty),
+               let currentModel = self.model,
+               let currentTokenizer = self.tokenizerAndTemplate {
+                startDecodeLoopIfNeeded(
+                    epoch: epoch,
+                    model: currentModel,
+                    tokenizerAndTemplate: currentTokenizer
+                )
             }
         }
 
         while !decodeQueue.isEmpty || !activeDecodeRows.isEmpty {
+            guard decodeLoopEpochState.isCurrent(epoch) else { return }
             if activeDecodeRows.isEmpty {
                 try? await Task.sleep(nanoseconds: 1_000_000)
+                guard decodeLoopEpochState.isCurrent(epoch) else { return }
             }
             activateQueuedDecodeRows()
             guard !activeDecodeRows.isEmpty else { continue }
@@ -717,6 +784,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String? = nil,
         startIndex: Int = 0,
         existingLogits: MLXArray? = nil,
+        residencyEpoch: UInt64,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> LFM2PrefillOutput {
         guard !promptTokens.isEmpty else {
@@ -728,6 +796,7 @@ public actor LFM2Generator: ChatGenerator {
         var hidden: MLXArray?
         while offset < promptTokens.count {
             try Task.checkCancellation()
+            try requireCurrentResidency(residencyEpoch)
             let end = min(promptTokens.count, offset + Self.prefillChunkSize)
             let chunk = Array(promptTokens[offset..<end])
             let input = MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count)
@@ -899,5 +968,24 @@ public actor LFM2Generator: ChatGenerator {
 
     private static func affineKVGroupSize(headDimension: Int) -> Int {
         [64, 32, 16, 8].first { headDimension % $0 == 0 } ?? 1
+    }
+
+    @discardableResult
+    private func beginResidencyTransition() -> UInt64 {
+        let epoch = decodeLoopEpochState.beginResidencyTransition()
+        failQueuedDecodeRows(CancellationError())
+        model = nil
+        tokenizerAndTemplate = nil
+        loadedModelPath = nil
+        loadedConfig = nil
+        prefixKVCache.removeAll(keepingCapacity: false)
+        Memory.clearCache()
+        return epoch
+    }
+
+    private func requireCurrentResidency(_ epoch: UInt64) throws {
+        guard decodeLoopEpochState.isCurrent(epoch) else {
+            throw CancellationError()
+        }
     }
 }

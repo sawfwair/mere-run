@@ -1672,7 +1672,10 @@ actor CodeGenServer {
         self.pool = runtimePool
         self.sidecarPool = APISidecarModelPool(
             settingsURL: settingsURL,
-            memoryPressurePolicy: memoryPressurePolicy
+            memoryPressurePolicy: memoryPressurePolicy,
+            relieveTextModelPressure: {
+                _ = await runtimePool.relieveMemoryPressure(preserveDefault: false)
+            }
         )
         self.requestAdmission = RuntimeRequestAdmission(
             maxActiveRequests: maxActiveRequests,

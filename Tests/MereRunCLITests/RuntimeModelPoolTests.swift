@@ -52,6 +52,65 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertEqual(decoded.defaultModel, status.defaultModel)
     }
 
+    func testRuntimeModelEntryDecodesOlderPayloadWithoutReadyField() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root)
+        )
+        let status = await pool.status()
+        var entry = try XCTUnwrap(status.models.first)
+        let encoded = try JSONEncoder().encode(entry)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "ready")
+
+        entry = try JSONDecoder().decode(
+            RuntimeModelPoolEntrySnapshot.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertNil(entry.ready)
+        XCTAssertFalse(entry.loaded)
+    }
+
+    func testSidecarEntryDecodesOlderPayloadWithoutReadyField() throws {
+        var resident = RuntimeSidecarResidentSnapshot(
+            kind: .image,
+            modelID: "image-zimage-nano",
+            modelPath: "/tmp/image-zimage-nano",
+            variant: "zImageTurbo",
+            loaded: true,
+            activeRequests: 0,
+            queuedRequests: 0,
+            loadedAt: nil,
+            lastAccess: nil,
+            lastEvictedAt: nil,
+            lastEvictionReason: nil,
+            pinned: false,
+            ttlSeconds: 300,
+            loadCount: 1,
+            replacementCount: 0,
+            evictionCount: 0,
+            completedRequests: 1,
+            failedRequests: 0
+        )
+        resident.ready = true
+        let encoded = try JSONEncoder().encode(resident)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "ready")
+
+        resident = try JSONDecoder().decode(
+            RuntimeSidecarResidentSnapshot.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertNil(resident.ready)
+        XCTAssertTrue(resident.loaded)
+    }
+
     func testRuntimeStatusIncludesSidecarActivityInTopLevelMemorySummary() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -381,6 +440,101 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertTrue(q35.loaded)
     }
 
+    func testPressureReliefRechecksAfterEachIdleTextEviction() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let samples = RuntimeMemorySampleSequenceProbe([
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 10 * gib),
+        ])
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            currentMemorySample: { samples.next() }
+        )
+        await pool.seedLoadedModelForTesting(
+            id: Gemma4Resources.defaultModelId,
+            lastAccess: Date(timeIntervalSince1970: 10)
+        )
+        await pool.seedLoadedModelForTesting(
+            id: Q35Resources.defaultModelId,
+            lastAccess: Date(timeIntervalSince1970: 20)
+        )
+
+        let evicted = await pool.relieveMemoryPressure()
+
+        XCTAssertEqual(evicted, [Gemma4Resources.defaultModelId])
+        XCTAssertEqual(samples.readCount(), 2)
+        let status = await pool.status()
+        let gemma = try XCTUnwrap(status.models.first { $0.id == Gemma4Resources.defaultModelId })
+        let q35 = try XCTUnwrap(status.models.first { $0.id == Q35Resources.defaultModelId })
+        XCTAssertFalse(gemma.loaded)
+        XCTAssertTrue(q35.loaded)
+        XCTAssertEqual(q35.ready, true)
+    }
+
+    func testPressureReliefPreservesStartupDefaultByDefault() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let gibibyte = gib
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            currentMemorySample: {
+                RuntimeMemorySample(physicalBytes: 100 * gibibyte, residentBytes: 95 * gibibyte)
+            }
+        )
+        await pool.seedLoadedModelForTesting(
+            id: "custom.gguf",
+            lastAccess: Date(timeIntervalSince1970: 0)
+        )
+        await pool.seedLoadedModelForTesting(
+            id: Q35Resources.defaultModelId,
+            lastAccess: Date(timeIntervalSince1970: 10)
+        )
+
+        let evicted = await pool.relieveMemoryPressure()
+
+        XCTAssertEqual(evicted, [Q35Resources.defaultModelId])
+        let status = await pool.status()
+        let startup = try XCTUnwrap(status.models.first { $0.id == "custom.gguf" })
+        XCTAssertTrue(startup.loaded)
+        XCTAssertEqual(startup.ready, true)
+    }
+
+    func testSidecarPressureReliefCanEvictIdleStartupDefault() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let samples = RuntimeMemorySampleSequenceProbe([
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 10 * gib),
+        ])
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            currentMemorySample: { samples.next() }
+        )
+        await pool.seedLoadedModelForTesting(
+            id: "custom.gguf",
+            lastAccess: Date(timeIntervalSince1970: 0)
+        )
+        await pool.seedLoadedModelForTesting(
+            id: Q35Resources.defaultModelId,
+            lastAccess: Date(timeIntervalSince1970: 10)
+        )
+
+        let evicted = await pool.relieveMemoryPressure(preserveDefault: false)
+
+        XCTAssertEqual(evicted, ["custom.gguf"])
+        XCTAssertEqual(samples.readCount(), 2)
+    }
+
     func testMemoryPressureLRUHonorsExcludedModel() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -663,5 +817,30 @@ private actor RuntimeMemoryPressureProbe {
 
     func current() -> RuntimeMemoryPressureLevel {
         level
+    }
+}
+
+private final class RuntimeMemorySampleSequenceProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private let samples: [RuntimeMemorySample]
+    private var index = 0
+
+    init(_ samples: [RuntimeMemorySample]) {
+        precondition(!samples.isEmpty)
+        self.samples = samples
+    }
+
+    func next() -> RuntimeMemorySample {
+        lock.lock()
+        defer { lock.unlock() }
+        let sample = samples[min(index, samples.count - 1)]
+        index += 1
+        return sample
+    }
+
+    func readCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return index
     }
 }

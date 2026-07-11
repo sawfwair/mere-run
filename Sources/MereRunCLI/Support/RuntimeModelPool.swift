@@ -82,6 +82,9 @@ struct RuntimeSidecarResidentSnapshot: Codable, Equatable, Sendable {
     let modelPath: String?
     let variant: String?
     let loaded: Bool
+    /// A resident generator can exist while its first model load is still in
+    /// progress or after that load failed. Older payloads omit this field.
+    var ready: Bool? = nil
     let activeRequests: Int
     let queuedRequests: Int
     let loadedAt: Date?
@@ -724,6 +727,10 @@ struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
     let engine: RuntimeServingEngine
     let installPath: String?
     let loaded: Bool
+    /// `loaded` remains the compatibility field for resident model objects.
+    /// `ready` distinguishes a resident still preparing from one that can
+    /// serve requests. Optional decoding preserves older status payloads.
+    var ready: Bool? = nil
     let activeRequests: Int
     let lastAccess: Date?
     let lastError: String?
@@ -846,6 +853,7 @@ actor RuntimeModelPool {
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
 
     private var loadedModels: [String: RuntimeLoadedModel] = [:]
+    private var preparingModelIDs: Set<String> = []
     private var states: [String: MutableState] = [:]
 
     init(
@@ -990,6 +998,7 @@ actor RuntimeModelPool {
             throw RuntimeModelPoolError.unloadConflict(resolved.id, activeRequests: state.activeRequests)
         }
         if let loaded = loadedModels.removeValue(forKey: resolved.id) {
+            preparingModelIDs.remove(resolved.id)
             await loaded.unload()
         }
         touch(id: resolved.id, error: nil)
@@ -1018,6 +1027,36 @@ actor RuntimeModelPool {
 
     func currentMemoryPressure() -> RuntimeMemoryPressureLevel {
         memoryPressurePolicy.pressure(for: currentMemorySample())
+    }
+
+    /// Releases idle text runtimes one at a time, sampling pressure again
+    /// after every unload. Sidecar admission uses `preserveDefault: false`
+    /// before considering its own residents: an idle startup model is cheaper
+    /// to reload than keeping its full footprint beside a large media model.
+    @discardableResult
+    func relieveMemoryPressure(
+        excluding excludedIDs: Set<String> = [],
+        preserveDefault: Bool = true
+    ) async -> [String] {
+        var protectedIDs = excludedIDs
+        if preserveDefault {
+            protectedIDs.insert(defaultModelID)
+        }
+        var evicted: [String] = []
+        while true {
+            let pressure = memoryPressurePolicy.pressure(for: currentMemorySample())
+            switch pressure {
+            case .disabled, .unknown, .nominal:
+                return evicted.sorted()
+            case .elevated, .critical:
+                break
+            }
+            guard let id = await evictOldestIdleUnpinnedModel(excluding: protectedIDs) else {
+                return evicted.sorted()
+            }
+            evicted.append(id)
+            await Task.yield()
+        }
     }
 
     func makeChatPlan(
@@ -1116,6 +1155,7 @@ actor RuntimeModelPool {
         for (id, loaded) in loadedEntries {
             let state = state(for: id)
             guard loadedModels[id] != nil,
+                  !preparingModelIDs.contains(id),
                   !excludedIDs.contains(id),
                   let modelSettings = settings[id],
                   !modelSettings.pinned,
@@ -1156,6 +1196,8 @@ actor RuntimeModelPool {
             let state = state(for: id)
             let modelSettings = settings[id] ?? RuntimeModelSettings()
             guard !excludedIDs.contains(id),
+                  id != defaultModelID,
+                  !preparingModelIDs.contains(id),
                   state.activeRequests == 0,
                   !modelSettings.pinned else {
                 return nil
@@ -1187,6 +1229,40 @@ actor RuntimeModelPool {
         return evicted.sorted()
     }
 
+    private func evictOldestIdleUnpinnedModel(
+        excluding excludedIDs: Set<String>
+    ) async -> String? {
+        let settings = (try? settingsStore.load())?.models ?? [:]
+        let candidate = loadedModels.keys.compactMap { id -> RuntimeLRUEvictionCandidate? in
+            let state = state(for: id)
+            let modelSettings = settings[id] ?? RuntimeModelSettings()
+            guard !excludedIDs.contains(id),
+                  !preparingModelIDs.contains(id),
+                  state.activeRequests == 0,
+                  !modelSettings.pinned else {
+                return nil
+            }
+            return RuntimeLRUEvictionCandidate(
+                id: id,
+                lastAccess: state.lastAccess ?? .distantPast
+            )
+        }
+        .sorted {
+            if $0.lastAccess == $1.lastAccess {
+                return $0.id < $1.id
+            }
+            return $0.lastAccess < $1.lastAccess
+        }
+        .first
+
+        guard let candidate,
+              let loaded = loadedModels.removeValue(forKey: candidate.id) else {
+            return nil
+        }
+        await loaded.unload()
+        return candidate.id
+    }
+
     private func ensureLoaded(_ resolved: ResolvedModel) async throws -> RuntimeLoadedModel {
         if let loaded = loadedModels[resolved.id] {
             return loaded
@@ -1195,14 +1271,17 @@ actor RuntimeModelPool {
         try MLXBundleSupport.ensureAvailable(quiet: true)
         let loaded = makeLoadedModel(for: resolved)
         loadedModels[resolved.id] = loaded
+        preparingModelIDs.insert(resolved.id)
         do {
             try await loaded.prepare { progress in
                 CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
             }
+            preparingModelIDs.remove(resolved.id)
             touch(id: resolved.id, error: nil)
             return loaded
         } catch {
             loadedModels.removeValue(forKey: resolved.id)
+            preparingModelIDs.remove(resolved.id)
             touch(id: resolved.id, error: error.localizedDescription)
             throw error
         }
@@ -1403,7 +1482,7 @@ actor RuntimeModelPool {
         } else {
             installPath = spec?.managedRuntimeURL()?.path
         }
-        return RuntimeModelPoolEntrySnapshot(
+        var snapshot = RuntimeModelPoolEntrySnapshot(
             id: id,
             category: spec?.category.rawValue ?? category(for: engine),
             engine: engine,
@@ -1426,6 +1505,8 @@ actor RuntimeModelPool {
             mtp: mtp,
             benchmarkStats: state.benchmarkStats
         )
+        snapshot.ready = loadedModels[id] != nil && !preparingModelIDs.contains(id)
+        return snapshot
     }
 
     private func applyDefaults(
@@ -1482,6 +1563,7 @@ actor RuntimeModelPool {
         activeRequests: Int = 0
     ) {
         loadedModels[id] = .textCode(CodeGenGenerator(modelId: id), modelPath: nil)
+        preparingModelIDs.remove(id)
         var state = state(for: id)
         state.activeRequests = activeRequests
         state.lastAccess = lastAccess
@@ -1500,6 +1582,7 @@ actor RuntimeModelPool {
             ),
             modelPath: nil
         )
+        preparingModelIDs.remove(id)
         var state = state(for: id)
         state.lastAccess = currentDate()
         states[id] = state

@@ -286,10 +286,11 @@ enum StatusFormatter {
         if snapshot.server.health == "up" {
             if let runtime = snapshot.server.runtime {
                 let activeSidecarModels = runtime.sidecars?.residents.compactMap {
-                    $0.loaded ? $0.modelID : nil
+                    $0.loaded && $0.ready != false ? $0.modelID : nil
                 } ?? []
                 let activeModels = Array(Set(
-                    runtime.models.filter(\.loaded).map(\.id) + activeSidecarModels
+                    runtime.models.filter { $0.loaded && $0.ready != false }.map(\.id)
+                        + activeSidecarModels
                 )).sorted()
                 if activeModels.isEmpty {
                     lines.append("  loaded models: none reported")
@@ -398,7 +399,11 @@ enum StatusFormatter {
     }
 
     private static func sidecarText(_ resident: RuntimeSidecarResidentSnapshot) -> String {
-        let state = resident.loaded ? "loaded" : "unloaded"
+        let state = if resident.loaded && resident.ready == false {
+            "resident (not ready)"
+        } else {
+            resident.loaded ? "loaded" : "unloaded"
+        }
         let model = resident.modelID ?? "none"
         var parts = [
             "\(resident.kind.rawValue): \(model)",

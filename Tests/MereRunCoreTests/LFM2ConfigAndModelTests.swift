@@ -239,6 +239,44 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertEqual(stats.maxBatchSize, 0)
     }
 
+    func testLFM2DecodeLoopEpochCancelsStaleLoopAndAllowsImmediateReuse() {
+        var state = LFM2DecodeLoopEpochState()
+        let originalEpoch = state.residencyEpoch
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: originalEpoch))
+
+        let replacementEpoch = state.beginResidencyTransition()
+
+        XCTAssertFalse(state.isCurrent(originalEpoch))
+        XCTAssertFalse(state.startLoopIfCurrent(epoch: originalEpoch))
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: replacementEpoch))
+        XCTAssertEqual(state.runningEpoch, replacementEpoch)
+    }
+
+    func testLFM2StaleLoopCompletionCannotClearReplacementLoop() {
+        var state = LFM2DecodeLoopEpochState()
+        let originalEpoch = state.residencyEpoch
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: originalEpoch))
+        let replacementEpoch = state.beginResidencyTransition()
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: replacementEpoch))
+
+        state.finishLoop(epoch: originalEpoch)
+        XCTAssertEqual(state.runningEpoch, replacementEpoch)
+
+        state.finishLoop(epoch: replacementEpoch)
+        XCTAssertNil(state.runningEpoch)
+    }
+
+    func testLFM2UnloadAdvancesResidencyEpoch() async {
+        let generator = LFM2Generator(continuousBatchingEnabled: true)
+        let before = await generator.decodeLoopEpochStateForTesting()
+
+        await generator.unload()
+
+        let after = await generator.decodeLoopEpochStateForTesting()
+        XCTAssertEqual(after.residencyEpoch, before.residencyEpoch + 1)
+        XCTAssertFalse(after.isCurrent(before.residencyEpoch))
+    }
+
     func testNativeGroupedQueryAttentionMatchesExpandedReference() throws {
         MLXRandom.seed(812)
         let config = try makeTinyConfig()
