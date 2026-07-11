@@ -24,6 +24,11 @@ The format is based on Keep a Changelog.
   ASR, TTS, OCR, VLM, MuScriptor, and Falcon paths with final-position output
   projection, pipelined GPU sampling, compact grouped-query caches, and true
   cached Falcon grounding.
+- kept the shared autoregressive GPU queue saturated after first-token
+  confirmation while preserving the final-token boundary fast path. A matched
+  96-token LFM2 release A/B on an M4 Max 128 GB measured 63.25 versus 62.47
+  decode tokens/s (+1.2%) and 9.61 versus 9.79 GB peak physical footprint
+  (-1.8%).
 - generalized batched MuScriptor decode across independent audio chunks;
   `music transcribe --chunk-batch-size` controls chunk groups in greedy,
   sampling, and beam modes, while beam search packs all live beams into one

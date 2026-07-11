@@ -16,9 +16,10 @@ model families.
 
 - Keep sampling tensors and next-token inputs on the MLX device; host readback
   is only for token confirmation and emission.
-- Preserve the one-step pipeline and final-token fast path when changing the
-  decode loop. EOS may discard one already-scheduled speculative forward, but
-  a completed token budget must not schedule an unused forward.
+- Preserve deep steady-state queueing and the final-token boundary fast path
+  when changing the decode loop. Confirm the first token before opening the
+  deeper pipeline, and do not schedule an unused forward after a completed
+  token budget. EOS may discard already-queued speculative work.
 - Cache implementations must maintain `[batch, heads, tokens, head-width]`
   layout, matching key/value offsets, source dtype, and independent wrappers
   when forked or split into rows.

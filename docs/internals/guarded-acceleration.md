@@ -7,6 +7,21 @@ theoretically faster.
 
 ## Shippable paths
 
+### Shared autoregressive pipeline saturation
+
+The shared decode loop confirms the first sampled token before opening its
+deeper steady-state pipeline, then queues the next dependent model forward
+before the host confirms the preceding token. The final token-budget boundary
+samples without scheduling an unused forward. This keeps immediate EOS and
+short budgets bounded without draining the GPU queue between ordinary tokens.
+
+A matched release-mode gate on 2026-07-11 used the managed
+`LiquidAI/LFM2.5-8B-A1B-MLX-8bit@984aa3f` checkpoint, a fixed prompt, greedy
+sampling, and 96 output tokens on an M4 Max with 128 GB unified memory. The
+three-run median was 63.25 decode tokens/s versus 62.47 for the pre-change
+baseline (+1.2%). Peak physical footprint was 9.61 GB versus 9.79 GB (-1.8%),
+and generated output was identical.
+
 ### Broader resident KV compression
 
 `RuntimeKVCacheMode.affine8` selects groupwise affine 8-bit attention K/V for

@@ -98,6 +98,29 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         XCTAssertEqual(forwardCalls, 0)
     }
 
+    func testSteadyStateQueuesForwardBeforeConfirmingPriorToken() throws {
+        var events: [String] = []
+        var forwardCalls = 0
+        let model = scriptedModel([7, 2, 9, eos])
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 4),
+            stepForward: { input in
+                forwardCalls += 1
+                events.append("forward")
+                return model(input)
+            },
+            decodeToken: { String($0) },
+            emitPiece: { token, _ in events.append("emit-\(token)") }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3, 7, 2, 9])
+        XCTAssertEqual(
+            Array(events.prefix(5)),
+            ["forward", "emit-3", "forward", "forward", "emit-7"]
+        )
+        XCTAssertEqual(forwardCalls, 3)
+    }
+
     func testImmediateEOSProducesNothing() throws {
         let result = try AutoregressiveDecodeEngine.decode(
             request(firstToken: eos, budget: 8),
