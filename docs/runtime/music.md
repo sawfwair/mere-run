@@ -1,14 +1,15 @@
 # Music Runtime
 
 This page covers the native music-generation paths exposed through
-`mere.run music analyze`, `mere.run music generate`, and
-`mere.run music realtime`.
+`mere.run music analyze`, `mere.run music generate`, `mere.run music realtime`,
+and `mere.run music transcribe`.
 
 ## Public surface
 
 - `mere.run music generate`
 - `mere.run music analyze`
 - `mere.run music realtime`
+- `mere.run music transcribe`
 
 ## Model family
 
@@ -17,6 +18,9 @@ This page covers the native music-generation paths exposed through
 - `music-acestep-xl-turbo-lm4b`
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
+- `music-muscriptor-small`
+- `music-muscriptor-medium`
+- `music-muscriptor-large`
 
 ## Guides
 
@@ -28,6 +32,7 @@ mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-magenta-rt2-small
+mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
 There is no separate `ace-step` guide topic. ACE-Step text-to-music, covers,
@@ -82,6 +87,9 @@ swift run mere.run music realtime \
   --duration 4 \
   --output ./live.wav \
   --no-play
+
+swift run mere.run model pull music-muscriptor-medium
+swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 ```
 
 ACE-Step generation uses the upstream CLI turbo shift default (`--shift 3.0`)
@@ -163,6 +171,7 @@ notes and continuous controls.
 - `Sources/MereRunCLI/Commands/MusicAnalyzeCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicGenerateCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicRealtimeCommand.swift`
+- `Sources/MereRunCLI/Commands/MusicTranscribeCommand.swift`
 
 ### Runtime
 
@@ -172,6 +181,7 @@ notes and continuous controls.
 - `Sources/MereRunCore/MagentaRT2/MagentaRT2Resources.swift`
 - `Sources/MereRunCore/MagentaRT2/MagentaRT2Renderer.swift`
 - `Sources/MereRunCore/MagentaRT2/MagentaRT2RealtimeSession.swift`
+- `Sources/MereRunCore/MuScriptor/MuScriptorTranscriber.swift`
 
 ## Reading order
 

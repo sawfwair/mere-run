@@ -362,6 +362,17 @@ enum GuideRegistry {
             resourceName: "music-analyze.md"
         ),
         GuideTopic(
+            topic: "music-transcribe",
+            title: "Music Transcribe",
+            commandPaths: [["music", "transcribe"]],
+            models: [
+                "music-muscriptor-small",
+                "music-muscriptor-medium",
+                "music-muscriptor-large",
+            ],
+            resourceName: "music-transcribe.md"
+        ),
+        GuideTopic(
             topic: "sfx-generate",
             title: "SFX Generate",
             commandPaths: [["sfx", "generate"]],

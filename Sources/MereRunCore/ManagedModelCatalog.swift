@@ -47,6 +47,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case falconPerception
     case aceStep
     case magentaRT2
+    case muScriptor
     case woosh
     case wooshClap
     case wooshSynchformer
@@ -1209,6 +1210,51 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music generate", "music realtime"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.muScriptorSmall.rawValue,
+            category: .music,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "MuScriptor/muscriptor-small",
+                revision: "8c127f603b807520fa465c838e9bfee8a91ada4e",
+                patterns: ["config.json", "model.safetensors"]
+            ),
+            upstreamRepoId: "MuScriptor/muscriptor-small",
+            upstreamRevision: "8c127f603b807520fa465c838e9bfee8a91ada4e",
+            validationKind: .muScriptor,
+            estimatedDownloadBytes: 412_000_000,
+            defaultCLICommands: ["music transcribe"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.muScriptorMedium.rawValue,
+            category: .music,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "MuScriptor/muscriptor-medium",
+                revision: "f32236969308476e01fd3aae67357de5feb05a2d",
+                patterns: ["config.json", "model.safetensors"]
+            ),
+            upstreamRepoId: "MuScriptor/muscriptor-medium",
+            upstreamRevision: "f32236969308476e01fd3aae67357de5feb05a2d",
+            validationKind: .muScriptor,
+            estimatedDownloadBytes: 1_230_000_000,
+            defaultCLICommands: ["music transcribe"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.muScriptorLarge.rawValue,
+            category: .music,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "MuScriptor/muscriptor-large",
+                revision: "8809fdfbed2affa7ade94a7059e746e3880720e7",
+                patterns: ["config.json", "model.safetensors"]
+            ),
+            upstreamRepoId: "MuScriptor/muscriptor-large",
+            upstreamRevision: "8809fdfbed2affa7ade94a7059e746e3880720e7",
+            validationKind: .muScriptor,
+            estimatedDownloadBytes: 5_620_000_000,
+            defaultCLICommands: ["music transcribe"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wooshDFlow.rawValue,
             category: .sfx,
             installShape: .structuredRoot,
@@ -1539,6 +1585,8 @@ public extension ManagedModelSpec {
             return Self.missingACEStepPaths(modelID: id, in: rootURL, fileManager: fileManager)
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
+        case .muScriptor:
+            return MuScriptorResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .woosh:
             let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
             let variant = WooshVariant.resolve(model: id, rootURL: checkpointsRoot, fileManager: fileManager) ?? .dflow

@@ -718,6 +718,33 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
+    func testMuScriptorSpecsUsePinnedGatedCheckpointLayouts() throws {
+        let expected: [(ModelResolver.ModelID, String, String)] = [
+            (.muScriptorSmall, "MuScriptor/muscriptor-small", "8c127f603b807520fa465c838e9bfee8a91ada4e"),
+            (.muScriptorMedium, "MuScriptor/muscriptor-medium", "f32236969308476e01fd3aae67357de5feb05a2d"),
+            (.muScriptorLarge, "MuScriptor/muscriptor-large", "8809fdfbed2affa7ade94a7059e746e3880720e7"),
+        ]
+        for (modelID, repoID, revision) in expected {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID.rawValue))
+            XCTAssertEqual(spec.category, .music)
+            XCTAssertEqual(spec.hubFallback?.repoId, repoID)
+            XCTAssertEqual(spec.hubFallback?.revision, revision)
+            XCTAssertEqual(spec.hubFallback?.patterns, ["config.json", "model.safetensors"])
+            XCTAssertEqual(spec.validationKind, .muScriptor)
+            XCTAssertEqual(spec.defaultCLICommands, ["music transcribe"])
+        }
+    }
+
+    func testMuScriptorRootRequiresConfigAndWeights() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.muScriptorSmall.rawValue))
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("{}".utf8).write(to: root.appendingPathComponent("config.json"))
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        try Data().write(to: root.appendingPathComponent("model.safetensors"))
+        XCTAssertTrue(spec.missingPaths(in: root, fileManager: .default).isEmpty)
+    }
+
     func testWooshDFlowSpecUsesFocusedHuggingFaceMirrorLayout() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.wooshDFlow.rawValue))
 

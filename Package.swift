@@ -147,6 +147,7 @@ var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
   + mlxDependency("MLXOptimizers")
   + mlxDependency("MLXRandom")
   + [
+      "AudioCodecs",
       .product(name: "Crypto", package: "swift-crypto"),
       .product(name: "Transformers", package: "swift-transformers")
     ]
@@ -283,6 +284,7 @@ targets.append(contentsOf: [
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
       "Krea2/README.md",
+      "MuScriptor/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",
       "LTX/README.md",

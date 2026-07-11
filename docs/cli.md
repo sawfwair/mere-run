@@ -37,6 +37,7 @@ Public tree:
 - `mere.run music analyze`
 - `mere.run music generate`
 - `mere.run music realtime`
+- `mere.run music transcribe`
 - `mere.run sfx generate`
 - `mere.run video generate`
 - `mere.run video export-latents`
@@ -1071,6 +1072,41 @@ swift run mere.run music generate \
   --model music-magenta-rt2-small \
   --duration 4 \
   --output ./magenta.wav
+```
+
+### `mere.run music transcribe`
+
+Transcribe a full music mix into instrument-separated MIDI with native
+MuScriptor inference.
+
+```bash
+swift run mere.run music transcribe "<audio>" [options]
+```
+
+Key options:
+
+- `--model`: one of `music-muscriptor-small`, `music-muscriptor-medium`, or `music-muscriptor-large`
+- `--model-path`: explicit local model root
+- `--output`, `-o`: output path, or `-` for stdout
+- `--format`, `-f`: `midi`, `json`, or `jsonl`
+- `--instruments`: comma-separated expected instrument groups
+- `--list-instruments`
+- `--sampling` and `--temperature`
+- `--max-tokens-per-chunk`
+- `--strict-eos`
+- `--beam-size`
+- `--dtype`: `bfloat16`, `float16`, or `float32`
+- `--quiet`
+
+The model repositories are gated and the weights are CC BY-NC 4.0. Accept the
+upstream Hugging Face terms before pulling.
+
+```bash
+swift run mere.run model pull music-muscriptor-medium
+swift run mere.run music transcribe ./song.mp3 --output ./song.mid
+swift run mere.run music transcribe ./song.wav \
+  --instruments voice,drums,electric_bass \
+  --format jsonl --output -
 ```
 
 ### `mere.run music realtime`
