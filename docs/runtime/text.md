@@ -83,6 +83,16 @@ Concurrent serve workloads use ragged, cache-safe decode batching when
 overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
 
+Gemma4, Qwen-family, and LFM2 API-serving settings can select explicit
+`--kv-cache-mode affine8` for long-context memory pressure. This compresses
+resident attention K/V but is not assumed faster because attention still
+dequantizes the cache.
+
+The local-path-only `text-chat-psi-agent` runtime has guarded compressed-MLA
+and fused sparse-MoE controls. They remain opt-in until a repeatable public
+checkpoint quality/throughput A/B is available; see the
+[guarded acceleration audit](../internals/guarded-acceleration.md).
+
 `text-agent-ornith-9b` installs an Ornith 1.0 9B OptiQ MLX snapshot and runs
 through the native Qwen-family runtime. Use `text chat --model text-agent-ornith-9b`
 or `api serve --engine text-chat-q36 --model text-agent-ornith-9b` for coding-agent

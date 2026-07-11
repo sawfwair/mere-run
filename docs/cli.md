@@ -1446,9 +1446,10 @@ swift run mere.run model runtime set text-chat-gemma4 \
 ```
 
 Use the matching `--clear-*` flags to remove optional values. Engine overrides
-are validated against the curated catalog. Gemma4 accepts `--kv-cache-mode`
-values of `default`, `polar2`, and `auto`; non-Gemma4 models reject PolarKV
-runtime modes. `--ttl-seconds` unloads idle loaded models during the runtime
+are validated against the curated catalog. Gemma4, Qwen-family, and LFM2 accept
+the explicit `affine8` resident-cache mode. Gemma4 additionally accepts
+`polar2` and `auto`; non-Gemma4 models reject PolarKV runtime modes.
+`--ttl-seconds` unloads idle loaded models during the runtime
 pool's opportunistic eviction passes, while `--pinned` protects a model from
 automatic TTL/LRU eviction without blocking explicit unload. Memory-pressure LRU
 uses the API server's `--memory-guard` tier. The guard derives soft/hard
@@ -1825,8 +1826,10 @@ Security defaults:
   `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
   long-context synthetic decode testing. It is not the default until checkpoint
   benchmarks prove the end-to-end model path.
-- Per-model runtime settings can also set `kvCacheMode` to `default`, `polar2`,
-  or `auto` for Gemma4. `auto` keeps the default KV path below 1024 prompt
+- Per-model runtime settings can set `kvCacheMode` to `affine8` for Gemma4,
+  Qwen-family, and LFM2. This reduces resident KV memory but dequantizes for
+  attention, so it is an explicit tradeoff. Gemma4 also accepts `polar2` or
+  `auto`; `auto` keeps the default KV path below 1024 prompt
   tokens and switches to decode-deferred packed PolarKV at or above that
   threshold.
 - `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,

@@ -197,6 +197,18 @@ They run real checkpoint paths with fixed prompt and decode lengths so runtime
 changes can be compared consistently. The built-in prompt fixtures are for
 runtime comparison, not model-quality evaluation.
 
+Generic affine-8 KV and Psi/GLM compressed MLA are quality-sensitive controls,
+so their source-level structural/numerical checks are separate:
+
+```bash
+swift test --filter 'AffineQuantizedKVCacheTests|GLM47AccelerationTests'
+```
+
+Before promoting either path, run release-mode real-checkpoint A/B with a fixed
+greedy prompt corpus and report output parity, resident memory, TTFT, prefill
+tokens/s, and decode tokens/s. See the
+[guarded acceleration audit](./internals/guarded-acceleration.md).
+
 ## Interpreting Results
 
 Use these conventions when reporting benchmark outcomes:

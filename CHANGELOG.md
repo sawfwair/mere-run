@@ -8,6 +8,9 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added explicit affine 8-bit resident KV caches for Gemma4, Qwen-family, and
+  LFM2 plus opt-in compressed-MLA and fused sparse-MoE execution for the native
+  Psi/GLM runtime, with numerical, structural-memory, and policy tests.
 - added native MuScriptor full-mix audio-to-MIDI transcription through
   `music transcribe`, with managed small/medium/large checkpoints, exact HTK
   mel preprocessing, MLX transformer inference, instrument conditioning,

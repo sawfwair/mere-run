@@ -378,6 +378,33 @@ stable chat prefix before the final message as an extra checkpoint when it is an
 exact token prefix of the full prompt, and the bounded cache gives those
 semantic checkpoints the same pruning priority as Gemma4.
 
+### `affine8` runtime KV cache mode
+
+`mere.run model runtime set <model> --kv-cache-mode affine8` selects resident
+groupwise affine 8-bit attention K/V for Gemma4, Qwen-family, and LFM2 serving.
+Qwen linear-attention state and LFM2 convolution state remain native. The cache
+supports prefix forks and compatible same-offset batching, but dequantizes for
+attention; use it as an explicit long-context memory control, not an assumed
+speed win. `default` restores native precision. `polar2` and `auto` remain
+Gemma4-only modes.
+
+### `MERERUN_PSI_COMPRESSED_MLA`
+
+Opt-in compressed latent-attention cache for the native Psi/GLM runtime. Set
+`1`, `true`, `yes`, or `on` to force it. Set `auto` to engage only at the
+threshold selected by `MERERUN_PSI_COMPRESSED_MLA_MIN_PROMPT_TOKENS` (default
+`2048`). Unset and false-like values keep expanded per-head K/V. Even `auto` is
+operator-selected: weight absorption changes floating-point operation order,
+so the runtime does not promote this path without checkpoint quality evidence.
+
+### `MERERUN_PSI_FUSED_MOE`
+
+Set to `1`, `true`, `yes`, or `on` to stack Psi/GLM gate and up expert weights
+and issue one quantized gather matmul instead of two. Long prefill routes are
+sorted by expert regardless of this flag. Fusion retains a second resident copy
+of gate/up weights and is therefore off by default pending real-checkpoint
+throughput measurements.
+
 ### `MERERUN_GEMMA4_CONTINUOUS_BATCHING`
 
 Set to `1` to enable the Gemma4 same-offset decode batching prototype in

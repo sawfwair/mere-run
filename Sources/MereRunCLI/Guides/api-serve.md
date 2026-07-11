@@ -61,7 +61,8 @@ mere.run status
   override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental
   packed PolarKV path for memory-pressure and long-context synthetic decode
   testing. Per-model runtime settings can also set `kvCacheMode` to `default`,
-  `polar2`, or conservative `auto`.
+  `polar2`, or conservative `auto`; Gemma4, Qwen-family, and LFM2 also accept
+  explicit memory-oriented `affine8`.
 
 ## Usage Patterns
 

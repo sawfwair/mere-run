@@ -50,6 +50,10 @@ mere.run status --json
   prompts and switch to packed 2-bit PolarKV for prompts at or above 1024
   tokens. `polar2` forces that path for every request, and non-Gemma4 models
   reject the setting.
+- Use `--kv-cache-mode affine8` on Gemma4, Qwen-family, or LFM2 when resident
+  long-context KV memory matters more than maximum decode throughput. The
+  generic cache dequantizes for attention, so compare against `default` on the
+  real checkpoint before keeping it enabled.
 - `ttlSeconds` unloads an idle, loaded model after that many seconds during the
   pool's opportunistic eviction passes. `pinned` exempts the model from
   automatic TTL/LRU eviction, but explicit unload still works.
