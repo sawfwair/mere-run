@@ -118,13 +118,55 @@ public enum AutoregressiveDecodeEngine {
             return true
         }
 
-        var logits = request.initialLogits
-        var pending: MLXArray?
         var buildSeconds = 0.0
         var waitSeconds = 0.0
 
+        var logits = request.initialLogits
+        var pending: MLXArray?
+
         while generated.count < request.tokenBudget {
             try checkCancellation?()
+
+            // The pending token's dependent forward is already executing on
+            // the GPU. Confirm it before queueing another step so readback is
+            // still overlapped, while EOS and the token budget cost at most
+            // that one already-scheduled speculative forward.
+            if let previous = pending {
+                let waitStart = CFAbsoluteTimeGetCurrent()
+                pending = nil
+                let confirmed = confirm(previous)
+                waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                guard confirmed else {
+                    return AutoregressiveDecodeResult(
+                        generatedTokens: generated,
+                        decodeSeconds: Date().timeIntervalSince(start),
+                        firstTokenSeconds: firstTokenSeconds,
+                        buildSeconds: buildSeconds,
+                        waitSeconds: waitSeconds
+                    )
+                }
+                if generated.count >= request.tokenBudget {
+                    break
+                }
+            }
+
+            // The final budgeted token only needs sampling and confirmation;
+            // there is no consumer for another model forward.
+            if generated.count == request.tokenBudget - 1 {
+                let buildStart = CFAbsoluteTimeGetCurrent()
+                let tokenArray = sampledTokenArray(
+                    logits: logits[0, -1, 0...],
+                    config: request.generationConfig,
+                    previousTokenIndices: repetitionHistory,
+                    banMask: request.banMask
+                )
+                asyncEval(tokenArray)
+                buildSeconds += CFAbsoluteTimeGetCurrent() - buildStart
+                let waitStart = CFAbsoluteTimeGetCurrent()
+                _ = confirm(tokenArray)
+                waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                break
+            }
 
             let buildStart = CFAbsoluteTimeGetCurrent()
             let tokenArray = sampledTokenArray(
@@ -140,28 +182,8 @@ public enum AutoregressiveDecodeEngine {
             )
             logits = try stepForward(tokenArray.asType(.int32).reshaped(1, 1))
             asyncEval([logits, tokenArray])
-            let buildEnd = CFAbsoluteTimeGetCurrent()
-            buildSeconds += buildEnd - buildStart
-
-            if let previous = pending {
-                pending = nil
-                let confirmed = confirm(previous)
-                waitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
-                guard confirmed else {
-                    return AutoregressiveDecodeResult(
-                        generatedTokens: generated,
-                        decodeSeconds: Date().timeIntervalSince(start),
-                        firstTokenSeconds: firstTokenSeconds,
-                        buildSeconds: buildSeconds,
-                        waitSeconds: waitSeconds
-                    )
-                }
-            }
+            buildSeconds += CFAbsoluteTimeGetCurrent() - buildStart
             pending = tokenArray
-        }
-
-        if let previous = pending, generated.count < request.tokenBudget {
-            _ = confirm(previous)
         }
 
         return AutoregressiveDecodeResult(

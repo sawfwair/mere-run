@@ -58,19 +58,44 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
     }
 
     func testImmediateEOSReportsNoFirstToken() throws {
+        var forwardCalls = 0
+        let model = scriptedModel([1, 2, 3])
         let result = try AutoregressiveDecodeEngine.decode(
             request(firstToken: eos, budget: 8),
-            stepForward: scriptedModel([1, 2, 3])
+            stepForward: { input in
+                forwardCalls += 1
+                return model(input)
+            }
         )
         XCTAssertNil(result.firstTokenSeconds)
+        XCTAssertEqual(forwardCalls, 1)
     }
 
     func testBudgetCutsGenerationExactly() throws {
+        var forwardCalls = 0
+        let model = scriptedModel([7, 2, 9, 4])
         let result = try AutoregressiveDecodeEngine.decode(
             request(firstToken: 3, budget: 2),
-            stepForward: scriptedModel([7, 2, 9, 4])
+            stepForward: { input in
+                forwardCalls += 1
+                return model(input)
+            }
         )
         XCTAssertEqual(result.generatedTokens, [3, 7])
+        XCTAssertEqual(forwardCalls, 1)
+    }
+
+    func testSingleTokenBudgetDoesNotScheduleThrowawayForward() throws {
+        var forwardCalls = 0
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 1),
+            stepForward: { _ in
+                forwardCalls += 1
+                return self.oneHotLogits(7)
+            }
+        )
+        XCTAssertEqual(result.generatedTokens, [3])
+        XCTAssertEqual(forwardCalls, 0)
     }
 
     func testImmediateEOSProducesNothing() throws {
