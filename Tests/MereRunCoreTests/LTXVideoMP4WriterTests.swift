@@ -145,6 +145,38 @@ final class LTXVideoMP4WriterTests: XCTestCase {
         XCTAssertEqual(try ffprobeVideoFrameCount(outputURL), frameCount)
     }
 
+    #if canImport(AVFoundation) && canImport(CoreGraphics)
+    func testAppleMediaFrameProviderStreamsInOrder() throws {
+        guard isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffprobe is not available")
+        }
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ltx-apple-streaming-writer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let width = 16
+        let height = 16
+        let frameCount = 5
+        var requestedFrames: [Int] = []
+        let outputURL = tempDir.appendingPathComponent("streamed.mp4")
+        try AppleMediaVideoIO.writeMP4(
+            bgra32FrameAt: { frameIndex in
+                requestedFrames.append(frameIndex)
+                return [UInt8](repeating: UInt8(frameIndex * 30), count: width * height * 4)
+            },
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: 8,
+            to: outputURL
+        )
+
+        XCTAssertEqual(requestedFrames, Array(0..<frameCount))
+        XCTAssertEqual(try ffprobeVideoFrameCount(outputURL), frameCount)
+    }
+    #endif
+
     private func ffprobeAudioBitRate(_ url: URL) throws -> Int {
         let result = try runTool(
             MediaTool.ffprobePath,
