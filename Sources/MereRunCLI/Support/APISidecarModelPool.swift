@@ -27,6 +27,7 @@ struct APISidecarResidentSlotState<Key: Equatable & Sendable>: Sendable {
     let evictionCount: Int
     let completedRequests: Int
     let failedRequests: Int
+    let idleEvictionGeneration: UInt64
 }
 
 struct APISidecarResidentIdlePolicy: Sendable {
@@ -376,7 +377,8 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
             replacementCount: replacementCount,
             evictionCount: evictionCount,
             completedRequests: completedRequests,
-            failedRequests: failedRequests
+            failedRequests: failedRequests,
+            idleEvictionGeneration: idleEvictionGeneration
         )
     }
 

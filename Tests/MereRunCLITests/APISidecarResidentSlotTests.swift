@@ -348,31 +348,44 @@ final class APISidecarResidentSlotTests: XCTestCase {
         let slot = APISidecarResidentSlot<String, Int>()
         _ = try await slot.withValue(
             for: "speech",
-            idleTTL: .milliseconds(80),
+            idleTTL: .seconds(60),
             make: { await probe.makeValue(7) },
             unload: { value in await probe.unload(value) },
             operation: { $0 }
         )
-        try await Task.sleep(for: .milliseconds(50))
+        let originalGeneration = await slot.state().idleEvictionGeneration
+
         _ = try await slot.withValue(
             for: "speech",
-            idleTTL: .milliseconds(80),
+            idleTTL: .seconds(60),
             make: { await probe.makeValue(8) },
             unload: { value in await probe.unload(value) },
             operation: { $0 }
         )
-        try await Task.sleep(for: .milliseconds(45))
+        let refreshedGeneration = await slot.state().idleEvictionGeneration
+        XCTAssertNotEqual(refreshedGeneration, originalGeneration)
 
-        let residentAfterOriginalDeadline = await slot.residentKey()
+        let staleEviction = await slot.evictIfIdle(
+            expectedKey: "speech",
+            expectedGeneration: originalGeneration,
+            reason: .ttl,
+            using: { value in await probe.unload(value) }
+        )
+
+        let residentAfterStaleEviction = await slot.residentKey()
         let earlyUnloads = await probe.unloadedValues()
-        XCTAssertEqual(residentAfterOriginalDeadline, "speech")
+        XCTAssertFalse(staleEviction)
+        XCTAssertEqual(residentAfterStaleEviction, "speech")
         XCTAssertTrue(earlyUnloads.isEmpty)
 
-        for _ in 0..<30 {
-            if await probe.unloadedValues() == [7] { break }
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        let currentEviction = await slot.evictIfIdle(
+            expectedKey: "speech",
+            expectedGeneration: refreshedGeneration,
+            reason: .ttl,
+            using: { value in await probe.unload(value) }
+        )
         let finalResident = await slot.residentKey()
+        XCTAssertTrue(currentEviction)
         XCTAssertNil(finalResident)
         let finalUnloads = await probe.unloadedValues()
         XCTAssertEqual(finalUnloads, [7])
