@@ -351,8 +351,9 @@ final class FalconPerceptionAttention: Module {
         let useManualDecodeAttention = cache != nil
             && sequenceLength == 1
             && !falconPerceptionShouldForceKernelDecodeAttention()
-        let attended = if useManualDecodeAttention {
-            falconPerceptionManualAttention(
+        let attended: MLXArray
+        if useManualDecodeAttention {
+            attended = falconPerceptionManualAttention(
                 queries: queries,
                 keys: keys,
                 values: values,
@@ -364,7 +365,7 @@ final class FalconPerceptionAttention: Module {
             let attentionValues = numRepeats > 1
                 ? falconPerceptionRepeatAlongHeads(values, heads: numRepeats)
                 : values
-            MLXFast.scaledDotProductAttention(
+            attended = MLXFast.scaledDotProductAttention(
                 queries: queries,
                 keys: keys,
                 values: attentionValues,

@@ -120,7 +120,7 @@ final class ACEStepDiTShapeTests: MereRunCoreTestCase {
             queries: queries.asType(.float32),
             keys: keys.asType(.float32),
             values: values.asType(.float32),
-            scale: Float(config.headDim).squareRoot().reciprocal,
+            scale: 1 / Float(config.headDim).squareRoot(),
             mask: .none
         ).asType(queries.dtype)
         let expected = attention.oProj(

@@ -211,7 +211,7 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
             queries: queries,
             keys: keys,
             values: values,
-            scale: Float(config.headDim).squareRoot().reciprocal,
+            scale: 1 / Float(config.headDim).squareRoot(),
             mask: .causal
         )
         let expected = attention.outProj(
