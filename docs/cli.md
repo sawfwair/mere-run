@@ -1456,6 +1456,11 @@ ceilings from process resident memory, host memory headroom, and a tier reserve;
 elevated pressure evicts the least-recently-used idle unpinned model, while
 critical pressure evicts every idle unpinned model.
 
+Managed image, TTS, and ASR sidecar models accept only the residency controls
+`--pinned`, `--unpinned`, `--ttl-seconds`, and `--clear-ttl`. Their default idle
+TTL is 300 seconds. Text-only alias, context, sampling, engine, and KV settings
+are rejected for sidecars.
+
 ### `mere.run model pull`
 
 Download a managed Hugging Face snapshot into the local model store. The command checks
@@ -1787,7 +1792,10 @@ Security defaults:
 - image/image-edit, TTS, and ASR sidecar endpoints each keep only their most
   recently used runtime resident. Matching requests reuse loaded model state
   through an exclusive queue; selecting another model or ASR backend unloads
-  the previous runtime before loading its replacement.
+  the previous runtime before loading its replacement. Idle sidecars default to
+  a 300-second TTL, honor managed-model pin/TTL settings, and participate in the
+  same memory-pressure policy without evicting active or queued work. Runtime
+  status reports their identities, load/access state, queues, and counters.
 - Gemma4 and Qwen-family chat use chunked prefill checkpoints for long prompts.
 - Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. Runtime status reports

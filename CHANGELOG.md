@@ -35,7 +35,10 @@ The format is based on Keep a Changelog.
 - kept the most recently used image, image-edit, TTS, and ASR sidecar runtimes
   resident in `api serve`; matching requests now reuse loaded model state,
   concurrent use of mutable generators is serialized, and switching models
-  unloads the previous resident before loading its replacement.
+  unloads the previous resident before loading its replacement. Sidecars use a
+  bounded five-minute idle TTL, honor managed-model `pinned` and `ttlSeconds`
+  settings, join memory-pressure eviction, and report residency/counters under
+  `/runtime/status` and `mere.run status` without evicting active work.
 
 ## 0.20.0 - 2026-07-07
 

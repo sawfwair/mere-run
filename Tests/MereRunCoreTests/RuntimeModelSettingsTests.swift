@@ -54,8 +54,25 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertThrowsError(
             try store.writeSettings(RuntimeModelSettings(alias: "image"), for: "image-zimage-nano")
         ) { error in
-            XCTAssertTrue(error.localizedDescription.contains("not supported"))
+            XCTAssertTrue(error.localizedDescription.contains("sidecar models support only"))
         }
+    }
+
+    func testSidecarSettingsAllowOnlyResidencyControls() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        try store.writeSettings(
+            RuntimeModelSettings(pinned: true, ttlSeconds: 45),
+            for: "image-zimage-nano"
+        )
+        let settings = try store.settings(for: "image-zimage-nano")
+
+        XCTAssertTrue(settings.pinned)
+        XCTAssertEqual(settings.ttlSeconds, 45)
+        XCTAssertTrue(try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+            .supportsRuntimeResidencySettings)
     }
 
     func testSettingsRejectGemmaKVModeForNonGemmaModel() throws {

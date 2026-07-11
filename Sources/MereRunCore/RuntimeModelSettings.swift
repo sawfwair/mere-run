@@ -100,6 +100,9 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
 
     public func validated(for spec: ManagedModelSpec) throws -> RuntimeModelSettings {
         let settings = normalized
+        guard spec.supportsRuntimeResidencySettings else {
+            throw RuntimeModelSettingsError.unsupportedModel(spec.id)
+        }
         if let alias = settings.alias {
             guard alias.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else {
                 throw RuntimeModelSettingsError.invalidAlias("aliases cannot contain whitespace")
@@ -141,8 +144,18 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
                 expectedEngine: .textChatGemma4
             )
         }
-        guard spec.isAPIServableRuntimeModel else {
-            throw RuntimeModelSettingsError.unsupportedModel(spec.id)
+        if spec.isAPISidecarRuntimeModel {
+            guard settings.alias == nil,
+                  settings.maxContextTokens == nil,
+                  settings.maxTokens == nil,
+                  settings.temperature == nil,
+                  settings.topP == nil,
+                  settings.engineOverride == nil,
+                  settings.kvCacheMode == nil else {
+                throw RuntimeModelSettingsError.invalidValue(
+                    "sidecar models support only pinned and ttlSeconds"
+                )
+            }
         }
         return settings
     }
@@ -300,5 +313,19 @@ public extension ManagedModelSpec {
 
     var isAPIServableRuntimeModel: Bool {
         defaultRuntimeServingEngine != nil
+    }
+
+    var isAPISidecarRuntimeModel: Bool {
+        switch validationKind {
+        case .flux2Klein, .zimageTurbo, .hidreamO1, .krea2, .ideogram4SDNQ,
+             .qwen3TTS, .qwen3ASR, .parakeet:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var supportsRuntimeResidencySettings: Bool {
+        isAPIServableRuntimeModel || isAPISidecarRuntimeModel
     }
 }

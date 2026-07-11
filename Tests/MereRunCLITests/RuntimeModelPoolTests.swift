@@ -29,6 +29,75 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertTrue(status.capabilities.prefixKVReuse.enabled)
     }
 
+    func testRuntimeStatusDecodesOlderPayloadWithoutSidecarsField() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root)
+        )
+        let status = await pool.status()
+        let encoded = try JSONEncoder().encode(status)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "sidecars")
+
+        let legacyPayload = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(RuntimeModelPoolStatus.self, from: legacyPayload)
+
+        XCTAssertNil(decoded.sidecars)
+        XCTAssertEqual(decoded.defaultModel, status.defaultModel)
+    }
+
+    func testRuntimeStatusIncludesSidecarActivityInTopLevelMemorySummary() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root)
+        )
+        let resident = RuntimeSidecarResidentSnapshot(
+            kind: .speech,
+            modelID: "speech-tts-qwen3-nano",
+            modelPath: nil,
+            variant: "qwen3-tts",
+            loaded: true,
+            activeRequests: 1,
+            queuedRequests: 2,
+            loadedAt: Date(timeIntervalSince1970: 10),
+            lastAccess: Date(timeIntervalSince1970: 20),
+            lastEvictedAt: nil,
+            lastEvictionReason: nil,
+            pinned: false,
+            ttlSeconds: 300,
+            loadCount: 1,
+            replacementCount: 0,
+            evictionCount: 0,
+            completedRequests: 2,
+            failedRequests: 0
+        )
+        let sidecars = RuntimeSidecarPoolStatus(
+            defaultIdleTTLSeconds: 300,
+            pressure: "nominal",
+            loadedCount: 1,
+            activeRequests: 1,
+            queuedRequests: 2,
+            residents: [resident]
+        )
+
+        let status = await pool.status(admission: nil, sidecars: sidecars)
+
+        XCTAssertEqual(status.activeRequests, 1)
+        XCTAssertEqual(status.memory.activeRequests, 1)
+        XCTAssertEqual(status.memory.activeModelCount, 1)
+        XCTAssertEqual(status.sidecars, sidecars)
+    }
+
     func testModelsResponseIncludesStartupDefault() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

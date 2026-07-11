@@ -53,6 +53,9 @@ mere.run status --json
 - `ttlSeconds` unloads an idle, loaded model after that many seconds during the
   pool's opportunistic eviction passes. `pinned` exempts the model from
   automatic TTL/LRU eviction, but explicit unload still works.
+- Managed image, TTS, and ASR API sidecars accept only `pinned` and
+  `ttlSeconds`. They use a 300-second idle TTL when none is configured and
+  reject aliases plus text-only context, sampling, engine, and KV controls.
 - Memory-pressure LRU uses the API server's `--memory-guard` tier. The guard
   derives soft/hard ceilings from process resident memory, host memory
   headroom, and a tier reserve (`safe`, `balanced`, `aggressive`, or
@@ -78,14 +81,20 @@ mere.run model runtime set text-chat-gemma4 \
 mere.run model runtime get chat-default --json
 ```
 
+```bash
+mere.run model runtime set image-zimage-nano --ttl-seconds 45
+mere.run model runtime set speech-asr-qwen3 --pinned
+```
+
 ## Troubleshooting
 
 - Unknown model: run `mere.run model list` and use a managed id or an existing
   alias.
-- Unsupported model: choose an API-capable text model rather than image, speech,
-  vision, music, or video ids.
+- Unsupported model: residency settings apply only to API-resident text models
+  and supported image, TTS, or ASR sidecars; vision, music, and video ids are
+  rejected.
 - Missing model at request time: run `mere.run model pull <id>` before selecting
-  it through `/v1/chat/completions`.
+  it through the matching chat, image, speech, or transcription endpoint.
 
 ## Sources
 

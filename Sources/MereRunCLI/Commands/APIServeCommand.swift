@@ -1628,7 +1628,7 @@ actor CodeGenServer {
     private let requestLimiter: APIRateLimiter
     private let requestAdmission: RuntimeRequestAdmission
     private let pool: RuntimeModelPool
-    private let sidecarPool = APISidecarModelPool()
+    private let sidecarPool: APISidecarModelPool
     private var embeddingModels: [String: Qwen3EmbeddingModel] = [:]
 
     init(
@@ -1655,10 +1655,12 @@ actor CodeGenServer {
         // silently never batched: /runtime/status showed batchedDecodeSteps=0
         // under concurrent load until the env was discovered.)
         let batchingDefault = maxActiveRequests > 1
+        let settingsURL = RuntimeModelSettingsStore.defaultURL()
         let runtimePool = RuntimeModelPool(
             defaultModelID: defaultModelID,
             defaultEngine: engine.runtimeServingEngine,
             startupModelPath: modelPath,
+            settingsStore: RuntimeModelSettingsStore(url: settingsURL),
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
             gemma4ContinuousBatchingEnabled:
                 runtimeOptionalEnvironmentFlag("MERERUN_GEMMA4_CONTINUOUS_BATCHING") ?? batchingDefault,
@@ -1667,6 +1669,10 @@ actor CodeGenServer {
             memoryPressurePolicy: memoryPressurePolicy
         )
         self.pool = runtimePool
+        self.sidecarPool = APISidecarModelPool(
+            settingsURL: settingsURL,
+            memoryPressurePolicy: memoryPressurePolicy
+        )
         self.requestAdmission = RuntimeRequestAdmission(
             maxActiveRequests: maxActiveRequests,
             pressureProvider: {
@@ -2266,31 +2272,36 @@ actor CodeGenServer {
         case .klein:
             _ = try await sidecarPool.generateImage(
                 kind: .flux2Klein,
-                modelSpec: resolved.rootURL.path,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
                 request: request
             )
         case .zimage:
             _ = try await sidecarPool.generateImage(
                 kind: .zImageTurbo,
-                modelSpec: resolved.rootURL.path,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
                 request: request
             )
         case .hidream:
             _ = try await sidecarPool.generateImage(
                 kind: .hiDreamO1,
-                modelSpec: resolved.rootURL.path,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
                 request: request
             )
         case .krea:
             _ = try await sidecarPool.generateImage(
                 kind: .krea2,
-                modelSpec: resolved.rootURL.path,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
                 request: request
             )
         case .ideogram:
             _ = try await sidecarPool.generateImage(
                 kind: .ideogram4,
-                modelSpec: resolved.rootURL.path,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
                 request: request
             )
         case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
@@ -2320,7 +2331,8 @@ actor CodeGenServer {
         )
         _ = try await sidecarPool.generateImage(
             kind: .qwenImageEdit,
-            modelSpec: plan.modelID,
+            modelID: plan.modelID,
+            modelPath: plan.modelID,
             request: request
         )
         return outputURL
@@ -2473,7 +2485,10 @@ actor CodeGenServer {
             return unauthorized
         }
         let admission = await requestAdmission.snapshot()
-        let data = try JSONEncoder().encode(await pool.status(admission: admission))
+        let sidecars = await sidecarPool.status()
+        let data = try JSONEncoder().encode(
+            await pool.status(admission: admission, sidecars: sidecars)
+        )
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],

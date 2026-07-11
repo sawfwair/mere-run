@@ -208,8 +208,8 @@ struct ModelRuntimeSet: ParsableCommand {
 private enum RuntimeModelCLI {
     static func resolveModelID(_ value: String, store: RuntimeModelSettingsStore) throws -> String {
         if let spec = ManagedModelCatalog.spec(for: value) {
-            guard spec.isAPIServableRuntimeModel else {
-                throw ValidationError("Model '\(spec.id)' is not supported by `mere.run api serve`.")
+            guard spec.supportsRuntimeResidencySettings else {
+                throw ValidationError("Model '\(spec.id)' does not have configurable API residency.")
             }
             return spec.id
         }

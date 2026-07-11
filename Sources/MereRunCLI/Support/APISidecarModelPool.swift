@@ -11,14 +11,49 @@ import MereRunCore
 /// replacement. The execution admission remains held for the complete
 /// operation because model generators contain mutable caches and are not
 /// generally safe to re-enter while an inference is suspended.
+struct APISidecarResidentSlotState<Key: Equatable & Sendable>: Sendable {
+    let residentKey: Key?
+    let lastKey: Key?
+    let loadedAt: Date?
+    let lastAccess: Date?
+    let lastEvictedAt: Date?
+    let lastEvictionReason: RuntimeSidecarEvictionReason?
+    let activeRequests: Int
+    let queuedRequests: Int
+    let loadCount: Int
+    let replacementCount: Int
+    let evictionCount: Int
+    let completedRequests: Int
+    let failedRequests: Int
+}
+
 actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
     private struct Resident: Sendable {
         let key: Key
         let value: Value
+        let loadedAt: Date
+        var lastAccess: Date
     }
 
     private let execution = RuntimeRequestAdmission(maxActiveRequests: 1)
+    private let currentDate: @Sendable () -> Date
     private var resident: Resident?
+    private var lastKey: Key?
+    private var lastLoadedAt: Date?
+    private var lastAccess: Date?
+    private var lastEvictedAt: Date?
+    private var lastEvictionReason: RuntimeSidecarEvictionReason?
+    private var activeRequests = 0
+    private var queuedRequests = 0
+    private var loadCount = 0
+    private var replacementCount = 0
+    private var evictionCount = 0
+    private var completedRequests = 0
+    private var failedRequests = 0
+
+    init(currentDate: @escaping @Sendable () -> Date = { Date() }) {
+        self.currentDate = currentDate
+    }
 
     func withValue<Result: Sendable>(
         for key: Key,
@@ -26,31 +61,81 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
         unload: @Sendable (Value) async -> Void,
         operation: @Sendable (Value) async throws -> Result
     ) async throws -> Result {
-        let lease = try await execution.acquire()
+        queuedRequests += 1
+        let lease: RuntimeRequestAdmissionLease
+        do {
+            lease = try await execution.acquire()
+        } catch {
+            queuedRequests = max(0, queuedRequests - 1)
+            throw error
+        }
+        queuedRequests = max(0, queuedRequests - 1)
+        activeRequests += 1
         do {
             let value = try await value(for: key, make: make, unload: unload)
             let result = try await operation(value)
+            completedRequests += 1
+            touch(key: key)
+            activeRequests = max(0, activeRequests - 1)
             await lease.release()
             return result
         } catch {
+            failedRequests += 1
+            touch(key: key)
+            activeRequests = max(0, activeRequests - 1)
             await lease.release()
             throw error
         }
     }
 
-    func unloadResident(
+    func evictIfIdle(
+        expectedKey: Key,
+        reason: RuntimeSidecarEvictionReason,
         using unload: @Sendable (Value) async -> Void
-    ) async throws {
-        let lease = try await execution.acquire()
-        if let resident {
-            self.resident = nil
-            await unload(resident.value)
+    ) async -> Bool {
+        guard activeRequests == 0,
+              let lease = await execution.tryAcquire() else {
+            return false
         }
+        guard activeRequests == 0,
+              let resident,
+              resident.key == expectedKey else {
+            await lease.release()
+            return false
+        }
+
+        self.resident = nil
+        lastKey = resident.key
+        lastLoadedAt = resident.loadedAt
+        lastAccess = resident.lastAccess
+        lastEvictedAt = currentDate()
+        lastEvictionReason = reason
+        evictionCount += 1
+        await unload(resident.value)
         await lease.release()
+        return true
     }
 
     func residentKey() -> Key? {
         resident?.key
+    }
+
+    func state() -> APISidecarResidentSlotState<Key> {
+        APISidecarResidentSlotState(
+            residentKey: resident?.key,
+            lastKey: lastKey,
+            loadedAt: resident?.loadedAt ?? lastLoadedAt,
+            lastAccess: resident?.lastAccess ?? lastAccess,
+            lastEvictedAt: lastEvictedAt,
+            lastEvictionReason: lastEvictionReason,
+            activeRequests: activeRequests,
+            queuedRequests: queuedRequests,
+            loadCount: loadCount,
+            replacementCount: replacementCount,
+            evictionCount: evictionCount,
+            completedRequests: completedRequests,
+            failedRequests: failedRequests
+        )
     }
 
     private func value(
@@ -63,15 +148,33 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
         }
         if let resident {
             self.resident = nil
+            lastKey = resident.key
+            lastLoadedAt = resident.loadedAt
+            lastAccess = resident.lastAccess
+            replacementCount += 1
             await unload(resident.value)
         }
         let value = try await make()
-        resident = Resident(key: key, value: value)
+        let now = currentDate()
+        resident = Resident(key: key, value: value, loadedAt: now, lastAccess: now)
+        lastKey = key
+        lastLoadedAt = now
+        lastAccess = now
+        loadCount += 1
         return value
+    }
+
+    private func touch(key: Key) {
+        guard var resident, resident.key == key else { return }
+        let now = currentDate()
+        lastKey = key
+        lastAccess = now
+        resident.lastAccess = now
+        self.resident = resident
     }
 }
 
-enum APISidecarImageKind: String, Sendable {
+enum APISidecarImageKind: String, Hashable, Sendable {
     case flux2Klein
     case zImageTurbo
     case hiDreamO1
@@ -80,20 +183,94 @@ enum APISidecarImageKind: String, Sendable {
     case qwenImageEdit
 }
 
-private struct APISidecarImageKey: Equatable, Sendable {
+private struct APISidecarImageKey: Hashable, Sendable {
     let kind: APISidecarImageKind
-    let modelSpec: String
+    let modelID: String
+    let modelPath: String
 }
 
-private struct APISidecarSpeechKey: Equatable, Sendable {
+private struct APISidecarSpeechKey: Hashable, Sendable {
     let modelID: String
     let modelPath: String?
 }
 
-private struct APISidecarASRKey: Equatable, Sendable {
+private struct APISidecarASRKey: Hashable, Sendable {
     let backend: ASRResolvedBackend
     let modelID: String
     let modelPath: String?
+}
+
+enum APISidecarLane: Int, CaseIterable, Hashable, Sendable {
+    case image
+    case speech
+    case transcription
+}
+
+struct APISidecarEvictionCandidate: Equatable, Sendable {
+    let lane: APISidecarLane
+    let loaded: Bool
+    let lastAccess: Date?
+    let activeRequests: Int
+    let queuedRequests: Int
+    let pinned: Bool
+    let ttlSeconds: Int
+}
+
+struct APISidecarEvictionDecision: Equatable, Sendable {
+    let lane: APISidecarLane
+    let reason: RuntimeSidecarEvictionReason
+}
+
+enum APISidecarEvictionPlanner {
+    static func decisions(
+        candidates: [APISidecarEvictionCandidate],
+        now: Date,
+        pressure: RuntimeMemoryPressureLevel,
+        excluding excludedLanes: Set<APISidecarLane> = []
+    ) -> [APISidecarEvictionDecision] {
+        let eligible = candidates.filter {
+            $0.loaded
+                && !excludedLanes.contains($0.lane)
+                && !$0.pinned
+                && $0.activeRequests == 0
+                && $0.queuedRequests == 0
+        }
+        let ttl = eligible.filter { candidate in
+            guard let lastAccess = candidate.lastAccess else { return false }
+            return now.timeIntervalSince(lastAccess) >= Double(candidate.ttlSeconds)
+        }
+        .sorted(by: oldestFirst)
+        var decisions = ttl.map {
+            APISidecarEvictionDecision(lane: $0.lane, reason: .ttl)
+        }
+        let ttlLanes = Set(ttl.map(\.lane))
+        let pressureEligible = eligible.filter { !ttlLanes.contains($0.lane) }.sorted(by: oldestFirst)
+        switch pressure {
+        case .elevated:
+            if let oldest = pressureEligible.first {
+                decisions.append(.init(lane: oldest.lane, reason: .memoryPressure))
+            }
+        case .critical:
+            decisions.append(contentsOf: pressureEligible.map {
+                .init(lane: $0.lane, reason: .memoryPressure)
+            })
+        case .disabled, .unknown, .nominal:
+            break
+        }
+        return decisions
+    }
+
+    private static func oldestFirst(
+        _ lhs: APISidecarEvictionCandidate,
+        _ rhs: APISidecarEvictionCandidate
+    ) -> Bool {
+        let lhsDate = lhs.lastAccess ?? .distantPast
+        let rhsDate = rhs.lastAccess ?? .distantPast
+        if lhsDate == rhsDate {
+            return lhs.lane.rawValue < rhs.lane.rawValue
+        }
+        return lhsDate < rhsDate
+    }
 }
 
 /// Non-actor image generators are safe here because the resident slot holds an
@@ -118,16 +295,47 @@ private enum APISidecarASRGenerator: Sendable {
 /// time. This bounds memory even when callers provide different local model
 /// paths, while repeated requests avoid model reloads.
 struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
-    private let imageSlot = APISidecarResidentSlot<APISidecarImageKey, APISidecarImageGenerator>()
-    private let speechSlot = APISidecarResidentSlot<APISidecarSpeechKey, Qwen3TTSGenerator>()
-    private let asrSlot = APISidecarResidentSlot<APISidecarASRKey, APISidecarASRGenerator>()
+    static let defaultIdleTTLSeconds = 300
+
+    private let imageSlot: APISidecarResidentSlot<APISidecarImageKey, APISidecarImageGenerator>
+    private let speechSlot: APISidecarResidentSlot<APISidecarSpeechKey, Qwen3TTSGenerator>
+    private let asrSlot: APISidecarResidentSlot<APISidecarASRKey, APISidecarASRGenerator>
+    private let settingsURL: URL
+    private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
+    private let defaultIdleTTLSeconds: Int
+    private let currentDate: @Sendable () -> Date
+    private let currentMemorySample: @Sendable () -> RuntimeMemorySample
+
+    init(
+        settingsURL: URL = RuntimeModelSettingsStore.defaultURL(),
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
+        defaultIdleTTLSeconds: Int = APISidecarModelPool.defaultIdleTTLSeconds,
+        currentDate: @escaping @Sendable () -> Date = { Date() },
+        currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() }
+    ) {
+        precondition(defaultIdleTTLSeconds > 0, "Sidecar idle TTL must be positive")
+        self.settingsURL = settingsURL
+        self.memoryPressurePolicy = memoryPressurePolicy
+        self.defaultIdleTTLSeconds = defaultIdleTTLSeconds
+        self.currentDate = currentDate
+        self.currentMemorySample = currentMemorySample
+        self.imageSlot = APISidecarResidentSlot(currentDate: currentDate)
+        self.speechSlot = APISidecarResidentSlot(currentDate: currentDate)
+        self.asrSlot = APISidecarResidentSlot(currentDate: currentDate)
+    }
 
     func generateImage(
         kind: APISidecarImageKind,
-        modelSpec: String,
+        modelID: String,
+        modelPath: String,
         request: GenerationRequest
     ) async throws -> GenerationResult {
-        let key = APISidecarImageKey(kind: kind, modelSpec: normalizedPath(modelSpec))
+        let key = APISidecarImageKey(
+            kind: kind,
+            modelID: modelID,
+            modelPath: normalizedPath(modelPath)
+        )
+        await evictIdleResidents(excluding: [.image])
         return try await imageSlot.withValue(
             for: key,
             make: {
@@ -190,6 +398,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             modelID: modelID,
             modelPath: modelPath.map(normalizedPath)
         )
+        await evictIdleResidents(excluding: [.speech])
         return try await speechSlot.withValue(
             for: key,
             make: { Qwen3TTSGenerator(modelId: modelID) },
@@ -243,7 +452,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         key: APISidecarASRKey,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> ASRResult {
-        try await asrSlot.withValue(
+        await evictIdleResidents(excluding: [.transcription])
+        return try await asrSlot.withValue(
             for: key,
             make: {
                 switch key.backend {
@@ -280,7 +490,246 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         )
     }
 
+    func status(
+        now: Date? = nil,
+        memorySample: RuntimeMemorySample? = nil
+    ) async -> RuntimeSidecarPoolStatus {
+        let timestamp = now ?? currentDate()
+        let sample = memorySample ?? currentMemorySample()
+        await evictIdleResidents(now: timestamp, memorySample: sample)
+        let states = await states()
+        let settings = loadedSettings()
+        let residents = residentSnapshots(states: states, settings: settings)
+        return RuntimeSidecarPoolStatus(
+            defaultIdleTTLSeconds: defaultIdleTTLSeconds,
+            pressure: memoryPressurePolicy.pressure(for: sample).rawValue,
+            loadedCount: residents.filter(\.loaded).count,
+            activeRequests: residents.reduce(0) { $0 + $1.activeRequests },
+            queuedRequests: residents.reduce(0) { $0 + $1.queuedRequests },
+            residents: residents
+        )
+    }
+
+    private struct SlotStates: Sendable {
+        let image: APISidecarResidentSlotState<APISidecarImageKey>
+        let speech: APISidecarResidentSlotState<APISidecarSpeechKey>
+        let transcription: APISidecarResidentSlotState<APISidecarASRKey>
+    }
+
+    private func states() async -> SlotStates {
+        async let image = imageSlot.state()
+        async let speech = speechSlot.state()
+        async let transcription = asrSlot.state()
+        return await SlotStates(
+            image: image,
+            speech: speech,
+            transcription: transcription
+        )
+    }
+
+    private func evictIdleResidents(
+        now: Date? = nil,
+        memorySample: RuntimeMemorySample? = nil,
+        excluding excludedLanes: Set<APISidecarLane> = []
+    ) async {
+        let states = await states()
+        let settings = loadedSettings()
+        let decisions = APISidecarEvictionPlanner.decisions(
+            candidates: evictionCandidates(states: states, settings: settings),
+            now: now ?? currentDate(),
+            pressure: memoryPressurePolicy.pressure(for: memorySample ?? currentMemorySample()),
+            excluding: excludedLanes
+        )
+
+        for decision in decisions {
+            switch decision.lane {
+            case .image:
+                guard let key = states.image.residentKey else { continue }
+                _ = await imageSlot.evictIfIdle(
+                    expectedKey: key,
+                    reason: decision.reason,
+                    using: Self.unloadImage
+                )
+            case .speech:
+                guard let key = states.speech.residentKey else { continue }
+                _ = await speechSlot.evictIfIdle(
+                    expectedKey: key,
+                    reason: decision.reason,
+                    using: { generator in await generator.unload() }
+                )
+            case .transcription:
+                guard let key = states.transcription.residentKey else { continue }
+                _ = await asrSlot.evictIfIdle(
+                    expectedKey: key,
+                    reason: decision.reason,
+                    using: Self.unloadASR
+                )
+            }
+        }
+    }
+
+    private func evictionCandidates(
+        states: SlotStates,
+        settings: [String: RuntimeModelSettings]
+    ) -> [APISidecarEvictionCandidate] {
+        let imageSettings = lifecycleSettings(
+            modelID: states.image.residentKey?.modelID,
+            settings: settings
+        )
+        let speechSettings = lifecycleSettings(
+            modelID: states.speech.residentKey?.modelID,
+            settings: settings
+        )
+        let transcriptionSettings = lifecycleSettings(
+            modelID: states.transcription.residentKey?.modelID,
+            settings: settings
+        )
+        return [
+            APISidecarEvictionCandidate(
+                lane: .image,
+                loaded: states.image.residentKey != nil,
+                lastAccess: states.image.lastAccess,
+                activeRequests: states.image.activeRequests,
+                queuedRequests: states.image.queuedRequests,
+                pinned: imageSettings.pinned,
+                ttlSeconds: imageSettings.ttlSeconds
+            ),
+            APISidecarEvictionCandidate(
+                lane: .speech,
+                loaded: states.speech.residentKey != nil,
+                lastAccess: states.speech.lastAccess,
+                activeRequests: states.speech.activeRequests,
+                queuedRequests: states.speech.queuedRequests,
+                pinned: speechSettings.pinned,
+                ttlSeconds: speechSettings.ttlSeconds
+            ),
+            APISidecarEvictionCandidate(
+                lane: .transcription,
+                loaded: states.transcription.residentKey != nil,
+                lastAccess: states.transcription.lastAccess,
+                activeRequests: states.transcription.activeRequests,
+                queuedRequests: states.transcription.queuedRequests,
+                pinned: transcriptionSettings.pinned,
+                ttlSeconds: transcriptionSettings.ttlSeconds
+            ),
+        ]
+    }
+
+    private func residentSnapshots(
+        states: SlotStates,
+        settings: [String: RuntimeModelSettings]
+    ) -> [RuntimeSidecarResidentSnapshot] {
+        let imageKey = states.image.residentKey ?? states.image.lastKey
+        let speechKey = states.speech.residentKey ?? states.speech.lastKey
+        let transcriptionKey = states.transcription.residentKey ?? states.transcription.lastKey
+        return [
+            residentSnapshot(
+                kind: .image,
+                modelID: imageKey?.modelID,
+                modelPath: imageKey?.modelPath,
+                variant: imageKey?.kind.rawValue,
+                loaded: states.image.residentKey != nil,
+                state: states.image,
+                settings: settings
+            ),
+            residentSnapshot(
+                kind: .speech,
+                modelID: speechKey?.modelID,
+                modelPath: speechKey?.modelPath,
+                variant: "qwen3-tts",
+                loaded: states.speech.residentKey != nil,
+                state: states.speech,
+                settings: settings
+            ),
+            residentSnapshot(
+                kind: .transcription,
+                modelID: transcriptionKey?.modelID,
+                modelPath: transcriptionKey?.modelPath,
+                variant: transcriptionKey?.backend.rawValue,
+                loaded: states.transcription.residentKey != nil,
+                state: states.transcription,
+                settings: settings
+            ),
+        ]
+    }
+
+    private func residentSnapshot<Key: Equatable & Sendable>(
+        kind: RuntimeSidecarKind,
+        modelID: String?,
+        modelPath: String?,
+        variant: String?,
+        loaded: Bool,
+        state: APISidecarResidentSlotState<Key>,
+        settings: [String: RuntimeModelSettings]
+    ) -> RuntimeSidecarResidentSnapshot {
+        let lifecycle = lifecycleSettings(modelID: modelID, settings: settings)
+        return RuntimeSidecarResidentSnapshot(
+            kind: kind,
+            modelID: modelID,
+            modelPath: modelPath,
+            variant: variant,
+            loaded: loaded,
+            activeRequests: state.activeRequests,
+            queuedRequests: state.queuedRequests,
+            loadedAt: state.loadedAt,
+            lastAccess: state.lastAccess,
+            lastEvictedAt: state.lastEvictedAt,
+            lastEvictionReason: state.lastEvictionReason,
+            pinned: lifecycle.pinned,
+            ttlSeconds: lifecycle.ttlSeconds,
+            loadCount: state.loadCount,
+            replacementCount: state.replacementCount,
+            evictionCount: state.evictionCount,
+            completedRequests: state.completedRequests,
+            failedRequests: state.failedRequests
+        )
+    }
+
+    private func lifecycleSettings(
+        modelID: String?,
+        settings: [String: RuntimeModelSettings]
+    ) -> (pinned: Bool, ttlSeconds: Int) {
+        let configured = modelID.flatMap { settings[$0] }
+        return (
+            pinned: configured?.pinned ?? false,
+            ttlSeconds: configured?.ttlSeconds ?? defaultIdleTTLSeconds
+        )
+    }
+
+    private func loadedSettings() -> [String: RuntimeModelSettings] {
+        (try? RuntimeModelSettingsStore(url: settingsURL).load())?.models ?? [:]
+    }
+
+    private static func unloadImage(_ generator: APISidecarImageGenerator) async {
+        switch generator {
+        case .flux2Klein(let generator):
+            await generator.unload()
+        case .zImageTurbo(let generator):
+            await generator.unload()
+        case .hiDreamO1(let generator):
+            generator.unload()
+        case .krea2(let generator):
+            generator.unload()
+        case .ideogram4(let generator):
+            generator.unload()
+        case .qwenImageEdit(let generator):
+            await generator.clearCache()
+        }
+    }
+
+    private static func unloadASR(_ generator: APISidecarASRGenerator) async {
+        switch generator {
+        case .qwen(let generator):
+            await generator.unload()
+        case .parakeet(let generator):
+            await generator.unload()
+        }
+    }
+
     private func normalizedPath(_ value: String) -> String {
-        URL(fileURLWithPath: value).standardizedFileURL.path
+        guard (value as NSString).isAbsolutePath else {
+            return value
+        }
+        return URL(fileURLWithPath: value).standardizedFileURL.path
     }
 }

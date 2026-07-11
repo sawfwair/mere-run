@@ -169,6 +169,15 @@ swift run mere.run api serve \
   reuse loaded components; mutable generators execute exclusively, and a model
   or ASR-backend switch unloads the previous runtime before loading the next one
   so request-selected local paths cannot grow residency without bound.
+- sidecars default to a 300-second idle TTL. Managed image, TTS, and ASR models
+  accept `model runtime set <id> --ttl-seconds <seconds>` and `--pinned`; those
+  residency settings override the default or exempt the resident from automatic
+  eviction. Sidecar-specific settings reject text-only sampling, engine, alias,
+  context, and KV controls.
+- sidecar maintenance uses the same `--memory-guard` pressure level as the text
+  pool. Elevated pressure evicts the oldest idle unpinned sidecar after TTL
+  expirations; critical pressure evicts all eligible idle sidecars. The
+  nonblocking eviction lease skips active or queued work.
 - chat completions pass through a fair FIFO request admission actor; the default
   `--max-active-requests 1` preserves serialized local inference and exposes
   queue depth in status; queued client cancellations are removed from the FIFO
@@ -212,8 +221,11 @@ swift run mere.run api serve \
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
   steps across loaded models under `cacheStats`; it also reports completed chat
   request counts, generated tokens, and average load/prefill/decode timings
-  under `benchmarkStats`; SSD KV persistence remains unavailable until the
-  in-memory counters justify it
+  under `benchmarkStats`. The additive `sidecars` object reports the image,
+  speech, and transcription resident model/path, active and queued requests,
+  load/access/eviction timestamps, TTL/pinned state, and lifecycle counters;
+  older status clients can ignore it. SSD KV persistence remains unavailable
+  until the in-memory counters justify it
 - runtime settings are stored at
   `<active model store>/.mere-run/runtime-model-settings.json`
 - the runtime pool applies `ttlSeconds` opportunistically when handling pool

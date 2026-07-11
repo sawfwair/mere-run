@@ -34,6 +34,48 @@ struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     let models: [RuntimeModelPoolEntrySnapshot]
     let cacheStats: RuntimeCacheStatsSummary
     let benchmarkStats: RuntimeBenchmarkStatsSummary?
+    var sidecars: RuntimeSidecarPoolStatus? = nil
+}
+
+enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
+    case image
+    case speech
+    case transcription
+}
+
+enum RuntimeSidecarEvictionReason: String, Codable, Equatable, Sendable {
+    case ttl
+    case memoryPressure = "memory_pressure"
+}
+
+struct RuntimeSidecarResidentSnapshot: Codable, Equatable, Sendable {
+    let kind: RuntimeSidecarKind
+    let modelID: String?
+    let modelPath: String?
+    let variant: String?
+    let loaded: Bool
+    let activeRequests: Int
+    let queuedRequests: Int
+    let loadedAt: Date?
+    let lastAccess: Date?
+    let lastEvictedAt: Date?
+    let lastEvictionReason: RuntimeSidecarEvictionReason?
+    let pinned: Bool
+    let ttlSeconds: Int
+    let loadCount: Int
+    let replacementCount: Int
+    let evictionCount: Int
+    let completedRequests: Int
+    let failedRequests: Int
+}
+
+struct RuntimeSidecarPoolStatus: Codable, Equatable, Sendable {
+    let defaultIdleTTLSeconds: Int
+    let pressure: String
+    let loadedCount: Int
+    let activeRequests: Int
+    let queuedRequests: Int
+    let residents: [RuntimeSidecarResidentSnapshot]
 }
 
 struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
@@ -810,10 +852,13 @@ actor RuntimeModelPool {
     }
 
     func status() async -> RuntimeModelPoolStatus {
-        await status(admission: nil)
+        await status(admission: nil, sidecars: nil)
     }
 
-    func status(admission: RuntimeRequestAdmissionSnapshot?) async -> RuntimeModelPoolStatus {
+    func status(
+        admission: RuntimeRequestAdmissionSnapshot?,
+        sidecars: RuntimeSidecarPoolStatus? = nil
+    ) async -> RuntimeModelPoolStatus {
         await evictIdleModels()
         let memorySample = currentMemorySample()
         let memoryLimits = memoryPressurePolicy.limits(for: memorySample)
@@ -849,7 +894,9 @@ actor RuntimeModelPool {
             )
         }
         let activeRequests = snapshots.reduce(0) { $0 + $1.activeRequests }
+            + (sidecars?.activeRequests ?? 0)
         let loadedCount = snapshots.filter { $0.loaded }.count
+            + (sidecars?.loadedCount ?? 0)
         return RuntimeModelPoolStatus(
             object: "runtime.status",
             defaultModel: defaultModelID,
@@ -883,7 +930,8 @@ actor RuntimeModelPool {
                 stats: snapshots.compactMap { $0.benchmarkStats }.filter {
                     $0.completedRequests > 0 || $0.failedRequests > 0
                 }
-            )
+            ),
+            sidecars: sidecars
         )
     }
 
@@ -1449,6 +1497,23 @@ actor RuntimeRequestAdmission {
                 await self.cancelWaiter(id: waiterID)
             }
         }
+    }
+
+    /// Acquires immediately without joining the FIFO, or returns nil when an
+    /// active/queued request already owns the capacity. Eviction uses this to
+    /// avoid waiting behind and then unloading a runtime that was active when
+    /// maintenance began.
+    func tryAcquire() async -> RuntimeRequestAdmissionLease? {
+        guard waiters.isEmpty, activeRequests < maxActiveRequests else {
+            return nil
+        }
+        let pressure = await pressureProvider()
+        guard waiters.isEmpty,
+              activeRequests < maxActiveRequests,
+              !admissionPaused(for: pressure) || activeRequests == 0 else {
+            return nil
+        }
+        return admit()
     }
 
     fileprivate func releaseLease() async {

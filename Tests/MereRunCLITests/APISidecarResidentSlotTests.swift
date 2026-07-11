@@ -83,6 +83,123 @@ final class APISidecarResidentSlotTests: XCTestCase {
         XCTAssertEqual(qwenRequests, [request])
         XCTAssertEqual(parakeetRequestCount, 0)
     }
+
+    func testIdleEvictionRecordsDiagnosticsAndUnloadsResident() async throws {
+        let probe = APISidecarSlotProbe()
+        let slot = APISidecarResidentSlot<String, Int>()
+        _ = try await slot.withValue(
+            for: "image",
+            make: { await probe.makeValue(9) },
+            unload: { value in await probe.unload(value) },
+            operation: { $0 }
+        )
+
+        let evicted = await slot.evictIfIdle(
+            expectedKey: "image",
+            reason: .ttl,
+            using: { value in await probe.unload(value) }
+        )
+        let state = await slot.state()
+        let unloadedValues = await probe.unloadedValues()
+
+        XCTAssertTrue(evicted)
+        XCTAssertNil(state.residentKey)
+        XCTAssertEqual(state.lastKey, "image")
+        XCTAssertEqual(state.lastEvictionReason, .ttl)
+        XCTAssertEqual(state.evictionCount, 1)
+        XCTAssertEqual(unloadedValues, [9])
+    }
+
+    func testEvictionNeverTakesAnActiveLease() async throws {
+        let probe = APISidecarSlotProbe()
+        let slot = APISidecarResidentSlot<String, Int>()
+        let request = Task {
+            try await slot.withValue(
+                for: "speech",
+                make: { await probe.makeValue(4) },
+                unload: { value in await probe.unload(value) },
+                operation: { value in try await probe.use(value, nanoseconds: 100_000_000) }
+            )
+        }
+        for _ in 0..<50 {
+            if await probe.activeUseCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        let evicted = await slot.evictIfIdle(
+            expectedKey: "speech",
+            reason: .memoryPressure,
+            using: { value in await probe.unload(value) }
+        )
+        let result = try await request.value
+        let residentKey = await slot.residentKey()
+        let unloadedValues = await probe.unloadedValues()
+
+        XCTAssertFalse(evicted)
+        XCTAssertEqual(result, 4)
+        XCTAssertEqual(residentKey, "speech")
+        XCTAssertTrue(unloadedValues.isEmpty)
+    }
+
+    func testEvictionPlannerCombinesTTLAndMemoryPressureWithoutTouchingBusyOrPinnedLanes() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let candidates = [
+            APISidecarEvictionCandidate(
+                lane: .image,
+                loaded: true,
+                lastAccess: Date(timeIntervalSince1970: 600),
+                activeRequests: 0,
+                queuedRequests: 0,
+                pinned: false,
+                ttlSeconds: 300
+            ),
+            APISidecarEvictionCandidate(
+                lane: .speech,
+                loaded: true,
+                lastAccess: Date(timeIntervalSince1970: 900),
+                activeRequests: 0,
+                queuedRequests: 0,
+                pinned: false,
+                ttlSeconds: 300
+            ),
+            APISidecarEvictionCandidate(
+                lane: .transcription,
+                loaded: true,
+                lastAccess: Date(timeIntervalSince1970: 500),
+                activeRequests: 0,
+                queuedRequests: 0,
+                pinned: true,
+                ttlSeconds: 300
+            ),
+        ]
+
+        let decisions = APISidecarEvictionPlanner.decisions(
+            candidates: candidates,
+            now: now,
+            pressure: .elevated
+        )
+
+        XCTAssertEqual(decisions, [
+            .init(lane: .image, reason: .ttl),
+            .init(lane: .speech, reason: .memoryPressure),
+        ])
+    }
+
+    func testEmptyPoolStatusReportsBoundedDefaultTTL() async {
+        let pool = APISidecarModelPool(
+            memoryPressurePolicy: RuntimeMemoryPressurePolicy(tier: .off),
+            defaultIdleTTLSeconds: 42
+        )
+
+        let status = await pool.status()
+
+        XCTAssertEqual(status.defaultIdleTTLSeconds, 42)
+        XCTAssertEqual(status.loadedCount, 0)
+        XCTAssertEqual(status.activeRequests, 0)
+        XCTAssertEqual(status.queuedRequests, 0)
+        XCTAssertEqual(status.residents.count, 3)
+        XCTAssertTrue(status.residents.allSatisfy { $0.ttlSeconds == 42 && !$0.loaded })
+    }
 }
 
 private actor APISidecarSlotProbe {
@@ -100,10 +217,10 @@ private actor APISidecarSlotProbe {
         unloaded.append(value)
     }
 
-    func use(_ value: Int) async throws -> Int {
+    func use(_ value: Int, nanoseconds: UInt64 = 20_000_000) async throws -> Int {
         activeUses += 1
         maxActiveUses = max(maxActiveUses, activeUses)
-        try await Task.sleep(nanoseconds: 20_000_000)
+        try await Task.sleep(nanoseconds: nanoseconds)
         activeUses -= 1
         return value
     }
@@ -118,6 +235,10 @@ private actor APISidecarSlotProbe {
 
     func maximumConcurrentUses() -> Int {
         maxActiveUses
+    }
+
+    func activeUseCount() -> Int {
+        activeUses
     }
 }
 
