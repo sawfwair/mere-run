@@ -13,6 +13,11 @@ The format is based on Keep a Changelog.
   Psi/GLM runtime, with numerical, structural-memory, and policy tests. Affine
   8-bit is a memory control relative to full-precision KV; Gemma Turbo's default
   4-bit TurboQuant cache remains smaller.
+- added `image generate --progress-json`, a machine-readable progress stream
+  for wrappers: one JSON object per event on stderr
+  (`{"event":"progress","stage":"denoising","step":2,"total_steps":4}`),
+  replacing the human-readable progress text and taking precedence over
+  `--quiet` for progress output.
 - added native MuScriptor full-mix audio-to-MIDI transcription through
   `music transcribe`, with managed small/medium/large checkpoints, exact HTK
   mel preprocessing, MLX transformer inference, instrument conditioning,

@@ -266,6 +266,13 @@ Key options:
 - `--preflight`: inspect the generation request without loading the model or writing an image
 - `--json`: with `--preflight`, emit a structured JSON report
 - `--quiet`
+- `--progress-json`: stream progress to stderr as JSON lines instead of
+  human-readable text, one object per event, e.g.
+  `{"event":"progress","stage":"denoising","step":2,"total_steps":4}`.
+  `step` is the generator's 0-based step index; each stage emits a final event
+  with `step == total_steps`. Takes precedence over `--quiet` for progress
+  output, so wrappers can keep stdout limited to the output path while still
+  observing per-step progress.
 
 Unless `--quiet` is set, progress diagnostics on stderr include the native image
 backend, for example `native MLX/Metal (default device: gpu)` on Apple Silicon.

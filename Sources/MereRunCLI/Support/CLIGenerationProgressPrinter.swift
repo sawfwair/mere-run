@@ -2,6 +2,32 @@ import Foundation
 import MereRunCore
 
 enum CLIGenerationProgressPrinter {
+    /// One NDJSON object per distinct progress event, e.g.
+    /// `{"event":"progress","stage":"denoising","step":2,"total_steps":4}`.
+    /// `step` is the generator's raw 0-based step index; stages emit a final
+    /// event with `step == total_steps` when they finish.
+    static func progressJSONLine(_ progress: GenerationProgress) -> String {
+        "{\"event\":\"progress\",\"stage\":\"\(progress.stage.rawValue)\"," +
+            "\"step\":\(progress.stepIndex),\"total_steps\":\(progress.totalSteps)}"
+    }
+
+    /// Machine-readable progress for wrappers (`--progress-json`): one JSON
+    /// line per event on stderr, so stdout stays reserved for the output path.
+    static func makeJSONProgressHandler(
+        write: @escaping @Sendable (String) -> Void = { CLIStderr.write($0) }
+    ) -> (@Sendable (GenerationProgress) -> Void) {
+        final class State: @unchecked Sendable {
+            var last: GenerationProgress?
+        }
+
+        let state = State()
+        return { progress in
+            guard progress != state.last else { return }
+            state.last = progress
+            write(progressJSONLine(progress) + "\n")
+        }
+    }
+
     static func makeProgressHandler() -> (@Sendable (GenerationProgress) -> Void) {
         final class State: @unchecked Sendable {
             var lastStage: GenerationStage?
