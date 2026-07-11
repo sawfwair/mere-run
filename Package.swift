@@ -274,6 +274,7 @@ targets.append(contentsOf: [
       "ACEStep/Model/README.md",
       "ACEStep/VAE/README.md",
       "CodeGen/README.md",
+      "Decode/README.md",
       "DeepseekV4Flash/README.md",
       "FalconPerception/README.md",
       "Flux2Klein/README.md",

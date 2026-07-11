@@ -30,11 +30,18 @@ The runtime loads MLX-converted directory-root snapshots with:
 `LFM2Generator.swift` is the chat entrypoint. It resolves managed installs or
 downloads through `ManagedModelResolver`, loads tokenizer/template resources,
 applies sharded safetensor weights with `HFSafetensorsWeightsLoader`, pre-fills
-in cancellable chunks, then decodes serially.
+in cancellable chunks, then uses either the pipelined serial loop or the
+row-compacting continuous decode scheduler selected by the serving runtime.
 
 ## Notes
 
 - This runtime is Swift-native and does not bridge to Python.
 - LFM2 is currently text-only. API requests with image content parts are rejected
   by the `text-chat-lfm2` capability profile.
-- Prefix KV reuse and continuous decode batching are not implemented for LFM2 yet.
+- API serving enables exact token-prefix KV reuse by default and enables
+  continuous decode batching when `--max-active-requests` is greater than one.
+  Ragged rows carry independent attention offsets and typed short-convolution
+  state so compatible requests may share one model forward across positions.
+- Cold model preparation is deduplicated by the serving pool. Residency epochs
+  invalidate stale decode loops and explicit unloads without canceling another
+  request that is waiting on the same shared preparation task.
