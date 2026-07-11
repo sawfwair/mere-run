@@ -85,7 +85,7 @@ yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
 Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
 end to end.
 
-### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`)
+### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, `MERERUN_LFM2_CONTINUOUS_BATCHING`)
 
 Decode batching for concurrent requests engages automatically when
 `mere.run api serve` runs with `--max-active-requests` above 1 — the
@@ -96,6 +96,14 @@ engagement under `decodeBatching` (`batchedDecodeSteps`, `maxBatchSize`);
 per-model stats include `recentDecodeTokensPerSecond`, a rolling last-10
 window that surfaces mid-flight throughput regressions lifetime averages
 hide.
+
+LFM2 follows the same `--max-active-requests` switch and exposes
+`MERERUN_LFM2_CONTINUOUS_BATCHING` as an explicit override. Its attention cache
+supports row-offset-aware ragged batches and its short-convolution state has a
+fixed decode shape, so compatible requests can share a forward even when their
+prompt lengths differ. The generator samples all rows with one device readback,
+splits typed cache lanes after each step, and immediately removes EOS or
+token-budget-complete rows. `0` keeps the serial pipelined decoder.
 
 ### `MERERUN_GEMMA4_MTP`
 
@@ -396,6 +404,17 @@ same-position because that engine still uses scalar cache offsets. The scheduler
 services the earliest decode position first by batching compatible rows there or
 advancing one lower-offset row until it can join a compatible batch. The feature
 needs `--max-active-requests` above `1` before requests can overlap.
+
+### `MERERUN_LFM2_CONTINUOUS_BATCHING`
+
+Set to `1` to force the LFM2 generator into compatible-row decode batching, or
+set to `0` to force serial decode. When unset, `api serve` enables it whenever
+`--max-active-requests` is above `1`.
+Unlike Gemma4, LFM2 can pack different decode positions: full-attention layers
+use ragged typed KV lanes with row-specific RoPE and masks, while short-conv
+layers concatenate their fixed-size recurrent windows. The scheduler preserves
+earliest-position fairness, compacts finished rows every step, and falls back
+to an independent forward if cache types or shapes do not prove compatibility.
 
 ## Debug toggles
 

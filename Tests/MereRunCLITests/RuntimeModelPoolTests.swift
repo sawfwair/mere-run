@@ -140,7 +140,8 @@ final class RuntimeModelPoolTests: XCTestCase {
             startupModelPath: root.appendingPathComponent("custom.gguf").path,
             settingsStore: RuntimeModelSettingsStore(modelsDir: root),
             gemma4PrefixKVCacheEnabled: false,
-            q35PrefixKVCacheEnabled: false
+            q35PrefixKVCacheEnabled: false,
+            lfm2PrefixKVCacheEnabled: false
         )
 
         let status = await pool.status()
@@ -182,6 +183,66 @@ final class RuntimeModelPoolTests: XCTestCase {
 
         XCTAssertTrue(status.capabilities.continuousBatching.available)
         XCTAssertTrue(status.capabilities.continuousBatching.enabled)
+    }
+
+    func testServeConcurrencyEnablesEveryTypedDecodeBatcher() {
+        let serialized = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: 1,
+            environment: [:]
+        )
+        let concurrent = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: 2,
+            environment: [:]
+        )
+
+        XCTAssertFalse(serialized.gemma4)
+        XCTAssertFalse(serialized.q35)
+        XCTAssertFalse(serialized.lfm2)
+        XCTAssertTrue(concurrent.gemma4)
+        XCTAssertTrue(concurrent.q35)
+        XCTAssertTrue(concurrent.lfm2)
+    }
+
+    func testLFM2BatchingEnvironmentOverrideWinsOverServeConcurrency() {
+        let forcedOff = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: 4,
+            environment: ["MERERUN_LFM2_CONTINUOUS_BATCHING": "off"]
+        )
+        let forcedOn = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: 1,
+            environment: ["MERERUN_LFM2_CONTINUOUS_BATCHING": "1"]
+        )
+
+        XCTAssertFalse(forcedOff.lfm2)
+        XCTAssertTrue(forcedOff.gemma4)
+        XCTAssertTrue(forcedOff.q35)
+        XCTAssertTrue(forcedOn.lfm2)
+    }
+
+    func testStatusReportsReachableLFM2ContinuousBatchingRuntime() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            lfm2ContinuousBatchingEnabled: true
+        )
+        await pool.seedLoadedLFM2ForTesting(
+            id: LFM2Resources.defaultModelId,
+            continuousBatchingEnabled: true
+        )
+
+        let status = await pool.status()
+
+        XCTAssertTrue(status.capabilities.continuousBatching.enabled)
+        let lfm2 = try XCTUnwrap(status.models.first { $0.id == LFM2Resources.defaultModelId })
+        XCTAssertTrue(lfm2.loaded)
+        XCTAssertEqual(lfm2.prefixKVCache?.enabled, true)
+        XCTAssertEqual(lfm2.continuousBatching?.enabled, true)
+        XCTAssertEqual(status.cacheStats.prefixKVReuse.enabledModelCount, 1)
+        XCTAssertEqual(status.cacheStats.decodeBatching.enabledModelCount, 1)
     }
 
     func testStatusIncludesRuntimeKVCacheMode() async throws {

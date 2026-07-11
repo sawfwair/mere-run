@@ -78,6 +78,10 @@ equally recommended:
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use
 `--model text-chat-lfm25-a1b-8bit` for CLI chat or `api serve --engine text-chat-lfm2`.
+Concurrent serve workloads use ragged, cache-safe decode batching when
+`--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
+overrides); rows at different prompt lengths share a forward only when every
+attention and short-conv cache proves compatibility.
 
 `text-agent-ornith-9b` installs an Ornith 1.0 9B OptiQ MLX snapshot and runs
 through the native Qwen-family runtime. Use `text chat --model text-agent-ornith-9b`

@@ -19,9 +19,13 @@ The format is based on Keep a Changelog.
   ASR, TTS, OCR, VLM, MuScriptor, and Falcon paths with final-position output
   projection, pipelined GPU sampling, compact grouped-query caches, and true
   cached Falcon grounding.
-- added batched MuScriptor greedy/sampling decode across independent audio
-  chunks; `music transcribe --chunk-batch-size` controls the batch width and
-  beam search retains its independent-cache path.
+- generalized batched MuScriptor decode across independent audio chunks;
+  `music transcribe --chunk-batch-size` controls greedy, sampling, and beam
+  widths, while beam search packs all live beams into one forward per step and
+  preserves independent typed cache lanes.
+- added opt-in LFM2 continuous decode batching with ragged row-offset-aware KV
+  lanes, batched short-conv state, one sampling readback per step, immediate
+  finished-row compaction, and exact serial fallback for incompatible caches.
 - changed Linux CUDA quantized matmul selection to probe native
   `quantized_mm` and `GatherQMM` independently, retaining an automatic dense
   fallback for runtimes that do not provide either kernel; Linux native

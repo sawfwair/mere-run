@@ -65,7 +65,7 @@ struct MusicTranscribe: ParsableCommand {
     @Option(name: [.customLong("beam-size")], help: "Beam-search width (1 disables beam search).")
     var beamSize: Int = 1
 
-    @Option(name: [.customLong("chunk-batch-size")], help: "Independent five-second chunks decoded together (greedy/sampling only).")
+    @Option(name: [.customLong("chunk-batch-size")], help: "Independent five-second chunks decoded together, including beam search.")
     var chunkBatchSize: Int = 4
 
     @Option(name: [.long], help: "Model compute type: bfloat16, float16, or float32.")

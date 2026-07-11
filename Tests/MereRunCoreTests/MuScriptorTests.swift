@@ -147,6 +147,73 @@ final class MuScriptorTests: XCTestCase {
         )
     }
 
+    func testBeamBatchingCollapsesOneDispatchPerBeamIntoOnePerStep() {
+        let counts = MuScriptorBeamBatching.modelDispatchCounts(
+            activeRowsPerStep: [8, 8, 6, 3, 1, 0]
+        )
+
+        XCTAssertEqual(counts.legacy, 26)
+        XCTAssertEqual(counts.batched, 5)
+    }
+
+    func testBeamBatchCacheMergeAndSplitPreserveIndependentRows() throws {
+        let first = KVCacheSimple(step: 4)
+        let second = KVCacheSimple(step: 4)
+        _ = first.update(
+            keys: MLXArray(Array(0..<8).map(Float.init)).reshaped(1, 1, 2, 4),
+            values: MLXArray(Array(20..<28).map(Float.init)).reshaped(1, 1, 2, 4)
+        )
+        _ = second.update(
+            keys: MLXArray(Array(40..<48).map(Float.init)).reshaped(1, 1, 2, 4),
+            values: MLXArray(Array(60..<68).map(Float.init)).reshaped(1, 1, 2, 4)
+        )
+
+        let batched = try XCTUnwrap(MuScriptorBeamBatching.batch([[first], [second]]))
+        let split = try XCTUnwrap(MuScriptorBeamBatching.split(caches: batched, rowCount: 2))
+
+        XCTAssertEqual(split.count, 2)
+        XCTAssertEqual(split[0][0].offset, 2)
+        XCTAssertEqual(split[1][0].offset, 2)
+        let nextKeys = MLXArray(Array(100..<108).map(Float.init)).reshaped(2, 1, 1, 4)
+        let nextValues = MLXArray(Array(200..<208).map(Float.init)).reshaped(2, 1, 1, 4)
+        let mergedAgain = try XCTUnwrap(MuScriptorBeamBatching.batch(split))
+        let updated = mergedAgain[0].update(keys: nextKeys, values: nextValues)
+        MLX.eval(updated.0, updated.1)
+
+        XCTAssertEqual(updated.0.shape, [2, 1, 3, 4])
+        XCTAssertEqual(updated.1.shape, [2, 1, 3, 4])
+    }
+
+    func testBatchedBeamSearchMatchesIndependentChunkSearch() throws {
+        let config = MuScriptorConfiguration(dim: 8, numHeads: 2, numLayers: 1, card: 1_393)
+        let transcriber = MuScriptorTranscriber(model: MuScriptorModel(configuration: config))
+        let firstPrefix = MLXArray((0..<24).map { Float($0) / 24 }, [1, 3, 8])
+        let secondPrefix = MLXArray((0..<24).map { Float(24 - $0) / 24 }, [1, 3, 8])
+        let options = MuScriptorTranscriptionOptions(
+            maxTokensPerChunk: 6,
+            beamSize: 3,
+            chunkBatchSize: 2
+        )
+
+        let batched = try transcriber.generateChunksWithBeamSearch(
+            indices: [0, 1],
+            prefix: MLX.concatenated([firstPrefix, secondPrefix], axis: 0),
+            options: options
+        )
+        let first = try transcriber.generateChunksWithBeamSearch(
+            indices: [0],
+            prefix: firstPrefix,
+            options: options
+        )
+        let second = try transcriber.generateChunksWithBeamSearch(
+            indices: [1],
+            prefix: secondPrefix,
+            options: options
+        )
+
+        XCTAssertEqual(batched, [first[0], second[0]])
+    }
+
     func testTranscriptionOptionsValidateChunkBatchSize() throws {
         try MuScriptorTranscriptionOptions(chunkBatchSize: 4).validate()
         XCTAssertThrowsError(

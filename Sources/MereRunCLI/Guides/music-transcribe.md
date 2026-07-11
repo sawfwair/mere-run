@@ -50,9 +50,11 @@ mere.run music transcribe ./song.wav --format jsonl --output -
 ```
 
 Greedy decoding is the default. `--sampling --temperature 0.8` enables sampled
-decoding. `--beam-size 4` enables slower beam search and cannot be combined with
-sampling. `--strict-eos` turns a chunk that reaches the generation limit into
-an error instead of returning the decoded prefix.
+decoding. `--beam-size 4` enables beam search and cannot be combined with
+sampling. `--chunk-batch-size` batches independent chunks in every decode mode;
+beam mode also packs all live beams into one model forward per step and drops
+ended rows before the next step. `--strict-eos` turns a chunk that reaches the
+generation limit into an error instead of returning the decoded prefix.
 
 ## Sources
 

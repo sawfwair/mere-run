@@ -1096,7 +1096,7 @@ Key options:
 - `--strict-eos`
 - `--beam-size`
 - `--chunk-batch-size`: independent five-second chunks decoded together for
-  greedy or sampling mode (default `4`; beam search stays per chunk)
+  greedy, sampling, or beam mode (default `4`; live beams share one forward)
 - `--dtype`: `bfloat16`, `float16`, or `float32`
 - `--quiet`
 

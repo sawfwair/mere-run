@@ -19,6 +19,28 @@ public final class LFM2ConvCache: @unchecked Sendable {
         copy.state = state
         return copy
     }
+
+    func batched(with caches: [LFM2ConvCache]) -> LFM2ConvCache? {
+        guard !caches.isEmpty else { return nil }
+        let states = caches.compactMap(\.state)
+        guard states.count == caches.count,
+              let first = states.first,
+              states.allSatisfy({ Array($0.shape.dropFirst()) == Array(first.shape.dropFirst()) }) else {
+            return nil
+        }
+        let result = LFM2ConvCache()
+        result.state = concatenated(states, axis: 0)
+        return result
+    }
+
+    func unbatchedRows(count: Int) -> [LFM2ConvCache]? {
+        guard count > 0, let state, state.dim(0) == count else { return nil }
+        return (0..<count).map { index in
+            let result = LFM2ConvCache()
+            result.state = state[index..<(index + 1), 0..., 0...]
+            return result
+        }
+    }
 }
 
 public enum LFM2LayerCache: @unchecked Sendable {
@@ -31,6 +53,59 @@ public enum LFM2LayerCache: @unchecked Sendable {
             return .attention(cache.fork())
         case .conv(let cache):
             return .conv(cache.fork())
+        }
+    }
+
+    var offset: Int? {
+        if case .attention(let cache) = self {
+            return cache.offset
+        }
+        return nil
+    }
+
+    var batchSignature: String {
+        switch self {
+        case .attention(let cache):
+            if cache.supportsVariablePositionBatching {
+                return "attention:variable"
+            }
+            return "attention:\(cache.offset)"
+        case .conv(let cache):
+            let shape = cache.state?.shape.map(String.init).joined(separator: "x") ?? "nil"
+            return "conv:\(shape)"
+        }
+    }
+
+    func batched(with caches: [LFM2LayerCache]) -> LFM2LayerCache? {
+        guard !caches.isEmpty else { return nil }
+        switch self {
+        case .attention(let first):
+            let typed = caches.compactMap { cache -> KVCache? in
+                guard case .attention(let value) = cache else { return nil }
+                return value
+            }
+            guard typed.count == caches.count, let batched = first.batched(with: typed) else {
+                return nil
+            }
+            return .attention(batched)
+        case .conv(let first):
+            let typed = caches.compactMap { cache -> LFM2ConvCache? in
+                guard case .conv(let value) = cache else { return nil }
+                return value
+            }
+            guard typed.count == caches.count, let batched = first.batched(with: typed) else {
+                return nil
+            }
+            return .conv(batched)
+        }
+    }
+
+    func unbatchedRows(count: Int) -> [LFM2LayerCache]? {
+        switch self {
+        case .attention(let cache):
+            return cache.unbatchedRows(count: count)?.map(LFM2LayerCache.attention)
+        case .conv(let cache):
+            return cache.unbatchedRows(count: count)?.map(LFM2LayerCache.conv)
         }
     }
 }

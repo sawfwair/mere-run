@@ -178,6 +178,67 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testRaggedBatchedDecodeMatchesIndependentRowsAndSplitsCaches() throws {
+        MLXRandom.seed(421)
+        let config = try makeTinyConfig()
+        let model = LFM2Model(config: config)
+        let firstCaches = makeLayerCaches(config: config)
+        let secondCaches = makeLayerCaches(config: config)
+        let firstPrompt = MLXArray([Int32(1), 2]).reshaped(1, 2)
+        let secondPrompt = MLXArray([Int32(3), 4, 5, 6]).reshaped(1, 4)
+        let firstPrefill = model(firstPrompt, cache: firstCaches)
+        let secondPrefill = model(secondPrompt, cache: secondCaches)
+        MLX.eval(firstPrefill, secondPrefill)
+
+        let serialFirstCaches = firstCaches.map { $0?.fork() }
+        let serialSecondCaches = secondCaches.map { $0?.fork() }
+        let batchedCaches: [LFM2LayerCache?] = try firstCaches.indices.map { layerIndex in
+            let rows = try XCTUnwrap([firstCaches[layerIndex], secondCaches[layerIndex]].compactMap { $0 })
+            XCTAssertEqual(rows.count, 2)
+            return try XCTUnwrap(rows[0].batched(with: rows))
+        }
+
+        let batched = model(
+            MLXArray([Int32(7), 8]).reshaped(2, 1),
+            cache: batchedCaches
+        )
+        let first = model(MLXArray([Int32(7)]).reshaped(1, 1), cache: serialFirstCaches)
+        let second = model(MLXArray([Int32(8)]).reshaped(1, 1), cache: serialSecondCaches)
+        MLX.eval(batched, first, second)
+
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batched[0] - first[0])).item(Float.self),
+            2e-4
+        )
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batched[1] - second[0])).item(Float.self),
+            2e-4
+        )
+
+        for cache in batchedCaches.compactMap({ $0 }) {
+            let rows = try XCTUnwrap(cache.unbatchedRows(count: 2))
+            XCTAssertEqual(rows.count, 2)
+            XCTAssertTrue(rows.allSatisfy { row in
+                switch row {
+                case .attention(let value):
+                    return value.offset == 3 || value.offset == 5
+                case .conv(let value):
+                    return value.state?.dim(0) == 1
+                }
+            })
+        }
+    }
+
+    func testLFM2ContinuousBatchingStatsExposeOptInState() async {
+        let generator = LFM2Generator(continuousBatchingEnabled: true)
+
+        let stats = await generator.continuousBatchingStats()
+
+        XCTAssertTrue(stats.enabled)
+        XCTAssertEqual(stats.batchedDecodeSteps, 0)
+        XCTAssertEqual(stats.maxBatchSize, 0)
+    }
+
     func testNativeGroupedQueryAttentionMatchesExpandedReference() throws {
         MLXRandom.seed(812)
         let config = try makeTinyConfig()

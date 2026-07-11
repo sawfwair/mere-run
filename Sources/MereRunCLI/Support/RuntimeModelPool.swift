@@ -7,12 +7,40 @@ import Darwin
 /// Tri-state environment flag: nil when unset, so callers can supply a
 /// context-dependent default (e.g. continuous batching following
 /// --max-active-requests).
-func runtimeOptionalEnvironmentFlag(_ key: String) -> Bool? {
-    guard let rawValue = ProcessInfo.processInfo.environment[key] else {
+func runtimeOptionalEnvironmentFlag(
+    _ key: String,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+) -> Bool? {
+    guard let rawValue = environment[key] else {
         return nil
     }
     let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     return !["0", "false", "no", "off"].contains(normalized)
+}
+
+struct RuntimeContinuousBatchingConfiguration: Equatable, Sendable {
+    let gemma4: Bool
+    let q35: Bool
+    let lfm2: Bool
+
+    init(
+        maxActiveRequests: Int,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
+        let defaultEnabled = maxActiveRequests > 1
+        gemma4 = runtimeOptionalEnvironmentFlag(
+            "MERERUN_GEMMA4_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+        q35 = runtimeOptionalEnvironmentFlag(
+            "MERERUN_Q35_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+        lfm2 = runtimeOptionalEnvironmentFlag(
+            "MERERUN_LFM2_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+    }
 }
 
 private func runtimeDefaultOnEnvironmentFlag(_ key: String) -> Bool {
@@ -89,10 +117,16 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
         gemma4PrefixKVCacheEnabled: Bool,
         gemma4ContinuousBatchingEnabled: Bool,
         q35ContinuousBatchingEnabled: Bool,
-        q35PrefixKVCacheEnabled: Bool
+        q35PrefixKVCacheEnabled: Bool,
+        lfm2ContinuousBatchingEnabled: Bool = false,
+        lfm2PrefixKVCacheEnabled: Bool = false
     ) -> RuntimeControlPlaneCapabilities {
-        let prefixKVCacheEnabled = gemma4PrefixKVCacheEnabled || q35PrefixKVCacheEnabled
-        let continuousBatchingEnabled = gemma4ContinuousBatchingEnabled || q35ContinuousBatchingEnabled
+        let prefixKVCacheEnabled = gemma4PrefixKVCacheEnabled
+            || q35PrefixKVCacheEnabled
+            || lfm2PrefixKVCacheEnabled
+        let continuousBatchingEnabled = gemma4ContinuousBatchingEnabled
+            || q35ContinuousBatchingEnabled
+            || lfm2ContinuousBatchingEnabled
         return RuntimeControlPlaneCapabilities(
             requestAdmission: RuntimeCapabilityStatus(
                 available: true,
@@ -102,22 +136,22 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
             chunkedPrefill: RuntimeCapabilityStatus(
                 available: true,
                 enabled: true,
-                detail: "Gemma4 and Qwen-family models prefill long prompts in cancellable chunks."
+                detail: "Gemma4, Qwen-family, and LFM2 models prefill long prompts in cancellable chunks."
             ),
             continuousBatching: RuntimeCapabilityStatus(
                 available: true,
                 enabled: continuousBatchingEnabled,
                 detail: continuousBatchingEnabled
-                    ? "Gemma4 and Qwen-family decode rows are packed when typed cache state is compatible; Qwen linear-only rows may batch across decode positions."
-                    : "Decode batching engages automatically when --max-active-requests is above 1; MERERUN_GEMMA4_CONTINUOUS_BATCHING / MERERUN_Q35_CONTINUOUS_BATCHING override per engine."
+                    ? "Gemma4, Qwen-family, and LFM2 decode rows are packed when typed cache state is compatible; Qwen-family and LFM2 rows may batch across decode positions."
+                    : "Decode batching engages automatically when --max-active-requests is above 1; the per-engine MERERUN_*_CONTINUOUS_BATCHING flags override it."
             ),
             prefixKVReuse: RuntimeCapabilityStatus(
                 available: true,
                 enabled: prefixKVCacheEnabled,
                 detail: prefixKVCacheEnabled
-                    ? "In-memory prefix KV reuse is enabled for matching Gemma4 or Qwen-family text token prefixes."
+                    ? "In-memory prefix KV reuse is enabled for matching Gemma4, Qwen-family, or LFM2 text token prefixes."
                     : "In-memory prefix KV reuse is disabled by " +
-                        "MERERUN_GEMMA4_PREFIX_KV_CACHE=0 or MERERUN_Q35_PREFIX_KV_CACHE=0."
+                        "the per-engine MERERUN_*_PREFIX_KV_CACHE flags."
             ),
             ssdKVCache: RuntimeCapabilityStatus(
                 available: false,
@@ -806,6 +840,7 @@ actor RuntimeModelPool {
     private let q35PrefixKVCacheEnabled: Bool
     private let q35ContinuousBatchingEnabled: Bool
     private let lfm2PrefixKVCacheEnabled: Bool
+    private let lfm2ContinuousBatchingEnabled: Bool
     private let currentDate: @Sendable () -> Date
     private let currentMemorySample: @Sendable () -> RuntimeMemorySample
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
@@ -824,6 +859,8 @@ actor RuntimeModelPool {
         q35PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_Q35_PREFIX_KV_CACHE"),
         q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
         lfm2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_LFM2_PREFIX_KV_CACHE"),
+        lfm2ContinuousBatchingEnabled: Bool =
+            ProcessInfo.processInfo.environment["MERERUN_LFM2_CONTINUOUS_BATCHING"] == "1",
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
@@ -838,6 +875,7 @@ actor RuntimeModelPool {
         self.q35PrefixKVCacheEnabled = q35PrefixKVCacheEnabled
         self.q35ContinuousBatchingEnabled = q35ContinuousBatchingEnabled
         self.lfm2PrefixKVCacheEnabled = lfm2PrefixKVCacheEnabled
+        self.lfm2ContinuousBatchingEnabled = lfm2ContinuousBatchingEnabled
         self.currentDate = currentDate
         self.currentMemorySample = currentMemorySample
         self.memoryPressurePolicy = memoryPressurePolicy
@@ -907,7 +945,9 @@ actor RuntimeModelPool {
                 gemma4PrefixKVCacheEnabled: gemma4PrefixKVCacheEnabled,
                 gemma4ContinuousBatchingEnabled: gemma4ContinuousBatchingEnabled,
                 q35ContinuousBatchingEnabled: q35ContinuousBatchingEnabled,
-                q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled
+                q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled,
+                lfm2ContinuousBatchingEnabled: lfm2ContinuousBatchingEnabled,
+                lfm2PrefixKVCacheEnabled: lfm2PrefixKVCacheEnabled
             ),
             memory: RuntimeMemorySnapshot(
                 physicalBytes: memorySample.physicalBytes,
@@ -1206,7 +1246,8 @@ actor RuntimeModelPool {
             return .textChatLFM2(
                 LFM2Generator(
                     modelId: resolved.id,
-                    prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled
+                    prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
+                    continuousBatchingEnabled: lfm2ContinuousBatchingEnabled
                 ),
                 modelPath: resolved.installPath
             )
@@ -1444,6 +1485,23 @@ actor RuntimeModelPool {
         var state = state(for: id)
         state.activeRequests = activeRequests
         state.lastAccess = lastAccess
+        states[id] = state
+    }
+
+    func seedLoadedLFM2ForTesting(
+        id: String,
+        continuousBatchingEnabled: Bool
+    ) {
+        loadedModels[id] = .textChatLFM2(
+            LFM2Generator(
+                modelId: id,
+                prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
+                continuousBatchingEnabled: continuousBatchingEnabled
+            ),
+            modelPath: nil
+        )
+        var state = state(for: id)
+        state.lastAccess = currentDate()
         states[id] = state
     }
     #endif
@@ -1762,7 +1820,9 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatQ35(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
+        case .textChatLFM2(let generator, _):
+            return await generator.prefixKVCacheStats()
+        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
             return nil
         }
     }
@@ -1773,7 +1833,9 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.continuousBatchingStats()
         case .textChatQ35(let generator, _):
             return await generator.continuousBatchingStats()
-        case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
+        case .textChatLFM2(let generator, _):
+            return await generator.continuousBatchingStats()
+        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
             return nil
         }
     }

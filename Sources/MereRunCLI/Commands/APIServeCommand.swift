@@ -1654,7 +1654,9 @@ actor CodeGenServer {
         // (The previous double-gate — env AND flag — shipped a serve that
         // silently never batched: /runtime/status showed batchedDecodeSteps=0
         // under concurrent load until the env was discovered.)
-        let batchingDefault = maxActiveRequests > 1
+        let batching = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: maxActiveRequests
+        )
         let settingsURL = RuntimeModelSettingsStore.defaultURL()
         let runtimePool = RuntimeModelPool(
             defaultModelID: defaultModelID,
@@ -1662,10 +1664,9 @@ actor CodeGenServer {
             startupModelPath: modelPath,
             settingsStore: RuntimeModelSettingsStore(url: settingsURL),
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
-            gemma4ContinuousBatchingEnabled:
-                runtimeOptionalEnvironmentFlag("MERERUN_GEMMA4_CONTINUOUS_BATCHING") ?? batchingDefault,
-            q35ContinuousBatchingEnabled:
-                runtimeOptionalEnvironmentFlag("MERERUN_Q35_CONTINUOUS_BATCHING") ?? batchingDefault,
+            gemma4ContinuousBatchingEnabled: batching.gemma4,
+            q35ContinuousBatchingEnabled: batching.q35,
+            lfm2ContinuousBatchingEnabled: batching.lfm2,
             memoryPressurePolicy: memoryPressurePolicy
         )
         self.pool = runtimePool
