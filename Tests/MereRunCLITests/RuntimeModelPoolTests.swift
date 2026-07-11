@@ -278,6 +278,283 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertTrue(forcedOn.lfm2)
     }
 
+    func testConcurrentColdLoadsSharePreparationAndWaitUntilReady() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let preparation = RuntimeModelPreparationProbe()
+        let completions = RuntimeCompletionProbe()
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            ensureMLXAvailable: {},
+            prepareLoadedModel: { _ in
+                await preparation.prepare()
+            }
+        )
+
+        let first = Task {
+            let snapshot = try await pool.loadModel(idOrAlias: "custom.gguf")
+            await completions.mark()
+            return snapshot
+        }
+        for _ in 0..<50 {
+            if await preparation.callCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let firstPreparationCount = await preparation.callCount()
+        XCTAssertEqual(firstPreparationCount, 1)
+
+        let second = Task {
+            let snapshot = try await pool.loadModel(idOrAlias: "custom.gguf")
+            await completions.mark()
+            return snapshot
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let concurrentPreparationCount = await preparation.callCount()
+        let completionsBeforeRelease = await completions.count()
+        XCTAssertEqual(concurrentPreparationCount, 1)
+        XCTAssertEqual(completionsBeforeRelease, 0)
+
+        await preparation.releaseAll()
+        let firstSnapshot = try await first.value
+        let secondSnapshot = try await second.value
+
+        XCTAssertEqual(firstSnapshot.ready, true)
+        XCTAssertEqual(secondSnapshot.ready, true)
+        let completionsAfterRelease = await completions.count()
+        XCTAssertEqual(completionsAfterRelease, 2)
+    }
+
+    func testUnloadDuringColdLoadInvalidatesStalePreparation() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let preparation = RuntimeModelPreparationProbe()
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            ensureMLXAvailable: {},
+            prepareLoadedModel: { _ in
+                await preparation.prepare()
+            }
+        )
+
+        let loading = Task {
+            try await pool.loadModel(idOrAlias: "custom.gguf")
+        }
+        for _ in 0..<50 {
+            if await preparation.callCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let unloading = Task {
+            try await pool.unloadModel(idOrAlias: "custom.gguf")
+        }
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        await preparation.releaseAll()
+        let unloaded = try await unloading.value
+        XCTAssertFalse(unloaded.loaded)
+        XCTAssertEqual(unloaded.ready, false)
+        do {
+            _ = try await loading.value
+            XCTFail("Expected the invalidated load to throw CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        }
+
+        let status = await pool.status()
+        let model = try XCTUnwrap(status.models.first { $0.id == "custom.gguf" })
+        XCTAssertFalse(model.loaded)
+        XCTAssertEqual(model.ready, false)
+    }
+
+    func testUnloadAndReloadNeverReturnsNewGenerationToOldPreparation() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let preparation = RuntimeOrderedModelPreparationProbe()
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            ensureMLXAvailable: {},
+            prepareLoadedModel: { _ in
+                await preparation.prepare()
+            }
+        )
+
+        let firstLoad = Task {
+            try await pool.loadModel(idOrAlias: "custom.gguf")
+        }
+        for _ in 0..<50 {
+            if await preparation.callCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let firstPreparationCount = await preparation.callCount()
+        XCTAssertEqual(firstPreparationCount, 1)
+
+        let unloading = Task {
+            try await pool.unloadModel(idOrAlias: "custom.gguf")
+        }
+        for _ in 0..<50 {
+            let status = await pool.status()
+            if status.models.first(where: { $0.id == "custom.gguf" })?.loaded == false {
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let secondLoad = Task {
+            try await pool.loadModel(idOrAlias: "custom.gguf")
+        }
+        for _ in 0..<50 {
+            if await preparation.callCount() == 2 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let secondPreparationCount = await preparation.callCount()
+        XCTAssertEqual(secondPreparationCount, 2)
+
+        await preparation.release(call: 2)
+        let secondSnapshot = try await secondLoad.value
+        XCTAssertTrue(secondSnapshot.loaded)
+        XCTAssertEqual(secondSnapshot.ready, true)
+
+        await preparation.release(call: 1)
+        _ = try await unloading.value
+        do {
+            _ = try await firstLoad.value
+            XCTFail("Expected the stale generation to throw CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        }
+
+        let status = await pool.status()
+        let model = try XCTUnwrap(status.models.first { $0.id == "custom.gguf" })
+        XCTAssertTrue(model.loaded)
+        XCTAssertEqual(model.ready, true)
+    }
+
+    func testCancelledSoleColdLoadDoesNotLeaveOrphanResident() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let preparation = RuntimeModelPreparationProbe()
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            ensureMLXAvailable: {},
+            prepareLoadedModel: { _ in
+                await preparation.prepare()
+            }
+        )
+
+        let cancelledLoad = Task {
+            try await pool.loadModel(idOrAlias: "custom.gguf")
+        }
+        for _ in 0..<50 {
+            if await preparation.callCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let cancelledPreparationCount = await preparation.callCount()
+        XCTAssertEqual(cancelledPreparationCount, 1)
+
+        cancelledLoad.cancel()
+        var cancelledStatus = await pool.status()
+        for _ in 0..<50 {
+            guard cancelledStatus.models.first(where: { $0.id == "custom.gguf" })?.loaded != false else {
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+            cancelledStatus = await pool.status()
+        }
+        let cancelledModel = try XCTUnwrap(
+            cancelledStatus.models.first { $0.id == "custom.gguf" }
+        )
+        XCTAssertFalse(cancelledModel.loaded)
+        XCTAssertEqual(cancelledModel.ready, false)
+
+        let replacementLoad = Task {
+            try await pool.loadModel(idOrAlias: "custom.gguf")
+        }
+        for _ in 0..<50 {
+            if await preparation.callCount() == 2 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let replacementPreparationCount = await preparation.callCount()
+        XCTAssertEqual(replacementPreparationCount, 2)
+
+        await preparation.releaseAll()
+        do {
+            _ = try await cancelledLoad.value
+            XCTFail("Expected the cancelled generation to throw CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        }
+        let replacementSnapshot = try await replacementLoad.value
+        XCTAssertTrue(replacementSnapshot.loaded)
+        XCTAssertEqual(replacementSnapshot.ready, true)
+    }
+
+    func testPreparationFailureAwaitsMatchingGenerationUnload() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let unload = RuntimeModelUnloadProbe()
+        let completions = RuntimeCompletionProbe()
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            ensureMLXAvailable: {},
+            prepareLoadedModel: { _ in
+                throw RuntimeModelPreparationTestError.failed
+            },
+            unloadLoadedModel: { _ in
+                await unload.unload()
+            }
+        )
+
+        let loading = Task {
+            let failedAsExpected: Bool
+            do {
+                _ = try await pool.loadModel(idOrAlias: "custom.gguf")
+                failedAsExpected = false
+            } catch is RuntimeModelPreparationTestError {
+                failedAsExpected = true
+            } catch {
+                failedAsExpected = false
+            }
+            await completions.mark()
+            return failedAsExpected
+        }
+        for _ in 0..<50 {
+            if await unload.callCount() == 1 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let unloadCount = await unload.callCount()
+        let completionsBeforeUnload = await completions.count()
+        XCTAssertEqual(unloadCount, 1)
+        XCTAssertEqual(completionsBeforeUnload, 0)
+        let cleaningStatus = await pool.status()
+        let cleaningModel = try XCTUnwrap(
+            cleaningStatus.models.first { $0.id == "custom.gguf" }
+        )
+        XCTAssertFalse(cleaningModel.loaded)
+
+        await unload.releaseAll()
+        let failedAsExpected = await loading.value
+        let completionsAfterUnload = await completions.count()
+        XCTAssertTrue(failedAsExpected)
+        XCTAssertEqual(completionsAfterUnload, 1)
+    }
+
     func testStatusReportsReachableLFM2ContinuousBatchingRuntime() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -634,6 +911,67 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertEqual(status.memory.guardTier, .balanced)
     }
 
+    func testMemoryPressurePrefersPhysicalFootprintOverResidentSize() {
+        let policy = RuntimeMemoryPressurePolicy(tier: .balanced)
+        let sample = RuntimeMemorySample(
+            physicalBytes: 100 * gib,
+            residentBytes: 10 * gib,
+            physicalFootprintBytes: 85 * gib
+        )
+
+        XCTAssertEqual(policy.currentBytes(for: sample), 85 * gib)
+        XCTAssertEqual(policy.pressure(for: sample), .elevated)
+    }
+
+    func testDynamicMemoryCeilingUsesPhysicalFootprint() {
+        let policy = RuntimeMemoryPressurePolicy(tier: .balanced)
+        let sample = RuntimeMemorySample(
+            physicalBytes: 100 * gib,
+            residentBytes: 5 * gib,
+            physicalFootprintBytes: 30 * gib,
+            availableBytes: 10 * gib
+        )
+
+        let limits = policy.limits(for: sample)
+
+        XCTAssertEqual(limits?.ceiling, 40 * gib)
+        XCTAssertEqual(limits?.soft, 36 * gib)
+        XCTAssertEqual(limits?.hard, 38 * gib)
+    }
+
+    func testStatusKeepsResidentSizeWhileGuardingOnPhysicalFootprint() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let gibibyte = gib
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            currentMemorySample: {
+                RuntimeMemorySample(
+                    physicalBytes: 100 * gibibyte,
+                    residentBytes: 10 * gibibyte,
+                    physicalFootprintBytes: 85 * gibibyte
+                )
+            }
+        )
+
+        let status = await pool.status()
+
+        XCTAssertEqual(status.memory.residentBytes, 10 * gib)
+        XCTAssertEqual(status.memory.currentBytes, 85 * gib)
+        XCTAssertEqual(status.memory.pressure, RuntimeMemoryPressureLevel.elevated.rawValue)
+    }
+
+    func testDarwinMemorySampleIncludesPhysicalFootprint() {
+        #if canImport(Darwin)
+        let sample = RuntimeMemorySample.current()
+        XCTAssertNotNil(sample.physicalFootprintBytes)
+        XCTAssertGreaterThan(sample.physicalFootprintBytes ?? 0, 0)
+        #endif
+    }
+
     func testMemoryGuardOffDisablesPressureEviction() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -817,6 +1155,87 @@ private actor RuntimeMemoryPressureProbe {
 
     func current() -> RuntimeMemoryPressureLevel {
         level
+    }
+}
+
+private actor RuntimeModelPreparationProbe {
+    private var calls = 0
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func prepare() async {
+        calls += 1
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func callCount() -> Int {
+        calls
+    }
+
+    func releaseAll() {
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
+}
+
+private actor RuntimeOrderedModelPreparationProbe {
+    private var calls = 0
+    private var continuations: [Int: CheckedContinuation<Void, Never>] = [:]
+
+    func prepare() async {
+        calls += 1
+        let call = calls
+        await withCheckedContinuation { continuation in
+            continuations[call] = continuation
+        }
+    }
+
+    func callCount() -> Int {
+        calls
+    }
+
+    func release(call: Int) {
+        continuations.removeValue(forKey: call)?.resume()
+    }
+}
+
+private enum RuntimeModelPreparationTestError: Error {
+    case failed
+}
+
+private actor RuntimeModelUnloadProbe {
+    private var calls = 0
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func unload() async {
+        calls += 1
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func callCount() -> Int {
+        calls
+    }
+
+    func releaseAll() {
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
+}
+
+private actor RuntimeCompletionProbe {
+    private var completions = 0
+
+    func mark() {
+        completions += 1
+    }
+
+    func count() -> Int {
+        completions
     }
 }
 

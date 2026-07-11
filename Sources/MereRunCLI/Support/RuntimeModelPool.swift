@@ -69,6 +69,7 @@ enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
     case image
     case speech
     case transcription
+    case embedding
 }
 
 enum RuntimeSidecarEvictionReason: String, Codable, Equatable, Sendable {
@@ -475,6 +476,7 @@ enum RuntimeMemoryGuardTier: String, Codable, CaseIterable, Equatable, Sendable 
 struct RuntimeMemorySample: Equatable, Sendable {
     let physicalBytes: UInt64
     let residentBytes: UInt64?
+    let physicalFootprintBytes: UInt64?
     let availableBytes: UInt64?
     let freeBytes: UInt64?
     let activeBytes: UInt64?
@@ -483,6 +485,7 @@ struct RuntimeMemorySample: Equatable, Sendable {
     init(
         physicalBytes: UInt64,
         residentBytes: UInt64?,
+        physicalFootprintBytes: UInt64? = nil,
         availableBytes: UInt64? = nil,
         freeBytes: UInt64? = nil,
         activeBytes: UInt64? = nil,
@@ -490,6 +493,7 @@ struct RuntimeMemorySample: Equatable, Sendable {
     ) {
         self.physicalBytes = physicalBytes
         self.residentBytes = residentBytes
+        self.physicalFootprintBytes = physicalFootprintBytes
         self.availableBytes = availableBytes
         self.freeBytes = freeBytes
         self.activeBytes = activeBytes
@@ -540,8 +544,32 @@ struct RuntimeMemoryPressurePolicy: Equatable, Sendable {
         return .nominal
     }
 
+    func projectedPressure(
+        for sample: RuntimeMemorySample,
+        additionalBytes: UInt64
+    ) -> RuntimeMemoryPressureLevel {
+        guard tier != .off else {
+            return .disabled
+        }
+        guard let currentBytes = currentBytes(for: sample),
+              let limits = limits(for: sample) else {
+            return .unknown
+        }
+        let (projected, overflow) = currentBytes.addingReportingOverflow(additionalBytes)
+        guard !overflow else {
+            return .critical
+        }
+        if projected >= limits.hard {
+            return .critical
+        }
+        if projected >= limits.soft {
+            return .elevated
+        }
+        return .nominal
+    }
+
     func currentBytes(for sample: RuntimeMemorySample) -> UInt64? {
-        sample.residentBytes
+        sample.physicalFootprintBytes ?? sample.residentBytes
     }
 
     func limits(for sample: RuntimeMemorySample) -> (ceiling: UInt64, soft: UInt64, hard: UInt64)? {
@@ -578,19 +606,19 @@ struct RuntimeMemoryPressurePolicy: Equatable, Sendable {
     }
 
     private func dynamicCeiling(for sample: RuntimeMemorySample) -> UInt64 {
-        guard let residentBytes = sample.residentBytes else {
+        guard let currentBytes = currentBytes(for: sample) else {
             return staticCeiling(for: sample)
         }
         if let freeBytes = sample.freeBytes,
            let inactiveBytes = sample.inactiveBytes,
            let activeBytes = sample.activeBytes {
-            return residentBytes
+            return currentBytes
                 + freeBytes
                 + inactiveBytes
                 + UInt64((Double(activeBytes) * activeReclaimRatio).rounded(.down))
         }
         if let availableBytes = sample.availableBytes {
-            return residentBytes + availableBytes
+            return currentBytes + availableBytes
         }
         return sample.physicalBytes
     }
@@ -633,15 +661,41 @@ private enum RuntimeProcessMemory {
     static func currentSample() -> RuntimeMemorySample {
         let physicalBytes = ProcessInfo.processInfo.physicalMemory
         let residentBytes = currentResidentBytes()
+        let physicalFootprintBytes = currentPhysicalFootprintBytes()
         let host = currentHostMemory()
         return RuntimeMemorySample(
             physicalBytes: physicalBytes,
             residentBytes: residentBytes,
+            physicalFootprintBytes: physicalFootprintBytes,
             availableBytes: host.availableBytes,
             freeBytes: host.freeBytes,
             activeBytes: host.activeBytes,
             inactiveBytes: host.inactiveBytes
         )
+    }
+
+    private static func currentPhysicalFootprintBytes() -> UInt64? {
+        #if canImport(Darwin)
+        var info = rusage_info_v4()
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            // The Darwin module imports `rusage_info_t *` as a pointer to an
+            // optional raw pointer. Rebinding the struct storage mirrors the
+            // C API's required `(rusage_info_t *)&info` cast; passing `&raw`
+            // would instead let the kernel overwrite the pointer variable.
+            pointer.withMemoryRebound(
+                to: rusage_info_t?.self,
+                capacity: 1
+            ) { rebound in
+                proc_pid_rusage(getpid(), RUSAGE_INFO_V4, rebound)
+            }
+        }
+        guard result == 0 else {
+            return nil
+        }
+        return info.ri_phys_footprint
+        #else
+        return nil
+        #endif
     }
 
     private static func currentResidentBytes() -> UInt64? {
@@ -787,6 +841,12 @@ enum RuntimeModelPoolError: LocalizedError, Equatable {
 }
 
 actor RuntimeModelPool {
+    private struct ModelPreparation {
+        let token: UUID
+        let task: Task<RuntimeLoadedModel, Error>
+        var waiterIDs: Set<UUID> = []
+    }
+
     private struct MutableState {
         var activeRequests = 0
         var lastAccess: Date?
@@ -851,8 +911,14 @@ actor RuntimeModelPool {
     private let currentDate: @Sendable () -> Date
     private let currentMemorySample: @Sendable () -> RuntimeMemorySample
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
+    private let ensureMLXAvailable: @Sendable () throws -> Void
+    private let prepareLoadedModel: @Sendable (RuntimeLoadedModel) async throws -> Void
+    private let unloadLoadedModel: @Sendable (RuntimeLoadedModel) async -> Void
 
     private var loadedModels: [String: RuntimeLoadedModel] = [:]
+    private var loadedModelTokens: [String: UUID] = [:]
+    private var modelPreparations: [String: ModelPreparation] = [:]
+    private var preparationCleanupTasks: [UUID: Task<Void, Never>] = [:]
     private var preparingModelIDs: Set<String> = []
     private var states: [String: MutableState] = [:]
 
@@ -871,7 +937,18 @@ actor RuntimeModelPool {
             ProcessInfo.processInfo.environment["MERERUN_LFM2_CONTINUOUS_BATCHING"] == "1",
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
-        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
+        ensureMLXAvailable: @escaping @Sendable () throws -> Void = {
+            try MLXBundleSupport.ensureAvailable(quiet: true)
+        },
+        prepareLoadedModel: @escaping @Sendable (RuntimeLoadedModel) async throws -> Void = { loaded in
+            try await loaded.prepare { progress in
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
+            }
+        },
+        unloadLoadedModel: @escaping @Sendable (RuntimeLoadedModel) async -> Void = { loaded in
+            await loaded.unload()
+        }
     ) {
         self.defaultModelID = defaultModelID
         self.defaultEngine = defaultEngine
@@ -887,6 +964,9 @@ actor RuntimeModelPool {
         self.currentDate = currentDate
         self.currentMemorySample = currentMemorySample
         self.memoryPressurePolicy = memoryPressurePolicy
+        self.ensureMLXAvailable = ensureMLXAvailable
+        self.prepareLoadedModel = prepareLoadedModel
+        self.unloadLoadedModel = unloadLoadedModel
     }
 
     func preloadDefault() async throws {
@@ -997,9 +1077,14 @@ actor RuntimeModelPool {
         guard state.activeRequests == 0 else {
             throw RuntimeModelPoolError.unloadConflict(resolved.id, activeRequests: state.activeRequests)
         }
-        if let loaded = loadedModels.removeValue(forKey: resolved.id) {
-            preparingModelIDs.remove(resolved.id)
-            await loaded.unload()
+        if let preparation = modelPreparations[resolved.id] {
+            await invalidatePreparation(
+                preparation,
+                modelID: resolved.id,
+                error: nil
+            )
+        } else if let loaded = removeLoadedModel(for: resolved.id) {
+            await unloadLoadedModel(loaded)
         }
         touch(id: resolved.id, error: nil)
         return try snapshot(idOrAlias: resolved.id)
@@ -1057,6 +1142,17 @@ actor RuntimeModelPool {
             evicted.append(id)
             await Task.yield()
         }
+    }
+
+    /// Proactively releases one least-recently-used idle, unpinned text
+    /// resident for a cold sidecar whose projected load exceeds the memory
+    /// guard. The caller re-samples after each eviction, preserving every warm
+    /// model that is not needed for headroom.
+    @discardableResult
+    func releaseOneIdleModelForSidecarLoad(
+        excluding excludedIDs: Set<String> = []
+    ) async -> String? {
+        await evictOldestIdleUnpinnedModel(excluding: excludedIDs)
     }
 
     func makeChatPlan(
@@ -1166,8 +1262,8 @@ actor RuntimeModelPool {
                 continue
             }
 
-            loadedModels.removeValue(forKey: id)
-            await loaded.unload()
+            _ = removeLoadedModel(for: id)
+            await unloadLoadedModel(loaded)
             evicted.append(id)
         }
 
@@ -1219,10 +1315,10 @@ actor RuntimeModelPool {
             guard evictionLimit.map({ evicted.count < $0 }) ?? true else {
                 break
             }
-            guard let loaded = loadedModels.removeValue(forKey: candidate.id) else {
+            guard let loaded = removeLoadedModel(for: candidate.id) else {
                 continue
             }
-            await loaded.unload()
+            await unloadLoadedModel(loaded)
             evicted.append(candidate.id)
         }
 
@@ -1256,35 +1352,203 @@ actor RuntimeModelPool {
         .first
 
         guard let candidate,
-              let loaded = loadedModels.removeValue(forKey: candidate.id) else {
+              let loaded = removeLoadedModel(for: candidate.id) else {
             return nil
         }
-        await loaded.unload()
+        await unloadLoadedModel(loaded)
         return candidate.id
     }
 
     private func ensureLoaded(_ resolved: ResolvedModel) async throws -> RuntimeLoadedModel {
-        if let loaded = loadedModels[resolved.id] {
+        if let loaded = loadedModels[resolved.id], !preparingModelIDs.contains(resolved.id) {
+            return loaded
+        }
+        if let preparation = modelPreparations[resolved.id] {
+            return try await awaitPreparation(preparation, modelID: resolved.id)
+        }
+
+        try ensureMLXAvailable()
+        let loaded = makeLoadedModel(for: resolved)
+        let token = UUID()
+        loadedModels[resolved.id] = loaded
+        loadedModelTokens[resolved.id] = token
+        preparingModelIDs.insert(resolved.id)
+        let prepareLoadedModel = self.prepareLoadedModel
+        let task = Task<RuntimeLoadedModel, Error> {
+            try await prepareLoadedModel(loaded)
+            return loaded
+        }
+        let preparation = ModelPreparation(token: token, task: task)
+        modelPreparations[resolved.id] = preparation
+        return try await awaitPreparation(preparation, modelID: resolved.id)
+    }
+
+    private func awaitPreparation(
+        _ preparation: ModelPreparation,
+        modelID: String
+    ) async throws -> RuntimeLoadedModel {
+        let waiterID = UUID()
+        guard var currentPreparation = modelPreparations[modelID],
+              currentPreparation.token == preparation.token else {
+            return try await finalizedLoadedModel(
+                modelID: modelID,
+                token: preparation.token
+            )
+        }
+        currentPreparation.waiterIDs.insert(waiterID)
+        modelPreparations[modelID] = currentPreparation
+
+        return try await withTaskCancellationHandler {
+            do {
+                _ = try await preparation.task.value
+                try Task.checkCancellation()
+                return try await finalizedLoadedModel(
+                    modelID: modelID,
+                    token: preparation.token
+                )
+            } catch {
+                if Task.isCancelled {
+                    await cancelPreparationWaiter(
+                        modelID: modelID,
+                        token: preparation.token,
+                        waiterID: waiterID
+                    )
+                } else {
+                    await failPreparation(
+                        preparation,
+                        modelID: modelID,
+                        error: error
+                    )
+                }
+                throw error
+            }
+        } onCancel: {
+            Task {
+                await self.cancelPreparationWaiter(
+                    modelID: modelID,
+                    token: preparation.token,
+                    waiterID: waiterID
+                )
+            }
+        }
+    }
+
+    private func finalizedLoadedModel(
+        modelID: String,
+        token: UUID
+    ) async throws -> RuntimeLoadedModel {
+        if let cleanup = preparationCleanupTasks[token] {
+            await cleanup.value
+            preparationCleanupTasks.removeValue(forKey: token)
+            throw CancellationError()
+        }
+
+        if let preparation = modelPreparations[modelID], preparation.token == token {
+            guard loadedModelTokens[modelID] == token,
+                  let loaded = loadedModels[modelID] else {
+                await invalidatePreparation(
+                    preparation,
+                    modelID: modelID,
+                    error: CancellationError().localizedDescription
+                )
+                throw CancellationError()
+            }
+            modelPreparations.removeValue(forKey: modelID)
+            preparingModelIDs.remove(modelID)
+            touch(id: modelID, error: nil)
             return loaded
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: true)
-        let loaded = makeLoadedModel(for: resolved)
-        loadedModels[resolved.id] = loaded
-        preparingModelIDs.insert(resolved.id)
-        do {
-            try await loaded.prepare { progress in
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-            preparingModelIDs.remove(resolved.id)
-            touch(id: resolved.id, error: nil)
+        // A different waiter may already have finalized this generation. An
+        // unload followed by a reload has a different token and must never be
+        // returned to a stale waiter from the prior generation.
+        if loadedModelTokens[modelID] == token,
+           !preparingModelIDs.contains(modelID),
+           let loaded = loadedModels[modelID] {
             return loaded
-        } catch {
-            loadedModels.removeValue(forKey: resolved.id)
-            preparingModelIDs.remove(resolved.id)
-            touch(id: resolved.id, error: error.localizedDescription)
-            throw error
         }
+        throw CancellationError()
+    }
+
+    private func cancelPreparationWaiter(
+        modelID: String,
+        token: UUID,
+        waiterID: UUID
+    ) async {
+        guard var preparation = modelPreparations[modelID],
+              preparation.token == token,
+              preparation.waiterIDs.remove(waiterID) != nil else {
+            await awaitPreparationCleanup(token: token)
+            return
+        }
+        guard preparation.waiterIDs.isEmpty else {
+            modelPreparations[modelID] = preparation
+            return
+        }
+        await invalidatePreparation(preparation, modelID: modelID, error: nil)
+    }
+
+    private func failPreparation(
+        _ preparation: ModelPreparation,
+        modelID: String,
+        error: Error
+    ) async {
+        await invalidatePreparation(
+            preparation,
+            modelID: modelID,
+            error: error.localizedDescription
+        )
+    }
+
+    private func invalidatePreparation(
+        _ preparation: ModelPreparation,
+        modelID: String,
+        error: String?
+    ) async {
+        if modelPreparations[modelID]?.token == preparation.token {
+            modelPreparations.removeValue(forKey: modelID)
+            preparingModelIDs.remove(modelID)
+            preparation.task.cancel()
+            if let error {
+                touch(id: modelID, error: error)
+            }
+            if let loaded = removeLoadedModel(for: modelID, matching: preparation.token) {
+                let unloadLoadedModel = self.unloadLoadedModel
+                let preparationTask = preparation.task
+                preparationCleanupTasks[preparation.token] = Task {
+                    // Generator actors are reentrant across model resolution
+                    // and loading awaits. Let cancellation settle preparation
+                    // before unloading so a resumed prepare cannot repopulate
+                    // the old generation after cleanup.
+                    _ = await preparationTask.result
+                    await unloadLoadedModel(loaded)
+                }
+            }
+        }
+        await awaitPreparationCleanup(token: preparation.token)
+    }
+
+    private func awaitPreparationCleanup(token: UUID) async {
+        guard let cleanup = preparationCleanupTasks[token] else {
+            return
+        }
+        await cleanup.value
+        preparationCleanupTasks.removeValue(forKey: token)
+    }
+
+    private func removeLoadedModel(for modelID: String) -> RuntimeLoadedModel? {
+        loadedModelTokens.removeValue(forKey: modelID)
+        return loadedModels.removeValue(forKey: modelID)
+    }
+
+    private func removeLoadedModel(
+        for modelID: String,
+        matching token: UUID
+    ) -> RuntimeLoadedModel? {
+        guard loadedModelTokens[modelID] == token else {
+            return nil
+        }
+        return removeLoadedModel(for: modelID)
     }
 
     private func makeLoadedModel(for resolved: ResolvedModel) -> RuntimeLoadedModel {
@@ -1563,6 +1827,7 @@ actor RuntimeModelPool {
         activeRequests: Int = 0
     ) {
         loadedModels[id] = .textCode(CodeGenGenerator(modelId: id), modelPath: nil)
+        loadedModelTokens[id] = UUID()
         preparingModelIDs.remove(id)
         var state = state(for: id)
         state.activeRequests = activeRequests
@@ -1582,6 +1847,7 @@ actor RuntimeModelPool {
             ),
             modelPath: nil
         )
+        loadedModelTokens[id] = UUID()
         preparingModelIDs.remove(id)
         var state = state(for: id)
         state.lastAccess = currentDate()
