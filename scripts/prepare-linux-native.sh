@@ -33,6 +33,9 @@ Environment:
   MERERUN_CUDA_ARCHITECTURES  Optional CMake CUDA architecture list for llama.cpp
                               and mlx-swift CUDA builds, for example
                               "86-real;90-virtual".
+  MLX_SWIFT_CUDA_COMMIT       Override the mlx-swift revision used by the CMake
+                              CUDA bridge. Defaults to the exact revision pinned
+                              in Package.resolved.
   MERERUN_LLAMA_GPU_LAYERS    Override llama.cpp GPU offload layers on Linux.
                               Defaults to all layers when MERERUN_LINUX_ACCEL=cuda
                               and 0 otherwise.
@@ -436,6 +439,25 @@ llama_commit="${LLAMA_CPP_COMMIT:-4988f6e866057afd130c1515ecef0c9bab9a15f8}"
 llama_url="${LLAMA_CPP_URL:-https://github.com/ggml-org/llama.cpp.git}"
 mlx_swift_checkout="$repo_root/.build/checkouts/mlx-swift"
 swift_numerics_checkout="$repo_root/.build/checkouts/swift-numerics"
+
+resolved_mlx_swift_revision() {
+  awk '
+    /"identity"[[:space:]]*:[[:space:]]*"mlx-swift"/ { found = 1 }
+    found && /"revision"[[:space:]]*:/ {
+      line = $0
+      sub(/^.*"revision"[[:space:]]*:[[:space:]]*"/, "", line)
+      sub(/".*$/, "", line)
+      print line
+      exit
+    }
+  ' "$repo_root/Package.resolved"
+}
+
+mlx_swift_cuda_commit="${MLX_SWIFT_CUDA_COMMIT:-$(resolved_mlx_swift_revision)}"
+if [[ -z "$mlx_swift_cuda_commit" ]]; then
+  echo "[prepare-linux-native] error: could not resolve the pinned mlx-swift revision." >&2
+  exit 68
+fi
 linux_accel="${MERERUN_LINUX_ACCEL:-cpu}"
 case "$linux_accel" in
   cpu|cuda)
@@ -449,6 +471,11 @@ if [[ "$check_only" != "1" ]]; then
   configure_linux_arm64_bf16_toolchain "$arch" "prepare-linux-native"
   if [[ "$linux_accel" == "cuda" ]]; then
     require_cmake_at_least 3 25 0
+    # llama.cpp is configured before the mlx-swift CUDA smoke. Resolve the
+    # toolkit now so CMake can find installations such as
+    # /usr/local/cuda-12.4/targets/<arch>/include instead of waiting until the
+    # later MLX phase to populate CUDA_HOME/CUDA_PATH.
+    detect_cuda_toolkit_defaults
   fi
 fi
 
@@ -533,9 +560,17 @@ build_llama() {
   if [[ "$linux_accel" == "cuda" ]]; then
     require_tool nvcc
     echo "[prepare-linux-native] enabling llama.cpp CUDA via GGML_CUDA=ON"
+    local cuda_compiler
+    cuda_compiler="$(command -v nvcc)"
     cmake_args+=(
       -DGGML_CUDA=ON
+      "-DCMAKE_CUDA_COMPILER=$cuda_compiler"
     )
+    if [[ -n "${CUDA_HOME:-}" ]]; then
+      cmake_args+=(
+        "-DCUDAToolkit_ROOT=$CUDA_HOME"
+      )
+    fi
     if [[ -n "${MERERUN_CUDA_ARCHITECTURES:-}" ]]; then
       echo "[prepare-linux-native] using CUDA architectures: $MERERUN_CUDA_ARCHITECTURES"
       cmake_args+=(
@@ -614,6 +649,7 @@ smoke_mlx_swift_cuda() {
   require_tool ninja
   require_tool nvcc
   require_tool swift
+  require_tool swiftc
 
   detect_cuda_toolkit_defaults
 
@@ -625,9 +661,9 @@ smoke_mlx_swift_cuda() {
     git clone --filter=blob:none https://github.com/ml-explore/mlx-swift.git "$mlx_cmake_src"
   fi
 
-  echo "[prepare-linux-native] updating mlx-swift CMake checkout"
-  git -C "$mlx_cmake_src" fetch --depth 1 origin main
-  git -C "$mlx_cmake_src" checkout --detach FETCH_HEAD
+  echo "[prepare-linux-native] checking out mlx-swift $mlx_swift_cuda_commit for the CMake CUDA bridge"
+  git -C "$mlx_cmake_src" fetch --depth 1 origin "$mlx_swift_cuda_commit"
+  git -C "$mlx_cmake_src" checkout --detach "$mlx_swift_cuda_commit"
 
   patch_mlx_cuda_jit_include_path "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
@@ -678,10 +714,15 @@ smoke_mlx_swift_cuda() {
   fi
 
   local mlx_cmake_args=(
+    "-DCMAKE_CUDA_COMPILER=$(command -v nvcc)"
+    "-DCMAKE_Swift_COMPILER=$(command -v swiftc)"
     -DMLX_BUILD_METAL=OFF
     -DMLX_BUILD_CUDA=ON
     -DMLX_C_BUILD_EXAMPLES=OFF
   )
+  if [[ -n "${CUDA_HOME:-}" ]]; then
+    mlx_cmake_args+=("-DCUDAToolkit_ROOT=$CUDA_HOME")
+  fi
   if [[ -n "${MERERUN_CUDA_ARCHITECTURES:-}" ]]; then
     echo "[prepare-linux-native] using CUDA architectures: $MERERUN_CUDA_ARCHITECTURES"
     mlx_cmake_args+=(
