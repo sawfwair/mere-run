@@ -142,15 +142,13 @@ if !isLinuxPackage {
 
 var targets: [Target] = []
 var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
-  + mlxDependency("MLXFast")
-  + mlxDependency("MLXNN")
-  + mlxDependency("MLXOptimizers")
-  + mlxDependency("MLXRandom")
-  + [
-      "AudioCodecs",
-      .product(name: "Crypto", package: "swift-crypto"),
-      .product(name: "Transformers", package: "swift-transformers")
-    ]
+mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
+mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunCoreDependencies.append("AudioCodecs")
+mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
+mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
 
 if hasMediaIOTarget {
   products.append(.library(name: "MediaIO", targets: ["MediaIO"]))
