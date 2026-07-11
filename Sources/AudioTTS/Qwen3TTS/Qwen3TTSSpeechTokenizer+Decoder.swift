@@ -218,17 +218,6 @@ func applyDecoderRotary(_ q: MLXArray, _ k: MLXArray, cos: MLXArray, sin: MLXArr
     return (qEmbed, kEmbed)
 }
 
-func repeatDecoderKVHeads(_ x: MLXArray, groups: Int) -> MLXArray {
-    guard groups > 1 else { return x }
-    let batch = x.dim(0)
-    let heads = x.dim(1)
-    let seqLen = x.dim(2)
-    let headDim = x.dim(3)
-    let expanded = x.expandedDimensions(axis: 2)
-    let tiled = broadcast(expanded, to: [batch, heads, groups, seqLen, headDim])
-    return tiled.reshaped(batch, heads * groups, seqLen, headDim)
-}
-
 final class DecoderAttention: Module {
     let headDim: Int
     let numHeads: Int
@@ -266,12 +255,6 @@ final class DecoderAttention: Module {
         var v = vProj(x).reshaped(batch, seqLen, numKVHeads, headDim).transposed(0, 2, 1, 3)
 
         (q, k) = applyDecoderRotary(q, k, cos: positionEmbeddings.cos, sin: positionEmbeddings.sin)
-
-        let kvGroups = numHeads / max(1, numKVHeads)
-        if kvGroups > 1 {
-            k = repeatDecoderKVHeads(k, groups: kvGroups)
-            v = repeatDecoderKVHeads(v, groups: kvGroups)
-        }
 
         if let cache {
             let updated = cache.update(keys: k, values: v)

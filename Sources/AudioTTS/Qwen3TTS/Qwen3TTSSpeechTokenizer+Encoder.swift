@@ -226,12 +226,6 @@ final class MimiAttention: Module {
         let positionEmbeddings = rotaryEmbedding(x, positionIds: positionIds)
         (q, k) = applyDecoderRotary(q, k, cos: positionEmbeddings.cos, sin: positionEmbeddings.sin)
 
-        let kvGroups = numHeads / max(1, numKVHeads)
-        if kvGroups > 1 {
-            k = repeatDecoderKVHeads(k, groups: kvGroups)
-            v = repeatDecoderKVHeads(v, groups: kvGroups)
-        }
-
         let updated = cache.update(keys: k, values: v)
         k = updated.0
         v = updated.1

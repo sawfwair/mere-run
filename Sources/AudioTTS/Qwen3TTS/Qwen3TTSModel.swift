@@ -248,7 +248,6 @@ final class Qwen3TTSAttention: Module {
     let numHeads: Int
     let numKVHeads: Int
     let headDim: Int
-    let numKVGroups: Int
     let scale: Float
 
     @ModuleInfo(key: "q_proj") var qProj: Linear
@@ -263,7 +262,6 @@ final class Qwen3TTSAttention: Module {
         self.numHeads = configuration.numAttentionHeads
         self.numKVHeads = configuration.numKeyValueHeads
         self.headDim = configuration.headDim
-        self.numKVGroups = configuration.numAttentionHeads / configuration.numKeyValueHeads
         self.scale = pow(Float(configuration.headDim), -0.5)
 
         self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: false)
@@ -305,12 +303,6 @@ final class Qwen3TTSAttention: Module {
             values = cachedValues
         }
 
-        // Expand KV heads if needed
-        if numKVHeads != numHeads {
-            keys = expandKeyValue(keys, repeats: numKVGroups)
-            values = expandKeyValue(values, repeats: numKVGroups)
-        }
-
         // Attention in float32 for numerical stability
         let queriesF32 = queries.asType(.float32)
         let keysF32 = keys.asType(.float32)
@@ -330,13 +322,6 @@ final class Qwen3TTSAttention: Module {
         return oProj(output)
     }
 
-    private func expandKeyValue(_ x: MLXArray, repeats: Int) -> MLXArray {
-        guard repeats > 1 else { return x }
-        var expanded = MLX.expandedDimensions(x, axis: 2)
-        expanded = MLX.repeated(expanded, count: repeats, axis: 2)
-        let shape = x.shape
-        return expanded.reshaped(shape[0], shape[1] * repeats, shape[2], shape[3])
-    }
 }
 
 // MARK: - MLP

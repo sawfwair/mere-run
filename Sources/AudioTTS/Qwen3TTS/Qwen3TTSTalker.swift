@@ -26,17 +26,6 @@ private func applyRotaryPosEmb(
     return (qEmbed, kEmbed)
 }
 
-private func repeatKVHeads(_ x: MLXArray, groups: Int) -> MLXArray {
-    guard groups > 1 else { return x }
-    let batch = x.dim(0)
-    let heads = x.dim(1)
-    let seqLen = x.dim(2)
-    let headDim = x.dim(3)
-    let expanded = x.expandedDimensions(axis: 2)
-    let tiled = broadcast(expanded, to: [batch, heads, groups, seqLen, headDim])
-    return tiled.reshaped(batch, heads * groups, seqLen, headDim)
-}
-
 // MARK: - Rotary Embeddings
 
 final class Qwen3TTSTalkerRotaryEmbedding {
@@ -183,12 +172,6 @@ final class Qwen3TTSTalkerAttention: Module {
         v = v.transposed(0, 2, 1, 3)
 
         (q, k) = applyRotaryPosEmb(q, k, cos: positionEmbeddings.cos, sin: positionEmbeddings.sin)
-
-        let kvGroups = numHeads / max(1, numKVHeads)
-        if kvGroups > 1 {
-            k = repeatKVHeads(k, groups: kvGroups)
-            v = repeatKVHeads(v, groups: kvGroups)
-        }
 
         if let cache {
             let updated = cache.update(keys: k, values: v)
@@ -377,12 +360,6 @@ final class Qwen3TTSCodePredictorAttention: Module {
         v = v.transposed(0, 2, 1, 3)
 
         (q, k) = applyRotaryPosEmb(q, k, cos: positionEmbeddings.cos, sin: positionEmbeddings.sin)
-
-        let kvGroups = numHeads / max(1, numKVHeads)
-        if kvGroups > 1 {
-            k = repeatKVHeads(k, groups: kvGroups)
-            v = repeatKVHeads(v, groups: kvGroups)
-        }
 
         if let cache {
             let updated = cache.update(keys: k, values: v)
