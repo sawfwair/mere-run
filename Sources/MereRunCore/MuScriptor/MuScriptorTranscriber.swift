@@ -148,7 +148,7 @@ public final class MuScriptorTranscriber {
         options: MuScriptorTranscriptionOptions
     ) throws -> [[Int]] {
         let batchSize = indices.count
-        let caches = model.makeCaches()
+        var caches = model.makeCaches()
         let initialTokens = MLXArray(
             [Int32](repeating: Int32(model.configuration.card), count: batchSize)
         ).reshaped(batchSize, 1)
@@ -160,22 +160,31 @@ public final class MuScriptorTranscriber {
         MLX.eval(logits)
 
         var generated = [[Int]](repeating: [], count: batchSize)
-        var ended = [Bool](repeating: false, count: batchSize)
+        var activeRows = Array(0..<batchSize)
+        var sampledEnded = [Bool](repeating: false, count: batchSize)
 
         for step in 0..<options.maxTokensPerChunk {
             let sampled: MLXArray
-            if options.useSampling {
+            if !MuScriptorBatchCompaction.isEnabled(useSampling: options.useSampling) {
                 sampled = MLX.categorical(logits / options.temperature).asType(.int32)
             } else {
                 sampled = MLX.argMax(logits, axis: -1).asType(.int32)
             }
-            let endedMask = MLXArray(ended.map { $0 ? Int32(1) : Int32(0) }) .> 0
-            let nextTokens = MLX.where(endedMask, MLXArray(Int32(1)), sampled)
+            let nextTokens: MLXArray
+            if !MuScriptorBatchCompaction.isEnabled(useSampling: options.useSampling) {
+                // Preserve seeded sampling semantics: keeping ended rows in
+                // the categorical batch means sibling EOS timing cannot
+                // reassign the global RNG stream for surviving rows.
+                let endedMask = MLXArray(sampledEnded.map { $0 ? Int32(1) : Int32(0) }) .> 0
+                nextTokens = MLX.where(endedMask, MLXArray(Int32(1)), sampled)
+            } else {
+                nextTokens = sampled
+            }
 
             let nextLogits: MLXArray?
             if step + 1 < options.maxTokensPerChunk {
                 let value = model.batchedLogits(
-                    tokenIDs: nextTokens.reshaped(batchSize, 1),
+                    tokenIDs: nextTokens.reshaped(activeRows.count, 1),
                     prefix: nil,
                     caches: caches
                 )
@@ -187,23 +196,54 @@ public final class MuScriptorTranscriber {
             }
 
             let values = nextTokens.asArray(Int32.self)
-            for row in 0..<batchSize where !ended[row] {
-                let token = Int(values[row])
-                if token == 1 {
-                    ended[row] = true
-                } else {
-                    generated[row].append(token)
+            if !MuScriptorBatchCompaction.isEnabled(useSampling: options.useSampling) {
+                for row in 0..<batchSize where !sampledEnded[row] {
+                    if values[row] == 1 {
+                        sampledEnded[row] = true
+                    } else {
+                        generated[row].append(Int(values[row]))
+                    }
                 }
+                if sampledEnded.allSatisfy({ $0 }) {
+                    return generated
+                }
+                if let nextLogits {
+                    logits = nextLogits
+                }
+                continue
             }
-            if ended.allSatisfy({ $0 }) {
+
+            let survivorLocalRows = MuScriptorBatchCompaction.survivingRows(tokenValues: values)
+            for (localRow, originalRow) in activeRows.enumerated() where values[localRow] != 1 {
+                generated[originalRow].append(Int(values[localRow]))
+            }
+            if survivorLocalRows.isEmpty {
                 return generated
             }
+            let survivingOriginalRows = survivorLocalRows.map { activeRows[$0] }
             if let nextLogits {
-                logits = nextLogits
+                if survivorLocalRows.count == activeRows.count {
+                    logits = nextLogits
+                } else {
+                    let rowIndices = MLXArray(survivorLocalRows.map(Int32.init))
+                    logits = MLX.take(nextLogits, rowIndices, axis: 0)
+                    guard let compacted = MuScriptorBatchCompaction.compact(
+                        caches: caches,
+                        rowCount: activeRows.count,
+                        keeping: survivorLocalRows
+                    ) else {
+                        preconditionFailure("MuScriptor KV cache rows could not be compacted")
+                    }
+                    caches = compacted
+                }
             }
+            activeRows = survivingOriginalRows
         }
 
-        if options.strictEOS, let row = ended.firstIndex(of: false) {
+        let unfinishedRow = MuScriptorBatchCompaction.isEnabled(useSampling: options.useSampling)
+            ? activeRows.first
+            : sampledEnded.firstIndex(of: false)
+        if options.strictEOS, let row = unfinishedRow {
             throw MuScriptorError.generationLimit(
                 chunk: indices[row],
                 limit: options.maxTokensPerChunk
@@ -304,5 +344,37 @@ public final class MuScriptorTranscriber {
             .sorted { values[$0] > values[$1] }
             .prefix(count)
             .map { ($0, values[$0] - logDenominator) }
+    }
+}
+
+enum MuScriptorBatchCompaction {
+    static func isEnabled(useSampling: Bool) -> Bool {
+        !useSampling
+    }
+
+    static func survivingRows(tokenValues: [Int32], eosToken: Int32 = 1) -> [Int] {
+        tokenValues.indices.filter { tokenValues[$0] != eosToken }
+    }
+
+    static func compact(
+        caches: [KVCacheSimple],
+        rowCount: Int,
+        keeping rowsToKeep: [Int]
+    ) -> [KVCacheSimple]? {
+        guard !rowsToKeep.isEmpty else { return [] }
+        var compacted: [KVCacheSimple] = []
+        compacted.reserveCapacity(caches.count)
+        for cache in caches {
+            guard let rows = cache.unbatchedRows(count: rowCount) as? [KVCacheSimple] else {
+                return nil
+            }
+            let selected = rowsToKeep.map { rows[$0] }
+            guard let first = selected.first,
+                  let batched = first.batched(with: selected) as? KVCacheSimple else {
+                return nil
+            }
+            compacted.append(batched)
+        }
+        return compacted
     }
 }

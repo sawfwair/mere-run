@@ -110,6 +110,43 @@ final class MuScriptorTests: XCTestCase {
         )
     }
 
+    func testBatchCompactionDropsEndedRowsAndPreservesCacheHistory() throws {
+        XCTAssertTrue(MuScriptorBatchCompaction.isEnabled(useSampling: false))
+        XCTAssertFalse(MuScriptorBatchCompaction.isEnabled(useSampling: true))
+        XCTAssertEqual(
+            MuScriptorBatchCompaction.survivingRows(tokenValues: [12, 1, 27, 1]),
+            [0, 2]
+        )
+
+        let cache = KVCacheSimple(step: 4)
+        let keys = MLXArray(Array(0..<12).map(Float.init)).reshaped(3, 1, 2, 2)
+        let values = MLXArray(Array(100..<112).map(Float.init)).reshaped(3, 1, 2, 2)
+        _ = cache.update(keys: keys, values: values)
+
+        let compacted = try XCTUnwrap(MuScriptorBatchCompaction.compact(
+            caches: [cache],
+            rowCount: 3,
+            keeping: [0, 2]
+        )).first
+        let selectedKeys = MLX.take(keys, MLXArray([Int32(0), 2]), axis: 0)
+        let selectedValues = MLX.take(values, MLXArray([Int32(0), 2]), axis: 0)
+        let nextKeys = MLXArray([Float(50), 51, 52, 53]).reshaped(2, 1, 1, 2)
+        let nextValues = MLXArray([Float(150), 151, 152, 153]).reshaped(2, 1, 1, 2)
+        let updated = try XCTUnwrap(compacted).update(keys: nextKeys, values: nextValues)
+        MLX.eval(updated.0, updated.1)
+
+        XCTAssertEqual(updated.0.shape, [2, 1, 3, 2])
+        XCTAssertEqual(updated.1.shape, [2, 1, 3, 2])
+        XCTAssertEqual(
+            updated.0[0..., 0..., 0..<2, 0...].asArray(Float.self),
+            selectedKeys.asArray(Float.self)
+        )
+        XCTAssertEqual(
+            updated.1[0..., 0..., 0..<2, 0...].asArray(Float.self),
+            selectedValues.asArray(Float.self)
+        )
+    }
+
     func testTranscriptionOptionsValidateChunkBatchSize() throws {
         try MuScriptorTranscriptionOptions(chunkBatchSize: 4).validate()
         XCTAssertThrowsError(
