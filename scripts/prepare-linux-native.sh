@@ -34,8 +34,8 @@ Environment:
                               and mlx-swift CUDA builds, for example
                               "86-real;90-virtual".
   MLX_SWIFT_CUDA_COMMIT       Override the mlx-swift revision used by the CMake
-                              CUDA bridge. Defaults to the exact revision pinned
-                              in Package.resolved.
+                              CUDA bridge. Defaults to the exact revision
+                              resolved by the active Linux Swift toolchain.
   MERERUN_LLAMA_GPU_LAYERS    Override llama.cpp GPU offload layers on Linux.
                               Defaults to all layers when MERERUN_LINUX_ACCEL=cuda
                               and 0 otherwise.
@@ -453,11 +453,6 @@ resolved_mlx_swift_revision() {
   ' "$repo_root/Package.resolved"
 }
 
-mlx_swift_cuda_commit="${MLX_SWIFT_CUDA_COMMIT:-$(resolved_mlx_swift_revision)}"
-if [[ -z "$mlx_swift_cuda_commit" ]]; then
-  echo "[prepare-linux-native] error: could not resolve the pinned mlx-swift revision." >&2
-  exit 68
-fi
 linux_accel="${MERERUN_LINUX_ACCEL:-cpu}"
 case "$linux_accel" in
   cpu|cuda)
@@ -655,6 +650,17 @@ smoke_mlx_swift_cuda() {
 
   local mlx_cmake_src="$repo_root/.build/native/src/mlx-swift"
   local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
+  local mlx_swift_cuda_commit="${MLX_SWIFT_CUDA_COMMIT:-}"
+  if [[ -z "$mlx_swift_cuda_commit" && -d "$mlx_swift_checkout/.git" ]]; then
+    mlx_swift_cuda_commit="$(git -C "$mlx_swift_checkout" rev-parse HEAD)"
+  fi
+  if [[ -z "$mlx_swift_cuda_commit" ]]; then
+    mlx_swift_cuda_commit="$(resolved_mlx_swift_revision)"
+  fi
+  if [[ -z "$mlx_swift_cuda_commit" ]]; then
+    echo "[prepare-linux-native] error: could not resolve the Linux mlx-swift revision." >&2
+    exit 68
+  fi
 
   if [[ ! -d "$mlx_cmake_src/.git" ]]; then
     echo "[prepare-linux-native] cloning mlx-swift for CMake CUDA smoke"
@@ -999,8 +1005,12 @@ stage_ds4
 
 if [[ "$check_only" != "1" ]]; then
   build_llama
-  smoke_mlx_swift_cuda
   patch_mlx_swift_for_linux
+  # Resolve SwiftPM first: older Linux Swift toolchains may select an older
+  # compatible mlx-swift release than a lockfile written by a newer macOS
+  # toolchain. The CMake CUDA bridge must use that exact resolved checkout to
+  # keep the Swift and native ABIs aligned.
+  smoke_mlx_swift_cuda
 fi
 
 verify_llama
