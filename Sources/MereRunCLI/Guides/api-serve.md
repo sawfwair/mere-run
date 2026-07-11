@@ -49,7 +49,11 @@ mere.run status
 - `--lora`: default LoRA adapter path for all requests.
 - `--api-key`: bearer token, also read from `MERERUN_API_KEY`.
 - `--rate-limit-per-minute`: global OpenAI-compatible request limit.
-- `--max-active-requests`: fair FIFO admission limit for concurrent chat completions; default `1`.
+- `--max-active-requests`: fair FIFO admission limit for concurrent local
+  inference across chat, embedding, image, TTS, and ASR requests; default `1`.
+  Values above `1` automatically enable supported
+  Gemma4, Qwen-family, and LFM2 decode batching unless an engine-specific
+  environment override forces the serial path.
 - `--memory-guard`: runtime memory guard tier, default `balanced`. Accepted
   values are `off`, `safe`, `balanced`, `aggressive`, and `custom`.
 - `--memory-guard-custom-ceiling-gb`: custom process-memory ceiling in GiB.
@@ -61,7 +65,11 @@ mere.run status
   override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental
   packed PolarKV path for memory-pressure and long-context synthetic decode
   testing. Per-model runtime settings can also set `kvCacheMode` to `default`,
-  `polar2`, or conservative `auto`.
+  `polar2`, or conservative `auto`; Gemma4, Qwen-family, and LFM2 also accept
+  explicit `affine8` as a memory control relative to full-precision KV. Gemma
+  Turbo already defaults to a smaller 4-bit TurboQuant cache, so forcing affine
+  8-bit can increase its KV residency; `default` restores the selected
+  engine/model/server default, not necessarily full precision.
 
 ## Usage Patterns
 
@@ -76,7 +84,8 @@ mere.run status
   default generation limits without starting the server. TTL unloads idle
   models during runtime pool operations, and pinned models skip automatic
   TTL/LRU eviction. `--memory-guard` computes tiered soft/hard ceilings from
-  process resident memory and host memory headroom. Under elevated pressure,
+  Darwin physical footprint (RSS elsewhere) and host memory headroom. Under
+  elevated pressure,
   chat admission pauses extra concurrent prefills and the pool evicts the
   least-recently-used idle unpinned model; under critical pressure, it evicts
   every idle unpinned model. Active requests are never evicted.
@@ -90,12 +99,34 @@ mere.run status
   startup default from `--engine`/`--model`.
 - `/v1/models` returns installed API-capable chat catalog ids, aliases, and
   installed native embedding, image, TTS, and ASR sidecar model ids.
-- Requests are admitted through a fair FIFO queue. The default
-  `--max-active-requests 1` preserves serialized local inference while making
-  queue depth visible in `/runtime/status`. Queued client cancellations are
-  removed from the FIFO instead of running later.
-- Gemma4 and Qwen-family chat use chunked prefill with cancellation/progress checkpoints.
-  This improves long-prompt observability without arbitrary batching.
+- The embedding, image/image-edit, TTS, and ASR endpoints each retain one
+  bounded most-recently-used runtime. Their autonomous idle timers default to 300
+  seconds and re-read managed `pinned`/`ttlSeconds` settings while idle. Active
+  and queued work is never evicted. The special `qwen-image-edit` repository ID
+  is resident but currently uses default lifecycle settings because it is not a
+  `model runtime` target.
+- `/runtime/status` reports sidecar residency separately from readiness.
+  `loaded` remains the compatibility field for a resident generator;
+  `ready: false` means its first operation is still loading or failed. The human
+  status formatter prints `resident (not ready)` for that state.
+- Cold sidecar loads are exclusive across lanes. Catalog or local-directory
+  size estimates are projected against the hard memory guard; the server first
+  releases eligible idle residents and returns a memory-pressure error rather
+  than starting a load that still lacks headroom.
+- The HTTP `/runtime/models/{id}` load, unload, and settings operations address
+  the chat/text pool only. Configure managed sidecar pinning and TTL with
+  `mere.run model runtime set`; sidecars remain visible in `/v1/models` and
+  `/runtime/status`.
+- Every local inference request is admitted through a fair FIFO queue. The
+  default `--max-active-requests 1` preserves serialized inference across text
+  and allocation-heavy media paths while making queue depth visible in
+  `/runtime/status`. Queued client cancellations are removed from the FIFO
+  instead of running later. Raising the limit is an explicit throughput and
+  unified-memory tradeoff. Explicit runtime model load/unload maintenance uses
+  the same admission queue so it cannot race default-serialized inference.
+- Gemma4, Qwen-family, and LFM2 chat use chunked prefill with
+  cancellation/progress checkpoints. This improves long-prompt observability
+  without turning prefill itself into continuous batching.
 - Gemma4 uses in-memory prefix KV reuse by default; set
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
   entries, hits, and reused tokens when a Gemma4 model is loaded. The cache
@@ -105,16 +136,22 @@ mere.run status
   `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
   from reuse, and text-only requests use the same stable chat-prefix checkpoint
   rule as Gemma4.
-- Gemma4 and Qwen-family chat can opt into decode batching with
-  `MERERUN_GEMMA4_CONTINUOUS_BATCHING=1` or
-  `MERERUN_Q35_CONTINUOUS_BATCHING=1`; use `--max-active-requests` above `1` to
-  allow overlapping rows, and `/runtime/status` reports actual batched decode
+- LFM2 chat uses in-memory prefix KV reuse by default; set
+  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Matching chunk-boundary
+  checkpoints fork both attention KV and short-convolution state.
+- Gemma4, Qwen-family, and LFM2 decode batching engages automatically when
+  `--max-active-requests` is above `1`. The corresponding
+  `MERERUN_GEMMA4_CONTINUOUS_BATCHING`,
+  `MERERUN_Q35_CONTINUOUS_BATCHING`, and
+  `MERERUN_LFM2_CONTINUOUS_BATCHING` variables can force the implementation on
+  or force the serial path. `/runtime/status` reports actual batched decode
   steps. Gemma4 full-attention rows stay same-position because that engine still
-  uses scalar RoPE/cache offsets; Qwen-family full-attention rows use row-offset-aware
-  ragged KV caches, and Qwen-family linear rows use typed recurrent state, so compatible
-  Qwen-family rows can batch across decode positions. The scheduler services the
-  earliest decode position first, batching compatible rows there or advancing a
-  single lower-offset row until it can join a compatible batch.
+  uses scalar RoPE/cache offsets. Qwen-family and LFM2 full-attention rows use
+  row-offset-aware ragged KV caches; Qwen-family linear attention and LFM2
+  short-convolution layers use typed recurrent state, so compatible rows may
+  batch across decode positions. The scheduler services the earliest decode
+  position first, batching compatible rows there or advancing one lower-offset
+  row until it can join a compatible batch.
 - `/runtime/status` aggregates prefix hits, reused tokens, and batched decode
   steps across loaded models under `cacheStats`; it also reports completed chat
   requests, generated tokens, and average load/prefill/decode timings under
@@ -125,24 +162,31 @@ mere.run status
 - Function `tool_choice` values are accepted for native tool-capable engines;
   specific function choices narrow the advertised tools to the named function.
 - `/v1/embeddings` accepts OpenAI-compatible string or string-array `input`
-  payloads and returns float embeddings from `text-embed-qwen3-0.6b`.
+  payloads and returns float embeddings from `text-embed-qwen3-0.6b`. A request
+  may contain up to 256 texts and 2 MiB of UTF-8 content; inference truncates
+  each row to 8,192 tokens and packs rows into bounded padded-token batches.
 - `/v1/images/generations` accepts `prompt`, `model`, `size`, `n`, and
   `response_format`. It supports `n=1`, returns base64 PNG JSON by default,
-  and can return a local `file://` URL when `response_format` is `url`.
+  and can return a local `file://` URL when `response_format` is `url`. Width
+  and height must each be a multiple of 16 from 16 through 4,096 pixels, with
+  at most 4,194,304 total pixels per image. Explicit `steps` must be from 1
+  through 100.
 - `/v1/images/edits` accepts multipart `image` or Open WebUI-style `image[]`,
   optional `mask`, `prompt`, `model`, `size`, `n`, and `response_format`. It
   uses the same native image runtime with `inputImage` conditioning and accepts
   local extensions such as `strength`, `seed`, `steps`, and `guidance_scale`.
-  Masks are accepted for client compatibility; current native edit models use
-  whole-image conditioning rather than strict masked inpainting.
+  The same dimension, total-pixel, and step limits apply. Masks are accepted for
+  client compatibility; current native edit models use whole-image
+  conditioning rather than strict masked inpainting.
 - `/v1/audio/speech` accepts `input`, `model`, `voice`, `speed`, and
   `response_format`. It returns WAV by default and can transcode to `mp3`,
   `opus`, `aac`, or `flac` when `ffmpeg` is available. OpenAI model names such
-  as `tts-1` map to the local default.
+  as `tts-1` map to the local default. Input plus voice instructions may total
+  at most 32 KiB of UTF-8 text.
 - `/v1/audio/transcriptions` accepts multipart `file`, `model`, `language`,
   `task`, and `response_format`. OpenAI model names such as `whisper-1` map to
   `speech-asr-parakeet`; response formats are `json`, `text`, `verbose_json`,
-  `srt`, and `vtt`.
+  `srt`, and `vtt`; `max_tokens` is limited to 1 through 4,096.
 - `vision-chat-gemma4-12b` accepts one OpenAI image content part per message through `/v1/chat/completions`; use a file path, `file://` URL, or base64 data URL because the local runtime does not fetch remote images.
 - Use `stream_options.include_usage` when a client expects the OpenAI streaming usage chunk.
 

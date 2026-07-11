@@ -116,7 +116,10 @@ struct ModelRuntimeSet: ParsableCommand {
     @Flag(name: [.long], help: "Clear the engine override.")
     var clearEngine: Bool = false
 
-    @Option(name: [.long], help: "Set runtime KV cache mode: default, polar2, or auto. Gemma4 only.")
+    @Option(
+        name: [.long],
+        help: "Set runtime KV cache mode: default; affine8 (Gemma4/Qwen/LFM2); or Gemma4-only polar2/auto."
+    )
     var kvCacheMode: RuntimeKVCacheMode?
 
     @Flag(name: [.long], help: "Clear the runtime KV cache mode.")
@@ -208,8 +211,8 @@ struct ModelRuntimeSet: ParsableCommand {
 private enum RuntimeModelCLI {
     static func resolveModelID(_ value: String, store: RuntimeModelSettingsStore) throws -> String {
         if let spec = ManagedModelCatalog.spec(for: value) {
-            guard spec.isAPIServableRuntimeModel else {
-                throw ValidationError("Model '\(spec.id)' is not supported by `mere.run api serve`.")
+            guard spec.supportsRuntimeResidencySettings else {
+                throw ValidationError("Model '\(spec.id)' does not have configurable API residency.")
             }
             return spec.id
         }

@@ -154,7 +154,8 @@ public final class Ideogram4Generator: ImageGenerator {
                 timestep: timestep,
                 positionIds: negativePositionIds,
                 segmentIds: negativeSegmentIds,
-                indicator: negativeIndicator
+                indicator: negativeIndicator,
+                segmentsAreUniform: true
             )
 
             let guidance = MLXArray(scheduler.guidanceSchedule[step])

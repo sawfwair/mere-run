@@ -92,7 +92,7 @@ func sampleTokenArrayTTS(
     }
 
     if let history = context.history, context.repetitionPenalty != 1.0 {
-        var membership = MLXArray.zeros([scores.dim(0)], dtype: .float32)
+        let membership = MLXArray.zeros([scores.dim(0)], dtype: .float32)
         membership[history] = MLXArray.ones([history.dim(0)], dtype: .float32)
         let inHistory = membership .> 0
         let penalized = MLX.where(

@@ -9,12 +9,29 @@ struct CLIASRExecutionResult {
     let backend: ASRResolvedBackend
 }
 
+protocol CLIASRTranscriptionExecutor: Sendable {
+    func transcribeQwen(
+        request: ASRRequest,
+        modelID: String,
+        modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult
+
+    func transcribeParakeet(
+        request: ASRRequest,
+        modelID: String,
+        modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult
+}
+
 enum CLIASRRouting {
     static func transcribe(
         request: ASRRequest,
         preferredBackend: ASRBackend,
         modelOverride: String? = nil,
-        progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
+        progressHandler: (@Sendable (ASRProgress) -> Void)? = nil,
+        executor: (any CLIASRTranscriptionExecutor)? = nil
     ) async throws -> CLIASRExecutionResult {
         let normalizedOverride = normalized(modelOverride)
         let inferredBackend = inferredBackendFromModelOverride(normalizedOverride)
@@ -56,31 +73,53 @@ enum CLIASRRouting {
 
         switch decision.backend {
         case .qwen:
-            let qwenGenerator = Qwen3ASRGenerator(modelId: qwenModelId(modelOverride: normalizedOverride))
+            let modelID = qwenModelId(modelOverride: normalizedOverride)
             let modelPath = qwenModelPath(
                 modelOverride: normalizedOverride,
                 localRoot: qwenRoot,
                 localAvailable: qwenLocalAvailable
             )
-            let result = try await qwenGenerator.transcribe(
-                request,
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
+            let result: ASRResult
+            if let executor {
+                result = try await executor.transcribeQwen(
+                    request: request,
+                    modelID: modelID,
+                    modelPath: modelPath,
+                    progressHandler: progressHandler
+                )
+            } else {
+                let generator = Qwen3ASRGenerator(modelId: modelID)
+                result = try await generator.transcribe(
+                    request,
+                    modelPath: modelPath,
+                    progressHandler: progressHandler
+                )
+            }
             return CLIASRExecutionResult(result: result, decision: decision, backend: .qwen)
 
         case .parakeet:
-            let parakeetGenerator = ParakeetGenerator(modelId: parakeetModelId(modelOverride: normalizedOverride))
+            let modelID = parakeetModelId(modelOverride: normalizedOverride)
             let modelPath = parakeetModelPath(
                 modelOverride: normalizedOverride,
                 localRoot: parakeetRoot,
                 localAvailable: parakeetLocalAvailable
             )
-            let result = try await parakeetGenerator.transcribe(
-                request,
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
+            let result: ASRResult
+            if let executor {
+                result = try await executor.transcribeParakeet(
+                    request: request,
+                    modelID: modelID,
+                    modelPath: modelPath,
+                    progressHandler: progressHandler
+                )
+            } else {
+                let generator = ParakeetGenerator(modelId: modelID)
+                result = try await generator.transcribe(
+                    request,
+                    modelPath: modelPath,
+                    progressHandler: progressHandler
+                )
+            }
             return CLIASRExecutionResult(result: result, decision: decision, backend: .parakeet)
         }
     }

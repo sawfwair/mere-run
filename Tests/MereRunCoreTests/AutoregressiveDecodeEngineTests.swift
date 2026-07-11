@@ -24,7 +24,7 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
 
     /// Scripted model: emits the given tokens in order regardless of input,
     /// then EOS forever.
-    private func scriptedModel(_ script: [Int]) -> (MLXArray) throws -> MLXArray {
+    private func scriptedModel(_ script: [Int]) -> (MLXArray) -> MLXArray {
         var upcoming = script
         return { _ in
             let next = upcoming.isEmpty ? self.eos : upcoming.removeFirst()
@@ -58,19 +58,67 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
     }
 
     func testImmediateEOSReportsNoFirstToken() throws {
+        var forwardCalls = 0
+        let model = scriptedModel([1, 2, 3])
         let result = try AutoregressiveDecodeEngine.decode(
             request(firstToken: eos, budget: 8),
-            stepForward: scriptedModel([1, 2, 3])
+            stepForward: { input in
+                forwardCalls += 1
+                return model(input)
+            }
         )
         XCTAssertNil(result.firstTokenSeconds)
+        XCTAssertEqual(forwardCalls, 1)
     }
 
     func testBudgetCutsGenerationExactly() throws {
+        var forwardCalls = 0
+        let model = scriptedModel([7, 2, 9, 4])
         let result = try AutoregressiveDecodeEngine.decode(
             request(firstToken: 3, budget: 2),
-            stepForward: scriptedModel([7, 2, 9, 4])
+            stepForward: { input in
+                forwardCalls += 1
+                return model(input)
+            }
         )
         XCTAssertEqual(result.generatedTokens, [3, 7])
+        XCTAssertEqual(forwardCalls, 1)
+    }
+
+    func testSingleTokenBudgetDoesNotScheduleThrowawayForward() throws {
+        var forwardCalls = 0
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 1),
+            stepForward: { _ in
+                forwardCalls += 1
+                return self.oneHotLogits(7)
+            }
+        )
+        XCTAssertEqual(result.generatedTokens, [3])
+        XCTAssertEqual(forwardCalls, 0)
+    }
+
+    func testSteadyStateQueuesForwardBeforeConfirmingPriorToken() throws {
+        var events: [String] = []
+        var forwardCalls = 0
+        let model = scriptedModel([7, 2, 9, eos])
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 4),
+            stepForward: { input in
+                forwardCalls += 1
+                events.append("forward")
+                return model(input)
+            },
+            decodeToken: { String($0) },
+            emitPiece: { token, _ in events.append("emit-\(token)") }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3, 7, 2, 9])
+        XCTAssertEqual(
+            Array(events.prefix(5)),
+            ["forward", "emit-3", "forward", "forward", "emit-7"]
+        )
+        XCTAssertEqual(forwardCalls, 3)
     }
 
     func testImmediateEOSProducesNothing() throws {
@@ -105,5 +153,33 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         )
         // Whitespace-only pieces buffer until visible text arrives.
         XCTAssertEqual(pieces, [" \nhello", "world"])
+    }
+
+    func testStatefulDecodeProcessesConfirmedTokenHistory() {
+        var processedHistories: [[Int]] = []
+        var sampled: [Int] = []
+        let result = AutoregressiveDecodeEngine.decodeStateful(
+            request(firstToken: 3, budget: 8),
+            processLogits: { logits, tokens in
+                processedHistories.append(tokens)
+                return logits
+            },
+            stepForward: scriptedModel([7, 2, eos]),
+            didSampleToken: { sampled.append($0) }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3, 7, 2])
+        XCTAssertEqual(processedHistories, [[], [3], [3, 7], [3, 7, 2]])
+        XCTAssertEqual(sampled, [3, 7, 2, eos])
+    }
+
+    func testStatefulDecodeCanRejectSampleBeforeAppendingIt() {
+        let result = AutoregressiveDecodeEngine.decodeStateful(
+            request(firstToken: 3, budget: 8),
+            stepForward: scriptedModel([7, 2, eos]),
+            shouldContinue: { $0 != 7 }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3])
     }
 }

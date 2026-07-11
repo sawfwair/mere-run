@@ -2,19 +2,6 @@ import Foundation
 @preconcurrency import MLX
 import MLXFast
 import MLXNN
-#if os(Linux)
-import Glibc
-#else
-import Darwin
-#endif
-
-#if os(Linux)
-private func mererunCos(_ value: Double) -> Double { Glibc.cos(value) }
-private func mererunSin(_ value: Double) -> Double { Glibc.sin(value) }
-#else
-private func mererunCos(_ value: Double) -> Double { Darwin.cos(value) }
-private func mererunSin(_ value: Double) -> Double { Darwin.sin(value) }
-#endif
 
 private func falconPerceptionRMSNorm(_ x: MLXArray, weight: MLXArray, eps: Float) -> MLXArray {
     let dtype = x.dtype
@@ -74,7 +61,25 @@ private func falconPerceptionManualAttention(
     } else {
         weights = softmax(scores, axis: -1)
     }
-    return MLX.matmul(weights, valuesF32).asType(queries.dtype)
+    if weights.dim(1) == valuesF32.dim(1) {
+        return MLX.matmul(weights, valuesF32).asType(queries.dtype)
+    }
+
+    let queryHeads = weights.dim(1)
+    let valueHeads = valuesF32.dim(1)
+    precondition(queryHeads.isMultiple(of: valueHeads), "Falcon query heads must group over value heads.")
+    let groups = queryHeads / valueHeads
+    let groupedWeights = weights.reshaped(
+        weights.dim(0),
+        valueHeads,
+        groups,
+        weights.dim(2),
+        weights.dim(3)
+    )
+    let groupedValues = MLX.expandedDimensions(valuesF32, axis: 2)
+    return MLX.matmul(groupedWeights, groupedValues)
+        .reshaped(weights.dim(0), queryHeads, weights.dim(2), valuesF32.dim(3))
+        .asType(queries.dtype)
 }
 
 final class FalconPerceptionKVCache: @unchecked Sendable {
@@ -101,12 +106,16 @@ final class FalconPerceptionKVCache: @unchecked Sendable {
 
         if needsGrowth {
             let batch = newKeys.dim(0)
-            let heads = newKeys.dim(1)
+            let keyHeads = newKeys.dim(1)
+            let valueHeads = newValues.dim(1)
             let keyDim = newKeys.dim(3)
             let valueDim = newValues.dim(3)
             let chunks = (required + step - 1) / step
-            let grownKeys = MLXArray.zeros([batch, heads, chunks * step, keyDim], dtype: newKeys.dtype)
-            let grownValues = MLXArray.zeros([batch, heads, chunks * step, valueDim], dtype: newValues.dtype)
+            let grownKeys = MLXArray.zeros([batch, keyHeads, chunks * step, keyDim], dtype: newKeys.dtype)
+            let grownValues = MLXArray.zeros(
+                [batch, valueHeads, chunks * step, valueDim],
+                dtype: newValues.dtype
+            )
             if let currentKeys = keys, let currentValues = values, previous > 0 {
                 grownKeys[.ellipsis, ..<previous, 0...] = currentKeys[.ellipsis, ..<previous, 0...]
                 grownValues[.ellipsis, ..<previous, 0...] = currentValues[.ellipsis, ..<previous, 0...]
@@ -276,9 +285,11 @@ final class FalconPerceptionAttention: Module {
         queries = falconPerceptionRMSNorm(queries, weight: normWQK, eps: eps)
         keys = falconPerceptionRMSNorm(keys, weight: normWQK, eps: eps)
 
+        // Falcon's learned 2D RoPE has distinct frequencies for every query
+        // head, so keys must be expanded before that rotation. Values have no
+        // head-specific transform and remain compact in the persistent cache.
         if numRepeats > 1 {
             keys = falconPerceptionRepeatAlongHeads(keys, heads: numRepeats)
-            values = falconPerceptionRepeatAlongHeads(values, heads: numRepeats)
         }
 
         if captureDebugStages {
@@ -340,8 +351,9 @@ final class FalconPerceptionAttention: Module {
         let useManualDecodeAttention = cache != nil
             && sequenceLength == 1
             && !falconPerceptionShouldForceKernelDecodeAttention()
-        let attended = if useManualDecodeAttention {
-            falconPerceptionManualAttention(
+        let attended: MLXArray
+        if useManualDecodeAttention {
+            attended = falconPerceptionManualAttention(
                 queries: queries,
                 keys: keys,
                 values: values,
@@ -350,10 +362,13 @@ final class FalconPerceptionAttention: Module {
                 sinks: sinks
             )
         } else {
-            MLXFast.scaledDotProductAttention(
+            let attentionValues = numRepeats > 1
+                ? falconPerceptionRepeatAlongHeads(values, heads: numRepeats)
+                : values
+            attended = MLXFast.scaledDotProductAttention(
                 queries: queries,
                 keys: keys,
-                values: values,
+                values: attentionValues,
                 scale: scale,
                 mask: attentionMask,
                 sinks: sinks
@@ -435,9 +450,8 @@ final class FalconPerceptionTransformerModel: Module {
     @ModuleInfo(key: "freqs_cis_golden") var freqsGolden: MLXArray
 
     let config: FalconPerceptionModelConfig
-    let cos1DTable: [Float]
-    let sin1DTable: [Float]
-    let rotaryDim: Int
+    let cos1DTable: MLXArray
+    let sin1DTable: MLXArray
     var lastHiddenState: MLXArray?
     var captureLayerOutputs = false
     var capturedLayerOutputs: [MLXArray] = []
@@ -457,30 +471,20 @@ final class FalconPerceptionTransformerModel: Module {
         self._norm.wrappedValue = RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
 
         let rotaryDim = max(1, text.headDim / 2)
-        self.rotaryDim = rotaryDim
         let heads = text.numAttentionHeads
         let goldenShape = [heads, max(1, rotaryDim / 2), 2]
         self._freqsGolden.wrappedValue = MLX.zeros(goldenShape, dtype: .float32)
 
-        var cos: [Float] = []
-        var sin: [Float] = []
-        cos.reserveCapacity(text.maxPositionEmbeddings * (rotaryDim / 2))
-        sin.reserveCapacity(text.maxPositionEmbeddings * (rotaryDim / 2))
         let halfRotary = max(1, rotaryDim / 2)
-        let theta = Double(text.ropeTheta)
-        let invFreqs = (0..<halfRotary).map { index -> Double in
-            let exponent = Double(index * 2) / Double(max(1, rotaryDim))
-            return 1.0 / pow(theta, exponent)
-        }
-        for position in 0..<text.maxPositionEmbeddings {
-            for frequency in invFreqs {
-                let value = Double(position) * frequency
-                cos.append(Float(mererunCos(value)))
-                sin.append(Float(mererunSin(value)))
-            }
-        }
-        self.cos1DTable = cos
-        self.sin1DTable = sin
+        let positions = MLXArray(0..<text.maxPositionEmbeddings)
+            .asType(.float32)
+            .reshaped(text.maxPositionEmbeddings, 1)
+        let dimensions = MLXArray(0..<halfRotary).asType(.float32).reshaped(1, halfRotary)
+        let exponents = (dimensions * 2) / Float(max(1, rotaryDim))
+        let inverseFrequencies = 1 / MLX.pow(MLXArray(text.ropeTheta), exponents)
+        let angles = positions * inverseFrequencies
+        self.cos1DTable = MLX.cos(angles)
+        self.sin1DTable = MLX.sin(angles)
 
         super.init()
     }
@@ -495,17 +499,16 @@ final class FalconPerceptionTransformerModel: Module {
     ) -> MLXArray {
         let hidden0 = inputsEmbeds ?? embedTokens(inputIDs)
         let cacheList = caches ?? Array(repeating: nil, count: layers.count)
-        let sequenceLength = hidden0.dim(1)
         capturedLayerOutputs.removeAll(keepingCapacity: captureLayerOutputs)
 
         let selectedCosSin = FalconPerceptionModel.selectCosSinTables(
             positionIDs: positionIDs,
             cosTable: cos1DTable,
-            sinTable: sin1DTable,
-            rotaryDim: rotaryDim
+            sinTable: sin1DTable
         )
-        let cos2D = posHW.map { FalconPerceptionModel.computeGoldenFrequencies(freqsGolden: freqsGolden, posHW: $0).0 }
-        let sin2D = posHW.map { FalconPerceptionModel.computeGoldenFrequencies(freqsGolden: freqsGolden, posHW: $0).1 }
+        let goldenFrequencies = posHW.map {
+            FalconPerceptionModel.computeGoldenFrequencies(freqsGolden: freqsGolden, posHW: $0)
+        }
 
         var hidden = hidden0
         for (index, layer) in layers.enumerated() {
@@ -515,8 +518,8 @@ final class FalconPerceptionTransformerModel: Module {
                 cache: cacheList[index],
                 cos1D: selectedCosSin.0,
                 sin1D: selectedCosSin.1,
-                cos2D: cos2D,
-                sin2D: sin2D
+                cos2D: goldenFrequencies?.0,
+                sin2D: goldenFrequencies?.1
             )
             if captureLayerOutputs {
                 let snapshot = falconPerceptionContiguous(hidden)
@@ -527,7 +530,6 @@ final class FalconPerceptionTransformerModel: Module {
 
         let normalized = norm(hidden)
         lastHiddenState = normalized
-        if sequenceLength > 0 { MLX.eval(normalized) }
         return normalized
     }
 }
@@ -570,7 +572,7 @@ final class FalconPerceptionLanguageModel: Module {
         sequenceLength: Int,
         cacheOffset: Int
     ) -> MLXArray? {
-        guard sequenceLength > 0, cacheOffset > 0 else { return nil }
+        guard sequenceLength > 1, cacheOffset > 0 else { return nil }
         let totalKeys = cacheOffset + sequenceLength
         var values = [Bool]()
         values.reserveCapacity(sequenceLength * totalKeys)
@@ -639,7 +641,8 @@ final class FalconPerceptionLanguageModel: Module {
         mask: MLXArray?,
         caches: [FalconPerceptionKVCache?]?,
         positionIDs: MLXArray?,
-        posHW: MLXArray?
+        posHW: MLXArray?,
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
         let sequenceLength = inputsEmbeds?.dim(1) ?? inputIDs.dim(1)
         let cacheOffset = caches?.first??.offset ?? 0
@@ -658,7 +661,10 @@ final class FalconPerceptionLanguageModel: Module {
             positionIDs: resolvedInputs.positionIDs,
             posHW: resolvedInputs.posHW
         )
-        return lmHead(hidden)
+        let projectedHidden = lastPositionOnly && hidden.dim(1) > 1
+            ? hidden[0..., (hidden.dim(1) - 1)..., 0...]
+            : hidden
+        return lmHead(projectedHidden)
     }
 }
 
@@ -772,7 +778,7 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         let ids = inputIDs.asArray(Int32.self).map(Int.init)
         guard ids.contains(config.coordTokenID) else { return embeds }
         let encoded = coordEncoder(coordXY.reshaped(-1, 2)).reshaped(1, -1, embeds.dim(-1))
-        var output = embeds
+        let output = embeds
         let sequenceLength = min(ids.count, output.dim(1))
         for index in 0..<sequenceLength where ids[index] == config.coordTokenID {
             output[0, index] = encoded[0, 0]
@@ -785,7 +791,7 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         let ids = inputIDs.asArray(Int32.self).map(Int.init)
         guard ids.contains(config.sizeTokenID) else { return embeds }
         let encoded = sizeEncoder(sizeHW.reshaped(-1, 2)).reshaped(1, -1, embeds.dim(-1))
-        var output = embeds
+        let output = embeds
         let sequenceLength = min(ids.count, output.dim(1))
         for index in 0..<sequenceLength where ids[index] == config.sizeTokenID {
             output[0, index] = encoded[0, 0]
@@ -894,7 +900,8 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         mask: MLXArray? = nil,
         caches: [FalconPerceptionKVCache?]? = nil,
         positionIDs: MLXArray? = nil,
-        posHW: MLXArray? = nil
+        posHW: MLXArray? = nil,
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
         let embeds: MLXArray
         if let inputsEmbeds {
@@ -911,7 +918,8 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
             mask: mask,
             caches: caches,
             positionIDs: positionIDs,
-            posHW: posHW
+            posHW: posHW,
+            lastPositionOnly: lastPositionOnly
         )
     }
 
@@ -943,7 +951,7 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         let positions = ids.enumerated().compactMap { index, value in
             value == imageTokenID ? index : nil
         }
-        var output = inputsEmbeds
+        let output = inputsEmbeds
         for (featureIndex, position) in positions.enumerated() where featureIndex < imageFeatures.dim(0) {
             output[0, position] = imageFeatures[featureIndex]
         }
@@ -1063,61 +1071,26 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
     }
 
     static func computeGoldenFrequencies(freqsGolden: MLXArray, posHW: MLXArray) -> (MLXArray, MLXArray) {
-        let freqShape = freqsGolden.shape
-        let heads = freqShape[0]
-        let freqCount = freqShape[1]
-        let tokenCount = posHW.shape[1]
-
-        let freqValues = freqsGolden.asType(.float32).asArray(Float.self)
-        let posValues = posHW.asType(.float32).asArray(Float.self)
-
-        var cosValues = [Float](repeating: 0, count: tokenCount * heads * freqCount)
-        var sinValues = [Float](repeating: 0, count: tokenCount * heads * freqCount)
-        for tokenIndex in 0..<tokenCount {
-            let px = posValues[(tokenIndex * 2)]
-            let py = posValues[(tokenIndex * 2) + 1]
-            for head in 0..<heads {
-                for frequencyIndex in 0..<freqCount {
-                    let base = ((head * freqCount) + frequencyIndex) * 2
-                    let theta = (px * freqValues[base]) + (py * freqValues[base + 1])
-                    let outIndex = ((tokenIndex * heads) + head) * freqCount + frequencyIndex
-                    cosValues[outIndex] = Float(mererunCos(Double(theta)))
-                    sinValues[outIndex] = Float(mererunSin(Double(theta)))
-                }
-            }
-        }
-
+        let heads = freqsGolden.dim(0)
+        let frequencyCount = freqsGolden.dim(1)
+        let tokenCount = posHW.dim(1)
+        let positions = posHW[0].asType(.float32).reshaped(tokenCount, 1, 1, 2)
+        let frequencies = freqsGolden.asType(.float32).reshaped(1, heads, frequencyCount, 2)
+        let angles = MLX.sum(positions * frequencies, axis: -1)
         return (
-            MLXArray(cosValues, [1, tokenCount, heads, freqCount]),
-            MLXArray(sinValues, [1, tokenCount, heads, freqCount])
+            MLX.cos(angles).reshaped(1, tokenCount, heads, frequencyCount),
+            MLX.sin(angles).reshaped(1, tokenCount, heads, frequencyCount)
         )
     }
 
     static func selectCosSinTables(
         positionIDs: MLXArray?,
-        cosTable: [Float],
-        sinTable: [Float],
-        rotaryDim: Int
+        cosTable: MLXArray,
+        sinTable: MLXArray
     ) -> (MLXArray?, MLXArray?) {
         guard let positionIDs else { return (nil, nil) }
-        let positions = positionIDs.asArray(Int32.self).map(Int.init)
-        let frequencyCount = max(1, rotaryDim / 2)
-        var cosValues: [Float] = []
-        var sinValues: [Float] = []
-        cosValues.reserveCapacity(positions.count * frequencyCount)
-        sinValues.reserveCapacity(positions.count * frequencyCount)
-        for position in positions {
-            let clamped = max(0, position)
-            let base = clamped * frequencyCount
-            for offset in 0..<frequencyCount {
-                cosValues.append(cosTable[base + offset])
-                sinValues.append(sinTable[base + offset])
-            }
-        }
-        return (
-            MLXArray(cosValues, [positions.count, frequencyCount]),
-            MLXArray(sinValues, [positions.count, frequencyCount])
-        )
+        let positions = MLX.maximum(positionIDs.asType(.int32), MLXArray(Int32(0)))
+        return (MLX.take(cosTable, positions, axis: 0), MLX.take(sinTable, positions, axis: 0))
     }
 
     static func applyRotaryEmbeddings(

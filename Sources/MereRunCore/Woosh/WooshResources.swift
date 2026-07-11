@@ -537,14 +537,11 @@ enum WooshTensorOps {
     }
 
     static func layerNormNoAffine(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
-        let mean = MLX.mean(x, axis: -1, keepDims: true)
-        let variance = MLX.mean((x - mean) * (x - mean), axis: -1, keepDims: true)
-        return (x - mean) / MLX.sqrt(variance + MLXArray(eps).asType(x.dtype))
+        MLXFast.layerNorm(x, eps: eps)
     }
 
     static func rmsNorm(_ x: MLXArray, weight: MLXArray, eps: Float = 1e-6) -> MLXArray {
-        let variance = MLX.mean(x * x, axis: -1, keepDims: true)
-        return x * MLX.rsqrt(variance + MLXArray(eps).asType(x.dtype)) * weight
+        MLXFast.rmsNorm(x, weight: weight, eps: eps)
     }
 
     static func l2Normalize(_ x: MLXArray, eps: Float = 1e-12) -> MLXArray {

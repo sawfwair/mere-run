@@ -166,6 +166,28 @@ extension Flux2KleinGenerator {
             width: patchedWidth,
             tCoords: tCoords
         )
+        let machine = MereRunMachineProfile.current
+        let useBatchedCFG = useCFG && negativePromptEmbeds.map { negativeEmbeds in
+            let negativeIds = negTxtIds ?? Flux2PosEmbed.prepareTextIds(
+                seqLen: negativeEmbeds.shape[1],
+                numAxes: 4
+            )
+            return DiffusionCFGExecution.canPair(negativeEmbeds, promptEmbeds)
+                && negativeIds.shape == txtIds.shape
+                && DiffusionCFGExecution.shouldBatch(
+                    mode: DiffusionCFGExecutionMode.current(
+                        modelEnvironmentKey: "MERERUN_FLUX2_BATCHED_CFG"
+                    ),
+                    width: request.width,
+                    height: request.height,
+                    physicalMemoryBytes: machine.physicalMemoryBytes,
+                    activeMemoryBytes: Memory.activeMemory,
+                    cacheMemoryBytes: Memory.cacheMemory,
+                    isUnifiedMemory: machine.isAppleSiliconMac,
+                    baseReserveBytes: 6 * DiffusionCFGExecution.gibibyte,
+                    activationBytesPerPixel: 4_096 * totalImages
+                )
+        } ?? false
 
         // 4. Setup scheduler (FLUX.2 Klein specific)
         // isDistilled is driven by manifest.variant (no heuristics).
@@ -197,29 +219,44 @@ extension Flux2KleinGenerator {
             // Run transformer (with CFG if enabled)
             let noisePred: MLXArray
             if useCFG, let negEmbeds = negativePromptEmbeds {
-                // Unconditional pass (FLUX.2 Klein doesn't use guidance parameter)
-                let uncondNoise = transformerForward(
-                    transformer,
-                    hiddenStates: latents,
-                    encoderHiddenStates: negEmbeds,
-                    timestep: timestepTensor,
-                    imgIds: imgIds,
-                    txtIds: negTxtIds ?? Flux2PosEmbed.prepareTextIds(seqLen: negEmbeds.shape[1], numAxes: 4)
-                )
+                if useBatchedCFG {
+                    let predictions = transformerForward(
+                        transformer,
+                        hiddenStates: DiffusionCFGExecution.duplicateBatch(latents),
+                        encoderHiddenStates: DiffusionCFGExecution.paired(negEmbeds, promptEmbeds),
+                        timestep: DiffusionCFGExecution.duplicateBatch(timestepTensor),
+                        imgIds: imgIds,
+                        txtIds: txtIds
+                    )
+                    noisePred = DiffusionCFGExecution.combinePredictions(
+                        predictions,
+                        guidanceScale: Float(request.guidanceScale)
+                    )
+                } else {
+                    // Unconditional pass (FLUX.2 Klein doesn't use guidance parameter)
+                    let uncondNoise = transformerForward(
+                        transformer,
+                        hiddenStates: latents,
+                        encoderHiddenStates: negEmbeds,
+                        timestep: timestepTensor,
+                        imgIds: imgIds,
+                        txtIds: negTxtIds ?? Flux2PosEmbed.prepareTextIds(seqLen: negEmbeds.shape[1], numAxes: 4)
+                    )
 
-                // Conditional pass (FLUX.2 Klein doesn't use guidance parameter)
-                let condNoise = transformerForward(
-                    transformer,
-                    hiddenStates: latents,
-                    encoderHiddenStates: promptEmbeds,
-                    timestep: timestepTensor,
-                    imgIds: imgIds,
-                    txtIds: txtIds
-                )
+                    // Conditional pass (FLUX.2 Klein doesn't use guidance parameter)
+                    let condNoise = transformerForward(
+                        transformer,
+                        hiddenStates: latents,
+                        encoderHiddenStates: promptEmbeds,
+                        timestep: timestepTensor,
+                        imgIds: imgIds,
+                        txtIds: txtIds
+                    )
 
-                // CFG: output = uncond + guidance_scale * (cond - uncond)
-                let g = MLXArray(Float(request.guidanceScale))
-                noisePred = uncondNoise + g * (condNoise - uncondNoise)
+                    // CFG: output = uncond + guidance_scale * (cond - uncond)
+                    let g = MLXArray(Float(request.guidanceScale))
+                    noisePred = uncondNoise + g * (condNoise - uncondNoise)
+                }
             } else {
                 // No CFG - single pass (FLUX.2 Klein doesn't use guidance parameter)
                 noisePred = transformerForward(

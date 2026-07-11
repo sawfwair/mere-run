@@ -85,7 +85,7 @@ yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
 Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
 end to end.
 
-### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`)
+### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, `MERERUN_LFM2_CONTINUOUS_BATCHING`)
 
 Decode batching for concurrent requests engages automatically when
 `mere.run api serve` runs with `--max-active-requests` above 1 — the
@@ -96,6 +96,14 @@ engagement under `decodeBatching` (`batchedDecodeSteps`, `maxBatchSize`);
 per-model stats include `recentDecodeTokensPerSecond`, a rolling last-10
 window that surfaces mid-flight throughput regressions lifetime averages
 hide.
+
+LFM2 follows the same `--max-active-requests` switch and exposes
+`MERERUN_LFM2_CONTINUOUS_BATCHING` as an explicit override. Its attention cache
+supports row-offset-aware ragged batches and its short-convolution state has a
+fixed decode shape, so compatible requests can share a forward even when their
+prompt lengths differ. The generator samples all rows with one device readback,
+splits typed cache lanes after each step, and immediately removes EOS or
+token-budget-complete rows. `0` keeps the serial pipelined decoder.
 
 ### `MERERUN_GEMMA4_MTP`
 
@@ -370,24 +378,94 @@ stable chat prefix before the final message as an extra checkpoint when it is an
 exact token prefix of the full prompt, and the bounded cache gives those
 semantic checkpoints the same pruning priority as Gemma4.
 
+### `affine8` runtime KV cache mode
+
+`mere.run model runtime set <model> --kv-cache-mode affine8` selects resident
+groupwise affine 8-bit attention K/V for Gemma4, Qwen-family, and LFM2 serving.
+Qwen linear-attention state and LFM2 convolution state remain native. The cache
+supports prefix forks and compatible same-offset batching, but dequantizes for
+attention; use it as an explicit long-context memory control relative to a
+full-precision KV cache, not an assumed speed win. In particular,
+`text-chat-gemma4-turbo` already defaults to a smaller 4-bit TurboQuant cache,
+so forcing `affine8` can increase its KV residency. `default` restores the
+engine/model/server default, which is not necessarily full precision. `polar2`
+and `auto` remain Gemma4-only modes.
+
+### Batched classifier-free guidance
+
+`MERERUN_IMAGE_BATCHED_CFG` selects CFG execution across Qwen Image Edit,
+Z-Image, FLUX.2 Klein, and HiDream O1. Values `1`, `true`, `yes`, `on`, `batch`,
+or `batched` force the paired transformer batch; `0`, `false`, `no`, `off`, or
+`serial` force two lower-peak-memory passes. `auto`, an unset variable, or an
+unrecognized value uses the automatic policy.
+
+The model-specific `MERERUN_QWEN_IMAGE_BATCHED_CFG`,
+`MERERUN_ZIMAGE_BATCHED_CFG`, `MERERUN_FLUX2_BATCHED_CFG`, and
+`MERERUN_HIDREAM_BATCHED_CFG` variables take precedence over the shared setting.
+Automatic batching requires Apple unified memory, at least 24 GiB of physical
+memory, compatible conditioning shapes, and enough estimated MLX allocation
+headroom for the requested resolution. The estimate subtracts MLX active and
+cache allocations from physical memory; it is not an operating-system
+available-memory or pressure signal. A forced batched mode bypasses that
+headroom estimate and can increase peak memory or exhaust unified memory.
+Incompatible conditioning shapes still use serial execution. The
+memory-constrained FLUX.2 iOS path always remains serial.
+
+### `MERERUN_FUSED_SDPA`
+
+Supported SAM 3.1, LightOn OCR, and selected vision-encoder attention shapes use
+MLX fused scaled-dot-product attention by default. Set `0`, `false`, or `off` to
+force the portable graph as an emergency compatibility or A/B fallback. Shapes
+that do not meet the fused path's contract continue to use their existing
+implementation.
+
+### `MERERUN_IDEOGRAM4_FUSED_KERNELS`
+
+Set `1`, `true`, or `on` to opt into custom Ideogram 4 QKV-normalization,
+AdaLN, and residual Metal kernels. The portable MLX graph remains the default:
+although the individual kernels benchmarked faster, a fixed installed-checkpoint
+warm inference was 1.65x slower with no measured MLX peak-memory improvement.
+The exact single-segment mask elimination is independent of this switch and
+remains enabled by default.
+
+### `MERERUN_PSI_COMPRESSED_MLA`
+
+Opt-in compressed latent-attention cache for the native Psi/GLM runtime. Set
+`1`, `true`, `yes`, or `on` to force it. Set `auto` to engage only at the
+threshold selected by `MERERUN_PSI_COMPRESSED_MLA_MIN_PROMPT_TOKENS` (default
+`2048`). Unset and false-like values keep expanded per-head K/V. Even `auto` is
+operator-selected: weight absorption changes floating-point operation order,
+so the runtime does not promote this path without checkpoint quality evidence.
+
+### `MERERUN_PSI_FUSED_MOE`
+
+Set to `1`, `true`, `yes`, or `on` to stack Psi/GLM gate and up expert weights
+and issue one quantized gather matmul instead of two. Long prefill routes are
+sorted by expert regardless of this flag. Fusion retains a second resident copy
+of gate/up weights and is therefore off by default pending real-checkpoint
+throughput measurements.
+
 ### `MERERUN_GEMMA4_CONTINUOUS_BATCHING`
 
-Set to `1` to enable the Gemma4 same-offset decode batching prototype in
-`mere.run api serve`. It packs overlapping Gemma4 decode rows with equal KV
-offsets into typed batched KV caches, splits the cache rows back after each
-step, and reports same-position batched decode steps, queued rows, and max
-observed batch size through `/runtime/status`. Gemma4 variable-position decode
-batching is not enabled because its current attention path applies RoPE with
-scalar cache offsets.
+When unset, `mere.run api serve` enables Gemma4 same-offset decode batching when
+`--max-active-requests` is above `1`. Set `1` to force it on even at concurrency
+`1`, or `0` to force the serial path. It packs overlapping Gemma4 decode rows
+with equal KV offsets into typed batched KV caches, splits the cache rows back
+after each step, and reports same-position batched decode steps, queued rows,
+and max observed batch size through `/runtime/status`. Gemma4 variable-position
+decode batching is not enabled because its current attention path applies RoPE
+with scalar cache offsets.
 
 ### `MERERUN_Q35_CONTINUOUS_BATCHING`
 
-Set to `1` to enable the Qwen-family decode batching prototype in `mere.run api serve`.
-It uses the runtime's typed full-attention and linear-attention cache states. Full
-attention can batch different decode positions through row-offset-aware ragged
-KV caches, and linear attention can batch different decode positions through
-typed recurrent state when cache shapes are compatible. Runtime status reports
-same-position and variable-position batched decode steps.
+When unset, `mere.run api serve` enables Qwen-family decode batching when
+`--max-active-requests` is above `1`. Set `1` to force it on even at concurrency
+`1`, or `0` to force the serial path. It uses the runtime's typed full-attention
+and linear-attention cache states. Full attention can batch different decode
+positions through row-offset-aware ragged KV caches, and linear attention can
+batch different decode positions through typed recurrent state when cache
+shapes are compatible. Runtime status reports same-position and
+variable-position batched decode steps.
 
 This is deliberately narrower than arbitrary continuous batching: prefill still
 runs as cancellable per-request chunks, and cache rows batch only when their
@@ -395,7 +473,19 @@ typed state proves compatibility. Gemma4 full-attention rows remain
 same-position because that engine still uses scalar cache offsets. The scheduler
 services the earliest decode position first by batching compatible rows there or
 advancing one lower-offset row until it can join a compatible batch. The feature
-needs `--max-active-requests` above `1` before requests can overlap.
+still needs `--max-active-requests` above `1` before requests can overlap, even
+when an environment override forces the batching implementation on.
+
+### `MERERUN_LFM2_CONTINUOUS_BATCHING`
+
+Set to `1` to force the LFM2 generator into compatible-row decode batching, or
+set to `0` to force serial decode. When unset, `api serve` enables it whenever
+`--max-active-requests` is above `1`.
+Unlike Gemma4, LFM2 can pack different decode positions: full-attention layers
+use ragged typed KV lanes with row-specific RoPE and masks, while short-conv
+layers concatenate their fixed-size recurrent windows. The scheduler preserves
+earliest-position fairness, compacts finished rows every step, and falls back
+to an independent forward if cache types or shapes do not prove compatibility.
 
 ## Debug toggles
 

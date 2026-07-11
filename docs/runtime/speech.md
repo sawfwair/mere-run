@@ -84,6 +84,12 @@ At a high level:
 4. the generator produces waveform data
 5. audio is written to disk through the codec/output helpers
 
+`MediaAudioIO` can write float WAV output incrementally from chunk providers,
+including device-backed producers, which avoids constructing a second
+whole-file `Data` copy. Individual TTS generators may still produce a complete
+waveform before handing it to the output helper; the streaming writer API does
+not by itself make every synthesis model incremental.
+
 ## How transcription flows
 
 1. audio input is decoded into the expected local format

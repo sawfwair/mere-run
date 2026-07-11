@@ -8,10 +8,118 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added explicit affine 8-bit resident KV caches for Gemma4, Qwen-family, and
+  LFM2 plus opt-in compressed-MLA and fused sparse-MoE execution for the native
+  Psi/GLM runtime, with numerical, structural-memory, and policy tests. Affine
+  8-bit is a memory control relative to full-precision KV; Gemma Turbo's default
+  4-bit TurboQuant cache remains smaller.
 - added native MuScriptor full-mix audio-to-MIDI transcription through
   `music transcribe`, with managed small/medium/large checkpoints, exact HTK
   mel preprocessing, MLX transformer inference, instrument conditioning,
   JSON/JSONL note events, and multi-track MIDI output.
+
+### Changed
+
+- reduced autoregressive prefill and decode work across shared Qwen, ACE-Step,
+  ASR, TTS, OCR, VLM, MuScriptor, and Falcon paths with final-position output
+  projection, pipelined GPU sampling, compact grouped-query caches, and true
+  cached Falcon grounding.
+- kept Qwen-VL caption prefill, deep-stack features, sampling, and decode inputs
+  on device. A matched three-run M4 Max release gate measured a 2.54-second
+  median versus 2.67 seconds (-4.9%) and 2.03 versus 2.13 GB RSS (-4.7%), with
+  byte-identical captions.
+- kept the shared autoregressive GPU queue saturated after first-token
+  confirmation while preserving the final-token boundary fast path. A matched
+  96-token LFM2 release A/B on an M4 Max 128 GB measured 63.25 versus 62.47
+  decode tokens/s (+1.2%) and 9.61 versus 9.79 GB peak physical footprint
+  (-1.8%).
+- generalized batched MuScriptor decode across independent audio chunks and
+  made `music transcribe --chunk-batch-size` a safety upper bound, adaptively
+  clamped by current MLX unified-memory headroom, compute-type-scaled lane
+  estimates, and a model-complexity live beam budget. Oversized requested beams
+  retain their search width by microbatching forwards to the lane budget. Beam
+  search preserves independent typed cache lanes throughout. In a
+  matched warm M4 Max 128 GB large-model beam-4 run, the selected two-chunk
+  group had a 3.69-second median and 50.38 GB peak footprint versus the
+  pre-batching baseline's 22.38 seconds and 11.15 GB; all output hashes matched.
+  One chunk took 4.70 seconds at 28.17 GB, while four chunks was dominated at
+  6.16 seconds and 87.48 GB and is now capped for that model/beam combination.
+- enabled compatible-row continuous decode batching automatically for Gemma4,
+  Qwen-family, and LFM2 serving when `--max-active-requests` is above `1`.
+  Engine-specific environment variables remain force-on/force-off overrides;
+  LFM2 uses ragged row-offset-aware KV lanes, batched short-conv state, one
+  sampling readback per step, immediate finished-row compaction, and exact
+  serial fallback for incompatible caches. Two simultaneous matched 96-token
+  LFM2 requests completed in 0.932 seconds versus a 1.148-second baseline tail,
+  about 23% higher aggregate throughput.
+- changed Linux CUDA quantized matmul selection to probe native
+  `quantized_mm` and `GatherQMM` independently, retaining an automatic dense
+  fallback for runtimes that do not provide either kernel; Linux native
+  preparation also skips unused llama tools and server targets.
+- generalized batched classifier-free guidance across Qwen Image Edit, Z-Image,
+  FLUX.2 Klein, and HiDream O1, with a shared policy, model-specific overrides,
+  an automatic estimated-MLX-allocation-headroom gate, and exact serial shape
+  fallbacks. Forced batching bypasses the estimate and can increase peak memory
+  or exhaust unified memory.
+- moved LTX tiled VAE overlap blending from per-tile CPU readbacks and Swift
+  pixel loops to device-side MLX accumulation and normalization.
+- streamed LTX video frames directly to FFmpeg stdin or AVAssetWriter one frame
+  at a time while overlapping the next device transfer, avoiding a monolithic
+  host frame buffer or raw-video spool. LTX audio is transferred and written in
+  aligned chunks, and float WAV output supports incremental writes without a
+  second whole-file `Data` copy.
+- enabled supported fused scaled-dot-product attention shapes by default for
+  SAM 3.1, LightOn OCR, and selected vision encoders, with
+  `MERERUN_FUSED_SDPA=0` as the portable fallback. Installed release checks
+  measured about 3% lower SAM text-prompt latency with 13.2% lower peak
+  footprint, and 1.46x LightOn OCR throughput with 55% lower peak footprint;
+  RSS stayed effectively flat in both cases.
+- removed Ideogram 4's redundant single-segment block mask by default. Custom
+  Ideogram QKV-normalization, AdaLN, and residual kernels remain opt-in through
+  `MERERUN_IDEOGRAM4_FUSED_KERNELS=1`: microbenchmarks improved, but the
+  installed-checkpoint warm path was 1.65x slower with no MLX peak-memory win.
+- kept the most recently used embedding, image, image-edit, TTS, and ASR
+  sidecar runtimes resident in `api serve`; matching requests now reuse loaded
+  model state, concurrent use of mutable generators is serialized, and
+  switching models unloads the previous resident before loading its
+  replacement. Cold sidecar work is exclusive across lanes, and catalog/path
+  size estimates plus conservative working-set floors trigger proactive idle-resident eviction or reject a load
+  projected to cross the configured hard memory guard. Sidecars use a
+  bounded five-minute idle TTL with autonomous expiry, poll live managed-model
+  `pinned` and `ttlSeconds` changes while idle, join memory-pressure eviction,
+  and report residency/readiness/counters under `/runtime/status` and
+  `mere.run status` without evicting active or queued work. The special
+  `qwen-image-edit` repository lane is resident but currently uses default
+  lifecycle settings because it is not configurable through `model runtime`.
+- measured the resident API path with three matched release requests per lane:
+  median latency fell from 2.10 to 1.23 seconds for TTS (-42%), 0.154 to 0.057
+  seconds for ASR (-63%), 1.193 to 0.710 seconds for a one-step image request
+  (-40%), and 0.021 to 0.013 seconds for embeddings (-38%). TTS and ASR outputs
+  were byte-identical; retained models remain subject to the documented idle
+  TTL and memory-pressure eviction policy.
+- extended fair FIFO request admission to every local inference route, so the
+  default `--max-active-requests 1` serializes chat and media activation peaks;
+  explicit runtime model load/unload maintenance shares the same queue, and
+  higher concurrency remains an explicit throughput and unified-memory choice.
+- bounded API embedding requests to 256 texts and 2 MiB of UTF-8 content, then
+  length-packed 8,192-token-capped rows into sequential batches with at most
+  8,192 padded tokens while preserving response order.
+- bounded OpenAI-compatible image generation and edit requests to dimensions
+  divisible by 16 from 16 through 4,096 pixels and 4,194,304 total pixels, and
+  return malformed image/TTS JSON as `400 invalid_request_error` responses
+  rather than server errors.
+- bounded explicit image inference to 100 steps, ASR decode to 4,096 tokens,
+  and combined TTS input/voice instructions to 32 KiB of UTF-8 text so one API
+  request cannot grow compute or prompt tensors without limit.
+- switched Darwin memory-guard decisions to `ri_phys_footprint`, which accounts
+  for unified-memory allocations that RSS can miss; status retains RSS for
+  compatibility and other platforms continue to use it as the fallback.
+- pinned the Linux CUDA CMake bridge to the exact `mlx-swift` checkout selected
+  by SwiftPM under the active Linux Swift toolchain;
+  `MLX_SWIFT_CUDA_COMMIT` remains an explicit diagnostic override.
+- gated default CUDA `.deb` metadata on a linked CUDA 13 `libcudart` SONAME;
+  other or unknown toolkit majors now fail closed unless a maintainer supplies
+  the complete `MERERUN_PACKAGE_LINUX_DEPS` override. Tar packaging is unchanged.
 
 ## 0.20.0 - 2026-07-07
 

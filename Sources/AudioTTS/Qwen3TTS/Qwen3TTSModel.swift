@@ -248,7 +248,6 @@ final class Qwen3TTSAttention: Module {
     let numHeads: Int
     let numKVHeads: Int
     let headDim: Int
-    let numKVGroups: Int
     let scale: Float
 
     @ModuleInfo(key: "q_proj") var qProj: Linear
@@ -263,7 +262,6 @@ final class Qwen3TTSAttention: Module {
         self.numHeads = configuration.numAttentionHeads
         self.numKVHeads = configuration.numKeyValueHeads
         self.headDim = configuration.headDim
-        self.numKVGroups = configuration.numAttentionHeads / configuration.numKeyValueHeads
         self.scale = pow(Float(configuration.headDim), -0.5)
 
         self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: false)
@@ -305,38 +303,21 @@ final class Qwen3TTSAttention: Module {
             values = cachedValues
         }
 
-        // Expand KV heads if needed
-        if numKVHeads != numHeads {
-            keys = expandKeyValue(keys, repeats: numKVGroups)
-            values = expandKeyValue(values, repeats: numKVGroups)
-        }
-
-        // Attention in float32 for numerical stability
-        let queriesF32 = queries.asType(.float32)
-        let keysF32 = keys.asType(.float32)
-        let valuesF32 = values.asType(.float32)
-
-        var output = MLXFast.scaledDotProductAttention(
-            queries: queriesF32,
-            keys: keysF32,
-            values: valuesF32,
+        // MLX performs the SDPA softmax in float32 while retaining the native
+        // projection/cache dtype for Q/K/V and its optimized decode kernel.
+        let output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
             scale: scale,
             mask: mask
         )
 
-        output = output.asType(queries.dtype)
-        output = output.transposed(0, 2, 1, 3).reshaped(B, L, -1)
+        let flattened = output.transposed(0, 2, 1, 3).reshaped(B, L, -1)
 
-        return oProj(output)
+        return oProj(flattened)
     }
 
-    private func expandKeyValue(_ x: MLXArray, repeats: Int) -> MLXArray {
-        guard repeats > 1 else { return x }
-        var expanded = MLX.expandedDimensions(x, axis: 2)
-        expanded = MLX.repeated(expanded, count: repeats, axis: 2)
-        let shape = x.shape
-        return expanded.reshaped(shape[0], shape[1] * repeats, shape[2], shape[3])
-    }
 }
 
 // MARK: - MLP

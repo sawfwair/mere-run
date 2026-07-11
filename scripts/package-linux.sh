@@ -34,7 +34,9 @@ Environment:
                                 Default artifact suffix. Empty by default.
   MERERUN_BUNDLE_SWIFT_LIBS     Copy libswift*/Foundation runtime .so dependencies
                                 reported by ldd into payload lib/. Default: 1.
-  MERERUN_PACKAGE_LINUX_DEPS    Override Debian Depends field.
+  MERERUN_PACKAGE_LINUX_DEPS    Override Debian Depends field. For CUDA, an
+                                explicit value bypasses automatic toolkit-major
+                                dependency gating; the caller owns compatibility.
   MERERUN_LINUX_ACCEL           Passed through to prepare-linux-native.sh (cpu/cuda).
   MERERUN_NATIVE_BUILD_JOBS     Passed through to prepare-linux-native.sh.
   MERERUN_CUDA_ARCHITECTURES    Passed through to prepare-linux-native.sh.
@@ -186,6 +188,34 @@ cuda_toolkit_root_candidates() {
     seen="$seen$resolved:"
     printf '%s\n' "$resolved"
   done
+}
+
+cuda_toolkit_major_from_binary() {
+  local binary="$1"
+  local linked_libraries
+  linked_libraries="$(ldd "$binary" 2>&1 || true)"
+
+  # libcudart's SONAME major follows the CUDA toolkit ABI major. Do not infer
+  # from cuFFT, cuDNN, NCCL, or the driver: their SONAMEs use independent
+  # version lines and can legitimately differ from the toolkit major.
+  local sonames
+  sonames="$(
+    printf '%s\n' "$linked_libraries" \
+      | grep -oE 'libcudart\.so\.[0-9]+' \
+      | sort -u \
+      || true
+  )"
+  local count
+  count="$(printf '%s\n' "$sonames" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+  if [[ "$count" != "1" ]]; then
+    if [[ "$count" == "0" ]]; then
+      echo "[package-linux] error: could not determine the built CUDA toolkit major from libcudart in $binary." >&2
+    else
+      echo "[package-linux] error: conflicting libcudart SONAMEs in $binary: $(printf '%s' "$sonames" | paste -sd, -)" >&2
+    fi
+    return 1
+  fi
+  printf '%s\n' "${sonames##*.}"
 }
 
 case "$linux_accel" in
@@ -523,8 +553,22 @@ if (( do_deb )); then
     ln -s ../lib/mere-run/mere.run "$deb_root/usr/bin/mere.run"
 
     default_depends="ffmpeg, libcurl4, zlib1g, libopenblas0-pthread | libopenblas0, liblapacke"
-    if [[ "$linux_accel" == "cuda" ]]; then
-      default_depends="$default_depends, cuda-cccl-13-0, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcufft-13-0, libcudnn9-cuda-13, libnccl2"
+    if [[ "$linux_accel" == "cuda" && -z "${MERERUN_PACKAGE_LINUX_DEPS:-}" ]]; then
+      if ! cuda_toolkit_major="$(cuda_toolkit_major_from_binary "$payload_dir/mere.run-bin")"; then
+        echo "[package-linux] error: refusing to emit a CUDA .deb with unverifiable runtime dependencies." >&2
+        echo "[package-linux] error: use --skip-deb to keep the already-written portable tarball." >&2
+        exit 70
+      fi
+      case "$cuda_toolkit_major" in
+        13)
+          default_depends="$default_depends, cuda-cccl-13-0, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcufft-13-0, libcudnn9-cuda-13, libnccl2"
+          ;;
+        *)
+          echo "[package-linux] error: CUDA .deb packaging supports toolkit major 13, but the built binary links libcudart.so.$cuda_toolkit_major." >&2
+          echo "[package-linux] error: use --skip-deb for this toolkit; the already-written tarball remains valid for a matching CUDA host." >&2
+          exit 70
+          ;;
+      esac
     fi
     depends="${MERERUN_PACKAGE_LINUX_DEPS:-$default_depends}"
     installed_size="$(du -sk "$deb_root/usr" | awk '{print $1}')"

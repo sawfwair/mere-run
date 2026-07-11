@@ -144,6 +144,16 @@ public actor QwenImageEditGenerator: ImageGenerator {
         guard let transformer = model.transformer else {
             throw GeneratorError.modelLoadFailed("Transformer was not loaded.")
         }
+        let machine = MereRunMachineProfile.current
+        let useBatchedCFG = usesCFG && QwenImageEditCFGExecution.shouldBatch(
+            mode: QwenImageEditCFGExecutionMode.current,
+            width: inferenceConfig.width,
+            height: inferenceConfig.height,
+            physicalMemoryBytes: machine.physicalMemoryBytes,
+            activeMemoryBytes: Memory.activeMemory,
+            cacheMemoryBytes: Memory.cacheMemory,
+            isUnifiedMemory: machine.isAppleSiliconMac
+        )
         for stepIndex in 0..<inferenceConfig.numInferenceSteps {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(
@@ -156,27 +166,40 @@ public actor QwenImageEditGenerator: ImageGenerator {
 
             let finalNoisePred: MLXArray
             if inferenceConfig.guidanceScale > 1.0 {
-                let uncondEmbeds = semanticEmbeds[0..<1, 0..., 0...]
-                let condEmbeds = semanticEmbeds[1..<2, 0..., 0...]
+                if useBatchedCFG {
+                    let predictions = transformer.forwardEdit(
+                        latents: QwenImageEditCFGExecution.duplicateBatch(latents),
+                        timestep: QwenImageEditCFGExecution.duplicateBatch(timestepBatch1),
+                        semanticEmbeds: semanticEmbeds,
+                        appearanceLatents: QwenImageEditCFGExecution.duplicateBatch(appearanceLatents)
+                    )
+                    finalNoisePred = QwenImageEditCFGExecution.combinePredictions(
+                        predictions,
+                        guidanceScale: inferenceConfig.guidanceScale
+                    )
+                } else {
+                    let uncondEmbeds = semanticEmbeds[0..<1, 0..., 0...]
+                    let condEmbeds = semanticEmbeds[1..<2, 0..., 0...]
 
-                let noisePredUncond = transformer.forwardEdit(
-                    latents: latents,
-                    timestep: timestepBatch1,
-                    semanticEmbeds: uncondEmbeds,
-                    appearanceLatents: appearanceLatents
-                )
-                MLX.eval(noisePredUncond)
-                Memory.clearCache()
+                    let noisePredUncond = transformer.forwardEdit(
+                        latents: latents,
+                        timestep: timestepBatch1,
+                        semanticEmbeds: uncondEmbeds,
+                        appearanceLatents: appearanceLatents
+                    )
+                    MLX.eval(noisePredUncond)
+                    Memory.clearCache()
 
-                let noisePredCond = transformer.forwardEdit(
-                    latents: latents,
-                    timestep: timestepBatch1,
-                    semanticEmbeds: condEmbeds,
-                    appearanceLatents: appearanceLatents
-                )
+                    let noisePredCond = transformer.forwardEdit(
+                        latents: latents,
+                        timestep: timestepBatch1,
+                        semanticEmbeds: condEmbeds,
+                        appearanceLatents: appearanceLatents
+                    )
 
-                finalNoisePred = noisePredUncond
-                    + (noisePredCond - noisePredUncond) * MLXArray(inferenceConfig.guidanceScale)
+                    finalNoisePred = noisePredUncond
+                        + (noisePredCond - noisePredUncond) * MLXArray(inferenceConfig.guidanceScale)
+                }
             } else {
                 finalNoisePred = transformer.forwardEdit(
                     latents: latents,

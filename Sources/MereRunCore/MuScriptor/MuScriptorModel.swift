@@ -171,8 +171,14 @@ public final class MuScriptorModel: Module {
     @ModuleInfo(key: "transformer") private var transformer: MuScriptorTransformer
     @ModuleInfo(key: "out_norm") private var outputNorm: LayerNorm
     @ModuleInfo(key: "linear") private var outputProjection: Linear
+    private var positionalEmbeddingTable: MLXArray?
+    private var positionalEmbeddingCapacity = 0
 
     public let configuration: MuScriptorConfiguration
+
+    var inferenceDType: DType {
+        tokenEmbedding.weight.dtype
+    }
 
     public init(configuration: MuScriptorConfiguration) {
         self.configuration = configuration
@@ -260,9 +266,24 @@ public final class MuScriptorModel: Module {
         prefix: MLXArray?,
         caches: [KVCacheSimple]
     ) -> MLXArray {
-        let tokenIDs = MLXArray([Int32(tokenID)]).reshaped(1, 1)
+        batchedLogits(
+            tokenIDs: MLXArray([Int32(tokenID)]).reshaped(1, 1),
+            prefix: prefix,
+            caches: caches
+        )[0]
+    }
+
+    /// Runs one autoregressive step for several independent audio chunks.
+    /// Every row owns its own cache lane while sharing one transformer graph.
+    public func batchedLogits(
+        tokenIDs: MLXArray,
+        prefix: MLXArray?,
+        caches: [KVCacheSimple]
+    ) -> MLXArray {
+        precondition(tokenIDs.ndim == 2 && tokenIDs.dim(1) == 1)
         var hidden = tokenEmbedding(tokenIDs)
         if let prefix {
+            precondition(prefix.dim(0) == tokenIDs.dim(0))
             hidden = MLX.concatenated([prefix, hidden], axis: 1)
         }
         let offset = caches.first?.offset ?? 0
@@ -274,7 +295,8 @@ public final class MuScriptorModel: Module {
         )
         hidden = transformer(hidden, caches: caches)
         hidden = outputNorm(hidden)
-        return outputProjection(hidden)[0, -1, 0..<1_393].asType(.float32)
+        let lastHidden = hidden[0..., hidden.dim(1) - 1, 0...]
+        return outputProjection(lastHidden)[0..., 0..<1_393].asType(.float32)
     }
 
     private func positionalEmbedding(
@@ -283,17 +305,34 @@ public final class MuScriptorModel: Module {
         offset: Int,
         dtype: DType
     ) -> MLXArray {
-        let half = dimension / 2
-        var values = [Float](repeating: 0, count: length * dimension)
-        for positionIndex in 0..<length {
-            let position = Float(offset + positionIndex)
-            for dimensionIndex in 0..<half {
-                let denominator = pow(10_000, Float(dimensionIndex) / Float(half - 1))
-                let phase = position / denominator
-                values[positionIndex * dimension + dimensionIndex] = cos(phase)
-                values[positionIndex * dimension + half + dimensionIndex] = sin(phase)
+        let requiredCapacity = offset + length
+        if requiredCapacity > positionalEmbeddingCapacity {
+            let capacity = max(requiredCapacity, max(1_024, positionalEmbeddingCapacity * 2))
+            positionalEmbeddingTable = makePositionalEmbeddingTable(
+                capacity: capacity,
+                dimension: dimension
+            )
+            positionalEmbeddingCapacity = capacity
+            if let positionalEmbeddingTable {
+                MLX.eval(positionalEmbeddingTable)
             }
         }
-        return MLXArray(values).reshaped(1, length, dimension).asType(dtype)
+        guard let positionalEmbeddingTable else {
+            preconditionFailure("MuScriptor positional embedding table was not initialized")
+        }
+        return positionalEmbeddingTable[0..., offset..<(offset + length), 0...].asType(dtype)
+    }
+
+    private func makePositionalEmbeddingTable(
+        capacity: Int,
+        dimension: Int
+    ) -> MLXArray {
+        let half = dimension / 2
+        let positions = MLXArray(0..<capacity).asType(.float32).reshaped(capacity, 1)
+        let dimensions = MLXArray(0..<half).asType(.float32).reshaped(1, half)
+        let denominator = MLX.pow(MLXArray(Float(10_000)), dimensions / Float(max(half - 1, 1)))
+        let phase = positions / denominator
+        return MLX.concatenated([MLX.cos(phase), MLX.sin(phase)], axis: -1)
+            .reshaped(1, capacity, dimension)
     }
 }

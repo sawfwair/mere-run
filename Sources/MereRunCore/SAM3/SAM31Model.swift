@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 struct SAM31VisionContext: @unchecked Sendable {
@@ -267,9 +268,23 @@ final class SAM31ViTAttention: Module {
             (q, k) = sam31ApplyRotary(q: q, k: k, cos: cos, sin: sin)
         }
 
-        var attn = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
-        attn = softmax(attn, axis: -1)
-        var out = MLX.matmul(attn, v)
+        // SAM's shipped ViT uses 64-wide heads. mlx-swift 0.31.5 dispatches
+        // qLen > 8 with headDim 64 to its tiled full-attention Metal kernel,
+        // avoiding the old graph's two materialized [B,H,Q,K] matrices.
+        var out: MLXArray
+        if FusedAttentionPolicy.enabled {
+            out = MLXFast.scaledDotProductAttention(
+                queries: q,
+                keys: k,
+                values: v,
+                scale: scale,
+                mask: .none
+            )
+        } else {
+            var attention = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
+            attention = softmax(attention, axis: -1)
+            out = MLX.matmul(attention, v)
+        }
         out = out.transposed(0, 2, 1, 3).reshaped(batch, sequenceLength, hiddenSize)
         let projected = oProj(out)
 
@@ -608,12 +623,27 @@ final class SAM31CLIPAttention: Module {
         let k = kProj(x).reshaped(batch, sequenceLength, numHeads, headDim).transposed(0, 2, 1, 3)
         let v = vProj(x).reshaped(batch, sequenceLength, numHeads, headDim).transposed(0, 2, 1, 3)
 
-        var scores = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
-        if let mask {
-            scores = scores + mask.asType(scores.dtype)
+        // The shipped CLIP tower also uses 64-wide heads, including its array
+        // mask, which is supported by MLX's fused full-attention Metal path.
+        let attentionOutput: MLXArray
+        if FusedAttentionPolicy.enabled {
+            attentionOutput = MLXFast.scaledDotProductAttention(
+                queries: q,
+                keys: k,
+                values: v,
+                scale: scale,
+                mask: mask
+            )
+        } else {
+            var scores = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
+            if let mask {
+                scores = scores + mask.asType(scores.dtype)
+            }
+            scores = softmax(scores, axis: -1)
+            attentionOutput = MLX.matmul(scores, v)
         }
-        scores = softmax(scores, axis: -1)
-        let attended = MLX.matmul(scores, v).transposed(0, 2, 1, 3).reshaped(batch, sequenceLength, hiddenSize)
+        let attended = attentionOutput.transposed(0, 2, 1, 3)
+            .reshaped(batch, sequenceLength, hiddenSize)
         return outProj(attended)
     }
 }

@@ -1,8 +1,9 @@
 import MLX
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
-final class Ideogram4RuntimeTests: XCTestCase {
+final class Ideogram4RuntimeTests: MereRunCoreTestCase {
     func testQwenEncoderWeightMapperStripsUpstreamModelPrefix() {
         let value = MLXArray([Float(1)], [1])
 
@@ -176,6 +177,82 @@ final class Ideogram4RuntimeTests: XCTestCase {
 
         XCTAssertEqual(output.shape, [1, 4, 8])
         XCTAssertTrue(MLX.max(MLX.abs(output.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testQwenCausalPrefillProjectsOnlyTheFinalPosition() {
+        let encoder = QwenEncoder(configuration: QwenTextEncoderConfiguration(
+            vocabSize: 32,
+            hiddenSize: 8,
+            numHiddenLayers: 1,
+            numAttentionHeads: 4,
+            numKeyValueHeads: 2,
+            intermediateSize: 16,
+            ropeTheta: 10_000,
+            maxPositionEmbeddings: 32,
+            rmsNormEps: 1e-6,
+            headDim: 2
+        ))
+        let inputIds = MLXArray([Int32(1), Int32(2), Int32(3), Int32(4)]).reshaped(1, 4)
+        let fullCache: [KVCache] = [KVCacheSimple()]
+        let finalCache: [KVCache] = [KVCacheSimple()]
+
+        let full = encoder.forwardCausal(inputIds: inputIds, cache: fullCache)
+        let final = encoder.forwardCausal(
+            inputIds: inputIds,
+            cache: finalCache,
+            lastPositionOnly: true
+        )
+        eval(full, final)
+
+        XCTAssertEqual(full.shape, [1, 4, 32])
+        XCTAssertEqual(final.shape, [1, 1, 32])
+        XCTAssertEqual(fullCache[0].offset, 4)
+        XCTAssertEqual(finalCache[0].offset, 4)
+
+        let expected = full[0, 3].asType(.float32)
+        let actual = final[0, 0].asType(.float32)
+        let maxDifference = MLX.max(MLX.abs(expected - actual)).item(Float.self)
+        XCTAssertLessThan(maxDifference, 1e-5)
+    }
+
+    func testQwenNativeCachedGQAMatchesReferenceAttention() {
+        func makeEncoder(mode: QwenCachedDecodeAttentionMode) -> QwenEncoder {
+            QwenEncoder(configuration: QwenTextEncoderConfiguration(
+                vocabSize: 32,
+                hiddenSize: 8,
+                numHiddenLayers: 1,
+                numAttentionHeads: 4,
+                numKeyValueHeads: 2,
+                intermediateSize: 16,
+                ropeTheta: 10_000,
+                maxPositionEmbeddings: 32,
+                rmsNormEps: 1e-6,
+                headDim: 2,
+                cachedDecodeAttentionMode: mode
+            ))
+        }
+
+        MLXRandom.seed(9)
+        let nativeEncoder = makeEncoder(mode: .native)
+        MLXRandom.seed(9)
+        let referenceEncoder = makeEncoder(mode: .reference)
+        let prompt = MLXArray([Int32(1), Int32(2), Int32(3)]).reshaped(1, 3)
+        let next = MLXArray([Int32(4)]).reshaped(1, 1)
+        let nativeCache: [KVCache] = [KVCacheSimple()]
+        let referenceCache: [KVCache] = [KVCacheSimple()]
+
+        let nativePrefill = nativeEncoder.forwardCausal(inputIds: prompt, cache: nativeCache)
+        let referencePrefill = referenceEncoder.forwardCausal(inputIds: prompt, cache: referenceCache)
+        eval(nativePrefill, referencePrefill)
+        let nativeDecode = nativeEncoder.forwardCausal(inputIds: next, cache: nativeCache)
+        let referenceDecode = referenceEncoder.forwardCausal(inputIds: next, cache: referenceCache)
+        eval(nativeDecode, referenceDecode)
+
+        XCTAssertEqual(nativeDecode.shape, [1, 1, 32])
+        let maxDifference = MLX.max(
+            MLX.abs(nativeDecode.asType(.float32) - referenceDecode.asType(.float32))
+        ).item(Float.self)
+        XCTAssertLessThan(maxDifference, 1e-4)
     }
 
     func testTextFeatureConcatenationInterleavesActivationLayersPerHiddenChannel() {

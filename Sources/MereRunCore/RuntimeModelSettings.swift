@@ -25,6 +25,10 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
 
 public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendable {
     case `default`
+    /// Affine 8-bit resident K/V. This is an explicit quality/memory tradeoff;
+    /// it reduces BF16 caches but can be larger than a model-specific 4-bit
+    /// default such as Gemma4 TurboQuant.
+    case affine8
     case polar2
     case auto
 
@@ -37,6 +41,13 @@ public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendabl
         switch self {
         case .default:
             return fallback
+        case .affine8:
+            return Gemma4KVCacheQuantization(
+                bits: 8,
+                scheme: .uniform,
+                groupSize: fallback.groupSize,
+                quantizedStart: 0
+            )
         case .polar2:
             return Self.gemma4Polar2Quantization(fallback: fallback)
         case .auto:
@@ -56,6 +67,15 @@ public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendabl
             groupSize: fallback.groupSize,
             quantizedStart: 0
         )
+    }
+
+    var genericCacheLabel: String {
+        switch self {
+        case .affine8:
+            return "resident-affine-8bit"
+        case .default, .polar2, .auto:
+            return "native"
+        }
     }
 }
 
@@ -92,6 +112,56 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         self.kvCacheMode = kvCacheMode
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case alias
+        case pinned
+        case ttlSeconds
+        case maxContextTokens
+        case maxTokens
+        case temperature
+        case topP
+        case engineOverride
+        case kvCacheMode
+        /// New cache modes are written under an additive key so older mere.run
+        /// binaries ignore them instead of failing to decode the whole shared
+        /// settings document. Existing modes retain their version-1 wire key.
+        case extendedKVCacheMode = "kvCacheModeV2"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        alias = try container.decodeIfPresent(String.self, forKey: .alias)
+        pinned = try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+        ttlSeconds = try container.decodeIfPresent(Int.self, forKey: .ttlSeconds)
+        maxContextTokens = try container.decodeIfPresent(Int.self, forKey: .maxContextTokens)
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
+        topP = try container.decodeIfPresent(Double.self, forKey: .topP)
+        engineOverride = try container.decodeIfPresent(RuntimeServingEngine.self, forKey: .engineOverride)
+        if let rawMode = try container.decodeIfPresent(String.self, forKey: .extendedKVCacheMode) {
+            kvCacheMode = RuntimeKVCacheMode(rawValue: rawMode)
+        } else {
+            kvCacheMode = try container.decodeIfPresent(RuntimeKVCacheMode.self, forKey: .kvCacheMode)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(alias, forKey: .alias)
+        try container.encode(pinned, forKey: .pinned)
+        try container.encodeIfPresent(ttlSeconds, forKey: .ttlSeconds)
+        try container.encodeIfPresent(maxContextTokens, forKey: .maxContextTokens)
+        try container.encodeIfPresent(maxTokens, forKey: .maxTokens)
+        try container.encodeIfPresent(temperature, forKey: .temperature)
+        try container.encodeIfPresent(topP, forKey: .topP)
+        try container.encodeIfPresent(engineOverride, forKey: .engineOverride)
+        if kvCacheMode == .affine8 {
+            try container.encode(RuntimeKVCacheMode.affine8.rawValue, forKey: .extendedKVCacheMode)
+        } else {
+            try container.encodeIfPresent(kvCacheMode, forKey: .kvCacheMode)
+        }
+    }
+
     public var normalized: RuntimeModelSettings {
         var copy = self
         copy.alias = normalizedOptionalString(alias)
@@ -100,6 +170,9 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
 
     public func validated(for spec: ManagedModelSpec) throws -> RuntimeModelSettings {
         let settings = normalized
+        guard spec.supportsRuntimeResidencySettings else {
+            throw RuntimeModelSettingsError.unsupportedModel(spec.id)
+        }
         if let alias = settings.alias {
             guard alias.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else {
                 throw RuntimeModelSettingsError.invalidAlias("aliases cannot contain whitespace")
@@ -132,17 +205,46 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
                 expected: expected
             )
         }
-        if let kvCacheMode = settings.kvCacheMode,
-           kvCacheMode != .default,
-           spec.defaultRuntimeServingEngine != .textChatGemma4 {
-            throw RuntimeModelSettingsError.incompatibleKVCacheMode(
-                modelID: spec.id,
-                requested: kvCacheMode,
-                expectedEngine: .textChatGemma4
-            )
+        if spec.isAPISidecarRuntimeModel {
+            guard settings.alias == nil,
+                  settings.maxContextTokens == nil,
+                  settings.maxTokens == nil,
+                  settings.temperature == nil,
+                  settings.topP == nil,
+                  settings.engineOverride == nil,
+                  settings.kvCacheMode == nil else {
+                throw RuntimeModelSettingsError.invalidValue(
+                    "sidecar models support only pinned and ttlSeconds"
+                )
+            }
         }
-        guard spec.isAPIServableRuntimeModel else {
-            throw RuntimeModelSettingsError.unsupportedModel(spec.id)
+        if let kvCacheMode = settings.kvCacheMode, kvCacheMode != .default {
+            let engine = spec.defaultRuntimeServingEngine?.canonical
+            switch kvCacheMode {
+            case .affine8:
+                let supportedEngines: [RuntimeServingEngine] = [
+                    .textChatGemma4,
+                    .textChatQ36,
+                    .textChatLFM2,
+                ]
+                guard engine.map(supportedEngines.contains) == true else {
+                    let supported = supportedEngines.map(\.rawValue).joined(separator: ", ")
+                    throw RuntimeModelSettingsError.invalidValue(
+                        "KV cache mode '\(kvCacheMode.rawValue)' is not compatible with model "
+                            + "'\(spec.id)' (supported engines: \(supported))"
+                    )
+                }
+            case .polar2, .auto:
+                guard engine == .textChatGemma4 else {
+                    throw RuntimeModelSettingsError.incompatibleKVCacheMode(
+                        modelID: spec.id,
+                        requested: kvCacheMode,
+                        expectedEngine: .textChatGemma4
+                    )
+                }
+            case .default:
+                break
+            }
         }
         return settings
     }
@@ -172,7 +274,11 @@ public enum RuntimeModelSettingsError: LocalizedError, Equatable {
     case invalidAlias(String)
     case invalidValue(String)
     case incompatibleEngine(modelID: String, requested: RuntimeServingEngine, expected: RuntimeServingEngine?)
-    case incompatibleKVCacheMode(modelID: String, requested: RuntimeKVCacheMode, expectedEngine: RuntimeServingEngine)
+    case incompatibleKVCacheMode(
+        modelID: String,
+        requested: RuntimeKVCacheMode,
+        expectedEngine: RuntimeServingEngine
+    )
 
     public var errorDescription: String? {
         switch self {
@@ -300,5 +406,19 @@ public extension ManagedModelSpec {
 
     var isAPIServableRuntimeModel: Bool {
         defaultRuntimeServingEngine != nil
+    }
+
+    var isAPISidecarRuntimeModel: Bool {
+        switch validationKind {
+        case .flux2Klein, .zimageTurbo, .hidreamO1, .krea2, .ideogram4SDNQ,
+             .qwen3TTS, .qwen3ASR, .parakeet, .qwen3Embedding:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var supportsRuntimeResidencySettings: Bool {
+        isAPIServableRuntimeModel || isAPISidecarRuntimeModel
     }
 }

@@ -1,6 +1,8 @@
 import Foundation
 
 public enum MediaVideoIO {
+    public typealias BGRAFrameProvider = (_ frameIndex: Int) throws -> [UInt8]
+
     public static func writeMP4(
         rgb24: [UInt8],
         width: Int,
@@ -34,6 +36,53 @@ public enum MediaVideoIO {
         #else
         try FFmpegMediaIO.writeMP4(
             rgb24: rgb24,
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: fps,
+            to: outputURL
+        )
+        #endif
+    }
+
+    /// Writes an MP4 from one BGRA frame at a time. The provider is called in
+    /// ascending frame order and may reuse its backing storage after it
+    /// returns. This keeps long generated videos out of one monolithic host
+    /// buffer and lets producers overlap the next device transfer with encode.
+    public static func writeMP4(
+        bgra32FrameAt frameProvider: BGRAFrameProvider,
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Int,
+        to outputURL: URL
+    ) throws {
+        #if canImport(AVFoundation)
+        do {
+            try FFmpegMediaIO.writeMP4(
+                bgra32FrameAt: frameProvider,
+                width: width,
+                height: height,
+                frameCount: frameCount,
+                fps: fps,
+                to: outputURL
+            )
+            return
+        } catch MediaIOError.missingTool where ProcessInfo.processInfo.environment["MERERUN_FFMPEG"] == nil {
+            // Preserve the existing backend policy: use native AVFoundation
+            // only when ffmpeg was not explicitly configured and is absent.
+        }
+        try AppleMediaVideoIO.writeMP4(
+            bgra32FrameAt: frameProvider,
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: fps,
+            to: outputURL
+        )
+        #else
+        try FFmpegMediaIO.writeMP4(
+            bgra32FrameAt: frameProvider,
             width: width,
             height: height,
             frameCount: frameCount,

@@ -118,14 +118,41 @@ public enum AutoregressiveDecodeEngine {
             return true
         }
 
-        var logits = request.initialLogits
-        var pending: MLXArray?
         var buildSeconds = 0.0
         var waitSeconds = 0.0
+
+        var logits = request.initialLogits
+        var pending: MLXArray?
 
         while generated.count < request.tokenBudget {
             try checkCancellation?()
 
+            // Confirm the first token before opening the deeper pipeline. This
+            // keeps immediate EOS to one speculative forward, while later
+            // iterations can queue the next dependent forward before the host
+            // confirms the preceding token.
+            if generated.isEmpty, let first = pending {
+                let waitStart = CFAbsoluteTimeGetCurrent()
+                pending = nil
+                let confirmed = confirm(first)
+                waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                guard confirmed else {
+                    return AutoregressiveDecodeResult(
+                        generatedTokens: generated,
+                        decodeSeconds: Date().timeIntervalSince(start),
+                        firstTokenSeconds: firstTokenSeconds,
+                        buildSeconds: buildSeconds,
+                        waitSeconds: waitSeconds
+                    )
+                }
+                if generated.count >= request.tokenBudget {
+                    break
+                }
+            }
+
+            let hasPending = pending != nil
+            let isFinalSample = (!hasPending && generated.count == request.tokenBudget - 1)
+                || (hasPending && generated.count == request.tokenBudget - 2)
             let buildStart = CFAbsoluteTimeGetCurrent()
             let tokenArray = sampledTokenArray(
                 logits: logits[0, -1, 0...],
@@ -133,6 +160,33 @@ public enum AutoregressiveDecodeEngine {
                 previousTokenIndices: repetitionHistory,
                 banMask: request.banMask
             )
+
+            if isFinalSample {
+                asyncEval(tokenArray)
+                buildSeconds += CFAbsoluteTimeGetCurrent() - buildStart
+                if let previous = pending {
+                    let waitStart = CFAbsoluteTimeGetCurrent()
+                    pending = nil
+                    let confirmed = confirm(previous)
+                    waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                    guard confirmed else {
+                        return AutoregressiveDecodeResult(
+                            generatedTokens: generated,
+                            decodeSeconds: Date().timeIntervalSince(start),
+                            firstTokenSeconds: firstTokenSeconds,
+                            buildSeconds: buildSeconds,
+                            waitSeconds: waitSeconds
+                        )
+                    }
+                }
+                if generated.count < request.tokenBudget {
+                    let waitStart = CFAbsoluteTimeGetCurrent()
+                    _ = confirm(tokenArray)
+                    waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                }
+                break
+            }
+
             repetitionHistory = appendingRepetitionHistory(
                 repetitionHistory,
                 token: tokenArray,
@@ -171,5 +225,91 @@ public enum AutoregressiveDecodeEngine {
             buildSeconds: buildSeconds,
             waitSeconds: waitSeconds
         )
+    }
+
+    /// Pipelined decode for generators whose next-step logits transform or
+    /// sampler state depends on the previously confirmed token. The sampled
+    /// token is still fed directly into the next forward on GPU; confirmation
+    /// happens at the start of the following iteration while that speculative
+    /// forward is already executing.
+    public static func decodeStateful(
+        _ request: AutoregressiveDecodeRequest,
+        processLogits: ((MLXArray, [Int]) -> MLXArray)? = nil,
+        stepForward: (MLXArray) -> MLXArray,
+        didSampleToken: ((Int) -> Void)? = nil,
+        shouldContinue: ((Int) -> Bool)? = nil
+    ) -> AutoregressiveDecodeResult {
+        guard request.tokenBudget > 0 else {
+            return AutoregressiveDecodeResult(generatedTokens: [], decodeSeconds: 0)
+        }
+
+        let start = Date()
+        var generated: [Int] = []
+        generated.reserveCapacity(request.tokenBudget)
+        var stateTokens = request.historySeedTokens
+        var firstTokenSeconds: Double?
+        var repetitionHistory = repetitionHistoryArray(
+            promptTokens: request.historySeedTokens,
+            config: request.generationConfig
+        )
+        var logits = request.initialLogits
+        var pending: MLXArray?
+        var buildSeconds = 0.0
+        var waitSeconds = 0.0
+
+        func result() -> AutoregressiveDecodeResult {
+            AutoregressiveDecodeResult(
+                generatedTokens: generated,
+                decodeSeconds: Date().timeIntervalSince(start),
+                firstTokenSeconds: firstTokenSeconds,
+                buildSeconds: buildSeconds,
+                waitSeconds: waitSeconds
+            )
+        }
+
+        while true {
+            if let tokenArray = pending {
+                let waitStart = CFAbsoluteTimeGetCurrent()
+                let token = tokenArray.item(Int.self)
+                waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                pending = nil
+
+                didSampleToken?(token)
+                if let shouldContinue, !shouldContinue(token) {
+                    return result()
+                }
+                if request.eosTokens.contains(token) {
+                    return result()
+                }
+
+                generated.append(token)
+                stateTokens.append(token)
+                if firstTokenSeconds == nil {
+                    firstTokenSeconds = Date().timeIntervalSince(start)
+                }
+                if generated.count >= request.tokenBudget {
+                    return result()
+                }
+            }
+
+            let buildStart = CFAbsoluteTimeGetCurrent()
+            let rawLogits = logits[0, -1, 0...]
+            let nextLogits = processLogits?(rawLogits, stateTokens) ?? rawLogits
+            let tokenArray = sampledTokenArray(
+                logits: nextLogits,
+                config: request.generationConfig,
+                previousTokenIndices: repetitionHistory,
+                banMask: request.banMask
+            )
+            repetitionHistory = appendingRepetitionHistory(
+                repetitionHistory,
+                token: tokenArray,
+                config: request.generationConfig
+            )
+            logits = stepForward(tokenArray.asType(.int32).reshaped(1, 1))
+            asyncEval([logits, tokenArray])
+            buildSeconds += CFAbsoluteTimeGetCurrent() - buildStart
+            pending = tokenArray
+        }
     }
 }

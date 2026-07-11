@@ -109,10 +109,16 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Bearer token required by API endpoints. Also read from MERERUN_API_KEY.")
     var apiKey: String?
 
-    @Option(name: [.long], help: "Global request limit for /v1/chat/completions and /v1/embeddings per rolling minute.")
+    @Option(name: [.long], help: "Global OpenAI-compatible inference request limit per rolling minute.")
     var rateLimitPerMinute: Int = 60
 
-    @Option(name: [.long], help: "Maximum chat completions admitted at once. Defaults to 1 for serialized local inference.")
+    @Option(
+        name: [.long],
+        help: """
+        Maximum local inference requests admitted at once. Defaults to 1; values above 1 automatically enable \
+        supported Gemma4, Qwen-family, and LFM2 decode batching unless overridden by environment.
+        """
+    )
     var maxActiveRequests: Int = 1
 
     @Option(name: [.long], help: "Runtime memory guard tier: off, safe, balanced, aggressive, or custom.")
@@ -468,9 +474,22 @@ struct APIHealthStatus: Codable, Equatable, Sendable {
 
 enum APIServerContract {
     static let defaultMaxTokens = 2048
+    static let maxEmbeddingInputCount = 256
+    static let maxEmbeddingInputUTF8Bytes = 2 * 1_024 * 1_024
+    static let maxImageInferenceSteps = 100
+    static let maxSpeechPromptUTF8Bytes = 32 * 1_024
+    static let maxTranscriptionTokens = 4_096
     static let defaultImageModelID = ModelResolver.ModelID.zetaNano.rawValue
     static let defaultSpeechModelID = Qwen3TTSResources.defaultModelId
     static let defaultTranscriptionModelID = ParakeetResources.defaultModelId
+
+    static func decodeImageGenerationRequest(from data: Data) throws -> OpenAIImageGenerationRequest {
+        try decodeJSONRequest(OpenAIImageGenerationRequest.self, from: data)
+    }
+
+    static func decodeSpeechRequest(from data: Data) throws -> OpenAIAudioSpeechRequest {
+        try decodeJSONRequest(OpenAIAudioSpeechRequest.self, from: data)
+    }
 
     struct ImageGenerationPlan: Equatable, Sendable {
         let modelID: String
@@ -582,6 +601,23 @@ enum APIServerContract {
         guard !texts.isEmpty else {
             throw APIRequestValidationError.invalidField("input", "must contain at least one text")
         }
+        guard texts.count <= maxEmbeddingInputCount else {
+            throw APIRequestValidationError.invalidField(
+                "input",
+                "must contain at most \(maxEmbeddingInputCount) texts"
+            )
+        }
+        var totalUTF8Bytes = 0
+        for text in texts {
+            let textBytes = text.utf8.count
+            guard textBytes <= maxEmbeddingInputUTF8Bytes - totalUTF8Bytes else {
+                throw APIRequestValidationError.invalidField(
+                    "input",
+                    "UTF-8 content must total at most \(maxEmbeddingInputUTF8Bytes) bytes"
+                )
+            }
+            totalUTF8Bytes += textBytes
+        }
         return texts
     }
 
@@ -629,9 +665,7 @@ enum APIServerContract {
         if let n = request.n, n != 1 {
             throw APIRequestValidationError.invalidField("n", "only n=1 is supported")
         }
-        if let steps = request.steps, steps <= 0 {
-            throw APIRequestValidationError.invalidField("steps", "must be greater than zero")
-        }
+        let steps = try imageInferenceSteps(request.steps)
         if let guidanceScale = request.guidance_scale,
            (!guidanceScale.isFinite || guidanceScale < 0) {
             throw APIRequestValidationError.invalidField("guidance_scale", "must be a positive number")
@@ -646,7 +680,7 @@ enum APIServerContract {
             responseFormat: responseFormat,
             seed: request.seed,
             negativePrompt: normalizedOptional(request.negative_prompt),
-            steps: request.steps,
+            steps: steps,
             guidanceScale: request.guidance_scale,
             inputImage: nil,
             strength: nil
@@ -677,7 +711,9 @@ enum APIServerContract {
                 throw APIRequestValidationError.invalidField("n", "only n=1 is supported")
             }
         }
-        let steps = try optionalPositiveIntField(form.field("steps"), field: "steps")
+        let steps = try imageInferenceSteps(
+            optionalPositiveIntField(form.field("steps"), field: "steps")
+        )
         let guidanceScale = try optionalPositiveDoubleField(form.field("guidance_scale"), field: "guidance_scale")
         let strength = try optionalUnitDoubleField(form.field("strength"), field: "strength")
         let size = try imageSize(from: form.field("size"))
@@ -733,10 +769,22 @@ enum APIServerContract {
         guard temperature.isFinite, (0...2).contains(temperature) else {
             throw APIRequestValidationError.invalidField("temperature", "must be between 0 and 2")
         }
+        let voiceDescription = voiceDescription(for: request.voice, instructions: request.instructions)
+        var promptUTF8Bytes = 0
+        for component in [input, voiceDescription] {
+            let componentBytes = component.utf8.count
+            guard componentBytes <= maxSpeechPromptUTF8Bytes - promptUTF8Bytes else {
+                throw APIRequestValidationError.invalidField(
+                    "input",
+                    "input and voice instructions must total at most \(maxSpeechPromptUTF8Bytes) UTF-8 bytes"
+                )
+            }
+            promptUTF8Bytes += componentBytes
+        }
         return SpeechPlan(
             modelID: normalizedSpeechModelID(request.model),
             input: input,
-            voiceDescription: voiceDescription(for: request.voice, instructions: request.instructions),
+            voiceDescription: voiceDescription,
             responseFormat: responseFormat,
             speed: speed,
             temperature: temperature
@@ -1204,6 +1252,36 @@ enum APIServerContract {
               height > 0 else {
             throw APIRequestValidationError.invalidField("size", "expected WIDTHxHEIGHT, for example 1024x1024")
         }
+
+        let maxDimension = 4_096
+        guard width <= maxDimension, height <= maxDimension else {
+            throw APIRequestValidationError.invalidField(
+                "size",
+                "width and height must each be at most \(maxDimension) pixels"
+            )
+        }
+
+        // Validate the pixel product with division so attacker-controlled
+        // dimensions can never overflow an Int before the request reaches a
+        // tensor allocation.
+        let maxPixels = 4_194_304
+        guard width <= maxPixels / height else {
+            throw APIRequestValidationError.invalidField(
+                "size",
+                "total image area must be at most \(maxPixels) pixels"
+            )
+        }
+
+        let imageAlignment = 16
+        guard width >= imageAlignment,
+              height >= imageAlignment,
+              width % imageAlignment == 0,
+              height % imageAlignment == 0 else {
+            throw APIRequestValidationError.invalidField(
+                "size",
+                "width and height must each be at least \(imageAlignment) pixels and divisible by \(imageAlignment)"
+            )
+        }
         return (width, height)
     }
 
@@ -1272,8 +1350,22 @@ enum APIServerContract {
         guard let rawValue = normalizedOptional(rawValue) else {
             return 448
         }
-        guard let value = Int(rawValue), (1...Int(Int32.max)).contains(value) else {
-            throw APIRequestValidationError.invalidField("max_tokens", "must be a positive integer")
+        guard let value = Int(rawValue), (1...maxTranscriptionTokens).contains(value) else {
+            throw APIRequestValidationError.invalidField(
+                "max_tokens",
+                "must be between 1 and \(maxTranscriptionTokens)"
+            )
+        }
+        return value
+    }
+
+    private static func imageInferenceSteps(_ value: Int?) throws -> Int? {
+        guard let value else { return nil }
+        guard (1...maxImageInferenceSteps).contains(value) else {
+            throw APIRequestValidationError.invalidField(
+                "steps",
+                "must be between 1 and \(maxImageInferenceSteps)"
+            )
         }
         return value
     }
@@ -1448,13 +1540,27 @@ enum APIServerContract {
         let millis = milliseconds % 1_000
         return String(format: "%02d:%02d:%02d%@%03d", hours, minutes, secs, separator, millis)
     }
+
+    private static func decodeJSONRequest<Request: Decodable>(
+        _ type: Request.Type,
+        from data: Data
+    ) throws -> Request {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw APIRequestValidationError.invalidPayload
+        }
+    }
 }
 
 enum APIRequestValidationError: LocalizedError, Equatable {
+    case invalidPayload
     case invalidField(String, String)
 
     var errorDescription: String? {
         switch self {
+        case .invalidPayload:
+            return "Invalid request payload."
         case .invalidField(let field, let reason):
             return "Invalid '\(field)': \(reason)."
         }
@@ -1628,7 +1734,7 @@ actor CodeGenServer {
     private let requestLimiter: APIRateLimiter
     private let requestAdmission: RuntimeRequestAdmission
     private let pool: RuntimeModelPool
-    private var embeddingModels: [String: Qwen3EmbeddingModel] = [:]
+    private let sidecarPool: APISidecarModelPool
 
     init(
         defaultModelID: String,
@@ -1653,19 +1759,32 @@ actor CodeGenServer {
         // (The previous double-gate — env AND flag — shipped a serve that
         // silently never batched: /runtime/status showed batchedDecodeSteps=0
         // under concurrent load until the env was discovered.)
-        let batchingDefault = maxActiveRequests > 1
+        let batching = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: maxActiveRequests
+        )
+        let settingsURL = RuntimeModelSettingsStore.defaultURL()
         let runtimePool = RuntimeModelPool(
             defaultModelID: defaultModelID,
             defaultEngine: engine.runtimeServingEngine,
             startupModelPath: modelPath,
+            settingsStore: RuntimeModelSettingsStore(url: settingsURL),
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
-            gemma4ContinuousBatchingEnabled:
-                runtimeOptionalEnvironmentFlag("MERERUN_GEMMA4_CONTINUOUS_BATCHING") ?? batchingDefault,
-            q35ContinuousBatchingEnabled:
-                runtimeOptionalEnvironmentFlag("MERERUN_Q35_CONTINUOUS_BATCHING") ?? batchingDefault,
+            gemma4ContinuousBatchingEnabled: batching.gemma4,
+            q35ContinuousBatchingEnabled: batching.q35,
+            lfm2ContinuousBatchingEnabled: batching.lfm2,
             memoryPressurePolicy: memoryPressurePolicy
         )
         self.pool = runtimePool
+        self.sidecarPool = APISidecarModelPool(
+            settingsURL: settingsURL,
+            memoryPressurePolicy: memoryPressurePolicy,
+            relieveTextModelPressure: {
+                _ = await runtimePool.relieveMemoryPressure(preserveDefault: false)
+            },
+            releaseOneIdleTextModelForLoad: {
+                await runtimePool.releaseOneIdleModelForSidecarLoad() != nil
+            }
+        )
         self.requestAdmission = RuntimeRequestAdmission(
             maxActiveRequests: maxActiveRequests,
             pressureProvider: {
@@ -1943,17 +2062,31 @@ actor CodeGenServer {
             return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
         }
 
+        let admissionLease: RuntimeRequestAdmissionLease
+        do {
+            admissionLease = try await requestAdmission.acquire()
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+
         do {
             let texts = try APIServerContract.embeddingTexts(from: openaiRequest)
             let resolved = try await embeddingModel(for: openaiRequest.model)
-            let result = try resolved.model.embed(texts: texts)
+            let result = try await sidecarPool.embed(
+                modelID: resolved.modelID,
+                modelPath: resolved.modelPath,
+                texts: texts
+            )
             let response = APIServerContract.embeddingResponse(
                 modelId: resolved.modelID,
                 embeddings: result.embeddings,
                 tokenCounts: result.tokenCounts
             )
-            return try jsonResponse(response)
+            let encoded = try jsonResponse(response)
+            await admissionLease.release()
+            return encoded
         } catch {
+            await admissionLease.release()
             return runtimeErrorResponse(error)
         }
     }
@@ -1985,14 +2118,21 @@ actor CodeGenServer {
         }
 
         do {
-            let openaiRequest = try JSONDecoder().decode(
-                OpenAIImageGenerationRequest.self,
+            let openaiRequest = try APIServerContract.decodeImageGenerationRequest(
                 from: Data(body.readableBytesView)
             )
             let plan = try APIServerContract.imageGenerationPlan(from: openaiRequest)
-            let outputURL = try await generateImage(plan)
-            let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
-            return try jsonResponse(response)
+            let admissionLease = try await requestAdmission.acquire()
+            do {
+                let outputURL = try await generateImage(plan)
+                let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
+                let encoded = try jsonResponse(response)
+                await admissionLease.release()
+                return encoded
+            } catch {
+                await admissionLease.release()
+                throw error
+            }
         } catch {
             return runtimeErrorResponse(error)
         }
@@ -2044,9 +2184,17 @@ actor CodeGenServer {
                 inputImageURLs: inputImageURLs,
                 maskImageURL: maskImageURL
             )
-            let outputURL = try await generateImage(plan)
-            let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
-            return try jsonResponse(response)
+            let admissionLease = try await requestAdmission.acquire()
+            do {
+                let outputURL = try await generateImage(plan)
+                let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
+                let encoded = try jsonResponse(response)
+                await admissionLease.release()
+                return encoded
+            } catch {
+                await admissionLease.release()
+                throw error
+            }
         } catch {
             return runtimeErrorResponse(error)
         }
@@ -2079,15 +2227,25 @@ actor CodeGenServer {
         }
 
         do {
-            let openaiRequest = try JSONDecoder().decode(
-                OpenAIAudioSpeechRequest.self,
+            let openaiRequest = try APIServerContract.decodeSpeechRequest(
                 from: Data(body.readableBytesView)
             )
             let plan = try APIServerContract.speechPlan(from: openaiRequest)
-            let outputURL = try await synthesizeSpeech(plan)
-            let responseURL = try speechResponseURL(outputURL, responseFormat: plan.responseFormat)
-            let data = try Data(contentsOf: responseURL)
-            return binaryResponse(data, contentType: APIServerContract.speechContentType(for: plan.responseFormat))
+            let admissionLease = try await requestAdmission.acquire()
+            do {
+                let outputURL = try await synthesizeSpeech(plan)
+                let responseURL = try speechResponseURL(outputURL, responseFormat: plan.responseFormat)
+                let data = try Data(contentsOf: responseURL)
+                let response = binaryResponse(
+                    data,
+                    contentType: APIServerContract.speechContentType(for: plan.responseFormat)
+                )
+                await admissionLease.release()
+                return response
+            } catch {
+                await admissionLease.release()
+                throw error
+            }
         } catch {
             return runtimeErrorResponse(error)
         }
@@ -2127,24 +2285,33 @@ actor CodeGenServer {
                 throw APIRequestValidationError.invalidField("file", "audio file is required")
             }
             let audioURL = try writeMultipartFile(file, directoryName: "mere-run-api-audio")
-            let result = try await transcribeAudio(audioURL: audioURL, plan: plan)
-            switch plan.responseFormat {
-            case "text":
-                return binaryResponse(Data(result.text.utf8), contentType: "text/plain; charset=utf-8")
-            case "srt", "vtt":
-                let subtitle = APIServerContract.transcriptionSubtitle(from: result, format: plan.responseFormat)
-                let contentType = plan.responseFormat == "srt"
-                    ? "application/x-subrip; charset=utf-8"
-                    : "text/vtt; charset=utf-8"
-                return binaryResponse(Data(subtitle.utf8), contentType: contentType)
-            case "verbose_json":
-                return try jsonResponse(
-                    APIServerContract.transcriptionResponse(from: result, verbose: true)
-                )
-            default:
-                return try jsonResponse(
-                    APIServerContract.transcriptionResponse(from: result, verbose: false)
-                )
+            let admissionLease = try await requestAdmission.acquire()
+            do {
+                let result = try await transcribeAudio(audioURL: audioURL, plan: plan)
+                let response: Response
+                switch plan.responseFormat {
+                case "text":
+                    response = binaryResponse(Data(result.text.utf8), contentType: "text/plain; charset=utf-8")
+                case "srt", "vtt":
+                    let subtitle = APIServerContract.transcriptionSubtitle(from: result, format: plan.responseFormat)
+                    let contentType = plan.responseFormat == "srt"
+                        ? "application/x-subrip; charset=utf-8"
+                        : "text/vtt; charset=utf-8"
+                    response = binaryResponse(Data(subtitle.utf8), contentType: contentType)
+                case "verbose_json":
+                    response = try jsonResponse(
+                        APIServerContract.transcriptionResponse(from: result, verbose: true)
+                    )
+                default:
+                    response = try jsonResponse(
+                        APIServerContract.transcriptionResponse(from: result, verbose: false)
+                    )
+                }
+                await admissionLease.release()
+                return response
+            } catch {
+                await admissionLease.release()
+                throw error
             }
         } catch {
             return runtimeErrorResponse(error)
@@ -2193,7 +2360,7 @@ actor CodeGenServer {
         )
     }
 
-    private func embeddingModel(for requestedModel: String) async throws -> (modelID: String, model: Qwen3EmbeddingModel) {
+    private func embeddingModel(for requestedModel: String) async throws -> (modelID: String, modelPath: String) {
         let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         if let spec = ManagedModelCatalog.spec(for: normalized),
            spec.id != Qwen3EmbeddingCatalog.modelId {
@@ -2203,25 +2370,13 @@ actor CodeGenServer {
             )
         }
 
-        if let model = embeddingModels[normalized] {
-            let modelID = ManagedModelCatalog.spec(for: normalized)?.id ?? normalized
-            return (modelID, model)
-        }
-
         let resolution = try await ManagedModelResolver.resolveForRuntime(
             requestedModel: normalized,
             defaultModelID: Qwen3EmbeddingCatalog.modelId,
             progress: nil
         )
         let modelID = resolution.source == .explicitPath ? normalized : resolution.spec.id
-        let model = try Qwen3EmbeddingModel(
-            resources: Qwen3EmbeddingResources(rootURL: resolution.url)
-        )
-        embeddingModels[normalized] = model
-        if modelID != normalized {
-            embeddingModels[modelID] = model
-        }
-        return (modelID, model)
+        return (modelID, resolution.url.standardizedFileURL.path)
     }
 
     private func generateImage(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
@@ -2263,21 +2418,40 @@ actor CodeGenServer {
 
         switch resolved.manifest.family {
         case .klein:
-            _ = try await Flux2KleinGenerator().generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .flux2Klein,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
+                request: request
+            )
         case .zimage:
-            _ = try await ZImageTurboGenerator().generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .zImageTurbo,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
+                request: request
+            )
         case .hidream:
-            let generator = HiDreamO1Generator()
-            defer { generator.unload() }
-            _ = try await generator.generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .hiDreamO1,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
+                request: request
+            )
         case .krea:
-            let generator = Krea2Generator()
-            defer { generator.unload() }
-            _ = try await generator.generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .krea2,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
+                request: request
+            )
         case .ideogram:
-            let generator = Ideogram4Generator()
-            defer { generator.unload() }
-            _ = try await generator.generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .ideogram4,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
+                request: request
+            )
         case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
@@ -2288,6 +2462,12 @@ actor CodeGenServer {
     }
 
     private func generateQwenImageEdit(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
+        guard let modelRoot = QwenImageEditRepository.resolveInstalledModelRoot() else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "qwen-image-edit is not installed; pull it before serving image edits"
+            )
+        }
         let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
         let request = GenerationRequest(
             prompt: plan.prompt,
@@ -2298,13 +2478,17 @@ actor CodeGenServer {
             guidanceScale: plan.guidanceScale ?? 4.0,
             seed: plan.seed,
             outputURL: outputURL,
-            model: plan.modelID,
+            model: modelRoot.path,
             maxSequenceLength: 512,
             inputImage: plan.inputImage,
             strength: plan.strength ?? 0.75
         )
-        let generator = QwenImageEditGenerator()
-        _ = try await generator.generate(request, progressHandler: nil)
+        _ = try await sidecarPool.generateImage(
+            kind: .qwenImageEdit,
+            modelID: QwenImageEditRepository.modelId,
+            modelPath: modelRoot.path,
+            request: request
+        )
         return outputURL
     }
 
@@ -2322,11 +2506,10 @@ actor CodeGenServer {
             temperature: plan.temperature,
             outputURL: outputURL
         )
-        let generator = Qwen3TTSGenerator(modelId: selection.modelID)
-        _ = try await generator.generate(
-            request,
+        _ = try await sidecarPool.synthesizeSpeech(
+            modelID: selection.modelID,
             modelPath: selection.modelPath,
-            progressHandler: nil
+            request: request
         )
         return outputURL
     }
@@ -2359,7 +2542,8 @@ actor CodeGenServer {
             request: request,
             preferredBackend: selection.backend,
             modelOverride: selection.modelOverride,
-            progressHandler: nil
+            progressHandler: nil,
+            executor: sidecarPool
         )
         return execution.result
     }
@@ -2455,7 +2639,10 @@ actor CodeGenServer {
             return unauthorized
         }
         let admission = await requestAdmission.snapshot()
-        let data = try JSONEncoder().encode(await pool.status(admission: admission))
+        let sidecars = await sidecarPool.status()
+        let data = try JSONEncoder().encode(
+            await pool.status(admission: admission, sidecars: sidecars)
+        )
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],
@@ -2467,10 +2654,19 @@ actor CodeGenServer {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
         }
+        let admissionLease: RuntimeRequestAdmissionLease
+        do {
+            admissionLease = try await requestAdmission.acquire()
+        } catch {
+            return runtimeErrorResponse(error)
+        }
         do {
             let snapshot = try await pool.loadModel(idOrAlias: id)
-            return try jsonResponse(snapshot)
+            let response = try jsonResponse(snapshot)
+            await admissionLease.release()
+            return response
         } catch {
+            await admissionLease.release()
             return runtimeErrorResponse(error)
         }
     }
@@ -2479,10 +2675,19 @@ actor CodeGenServer {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
         }
+        let admissionLease: RuntimeRequestAdmissionLease
+        do {
+            admissionLease = try await requestAdmission.acquire()
+        } catch {
+            return runtimeErrorResponse(error)
+        }
         do {
             let snapshot = try await pool.unloadModel(idOrAlias: id)
-            return try jsonResponse(snapshot)
+            let response = try jsonResponse(snapshot)
+            await admissionLease.release()
+            return response
         } catch {
+            await admissionLease.release()
             return runtimeErrorResponse(error)
         }
     }
@@ -2907,6 +3112,12 @@ actor CodeGenServer {
                     type: "server_error"
                 )
             }
+        case let error as APISidecarModelPoolError:
+            return makeErrorResponse(
+                status: .serviceUnavailable,
+                message: error.localizedDescription,
+                type: "memory_pressure_error"
+            )
         case let error as APIRequestValidationError:
             return makeErrorResponse(
                 status: .badRequest,

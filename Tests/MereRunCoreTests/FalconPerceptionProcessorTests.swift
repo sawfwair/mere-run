@@ -233,8 +233,44 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
         )
         XCTAssertEqual(decode.positionIDs?.asArray(Int32.self), [3])
         XCTAssertNil(decode.posHW)
-        XCTAssertEqual(decode.mask?.shape, [1, 1, 1, 6])
-        XCTAssertEqual(decode.mask?.asArray(Bool.self), [true, true, true, true, true, true])
+        XCTAssertNil(decode.mask)
+    }
+
+    func testVectorizedFalconRotaryTablesMatchScalarReference() {
+        let frequencies = MLXArray([
+            Float(1), 0, 0, 1,
+            0.5, 0.25, -1, 1,
+        ], [2, 2, 2])
+        let positions = MLXArray([
+            Float(1), 2,
+            -1, 0.5,
+        ], [1, 2, 2])
+
+        let (cosines, sines) = FalconPerceptionModel.computeGoldenFrequencies(
+            freqsGolden: frequencies,
+            posHW: positions
+        )
+        MLX.eval(cosines, sines)
+
+        let expectedAngles: [Float] = [1, 2, 1, 1, -1, 0.5, -0.375, 1.5]
+        XCTAssertEqual(cosines.shape, [1, 2, 2, 2])
+        XCTAssertEqual(sines.shape, [1, 2, 2, 2])
+        for (actual, angle) in zip(cosines.asArray(Float.self), expectedAngles) {
+            XCTAssertEqual(actual, cos(angle), accuracy: 1e-6)
+        }
+        for (actual, angle) in zip(sines.asArray(Float.self), expectedAngles) {
+            XCTAssertEqual(actual, sin(angle), accuracy: 1e-6)
+        }
+
+        let cosineTable = MLXArray((0..<8).map(Float.init), [4, 2])
+        let sineTable = cosineTable + 10
+        let selected = FalconPerceptionModel.selectCosSinTables(
+            positionIDs: MLXArray([Int32(2), Int32(0), Int32(3)]),
+            cosTable: cosineTable,
+            sinTable: sineTable
+        )
+        XCTAssertEqual(selected.0?.asArray(Float.self), [4, 5, 0, 1, 6, 7])
+        XCTAssertEqual(selected.1?.asArray(Float.self), [14, 15, 10, 11, 16, 17])
     }
 
     func testCachedDecodeMatchesFullForwardForPresenceStep() {
@@ -288,6 +324,7 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
         let cachedModel = FalconPerceptionModel(config: config)
         MLXRandom.seed(99)
         let fullModel = FalconPerceptionModel(config: config)
+        cachedModel.languageModel.model.layers[0].selfAttn.captureDebugStages = true
 
         let promptPositionData = FalconPerceptionModel.computePositionData(
             inputIDs: promptIDs,
@@ -305,9 +342,12 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
         var cachedLogits = cachedModel.forward(
             inputIDs: promptIDs,
             inputsEmbeds: promptEmbeds,
-            caches: caches
+            caches: caches,
+            lastPositionOnly: true
         )
         MLX.eval(cachedLogits)
+        XCTAssertEqual(cachedLogits.shape, [1, 1, 512])
+        XCTAssertEqual(cachedModel.lastHiddenState?.shape, [1, promptTokens.count, 32])
         cachedModel.finishGroundingPrefill()
 
         let presenceIDs = MLXArray([presenceToken], [1, 1])
@@ -318,6 +358,12 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
             caches: caches
         )
         MLX.eval(cachedLogits)
+        XCTAssertTrue(caches.allSatisfy { $0?.offset == promptTokens.count + 1 })
+        let cacheCapture = try? XCTUnwrap(
+            cachedModel.languageModel.model.layers[0].selfAttn.lastDebugCapture
+        )
+        XCTAssertEqual(cacheCapture?.keysAfterCache?.dim(1), config.textConfig.numAttentionHeads)
+        XCTAssertEqual(cacheCapture?.valuesAfterCache?.dim(1), config.textConfig.numKeyValueHeads)
 
         let fullPositionData = FalconPerceptionModel.computePositionData(
             inputIDs: fullIDs,

@@ -7,12 +7,40 @@ import Darwin
 /// Tri-state environment flag: nil when unset, so callers can supply a
 /// context-dependent default (e.g. continuous batching following
 /// --max-active-requests).
-func runtimeOptionalEnvironmentFlag(_ key: String) -> Bool? {
-    guard let rawValue = ProcessInfo.processInfo.environment[key] else {
+func runtimeOptionalEnvironmentFlag(
+    _ key: String,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+) -> Bool? {
+    guard let rawValue = environment[key] else {
         return nil
     }
     let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     return !["0", "false", "no", "off"].contains(normalized)
+}
+
+struct RuntimeContinuousBatchingConfiguration: Equatable, Sendable {
+    let gemma4: Bool
+    let q35: Bool
+    let lfm2: Bool
+
+    init(
+        maxActiveRequests: Int,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
+        let defaultEnabled = maxActiveRequests > 1
+        gemma4 = runtimeOptionalEnvironmentFlag(
+            "MERERUN_GEMMA4_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+        q35 = runtimeOptionalEnvironmentFlag(
+            "MERERUN_Q35_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+        lfm2 = runtimeOptionalEnvironmentFlag(
+            "MERERUN_LFM2_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+    }
 }
 
 private func runtimeDefaultOnEnvironmentFlag(_ key: String) -> Bool {
@@ -34,6 +62,52 @@ struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     let models: [RuntimeModelPoolEntrySnapshot]
     let cacheStats: RuntimeCacheStatsSummary
     let benchmarkStats: RuntimeBenchmarkStatsSummary?
+    var sidecars: RuntimeSidecarPoolStatus? = nil
+}
+
+enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
+    case image
+    case speech
+    case transcription
+    case embedding
+}
+
+enum RuntimeSidecarEvictionReason: String, Codable, Equatable, Sendable {
+    case ttl
+    case memoryPressure = "memory_pressure"
+}
+
+struct RuntimeSidecarResidentSnapshot: Codable, Equatable, Sendable {
+    let kind: RuntimeSidecarKind
+    let modelID: String?
+    let modelPath: String?
+    let variant: String?
+    let loaded: Bool
+    /// A resident generator can exist while its first model load is still in
+    /// progress or after that load failed. Older payloads omit this field.
+    var ready: Bool? = nil
+    let activeRequests: Int
+    let queuedRequests: Int
+    let loadedAt: Date?
+    let lastAccess: Date?
+    let lastEvictedAt: Date?
+    let lastEvictionReason: RuntimeSidecarEvictionReason?
+    let pinned: Bool
+    let ttlSeconds: Int
+    let loadCount: Int
+    let replacementCount: Int
+    let evictionCount: Int
+    let completedRequests: Int
+    let failedRequests: Int
+}
+
+struct RuntimeSidecarPoolStatus: Codable, Equatable, Sendable {
+    let defaultIdleTTLSeconds: Int
+    let pressure: String
+    let loadedCount: Int
+    let activeRequests: Int
+    let queuedRequests: Int
+    let residents: [RuntimeSidecarResidentSnapshot]
 }
 
 struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
@@ -47,10 +121,16 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
         gemma4PrefixKVCacheEnabled: Bool,
         gemma4ContinuousBatchingEnabled: Bool,
         q35ContinuousBatchingEnabled: Bool,
-        q35PrefixKVCacheEnabled: Bool
+        q35PrefixKVCacheEnabled: Bool,
+        lfm2ContinuousBatchingEnabled: Bool = false,
+        lfm2PrefixKVCacheEnabled: Bool = false
     ) -> RuntimeControlPlaneCapabilities {
-        let prefixKVCacheEnabled = gemma4PrefixKVCacheEnabled || q35PrefixKVCacheEnabled
-        let continuousBatchingEnabled = gemma4ContinuousBatchingEnabled || q35ContinuousBatchingEnabled
+        let prefixKVCacheEnabled = gemma4PrefixKVCacheEnabled
+            || q35PrefixKVCacheEnabled
+            || lfm2PrefixKVCacheEnabled
+        let continuousBatchingEnabled = gemma4ContinuousBatchingEnabled
+            || q35ContinuousBatchingEnabled
+            || lfm2ContinuousBatchingEnabled
         return RuntimeControlPlaneCapabilities(
             requestAdmission: RuntimeCapabilityStatus(
                 available: true,
@@ -60,22 +140,22 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
             chunkedPrefill: RuntimeCapabilityStatus(
                 available: true,
                 enabled: true,
-                detail: "Gemma4 and Qwen-family models prefill long prompts in cancellable chunks."
+                detail: "Gemma4, Qwen-family, and LFM2 models prefill long prompts in cancellable chunks."
             ),
             continuousBatching: RuntimeCapabilityStatus(
                 available: true,
                 enabled: continuousBatchingEnabled,
                 detail: continuousBatchingEnabled
-                    ? "Gemma4 and Qwen-family decode rows are packed when typed cache state is compatible; Qwen linear-only rows may batch across decode positions."
-                    : "Decode batching engages automatically when --max-active-requests is above 1; MERERUN_GEMMA4_CONTINUOUS_BATCHING / MERERUN_Q35_CONTINUOUS_BATCHING override per engine."
+                    ? "Gemma4, Qwen-family, and LFM2 decode rows are packed when typed cache state is compatible; Qwen-family and LFM2 rows may batch across decode positions."
+                    : "Decode batching engages automatically when --max-active-requests is above 1; the per-engine MERERUN_*_CONTINUOUS_BATCHING flags override it."
             ),
             prefixKVReuse: RuntimeCapabilityStatus(
                 available: true,
                 enabled: prefixKVCacheEnabled,
                 detail: prefixKVCacheEnabled
-                    ? "In-memory prefix KV reuse is enabled for matching Gemma4 or Qwen-family text token prefixes."
+                    ? "In-memory prefix KV reuse is enabled for matching Gemma4, Qwen-family, or LFM2 text token prefixes."
                     : "In-memory prefix KV reuse is disabled by " +
-                        "MERERUN_GEMMA4_PREFIX_KV_CACHE=0 or MERERUN_Q35_PREFIX_KV_CACHE=0."
+                        "the per-engine MERERUN_*_PREFIX_KV_CACHE flags."
             ),
             ssdKVCache: RuntimeCapabilityStatus(
                 available: false,
@@ -396,6 +476,7 @@ enum RuntimeMemoryGuardTier: String, Codable, CaseIterable, Equatable, Sendable 
 struct RuntimeMemorySample: Equatable, Sendable {
     let physicalBytes: UInt64
     let residentBytes: UInt64?
+    let physicalFootprintBytes: UInt64?
     let availableBytes: UInt64?
     let freeBytes: UInt64?
     let activeBytes: UInt64?
@@ -404,6 +485,7 @@ struct RuntimeMemorySample: Equatable, Sendable {
     init(
         physicalBytes: UInt64,
         residentBytes: UInt64?,
+        physicalFootprintBytes: UInt64? = nil,
         availableBytes: UInt64? = nil,
         freeBytes: UInt64? = nil,
         activeBytes: UInt64? = nil,
@@ -411,6 +493,7 @@ struct RuntimeMemorySample: Equatable, Sendable {
     ) {
         self.physicalBytes = physicalBytes
         self.residentBytes = residentBytes
+        self.physicalFootprintBytes = physicalFootprintBytes
         self.availableBytes = availableBytes
         self.freeBytes = freeBytes
         self.activeBytes = activeBytes
@@ -461,8 +544,32 @@ struct RuntimeMemoryPressurePolicy: Equatable, Sendable {
         return .nominal
     }
 
+    func projectedPressure(
+        for sample: RuntimeMemorySample,
+        additionalBytes: UInt64
+    ) -> RuntimeMemoryPressureLevel {
+        guard tier != .off else {
+            return .disabled
+        }
+        guard let currentBytes = currentBytes(for: sample),
+              let limits = limits(for: sample) else {
+            return .unknown
+        }
+        let (projected, overflow) = currentBytes.addingReportingOverflow(additionalBytes)
+        guard !overflow else {
+            return .critical
+        }
+        if projected >= limits.hard {
+            return .critical
+        }
+        if projected >= limits.soft {
+            return .elevated
+        }
+        return .nominal
+    }
+
     func currentBytes(for sample: RuntimeMemorySample) -> UInt64? {
-        sample.residentBytes
+        sample.physicalFootprintBytes ?? sample.residentBytes
     }
 
     func limits(for sample: RuntimeMemorySample) -> (ceiling: UInt64, soft: UInt64, hard: UInt64)? {
@@ -499,19 +606,19 @@ struct RuntimeMemoryPressurePolicy: Equatable, Sendable {
     }
 
     private func dynamicCeiling(for sample: RuntimeMemorySample) -> UInt64 {
-        guard let residentBytes = sample.residentBytes else {
+        guard let currentBytes = currentBytes(for: sample) else {
             return staticCeiling(for: sample)
         }
         if let freeBytes = sample.freeBytes,
            let inactiveBytes = sample.inactiveBytes,
            let activeBytes = sample.activeBytes {
-            return residentBytes
+            return currentBytes
                 + freeBytes
                 + inactiveBytes
                 + UInt64((Double(activeBytes) * activeReclaimRatio).rounded(.down))
         }
         if let availableBytes = sample.availableBytes {
-            return residentBytes + availableBytes
+            return currentBytes + availableBytes
         }
         return sample.physicalBytes
     }
@@ -554,15 +661,41 @@ private enum RuntimeProcessMemory {
     static func currentSample() -> RuntimeMemorySample {
         let physicalBytes = ProcessInfo.processInfo.physicalMemory
         let residentBytes = currentResidentBytes()
+        let physicalFootprintBytes = currentPhysicalFootprintBytes()
         let host = currentHostMemory()
         return RuntimeMemorySample(
             physicalBytes: physicalBytes,
             residentBytes: residentBytes,
+            physicalFootprintBytes: physicalFootprintBytes,
             availableBytes: host.availableBytes,
             freeBytes: host.freeBytes,
             activeBytes: host.activeBytes,
             inactiveBytes: host.inactiveBytes
         )
+    }
+
+    private static func currentPhysicalFootprintBytes() -> UInt64? {
+        #if canImport(Darwin)
+        var info = rusage_info_v4()
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            // The Darwin module imports `rusage_info_t *` as a pointer to an
+            // optional raw pointer. Rebinding the struct storage mirrors the
+            // C API's required `(rusage_info_t *)&info` cast; passing `&raw`
+            // would instead let the kernel overwrite the pointer variable.
+            pointer.withMemoryRebound(
+                to: rusage_info_t?.self,
+                capacity: 1
+            ) { rebound in
+                proc_pid_rusage(getpid(), RUSAGE_INFO_V4, rebound)
+            }
+        }
+        guard result == 0 else {
+            return nil
+        }
+        return info.ri_phys_footprint
+        #else
+        return nil
+        #endif
     }
 
     private static func currentResidentBytes() -> UInt64? {
@@ -648,6 +781,10 @@ struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
     let engine: RuntimeServingEngine
     let installPath: String?
     let loaded: Bool
+    /// `loaded` remains the compatibility field for resident model objects.
+    /// `ready` distinguishes a resident still preparing from one that can
+    /// serve requests. Optional decoding preserves older status payloads.
+    var ready: Bool? = nil
     let activeRequests: Int
     let lastAccess: Date?
     let lastError: String?
@@ -704,6 +841,12 @@ enum RuntimeModelPoolError: LocalizedError, Equatable {
 }
 
 actor RuntimeModelPool {
+    private struct ModelPreparation {
+        let token: UUID
+        let task: Task<RuntimeLoadedModel, Error>
+        var waiterIDs: Set<UUID> = []
+    }
+
     private struct MutableState {
         var activeRequests = 0
         var lastAccess: Date?
@@ -764,11 +907,19 @@ actor RuntimeModelPool {
     private let q35PrefixKVCacheEnabled: Bool
     private let q35ContinuousBatchingEnabled: Bool
     private let lfm2PrefixKVCacheEnabled: Bool
+    private let lfm2ContinuousBatchingEnabled: Bool
     private let currentDate: @Sendable () -> Date
     private let currentMemorySample: @Sendable () -> RuntimeMemorySample
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
+    private let ensureMLXAvailable: @Sendable () throws -> Void
+    private let prepareLoadedModel: @Sendable (RuntimeLoadedModel) async throws -> Void
+    private let unloadLoadedModel: @Sendable (RuntimeLoadedModel) async -> Void
 
     private var loadedModels: [String: RuntimeLoadedModel] = [:]
+    private var loadedModelTokens: [String: UUID] = [:]
+    private var modelPreparations: [String: ModelPreparation] = [:]
+    private var preparationCleanupTasks: [UUID: Task<Void, Never>] = [:]
+    private var preparingModelIDs: Set<String> = []
     private var states: [String: MutableState] = [:]
 
     init(
@@ -782,9 +933,22 @@ actor RuntimeModelPool {
         q35PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_Q35_PREFIX_KV_CACHE"),
         q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
         lfm2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_LFM2_PREFIX_KV_CACHE"),
+        lfm2ContinuousBatchingEnabled: Bool =
+            ProcessInfo.processInfo.environment["MERERUN_LFM2_CONTINUOUS_BATCHING"] == "1",
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
-        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
+        ensureMLXAvailable: @escaping @Sendable () throws -> Void = {
+            try MLXBundleSupport.ensureAvailable(quiet: true)
+        },
+        prepareLoadedModel: @escaping @Sendable (RuntimeLoadedModel) async throws -> Void = { loaded in
+            try await loaded.prepare { progress in
+                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
+            }
+        },
+        unloadLoadedModel: @escaping @Sendable (RuntimeLoadedModel) async -> Void = { loaded in
+            await loaded.unload()
+        }
     ) {
         self.defaultModelID = defaultModelID
         self.defaultEngine = defaultEngine
@@ -796,9 +960,13 @@ actor RuntimeModelPool {
         self.q35PrefixKVCacheEnabled = q35PrefixKVCacheEnabled
         self.q35ContinuousBatchingEnabled = q35ContinuousBatchingEnabled
         self.lfm2PrefixKVCacheEnabled = lfm2PrefixKVCacheEnabled
+        self.lfm2ContinuousBatchingEnabled = lfm2ContinuousBatchingEnabled
         self.currentDate = currentDate
         self.currentMemorySample = currentMemorySample
         self.memoryPressurePolicy = memoryPressurePolicy
+        self.ensureMLXAvailable = ensureMLXAvailable
+        self.prepareLoadedModel = prepareLoadedModel
+        self.unloadLoadedModel = unloadLoadedModel
     }
 
     func preloadDefault() async throws {
@@ -810,10 +978,13 @@ actor RuntimeModelPool {
     }
 
     func status() async -> RuntimeModelPoolStatus {
-        await status(admission: nil)
+        await status(admission: nil, sidecars: nil)
     }
 
-    func status(admission: RuntimeRequestAdmissionSnapshot?) async -> RuntimeModelPoolStatus {
+    func status(
+        admission: RuntimeRequestAdmissionSnapshot?,
+        sidecars: RuntimeSidecarPoolStatus? = nil
+    ) async -> RuntimeModelPoolStatus {
         await evictIdleModels()
         let memorySample = currentMemorySample()
         let memoryLimits = memoryPressurePolicy.limits(for: memorySample)
@@ -849,7 +1020,9 @@ actor RuntimeModelPool {
             )
         }
         let activeRequests = snapshots.reduce(0) { $0 + $1.activeRequests }
+            + (sidecars?.activeRequests ?? 0)
         let loadedCount = snapshots.filter { $0.loaded }.count
+            + (sidecars?.loadedCount ?? 0)
         return RuntimeModelPoolStatus(
             object: "runtime.status",
             defaultModel: defaultModelID,
@@ -860,7 +1033,9 @@ actor RuntimeModelPool {
                 gemma4PrefixKVCacheEnabled: gemma4PrefixKVCacheEnabled,
                 gemma4ContinuousBatchingEnabled: gemma4ContinuousBatchingEnabled,
                 q35ContinuousBatchingEnabled: q35ContinuousBatchingEnabled,
-                q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled
+                q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled,
+                lfm2ContinuousBatchingEnabled: lfm2ContinuousBatchingEnabled,
+                lfm2PrefixKVCacheEnabled: lfm2PrefixKVCacheEnabled
             ),
             memory: RuntimeMemorySnapshot(
                 physicalBytes: memorySample.physicalBytes,
@@ -883,7 +1058,8 @@ actor RuntimeModelPool {
                 stats: snapshots.compactMap { $0.benchmarkStats }.filter {
                     $0.completedRequests > 0 || $0.failedRequests > 0
                 }
-            )
+            ),
+            sidecars: sidecars
         )
     }
 
@@ -901,8 +1077,14 @@ actor RuntimeModelPool {
         guard state.activeRequests == 0 else {
             throw RuntimeModelPoolError.unloadConflict(resolved.id, activeRequests: state.activeRequests)
         }
-        if let loaded = loadedModels.removeValue(forKey: resolved.id) {
-            await loaded.unload()
+        if let preparation = modelPreparations[resolved.id] {
+            await invalidatePreparation(
+                preparation,
+                modelID: resolved.id,
+                error: nil
+            )
+        } else if let loaded = removeLoadedModel(for: resolved.id) {
+            await unloadLoadedModel(loaded)
         }
         touch(id: resolved.id, error: nil)
         return try snapshot(idOrAlias: resolved.id)
@@ -930,6 +1112,47 @@ actor RuntimeModelPool {
 
     func currentMemoryPressure() -> RuntimeMemoryPressureLevel {
         memoryPressurePolicy.pressure(for: currentMemorySample())
+    }
+
+    /// Releases idle text runtimes one at a time, sampling pressure again
+    /// after every unload. Sidecar admission uses `preserveDefault: false`
+    /// before considering its own residents: an idle startup model is cheaper
+    /// to reload than keeping its full footprint beside a large media model.
+    @discardableResult
+    func relieveMemoryPressure(
+        excluding excludedIDs: Set<String> = [],
+        preserveDefault: Bool = true
+    ) async -> [String] {
+        var protectedIDs = excludedIDs
+        if preserveDefault {
+            protectedIDs.insert(defaultModelID)
+        }
+        var evicted: [String] = []
+        while true {
+            let pressure = memoryPressurePolicy.pressure(for: currentMemorySample())
+            switch pressure {
+            case .disabled, .unknown, .nominal:
+                return evicted.sorted()
+            case .elevated, .critical:
+                break
+            }
+            guard let id = await evictOldestIdleUnpinnedModel(excluding: protectedIDs) else {
+                return evicted.sorted()
+            }
+            evicted.append(id)
+            await Task.yield()
+        }
+    }
+
+    /// Proactively releases one least-recently-used idle, unpinned text
+    /// resident for a cold sidecar whose projected load exceeds the memory
+    /// guard. The caller re-samples after each eviction, preserving every warm
+    /// model that is not needed for headroom.
+    @discardableResult
+    func releaseOneIdleModelForSidecarLoad(
+        excluding excludedIDs: Set<String> = []
+    ) async -> String? {
+        await evictOldestIdleUnpinnedModel(excluding: excludedIDs)
     }
 
     func makeChatPlan(
@@ -1028,6 +1251,7 @@ actor RuntimeModelPool {
         for (id, loaded) in loadedEntries {
             let state = state(for: id)
             guard loadedModels[id] != nil,
+                  !preparingModelIDs.contains(id),
                   !excludedIDs.contains(id),
                   let modelSettings = settings[id],
                   !modelSettings.pinned,
@@ -1038,8 +1262,8 @@ actor RuntimeModelPool {
                 continue
             }
 
-            loadedModels.removeValue(forKey: id)
-            await loaded.unload()
+            _ = removeLoadedModel(for: id)
+            await unloadLoadedModel(loaded)
             evicted.append(id)
         }
 
@@ -1068,6 +1292,8 @@ actor RuntimeModelPool {
             let state = state(for: id)
             let modelSettings = settings[id] ?? RuntimeModelSettings()
             guard !excludedIDs.contains(id),
+                  id != defaultModelID,
+                  !preparingModelIDs.contains(id),
                   state.activeRequests == 0,
                   !modelSettings.pinned else {
                 return nil
@@ -1089,35 +1315,240 @@ actor RuntimeModelPool {
             guard evictionLimit.map({ evicted.count < $0 }) ?? true else {
                 break
             }
-            guard let loaded = loadedModels.removeValue(forKey: candidate.id) else {
+            guard let loaded = removeLoadedModel(for: candidate.id) else {
                 continue
             }
-            await loaded.unload()
+            await unloadLoadedModel(loaded)
             evicted.append(candidate.id)
         }
 
         return evicted.sorted()
     }
 
+    private func evictOldestIdleUnpinnedModel(
+        excluding excludedIDs: Set<String>
+    ) async -> String? {
+        let settings = (try? settingsStore.load())?.models ?? [:]
+        let candidate = loadedModels.keys.compactMap { id -> RuntimeLRUEvictionCandidate? in
+            let state = state(for: id)
+            let modelSettings = settings[id] ?? RuntimeModelSettings()
+            guard !excludedIDs.contains(id),
+                  !preparingModelIDs.contains(id),
+                  state.activeRequests == 0,
+                  !modelSettings.pinned else {
+                return nil
+            }
+            return RuntimeLRUEvictionCandidate(
+                id: id,
+                lastAccess: state.lastAccess ?? .distantPast
+            )
+        }
+        .sorted {
+            if $0.lastAccess == $1.lastAccess {
+                return $0.id < $1.id
+            }
+            return $0.lastAccess < $1.lastAccess
+        }
+        .first
+
+        guard let candidate,
+              let loaded = removeLoadedModel(for: candidate.id) else {
+            return nil
+        }
+        await unloadLoadedModel(loaded)
+        return candidate.id
+    }
+
     private func ensureLoaded(_ resolved: ResolvedModel) async throws -> RuntimeLoadedModel {
-        if let loaded = loadedModels[resolved.id] {
+        if let loaded = loadedModels[resolved.id], !preparingModelIDs.contains(resolved.id) {
+            return loaded
+        }
+        if let preparation = modelPreparations[resolved.id] {
+            return try await awaitPreparation(preparation, modelID: resolved.id)
+        }
+
+        try ensureMLXAvailable()
+        let loaded = makeLoadedModel(for: resolved)
+        let token = UUID()
+        loadedModels[resolved.id] = loaded
+        loadedModelTokens[resolved.id] = token
+        preparingModelIDs.insert(resolved.id)
+        let prepareLoadedModel = self.prepareLoadedModel
+        let task = Task<RuntimeLoadedModel, Error> {
+            try await prepareLoadedModel(loaded)
+            return loaded
+        }
+        let preparation = ModelPreparation(token: token, task: task)
+        modelPreparations[resolved.id] = preparation
+        return try await awaitPreparation(preparation, modelID: resolved.id)
+    }
+
+    private func awaitPreparation(
+        _ preparation: ModelPreparation,
+        modelID: String
+    ) async throws -> RuntimeLoadedModel {
+        let waiterID = UUID()
+        guard var currentPreparation = modelPreparations[modelID],
+              currentPreparation.token == preparation.token else {
+            return try await finalizedLoadedModel(
+                modelID: modelID,
+                token: preparation.token
+            )
+        }
+        currentPreparation.waiterIDs.insert(waiterID)
+        modelPreparations[modelID] = currentPreparation
+
+        return try await withTaskCancellationHandler {
+            do {
+                _ = try await preparation.task.value
+                try Task.checkCancellation()
+                return try await finalizedLoadedModel(
+                    modelID: modelID,
+                    token: preparation.token
+                )
+            } catch {
+                if Task.isCancelled {
+                    await cancelPreparationWaiter(
+                        modelID: modelID,
+                        token: preparation.token,
+                        waiterID: waiterID
+                    )
+                } else {
+                    await failPreparation(
+                        preparation,
+                        modelID: modelID,
+                        error: error
+                    )
+                }
+                throw error
+            }
+        } onCancel: {
+            Task {
+                await self.cancelPreparationWaiter(
+                    modelID: modelID,
+                    token: preparation.token,
+                    waiterID: waiterID
+                )
+            }
+        }
+    }
+
+    private func finalizedLoadedModel(
+        modelID: String,
+        token: UUID
+    ) async throws -> RuntimeLoadedModel {
+        if let cleanup = preparationCleanupTasks[token] {
+            await cleanup.value
+            preparationCleanupTasks.removeValue(forKey: token)
+            throw CancellationError()
+        }
+
+        if let preparation = modelPreparations[modelID], preparation.token == token {
+            guard loadedModelTokens[modelID] == token,
+                  let loaded = loadedModels[modelID] else {
+                await invalidatePreparation(
+                    preparation,
+                    modelID: modelID,
+                    error: CancellationError().localizedDescription
+                )
+                throw CancellationError()
+            }
+            modelPreparations.removeValue(forKey: modelID)
+            preparingModelIDs.remove(modelID)
+            touch(id: modelID, error: nil)
             return loaded
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: true)
-        let loaded = makeLoadedModel(for: resolved)
-        loadedModels[resolved.id] = loaded
-        do {
-            try await loaded.prepare { progress in
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-            touch(id: resolved.id, error: nil)
+        // A different waiter may already have finalized this generation. An
+        // unload followed by a reload has a different token and must never be
+        // returned to a stale waiter from the prior generation.
+        if loadedModelTokens[modelID] == token,
+           !preparingModelIDs.contains(modelID),
+           let loaded = loadedModels[modelID] {
             return loaded
-        } catch {
-            loadedModels.removeValue(forKey: resolved.id)
-            touch(id: resolved.id, error: error.localizedDescription)
-            throw error
         }
+        throw CancellationError()
+    }
+
+    private func cancelPreparationWaiter(
+        modelID: String,
+        token: UUID,
+        waiterID: UUID
+    ) async {
+        guard var preparation = modelPreparations[modelID],
+              preparation.token == token,
+              preparation.waiterIDs.remove(waiterID) != nil else {
+            await awaitPreparationCleanup(token: token)
+            return
+        }
+        guard preparation.waiterIDs.isEmpty else {
+            modelPreparations[modelID] = preparation
+            return
+        }
+        await invalidatePreparation(preparation, modelID: modelID, error: nil)
+    }
+
+    private func failPreparation(
+        _ preparation: ModelPreparation,
+        modelID: String,
+        error: Error
+    ) async {
+        await invalidatePreparation(
+            preparation,
+            modelID: modelID,
+            error: error.localizedDescription
+        )
+    }
+
+    private func invalidatePreparation(
+        _ preparation: ModelPreparation,
+        modelID: String,
+        error: String?
+    ) async {
+        if modelPreparations[modelID]?.token == preparation.token {
+            modelPreparations.removeValue(forKey: modelID)
+            preparingModelIDs.remove(modelID)
+            preparation.task.cancel()
+            if let error {
+                touch(id: modelID, error: error)
+            }
+            if let loaded = removeLoadedModel(for: modelID, matching: preparation.token) {
+                let unloadLoadedModel = self.unloadLoadedModel
+                let preparationTask = preparation.task
+                preparationCleanupTasks[preparation.token] = Task {
+                    // Generator actors are reentrant across model resolution
+                    // and loading awaits. Let cancellation settle preparation
+                    // before unloading so a resumed prepare cannot repopulate
+                    // the old generation after cleanup.
+                    _ = await preparationTask.result
+                    await unloadLoadedModel(loaded)
+                }
+            }
+        }
+        await awaitPreparationCleanup(token: preparation.token)
+    }
+
+    private func awaitPreparationCleanup(token: UUID) async {
+        guard let cleanup = preparationCleanupTasks[token] else {
+            return
+        }
+        await cleanup.value
+        preparationCleanupTasks.removeValue(forKey: token)
+    }
+
+    private func removeLoadedModel(for modelID: String) -> RuntimeLoadedModel? {
+        loadedModelTokens.removeValue(forKey: modelID)
+        return loadedModels.removeValue(forKey: modelID)
+    }
+
+    private func removeLoadedModel(
+        for modelID: String,
+        matching token: UUID
+    ) -> RuntimeLoadedModel? {
+        guard loadedModelTokens[modelID] == token else {
+            return nil
+        }
+        return removeLoadedModel(for: modelID)
     }
 
     private func makeLoadedModel(for resolved: ResolvedModel) -> RuntimeLoadedModel {
@@ -1158,7 +1589,8 @@ actor RuntimeModelPool {
             return .textChatLFM2(
                 LFM2Generator(
                     modelId: resolved.id,
-                    prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled
+                    prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
+                    continuousBatchingEnabled: lfm2ContinuousBatchingEnabled
                 ),
                 modelPath: resolved.installPath
             )
@@ -1314,7 +1746,7 @@ actor RuntimeModelPool {
         } else {
             installPath = spec?.managedRuntimeURL()?.path
         }
-        return RuntimeModelPoolEntrySnapshot(
+        var snapshot = RuntimeModelPoolEntrySnapshot(
             id: id,
             category: spec?.category.rawValue ?? category(for: engine),
             engine: engine,
@@ -1337,6 +1769,8 @@ actor RuntimeModelPool {
             mtp: mtp,
             benchmarkStats: state.benchmarkStats
         )
+        snapshot.ready = loadedModels[id] != nil && !preparingModelIDs.contains(id)
+        return snapshot
     }
 
     private func applyDefaults(
@@ -1393,9 +1827,30 @@ actor RuntimeModelPool {
         activeRequests: Int = 0
     ) {
         loadedModels[id] = .textCode(CodeGenGenerator(modelId: id), modelPath: nil)
+        loadedModelTokens[id] = UUID()
+        preparingModelIDs.remove(id)
         var state = state(for: id)
         state.activeRequests = activeRequests
         state.lastAccess = lastAccess
+        states[id] = state
+    }
+
+    func seedLoadedLFM2ForTesting(
+        id: String,
+        continuousBatchingEnabled: Bool
+    ) {
+        loadedModels[id] = .textChatLFM2(
+            LFM2Generator(
+                modelId: id,
+                prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
+                continuousBatchingEnabled: continuousBatchingEnabled
+            ),
+            modelPath: nil
+        )
+        loadedModelTokens[id] = UUID()
+        preparingModelIDs.remove(id)
+        var state = state(for: id)
+        state.lastAccess = currentDate()
         states[id] = state
     }
     #endif
@@ -1433,7 +1888,7 @@ actor RuntimeRequestAdmission {
 
     func acquire() async throws -> RuntimeRequestAdmissionLease {
         await drain()
-        if await canAdmitNow() {
+        if await canAdmitNow(requireEmptyQueue: true) {
             return admit()
         }
 
@@ -1449,6 +1904,23 @@ actor RuntimeRequestAdmission {
                 await self.cancelWaiter(id: waiterID)
             }
         }
+    }
+
+    /// Acquires immediately without joining the FIFO, or returns nil when an
+    /// active/queued request already owns the capacity. Eviction uses this to
+    /// avoid waiting behind and then unloading a runtime that was active when
+    /// maintenance began.
+    func tryAcquire() async -> RuntimeRequestAdmissionLease? {
+        guard waiters.isEmpty, activeRequests < maxActiveRequests else {
+            return nil
+        }
+        let pressure = await pressureProvider()
+        guard waiters.isEmpty,
+              activeRequests < maxActiveRequests,
+              !admissionPaused(for: pressure) || activeRequests == 0 else {
+            return nil
+        }
+        return admit()
     }
 
     fileprivate func releaseLease() async {
@@ -1509,6 +1981,12 @@ actor RuntimeRequestAdmission {
             guard await canAdmitNow() else {
                 return
             }
+            // Pressure sampling yields the actor. A concurrent drain may have
+            // consumed capacity or cancellation may have emptied the FIFO, so
+            // revalidate both before removing its first waiter.
+            guard activeRequests < maxActiveRequests, !waiters.isEmpty else {
+                return
+            }
             let waiter = waiters.removeFirst()
             guard waiterStates[waiter.id] != .cancelled else {
                 waiterStates.removeValue(forKey: waiter.id)
@@ -1526,11 +2004,18 @@ actor RuntimeRequestAdmission {
         return RuntimeRequestAdmissionLease(admission: self)
     }
 
-    private func canAdmitNow() async -> Bool {
-        guard activeRequests < maxActiveRequests else {
+    private func canAdmitNow(requireEmptyQueue: Bool = false) async -> Bool {
+        guard activeRequests < maxActiveRequests,
+              !requireEmptyQueue || waiters.isEmpty else {
             return false
         }
         let pressure = await pressureProvider()
+        // `pressureProvider` is an actor reentrancy point. Never rely on the
+        // capacity/FIFO snapshot taken before it suspended.
+        guard activeRequests < maxActiveRequests,
+              !requireEmptyQueue || waiters.isEmpty else {
+            return false
+        }
         guard admissionPaused(for: pressure) else {
             return true
         }
@@ -1697,7 +2182,9 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatQ35(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
+        case .textChatLFM2(let generator, _):
+            return await generator.prefixKVCacheStats()
+        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
             return nil
         }
     }
@@ -1708,7 +2195,9 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.continuousBatchingStats()
         case .textChatQ35(let generator, _):
             return await generator.continuousBatchingStats()
-        case .textCode, .textChatKlein, .textChatLFM2, .textChatDeepseekV4Flash:
+        case .textChatLFM2(let generator, _):
+            return await generator.continuousBatchingStats()
+        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
             return nil
         }
     }

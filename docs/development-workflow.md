@@ -125,9 +125,15 @@ upstream `mlx-swift` CUDA bridge. On Ubuntu 22.04/Jammy images, install a curren
 package build.
 
 Arm64 CUDA package builds require a real arm64 CUDA host. CUDA `.deb` artifacts
-add default runtime/JIT dependencies on `cuda-cccl-13-0`,
+are gated to binaries whose linked `libcudart` SONAME proves CUDA 13, then add
+default runtime/JIT dependencies on `cuda-cccl-13-0`,
 `cuda-cudart-13-0`, `cuda-nvrtc-13-0`, `libcublas-13-0`,
 `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
+For any other or unknown toolkit major, use `--skip-deb`; the tar package path
+remains available and must be smoke-tested on a matching host.
+An explicit `MERERUN_PACKAGE_LINUX_DEPS` value bypasses the automatic CUDA
+major gate and is written verbatim, making dependency compatibility the
+packager's responsibility.
 
 ## Model-store expectations
 

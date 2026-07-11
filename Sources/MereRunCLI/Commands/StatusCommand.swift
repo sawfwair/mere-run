@@ -285,7 +285,13 @@ enum StatusFormatter {
 
         if snapshot.server.health == "up" {
             if let runtime = snapshot.server.runtime {
-                let activeModels = runtime.models.filter(\.loaded).map(\.id)
+                let activeSidecarModels = runtime.sidecars?.residents.compactMap {
+                    $0.loaded && $0.ready != false ? $0.modelID : nil
+                } ?? []
+                let activeModels = Array(Set(
+                    runtime.models.filter { $0.loaded && $0.ready != false }.map(\.id)
+                        + activeSidecarModels
+                )).sorted()
                 if activeModels.isEmpty {
                     lines.append("  loaded models: none reported")
                 } else {
@@ -308,6 +314,16 @@ enum StatusFormatter {
                     lines.append("  benchmark stats: \(benchmarkStats)")
                 }
                 lines.append("  memory: \(memoryText(runtime.memory))")
+                if let sidecars = runtime.sidecars {
+                    lines.append(
+                        "  sidecar residency: \(sidecars.loadedCount)/\(sidecars.residents.count) loaded, "
+                            + "\(sidecars.activeRequests) active, \(sidecars.queuedRequests) queued, "
+                            + "default TTL \(sidecars.defaultIdleTTLSeconds)s"
+                    )
+                    for resident in sidecars.residents where resident.modelID != nil {
+                        lines.append("    \(sidecarText(resident))")
+                    }
+                }
                 for model in runtime.models {
                     guard let prefixKVCache = model.prefixKVCache else { continue }
                     lines.append("    \(model.id) prefix KV: \(prefixKVCache.entries)/\(prefixKVCache.maxEntries) entries, \(prefixKVCache.hits) hits, \(prefixKVCache.reusedTokens) reused tokens")
@@ -380,6 +396,30 @@ enum StatusFormatter {
                 + "\(resident) resident, \(physical) physical\(limitsText)"
         }
         return "\(memory.pressure) pressure, \(guardText), \(memory.activeModelCount) active model(s), \(physical) physical\(limitsText)"
+    }
+
+    private static func sidecarText(_ resident: RuntimeSidecarResidentSnapshot) -> String {
+        let state = if resident.loaded && resident.ready == false {
+            "resident (not ready)"
+        } else {
+            resident.loaded ? "loaded" : "unloaded"
+        }
+        let model = resident.modelID ?? "none"
+        var parts = [
+            "\(resident.kind.rawValue): \(model)",
+            state,
+            "\(resident.activeRequests) active",
+            "\(resident.queuedRequests) queued",
+            "TTL \(resident.ttlSeconds)s",
+            "\(resident.loadCount) load(s)",
+        ]
+        if resident.pinned {
+            parts.append("pinned")
+        }
+        if let reason = resident.lastEvictionReason {
+            parts.append("last eviction \(reason.rawValue)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private static func capabilityText(_ capability: RuntimeCapabilityStatus) -> String {

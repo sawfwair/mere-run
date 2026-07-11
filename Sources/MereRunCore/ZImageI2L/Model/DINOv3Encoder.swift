@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 // MARK: - DINOv3 Vision Encoder
@@ -167,10 +168,22 @@ final class DINOv3Attention: Module {
         k = k.transposed(0, 2, 1, 3)
         v = v.transposed(0, 2, 1, 3)
 
-        // Scaled dot-product attention
-        var attn = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
-        attn = softmax(attn, axis: -1)
-        var out = MLX.matmul(attn, v)
+        // DINOv3's 128-wide heads hit MLX 0.31.5's fused full-attention
+        // Metal kernel instead of materializing quadratic score tensors.
+        var out: MLXArray
+        if FusedAttentionPolicy.enabled {
+            out = MLXFast.scaledDotProductAttention(
+                queries: q,
+                keys: k,
+                values: v,
+                scale: scale,
+                mask: .none
+            )
+        } else {
+            var attention = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
+            attention = softmax(attention, axis: -1)
+            out = MLX.matmul(attention, v)
+        }
 
         // Reshape back: [batch, seq, hidden]
         out = out.transposed(0, 2, 1, 3).reshaped(batch, seqLen, numHeads * headDim)

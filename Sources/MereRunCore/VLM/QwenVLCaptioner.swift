@@ -141,7 +141,11 @@ public final class QwenVLCaptioner: @unchecked Sendable {
 
         // Embed and forward
         let embeddings = encoder.textEncoder.encoder.embed(inputIds: inputIds)
-        var logits = encoder.textEncoder.encoder.forwardCausal(embeddings: embeddings, cache: cache)
+        var logits = encoder.textEncoder.encoder.forwardCausal(
+            embeddings: embeddings,
+            cache: cache,
+            lastPositionOnly: true
+        )
         MLX.eval(logits)
 
         var tokens = promptTokens
@@ -211,6 +215,12 @@ public final class QwenVLCaptioner: @unchecked Sendable {
             "<|im_start|>assistant\n"
 
         let tokenIds = tokenizer.encodeText(formattedPrompt)
+        guard let imageTokenRange = Self.contiguousTokenRange(
+            in: tokenIds,
+            matching: imageTokenId
+        ) else {
+            throw Error.captionModelMissingVisionTokens
+        }
         let inputIds = MLXArray(tokenIds.map { Int32($0) }).reshaped(1, tokenIds.count)
 
         // Prefill with vision embeddings replacing the expanded image-token span in place.
@@ -219,15 +229,12 @@ public final class QwenVLCaptioner: @unchecked Sendable {
             imageTokenId: imageTokenId,
             visionStartTokenId: visionStartTokenId,
             pixelValues: pixelValues,
-            gridThw: grid
+            gridThw: grid,
+            imageTokenRange: imageTokenRange
         )
 
-        var generatedTokens: [Int] = []
-        var runningLogits = logits
-        let cacheRef = cache
-
         if Self.debugLogits {
-            Self.logTopLogits(label: "prefill", logits: runningLogits[0, -1, 0...], tokenizer: tokenizer)
+            Self.logTopLogits(label: "prefill", logits: logits[0, -1, 0...], tokenizer: tokenizer)
         }
 
         let generationConfig = PromptEnhanceConfig(
@@ -240,45 +247,57 @@ public final class QwenVLCaptioner: @unchecked Sendable {
             stopTokenIds: Set([tokenizer.eosTokenId ?? 151645, 151643])
         )
 
-        for _ in 0..<config.maxNewTokens {
-            let lastLogits = runningLogits[0, -1, 0...]
-            let nextToken = sampleToken(
-                logits: lastLogits,
-                config: GenerationConfig(
-                    maxTokens: generationConfig.maxNewTokens,
-                    temperature: generationConfig.temperature,
-                    topP: generationConfig.topP,
-                    repetitionPenalty: generationConfig.repetitionPenalty,
-                    repetitionContextSize: generationConfig.repetitionContextSize
-                ),
-                previousTokens: tokenIds + generatedTokens
-            )
-
-            if generationConfig.stopTokenIds.contains(nextToken) || nextToken == generationConfig.eosTokenId {
-                break
+        let samplingConfig = GenerationConfig(
+            maxTokens: generationConfig.maxNewTokens,
+            temperature: generationConfig.temperature,
+            topP: generationConfig.topP,
+            repetitionPenalty: generationConfig.repetitionPenalty,
+            repetitionContextSize: generationConfig.repetitionContextSize,
+            topPPrefilter: 0
+        )
+        var scheduledTokenCount = 0
+        let decodeResult = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: logits,
+                generationConfig: samplingConfig,
+                eosTokens: generationConfig.stopTokenIds.union([generationConfig.eosTokenId]),
+                tokenBudget: config.maxNewTokens,
+                historySeedTokens: tokenIds
+            ),
+            stepForward: { nextInput in
+                // The shared decoder feeds the sampled array directly into
+                // the next forward and confirms the previous token while the
+                // GPU executes this step. No per-token host sampling stall.
+                let scheduledPosition = finalSeqLen + scheduledTokenCount + ropeDelta
+                scheduledTokenCount += 1
+                let nextInput = nextInput.asType(.int32).reshaped(1, 1)
+                let nextEmbed = encoder.textEncoder.encoder.embed(inputIds: nextInput)
+                let posIds = MLXArray([Int32(scheduledPosition)]).reshaped(1, 1)
+                let nextLogits = encoder.textEncoder.encoder.forwardCausal(
+                    embeddings: nextEmbed,
+                    cache: cache,
+                    positionIds: posIds
+                )
+                if Self.debugLogits {
+                    Self.logTopLogits(
+                        label: "scheduled-step\(scheduledTokenCount)",
+                        logits: nextLogits[0, -1, 0...],
+                        tokenizer: tokenizer
+                    )
+                }
+                return nextLogits
             }
+        )
 
-            generatedTokens.append(nextToken)
-
-            // Position for new token = finalSeqLen + generatedCount - 1 + ropeDelta
-            let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
-            let nextEmbed = encoder.textEncoder.encoder.embed(inputIds: nextInput)
-            let posValue = Int32(finalSeqLen + generatedTokens.count - 1 + ropeDelta)
-            let posIds = MLXArray([posValue]).reshaped(1, 1)
-            runningLogits = encoder.textEncoder.encoder.forwardCausal(
-                embeddings: nextEmbed,
-                cache: cacheRef,
-                positionIds: posIds
-            )
-            MLX.eval(runningLogits)
-
-            if Self.debugLogits {
-                Self.logTopLogits(label: "step\(generatedTokens.count)", logits: runningLogits[0, -1, 0...], tokenizer: tokenizer)
-            }
-        }
-
-        let decoded = tokenizer.decode(tokens: generatedTokens)
+        let decoded = tokenizer.decode(tokens: decodeResult.generatedTokens)
         return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func contiguousTokenRange(in tokens: [Int], matching token: Int) -> Range<Int>? {
+        let positions = tokens.indices.filter { tokens[$0] == token }
+        guard let first = positions.first else { return nil }
+        let range = first..<(first + positions.count)
+        return positions == Array(range) ? range : nil
     }
 
     // MARK: - Weights

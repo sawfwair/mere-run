@@ -54,8 +54,34 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertThrowsError(
             try store.writeSettings(RuntimeModelSettings(alias: "image"), for: "image-zimage-nano")
         ) { error in
-            XCTAssertTrue(error.localizedDescription.contains("not supported"))
+            XCTAssertTrue(error.localizedDescription.contains("sidecar models support only"))
         }
+    }
+
+    func testSidecarSettingsAllowOnlyResidencyControls() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        try store.writeSettings(
+            RuntimeModelSettings(pinned: true, ttlSeconds: 45),
+            for: "image-zimage-nano"
+        )
+        try store.writeSettings(
+            RuntimeModelSettings(pinned: true, ttlSeconds: 90),
+            for: Qwen3EmbeddingCatalog.modelId
+        )
+        let settings = try store.settings(for: "image-zimage-nano")
+        let embeddingSettings = try store.settings(for: Qwen3EmbeddingCatalog.modelId)
+
+        XCTAssertTrue(settings.pinned)
+        XCTAssertEqual(settings.ttlSeconds, 45)
+        XCTAssertTrue(try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+            .supportsRuntimeResidencySettings)
+        XCTAssertTrue(embeddingSettings.pinned)
+        XCTAssertEqual(embeddingSettings.ttlSeconds, 90)
+        XCTAssertTrue(try XCTUnwrap(ManagedModelCatalog.spec(for: Qwen3EmbeddingCatalog.modelId))
+            .supportsRuntimeResidencySettings)
     }
 
     func testSettingsRejectGemmaKVModeForNonGemmaModel() throws {
@@ -66,8 +92,100 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertThrowsError(
             try store.writeSettings(RuntimeModelSettings(kvCacheMode: .polar2), for: Q35Resources.defaultModelId)
         ) { error in
-            XCTAssertTrue(error.localizedDescription.contains("KV cache mode"))
+            let expected = RuntimeModelSettingsError.incompatibleKVCacheMode(
+                modelID: Q35Resources.defaultModelId,
+                requested: .polar2,
+                expectedEngine: .textChatGemma4
+            )
+            XCTAssertEqual(
+                error as? RuntimeModelSettingsError,
+                expected
+            )
+            XCTAssertEqual(
+                error.localizedDescription,
+                "KV cache mode 'polar2' is not compatible with model "
+                    + "'\(Q35Resources.defaultModelId)' (expected \(RuntimeServingEngine.textChatGemma4.rawValue))."
+            )
         }
+    }
+
+    func testAffineEightReportsAllCompatibleEngines() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        XCTAssertThrowsError(
+            try store.writeSettings(
+                RuntimeModelSettings(kvCacheMode: .affine8),
+                for: CodeGenResources.defaultModelId
+            )
+        ) { error in
+            let reason = "KV cache mode 'affine8' is not compatible with model "
+                + "'\(CodeGenResources.defaultModelId)' (supported engines: "
+                + [
+                    RuntimeServingEngine.textChatGemma4,
+                    .textChatQ36,
+                    .textChatLFM2,
+                ].map(\.rawValue).joined(separator: ", ")
+                + ")"
+            XCTAssertEqual(
+                error as? RuntimeModelSettingsError,
+                .invalidValue(reason)
+            )
+            XCTAssertEqual(
+                error.localizedDescription,
+                "Invalid runtime setting: \(reason)."
+            )
+        }
+    }
+
+    func testAffineEightKVModeIsAcceptedByNativeAttentionEngines() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        for modelID in [
+            Gemma4Resources.defaultModelId,
+            Q35Resources.defaultModelId,
+            LFM2Resources.defaultModelId,
+        ] {
+            try store.writeSettings(RuntimeModelSettings(kvCacheMode: .affine8), for: modelID)
+            XCTAssertEqual(try store.settings(for: modelID).kvCacheMode, .affine8)
+        }
+    }
+
+    func testGemmaAffineEightMapsToUniformQuantization() {
+        let fallback = Gemma4KVCacheQuantization(bits: nil, scheme: .uniform, groupSize: 64, quantizedStart: 128)
+        let resolved = RuntimeKVCacheMode.affine8.gemma4Quantization(
+            fallback: fallback,
+            promptTokenCount: 10
+        )
+        XCTAssertEqual(resolved.scheme, .uniform)
+        XCTAssertEqual(resolved.bits, 8)
+        XCTAssertEqual(resolved.groupSize, 64)
+        XCTAssertEqual(resolved.quantizedStart, 0)
+    }
+
+    func testAffineEightUsesAdditiveDowngradeSafeSettingsKey() throws {
+        let document = RuntimeModelSettingsDocument(models: [
+            Q35Resources.defaultModelId: RuntimeModelSettings(kvCacheMode: .affine8),
+        ])
+        let data = try JSONEncoder().encode(document)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let models = try XCTUnwrap(object["models"] as? [String: Any])
+        let settings = try XCTUnwrap(models[Q35Resources.defaultModelId] as? [String: Any])
+
+        XCTAssertEqual(settings["kvCacheModeV2"] as? String, "affine8")
+        XCTAssertNil(settings["kvCacheMode"])
+        XCTAssertEqual(
+            try JSONDecoder().decode(RuntimeModelSettingsDocument.self, from: data)
+                .models[Q35Resources.defaultModelId]?.kvCacheMode,
+            .affine8
+        )
+        XCTAssertNil(
+            try JSONDecoder().decode(LegacyRuntimeModelSettingsDocument.self, from: data)
+                .models[Q35Resources.defaultModelId]?.kvCacheMode
+        )
     }
 
     func testQ36DefaultRuntimeEngineAcceptsLegacyQ35Alias() throws {
@@ -118,4 +236,18 @@ final class RuntimeModelSettingsTests: XCTestCase {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
+}
+
+private enum LegacyRuntimeKVCacheMode: String, Decodable {
+    case `default`
+    case polar2
+    case auto
+}
+
+private struct LegacyRuntimeModelSettings: Decodable {
+    let kvCacheMode: LegacyRuntimeKVCacheMode?
+}
+
+private struct LegacyRuntimeModelSettingsDocument: Decodable {
+    let models: [String: LegacyRuntimeModelSettings]
 }

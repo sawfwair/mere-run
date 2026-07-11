@@ -367,7 +367,7 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
             let data = (line + "\n").data(using: .utf8) ?? Data()
             if fileManager.fileExists(atPath: runtimeTraceLogURL.path) {
                 if let handle = try? FileHandle(forWritingTo: runtimeTraceLogURL) {
-                    try? handle.seekToEnd()
+                    _ = try? handle.seekToEnd()
                     try? handle.write(contentsOf: data)
                     try? handle.close()
                 }
@@ -386,51 +386,27 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         trace("TRACE runtime query: \(query)")
         trace("TRACE runtime processed_size: \(processed.processedSize.width) \(processed.processedSize.height)")
         trace("TRACE runtime input_count: \(processed.inputIDs.dim(1))")
-        let baseTokenIDs = processed.inputIDs.asArray(Int32.self)
-        var generatedTokenIDs: [Int32] = []
-        var generatedCoordHistory: [MLXArray?] = []
-        var generatedSizeHistory: [MLXArray?] = []
-
-        func rebuildLogits() -> MLXArray {
-            let tokenIDs = baseTokenIDs + generatedTokenIDs
-            let fullInputIDs = MLXArray(tokenIDs, [1, tokenIDs.count])
-            let positionData = FalconPerceptionModel.computePositionData(
-                inputIDs: fullInputIDs,
-                config: config,
-                imageGridHW: processed.imageGridHW
-            )
-            var inputsEmbeds = model.makeInputEmbeddings(
-                inputIDs: fullInputIDs,
-                pixelValues: processed.pixelValues,
-                imageGridHW: processed.imageGridHW
-            )
-
-            let generatedStart = baseTokenIDs.count
-            for (index, tokenID) in generatedTokenIDs.enumerated() {
-                let position = generatedStart + index
-                if tokenID == Int32(config.coordTokenID),
-                   let coordXY = generatedCoordHistory[index] {
-                    let encoded = model.coordEncoder(coordXY.reshaped(-1, 2))
-                    inputsEmbeds[0, position] = encoded[0]
-                } else if tokenID == Int32(config.sizeTokenID),
-                          let sizeHW = generatedSizeHistory[index] {
-                    let encoded = model.sizeEncoder(sizeHW.reshaped(-1, 2))
-                    inputsEmbeds[0, position] = encoded[0]
-                }
-            }
-
-            let logits = model.forward(
-                inputIDs: fullInputIDs,
-                inputsEmbeds: inputsEmbeds,
-                mask: positionData.attentionMask,
-                positionIDs: positionData.positionIDs,
-                posHW: positionData.posHW
-            )
-            MLX.eval(logits)
-            return logits
-        }
-
-        var logits = rebuildLogits()
+        let positionData = FalconPerceptionModel.computePositionData(
+            inputIDs: processed.inputIDs,
+            config: config,
+            imageGridHW: processed.imageGridHW
+        )
+        model.prepareGroundingPrefill(positionData: positionData)
+        let caches = model.makeCaches()
+        let inputsEmbeds = model.makeInputEmbeddings(
+            inputIDs: processed.inputIDs,
+            pixelValues: processed.pixelValues,
+            imageGridHW: processed.imageGridHW
+        )
+        var logits = model.forward(
+            inputIDs: processed.inputIDs,
+            inputsEmbeds: inputsEmbeds,
+            caches: caches,
+            lastPositionOnly: true
+        )
+        MLX.eval(logits)
+        model.finishGroundingPrefill()
+        trace("TRACE runtime prefill_cache_offset: \(caches.first??.offset ?? 0)")
 
         let gridHW = processed.imageGridHW.asArray(Int32.self).map(Int.init)
         let gridH = gridHW.indices.contains(0) ? gridHW[0] : 0
@@ -581,11 +557,30 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                 }
             }
 
-            generatedTokenIDs.append(Int32(tokenID))
-            generatedCoordHistory.append(encodedCoordXY)
-            generatedSizeHistory.append(encodedSizeHW)
-            trace("TRACE runtime full_forward_length=\(baseTokenIDs.count + generatedTokenIDs.count)")
-            logits = rebuildLogits()
+            let tokenArray = MLXArray([Int32(tokenID)], [1, 1])
+            var tokenEmbeds = model.embedTokens(tokenArray)
+            if tokenID == config.coordTokenID, let encodedCoordXY {
+                tokenEmbeds = model.encodeCoordinates(
+                    into: tokenEmbeds,
+                    inputIDs: tokenArray,
+                    coordXY: encodedCoordXY
+                )
+            } else if tokenID == config.sizeTokenID, let encodedSizeHW {
+                tokenEmbeds = model.encodeSizes(
+                    into: tokenEmbeds,
+                    inputIDs: tokenArray,
+                    sizeHW: encodedSizeHW
+                )
+            }
+
+            logits = model.forward(
+                inputIDs: tokenArray,
+                inputsEmbeds: tokenEmbeds,
+                caches: caches,
+                lastPositionOnly: true
+            )
+            asyncEval(logits)
+            trace("TRACE runtime cached_forward_offset=\(caches.first??.offset ?? 0)")
         }
 
         if let currentXY, let currentHW {

@@ -75,8 +75,13 @@ public enum LTXVideoMP4Writer {
             do {
                 try writeVideoOnly(frames: frames, fps: fps, to: tempVideoURL)
 
-                let preparedAudio = try prepareAudio(audioWaveform)
-                try writeWAV(interleaved: preparedAudio.interleaved, channels: preparedAudio.channels, sampleRate: audioSampleRate, to: tempAudioURL)
+                let preparedAudio = try prepareAudioTensor(audioWaveform)
+                try writeWAV(
+                    sampleChannel: preparedAudio.tensor,
+                    channels: preparedAudio.channels,
+                    sampleRate: audioSampleRate,
+                    to: tempAudioURL
+                )
                 try mux(
                     videoURL: tempVideoURL,
                     audioURL: tempAudioURL,
@@ -110,7 +115,6 @@ public enum LTXVideoMP4Writer {
         let frameCount = prepared.frameCount
         let height = prepared.height
         let width = prepared.width
-        let rgbBytes = prepared.rgbBytes
 
         let fm = FileManager.default
         if fm.fileExists(atPath: outputURL.path) {
@@ -118,9 +122,18 @@ public enum LTXVideoMP4Writer {
         }
         try fm.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
+        var pendingFrame = bgraFrame(prepared.tensor, at: 0)
+        asyncEval(pendingFrame)
         do {
             try MediaVideoIO.writeMP4(
-                rgb24: rgbBytes,
+                bgra32FrameAt: { frameIndex in
+                    let currentFrame = pendingFrame
+                    if frameIndex + 1 < frameCount {
+                        pendingFrame = bgraFrame(prepared.tensor, at: frameIndex + 1)
+                        asyncEval(pendingFrame)
+                    }
+                    return currentFrame.reshaped(-1).asArray(UInt8.self)
+                },
                 width: width,
                 height: height,
                 frameCount: frameCount,
@@ -134,7 +147,7 @@ public enum LTXVideoMP4Writer {
 
     private static func prepareFrames(
         _ frames: MLXArray
-    ) throws -> (rgbBytes: [UInt8], frameCount: Int, height: Int, width: Int) {
+    ) throws -> (tensor: MLXArray, frameCount: Int, height: Int, width: Int) {
         var tensor = frames
         if tensor.ndim == 5 {
             guard tensor.dim(0) == 1 else {
@@ -154,14 +167,32 @@ public enum LTXVideoMP4Writer {
         guard channels == 3 else {
             throw WriterError.unsupportedChannels(channels)
         }
+        guard frameCount > 0, height > 0, width > 0 else {
+            throw WriterError.unsupportedShape(tensor.shape)
+        }
 
-        let uint8Frames = tensor.asType(.uint8)
-        MLX.eval(uint8Frames)
-        let rgbBytes = uint8Frames.reshaped(-1).asArray(UInt8.self)
-        return (rgbBytes, frameCount, height, width)
+        return (tensor, frameCount, height, width)
+    }
+
+    static func bgraFrame(_ frames: MLXArray, at frameIndex: Int) -> MLXArray {
+        let height = frames.dim(1)
+        let width = frames.dim(2)
+        let rgb = frames[frameIndex, 0..., 0..., 0...].asType(.uint8)
+        let bgr = MLX.take(rgb, MLXArray([Int32(2), 1, 0]), axis: -1)
+        let alpha = MLX.full([height, width, 1], values: UInt8(255))
+        return MLX.concatenated([bgr, alpha], axis: -1)
     }
 
     static func prepareAudio(_ audio: MLXArray) throws -> (interleaved: [Float], channels: Int) {
+        let prepared = try prepareAudioTensor(audio)
+        var encodedSamples = prepared.tensor.asType(.float32).reshaped(-1).asArray(Float.self)
+        try validateAndClamp(samples: &encodedSamples)
+        return (encodedSamples, prepared.channels)
+    }
+
+    private static func prepareAudioTensor(
+        _ audio: MLXArray
+    ) throws -> (tensor: MLXArray, channels: Int) {
         var sampleChannel = audio
         if sampleChannel.ndim == 1 {
             sampleChannel = sampleChannel.reshaped(sampleChannel.dim(0), 1)
@@ -194,18 +225,21 @@ public enum LTXVideoMP4Writer {
         guard channels >= 1 else {
             throw WriterError.unsupportedAudioShape(audio.shape)
         }
-        let floatSamples = sampleChannel.asType(.float32).reshaped(-1).asArray(Float.self)
-        let encodedSamples = try floatSamples.map { sample -> Float in
+        return (sampleChannel, channels)
+    }
+
+    private static func validateAndClamp(samples: inout [Float]) throws {
+        for index in samples.indices {
+            let sample = samples[index]
             guard sample.isFinite else {
                 throw WriterError.nonFiniteAudioSample
             }
-            return min(1.0, max(-1.0, sample))
+            samples[index] = min(1.0, max(-1.0, sample))
         }
-        return (encodedSamples, channels)
     }
 
     private static func writeWAV(
-        interleaved: [Float],
+        sampleChannel: MLXArray,
         channels: Int,
         sampleRate: Int,
         to url: URL
@@ -216,12 +250,31 @@ public enum LTXVideoMP4Writer {
         }
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 
+        let flattened = sampleChannel.asType(.float32).reshaped(-1)
+        let sampleCount = flattened.dim(0)
+        let requestedChunk = 65_536
+        let chunkSampleCount = max(channels, (requestedChunk / channels) * channels)
+        var pendingRange = 0..<min(sampleCount, chunkSampleCount)
+        var pendingSamples = flattened[pendingRange]
+        asyncEval(pendingSamples)
         try MediaAudioIO.writeFloatWAV(
-            samples: interleaved,
+            sampleCount: sampleCount,
             sampleRate: sampleRate,
             channels: channels,
+            chunkSampleCount: chunkSampleCount,
             to: url
-        )
+        ) { range in
+            precondition(range == pendingRange, "Float WAV provider requested samples out of order")
+            let currentSamples = pendingSamples
+            if range.upperBound < sampleCount {
+                pendingRange = range.upperBound..<min(sampleCount, range.upperBound + chunkSampleCount)
+                pendingSamples = flattened[pendingRange]
+                asyncEval(pendingSamples)
+            }
+            var hostSamples = currentSamples.asArray(Float.self)
+            try validateAndClamp(samples: &hostSamples)
+            return hostSamples
+        }
     }
 
     private static func mux(

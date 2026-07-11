@@ -165,9 +165,16 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.20.0
 ls dist/linux/
 ```
 
-CUDA `.deb` packages declare the CUDA 13 runtime/JIT packages they need:
+CUDA `.deb` packages are currently gated to binaries linked against CUDA 13.
+The packager reads the `libcudart.so` SONAME from the built executable and
+refuses to emit a `.deb` when the toolkit major is unknown or is not 13, rather
+than attaching incorrect runtime dependencies. CUDA 13 packages declare:
 `cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
 `libcublas-13-0`, `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
+For a CUDA 12 build, pass `--skip-deb` and distribute the tarball only after a
+runtime smoke on a matching CUDA 12 host. Maintainers who supply an exact
+`MERERUN_PACKAGE_LINUX_DEPS` value deliberately bypass this gate; that override
+is copied verbatim into `Depends`, so the caller owns package compatibility.
 
 For source-only CUDA checks, prepare native artifacts and then export the
 environment printed by the script before building:
@@ -176,6 +183,13 @@ environment printed by the script before building:
 MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
 swift build --product mere.run
 ```
+
+The preparation script first lets SwiftPM resolve dependencies under the active
+Linux Swift toolchain, then builds the CMake CUDA bridge from that exact
+`mlx-swift` checkout. This keeps the bridge aligned when an older Swift
+toolchain selects a compatibility revision different from a Mac checkout.
+`MLX_SWIFT_CUDA_COMMIT` is available only as a deliberate maintainer diagnostic
+override; normal source builds should use the SwiftPM-selected revision.
 
 Do not describe a CUDA configuration as supported unless it has been run on that
 matching host.
@@ -191,6 +205,12 @@ uses that subprocess on Linux so GGUF coding models do not share a process with
 MLX CUDA. If a future CUDA run fails inside an upstream MLX or llama.cpp kernel,
 keep that failure in the release notes or PR description until the exact package
 has been rebuilt and rerun on matching hardware.
+
+Quantized MLX paths default to `MERERUN_MLX_CUDA_NATIVE_QUANT=auto`: each
+process probes native `quantized_mm` and `GatherQMM` separately, reports the
+selected backend on stderr, and falls back to dense compatibility if the linked
+runtime rejects a kernel. Run `scripts/e2e_gb10.sh --quant-mode auto` after each
+CUDA package rebuild; `native` is the explicit fail-loud validation mode.
 
 ## Build from source on Linux
 

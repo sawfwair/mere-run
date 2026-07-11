@@ -201,7 +201,7 @@ struct ModelBenchmarkAPIWorkload: AsyncParsableCommand {
             "Why should request admission remain fair and visible?",
             "What does chunked prefill improve for long prompts?",
             "Which cache signal tells us repeated prefixes are actually reused?",
-            "Why is continuous batching kept behind an opt-in switch?",
+            "How does continuous batching improve concurrent local serving?",
             "What should happen before enabling SSD-backed KV persistence?",
             "Summarize the benchmark decision rule in one sentence.",
         ]

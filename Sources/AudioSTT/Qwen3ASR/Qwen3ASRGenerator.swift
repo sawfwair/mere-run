@@ -481,7 +481,8 @@ public actor Qwen3ASRGenerator: ASRGenerator {
             inputIds: inputIds,
             audioFeatures: audioFeatures,
             cache: cache,
-            positionIds: positionIds
+            positionIds: positionIds,
+            lastPositionOnly: true
         )
         MLX.eval(logits)
 

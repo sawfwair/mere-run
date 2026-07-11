@@ -245,18 +245,12 @@ public final class ACEStep5HzLM {
         let inputIds = MLXArray(promptTokens.map { Int32($0) }).reshaped(1, promptTokens.count)
         MLX.eval(inputIds)
 
-        var tokens = promptTokens
-        var logits = model.forwardCausal(inputIds: inputIds, cache: cache)
+        let logits = model.forwardCausal(inputIds: inputIds, cache: cache, lastPositionOnly: true)
         MLX.eval(logits)
 
-        for _ in 0..<config.maxNewTokens {
-            var lastLogits = logits[0, -1, 0...]
-            if let processor = logitsProcessor {
-                lastLogits = processor(lastLogits, tokens)
-            }
-
+        let processLogits: (MLXArray, [Int]) -> MLXArray = { logits, tokens in
+            var nextLogits = logitsProcessor?(logits, tokens) ?? logits
             let topK = max(config.topK, 0)
-            var nextLogits = lastLogits
             if topK > 0 && topK < nextLogits.dim(-1) {
                 // k-th largest value via argPartition — identical threshold
                 // to the full argSort without sorting the whole vocabulary
@@ -266,31 +260,32 @@ public final class ACEStep5HzLM {
                 let threshold = nextLogits.take(partition[kth..<(kth + 1)], axis: -1)
                 nextLogits = MLX.where(nextLogits .< threshold, MLXArray(-Float.infinity), nextLogits)
             }
-
-            let topP = (0.0..<1.0).contains(config.topP) ? config.topP : 1.0
-            let genConfig = GenerationConfig(
-                maxTokens: config.maxNewTokens,
-                temperature: config.temperature,
-                topP: topP,
-                repetitionPenalty: config.repetitionPenalty,
-                repetitionContextSize: config.repetitionContextSize
-            )
-            let next = sampleToken(logits: nextLogits, config: genConfig, previousTokens: tokens)
-
-            if config.stopTokenIds.contains(next) {
-                didSampleToken?(next)
-                break
-            }
-
-            tokens.append(next)
-            didSampleToken?(next)
-
-            let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
-            logits = model.forwardCausal(inputIds: nextInput, cache: cache)
-            MLX.eval(logits)
+            return nextLogits
         }
 
-        return Array(tokens.dropFirst(promptTokens.count))
+        let topP = (0.0..<1.0).contains(config.topP) ? config.topP : 1.0
+        let generationConfig = GenerationConfig(
+            maxTokens: config.maxNewTokens,
+            temperature: config.temperature,
+            topP: topP,
+            repetitionPenalty: config.repetitionPenalty,
+            repetitionContextSize: config.repetitionContextSize
+        )
+        let result = AutoregressiveDecodeEngine.decodeStateful(
+            AutoregressiveDecodeRequest(
+                initialLogits: logits,
+                generationConfig: generationConfig,
+                eosTokens: config.stopTokenIds,
+                tokenBudget: config.maxNewTokens,
+                historySeedTokens: promptTokens
+            ),
+            processLogits: processLogits,
+            stepForward: { nextInput in
+                self.model.forwardCausal(inputIds: nextInput, cache: cache)
+            },
+            didSampleToken: didSampleToken
+        )
+        return result.generatedTokens
     }
 
     private var configNumLayers: Int { config.numHiddenLayers }

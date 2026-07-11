@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
 import MLX
+import MLXFast
+import MLXNN
 import MLXRandom
 @testable import MereRunCore
 
@@ -174,6 +176,151 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
         XCTAssertEqual(logits.shape, [1, 3, config.vocabSize])
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testRaggedBatchedDecodeMatchesIndependentRowsAndSplitsCaches() throws {
+        MLXRandom.seed(421)
+        let config = try makeTinyConfig()
+        let model = LFM2Model(config: config)
+        let firstCaches = makeLayerCaches(config: config)
+        let secondCaches = makeLayerCaches(config: config)
+        let firstPrompt = MLXArray([Int32(1), 2]).reshaped(1, 2)
+        let secondPrompt = MLXArray([Int32(3), 4, 5, 6]).reshaped(1, 4)
+        let firstPrefill = model(firstPrompt, cache: firstCaches)
+        let secondPrefill = model(secondPrompt, cache: secondCaches)
+        MLX.eval(firstPrefill, secondPrefill)
+
+        let serialFirstCaches = firstCaches.map { $0?.fork() }
+        let serialSecondCaches = secondCaches.map { $0?.fork() }
+        let batchedCaches: [LFM2LayerCache?] = try firstCaches.indices.map { layerIndex in
+            let rows = try XCTUnwrap([firstCaches[layerIndex], secondCaches[layerIndex]].compactMap { $0 })
+            XCTAssertEqual(rows.count, 2)
+            return try XCTUnwrap(rows[0].batched(with: rows))
+        }
+
+        let batched = model(
+            MLXArray([Int32(7), 8]).reshaped(2, 1),
+            cache: batchedCaches
+        )
+        let first = model(MLXArray([Int32(7)]).reshaped(1, 1), cache: serialFirstCaches)
+        let second = model(MLXArray([Int32(8)]).reshaped(1, 1), cache: serialSecondCaches)
+        MLX.eval(batched, first, second)
+
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batched[0] - first[0])).item(Float.self),
+            2e-4
+        )
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batched[1] - second[0])).item(Float.self),
+            2e-4
+        )
+
+        for cache in batchedCaches.compactMap({ $0 }) {
+            let rows = try XCTUnwrap(cache.unbatchedRows(count: 2))
+            XCTAssertEqual(rows.count, 2)
+            XCTAssertTrue(rows.allSatisfy { row in
+                switch row {
+                case .attention(let value):
+                    return value.offset == 3 || value.offset == 5
+                case .conv(let value):
+                    return value.state?.dim(0) == 1
+                }
+            })
+        }
+    }
+
+    func testLFM2ContinuousBatchingStatsExposeOptInState() async {
+        let generator = LFM2Generator(continuousBatchingEnabled: true)
+
+        let stats = await generator.continuousBatchingStats()
+
+        XCTAssertTrue(stats.enabled)
+        XCTAssertEqual(stats.batchedDecodeSteps, 0)
+        XCTAssertEqual(stats.maxBatchSize, 0)
+    }
+
+    func testLFM2DecodeLoopEpochCancelsStaleLoopAndAllowsImmediateReuse() {
+        var state = LFM2DecodeLoopEpochState()
+        let originalEpoch = state.residencyEpoch
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: originalEpoch))
+
+        let replacementEpoch = state.beginResidencyTransition()
+
+        XCTAssertFalse(state.isCurrent(originalEpoch))
+        XCTAssertFalse(state.startLoopIfCurrent(epoch: originalEpoch))
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: replacementEpoch))
+        XCTAssertEqual(state.runningEpoch, replacementEpoch)
+    }
+
+    func testLFM2StaleLoopCompletionCannotClearReplacementLoop() {
+        var state = LFM2DecodeLoopEpochState()
+        let originalEpoch = state.residencyEpoch
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: originalEpoch))
+        let replacementEpoch = state.beginResidencyTransition()
+        XCTAssertTrue(state.startLoopIfCurrent(epoch: replacementEpoch))
+
+        state.finishLoop(epoch: originalEpoch)
+        XCTAssertEqual(state.runningEpoch, replacementEpoch)
+
+        state.finishLoop(epoch: replacementEpoch)
+        XCTAssertNil(state.runningEpoch)
+    }
+
+    func testLFM2UnloadAdvancesResidencyEpoch() async {
+        let generator = LFM2Generator(continuousBatchingEnabled: true)
+        let before = await generator.decodeLoopEpochStateForTesting()
+
+        await generator.unload()
+
+        let after = await generator.decodeLoopEpochStateForTesting()
+        XCTAssertEqual(after.residencyEpoch, before.residencyEpoch + 1)
+        XCTAssertFalse(after.isCurrent(before.residencyEpoch))
+    }
+
+    func testNativeGroupedQueryAttentionMatchesExpandedReference() throws {
+        MLXRandom.seed(812)
+        let config = try makeTinyConfig()
+        let attention = LFM2Attention(config: config)
+        let input = MLXRandom.normal([2, 7, config.hiddenSize]).asType(.float32)
+
+        let actual = attention(input, mask: .causal, cache: nil)
+
+        let batch = input.dim(0)
+        let sequence = input.dim(1)
+        var queries = attention.qLayerNorm(
+            attention.qProj(input).reshaped(batch, sequence, config.numAttentionHeads, config.headDim)
+        ).transposed(0, 2, 1, 3)
+        var keys = attention.kLayerNorm(
+            attention.kProj(input).reshaped(batch, sequence, config.numKeyValueHeads, config.headDim)
+        ).transposed(0, 2, 1, 3)
+        var values = attention.vProj(input)
+            .reshaped(batch, sequence, config.numKeyValueHeads, config.headDim)
+            .transposed(0, 2, 1, 3)
+        let rope = RoPE(
+            dimensions: config.headDim,
+            traditional: false,
+            base: config.ropeParameters?.ropeTheta ?? config.ropeTheta
+        )
+        queries = rope(queries, offset: 0)
+        keys = rope(keys, offset: 0)
+        let repeats = config.numAttentionHeads / config.numKeyValueHeads
+        keys = MLX.repeated(keys, count: repeats, axis: 1)
+        values = MLX.repeated(values, count: repeats, axis: 1)
+        let expanded = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: 1 / Float(config.headDim).squareRoot(),
+            mask: .causal
+        )
+        let expected = attention.outProj(
+            expanded.transposed(0, 2, 1, 3)
+                .reshaped(batch, sequence, config.numAttentionHeads * config.headDim)
+        )
+
+        MLX.eval(actual, expected)
+        let maxDifference = MLX.max(MLX.abs(actual - expected)).item(Float.self)
+        XCTAssertLessThan(maxDifference, 1e-5)
     }
 
     func testTransposesConvertedConvWeightsWhenNeeded() {

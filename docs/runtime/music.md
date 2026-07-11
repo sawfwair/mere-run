@@ -92,6 +92,40 @@ swift run mere.run model pull music-muscriptor-medium
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 ```
 
+MuScriptor treats `--chunk-batch-size` (default `4`) as an upper bound, not a
+forced allocation. On Apple Silicon, the runtime subtracts current MLX active
+and cache allocations plus a reserve of the greater of 4 GiB or one-eighth of
+physical memory. It estimates each requested chunk at
+`numLayers * dim * 65,536 * max(1, beamSize)` bytes for bfloat16 and float16;
+float32 doubles that lane estimate. A second, model-complexity-scaled limit
+caps useful live beam lanes at 8 for the large checkpoint and 32 for medium and
+small, so large with `--beam-size 4` uses at most two chunks together even when
+memory allows more. This limit controls cross-chunk grouping. If one requested
+beam is wider than the budget, its live-beam forwards are microbatched while
+preserving the requested search width. The effective chunk group is selected
+once after model load at transcription start. The memory clamp is skipped when
+a unified-memory profile is unavailable, including non-Apple Linux hosts; the
+model-complexity limit still applies. Explicit `--chunk-batch-size 1` always
+preserves the lowest-memory single-chunk path. Persistent cache state still
+scales with the requested beam width, so the policy reduces cross-chunk and
+forward pressure but does not guarantee admission when one beam cannot fit.
+
+The cap reflects a matched warm M4 Max 128 GB measurement with
+`music-muscriptor-large`, 20 seconds/four chunks, beam size 4, and 64 maximum
+tokens per chunk. The pre-batching baseline took 22.38 seconds at 11.15 GB peak
+physical footprint. Chunk batch 1 took 4.70 seconds at 28.17 GB; chunk batch 2
+had a 3.69-second median at 50.38 GB; and chunk batch 4 took 6.16 seconds at
+87.48 GB. All JSON outputs had identical SHA-256 hashes. The adaptive
+two-chunk path was therefore about 6.1x faster than baseline at about 4.5x the
+peak footprint, while the four-chunk group was both slower and substantially
+larger. Lower-headroom systems fall back to one chunk, which measured about
+4.8x faster than baseline at about 2.5x its peak footprint.
+
+Greedy and sampling pipeline selected tokens into the next model step. Beam
+search packs live beams across the effective chunk group into as few bounded
+forwards per step as the lane budget allows, keeps an independently forked
+typed cache lane for every beam, and removes ended beams from later forwards.
+
 ACE-Step generation uses the upstream CLI turbo shift default (`--shift 3.0`)
 and the native Haar DCW sampler correction (`double`, low `0.05`, high `0.02`)
 before VAE decode. The XL turbo managed ID installs the 4B DiT decoder plus the

@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
@@ -196,6 +197,54 @@ final class HiDreamO1ConfigTests: MereRunCoreTestCase {
 
         let finalLayer = HiDreamO1FinalLayer(hiddenSize: 8, patchSize: 2, outChannels: 3)
         XCTAssertEqual(finalLayer(MLXArray(Array(repeating: Float(0.5), count: 2 * 8), [2, 8])).shape, [2, 12])
+    }
+
+    func testGenerationAttentionMaskKeepsPaddedCFGRowsIndependent() {
+        MLXRandom.seed(17)
+        let encoder = QwenEncoder(configuration: QwenTextEncoderConfiguration(
+            vocabSize: 32,
+            hiddenSize: 8,
+            numHiddenLayers: 1,
+            numAttentionHeads: 4,
+            numKeyValueHeads: 2,
+            intermediateSize: 16,
+            ropeTheta: 10_000,
+            maxPositionEmbeddings: 32,
+            rmsNormEps: 1e-6,
+            headDim: 2
+        ))
+        let source = MLXRandom.normal([1, 4, 8]).asType(.bfloat16)
+        let serialTypes = MLXArray([Int32(0), 0, 1, 1], [1, 4])
+        let serial = encoder.forward(
+            embeddings: source,
+            attentionMask: nil,
+            tokenTypes: serialTypes
+        ).lastHiddenState
+
+        let padding = MLXArray(Array(repeating: Float(1_000), count: 8), [1, 1, 8]).asType(.bfloat16)
+        let firstRow = MLX.concatenated([source, padding], axis: 1)
+        let secondRow = MLXRandom.normal([1, 5, 8]).asType(.bfloat16)
+        let batch = MLX.concatenated([firstRow, secondRow], axis: 0)
+        let batchTypes = MLXArray([
+            Int32(0), 0, 1, 1, 0,
+            0, 0, 1, 1, 1,
+        ], [2, 5])
+        let batchMask = MLXArray([
+            Int32(1), 1, 1, 1, 0,
+            1, 1, 1, 1, 1,
+        ], [2, 5])
+        let batched = encoder.forward(
+            embeddings: batch,
+            attentionMask: batchMask,
+            tokenTypes: batchTypes
+        ).lastHiddenState
+        MLX.eval(serial, batched)
+
+        let difference = MLX.max(MLX.abs(
+            serial[0, 0..<4, 0...].asType(.float32)
+                - batched[0, 0..<4, 0...].asType(.float32)
+        )).item(Float.self)
+        XCTAssertLessThan(difference, 1e-4)
     }
 
     func testPixelHeadWeightMapperKeepsOnlyHiDreamSpecificKeys() {

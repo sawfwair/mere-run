@@ -13,6 +13,9 @@ public struct GenerationConfig: Sendable {
     public var repetitionContextSize: Int
     /// Token ids that must never be sampled. Applied as a -inf logit mask.
     public var bannedTokens: [Int]
+    /// Per-request top-p candidate limit. Nil uses the process policy; zero
+    /// requests exact full-vocabulary top-p sampling.
+    public var topPPrefilter: Int?
 
     public init(
         maxTokens: Int = 256,
@@ -21,7 +24,8 @@ public struct GenerationConfig: Sendable {
         topP: Float = 0.9,
         repetitionPenalty: Float? = 1.05,
         repetitionContextSize: Int = 20,
-        bannedTokens: [Int] = []
+        bannedTokens: [Int] = [],
+        topPPrefilter: Int? = nil
     ) {
         self.maxTokens = maxTokens
         self.temperature = temperature
@@ -30,6 +34,7 @@ public struct GenerationConfig: Sendable {
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
         self.bannedTokens = bannedTokens
+        self.topPPrefilter = topPPrefilter
     }
 }
 
@@ -112,6 +117,19 @@ enum SamplerPolicy {
     }()
 }
 
+/// Applies an exact top-k threshold without sorting the full vocabulary.
+/// `argPartition` is linear-time on the selection axis and the selected
+/// candidates are only reduced to their minimum; their order is irrelevant.
+func applyingTopK(_ logits: MLXArray, topK: Int) -> MLXArray {
+    let vocabulary = logits.dim(-1)
+    guard topK > 0, topK < vocabulary else { return logits }
+    let firstTopIndex = vocabulary - topK
+    let partitioned = argPartition(logits, kth: firstTopIndex, axis: -1)
+    let topIndices = partitioned[firstTopIndex...]
+    let threshold = logits.take(topIndices, axis: -1).min()
+    return MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
+}
+
 /// Samples a token entirely on the GPU and returns it as a 0-d array, so decode
 /// loops can pipeline the readback instead of blocking on `.item()` per token.
 /// Matches `sampleToken(logits:config:previousTokens:)` distribution semantics;
@@ -151,10 +169,7 @@ public func sampledTokenArray(
     }
 
     if useTopK {
-        let sortedIndices = argSort(logits, axis: -1)
-        let sortedLogits = logits.take(sortedIndices, axis: -1)
-        let threshold = sortedLogits[sortedLogits.dim(-1) - config.topK]
-        logits = MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
+        logits = applyingTopK(logits, topK: config.topK)
     }
 
     if useTopP {
@@ -163,7 +178,7 @@ public func sampledTokenArray(
         // entries would defeat the partition) or when disabled.
         var candidateIndices: MLXArray?
         var workingLogits = logits
-        let prefilter = SamplerPolicy.topPPrefilter
+        let prefilter = max(0, config.topPPrefilter ?? SamplerPolicy.topPPrefilter)
         if !useTopK, prefilter > 0, logits.dim(-1) > prefilter * 4 {
             let vocabulary = logits.dim(-1)
             let partitioned = argPartition(logits, kth: vocabulary - prefilter, axis: -1)
@@ -265,10 +280,7 @@ public func topKSample(logits: MLXArray, temperature: Float, topK: Int) -> Int {
     }
 
     if topK > 0 && topK < logits.dim(-1) {
-        let sortedIndices = argSort(logits, axis: -1)
-        let sortedLogits = logits.take(sortedIndices, axis: -1)
-        let threshold = sortedLogits[sortedLogits.dim(-1) - topK]
-        logits = MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
+        logits = applyingTopK(logits, topK: topK)
     }
 
     let probs = categorical(logits / temperature)
@@ -338,17 +350,17 @@ public func sampleToken(
     let useTopP = config.topP > 0 && config.topP < 1
 
     if useTopK {
-        let sortedIndices = argSort(logits, axis: -1)
-        let sortedLogits = logits.take(sortedIndices, axis: -1)
-
+        // Preserve the legacy top-k + top-p boundary in the source dtype;
+        // topPSample performs the float32 promotion after thresholding. The
+        // top-k-only path historically promoted before choosing its boundary.
+        if !useTopP, logits.dtype == .bfloat16 {
+            logits = logits.asType(.float32)
+        }
+        logits = applyingTopK(logits, topK: config.topK)
         if useTopP {
-            if useTopK && config.topK < sortedLogits.dim(-1) {
-                let threshold = sortedLogits[sortedLogits.dim(-1) - config.topK]
-                logits = MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
-            }
             return topPSample(logits: logits, temperature: config.temperature, topP: config.topP)
         } else {
-            return topKSample(logits: logits, temperature: config.temperature, topK: config.topK)
+            return categoricalSample(logits: logits, temperature: config.temperature)
         }
     } else if useTopP {
         return topPSample(logits: logits, temperature: config.temperature, topP: config.topP)
@@ -376,10 +388,7 @@ public func samplingProbabilities(
     }
 
     if config.topK > 0 && config.topK < logits.dim(-1) {
-        let sortedIndices = argSort(logits, axis: -1)
-        let sortedLogits = logits.take(sortedIndices, axis: -1)
-        let threshold = sortedLogits[sortedLogits.dim(-1) - config.topK]
-        logits = MLX.where(logits .< threshold, MLXArray(-Float.infinity), logits)
+        logits = applyingTopK(logits, topK: config.topK)
     }
 
     if config.temperature == 0 {

@@ -6,6 +6,7 @@ public typealias Q35ContinuousBatchingStats = RuntimeDecodeBatchingStats
 
 private struct Q35PrefixKVCacheKey: Hashable {
     let modelPath: String
+    let cacheMode: RuntimeKVCacheMode
     let tokens: [Int]
 }
 
@@ -455,8 +456,11 @@ public actor Q35Generator: ChatGenerator {
             prefixKVCacheEnabled
             || (Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
                 && mtpModel != nil)
+        let effectiveKVCacheMode: RuntimeKVCacheMode = request.kvCacheMode == .affine8
+            ? .affine8
+            : .default
 
-        var layerCaches = makeLayerCaches(config: loadedConfig)
+        var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
         let promptInput = MLXArray(promptTokens.map { Int32($0) }).reshaped(1, promptTokens.count)
 
         var prefillOutput: Q35PrefillOutput
@@ -466,7 +470,8 @@ public actor Q35Generator: ChatGenerator {
         if imageURLs.isEmpty {
             let prefixSeed = prefixKVCacheSeed(
                 modelPath: loadedModelPath ?? "",
-                promptTokens: promptTokens
+                promptTokens: promptTokens,
+                cacheMode: effectiveKVCacheMode
             )
             let prefixCheckpoints = semanticPrefixCheckpoints(
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -589,7 +594,10 @@ public actor Q35Generator: ChatGenerator {
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
                 decodeSeconds: decodeResult.decodeSeconds,
-                firstTokenSeconds: decodeResult.firstTokenSeconds
+                firstTokenSeconds: decodeResult.firstTokenSeconds,
+                kvCacheMode: effectiveKVCacheMode,
+                prefillKVCache: effectiveKVCacheMode.genericCacheLabel,
+                decodeKVCache: effectiveKVCacheMode.genericCacheLabel
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
@@ -1569,12 +1577,14 @@ public actor Q35Generator: ChatGenerator {
 
     private func prefixKVCacheSeed(
         modelPath: String,
-        promptTokens: [Int]
+        promptTokens: [Int],
+        cacheMode: RuntimeKVCacheMode
     ) -> (tokenCount: Int, caches: [Q35LayerCache?], logits: MLXArray, hidden: MLXArray)? {
         guard prefixKVCacheEnabled else { return nil }
         let matchingKey = prefixKVCache.keys
             .filter { key in
                 key.modelPath == modelPath
+                    && key.cacheMode == cacheMode
                     && key.tokens.count <= promptTokens.count
                     && promptTokens.starts(with: key.tokens)
             }
@@ -1610,6 +1620,7 @@ public actor Q35Generator: ChatGenerator {
         guard prefixKVCacheEnabled, tokenCount > 0 else { return }
         let key = Q35PrefixKVCacheKey(
             modelPath: modelPath,
+            cacheMode: cacheMode(for: cache),
             tokens: Array(promptTokens.prefix(tokenCount))
         )
         prefixKVCache[key] = Q35PrefixKVCacheEntry(
@@ -1839,7 +1850,10 @@ public actor Q35Generator: ChatGenerator {
         }
     }
 
-    private func makeLayerCaches(config: Q35Config) -> [Q35LayerCache?] {
+    private func makeLayerCaches(
+        config: Q35Config,
+        kvCacheMode: RuntimeKVCacheMode = .default
+    ) -> [Q35LayerCache?] {
         let text = config.textConfig
         let mlpOnly = Set(text.mlpOnlyLayers)
         return (0..<text.numHiddenLayers).map { layerIndex in
@@ -1848,10 +1862,27 @@ public actor Q35Generator: ChatGenerator {
             }
             let layerType = layerIndex < text.layerTypes.count ? text.layerTypes[layerIndex] : "linear_attention"
             if layerType == "full_attention" {
+                if kvCacheMode == .affine8 {
+                    return .full(AffineQuantizedKVCache(
+                        groupSize: Self.affineKVGroupSize(headDimension: text.headDim),
+                        step: 256
+                    ))
+                }
                 return .full(KVCacheSimple(step: 256))
             }
             return .linear(Q35LinearCache())
         }
+    }
+
+    private func cacheMode(for caches: [Q35LayerCache?]) -> RuntimeKVCacheMode {
+        caches.contains { entry in
+            guard case .full(let cache)? = entry else { return false }
+            return cache is AffineQuantizedKVCache
+        } ? .affine8 : .default
+    }
+
+    private static func affineKVGroupSize(headDimension: Int) -> Int {
+        [64, 32, 16, 8].first { headDimension % $0 == 0 } ?? 1
     }
 
     private func collectImageURLs(from messages: [ChatMessage]) -> [String] {

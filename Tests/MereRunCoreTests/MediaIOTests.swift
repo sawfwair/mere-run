@@ -48,6 +48,34 @@ final class MediaIOTests: XCTestCase {
         XCTAssertEqual(readUInt32LE(data, offset: 40), 4 * UInt32(MemoryLayout<Float>.size))
     }
 
+    func testFloatWAVWriterRequestsChannelAlignedChunks() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-streamed-\(UUID().uuidString)")
+            .appendingPathExtension("wav")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let expected: [Float] = [0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1, -1, 0.125]
+        var requestedRanges: [Range<Int>] = []
+        try MediaAudioIO.writeFloatWAV(
+            sampleCount: expected.count,
+            sampleRate: 24_000,
+            channels: 2,
+            chunkSampleCount: 5,
+            to: tempURL
+        ) { range in
+            requestedRanges.append(range)
+            return Array(expected[range])
+        }
+
+        XCTAssertEqual(requestedRanges, [0..<4, 4..<8, 8..<10])
+        let data = try Data(contentsOf: tempURL)
+        XCTAssertEqual(data.count, 44 + expected.count * MemoryLayout<Float>.size)
+        let decoded = expected.indices.map { index in
+            Float(bitPattern: readUInt32LE(data, offset: 44 + index * MemoryLayout<Float>.size))
+        }
+        XCTAssertEqual(decoded, expected)
+    }
+
     func testAudioTranscodeWritesRequestedContainer() throws {
         guard isExecutableAvailable(MediaTool.ffmpegPath) else {
             throw XCTSkip("ffmpeg is not available")

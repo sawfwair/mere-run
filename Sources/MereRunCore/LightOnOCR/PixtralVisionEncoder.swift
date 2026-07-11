@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 // MARK: - Pixtral Vision Encoder Configuration
@@ -61,8 +62,6 @@ final class PixtralRotaryEmbedding {
             let freq = 1.0 / pow(base, Float(i) / Float(dim))
             freqsArray.append(freq)
         }
-        let freqs = MLXArray(freqsArray)  // [32]
-
         // Split into even (for height) and odd (for width) indexed frequencies
         // freqs[::2] -> indices 0, 2, 4, ... -> 16 values for height
         // freqs[1::2] -> indices 1, 3, 5, ... -> 16 values for width
@@ -179,10 +178,21 @@ final class PixtralAttention: Module {
         k = k.transposed(0, 2, 1, 3)
         vReshaped = vReshaped.transposed(0, 2, 1, 3)
 
-        // Scaled dot-product attention
-        var attn = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
-        attn = softmax(attn, axis: -1)
-        var out = MLX.matmul(attn, vReshaped)
+        // Pixtral's 64-wide heads use MLX's tiled full-attention Metal kernel.
+        var out: MLXArray
+        if FusedAttentionPolicy.enabled {
+            out = MLXFast.scaledDotProductAttention(
+                queries: q,
+                keys: k,
+                values: vReshaped,
+                scale: scale,
+                mask: .none
+            )
+        } else {
+            var attention = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
+            attention = softmax(attention, axis: -1)
+            out = MLX.matmul(attention, vReshaped)
+        }
 
         // Reshape back: [batch, seq, hidden]
         out = out.transposed(0, 2, 1, 3).reshaped(batch, seqLen, numHeads * headDim)

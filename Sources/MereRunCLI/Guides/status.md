@@ -8,7 +8,11 @@ managed models installed there.
 When `/runtime/status` is available, the snapshot also includes runtime pool
 entries, active request counts, request admission queue depth, memory pressure,
 runtime capability flags, aggregate cache stats, per-model prefix KV cache
-stats, per-model decode batching stats when enabled, and the settings file path.
+stats, per-model decode batching stats when enabled, embedding/image/TTS/ASR sidecar
+residency and readiness, and the settings file path. In JSON, `loaded` is the
+backward-compatible resident-object signal; additive `ready: false` means a text
+model is still preparing or a sidecar's first operation is loading or failed.
+Older payloads may omit `ready`.
 
 ## Required Models
 
@@ -52,6 +56,10 @@ mere.run guide status
   variable-position decode batches when the selected engine can report them.
 - Use `benchmark stats` to compare completed request counts, generated tokens,
   and average load/prefill/decode timings while cache and batching flags are on.
+- Use `sidecar residency` to distinguish an unloaded lane, a `resident (not
+  ready)` generator, and a ready image, speech, or transcription runtime. The
+  human `loaded models` line includes only residents whose optional readiness is
+  not explicitly false.
 
 ## Examples
 
@@ -74,6 +82,9 @@ MERERUN_API_KEY=change-me mere.run status --json
   `/v1/models` needs `--api-key` or `MERERUN_API_KEY`.
 - The loaded model list is what the API server reports; it is not a system-wide
   RAM/process scan for every runtime family.
+- A sidecar can be resident before it is ready because its generator object is
+  created before the first operation finishes model loading. Check the per-lane
+  state rather than treating residency alone as request readiness.
 - The installed model list follows the same shared inventory path as
   `mere.run model list`.
 - `runtime settings` points at

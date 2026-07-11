@@ -60,12 +60,6 @@ final class ACEStepAttention: Module {
             k = applySplitRoPE(k, offset: ropeOffset)
         }
 
-        if numKVHeads != numHeads {
-            let groups = numHeads / max(1, numKVHeads)
-            k = expandKeyValue(k, repeats: groups)
-            v = expandKeyValue(v, repeats: groups)
-        }
-
         let qF32 = q.asType(.float32)
         let kF32 = k.asType(.float32)
         let vF32 = v.asType(.float32)
@@ -100,13 +94,5 @@ final class ACEStepAttention: Module {
         let out1 = x1 * cos - x2 * sin
         let out2 = x2 * cos + x1 * sin
         return MLX.concatenated([out1, out2], axis: 3).asType(dtype)
-    }
-
-    private func expandKeyValue(_ x: MLXArray, repeats: Int) -> MLXArray {
-        guard repeats > 1 else { return x }
-        var expanded = MLX.expandedDimensions(x, axis: 2)
-        expanded = MLX.repeated(expanded, count: repeats, axis: 2)
-        let shape = x.shape
-        return expanded.reshaped(shape[0], shape[1] * repeats, shape[2], shape[3])
     }
 }

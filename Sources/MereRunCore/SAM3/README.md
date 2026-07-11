@@ -11,3 +11,6 @@ SAM 3.1 segmentation, prompting, tracking, video, and camera support.
 
 Keep video/graphics dictionaries at Apple framework boundaries and pass typed
 prompt/result structures through the runtime.
+
+Supported attention shapes use MLX fused SDPA by default. Set
+`MERERUN_FUSED_SDPA=0` to restore materialized attention for diagnosis.

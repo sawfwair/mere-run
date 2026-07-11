@@ -86,6 +86,21 @@ swift run mere.run video export-latents \
 
 `video export-latents` still targets the distilled video-only latent path.
 
+Long or high-resolution LTX decodes automatically split the VAE work into
+overlapping temporal/spatial tiles. Tile pixels and trapezoidal weights remain
+in MLX for device-side accumulation, normalization, and UInt8 conversion; the
+runtime no longer reads every float tile back to Swift. Override the automatic
+decode budget with `MERERUN_VIDEO_LTX_VAE_DECODE_BUDGET_GB` when validating a
+specific memory envelope.
+
+Final MP4 encoding is incremental. The writer transfers one BGRA frame at a
+time to FFmpeg stdin or AVAssetWriter and overlaps the next device-to-host frame
+transfer with encoder work, avoiding a monolithic host frame buffer and a raw
+video spool. Unified-AV audio is likewise transferred and written in aligned
+chunks. The decoded MLX frame tensor still exists on device, so this removes
+duplicated host-side staging rather than making the generation path
+zero-memory. MP4 formats and backend selection are unchanged.
+
 ## Runtime entrypoints
 
 ### CLI

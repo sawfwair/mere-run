@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 struct SAM31InteractiveMaskOutput: @unchecked Sendable {
@@ -26,10 +27,7 @@ final class SAM31LayerNorm2d: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        let mean = x.mean(axis: -1, keepDims: true)
-        let variance = ((x - mean) ** 2).mean(axis: -1, keepDims: true)
-        let normalized = (x - mean) / MLX.sqrt(variance + MLXArray(eps).asType(x.dtype))
-        return normalized * weight + bias
+        MLXFast.layerNorm(x, weight: weight, bias: bias, eps: eps)
     }
 }
 

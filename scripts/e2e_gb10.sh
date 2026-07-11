@@ -15,7 +15,7 @@ set -uo pipefail
 #
 # Usage:
 #   scripts/e2e_gb10.sh [--bin PATH] [--pull] [--only CAT[,CAT...]]
-#                       [--out DIR] [--max-tokens N]
+#                       [--out DIR] [--max-tokens N] [--quant-mode MODE]
 #
 #   --bin PATH      mere.run binary to test. Default: mere.run on PATH.
 #   --pull          Auto-pull missing models before running them (downloads!).
@@ -26,6 +26,7 @@ set -uo pipefail
 #                   music,video). Default: all.
 #   --out DIR       Output/artifact dir. Default: ./e2e-gb10-out
 #   --max-tokens N  Token cap for text decode runs. Default: 24
+#   --quant-mode     CUDA quant backend: auto, native, or dense. Default: auto.
 #
 # Output: $OUT/results.tsv and $OUT/results.md (a pass/fail/throughput matrix),
 # plus per-model logs and generated artifacts under $OUT.
@@ -35,6 +36,7 @@ DO_PULL=0
 ONLY=""
 OUT="./e2e-gb10-out"
 MAX_TOKENS=24
+QUANT_MODE="${MERERUN_MLX_CUDA_NATIVE_QUANT:-auto}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -43,10 +45,19 @@ while [[ $# -gt 0 ]]; do
     --only) ONLY="${2:?}"; shift 2;;
     --out) OUT="${2:?}"; shift 2;;
     --max-tokens) MAX_TOKENS="${2:?}"; shift 2;;
+    --quant-mode) QUANT_MODE="${2:?}"; shift 2;;
     -h|--help) sed -n '2,40p' "$0"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 64;;
   esac
 done
+
+case "$QUANT_MODE" in
+  auto|automatic) QUANT_MODE="auto";;
+  native|1|true|yes|on) QUANT_MODE="native";;
+  dense|0|false|no|off) QUANT_MODE="dense";;
+  *) echo "--quant-mode must be auto, native, or dense" >&2; exit 64;;
+esac
+export MERERUN_MLX_CUDA_NATIVE_QUANT="$QUANT_MODE"
 
 mkdir -p "$OUT"
 TSV="$OUT/results.tsv"
@@ -131,6 +142,12 @@ run_case() {
           status="PASS"; detail="$(stat -c%s "$expect") bytes"
         else status="WEAK"; detail="no/empty artifact"; fi;;
     esac
+  fi
+
+  local quant_selection
+  quant_selection="$(grep -oE 'mlx_cuda_quant operation=[^ ]+ mode=[^ ]+ backend=[^ ]+' "$log" | sort -u | paste -sd';' -)"
+  if [[ -n "$quant_selection" ]]; then
+    detail="${detail:+$detail; }$quant_selection"
   fi
 
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$cat" "$model" "$status" "$secs" "$tps" "$peak" "$detail" >>"$TSV"
@@ -232,6 +249,7 @@ want video && run_case video video-ltx-av file "$ASSETS/video.mp4" 1200 \
   echo
   echo "Binary: \`$BIN\` — $("$BIN" --version 2>/dev/null | head -1)"
   echo "Host: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1), $(uname -m), $(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-unknown}")"
+  echo "CUDA quant mode: `$QUANT_MODE`"
   echo
   echo "| Category | Model | Status | Seconds | decode_tps | GPU peak | Detail |"
   echo "| --- | --- | --- | --- | --- | --- | --- |"

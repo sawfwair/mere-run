@@ -1,4 +1,5 @@
 import MLX
+import MLXFast
 import MLXRandom
 import XCTest
 @testable import MereRunCore
@@ -74,5 +75,60 @@ final class ACEStepDiTShapeTests: MereRunCoreTestCase {
         XCTAssertEqual(config.conditionEncoderConfig.hiddenSize, 2048)
         XCTAssertEqual(config.conditionEncoderConfig.numAttentionHeads, 16)
         XCTAssertEqual(config.conditionEncoderConfig.intermediateSize, 6144)
+    }
+
+    func testNativeGroupedQueryAttentionMatchesExpandedReference() {
+        let config = ACEStepConfig(
+            hiddenSize: 32,
+            intermediateSize: 64,
+            numHiddenLayers: 1,
+            numAttentionHeads: 4,
+            numKeyValueHeads: 2,
+            headDim: 8,
+            audioAcousticHiddenDim: 4,
+            inChannels: 12
+        )
+        MLXRandom.seed(410)
+        let attention = ACEStepAttention(config: config)
+        let hidden = MLXRandom.normal([2, 5, config.hiddenSize]).asType(.float32)
+        let encoder = MLXRandom.normal([2, 7, config.hiddenSize]).asType(.float32)
+
+        let actual = attention(
+            hidden,
+            mask: .none,
+            encoderHiddenStates: encoder
+        )
+
+        let batch = hidden.dim(0)
+        let queryLength = hidden.dim(1)
+        let keyLength = encoder.dim(1)
+        let queries = attention.qNorm(
+            attention.qProj(hidden)
+                .reshaped(batch, queryLength, config.numAttentionHeads, config.headDim)
+        ).transposed(0, 2, 1, 3)
+        var keys = attention.kNorm(
+            attention.kProj(encoder)
+                .reshaped(batch, keyLength, config.numKeyValueHeads, config.headDim)
+        ).transposed(0, 2, 1, 3)
+        var values = attention.vProj(encoder)
+            .reshaped(batch, keyLength, config.numKeyValueHeads, config.headDim)
+            .transposed(0, 2, 1, 3)
+        let repeats = config.numAttentionHeads / config.numKeyValueHeads
+        keys = MLX.repeated(keys, count: repeats, axis: 1)
+        values = MLX.repeated(values, count: repeats, axis: 1)
+        let expanded = MLXFast.scaledDotProductAttention(
+            queries: queries.asType(.float32),
+            keys: keys.asType(.float32),
+            values: values.asType(.float32),
+            scale: 1 / Float(config.headDim).squareRoot(),
+            mask: .none
+        ).asType(queries.dtype)
+        let expected = attention.oProj(
+            expanded.transposed(0, 2, 1, 3).reshaped(batch, queryLength, -1)
+        )
+
+        MLX.eval(actual, expected)
+        let maxDifference = MLX.max(MLX.abs(actual - expected)).item(Float.self)
+        XCTAssertLessThan(maxDifference, 1e-5)
     }
 }

@@ -224,7 +224,36 @@ final class StatusCommandTests: XCTestCase {
                     totalDecodeSeconds: 2.0,
                     lastCompletedAt: nil
                 ),
-            ])
+            ]),
+            sidecars: RuntimeSidecarPoolStatus(
+                defaultIdleTTLSeconds: 300,
+                pressure: "nominal",
+                loadedCount: 1,
+                activeRequests: 0,
+                queuedRequests: 0,
+                residents: [
+                    RuntimeSidecarResidentSnapshot(
+                        kind: .image,
+                        modelID: "image-zimage-nano",
+                        modelPath: "/tmp/models/image-zimage-nano",
+                        variant: "zImageTurbo",
+                        loaded: true,
+                        activeRequests: 0,
+                        queuedRequests: 0,
+                        loadedAt: Date(timeIntervalSince1970: 10),
+                        lastAccess: Date(timeIntervalSince1970: 20),
+                        lastEvictedAt: nil,
+                        lastEvictionReason: nil,
+                        pinned: false,
+                        ttlSeconds: 45,
+                        loadCount: 1,
+                        replacementCount: 0,
+                        evictionCount: 0,
+                        completedRequests: 2,
+                        failedRequests: 0
+                    ),
+                ]
+            )
         )
         let snapshot = StatusSnapshot(
             server: StatusServerSnapshot(
@@ -248,7 +277,7 @@ final class StatusCommandTests: XCTestCase {
 
         let output = StatusFormatter.text(snapshot)
 
-        XCTAssertTrue(output.contains("loaded models: text-chat-gemma4"))
+        XCTAssertTrue(output.contains("loaded models: image-zimage-nano, text-chat-gemma4"))
         XCTAssertTrue(output.contains("active requests: 2"))
         XCTAssertTrue(output.contains("request admission: 1/1 active, 1 queued"))
         XCTAssertTrue(output.contains("continuous batching: enabled"))
@@ -265,6 +294,8 @@ final class StatusCommandTests: XCTestCase {
             "text-chat-gemma4 batching: 4 batched steps, 3 same-position, 1 variable-position, max batch 2, 1 queued rows"
         ))
         XCTAssertTrue(output.contains("text-chat-gemma4 MTP: active, block 4, 6/9 accepted"))
+        XCTAssertTrue(output.contains("sidecar residency: 1/1 loaded, 0 active, 0 queued, default TTL 300s"))
+        XCTAssertTrue(output.contains("image: image-zimage-nano, loaded, 0 active, 0 queued, TTL 45s, 1 load(s)"))
         XCTAssertTrue(output.contains("runtime settings: /tmp/models/.mere-run/runtime-model-settings.json"))
     }
 

@@ -57,11 +57,9 @@ public final class GLM47Flash: @unchecked Sendable {
         let tokens = tokenizer.encodeChat(messages: messages, tools: tools, addGenerationPrompt: true)
         let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped(1, tokens.count)
 
-        let cache: [KVCache] = (0..<config.numHiddenLayers).map { _ in
-            KVCacheSimple(step: 256)
-        }
+        let cache = makeCache(promptTokenCount: tokens.count)
 
-        var logits = model.lastPositionLogits(inputIds, cache: cache)
+        let logits = model.lastPositionLogits(inputIds, cache: cache)
         MLX.eval(logits)
 
         let eosTokens = Set(config.eosTokenId ?? []).union([tokenizer.eosTokenId ?? -1])
@@ -102,11 +100,9 @@ public final class GLM47Flash: @unchecked Sendable {
         let tokens = tokenizer.encodeChat(messages: messages, tools: tools, addGenerationPrompt: true)
         let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped(1, tokens.count)
 
-        let cache: [KVCache] = (0..<config.numHiddenLayers).map { _ in
-            KVCacheSimple(step: 256)
-        }
+        let cache = makeCache(promptTokenCount: tokens.count)
 
-        var logits = model.lastPositionLogits(inputIds, cache: cache)
+        let logits = model.lastPositionLogits(inputIds, cache: cache)
         MLX.eval(logits)
 
         let eosTokens = Set(config.eosTokenId ?? []).union([tokenizer.eosTokenId ?? -1])
@@ -140,5 +136,18 @@ public final class GLM47Flash: @unchecked Sendable {
 
         let decoded = tokenizer.decode(tokens: generatedTokens)
         return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func makeCache(promptTokenCount: Int) -> [KVCache] {
+        let compressedMLA = GLM47CompressedMLAPolicy.isEnabled(
+            promptTokenCount: promptTokenCount,
+            config: config
+        )
+        return (0..<config.numHiddenLayers).map { _ -> KVCache in
+            if compressedMLA {
+                return GLM47CompressedMLACache(step: 256)
+            }
+            return KVCacheSimple(step: 256)
+        }
     }
 }

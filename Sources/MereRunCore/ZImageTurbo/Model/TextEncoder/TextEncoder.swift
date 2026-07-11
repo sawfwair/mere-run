@@ -12,6 +12,17 @@ enum QwenTextEncoderError: Error {
   case mismatchedVisionTokenCount
 }
 
+/// Selects the single-token cached-attention implementation used by the
+/// shared Qwen text stack. Native mode keeps grouped key/value heads compact
+/// and lets MLX dispatch its GQA kernel. Reference mode expands the heads and
+/// uses explicit float32 attention for multimodal checkpoints whose MRoPE
+/// decode parity still depends on the reference formulation.
+public enum QwenCachedDecodeAttentionMode: String, Sendable {
+  case automatic
+  case native
+  case reference
+}
+
 public struct QwenTextEncoderConfiguration {
   public var vocabSize: Int
   public var hiddenSize: Int
@@ -27,6 +38,7 @@ public struct QwenTextEncoderConfiguration {
   public var mropeSection: [Int]?
   public var mropeInterleaved: Bool
   public var useFloat32Activations: Bool
+  public var cachedDecodeAttentionMode: QwenCachedDecodeAttentionMode
 
   public init(
     vocabSize: Int = 151_936,
@@ -42,7 +54,8 @@ public struct QwenTextEncoderConfiguration {
     headDim: Int = 128,
     mropeSection: [Int]? = nil,
     mropeInterleaved: Bool = false,
-    useFloat32Activations: Bool = false
+    useFloat32Activations: Bool = false,
+    cachedDecodeAttentionMode: QwenCachedDecodeAttentionMode = .automatic
   ) {
     self.vocabSize = vocabSize
     self.hiddenSize = hiddenSize
@@ -58,6 +71,7 @@ public struct QwenTextEncoderConfiguration {
     self.mropeSection = mropeSection
     self.mropeInterleaved = mropeInterleaved
     self.useFloat32Activations = useFloat32Activations
+    self.cachedDecodeAttentionMode = cachedDecodeAttentionMode
   }
 }
 

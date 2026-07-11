@@ -51,40 +51,32 @@ extension QwenTextEncoder {
     var tokens = inputIds.asArray(Int32.self).map { Int($0) }
     let inputLength = tokens.count
 
-    var logits = encoder.forwardCausal(inputIds: inputIds, cache: cache)
+    let logits = encoder.forwardCausal(inputIds: inputIds, cache: cache, lastPositionOnly: true)
     MLX.eval(logits)
+    let generationConfig = GenerationConfig(
+      maxTokens: config.maxNewTokens,
+      temperature: config.temperature,
+      topP: config.topP,
+      repetitionPenalty: config.repetitionPenalty,
+      repetitionContextSize: config.repetitionContextSize
+    )
+    var eosTokens = config.stopTokenIds
+    eosTokens.insert(config.eosTokenId)
+    let result = AutoregressiveDecodeEngine.decodeStateful(
+      AutoregressiveDecodeRequest(
+        initialLogits: logits,
+        generationConfig: generationConfig,
+        eosTokens: eosTokens,
+        tokenBudget: config.maxNewTokens,
+        historySeedTokens: tokens
+      ),
+      stepForward: { nextInput in
+        self.encoder.forwardCausal(inputIds: nextInput, cache: cache)
+      },
+      shouldContinue: tokenCallback
+    )
 
-    for _ in 0..<config.maxNewTokens {
-      let lastLogits = logits[0, -1, 0...]
-
-      let generationConfig = GenerationConfig(
-        maxTokens: config.maxNewTokens,
-        temperature: config.temperature,
-        topP: config.topP,
-        repetitionPenalty: config.repetitionPenalty,
-        repetitionContextSize: config.repetitionContextSize
-      )
-      let nextToken = sampleToken(
-        logits: lastLogits,
-        config: generationConfig,
-        previousTokens: tokens
-      )
-
-      if let callback = tokenCallback, !callback(nextToken) {
-        break
-      }
-
-      if config.stopTokenIds.contains(nextToken) || nextToken == config.eosTokenId {
-        break
-      }
-
-      tokens.append(nextToken)
-
-      let nextInput = MLXArray([Int32(nextToken)]).reshaped(1, 1)
-      logits = encoder.forwardCausal(inputIds: nextInput, cache: cache)
-      MLX.eval(logits)
-    }
-
+    tokens.append(contentsOf: result.generatedTokens)
     return Array(tokens.dropFirst(inputLength))
   }
 

@@ -165,7 +165,8 @@ public final class QwenVLEncoder: Module {
         imageTokenId: Int,
         visionStartTokenId: Int,
         pixelValues: MLXArray,
-        gridThw: [(Int, Int, Int)]
+        gridThw: [(Int, Int, Int)],
+        imageTokenRange: Range<Int>? = nil
     ) throws -> (MLXArray, [KVCache], Int, Int) {
         let cache: [KVCache] = (0..<textEncoder.configuration.numHiddenLayers).map { _ in
             KVCacheSimple(step: 256)
@@ -203,33 +204,29 @@ public final class QwenVLEncoder: Module {
         let embeddings = textEncoder.encoder.embed(inputIds: tokenIds)
 
         // Replace the expanded <|image_pad|> run with vision embeddings in place.
-        let (mergedEmbeddings, placeholderPos, finalSeqLen) = Self.replaceVisionEmbeddings(
+        let (mergedEmbeddings, visualTokenRange, finalSeqLen) = Self.replaceVisionEmbeddings(
             hiddenStates: embeddings,
             inputIds: tokenIds,
             imageTokenId: imageTokenId,
-            visionEmbeds: visionEmbeds
+            visionEmbeds: visionEmbeds,
+            imageTokenRange: imageTokenRange
         )
-
-        // Build visual position mask for deepstack (marks positions where vision tokens are)
-        let visualPosMask = Self.buildVisualPositionMask(
-            inputIds: tokenIds,
-            imageTokenId: imageTokenId
-        )
+        let placeholderPos = visualTokenRange.lowerBound
 
         // Compute M-RoPE position IDs for the expanded prompt sequence.
         let grid = gridThw.first ?? (1, 1, 1)
-        let positionIds = Self.computePromptRopePositions(
+        let ropePositions = Self.computePromptRopePositions(
             seqLen: finalSeqLen,
             placeholderPos: placeholderPos,
             numVisionTokens: numVisionTokens,
             gridThw: grid,
             spatialMergeSize: visionSpatialMergeSize
         )
+        let positionIds = ropePositions.ids
         if Self.debugVisionStats {
-            let maxPos = positionIds.max().item(Int32.self)
             print(
                 "[QwenVLEncoder] placeholderPos=\(placeholderPos) numVisionTokens=\(numVisionTokens) " +
-                "finalSeqLen=\(finalSeqLen) maxPos=\(maxPos)"
+                "finalSeqLen=\(finalSeqLen) maxPos=\(ropePositions.maxPosition)"
             )
         }
 
@@ -238,14 +235,14 @@ public final class QwenVLEncoder: Module {
             embeddings: mergedEmbeddings,
             cache: cache,
             positionIds: positionIds,
-            visualPosMask: visualPosMask,
-            deepstackFeatures: deepstackFeatures
+            visualTokenRange: visualTokenRange,
+            deepstackFeatures: deepstackFeatures,
+            lastPositionOnly: true
         )
         MLX.eval(logits)
 
         // Compute rope delta: how much the max position exceeds the sequence length
-        let maxPos = positionIds.max().item(Int32.self)
-        let ropeDelta = Int(maxPos) + 1 - finalSeqLen
+        let ropeDelta = ropePositions.maxPosition + 1 - finalSeqLen
 
         return (logits, cache, finalSeqLen, ropeDelta)
     }
@@ -269,20 +266,6 @@ public final class QwenVLEncoder: Module {
         )
     }
 
-    /// Build a mask marking image-token positions in the prompt sequence.
-    private static func buildVisualPositionMask(inputIds: MLXArray, imageTokenId: Int) -> MLXArray {
-        let seqLen = inputIds.dim(1)
-        let tokenArray = inputIds.asType(.int32)
-        MLX.eval(tokenArray)
-        let tokenValues = tokenArray.asArray(Int32.self)
-
-        var mask = [Float32](repeating: 0.0, count: seqLen)
-        for i in 0..<seqLen where tokenValues[i] == Int32(imageTokenId) {
-            mask[i] = 1.0
-        }
-        return MLXArray(mask, [1, seqLen])
-    }
-
     /// Compute M-RoPE position IDs for a prompt that already contains the expanded image-token run.
     private static func computePromptRopePositions(
         seqLen: Int,
@@ -290,7 +273,7 @@ public final class QwenVLEncoder: Module {
         numVisionTokens: Int,
         gridThw: (Int, Int, Int),
         spatialMergeSize: Int
-    ) -> MLXArray {
+    ) -> (ids: MLXArray, maxPosition: Int) {
         var positions = Array(repeating: [Int](), count: 3)
         for d in 0..<3 { positions[d].reserveCapacity(seqLen) }
 
@@ -328,7 +311,8 @@ public final class QwenVLEncoder: Module {
         }
 
         let flat = positions.flatMap { $0.map(Int32.init) }
-        return MLXArray(flat, [3, 1, seqLen])
+        let maxPosition = positions.compactMap { $0.max() }.max() ?? 0
+        return (MLXArray(flat, [3, 1, seqLen]), maxPosition)
     }
 
     // MARK: - Patch inputs + replacement helpers
@@ -376,8 +360,9 @@ public final class QwenVLEncoder: Module {
         hiddenStates: MLXArray,
         inputIds: MLXArray,
         imageTokenId: Int,
-        visionEmbeds: MLXArray
-    ) -> (MLXArray, Int, Int) {
+        visionEmbeds: MLXArray,
+        imageTokenRange: Range<Int>?
+    ) -> (MLXArray, Range<Int>, Int) {
         let seqLen = hiddenStates.dim(1)
 
         var visionTensor = visionEmbeds
@@ -385,42 +370,42 @@ public final class QwenVLEncoder: Module {
             visionTensor = visionTensor.asType(hiddenStates.dtype)
         }
 
-        let tokenArray = inputIds.asType(.int32)
-        MLX.eval(tokenArray)
-        let tokenValues = tokenArray.asArray(Int32.self)
-
-        // Find the contiguous <|image_pad|> span.
-        var placeholderPos: Int? = nil
-        var placeholderCount = 0
-        for position in 0..<seqLen where tokenValues[position] == Int32(imageTokenId) {
-            if placeholderPos == nil {
-                placeholderPos = position
-            }
-            placeholderCount += 1
-        }
-
-        guard let pos = placeholderPos else {
-            return (hiddenStates, 0, seqLen)
-        }
-
         let numVisionTokens = visionTensor.dim(0)
-        precondition(
-            placeholderCount == numVisionTokens,
-            "[QwenVLEncoder] image token span mismatch: prompt has \(placeholderCount) placeholders, vision tower produced \(numVisionTokens) tokens"
-        )
-
-        let expectedPositions = Array(pos..<(pos + numVisionTokens))
-        let actualPositions = tokenValues.enumerated().compactMap { index, value in
-            value == Int32(imageTokenId) ? index : nil
+        let resolvedRange: Range<Int>
+        if let imageTokenRange {
+            resolvedRange = imageTokenRange
+        } else {
+            // Compatibility fallback for direct API callers. The production
+            // caption path passes the already-host-resident token range and
+            // avoids this synchronization entirely.
+            let tokenArray = inputIds.asType(.int32)
+            MLX.eval(tokenArray)
+            let tokenValues = tokenArray.asArray(Int32.self)
+            let positions = tokenValues.enumerated().compactMap { index, value in
+                value == Int32(imageTokenId) ? index : nil
+            }
+            guard let first = positions.first else {
+                return (hiddenStates, 0..<0, seqLen)
+            }
+            resolvedRange = first..<(first + positions.count)
+            precondition(
+                positions == Array(resolvedRange),
+                "[QwenVLEncoder] expected a contiguous image-token span in the prompt"
+            )
         }
+
         precondition(
-            actualPositions == expectedPositions,
-            "[QwenVLEncoder] expected a contiguous image-token span in the prompt"
+            resolvedRange.lowerBound >= 0 && resolvedRange.upperBound <= seqLen,
+            "[QwenVLEncoder] image token span falls outside the prompt"
+        )
+        precondition(
+            resolvedRange.count == numVisionTokens,
+            "[QwenVLEncoder] image token span mismatch: prompt has \(resolvedRange.count) placeholders, vision tower produced \(numVisionTokens) tokens"
         )
 
         let merged = hiddenStates
-        merged[0, pos..<(pos + numVisionTokens), 0...] = visionTensor
-        return (merged, pos, seqLen)
+        merged[0, resolvedRange, 0...] = visionTensor
+        return (merged, resolvedRange, seqLen)
     }
 }
 
@@ -429,8 +414,9 @@ extension QwenEncoder {
         embeddings: MLXArray,
         cache: [KVCache]?,
         positionIds: MLXArray? = nil,
-        visualPosMask: MLXArray? = nil,
-        deepstackFeatures: [MLXArray] = []
+        visualTokenRange: Range<Int>? = nil,
+        deepstackFeatures: [MLXArray] = [],
+        lastPositionOnly: Bool = false
     ) -> MLXArray {
         var h = embeddings
         let n = h.dim(1)
@@ -447,71 +433,49 @@ extension QwenEncoder {
             h = layer(h, mask: mask, cache: cache?[i], positionIds: positionIds)
 
             // Apply deepstack visual features at early layers (0, 1, 2, ...)
-            if i < deepstackFeatures.count, let visualMask = visualPosMask {
-                h = applyDeepstackFeatures(
+            if i < deepstackFeatures.count, let visualTokenRange {
+                h = Self.applyingDeepstackFeatures(
                     hiddenStates: h,
-                    visualPosMask: visualMask,
+                    visualTokenRange: visualTokenRange,
                     visualEmbeds: deepstackFeatures[i]
                 )
             }
         }
 
         h = norm(h)
+        if lastPositionOnly && h.dim(1) > 1 {
+            h = h[0..., (h.dim(1) - 1)..., 0...]
+        }
         return embedTokens.asLinear(h)
     }
 
     /// Add deepstack visual features to hidden states at visual token positions
-    private func applyDeepstackFeatures(
+    static func applyingDeepstackFeatures(
         hiddenStates: MLXArray,
-        visualPosMask: MLXArray,
+        visualTokenRange: Range<Int>,
         visualEmbeds: MLXArray
     ) -> MLXArray {
-        // visualPosMask: [1, seqLen] with 1s at vision positions
         // visualEmbeds: [numVisionTokens, hiddenDim]
         // hiddenStates: [1, seqLen, hiddenDim]
 
         let seqLen = hiddenStates.dim(1)
-        let hiddenDim = hiddenStates.dim(2)
         let numVision = visualEmbeds.dim(0)
-
-        // Find indices where mask is 1
-        MLX.eval(visualPosMask)
-        let maskFlat = visualPosMask.reshaped(seqLen)
-        let maskArray = maskFlat.asArray(Float32.self)
-
-        var indices: [Int] = []
-        for i in 0..<seqLen where maskArray[i] > 0.5 {
-            indices.append(i)
-        }
-
-        if indices.isEmpty || indices.count != numVision {
+        guard visualTokenRange.lowerBound >= 0,
+              visualTokenRange.upperBound <= seqLen,
+              visualTokenRange.count == numVision else {
             return hiddenStates
         }
 
-        // Build full-size embeddings with visual embeds at right positions
-        var paddedEmbeds = [[Float32]](repeating: [Float32](repeating: 0, count: hiddenDim), count: seqLen)
-
-        // Convert visual embeds to array
-        let visualEmbedsTyped = visualEmbeds.asType(.float32)
-        MLX.eval(visualEmbedsTyped)
-        let visualData = visualEmbedsTyped.asArray(Float32.self)
-
-        // Place visual embeds at their positions
-        for (i, pos) in indices.enumerated() {
-            let offset = i * hiddenDim
-            for j in 0..<hiddenDim {
-                paddedEmbeds[pos][j] = visualData[offset + j]
-            }
+        var visualTensor = visualEmbeds
+        if visualTensor.dtype != hiddenStates.dtype {
+            visualTensor = visualTensor.asType(hiddenStates.dtype)
         }
 
-        // Flatten and create MLXArray
-        let flatPadded = paddedEmbeds.flatMap { $0 }
-        let paddedArray = MLXArray(flatPadded, [seqLen, hiddenDim]).asType(hiddenStates.dtype)
-
-        // Add to hidden states: h + padded_visual_embeds
-        let h = hiddenStates.reshaped(seqLen, hiddenDim)
-        let result = h + paddedArray
-
-        return result.reshaped(1, seqLen, hiddenDim)
+        // Keep the entire operation on-device. The old implementation read
+        // both the mask and every visual feature to Swift, built a nested
+        // Float32 buffer, then uploaded it again at each deepstack layer.
+        let padded = MLXArray.zeros(hiddenStates.shape, dtype: hiddenStates.dtype)
+        padded[0, visualTokenRange, 0...] = visualTensor
+        return hiddenStates + padded
     }
 }

@@ -78,6 +78,24 @@ equally recommended:
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use
 `--model text-chat-lfm25-a1b-8bit` for CLI chat or `api serve --engine text-chat-lfm2`.
+Concurrent serve workloads use ragged, cache-safe decode batching when
+`--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
+overrides); rows at different prompt lengths share a forward only when every
+attention and short-conv cache proves compatibility.
+
+Gemma4, Qwen-family, and LFM2 API-serving settings can select explicit
+`--kv-cache-mode affine8` as a long-context memory control relative to
+full-precision K/V. Qwen-family and LFM2 dequantize the generic cache for
+attention, so the mode is not assumed faster. Gemma uses its model-specific
+quantized KV path; `text-chat-gemma4-turbo` already defaults to a smaller 4-bit
+TurboQuant cache, so forcing affine 8-bit can increase that model's KV
+residency. `default` restores the engine/model/server default rather than
+promising full precision.
+
+The local-path-only `text-chat-psi-agent` runtime has guarded compressed-MLA
+and fused sparse-MoE controls. They remain opt-in until a repeatable public
+checkpoint quality/throughput A/B is available; see the
+[guarded acceleration audit](../internals/guarded-acceleration.md).
 
 `text-agent-ornith-9b` installs an Ornith 1.0 9B OptiQ MLX snapshot and runs
 through the native Qwen-family runtime. Use `text chat --model text-agent-ornith-9b`

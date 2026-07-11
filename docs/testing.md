@@ -85,7 +85,13 @@ swift build --target mere.run
 
 In this mode `Package.swift` imports the CMake-built `mlx-swift` Swift modules
 and static libraries instead of rebuilding `mlx-swift` through SwiftPM's
-CPU-oriented Linux manifest path.
+CPU-oriented Linux manifest path. The preparation script checks out the exact
+`mlx-swift` revision selected by SwiftPM under the active Linux Swift toolchain,
+keeping the CMake bridge and Swift package graph aligned even when that
+toolchain resolves a compatibility revision different from a Mac checkout.
+`MLX_SWIFT_CUDA_COMMIT` is a deliberate diagnostic override for maintainers,
+not part of normal setup. This pin removes source drift; it does not count as
+CUDA validation on a host that has not run the path.
 
 Linux release packaging has its own artifact check:
 
@@ -108,6 +114,14 @@ tar -tzf dist/linux/mere-run-*-linux-x86_64-cuda.tar.gz | grep '/.mererun-linux-
 dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
 ```
 
+The `.deb` check requires the built binary to link one unambiguous CUDA 13
+`libcudart` SONAME; packaging fails instead of writing CUDA 13 dependencies for
+a CUDA 12 or unknown binary. Use `--skip-deb` when validating a tarball against
+another toolkit major.
+An explicit `MERERUN_PACKAGE_LINUX_DEPS` fixture separately verifies the
+maintainer override; its value is written verbatim and bypasses the default
+major gate.
+
 On Linux arm64, use CUDA for the package check:
 
 ```bash
@@ -116,6 +130,20 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.20.0
 
 Run Linux package and manifest checks on the affected Linux host class. CUDA
 artifacts need a matching CUDA host for meaningful runtime smoke coverage.
+
+For a real GB10/DGX Spark model sweep, use the installed CUDA binary and record
+the quantized-kernel choice alongside artifacts and throughput:
+
+```bash
+scripts/e2e_gb10.sh --bin /usr/bin/mere.run --quant-mode auto --out ./e2e-gb10-auto
+```
+
+`auto` probes `quantized_mm` and `GatherQMM` independently and records either
+`backend=native` or `backend=dense` in the result detail. Use `--quant-mode
+native` for a fail-loud kernel-availability run and `--quant-mode dense` for a
+compatibility/throughput baseline. Do not treat the automatic selection as
+GB10-validated until this sweep has run against the exact packaged binary and
+host.
 
 MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
 covers pure Swift image, WAV, and FFT behavior in the normal test suite.
