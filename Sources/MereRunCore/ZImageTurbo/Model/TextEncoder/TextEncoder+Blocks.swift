@@ -445,7 +445,7 @@ public final class QwenEncoder: Module {
 
     let causalMask = MLXFast.ScaledDotProductAttentionMaskMode.causal
     if let tokenTypes {
-      return generationAttentionMask(h: h, tokenTypes: tokenTypes)
+      return generationAttentionMask(h: h, tokenTypes: tokenTypes, attentionMask: attentionMask)
     }
 
     if let attentionMask = attentionMask {
@@ -475,7 +475,8 @@ public final class QwenEncoder: Module {
 
   private func generationAttentionMask(
     h: MLXArray,
-    tokenTypes: MLXArray
+    tokenTypes: MLXArray,
+    attentionMask: MLXArray?
   ) -> MLXFast.ScaledDotProductAttentionMaskMode {
     let batch = h.dim(0)
     let length = h.dim(1)
@@ -495,6 +496,10 @@ public final class QwenEncoder: Module {
     }
     let generationRows = (types .> MLXArray(0)).reshaped(batch, length, 1)
     blocked = blocked .&& (.!generationRows)
+    if let attentionMask {
+      let validKeys = (attentionMask .> MLXArray(0)).reshaped(batch, 1, length)
+      blocked = (blocked.asType(.int32) + (.!validKeys).asType(.int32)) .> MLXArray(0)
+    }
     let additive = MLX.where(blocked, zeros + minValue, zeros).reshaped(batch, 1, length, length)
     return .array(additive)
   }

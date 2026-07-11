@@ -26,8 +26,10 @@ The format is based on Keep a Changelog.
   `quantized_mm` and `GatherQMM` independently, retaining an automatic dense
   fallback for runtimes that do not provide either kernel; Linux native
   preparation also skips unused llama tools and server targets.
-- added memory-aware batched classifier-free guidance to Qwen Image Edit, with
-  `MERERUN_QWEN_IMAGE_BATCHED_CFG` overrides for forced batched or serial runs.
+- generalized memory-aware batched classifier-free guidance across Qwen Image
+  Edit, Z-Image, FLUX.2 Klein, and HiDream O1, with a shared policy plus
+  model-specific overrides and exact serial fallbacks under memory or shape
+  pressure.
 - moved LTX tiled VAE overlap blending from per-tile CPU readbacks and Swift
   pixel loops to device-side MLX accumulation and normalization.
 

@@ -58,6 +58,7 @@ final class HiDreamO1Model: Module {
         vinputs: MLXArray,
         timestep: MLXArray,
         tokenTypes: MLXArray,
+        attentionMask: MLXArray? = nil,
         visionConditions: [HiDreamO1ImagePreprocessor.VisionConditionTensor] = []
     ) throws -> MLXArray {
         let textEmbeddings = try preparedTextEmbeddings(
@@ -65,11 +66,11 @@ final class HiDreamO1Model: Module {
             timestep: timestep,
             visionConditions: visionConditions
         )
-        let visualEmbeddings = pixelHead.patchEmbeddings(vinputs[0]).expandedDimensions(axis: 0)
+        let visualEmbeddings = pixelHead.patchEmbeddings(vinputs)
         let embeddings = MLX.concatenated([textEmbeddings, visualEmbeddings], axis: 1)
         let hiddenStates = languageModel.forward(
             embeddings: embeddings,
-            attentionMask: nil,
+            attentionMask: attentionMask,
             positionIds: positionIds,
             tokenTypes: tokenTypes,
             outputHiddenStates: false
@@ -260,6 +261,87 @@ enum HiDreamO1Denoiser {
         }
     }
 
+    private struct PreparedCFGPair {
+        let inputIds: MLXArray
+        let positionIds: MLXArray
+        let tokenTypes: MLXArray
+        let attentionMask: MLXArray
+        let selections: [MLXArray]
+        let targetImageLength: Int
+        let visualLength: Int
+        let visionConditions: [HiDreamO1ImagePreprocessor.VisionConditionTensor]
+
+        init?(unconditional: PreparedSample, conditional: PreparedSample) {
+            let samples = [unconditional, conditional]
+            let textLengths = samples.map { $0.sample.inputIds.count }
+            let totalLengths = samples.map { $0.sample.tokenTypes.count }
+            let visualLengths = zip(totalLengths, textLengths).map { total, text in total - text }
+            guard unconditional.sample.targetImageLength == conditional.sample.targetImageLength,
+                  visualLengths[0] == visualLengths[1], visualLengths[0] > 0,
+                  unconditional.visionConditions.count == conditional.visionConditions.count,
+                  samples.allSatisfy({ prepared in
+                      let sample = prepared.sample
+                      return sample.vinputMask.count == sample.tokenTypes.count
+                          && sample.positionIds.count == 3
+                          && sample.positionIds.allSatisfy { $0.count == sample.tokenTypes.count }
+                          && sample.tokenTypes.count >= sample.inputIds.count
+                          && sample.vinputMask.filter { $0 }.count >= sample.targetImageLength
+                  }) else {
+                return nil
+            }
+
+            let maximumTextLength = textLengths.max() ?? 0
+            let batchSequenceLength = maximumTextLength + visualLengths[0]
+            var inputRows: [[Int32]] = []
+            var tokenTypeRows: [[Int32]] = []
+            var maskRows: [[Int32]] = []
+            var positionRows = Array(repeating: [[Int32]](), count: 3)
+            var selections: [MLXArray] = []
+
+            for (rowIndex, prepared) in samples.enumerated() {
+                let sample = prepared.sample
+                let textLength = textLengths[rowIndex]
+                let padding = maximumTextLength - textLength
+                inputRows.append(sample.inputIds.map(Int32.init) + Array(repeating: 0, count: padding))
+
+                let leadingTypes = sample.tokenTypes.prefix(textLength).map(Int32.init)
+                let visualTypes = sample.tokenTypes.dropFirst(textLength).map(Int32.init)
+                tokenTypeRows.append(leadingTypes + Array(repeating: 0, count: padding) + visualTypes)
+                maskRows.append(
+                    Array(repeating: 1, count: textLength)
+                        + Array(repeating: 0, count: padding)
+                        + Array(repeating: 1, count: visualLengths[rowIndex])
+                )
+
+                for axis in 0..<3 {
+                    let leadingPositions = sample.positionIds[axis].prefix(textLength).map(Int32.init)
+                    let visualPositions = sample.positionIds[axis].dropFirst(textLength).map(Int32.init)
+                    positionRows[axis].append(
+                        leadingPositions + Array(repeating: 0, count: padding) + visualPositions
+                    )
+                }
+
+                let selected = sample.vinputMask.enumerated().compactMap { index, keep -> Int32? in
+                    guard keep else { return nil }
+                    return Int32(index >= textLength ? index + padding : index)
+                }
+                selections.append(MLXArray(selected))
+            }
+
+            self.inputIds = MLXArray(inputRows.flatMap { $0 }, [2, maximumTextLength])
+            self.positionIds = MLXArray(
+                positionRows.flatMap { $0 }.flatMap { $0 },
+                [3, 2, batchSequenceLength]
+            )
+            self.tokenTypes = MLXArray(tokenTypeRows.flatMap { $0 }, [2, batchSequenceLength])
+            self.attentionMask = MLXArray(maskRows.flatMap { $0 }, [2, batchSequenceLength])
+            self.selections = selections
+            self.targetImageLength = unconditional.sample.targetImageLength
+            self.visualLength = visualLengths[0]
+            self.visionConditions = conditional.visionConditions
+        }
+    }
+
     static func initialPatches(
         height: Int,
         width: Int,
@@ -395,6 +477,29 @@ enum HiDreamO1Denoiser {
         let preparedConditioning = PreparedSample(conditioning: conditioning)
         let preparedUnconditional = unconditionalConditioning.map(PreparedSample.init(conditioning:))
         let usesCFG = guidanceScale > 1.0 && preparedUnconditional != nil
+        let machine = MereRunMachineProfile.current
+        let preparedCFGPair: PreparedCFGPair? = {
+            guard usesCFG, let preparedUnconditional,
+                  DiffusionCFGExecution.shouldBatch(
+                      mode: DiffusionCFGExecutionMode.current(
+                          modelEnvironmentKey: "MERERUN_HIDREAM_BATCHED_CFG"
+                      ),
+                      width: width,
+                      height: height,
+                      physicalMemoryBytes: machine.physicalMemoryBytes,
+                      activeMemoryBytes: Memory.activeMemory,
+                      cacheMemoryBytes: Memory.cacheMemory,
+                      isUnifiedMemory: machine.isAppleSiliconMac,
+                      baseReserveBytes: 8 * DiffusionCFGExecution.gibibyte,
+                      activationBytesPerPixel: 4_096
+                  ) else {
+                return nil
+            }
+            return PreparedCFGPair(
+                unconditional: preparedUnconditional,
+                conditional: preparedConditioning
+            )
+        }()
         var uniPCState = scheduler.usesFlashStep ? nil : HiDreamO1UniPCState(scheduler: scheduler)
         var z = initialPatches(height: height, width: width, seed: seed)
 
@@ -416,28 +521,43 @@ enum HiDreamO1Denoiser {
             let sigma = MLX.maximum(timestep / MLXArray(1_000.0), MLXArray(timestepEpsilon))
             let tPixelDiT = MLXArray(1.0) - timestep / MLXArray(1_000.0)
             let vinputs = referencePatches.map { MLX.concatenated([z, $0], axis: 1) } ?? z
-            let conditionalVelocity = try predictedVelocity(
-                model: model,
-                prepared: preparedConditioning,
-                vinputs: vinputs,
-                timestep: tPixelDiT,
-                sigma: sigma,
-                z: z
-            )
             let guidedVelocity: MLXArray
-            if usesCFG, let preparedUnconditional {
-                let unconditionalVelocity = try predictedVelocity(
+            if let preparedCFGPair, vinputs.dim(1) == preparedCFGPair.visualLength {
+                let predictions = try predictedVelocities(
                     model: model,
-                    prepared: preparedUnconditional,
+                    prepared: preparedCFGPair,
                     vinputs: vinputs,
                     timestep: tPixelDiT,
                     sigma: sigma,
                     z: z
                 )
-                guidedVelocity = unconditionalVelocity
-                    + (conditionalVelocity - unconditionalVelocity) * MLXArray(guidanceScale)
+                guidedVelocity = DiffusionCFGExecution.combinePredictions(
+                    predictions,
+                    guidanceScale: guidanceScale
+                )
             } else {
-                guidedVelocity = conditionalVelocity
+                let conditionalVelocity = try predictedVelocity(
+                    model: model,
+                    prepared: preparedConditioning,
+                    vinputs: vinputs,
+                    timestep: tPixelDiT,
+                    sigma: sigma,
+                    z: z
+                )
+                if usesCFG, let preparedUnconditional {
+                    let unconditionalVelocity = try predictedVelocity(
+                        model: model,
+                        prepared: preparedUnconditional,
+                        vinputs: vinputs,
+                        timestep: tPixelDiT,
+                        sigma: sigma,
+                        z: z
+                    )
+                    guidedVelocity = unconditionalVelocity
+                        + (conditionalVelocity - unconditionalVelocity) * MLXArray(guidanceScale)
+                } else {
+                    guidedVelocity = conditionalVelocity
+                }
             }
 
             let modelOutput = -guidedVelocity
@@ -483,6 +603,32 @@ enum HiDreamO1Denoiser {
         let selected = xPred[0, prepared.selection, 0...]
         let predicted = selected[0..<prepared.sample.targetImageLength, 0...].expandedDimensions(axis: 0)
         return (predicted.asType(.float32) - z.asType(.float32)) / sigma.asType(.float32)
+    }
+
+    private static func predictedVelocities(
+        model: HiDreamO1Model,
+        prepared: PreparedCFGPair,
+        vinputs: MLXArray,
+        timestep: MLXArray,
+        sigma: MLXArray,
+        z: MLXArray
+    ) throws -> MLXArray {
+        let xPred = try model.forward(
+            inputIds: prepared.inputIds,
+            positionIds: prepared.positionIds,
+            vinputs: DiffusionCFGExecution.duplicateBatch(vinputs),
+            timestep: MLX.broadcast(timestep.reshaped(1), to: [2]),
+            tokenTypes: prepared.tokenTypes,
+            attentionMask: prepared.attentionMask,
+            visionConditions: prepared.visionConditions
+        )
+        let selectedPredictions = prepared.selections.enumerated().map { row, selection in
+            let selected = xPred[row, selection, 0...]
+            return selected[0..<prepared.targetImageLength, 0...].expandedDimensions(axis: 0)
+        }
+        let predictions = MLX.concatenated(selectedPredictions, axis: 0)
+        let batchedZ = DiffusionCFGExecution.duplicateBatch(z).asType(.float32)
+        return (predictions.asType(.float32) - batchedZ) / sigma.asType(.float32)
     }
 
     private static func flashStep(

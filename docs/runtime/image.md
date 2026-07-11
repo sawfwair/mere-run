@@ -393,12 +393,21 @@ swift run mere.run image validate --family klein --test pipeline
 - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+ModelLoading.swift`
 - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
-Qwen Image Edit automatically combines unconditional and conditional CFG into
-one transformer batch only on unified-memory machines with sufficient live
-headroom for the requested resolution. Set
-`MERERUN_QWEN_IMAGE_BATCHED_CFG=batched` to force the throughput path or
-`MERERUN_QWEN_IMAGE_BATCHED_CFG=serial` to force the lower-memory two-pass path;
-unset it (or use `auto`) for the memory-aware default.
+Qwen Image Edit, Z-Image, FLUX.2 Klein, and HiDream O1 automatically combine
+unconditional and conditional CFG into one transformer batch on Apple silicon
+Macs with sufficient live headroom for the requested resolution. HiDream masks
+the padding used to align different prompt lengths; Z-Image keeps the serial
+path when the two encoded prompt shapes cannot be paired exactly. The
+memory-constrained FLUX.2 iOS pipeline also keeps its serial two-pass path.
+
+Set `MERERUN_IMAGE_BATCHED_CFG=batched` to force the throughput policy or
+`MERERUN_IMAGE_BATCHED_CFG=serial` to force the lower-memory policy. The
+model-specific `MERERUN_QWEN_IMAGE_BATCHED_CFG`,
+`MERERUN_ZIMAGE_BATCHED_CFG`, `MERERUN_FLUX2_BATCHED_CFG`, and
+`MERERUN_HIDREAM_BATCHED_CFG` variables take precedence. Unset the variables
+(or use `auto`) for the memory-aware default. A forced batched policy bypasses
+the headroom check but still falls back to serial execution when conditioning
+shapes are incompatible.
 
 ## How image generation flows
 

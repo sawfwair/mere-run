@@ -65,6 +65,59 @@ final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
         XCTAssertEqual(combined.asArray(Float.self), [10, 20])
     }
 
+    func testBatchedCFGCombinationSupportsNonImageRanks() {
+        let predictions = MLXArray([Float(1), 2, 4, 8], [2, 2])
+        let combined = DiffusionCFGExecution.combinePredictions(
+            predictions,
+            guidanceScale: 3
+        )
+        MLX.eval(combined)
+
+        XCTAssertEqual(combined.shape, [1, 2])
+        XCTAssertEqual(combined.asArray(Float.self), [10, 20])
+    }
+
+    func testPositiveAnchoredCFGCombinationPreservesZImageFormula() {
+        let predictions = MLXArray([Float(1), 2, 4, 8], [2, 2])
+        let combined = DiffusionCFGExecution.combinePositiveAnchoredPredictions(
+            predictions,
+            guidanceScale: 3
+        )
+        MLX.eval(combined)
+
+        XCTAssertEqual(combined.shape, [1, 2])
+        XCTAssertEqual(combined.asArray(Float.self), [13, 26])
+    }
+
+    func testCFGBatchingPairsOnlyShapeCompatibleRows() {
+        let unconditional = MLXArray([Float(1), 2, 3, 4], [1, 2, 2])
+        let conditional = MLXArray([Float(5), 6, 7, 8], [1, 2, 2])
+        let incompatible = MLXArray([Float(1), 2, 3], [1, 3, 1])
+
+        XCTAssertTrue(DiffusionCFGExecution.canPair(unconditional, conditional))
+        XCTAssertFalse(DiffusionCFGExecution.canPair(unconditional, incompatible))
+
+        let paired = DiffusionCFGExecution.paired(unconditional, conditional)
+        MLX.eval(paired)
+        XCTAssertEqual(paired.shape, [2, 2, 2])
+        XCTAssertEqual(paired.asArray(Float.self), [1, 2, 3, 4, 5, 6, 7, 8])
+    }
+
+    func testModelSpecificHeadroomReserveCanKeepCFGSerial() {
+        let gibibyte = DiffusionCFGExecution.gibibyte
+        XCTAssertFalse(DiffusionCFGExecution.shouldBatch(
+            mode: .automatic,
+            width: 1_024,
+            height: 1_024,
+            physicalMemoryBytes: 32 * gibibyte,
+            activeMemoryBytes: 19 * Int(gibibyte),
+            cacheMemoryBytes: 2 * Int(gibibyte),
+            isUnifiedMemory: true,
+            baseReserveBytes: 8 * gibibyte,
+            activationBytesPerPixel: 4_096
+        ))
+    }
+
     func testResolveInstalledModelRootFindsDirectRoot() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
