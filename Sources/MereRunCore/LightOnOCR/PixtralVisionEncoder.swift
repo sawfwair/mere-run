@@ -62,8 +62,6 @@ final class PixtralRotaryEmbedding {
             let freq = 1.0 / pow(base, Float(i) / Float(dim))
             freqsArray.append(freq)
         }
-        let freqs = MLXArray(freqsArray)  // [32]
-
         // Split into even (for height) and odd (for width) indexed frequencies
         // freqs[::2] -> indices 0, 2, 4, ... -> 16 values for height
         // freqs[1::2] -> indices 1, 3, 5, ... -> 16 values for width
