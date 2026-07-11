@@ -13,6 +13,16 @@ public enum HiDreamO1GeneratorError: LocalizedError, Sendable {
 }
 
 public final class HiDreamO1Generator: ImageGenerator {
+    private struct LoadedModel {
+        let rootURL: URL
+        let config: HiDreamO1Config
+        let tokenizer: HiDreamO1TokenizerAndTemplate
+        let variant: MereRunModelManifest.Variant
+        let model: HiDreamO1Model
+    }
+
+    private var loaded: LoadedModel?
+
     public init() {}
 
     deinit {
@@ -20,6 +30,7 @@ public final class HiDreamO1Generator: ImageGenerator {
     }
 
     public func unload() {
+        loaded = nil
         clearGPUMemory()
     }
 
@@ -31,18 +42,11 @@ public final class HiDreamO1Generator: ImageGenerator {
             clearGPUMemory()
         }
 
-        progressHandler?(GenerationProgress(stage: .loadingModel, stepIndex: 0, totalSteps: 1))
         let rootURL = try resolveModelRoot(request)
-        let resources = HiDreamO1Resources(rootURL: rootURL)
-        let missing = resources.validate()
-        guard missing.isEmpty else {
-            throw HiDreamO1GeneratorError.missingModelFiles(missing)
-        }
-
-        let config = try HiDreamO1Config.load(from: resources)
-        let tokenizer = try await HiDreamO1TokenizerAndTemplate.load(from: resources)
-        let manifest = try MereRunModelManifest.loadRequired(from: rootURL)
-        let variant = manifest.variant ?? .distilled
+        let loaded = try await loadModelIfNeeded(rootURL: rootURL, progressHandler: progressHandler)
+        let config = loaded.config
+        let tokenizer = loaded.tokenizer
+        let variant = loaded.variant
         let shift: Float = variant == .distilled ? 1.0 : 3.0
         let scheduler = HiDreamO1Scheduler(steps: request.steps, variant: variant, shift: shift)
 
@@ -137,15 +141,10 @@ public final class HiDreamO1Generator: ImageGenerator {
         }
 
         let seed = request.seed ?? deterministicSeed(prompt: request.prompt)
-        let model = try HiDreamO1ModelLoader.load(
-            resources: resources,
-            config: config,
-            progressHandler: progressHandler
-        )
         let image: MLXArray
         if references.isEmpty {
             let patches = try HiDreamO1Denoiser.runTextOnly(
-                model: model,
+                model: loaded.model,
                 conditioning: conditioning,
                 unconditionalConditioning: unconditionalConditioning,
                 scheduler: scheduler,
@@ -162,7 +161,7 @@ public final class HiDreamO1Generator: ImageGenerator {
             )
         } else {
             let patches = try HiDreamO1Denoiser.runWithReferences(
-                model: model,
+                model: loaded.model,
                 conditioning: conditioning,
                 unconditionalConditioning: unconditionalConditioning,
                 scheduler: scheduler,
@@ -184,6 +183,41 @@ public final class HiDreamO1Generator: ImageGenerator {
         try HiDreamO1ImagePreprocessor.saveNormalizedCHW(image, to: request.outputURL)
         progressHandler?(GenerationProgress(stage: .saving, stepIndex: 1, totalSteps: 1))
         return GenerationResult(outputURL: request.outputURL, seed: seed)
+    }
+
+    private func loadModelIfNeeded(
+        rootURL: URL,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) async throws -> LoadedModel {
+        if let loaded, loaded.rootURL == rootURL {
+            return loaded
+        }
+
+        unload()
+        progressHandler?(GenerationProgress(stage: .loadingModel, stepIndex: 0, totalSteps: 1))
+        let resources = HiDreamO1Resources(rootURL: rootURL)
+        let missing = resources.validate()
+        guard missing.isEmpty else {
+            throw HiDreamO1GeneratorError.missingModelFiles(missing)
+        }
+
+        let config = try HiDreamO1Config.load(from: resources)
+        let tokenizer = try await HiDreamO1TokenizerAndTemplate.load(from: resources)
+        let manifest = try MereRunModelManifest.loadRequired(from: rootURL)
+        let model = try HiDreamO1ModelLoader.load(
+            resources: resources,
+            config: config,
+            progressHandler: progressHandler
+        )
+        let loaded = LoadedModel(
+            rootURL: rootURL,
+            config: config,
+            tokenizer: tokenizer,
+            variant: manifest.variant ?? .distilled,
+            model: model
+        )
+        self.loaded = loaded
+        return loaded
     }
 
     private func resolveModelRoot(_ request: GenerationRequest) throws -> URL {

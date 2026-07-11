@@ -164,6 +164,11 @@ swift run mere.run api serve \
   `/v1/audio/transcriptions` are sidecar routes over existing native CLI
   runtime paths. Installed image, TTS, and ASR sidecar catalog ids are listed in
   `/v1/models` even though they are not chat-serving engines.
+- the server keeps one most-recently-used image or image-edit runtime, one TTS
+  runtime, and one ASR runtime resident. Repeated requests for the same model
+  reuse loaded components; mutable generators execute exclusively, and a model
+  or ASR-backend switch unloads the previous runtime before loading the next one
+  so request-selected local paths cannot grow residency without bound.
 - chat completions pass through a fair FIFO request admission actor; the default
   `--max-active-requests 1` preserves serialized local inference and exposes
   queue depth in status; queued client cancellations are removed from the FIFO

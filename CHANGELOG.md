@@ -32,6 +32,10 @@ The format is based on Keep a Changelog.
   pressure.
 - moved LTX tiled VAE overlap blending from per-tile CPU readbacks and Swift
   pixel loops to device-side MLX accumulation and normalization.
+- kept the most recently used image, image-edit, TTS, and ASR sidecar runtimes
+  resident in `api serve`; matching requests now reuse loaded model state,
+  concurrent use of mutable generators is serialized, and switching models
+  unloads the previous resident before loading its replacement.
 
 ## 0.20.0 - 2026-07-07
 

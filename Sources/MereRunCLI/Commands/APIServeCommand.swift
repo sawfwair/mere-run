@@ -1628,6 +1628,7 @@ actor CodeGenServer {
     private let requestLimiter: APIRateLimiter
     private let requestAdmission: RuntimeRequestAdmission
     private let pool: RuntimeModelPool
+    private let sidecarPool = APISidecarModelPool()
     private var embeddingModels: [String: Qwen3EmbeddingModel] = [:]
 
     init(
@@ -2263,21 +2264,35 @@ actor CodeGenServer {
 
         switch resolved.manifest.family {
         case .klein:
-            _ = try await Flux2KleinGenerator().generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .flux2Klein,
+                modelSpec: resolved.rootURL.path,
+                request: request
+            )
         case .zimage:
-            _ = try await ZImageTurboGenerator().generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .zImageTurbo,
+                modelSpec: resolved.rootURL.path,
+                request: request
+            )
         case .hidream:
-            let generator = HiDreamO1Generator()
-            defer { generator.unload() }
-            _ = try await generator.generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .hiDreamO1,
+                modelSpec: resolved.rootURL.path,
+                request: request
+            )
         case .krea:
-            let generator = Krea2Generator()
-            defer { generator.unload() }
-            _ = try await generator.generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .krea2,
+                modelSpec: resolved.rootURL.path,
+                request: request
+            )
         case .ideogram:
-            let generator = Ideogram4Generator()
-            defer { generator.unload() }
-            _ = try await generator.generate(request, progressHandler: nil)
+            _ = try await sidecarPool.generateImage(
+                kind: .ideogram4,
+                modelSpec: resolved.rootURL.path,
+                request: request
+            )
         case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
@@ -2303,8 +2318,11 @@ actor CodeGenServer {
             inputImage: plan.inputImage,
             strength: plan.strength ?? 0.75
         )
-        let generator = QwenImageEditGenerator()
-        _ = try await generator.generate(request, progressHandler: nil)
+        _ = try await sidecarPool.generateImage(
+            kind: .qwenImageEdit,
+            modelSpec: plan.modelID,
+            request: request
+        )
         return outputURL
     }
 
@@ -2322,11 +2340,10 @@ actor CodeGenServer {
             temperature: plan.temperature,
             outputURL: outputURL
         )
-        let generator = Qwen3TTSGenerator(modelId: selection.modelID)
-        _ = try await generator.generate(
-            request,
+        _ = try await sidecarPool.synthesizeSpeech(
+            modelID: selection.modelID,
             modelPath: selection.modelPath,
-            progressHandler: nil
+            request: request
         )
         return outputURL
     }
@@ -2359,7 +2376,8 @@ actor CodeGenServer {
             request: request,
             preferredBackend: selection.backend,
             modelOverride: selection.modelOverride,
-            progressHandler: nil
+            progressHandler: nil,
+            executor: sidecarPool
         )
         return execution.result
     }

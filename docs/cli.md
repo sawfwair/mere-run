@@ -1784,6 +1784,10 @@ Security defaults:
   requires `--memory-guard-custom-ceiling-gb`.
 - elevated or critical memory pressure pauses extra concurrent admissions while
   letting one request run so the server can make progress
+- image/image-edit, TTS, and ASR sidecar endpoints each keep only their most
+  recently used runtime resident. Matching requests reuse loaded model state
+  through an exclusive queue; selecting another model or ASR backend unloads
+  the previous runtime before loading its replacement.
 - Gemma4 and Qwen-family chat use chunked prefill checkpoints for long prompts.
 - Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. Runtime status reports
