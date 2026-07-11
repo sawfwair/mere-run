@@ -192,6 +192,12 @@ MLX CUDA. If a future CUDA run fails inside an upstream MLX or llama.cpp kernel,
 keep that failure in the release notes or PR description until the exact package
 has been rebuilt and rerun on matching hardware.
 
+Quantized MLX paths default to `MERERUN_MLX_CUDA_NATIVE_QUANT=auto`: each
+process probes native `quantized_mm` and `GatherQMM` separately, reports the
+selected backend on stderr, and falls back to dense compatibility if the linked
+runtime rejects a kernel. Run `scripts/e2e_gb10.sh --quant-mode auto` after each
+CUDA package rebuild; `native` is the explicit fail-loud validation mode.
+
 ## Build from source on Linux
 
 Install the package layer first:

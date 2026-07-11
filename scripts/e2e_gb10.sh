@@ -53,7 +53,8 @@ done
 
 case "$QUANT_MODE" in
   auto|automatic) QUANT_MODE="auto";;
-  native|dense) ;;
+  native|1|true|yes|on) QUANT_MODE="native";;
+  dense|0|false|no|off) QUANT_MODE="dense";;
   *) echo "--quant-mode must be auto, native, or dense" >&2; exit 64;;
 esac
 export MERERUN_MLX_CUDA_NATIVE_QUANT="$QUANT_MODE"

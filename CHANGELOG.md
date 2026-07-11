@@ -13,6 +13,23 @@ The format is based on Keep a Changelog.
   mel preprocessing, MLX transformer inference, instrument conditioning,
   JSON/JSONL note events, and multi-track MIDI output.
 
+### Changed
+
+- reduced autoregressive prefill and decode work across shared Qwen, ACE-Step,
+  ASR, TTS, OCR, VLM, MuScriptor, and Falcon paths with final-position output
+  projection, pipelined GPU sampling, compact grouped-query caches, and true
+  cached Falcon grounding.
+- added batched MuScriptor greedy/sampling decode across independent audio
+  chunks; `music transcribe --chunk-batch-size` controls the batch width and
+  beam search retains its independent-cache path.
+- changed Linux CUDA quantized matmul selection to probe native
+  `quantized_mm` and `GatherQMM` independently, retaining an automatic dense
+  fallback for runtimes that do not provide either kernel.
+- added memory-aware batched classifier-free guidance to Qwen Image Edit, with
+  `MERERUN_QWEN_IMAGE_BATCHED_CFG` overrides for forced batched or serial runs.
+- moved LTX tiled VAE overlap blending from per-tile CPU readbacks and Swift
+  pixel loops to device-side MLX accumulation and normalization.
+
 ## 0.20.0 - 2026-07-07
 
 ### Added

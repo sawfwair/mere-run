@@ -92,6 +92,12 @@ swift run mere.run model pull music-muscriptor-medium
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 ```
 
+MuScriptor greedily decodes up to four independent five-second chunks in one
+transformer batch by default and pipelines sampled tokens into the next model
+step. Use `--chunk-batch-size 1` for the lowest-memory path or raise it on larger
+unified-memory systems. Beam search keeps one forkable cache per beam and does
+not use cross-chunk batching.
+
 ACE-Step generation uses the upstream CLI turbo shift default (`--shift 3.0`)
 and the native Haar DCW sampler correction (`double`, low `0.05`, high `0.02`)
 before VAE decode. The XL turbo managed ID installs the 4B DiT decoder plus the

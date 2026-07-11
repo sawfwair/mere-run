@@ -393,6 +393,13 @@ swift run mere.run image validate --family klein --test pipeline
 - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+ModelLoading.swift`
 - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
+Qwen Image Edit automatically combines unconditional and conditional CFG into
+one transformer batch only on unified-memory machines with sufficient live
+headroom for the requested resolution. Set
+`MERERUN_QWEN_IMAGE_BATCHED_CFG=batched` to force the throughput path or
+`MERERUN_QWEN_IMAGE_BATCHED_CFG=serial` to force the lower-memory two-pass path;
+unset it (or use `auto`) for the memory-aware default.
+
 ## How image generation flows
 
 At a high level:

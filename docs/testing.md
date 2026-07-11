@@ -117,6 +117,20 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.20.0
 Run Linux package and manifest checks on the affected Linux host class. CUDA
 artifacts need a matching CUDA host for meaningful runtime smoke coverage.
 
+For a real GB10/DGX Spark model sweep, use the installed CUDA binary and record
+the quantized-kernel choice alongside artifacts and throughput:
+
+```bash
+scripts/e2e_gb10.sh --bin /usr/bin/mere.run --quant-mode auto --out ./e2e-gb10-auto
+```
+
+`auto` probes `quantized_mm` and `GatherQMM` independently and records either
+`backend=native` or `backend=dense` in the result detail. Use `--quant-mode
+native` for a fail-loud kernel-availability run and `--quant-mode dense` for a
+compatibility/throughput baseline. Do not treat the automatic selection as
+GB10-validated until this sweep has run against the exact packaged binary and
+host.
+
 MediaIO coverage has two layers. `Tests/MereRunCoreTests/MediaIOTests.swift`
 covers pure Swift image, WAV, and FFT behavior in the normal test suite.
 `scripts/check-linux.sh` also runs the hidden `MediaIOSmoke` SwiftPM executable
