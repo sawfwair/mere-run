@@ -612,10 +612,13 @@ public enum DepthAnything3Preprocessor {
     private static func multiply44(_ lhs: [Double], _ rhs: [Double]) -> [Double] {
         var result = [Double](repeating: 0, count: 16)
         for row in 0..<4 {
+            let rowOffset = row * 4
             for column in 0..<4 {
-                result[row * 4 + column] = (0..<4).reduce(0) {
-                    $0 + lhs[row * 4 + $1] * rhs[$1 * 4 + column]
+                var value = 0.0
+                for inner in 0..<4 {
+                    value += lhs[rowOffset + inner] * rhs[inner * 4 + column]
                 }
+                result[rowOffset + column] = value
             }
         }
         return result
