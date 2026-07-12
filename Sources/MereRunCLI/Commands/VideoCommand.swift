@@ -126,7 +126,7 @@ struct VideoExportLatents: AsyncParsableCommand {
 struct VideoGenerate: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "generate",
-        abstract: "Generate MP4 video with native Swift/MLX LTX.",
+        abstract: "Generate MP4 video with native Swift/MLX video models.",
         discussion: """
         Prints the output MP4 path to stdout.
         Progress and diagnostics are printed to stderr.
@@ -140,6 +140,7 @@ struct VideoGenerate: AsyncParsableCommand {
           swift run mere.run video generate "woman walking in neon rain" --image frame.png
           swift run mere.run video generate "a car drives from dawn into sunset" --image start.png --end-image end.png
           swift run mere.run video generate "dialogue with clean background music" --variant unified-av --model video-ltx23-av-mlx --duration 15 --fps 24
+          swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
         """
     )
 
@@ -149,7 +150,7 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output MP4 path (default: ./mererun-video-<timestamp>.mp4).")
     var output: String?
 
-    @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LTX model root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed video model id or local model root.")
     var model: String = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
 
     @Option(name: [.customLong("variant")], help: "Native LTX lane: distilled for faster video-only drafts, unified-av for synchronized audio/video.")
@@ -158,16 +159,16 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("model-root")], help: "Local LTX model root. Takes precedence over --model.")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Output width (must be divisible by 64; auto-snapped down).")
+    @Option(name: [.long], help: "Output width (snapped to the selected model's native geometry).")
     var width: Int = 768
 
-    @Option(name: [.long], help: "Output height (must be divisible by 64; auto-snapped down).")
+    @Option(name: [.long], help: "Output height (snapped to the selected model's native geometry).")
     var height: Int = 512
 
-    @Option(name: [.customLong("num-frames")], help: "Frame count (must be 8n+1; auto-adjusted).")
+    @Option(name: [.customLong("num-frames")], help: "Frame count (adjusted to the selected model's native cadence).")
     var numFrames: Int = 65
 
-    @Option(name: [.long], help: "Target output duration in seconds. Overrides --num-frames by choosing the nearest 8n+1 frame count for --fps.")
+    @Option(name: [.long], help: "Target output duration in seconds. Overrides --num-frames using the selected model's native cadence.")
     var duration: Double?
 
     @Option(name: [.long], help: "Frames per second.")
@@ -175,6 +176,18 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Seed value.")
     var seed: Int?
+
+    @Option(name: [.long], help: "Wan denoising steps.")
+    var steps: Int = 40
+
+    @Option(name: [.customLong("guidance-scale")], help: "Wan classifier-free guidance scale.")
+    var guidanceScale: Float = 5
+
+    @Option(name: [.long], help: "Wan flow-schedule shift.")
+    var shift: Float = 5
+
+    @Option(name: [.customLong("negative-prompt")], help: "Wan negative prompt. Defaults to the official TI2V negative prompt.")
+    var negativePrompt: String?
 
     @Option(name: [.long], help: "Optional source image path (enables image-to-video).")
     var image: String?
@@ -221,14 +234,23 @@ struct VideoGenerate: AsyncParsableCommand {
                 throw ValidationError("--duration must be > 0")
             }
         }
-        guard width >= 64 else {
-            throw ValidationError("--width must be >= 64")
+        guard width >= 32 else {
+            throw ValidationError("--width must be >= 32")
         }
-        guard height >= 64 else {
-            throw ValidationError("--height must be >= 64")
+        guard height >= 32 else {
+            throw ValidationError("--height must be >= 32")
         }
-        guard numFrames >= 9 else {
-            throw ValidationError("--num-frames must be >= 9")
+        guard numFrames >= 5 else {
+            throw ValidationError("--num-frames must be >= 5")
+        }
+        guard steps > 0 else {
+            throw ValidationError("--steps must be >= 1")
+        }
+        guard guidanceScale >= 0 else {
+            throw ValidationError("--guidance-scale must be >= 0")
+        }
+        guard shift > 0 else {
+            throw ValidationError("--shift must be > 0")
         }
         guard (0...1).contains(imageStrength) else {
             throw ValidationError("--image-strength must be between 0 and 1")
@@ -244,24 +266,6 @@ struct VideoGenerate: AsyncParsableCommand {
         let resolvedHeight = max(64, (height / 64) * 64)
         let requestedNumFrames = duration.map { nearestLTXFrameCount(duration: $0, fps: fps) } ?? numFrames
         let resolvedNumFrames = max(9, ((requestedNumFrames - 1) / 8) * 8 + 1)
-        if !quiet {
-            if resolvedWidth != width || resolvedHeight != height {
-                CLIStderr.write("Adjusted size to \(resolvedWidth)x\(resolvedHeight) (must be divisible by 64)\n")
-            }
-            if let duration {
-                let resolvedSeconds = Double(resolvedNumFrames) / Double(fps)
-                CLIStderr.write(
-                    "Resolved duration \(String(format: "%.2f", duration))s to \(resolvedNumFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 8n+1)\n"
-                )
-            } else if resolvedNumFrames != numFrames {
-                CLIStderr.write("Adjusted frame count to \(resolvedNumFrames) (must satisfy 8n+1)\n")
-            }
-            if variant == .unifiedAV && fps != 24 {
-                CLIStderr.write(
-                    "Warning: LTX unified AV is trained for 24 fps; --fps \(fps) can make generated motion look time-stretched relative to audio.\n"
-                )
-            }
-        }
 
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
@@ -293,6 +297,68 @@ struct VideoGenerate: AsyncParsableCommand {
             variant: variant
         ).path
 
+        let resolvedRootURL = URL(fileURLWithPath: resolvedModelRoot).standardizedFileURL
+        if isWan2ModelRoot(resolvedRootURL) {
+            guard let sourceImageURL else {
+                throw ValidationError("Wan2.2 TI2V requires --image.")
+            }
+            guard endImageURL == nil else {
+                throw ValidationError("Wan2.2 TI2V does not support --end-image yet.")
+            }
+            let wanWidth = max(32, (width / 32) * 32)
+            let wanHeight = max(32, (height / 32) * 32)
+            let requestedWanFrames = duration.map { nearestWanFrameCount(duration: $0, fps: fps) } ?? numFrames
+            let wanFrames = max(5, ((requestedWanFrames - 1) / 4) * 4 + 1)
+            if !quiet {
+                if wanWidth != width || wanHeight != height {
+                    CLIStderr.write("Adjusted Wan size to \(wanWidth)x\(wanHeight) (must be divisible by 32)\n")
+                }
+                if let duration {
+                    let resolvedSeconds = Double(wanFrames) / Double(fps)
+                    CLIStderr.write(
+                        "Resolved Wan duration \(String(format: "%.2f", duration))s to \(wanFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 4n+1)\n"
+                    )
+                } else if wanFrames != numFrames {
+                    CLIStderr.write("Adjusted Wan frame count to \(wanFrames) (must satisfy 4n+1)\n")
+                }
+            }
+            try await runNativeWanGenerate(
+                prompt: trimmedPrompt,
+                negativePrompt: negativePrompt ?? Wan2Resources.defaultNegativePrompt,
+                width: wanWidth,
+                height: wanHeight,
+                numFrames: wanFrames,
+                steps: steps,
+                guidanceScale: guidanceScale,
+                shift: shift,
+                fps: fps,
+                seed: seed ?? 42,
+                sourceImageURL: sourceImageURL,
+                modelRoot: resolvedRootURL,
+                outputURL: outputURL
+            )
+            return
+        }
+
+        if !quiet {
+            if resolvedWidth != width || resolvedHeight != height {
+                CLIStderr.write("Adjusted size to \(resolvedWidth)x\(resolvedHeight) (must be divisible by 64)\n")
+            }
+            if let duration {
+                let resolvedSeconds = Double(resolvedNumFrames) / Double(fps)
+                CLIStderr.write(
+                    "Resolved duration \(String(format: "%.2f", duration))s to \(resolvedNumFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 8n+1)\n"
+                )
+            } else if resolvedNumFrames != numFrames {
+                CLIStderr.write("Adjusted frame count to \(resolvedNumFrames) (must satisfy 8n+1)\n")
+            }
+            if variant == .unifiedAV && fps != 24 {
+                CLIStderr.write(
+                    "Warning: LTX unified AV is trained for 24 fps; --fps \(fps) can make generated motion look time-stretched relative to audio.\n"
+                )
+            }
+        }
+
         try await runNativeGenerate(
             prompt: trimmedPrompt,
             width: resolvedWidth,
@@ -308,6 +374,71 @@ struct VideoGenerate: AsyncParsableCommand {
             modelRoot: resolvedModelRoot,
             outputURL: outputURL
         )
+    }
+
+    private func isWan2ModelRoot(_ rootURL: URL) -> Bool {
+        let resources = Wan2Resources(rootURL: rootURL)
+        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
+    }
+
+    private func runNativeWanGenerate(
+        prompt: String,
+        negativePrompt: String,
+        width: Int,
+        height: Int,
+        numFrames: Int,
+        steps: Int,
+        guidanceScale: Float,
+        shift: Float,
+        fps: Int,
+        seed: Int,
+        sourceImageURL: URL,
+        modelRoot: URL,
+        outputURL: URL
+    ) async throws {
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        let options = try Wan2GenerationOptions(
+            prompt: prompt,
+            negativePrompt: negativePrompt,
+            sourceImageURL: sourceImageURL,
+            outputURL: outputURL,
+            width: width,
+            height: height,
+            numFrames: numFrames,
+            steps: steps,
+            guidanceScale: guidanceScale,
+            shift: shift,
+            seed: UInt64(bitPattern: Int64(seed)),
+            fps: fps
+        )
+        if !quiet {
+            CLIStderr.write("Engine: native Wan2.2 TI2V\n")
+            CLIStderr.write("Model root: \(modelRoot.path)\n")
+            CLIStderr.write("Mode: image-to-video\n")
+        }
+        let reportsProgress = !quiet
+        let generator = Wan2TI2VGenerator()
+        let result = try await generator.generate(
+            options: options,
+            resources: Wan2Resources(rootURL: modelRoot),
+            progressHandler: { progress in
+                guard reportsProgress else { return }
+                if progress.stage == .denoising {
+                    CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
+                } else {
+                    CLIStderr.write("\(progress.stage.rawValue)\n")
+                }
+            }
+        )
+        if !quiet {
+            CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
+            CLIStderr.write("Writing MP4...\n")
+        }
+        try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+        if !quiet {
+            CLIStderr.write("Saved: \(outputURL.path)\n")
+        }
+        print(outputURL.path)
     }
 
     private func runNativeGenerate(
@@ -537,6 +668,11 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
         throw ValidationError("Model root directory not found: \(rootURL.path)")
     }
 
+    let wanResources = Wan2Resources(rootURL: rootURL)
+    if wanResources.validate().isEmpty, (try? wanResources.loadConfiguration()) != nil {
+        return
+    }
+
     if isLTX23SplitModelRoot(rootURL) {
         return
     }
@@ -667,6 +803,12 @@ func nearestLTXFrameCount(duration: Double, fps: Int) -> Int {
     let targetFrames = max(9.0, duration * Double(max(1, fps)))
     let chunks = max(1, Int(((targetFrames - 1.0) / 8.0).rounded()))
     return chunks * 8 + 1
+}
+
+func nearestWanFrameCount(duration: Double, fps: Int) -> Int {
+    let targetFrames = max(5.0, duration * Double(max(1, fps)))
+    let chunks = max(1, Int(((targetFrames - 1.0) / 4.0).rounded()))
+    return chunks * 4 + 1
 }
 
 private func isNativeVideoModelRootAvailable(at path: String) -> Bool {

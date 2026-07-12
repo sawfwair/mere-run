@@ -89,7 +89,7 @@ are:
 - Vision grounding: `vision-ground-falcon-perception`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-wan22-ti2v-5b-mlx`
 
 For subsystem-specific implementation guides, see:
 
@@ -1336,7 +1336,7 @@ preflight or generation.
 
 ### `mere.run video generate`
 
-Generate MP4 video with the native LTX pipelines.
+Generate MP4 video with the native LTX and Wan2.2 pipelines.
 
 ```bash
 swift run mere.run video generate "<prompt>" [options]
@@ -1352,6 +1352,7 @@ Key options:
 - `--duration`
 - `--fps`
 - `--seed`
+- `--steps`, `--guidance-scale`, `--shift`, `--negative-prompt` for Wan2.2
 - `--image`
 - `--image-strength`
 - `--end-image`
@@ -1373,6 +1374,12 @@ for clip length so the CLI can choose the nearest legal `8n+1` frame count.
 Use the default `distilled` lane for faster video-only drafts. Use
 `--variant unified-av --model video-ltx23-av-mlx` for the current high-quality
 synchronized audio/video lane.
+
+For native Wan2.2 image-to-video, pass
+`--model video-wan22-ti2v-5b-mlx --image <frame>`. Wan dimensions are snapped
+to multiples of 32 and frame counts follow `4n+1`; 512x320 with 17 frames is a
+useful short world-transition baseline. Tiny 128-pixel outputs are structural
+smokes, not quality renders.
 
 Preflight mode:
 
@@ -1403,6 +1410,16 @@ swift run mere.run video generate \
   --output ./clip.mp4 \
   --preflight \
   --json
+
+swift run mere.run video generate \
+  "the first-person camera walks straight forward through the same corridor" \
+  --model video-wan22-ti2v-5b-mlx \
+  --image ./corridor.png \
+  --width 512 \
+  --height 320 \
+  --num-frames 17 \
+  --steps 40 \
+  --output ./corridor-forward.mp4
 
 swift run mere.run video generate \
   "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \

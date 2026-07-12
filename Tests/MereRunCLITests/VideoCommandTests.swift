@@ -98,6 +98,12 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 8), 121)
     }
 
+    func testNearestWanFrameCountUsesFourFrameLatentCadence() {
+        XCTAssertEqual(nearestWanFrameCount(duration: 1, fps: 24), 25)
+        XCTAssertEqual(nearestWanFrameCount(duration: 0.5, fps: 24), 13)
+        XCTAssertEqual(nearestWanFrameCount(duration: 0.1, fps: 24), 5)
+    }
+
     func testVideoGeneratePreflightReportsResolvedPlan() throws {
         let modelRoot = try makeValidLTXModelRoot()
         let sourceImage = try makeTempFile(name: "start.png")
@@ -259,6 +265,37 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNoThrow(try validateNativeModelRoot(rootURL))
     }
 
+    func testWanPreflightUsesNativeSpatialAndTemporalGeometry() throws {
+        let modelRoot = try makeValidWanModelRoot()
+        let sourceImage = try makeTempFile(name: "start.png")
+        let output = makeTempOutput(name: "clip.mp4")
+        let cmd = try VideoGenerate.parse([
+            "the camera walks forward",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--width", "1057",
+            "--height", "577",
+            "--num-frames", "18",
+            "--image", sourceImage.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.layout, "wan22_ti2v_mlx")
+        XCTAssertEqual(envelope.result.plan.variant, "wan22-ti2v")
+        XCTAssertEqual(envelope.result.plan.resolvedWidth, 1_056)
+        XCTAssertEqual(envelope.result.plan.resolvedHeight, 576)
+        XCTAssertEqual(envelope.result.plan.resolvedNumFrames, 17)
+        XCTAssertFalse(envelope.result.plan.writesAudio)
+    }
+
     private func makeTempDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("VideoCommandTests.\(UUID().uuidString)", isDirectory: true)
@@ -286,6 +323,38 @@ final class VideoCommandTests: XCTestCase {
         )
         try createFile(rootURL.appendingPathComponent("ltx-2-19b-distilled.safetensors"))
         try createFile(rootURL.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors"))
+        return rootURL
+    }
+
+    private func makeValidWanModelRoot() throws -> URL {
+        let rootURL = try makeTempDirectory()
+        let config = """
+        {
+          "model_type": "ti2v",
+          "model_version": "2.2",
+          "patch_size": [1, 2, 2],
+          "text_len": 512,
+          "in_dim": 48,
+          "dim": 3072,
+          "ffn_dim": 14336,
+          "text_dim": 4096,
+          "out_dim": 48,
+          "num_heads": 24,
+          "num_layers": 30,
+          "vae_stride": [4, 16, 16],
+          "vae_z_dim": 48,
+          "sample_shift": 5.0,
+          "sample_steps": 40,
+          "sample_guide_scale": 5.0,
+          "sample_fps": 24,
+          "frame_num": 81,
+          "max_area": 901120
+        }
+        """
+        try Data(config.utf8).write(to: rootURL.appendingPathComponent("config.json"))
+        for name in ["model.safetensors", "t5_encoder.safetensors", "tokenizer.json", "vae.safetensors"] {
+            try createFile(rootURL.appendingPathComponent(name))
+        }
         return rootURL
     }
 

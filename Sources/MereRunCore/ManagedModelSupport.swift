@@ -687,6 +687,13 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 96,
                 recommended: 128
             ),
+            descriptor(
+                ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
+                "Wan2.2 TI2V 5B MLX",
+                "Generates text- and image-conditioned pixel video with the native Swift MLX Wan2.2 runtime.",
+                minimum: 64,
+                recommended: 96
+            ),
         ]
         return Dictionary(uniqueKeysWithValues: descriptors.map { ($0.modelID, $0) })
     }()

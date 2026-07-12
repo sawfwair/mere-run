@@ -95,6 +95,7 @@ from the runtime catalog used by `mere.run model list`,
 | `sfx` | `sfx-woosh-dvflow-8s` |
 | `video` | `video-ltx-av` |
 | `video` | `video-ltx23-av-mlx` |
+| `video` | `video-wan22-ti2v-5b-mlx` |
 <!-- managed-model-catalog:end -->
 
 Most catalog IDs have managed Hugging Face sources and can be installed with
@@ -553,3 +554,25 @@ VAE files, BWE vocoder, and MLX-native tensor layouts. Use this model for the
 current high-quality synchronized audio/video lane.
 The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane
 and is not loaded by the native MLX video runtime.
+
+### `video-wan22-ti2v-5b-mlx`
+
+The native Wan2.2 TI2V-5B model root is:
+
+```text
+.../models/video-wan22-ti2v-5b-mlx
+```
+
+`mere.run model pull video-wan22-ti2v-5b-mlx` installs a pinned MLX conversion
+of `Wan-AI/Wan2.2-TI2V-5B`. The root contains the single 5B transformer, local
+UMT5 tokenizer and encoder, and the float32 48-channel Wan2.2 VAE required for
+image conditioning. The managed snapshot is pinned by revision; inference does
+not fetch tokenizer or model components at runtime.
+
+The core runtime also exposes `Wan2WorldSession` for long-lived world
+generation. One session retains the models, prompt cache, and terminal-frame
+latent across transitions; callers receive MP4/PNG state artifacts and opaque
+state IDs rather than mutable MLX tensors. Camera controls are represented as
+XYZ translation and rotation so a DreamX-derived causal camera conditioner can
+replace the current text-plus-first-frame mode without changing the session
+schema.

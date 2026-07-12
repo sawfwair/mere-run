@@ -80,6 +80,7 @@ public struct ModelResolver {
         case wooshDVFlow8s = "sfx-woosh-dvflow-8s"
         case ltxVideoAV = "video-ltx-av"
         case ltxVideo23AVMLX = "video-ltx23-av-mlx"
+        case wan22TI2V5BMLX = "video-wan22-ti2v-5b-mlx"
     }
 
     public enum Source: String, Hashable, Sendable {
