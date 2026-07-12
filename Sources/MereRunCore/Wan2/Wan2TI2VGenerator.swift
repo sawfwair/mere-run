@@ -20,7 +20,7 @@ public enum Wan2TI2VGeneratorError: LocalizedError {
     }
 }
 
-public struct Wan2VideoGenerationResult {
+public struct Wan2VideoGenerationResult: @unchecked Sendable {
     public let frames: MLXArray
     public let seed: UInt64
     public let terminalFrameLatent: MLXArray?
