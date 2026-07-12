@@ -188,6 +188,16 @@ struct VideoGenerationPreflightAnalyzer {
         self.now = now
     }
 
+    private var usesWanGeometry: Bool {
+        if input.model.trimmingCharacters(in: .whitespacesAndNewlines) == Wan2Resources.modelID {
+            return true
+        }
+        let candidate = input.modelRoot ?? input.model
+        let url = URL(fileURLWithPath: candidate).standardizedFileURL
+        let resources = Wan2Resources(rootURL: url)
+        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
+    }
+
     func envelope() -> VideoGenerationPreflightEnvelope {
         var diagnostics: [PreflightDiagnostic] = []
         validateStaticOptions(diagnostics: &diagnostics)
@@ -269,33 +279,35 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        if input.width < 64 {
+        let minimumSpatialDimension = usesWanGeometry ? 32 : 64
+        let minimumFrameCount = usesWanGeometry ? 5 : 9
+        if input.width < minimumSpatialDimension {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "width_too_small",
                     severity: .blocker,
                     title: "Width is too small",
-                    message: "--width must be >= 64."
+                    message: "--width must be >= \(minimumSpatialDimension)."
                 )
             )
         }
-        if input.height < 64 {
+        if input.height < minimumSpatialDimension {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "height_too_small",
                     severity: .blocker,
                     title: "Height is too small",
-                    message: "--height must be >= 64."
+                    message: "--height must be >= \(minimumSpatialDimension)."
                 )
             )
         }
-        if input.numFrames < 9 {
+        if input.numFrames < minimumFrameCount {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "num_frames_too_small",
                     severity: .blocker,
                     title: "Frame count is too small",
-                    message: "--num-frames must be >= 9."
+                    message: "--num-frames must be >= \(minimumFrameCount)."
                 )
             )
         }
@@ -534,7 +546,11 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func videoLayout(at url: URL) -> String? {
-        isLTX23SplitModelRoot(url, fileManager: fileManager) ? "ltx23_split" : "ltx_merged"
+        let resources = Wan2Resources(rootURL: url)
+        if resources.validate().isEmpty, (try? resources.loadConfiguration()) != nil {
+            return "wan22_ti2v_mlx"
+        }
+        return isLTX23SplitModelRoot(url, fileManager: fileManager) ? "ltx23_split" : "ltx_merged"
     }
 
     private func outputSummary(
@@ -646,12 +662,24 @@ struct VideoGenerationPreflightAnalyzer {
         inputs: VideoGenerationInputPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationPlanPreflightSummary {
-        let resolvedWidth = max(64, (input.width / 64) * 64)
-        let resolvedHeight = max(64, (input.height / 64) * 64)
-        let requestedFrames = input.duration.map { nearestLTXFrameCount(duration: $0, fps: input.fps) } ?? input.numFrames
-        let resolvedFrames = max(9, ((requestedFrames - 1) / 8) * 8 + 1)
+        let spatialMultiple = usesWanGeometry ? 32 : 64
+        let temporalMultiple = usesWanGeometry ? 4 : 8
+        let minimumFrames = usesWanGeometry ? 5 : 9
+        let resolvedWidth = max(spatialMultiple, (input.width / spatialMultiple) * spatialMultiple)
+        let resolvedHeight = max(spatialMultiple, (input.height / spatialMultiple) * spatialMultiple)
+        let requestedFrames = input.duration.map {
+            usesWanGeometry
+                ? nearestWanFrameCount(duration: $0, fps: input.fps)
+                : nearestLTXFrameCount(duration: $0, fps: input.fps)
+        } ?? input.numFrames
+        let resolvedFrames = max(
+            minimumFrames,
+            ((requestedFrames - 1) / temporalMultiple) * temporalMultiple + 1
+        )
 
-        if input.width >= 64, input.height >= 64, (resolvedWidth != input.width || resolvedHeight != input.height) {
+        if input.width >= spatialMultiple,
+           input.height >= spatialMultiple,
+           resolvedWidth != input.width || resolvedHeight != input.height {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "dimensions_will_be_adjusted",
@@ -661,13 +689,13 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        if input.numFrames >= 9, input.duration == nil, resolvedFrames != input.numFrames {
+        if input.numFrames >= minimumFrames, input.duration == nil, resolvedFrames != input.numFrames {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "num_frames_will_be_adjusted",
                     severity: .note,
                     title: "Frame count will be adjusted",
-                    message: "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy 8n+1."
+                    message: "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy \(temporalMultiple)n+1."
                 )
             )
         }
@@ -690,7 +718,7 @@ struct VideoGenerationPreflightAnalyzer {
         }
 
         return VideoGenerationPlanPreflightSummary(
-            variant: input.variant.rawValue,
+            variant: usesWanGeometry ? "wan22-ti2v" : input.variant.rawValue,
             inputMode: inputs.mode,
             requestedWidth: input.width,
             requestedHeight: input.height,
@@ -702,7 +730,7 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0 ? Double(resolvedFrames) / Double(input.fps) : nil,
             seed: input.seed ?? 42,
-            writesAudio: input.variant == .unifiedAV
+            writesAudio: !usesWanGeometry && input.variant == .unifiedAV
         )
     }
 

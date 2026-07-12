@@ -150,7 +150,8 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .videoDepthAnything
             || spec?.validationKind == .depthAnything3
             || spec?.validationKind == .tripoSR
-            || spec?.validationKind == .instantMesh {
+            || spec?.validationKind == .instantMesh
+            || spec?.validationKind == .wan22TI2VMLX {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -384,8 +385,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=music expects ace-step, magenta-rt2, or muscriptor.")
             case .sfx where engine != .woosh:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh.")
-            case .video where engine != .ltxVideo:
-                warnings.append("Manifest engine mismatch: family=video expects ltx-video.")
+            case .video where engine != .ltxVideo && engine != .wanVideo:
+                warnings.append("Manifest engine mismatch: family=video expects ltx-video or wan-video.")
             case .psi where engine != .psiChat:
                 warnings.append("Manifest engine mismatch: family=psi expects psi-chat.")
             default:
@@ -459,7 +460,7 @@ public enum MereRunModelValidator {
             }
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .ltxVideo?,
-                 .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?:
+                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?:
                 return true
             default:
                 return false

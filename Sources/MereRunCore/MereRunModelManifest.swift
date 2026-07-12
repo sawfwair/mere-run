@@ -70,6 +70,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case woosh = "woosh"
         /// LTX video family.
         case ltxVideo = "ltx-video"
+        /// Wan2 native video family.
+        case wanVideo = "wan-video"
         /// Psi agent chat family.
         case psiChat = "psi-chat"
         /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
@@ -1469,6 +1471,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.videoGeneration],
                 components: nil,
                 upstreamRepoId: isLTX23 ? "dgrauet/ltx-2.3-mlx@main" : "mlx-community/LTX-2-distilled-bf16",
+                createdAt: createdAt
+            )
+        case .wan22TI2V5BMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .wanVideo,
+                family: .video,
+                tier: .base,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 40, cfg: 5.0, sigmaShift: 5.0),
+                supports: [.videoGeneration],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: .local(path: "."),
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(Wan2Resources.managedRepoID)@\(Wan2Resources.managedRevision)",
                 createdAt: createdAt
             )
         }

@@ -312,6 +312,7 @@ targets.append(contentsOf: [
       "VideoDepth/README.md",
       "VideoDepth/VDA/README.md",
       "VisionGeometry/MoGe2/README.md",
+      "Wan2/README.md",
       "Woosh/README.md",
       "ZImageI2L/README.md",
       "ZImageI2L/Model/README.md",

@@ -61,6 +61,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case wooshSynchformer
     case ltxVideo
     case ltxVideo23MLX
+    case wan22TI2VMLX
     case hfTextChat
 }
 
@@ -1536,6 +1537,22 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"],
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
         ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Wan2Resources.managedRepoID,
+                revision: Wan2Resources.managedRevision,
+                patterns: Wan2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Wan2Resources.managedRepoID,
+            upstreamRevision: Wan2Resources.managedRevision,
+            validationKind: .wan22TI2VMLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 24_200_000_000,
+            defaultCLICommands: ["video generate"]
+        ),
     ]
 
     public static var allModelIDs: [String] {
@@ -1743,6 +1760,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23MLX:
             return Self.missingLTXVideo23MLXPaths(in: rootURL, fileManager: fileManager)
+        case .wan22TI2VMLX:
+            return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hfTextChat:
             return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }
@@ -1784,6 +1803,18 @@ public extension ManagedModelSpec {
                 in: normalizedRootURL(rootURL, fileManager: fileManager),
                 fileManager: fileManager
             ).map { "Missing required LTX 2.3 MLX file: \($0.path)" }
+        case .wan22TI2VMLX:
+            let resources = Wan2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
+            let missing = resources.validate(fileManager: fileManager)
+            if !missing.isEmpty {
+                return missing.map { "Missing required Wan2.2 TI2V MLX file: \($0.path)" }
+            }
+            do {
+                _ = try resources.loadConfiguration()
+                return []
+            } catch {
+                return [error.localizedDescription]
+            }
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(
                 modelID: id,
