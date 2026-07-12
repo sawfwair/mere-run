@@ -3192,7 +3192,7 @@ struct APIArtifactDirectoryCleanupScheduler: Sendable {
     }
 }
 
-func withVFXRequestAdmission<T>(
+func withVFXRequestAdmission<T: Sendable>(
     using admission: RuntimeRequestAdmission,
     isolation _: isolated (any Actor)? = #isolation,
     operation: () async throws -> T
