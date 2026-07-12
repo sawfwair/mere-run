@@ -546,9 +546,11 @@ private struct Wan2Matrix4: Hashable {
         var output = Array(repeating: Float(0), count: 16)
         for row in 0..<4 {
             for column in 0..<4 {
-                output[row * 4 + column] = (0..<4).reduce(Float(0)) {
-                    $0 + left.values[row * 4 + $1] * right.values[$1 * 4 + column]
+                var value = Float(0)
+                for index in 0..<4 {
+                    value += left.values[row * 4 + index] * right.values[index * 4 + column]
                 }
+                output[row * 4 + column] = value
             }
         }
         return Wan2Matrix4(output)
