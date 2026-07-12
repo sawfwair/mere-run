@@ -62,7 +62,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .chat: return "bubble.left.and.bubble.right"
         case .code: return "chevron.left.forwardslash.chevron.right"
         case .speak: return "waveform"
-        case .listen: return "captions.bubble"
+        case .listen: return "waveform.badge.mic"
         case .readImage: return "doc.viewfinder"
         case .findObjects: return "scope"
         case .segment: return "square.dashed"
@@ -975,11 +975,69 @@ struct StudioRunProgress: Equatable {
     let detail: String?
 }
 
-/// Parses the carriage-return progress lines the CLI writes for downloads/extraction, e.g.
-/// `[image-zimage-nano] 45%  1.2 GB / 3.4 GB` or `[image-zimage-nano] 45%  (45 MB/s)`.
+/// Parses the progress lines `mere.run` writes to stderr — model download/extraction
+/// (`[image-zimage-nano] 45%  1.2 GB / 3.4 GB`) and per-step generation, in both the
+/// human `Generating (2/4)` form and the `--progress-json` NDJSON event stream — into a
+/// single determinate-or-indeterminate value the canvas can render.
 enum StudioProgressParser {
     static func parse(_ rawLine: String) -> StudioRunProgress? {
         let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Structured generation progress (from `--progress-json`):
+        // {"event":"progress","stage":"denoising","step":2,"total_steps":4}
+        if line.hasPrefix("{"), let generation = parseGenerationJSON(line) {
+            return generation
+        }
+
+        // Human generation progress the CLI prints during denoising, e.g. "Generating (2/4)".
+        if let generation = parseGeneratingLine(line) {
+            return generation
+        }
+
+        return parseDownloadLine(line)
+    }
+
+    /// "Generating (2/4)" → a determinate step fraction (the CLI prints 1-based steps).
+    private static func parseGeneratingLine(_ line: String) -> StudioRunProgress? {
+        guard let marker = line.range(of: "Generating (") else { return nil }
+        let inner = line[marker.upperBound...]
+        guard let slash = inner.firstIndex(of: "/"),
+              let close = inner.firstIndex(of: ")"), slash < close else { return nil }
+        let stepText = inner[inner.startIndex..<slash].trimmingCharacters(in: .whitespaces)
+        let totalText = inner[inner.index(after: slash)..<close].trimmingCharacters(in: .whitespaces)
+        guard let step = Int(stepText), let total = Int(totalText), total > 0 else { return nil }
+        let current = min(max(step, 0), total)
+        return StudioRunProgress(
+            label: "Generating",
+            fractionCompleted: Double(current) / Double(total),
+            detail: "Step \(current) of \(total)"
+        )
+    }
+
+    /// One NDJSON progress event; only the denoising stage carries the step bar (load
+    /// stages stay indeterminate and are left to the running overlay's status line).
+    private static func parseGenerationJSON(_ line: String) -> StudioRunProgress? {
+        guard let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (object["event"] as? String) == "progress",
+              (object["stage"] as? String) == "denoising",
+              let step = intValue(object["step"]),
+              let total = intValue(object["total_steps"]), total > 0 else { return nil }
+        let current = min(step + 1, total) // the CLI emits a 0-based step index
+        return StudioRunProgress(
+            label: "Generating",
+            fractionCompleted: Double(current) / Double(total),
+            detail: "Step \(current) of \(total)"
+        )
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let int = value as? Int { return int }
+        if let double = value as? Double { return Int(double) }
+        return nil
+    }
+
+    private static func parseDownloadLine(_ line: String) -> StudioRunProgress? {
         guard line.hasPrefix("["), let close = line.firstIndex(of: "]") else { return nil }
         let label = String(line[line.index(after: line.startIndex)..<close])
             .trimmingCharacters(in: .whitespaces)

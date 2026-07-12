@@ -27,12 +27,20 @@ struct StudioConversationView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider().overlay(MereRunTheme.border.opacity(0.4))
+            // A blank new chat shows only its empty state — no header, so the
+            // thread title and the "New chat" action never read as duplicates.
+            if hasActiveConversation {
+                header
+                Divider().overlay(MereRunTheme.border.opacity(0.4))
+            }
             if droppedFromContext > 0 { contextTrimBanner }
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var hasActiveConversation: Bool {
+        item != nil || !messages.isEmpty || isRunning
     }
 
     private var contextTrimBanner: some View {
@@ -47,7 +55,7 @@ struct StudioConversationView: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.sm) {
-            Text(item?.displayTitle ?? "New chat")
+            Text(item?.displayTitle ?? "Untitled chat")
                 .font(MereRunTheme.sectionFont)
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .lineLimit(1)
