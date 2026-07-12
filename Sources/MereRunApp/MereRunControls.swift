@@ -22,6 +22,44 @@ extension ButtonStyle where Self == MerePrimaryButtonStyle {
     static var merePrimary: MerePrimaryButtonStyle { MerePrimaryButtonStyle() }
 }
 
+/// A quiet secondary action: themed surface + border with hover feedback, replacing the
+/// native `.bordered` look so custom panels stay visually consistent in both appearances.
+struct MereSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        MereSecondaryButtonBody(configuration: configuration)
+    }
+
+    private struct MereSecondaryButtonBody: View {
+        let configuration: Configuration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(hovering ? MereRunTheme.textPrimary : MereRunTheme.textSecondary)
+                .padding(.horizontal, MereRunTheme.Spacing.sm)
+                .frame(minHeight: 26)
+                .background {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                        .fill(hovering ? MereRunTheme.surfaceRaised : MereRunTheme.surface.opacity(0.5))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                                .strokeBorder(MereRunTheme.border.opacity(0.7), lineWidth: 1)
+                        }
+                }
+                .contentShape(Rectangle())
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                .onHover { hovering = $0 }
+                .animation(MereRunTheme.Motion.quick, value: hovering)
+                .animation(MereRunTheme.Motion.quick, value: configuration.isPressed)
+        }
+    }
+}
+
+extension ButtonStyle where Self == MereSecondaryButtonStyle {
+    static var mereSecondary: MereSecondaryButtonStyle { MereSecondaryButtonStyle() }
+}
+
 /// Icon-only buttons that acknowledge the pointer: a soft fill on hover, a slight press dip.
 /// Hover feedback is what separates a native-feeling control from a static glyph.
 struct MereIconButtonStyle: ButtonStyle {

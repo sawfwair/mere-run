@@ -1,7 +1,8 @@
 import CoreGraphics
 
 /// The Studio has two deliberate window presentations. Regular keeps the desktop three-column
-/// workspace; compact promotes the canvas and composer while moving navigation into overlays.
+/// workspace; compact promotes the canvas and composer, narrowing navigation to an icon rail
+/// and moving the library into an overlay.
 enum StudioLayoutClass: Equatable {
     case compact
     case regular
@@ -11,6 +12,9 @@ enum StudioLayoutClass: Equatable {
 
 enum StudioLayoutPolicy {
     static let sidebarWidth: CGFloat = 212
+    /// The narrow-window icon rail: keeps every mode reachable when the full sidebar
+    /// doesn't fit, rather than hiding navigation entirely.
+    static let railWidth: CGFloat = 60
     static let libraryWidth: CGFloat = 272
     static let minimumCanvasWidth: CGFloat = 620
 

@@ -25,6 +25,16 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
+- polished the macOS Studio app: narrow windows keep an icon rail for mode
+  navigation instead of hiding the sidebar; image generation shows a
+  determinate per-step progress bar (parsing both the human `Generating (N/M)`
+  stderr text and the `--progress-json` event stream); example prompt chips
+  wrap instead of truncating; a blank chat no longer shows a duplicate
+  "New chat" header; the composer's model pill shows a human-readable model
+  name (exact id in the tooltip) and the paste button appears only when the
+  clipboard holds an image; results cap to a readable width on wide windows;
+  Listen uses a mic-badged waveform icon; sidebar footer controls use themed
+  styling.
 - reduced autoregressive prefill and decode work across shared Qwen, ACE-Step,
   ASR, TTS, OCR, VLM, MuScriptor, and Falcon paths with final-position output
   projection, pipelined GPU sampling, compact grouped-query caches, and true

@@ -95,20 +95,16 @@ struct StudioSidebar: View {
             HStack(spacing: 8) {
                 Button(action: onShowModels) {
                     Label("Models", systemImage: "shippingbox")
-                        .font(MereRunTheme.captionFont)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.mereSecondary)
                 .help("Browse and manage local models (⇧⌘M)")
 
                 Button(action: onShowHelp) {
                     Label("Guide", systemImage: "questionmark.circle")
-                        .font(MereRunTheme.captionFont)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.mereSecondary)
                 .help("Open the offline guide")
             }
         }
@@ -175,6 +171,150 @@ private struct StudioSidebarRow: View {
         if let unavailableMessage { return unavailableMessage }
         if let shortcutNumber { return "\(mode.subtitle) (⌘\(shortcutNumber))" }
         return mode.subtitle
+    }
+}
+
+/// The narrow-window navigation: an icon-only rail so every mode stays reachable when the
+/// full sidebar doesn't fit — instead of hiding navigation behind a subtle header menu.
+struct StudioSidebarRail: View {
+    @Binding var mode: StudioMode
+    let modeCapabilities: [StudioMode: StudioModelCapability]
+    let onShowModels: () -> Void
+    let onShowHelp: () -> Void
+
+    @Namespace private var selectionNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let orderedModes: [StudioMode] = StudioModeGroup.allCases.flatMap(\.modes)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("m")
+                .font(.system(size: 18, weight: .semibold, design: .serif))
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .frame(height: 30)
+                .padding(.top, 42)
+                .padding(.bottom, MereRunTheme.Spacing.sm)
+                .accessibilityHidden(true)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 5) {
+                    ForEach(Array(StudioModeGroup.allCases.enumerated()), id: \.element) { index, group in
+                        if index > 0 {
+                            Divider()
+                                .overlay(MereRunTheme.border.opacity(0.4))
+                                .frame(width: 22)
+                                .padding(.vertical, 3)
+                        }
+                        ForEach(group.modes) { candidate in
+                            StudioRailRow(
+                                mode: candidate,
+                                isSelected: candidate == mode,
+                                unavailableMessage: modeCapabilities[candidate]?.unavailableMessage,
+                                shortcutNumber: Self.orderedModes.firstIndex(of: candidate).flatMap { index in
+                                    index < 9 ? index + 1 : nil
+                                },
+                                namespace: selectionNamespace
+                            ) {
+                                guard candidate != mode else { return }
+                                if reduceMotion {
+                                    mode = candidate
+                                } else {
+                                    withAnimation(MereRunTheme.Motion.spring) { mode = candidate }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 4) {
+                railAction(system: "shippingbox", help: "Models (⇧⌘M)", label: "Models", action: onShowModels)
+                railAction(system: "questionmark.circle", help: "Guide", label: "Guide", action: onShowHelp)
+            }
+            .padding(.bottom, MereRunTheme.Spacing.sm)
+        }
+        .frame(width: StudioLayoutPolicy.railWidth)
+        .background {
+            VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
+                .ignoresSafeArea()
+        }
+    }
+
+    private func railAction(
+        system: String,
+        help: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .frame(width: 38, height: 32)
+        }
+        .buttonStyle(.mereIcon)
+        .help(help)
+        .accessibilityLabel(label)
+    }
+}
+
+/// One icon-only rail row: the same bronze sliding selection pill as the full sidebar,
+/// with a soft hover fill and the mode title in a tooltip.
+private struct StudioRailRow: View {
+    let mode: StudioMode
+    let isSelected: Bool
+    let unavailableMessage: String?
+    let shortcutNumber: Int?
+    let namespace: Namespace.ID
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: mode.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(foregroundColor)
+                .frame(width: 40, height: 34)
+                .background {
+                    ZStack {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                                .fill(MereRunTheme.accent)
+                                .matchedGeometryEffect(id: "studio.rail.selection", in: namespace)
+                        } else if hovering && unavailableMessage == nil {
+                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                                .fill(MereRunTheme.hoverFill)
+                        }
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
+        }
+        .buttonStyle(.plain)
+        .disabled(unavailableMessage != nil)
+        .opacity(unavailableMessage == nil ? 1 : 0.4)
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .help(helpText)
+        .modifier(StudioModeShortcut(number: shortcutNumber))
+        .accessibilityLabel(mode.title)
+        .accessibilityHint(unavailableMessage ?? mode.subtitle)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var foregroundColor: Color {
+        if unavailableMessage != nil { return MereRunTheme.textMuted }
+        return isSelected ? MereRunTheme.background : MereRunTheme.textSecondary
+    }
+
+    private var helpText: String {
+        if let unavailableMessage { return unavailableMessage }
+        if let shortcutNumber { return "\(mode.title) (⌘\(shortcutNumber))" }
+        return mode.title
     }
 }
 

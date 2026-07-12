@@ -3,8 +3,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct StudioRootView: View {
-    private static let orderedModes = StudioModeGroup.allCases.flatMap(\.modes)
-
     @EnvironmentObject private var controller: MereRunController
     @StateObject private var library = StudioLibraryStore()
     // Persisted per scene so relaunch restores the last mode and panel layout.
@@ -128,18 +126,28 @@ struct StudioRootView: View {
     private func adaptiveShell(layout: StudioLayoutClass, availableWidth: CGFloat) -> some View {
         ZStack(alignment: .trailing) {
             HStack(spacing: 0) {
-                if !layout.isCompact {
+                if layout.isCompact {
+                    StudioSidebarRail(
+                        mode: $mode,
+                        modeCapabilities: modeCapabilities,
+                        onShowModels: { showModels = true },
+                        onShowHelp: { showHelp = true }
+                    )
+
+                    Divider()
+                        .overlay(MereRunTheme.border.opacity(0.4))
+                } else {
                     regularNavigation
 
                     Divider()
                         .overlay(MereRunTheme.border.opacity(0.4))
-                }
 
-                if !layout.isCompact, showLibrary {
-                    regularLibrary
+                    if showLibrary {
+                        regularLibrary
 
-                    Divider()
-                        .overlay(MereRunTheme.border.opacity(0.5))
+                        Divider()
+                            .overlay(MereRunTheme.border.opacity(0.5))
+                    }
                 }
 
                 contentColumn(isCompact: layout.isCompact)
@@ -633,20 +641,18 @@ struct StudioRootView: View {
     /// panel toggles. Machine-wide status lives in the sidebar; blocking states own the canvas.
     private func topBar(isCompact: Bool) -> some View {
         HStack(spacing: MereRunTheme.Spacing.sm) {
-            if isCompact {
-                compactModePicker
-            } else {
-                Image(systemName: mode.systemImage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
+            // The mode name is a static label in both layouts; switching lives in the
+            // sidebar (regular) or the icon rail (compact), never a subtle header menu.
+            Image(systemName: mode.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(mode.title)
-                        .font(.system(size: 15, weight: .semibold))
-                    Text(mode.subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(MereRunTheme.textMuted)
-                }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(mode.title)
+                    .font(.system(size: 15, weight: .semibold))
+                Text(mode.subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
             }
 
             Spacer()
@@ -687,64 +693,6 @@ struct StudioRootView: View {
         .padding(.horizontal, isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.lg)
         .frame(height: 52)
         .background(VisualEffectBackground())
-    }
-
-    private var compactModePicker: some View {
-        Menu {
-            ForEach(StudioModeGroup.allCases) { group in
-                Section(group.rawValue) {
-                    ForEach(group.modes) { candidate in
-                        Button {
-                            mode = candidate
-                        } label: {
-                            if candidate == mode {
-                                Label(candidate.title, systemImage: "checkmark")
-                            } else {
-                                Label(candidate.title, systemImage: candidate.systemImage)
-                            }
-                        }
-                        .disabled(modeCapabilities[candidate]?.unavailableMessage != nil)
-                        .modifier(
-                            StudioModeShortcut(
-                                number: Self.orderedModes.firstIndex(of: candidate).flatMap { index in
-                                    index < 9 ? index + 1 : nil
-                                }
-                            )
-                        )
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: mode.systemImage)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-                    .frame(width: 20)
-                Text(mode.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textPrimary)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                    .fill(MereRunTheme.surface.opacity(0.62))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                            .strokeBorder(MereRunTheme.border.opacity(0.45), lineWidth: 1)
-                    }
-            }
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Switch creation mode")
-        .accessibilityLabel("Mode")
-        .accessibilityValue(mode.title)
     }
 
     private func libraryIsVisible(isCompact: Bool) -> Bool {

@@ -20,6 +20,10 @@ struct StudioComposer: View {
     let onPaste: () -> Void
     let onShowModels: () -> Void
 
+    /// Whether the clipboard currently holds an image, so the paste affordance only
+    /// appears when it can actually do something (refreshed on appear + on focus).
+    @State private var clipboardHasImage = false
+
     var body: some View {
         VStack(spacing: MereRunTheme.Spacing.xs) {
             if !draft.inputPath.isBlank {
@@ -38,6 +42,14 @@ struct StudioComposer: View {
             }
         }
         .animation(MereRunTheme.Motion.standard, value: draft.inputPath.isBlank)
+        .onAppear(perform: refreshClipboardImageState)
+        .onChange(of: promptFocus.wrappedValue) { _, focused in
+            if focused { refreshClipboardImageState() }
+        }
+    }
+
+    private func refreshClipboardImageState() {
+        clipboardHasImage = NSPasteboard.general.canReadObject(forClasses: [NSImage.self], options: nil)
     }
 
     private var attachmentChip: some View {
@@ -163,7 +175,7 @@ struct StudioComposer: View {
             .help(mode.requiresAttachment ? "Attach required input" : "Attach reference")
             .accessibilityLabel(mode.requiresAttachment ? "Attach required input" : "Attach reference")
 
-            if mode.acceptedTypes.contains(.image) {
+            if mode.acceptedTypes.contains(.image), clipboardHasImage {
                 Button(action: onPaste) {
                     Image(systemName: "doc.on.clipboard")
                         .font(.system(size: 14, weight: .semibold))
@@ -172,8 +184,10 @@ struct StudioComposer: View {
                 .buttonStyle(.mereIcon)
                 .help("Paste image from clipboard (⌘V)")
                 .accessibilityLabel("Paste image from clipboard")
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
+        .animation(MereRunTheme.Motion.quick, value: clipboardHasImage)
     }
 
     @ViewBuilder
@@ -328,20 +342,44 @@ struct StudioComposer: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Model for this run")
+        .help(rawModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(rawModelID)")
         .accessibilityLabel("Model")
-        .accessibilityValue(modelLabel)
+        .accessibilityValue(rawModelID.isEmpty ? "Automatic" : rawModelID)
+    }
+
+    /// The resolved model id for this run: the explicit draft model, else the
+    /// mode's template default, else empty (Auto).
+    private var rawModelID: String {
+        let current = draft.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !current.isEmpty { return current }
+        return CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
     }
 
     private var modelLabel: String {
-        let current = draft.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !current.isEmpty { return shortModelName(current) }
-        let templateDefault = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
-        return templateDefault.isEmpty ? "Auto" : shortModelName(templateDefault)
+        rawModelID.isEmpty ? "Auto" : Self.displayModelName(rawModelID)
     }
 
-    private func shortModelName(_ id: String) -> String {
-        id.components(separatedBy: "/").last ?? id
+    /// A human-facing label for a model id: drop the modality/category prefix and
+    /// title-case the distinctive remainder ("text-agent-deepseek-v4-flash" →
+    /// "Deepseek V4 Flash"). The exact id stays in the pill's tooltip, so the
+    /// friendly name never hides what the CLI actually expects.
+    static func displayModelName(_ id: String) -> String {
+        let leaf = id.components(separatedBy: "/").last ?? id
+        let prefixes = [
+            "text-chat-", "text-agent-", "text-embed-", "text-code-",
+            "image-", "video-", "music-", "sfx-", "speech-", "embed-", "vision-", "text-"
+        ]
+        var core = leaf
+        for prefix in prefixes where core.hasPrefix(prefix) {
+            core = String(core.dropFirst(prefix.count))
+            break
+        }
+        let words = core.split(separator: "-").map { token -> String in
+            guard let first = token.first, first.isLetter else { return String(token) }
+            return first.uppercased() + token.dropFirst()
+        }
+        let label = words.joined(separator: " ")
+        return label.isEmpty ? leaf : label
     }
 
     private var groupedModelCategories: [(category: String, rows: [StudioModelInventoryRow])] {
