@@ -62,6 +62,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case ltxVideo
     case ltxVideo23MLX
     case wan22TI2VMLX
+    case dreamXCausalMLX
     case hfTextChat
 }
 
@@ -1553,6 +1554,18 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: 24_200_000_000,
             defaultCLICommands: ["video generate"]
         ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.dreamXWorld5BARMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            upstreamRepoId: Wan2DreamXCausalResources.upstreamRepoID,
+            upstreamRevision: Wan2DreamXCausalResources.upstreamRevision,
+            validationKind: .dreamXCausalMLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 10_566_339_320,
+            defaultCLICommands: ["world serve"],
+            companionModelIDs: [ModelResolver.ModelID.wan22TI2V5BMLX.rawValue]
+        ),
     ]
 
     public static var allModelIDs: [String] {
@@ -1762,6 +1775,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideo23MLXPaths(in: rootURL, fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .dreamXCausalMLX:
+            return Wan2DreamXCausalResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hfTextChat:
             return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }
@@ -1814,6 +1829,12 @@ public extension ManagedModelSpec {
                 return []
             } catch {
                 return [error.localizedDescription]
+            }
+        case .dreamXCausalMLX:
+            return Wan2DreamXCausalResources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            ).validate(fileManager: fileManager).map {
+                "Missing required DreamX causal MLX file: \($0.path)"
             }
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(

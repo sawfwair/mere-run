@@ -694,6 +694,13 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 64,
                 recommended: 96
             ),
+            descriptor(
+                ModelResolver.ModelID.dreamXWorld5BARMLX.rawValue,
+                "DreamX World 5B AR MLX",
+                "Runs persistent camera-conditioned world generation with the native causal Swift MLX runtime.",
+                minimum: 64,
+                recommended: 128
+            ),
         ]
         return Dictionary(uniqueKeysWithValues: descriptors.map { ($0.modelID, $0) })
     }()

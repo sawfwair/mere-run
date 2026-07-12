@@ -10,6 +10,26 @@ the byte count and SHA-256 of every emitted weights, configuration, provenance,
 and license file before publishing the staged directory. Their `--license-file`
 argument is mandatory and accepts only the exact pinned upstream license bytes.
 
+## DreamX-World 5B camera adapter
+
+`extract_dreamx_camera_adapter.py` reads safetensors headers and downloads only
+the 300 `cam_self_attn` tensors from the pinned public
+`GD-ML/DreamX-World-5B-Cam` release. The tensors occupy 30 contiguous HTTP byte
+ranges and produce a 4.22 GiB adapter instead of duplicating the 24.5 GB full
+checkpoint. A sampled ordinary transformer weight from the DreamX release is
+bit-identical to the managed Wan base after BF16 conversion, so the native
+package composes that base with the learned camera branch.
+
+```bash
+python3 scripts/model-conversion/extract_dreamx_camera_adapter.py \
+  --output camera_adapter.safetensors
+```
+
+The extractor pins revision
+`a4379c7723f6ebd02139e2e8fd62d6ef523e86e3`, rejects ignored HTTP range
+requests, validates every index/header entry, and writes the output atomically.
+Python is acquisition tooling only; inference remains native Swift/MLX.
+
 ## Video Depth Anything Small
 
 `convert_vda_small.py` accepts only the pinned relative or metric Apache-2.0

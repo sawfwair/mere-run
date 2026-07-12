@@ -20,7 +20,7 @@ public enum Wan2TI2VGeneratorError: LocalizedError {
     }
 }
 
-public struct Wan2VideoGenerationResult {
+public struct Wan2VideoGenerationResult: @unchecked Sendable {
     public let frames: MLXArray
     public let seed: UInt64
     public let terminalFrameLatent: MLXArray?
@@ -45,8 +45,15 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
     private var transformer: Wan2TransformerModel?
     private var promptCache: [PromptCacheKey: Wan2TextConditioning] = [:]
     private var chainedTerminalFrameLatent: MLXArray?
+    private let cameraWeightsURL: URL?
 
-    public init() {}
+    public init(cameraWeightsURL: URL? = nil) {
+        self.cameraWeightsURL = cameraWeightsURL?.standardizedFileURL
+    }
+
+    public var conditioningMode: Wan2WorldConditioningMode {
+        cameraWeightsURL == nil ? .textAndFirstFrame : .projectiveCameraLatents
+    }
 
     public var isWarm: Bool {
         tokenizer != nil && textEncoder != nil && vae != nil && transformer != nil
@@ -196,10 +203,13 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
             negativeCaches.flatMap { [$0.key, $0.value] }
         )
 
-        var scheduler = Wan2UniPCScheduler(steps: options.steps, shift: options.shift)
+        var eulerScheduler = Wan2FlowMatchEulerScheduler(steps: options.steps, shift: options.shift)
+        var uniPCScheduler = Wan2UniPCScheduler(steps: options.steps, shift: options.shift)
+        let usesDreamXSampler = options.cameraConditioning != nil
+        let timesteps = usesDreamXSampler ? eulerScheduler.timesteps : uniPCScheduler.timesteps
         var latent = initialLatent
         let debugStats = ProcessInfo.processInfo.environment["MERERUN_WAN2_DEBUG_STATS"] == "1"
-        for (stepIndex, timestep) in scheduler.timesteps.enumerated() {
+        for (stepIndex, timestep) in timesteps.enumerated() {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(
                 stage: .denoising,
@@ -211,7 +221,8 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
                 latents: [latent],
                 timesteps: tokenTimesteps,
                 embeddedContext: positiveContext,
-                crossCaches: positiveCaches
+                crossCaches: positiveCaches,
+                cameraConditioning: options.cameraConditioning
             )[0]
             eval(conditional)
             Memory.clearCache()
@@ -220,10 +231,13 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
                 latents: [latent],
                 timesteps: tokenTimesteps,
                 embeddedContext: negativeContext,
-                crossCaches: negativeCaches
+                crossCaches: negativeCaches,
+                cameraConditioning: options.cameraConditioning
             )[0]
             let velocity = unconditional + options.guidanceScale * (conditional - unconditional)
-            latent = scheduler.step(modelOutput: velocity, sample: latent)
+            latent = usesDreamXSampler
+                ? eulerScheduler.step(velocity: velocity, sample: latent)
+                : uniPCScheduler.step(modelOutput: velocity, sample: latent)
             latent = Wan2TI2VConditioning.blend(
                 imageLatent: imageLatent,
                 noise: latent,
@@ -323,7 +337,15 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
     ) throws -> Wan2TransformerModel {
         try ensureRoot(resources)
         if transformer == nil {
-            transformer = try Wan2ModelLoader.loadTransformer(resources: resources, progress: progress)
+            if let cameraWeightsURL {
+                transformer = try Wan2ModelLoader.loadDreamXCameraTransformer(
+                    resources: resources,
+                    cameraWeightsURL: cameraWeightsURL,
+                    progress: progress
+                )
+            } else {
+                transformer = try Wan2ModelLoader.loadTransformer(resources: resources, progress: progress)
+            }
         }
         return transformer!
     }

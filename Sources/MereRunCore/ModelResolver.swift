@@ -81,6 +81,7 @@ public struct ModelResolver {
         case ltxVideoAV = "video-ltx-av"
         case ltxVideo23AVMLX = "video-ltx23-av-mlx"
         case wan22TI2V5BMLX = "video-wan22-ti2v-5b-mlx"
+        case dreamXWorld5BARMLX = "video-dreamx-world-5b-ar-mlx"
     }
 
     public enum Source: String, Hashable, Sendable {

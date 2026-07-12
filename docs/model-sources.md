@@ -96,6 +96,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx-av` |
 | `video` | `video-ltx23-av-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
+| `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
 
 Most catalog IDs have managed Hugging Face sources and can be installed with
@@ -576,3 +577,18 @@ state IDs rather than mutable MLX tensors. Camera controls are represented as
 XYZ translation and rotation so a DreamX-derived causal camera conditioner can
 replace the current text-plus-first-frame mode without changing the session
 schema.
+
+### `video-dreamx-world-5b-ar-mlx`
+
+The native DreamX-World autoregressive checkpoint root is:
+
+```text
+.../models/video-dreamx-world-5b-ar-mlx
+```
+
+`mere.run world prepare` converts the pinned `GD-ML/DreamX-World-5B`
+checkpoint into the MLX-native root. The runtime pairs it with
+`video-wan22-ti2v-5b-mlx` for the tokenizer, text encoder, and VAE resources.
+The checkpoint provides learned camera conditioning, block-causal attention,
+persistent attention caches, and autoregressive forcing for long-lived local
+world sessions. It is not downloaded automatically at runtime.

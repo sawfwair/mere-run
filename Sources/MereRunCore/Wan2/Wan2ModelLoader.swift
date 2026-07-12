@@ -1,13 +1,20 @@
 import Foundation
 import MLX
+import MLXNN
 
 public enum Wan2ModelLoaderError: LocalizedError, Sendable {
     case textEncodingFailed
+    case invalidDreamXCameraWeights(expected: Int, actual: Int)
+    case invalidDreamXCausalWeights(expected: Int, actual: Int)
 
     public var errorDescription: String? {
         switch self {
         case .textEncodingFailed:
             return "Wan2 text encoder did not return the expected batch."
+        case .invalidDreamXCameraWeights(let expected, let actual):
+            return "DreamX camera adapter must contain \(expected) tensors, found \(actual)."
+        case .invalidDreamXCausalWeights(let expected, let actual):
+            return "DreamX causal checkpoint must contain \(expected) tensors, found \(actual)."
         }
     }
 }
@@ -91,16 +98,81 @@ public enum Wan2ModelLoader {
     ) throws -> Wan2TransformerModel {
         progress?("Loading Wan2.2 TI2V transformer")
         let model = Wan2TransformerModel()
-        try SafetensorsStreamingLoader.applyWeightsStreaming(
+        try applyTransformerWeights(
             url: resources.transformerURL,
             to: model,
-            dtype: nil,
-            verify: .none,
-            mapper: { key, value in
-                let targetType: DType = key.hasSuffix("modulation") ? .float32 : dtype
-                return [(key, value.asType(targetType))]
-            },
-            batchSize: 12
+            dtype: dtype,
+            verify: .none
+        )
+        eval(model.parameters().flattened().map(\.1))
+        return model
+    }
+
+    public static func loadDreamXCameraTransformer(
+        resources: Wan2Resources,
+        cameraWeightsURL: URL,
+        dtype: DType = .bfloat16,
+        progress: (@Sendable (String) -> Void)? = nil
+    ) throws -> Wan2TransformerModel {
+        let metadata = try SafetensorsStreamingLoader.metadata(url: cameraWeightsURL)
+        let cameraTensorCount = metadata.keys.filter { $0.contains(".cam_self_attn.") }.count
+        guard cameraTensorCount == 300, metadata.count == 300 else {
+            throw Wan2ModelLoaderError.invalidDreamXCameraWeights(
+                expected: 300,
+                actual: cameraTensorCount
+            )
+        }
+        progress?("Loading Wan2.2 TI2V transformer")
+        let model = Wan2TransformerModel(configuration: Wan2TransformerConfiguration(
+            projectiveCameraConditioning: true
+        ))
+        try applyTransformerWeights(
+            url: resources.transformerURL,
+            to: model,
+            dtype: dtype,
+            verify: .none
+        )
+        progress?("Loading DreamX projective camera attention")
+        try applyTransformerWeights(
+            url: cameraWeightsURL,
+            to: model,
+            dtype: dtype,
+            verify: .noUnusedKeys
+        )
+        eval(model.parameters().flattened().map(\.1))
+        return model
+    }
+
+    public static func loadDreamXCausalTransformer(
+        weightsURL: URL,
+        dtype: DType = .bfloat16,
+        progress: (@Sendable (String) -> Void)? = nil
+    ) throws -> Wan2TransformerModel {
+        let metadata = try SafetensorsStreamingLoader.metadata(url: weightsURL)
+        guard metadata.count == 1_125 else {
+            throw Wan2ModelLoaderError.invalidDreamXCausalWeights(
+                expected: 1_125,
+                actual: metadata.count
+            )
+        }
+        let cameraPrefix = "blocks.0.cam_self_attn."
+        guard metadata[cameraPrefix + "q_proj.weight"]?.shape == [768, 3_072],
+              metadata[cameraPrefix + "out_proj.weight"]?.shape == [3_072, 768] else {
+            throw Wan2ModelLoaderError.invalidDreamXCausalWeights(
+                expected: 1_125,
+                actual: metadata.count
+            )
+        }
+        progress?("Loading DreamX causal Wan2 transformer")
+        let model = Wan2TransformerModel(configuration: Wan2TransformerConfiguration(
+            projectiveCameraConditioning: true,
+            projectiveCameraAttentionCompression: 4
+        ))
+        try applyTransformerWeights(
+            url: weightsURL,
+            to: model,
+            dtype: dtype,
+            verify: .noUnusedKeys
         )
         eval(model.parameters().flattened().map(\.1))
         return model
@@ -122,5 +194,24 @@ public enum Wan2ModelLoader {
         )
         eval(model.parameters().flattened().map(\.1))
         return model
+    }
+
+    private static func applyTransformerWeights(
+        url: URL,
+        to model: Wan2TransformerModel,
+        dtype: DType,
+        verify: Module.VerifyUpdate
+    ) throws {
+        try SafetensorsStreamingLoader.applyWeightsStreaming(
+            url: url,
+            to: model,
+            dtype: nil,
+            verify: verify,
+            mapper: { key, value in
+                let targetType: DType = key.hasSuffix("modulation") ? .float32 : dtype
+                return [(key, value.asType(targetType))]
+            },
+            batchSize: 12
+        )
     }
 }

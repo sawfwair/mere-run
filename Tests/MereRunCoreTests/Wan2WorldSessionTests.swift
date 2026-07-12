@@ -15,6 +15,28 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
         XCTAssertTrue(left.promptClause.contains("pivots left in place"))
     }
 
+    func testCausalCameraTrajectoryHonorsRequestedMotionMagnitude() {
+        let fifteen = Wan2DreamXARTrajectory.compile(
+            control: .yawLeft(degrees: 15),
+            pixelFrameCount: 9
+        )
+        let thirty = Wan2DreamXARTrajectory.compile(
+            control: .yawLeft(degrees: 30),
+            pixelFrameCount: 9
+        )
+        XCTAssertNotEqual(fifteen.viewMatrices, thirty.viewMatrices)
+
+        let near = Wan2DreamXARTrajectory.compile(
+            control: .forward(meters: 0.25),
+            pixelFrameCount: 9
+        )
+        let far = Wan2DreamXARTrajectory.compile(
+            control: .forward(meters: 1),
+            pixelFrameCount: 9
+        )
+        XCTAssertNotEqual(near.viewMatrices, far.viewMatrices)
+    }
+
     func testColdSessionCanResetToAnExplicitWorldFrame() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("wan-session-model-\(UUID().uuidString)")
@@ -52,5 +74,37 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
         XCTAssertEqual(request.guidanceScale, 5)
         XCTAssertEqual(request.shift, 5)
         XCTAssertEqual(request.fps, 24)
+    }
+
+    func testCameraWeightsSelectProjectiveConditioningWithoutLoadingModels() async {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wan-camera-session-model-\(UUID().uuidString)")
+        let state = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wan-camera-session-state-\(UUID().uuidString)")
+        let cameraWeights = root.appendingPathComponent("camera_adapter.safetensors")
+        let session = Wan2WorldSession(
+            resources: Wan2Resources(rootURL: root),
+            stateDirectory: state,
+            cameraWeightsURL: cameraWeights
+        )
+        let snapshot = await session.snapshot()
+        XCTAssertEqual(snapshot.conditioningMode, .projectiveCameraLatents)
+        XCTAssertFalse(snapshot.keepsModelsWarm)
+    }
+
+    func testCausalWeightsSelectPersistentConditioningWithoutLoadingModels() async {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wan-causal-session-model-\(UUID().uuidString)")
+        let state = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wan-causal-session-state-\(UUID().uuidString)")
+        let session = Wan2WorldSession(
+            resources: Wan2Resources(rootURL: root),
+            stateDirectory: state,
+            causalWeightsURL: root.appendingPathComponent("causal.safetensors")
+        )
+        let snapshot = await session.snapshot()
+        XCTAssertEqual(snapshot.conditioningMode, .causalCameraLatents)
+        XCTAssertFalse(snapshot.keepsModelsWarm)
+        XCTAssertFalse(snapshot.keepsTerminalLatent)
     }
 }

@@ -34,6 +34,7 @@ public struct Wan2GenerationOptions: Hashable, Sendable {
     public let shift: Float
     public let seed: UInt64
     public let fps: Int
+    public let cameraConditioning: Wan2ProjectiveCameraConditioning?
 
     public init(
         prompt: String,
@@ -47,7 +48,8 @@ public struct Wan2GenerationOptions: Hashable, Sendable {
         guidanceScale: Float = 5,
         shift: Float = 5,
         seed: UInt64 = 42,
-        fps: Int = 24
+        fps: Int = 24,
+        cameraConditioning: Wan2ProjectiveCameraConditioning? = nil
     ) throws {
         guard width > 0,
               height > 0,
@@ -74,6 +76,7 @@ public struct Wan2GenerationOptions: Hashable, Sendable {
         self.shift = shift
         self.seed = seed
         self.fps = fps
+        self.cameraConditioning = cameraConditioning
     }
 
     public var latentShape: [Int] {
@@ -98,19 +101,19 @@ public struct Wan2FlowMatchEulerScheduler: Sendable {
     public init(steps: Int, shift: Float = 5, trainTimesteps: Int = 1_000) {
         precondition(steps > 0)
         precondition(trainTimesteps > 1)
+        precondition(shift > 0)
         var shifted: [Float] = []
         shifted.reserveCapacity(steps + 1)
-        let sigmaMax = Float(trainTimesteps - 1) / Float(trainTimesteps)
+        let trainSigmaMin = 1 / Float(trainTimesteps)
+        let sigmaMin = shift * trainSigmaMin / (1 + (shift - 1) * trainSigmaMin)
         for index in 0..<steps {
-            let fraction = Float(index) / Float(steps)
-            let sigma = sigmaMax * (1 - fraction)
+            let fraction = steps == 1 ? 0 : Float(index) / Float(steps - 1)
+            let sigma = 1 + (sigmaMin - 1) * fraction
             shifted.append(shift * sigma / (1 + (shift - 1) * sigma))
         }
         shifted.append(0)
         self.sigmas = shifted
-        self.timesteps = shifted.dropLast().map {
-            Float(Int(($0 * Float(trainTimesteps)).rounded(.towardZero)))
-        }
+        self.timesteps = shifted.dropLast().map { $0 * Float(trainTimesteps) }
     }
 
     public mutating func step(velocity: MLXArray, sample: MLXArray) -> MLXArray {
@@ -122,6 +125,29 @@ public struct Wan2FlowMatchEulerScheduler: Sendable {
 
     public mutating func reset() {
         stepIndex = 0
+    }
+}
+
+public struct Wan2CausalForcingScheduler: Sendable {
+    public let timesteps: [Float]
+
+    public init(shift: Float = 5) {
+        precondition(shift > 0)
+        let trainingIndices: [Float] = [1, 0.75, 0.5, 0.25]
+        self.timesteps = trainingIndices.map { sigma in
+            1_000 * shift * sigma / (1 + (shift - 1) * sigma)
+        }
+    }
+
+    public func predictClean(flow: MLXArray, sample: MLXArray, timestep: Float) -> MLXArray {
+        (sample.asType(.float32) - (timestep / 1_000) * flow.asType(.float32))
+            .asType(flow.dtype)
+    }
+
+    public func addNoise(clean: MLXArray, noise: MLXArray, timestep: Float) -> MLXArray {
+        let sigma = timestep / 1_000
+        return ((1 - sigma) * clean.asType(.float32) + sigma * noise.asType(.float32))
+            .asType(noise.dtype)
     }
 }
 
