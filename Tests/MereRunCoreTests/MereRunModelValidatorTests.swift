@@ -267,6 +267,31 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.isEmpty)
     }
 
+    func testGeometryAndDepthManagedModelsRejectPlaceholderArtifacts() throws {
+        let cases: [(ModelResolver.ModelID, String)] = [
+            (.visionGeometryMoGe2Small, "model.onnx"),
+            (.visionDepthVDASmall, "video_depth_anything_vits.pth"),
+        ]
+        for (modelID, artifact) in cases {
+            let root = try TestFileSystem.makeTempDir()
+            defer { try? FileManager.default.removeItem(at: root) }
+            try MereRunModelManifest.template(
+                for: modelID,
+                createdAt: Date(timeIntervalSince1970: 0)
+            ).write(to: root)
+            try TestFileSystem.writeFile(root.appendingPathComponent(artifact))
+
+            let report = MereRunModelValidator.validate(
+                modelRoot: root,
+                expectedModelID: modelID.rawValue
+            )
+            XCTAssertFalse(report.isValid, "\(modelID.rawValue): \(report.errors)")
+            XCTAssertTrue(report.errors.contains { $0.contains("wrong size") })
+            XCTAssertFalse(report.warnings.contains { $0.contains("model root marker") })
+            XCTAssertFalse(report.errors.contains { $0.contains("text_encoder") || $0.contains("tokenizer") })
+        }
+    }
+
     func testMagentaRT2RootLayoutPassesValidation() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

@@ -441,6 +441,8 @@ swift run mere.run vision track ./clip.mp4 --prompt "a person" --preflight --jso
 
 # Record a short camera session and track it
 swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
+swift run mere.run vision pose ./person.png --json-output ./person-pose.json
+swift run mere.run vision flow ./frame-001.png ./frame-002.png --output ./motion.flo
 
 # Generate music
 swift run mere.run model pull music-acestep
@@ -596,6 +598,8 @@ The public CLI is modality-first:
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
+- `mere.run vision pose`
+- `mere.run vision flow`
 - `mere.run vision ocr`
 - `mere.run music analyze`
 - `mere.run music generate`

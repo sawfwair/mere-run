@@ -2,6 +2,63 @@ import XCTest
 @testable import MereRunCore
 
 final class ManagedModelResolverTests: XCTestCase {
+    func testMaterializedGeometryInstallsExactBundledLicenseEvidence() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for pin in GeometryModelPins.all where pin.licenseEvidence != nil {
+            let snapshot = root.appendingPathComponent("snapshot-\(pin.modelID)", isDirectory: true)
+            let install = root.appendingPathComponent("install-\(pin.modelID)", isDirectory: true)
+            try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: pin.modelID))
+            _ = try ManagedModelResolver.materializeManagedInstallRoot(
+                for: spec,
+                snapshotURL: snapshot,
+                modelDir: install,
+                fileManager: .default
+            )
+            let evidence = try XCTUnwrap(pin.licenseEvidence)
+            _ = try evidence.installedPin.verify(in: install)
+            try Data("tampered".utf8).write(
+                to: install.appendingPathComponent(evidence.installedPin.filename)
+            )
+            XCTAssertTrue(
+                spec.missingPaths(in: install).contains {
+                    $0.lastPathComponent == evidence.installedPin.filename
+                },
+                pin.modelID
+            )
+        }
+    }
+
+    func testPinnedGeometryModelsWithManifestAndPlaceholderBytesAreNotRunnable() throws {
+        let modelsRoot = try makeTemporaryDirectory()
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        for pin in GeometryModelPins.all {
+            let modelID = try XCTUnwrap(ModelResolver.ModelID(rawValue: pin.modelID))
+            let install = modelsRoot.appendingPathComponent(pin.modelID, isDirectory: true)
+            try FileManager.default.createDirectory(at: install, withIntermediateDirectories: true)
+            for artifact in pin.artifacts {
+                try Data([0]).write(to: install.appendingPathComponent(artifact.filename))
+            }
+            try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+                .write(to: install)
+
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: pin.modelID))
+            XCTAssertNil(ModelResolver().resolveIfPresent(modelID), pin.modelID)
+            XCTAssertNil(spec.managedRuntimeURL(), pin.modelID)
+            XCTAssertFalse(
+                ManagedModelResolver.isManagedInstallComplete(spec: spec, at: install),
+                pin.modelID
+            )
+        }
+    }
+
     func testMaterializedInstallRootsKeepSharedHubAliasesManifestIsolated() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -220,6 +220,9 @@ let linuxNativeLinkerSettings: [LinkerSetting] = isLinuxPackage
 var mereRunCoreLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
 if !isLinuxPackage {
   mereRunCoreLinkerSettings.append(.linkedFramework("Metal"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("Vision"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("ImageIO"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("CoreVideo"))
 }
 
 var audioCodecsDependencies: [Target.Dependency] = mlxDependency("MLX")
@@ -273,15 +276,19 @@ targets.append(contentsOf: [
       "ACEStep/README.md",
       "ACEStep/Model/README.md",
       "ACEStep/VAE/README.md",
+      "Asset3D/README.md",
       "CodeGen/README.md",
       "Decode/README.md",
       "DeepseekV4Flash/README.md",
+      "DepthAnything3/README.md",
       "FalconPerception/README.md",
       "Flux2Klein/README.md",
       "Flux2Klein/Model/Transformer/README.md",
       "Gemma4/README.md",
+      "Geometry/README.md",
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
+      "InstantMesh/README.md",
       "Krea2/README.md",
       "MuScriptor/README.md",
       "LFM2/README.md",
@@ -290,6 +297,8 @@ targets.append(contentsOf: [
       "LoRA/README.md",
       "MagentaRT2/README.md",
       "PrivacyFilter/README.md",
+      "Pose/README.md",
+      "OpticalFlow/README.md",
       "Psi/README.md",
       "Q35/README.md",
       "Quantization/README.md",
@@ -298,7 +307,11 @@ targets.append(contentsOf: [
       "QwenImageEdit/Model/VAE/README.md",
       "SAM3/README.md",
       "Support/README.md",
+      "TripoSR/README.md",
       "VLM/README.md",
+      "VideoDepth/README.md",
+      "VideoDepth/VDA/README.md",
+      "VisionGeometry/MoGe2/README.md",
       "Woosh/README.md",
       "ZImageI2L/README.md",
       "ZImageI2L/Model/README.md",
@@ -309,6 +322,9 @@ targets.append(contentsOf: [
       "ZImageTurbo/Model/Transformer/README.md",
       "ZImageTurbo/Model/VAE/README.md",
       "ZImageTurbo/Util/README.md"
+    ],
+    resources: [
+      .process("Resources")
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: mereRunCoreLinkerSettings

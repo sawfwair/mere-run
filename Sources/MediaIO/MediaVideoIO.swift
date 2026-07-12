@@ -1,5 +1,63 @@
 import Foundation
 
+struct ResolvedMediaVideoFrameRate: Sendable, Equatable {
+    let framesPerSecond: Double
+    let timeScale: Int32
+}
+
+enum MediaVideoFrameRateResolver {
+    static let minimumFramesPerSecond = 1.0
+
+    /// Resolves metadata and caller-supplied frame rates before any integer
+    /// conversion. Non-positive metadata may use an explicit positive fallback;
+    /// non-finite values are always rejected instead of being silently hidden.
+    static func resolve(
+        _ candidateFPS: Double,
+        fallbackFPS: Double? = nil
+    ) throws -> ResolvedMediaVideoFrameRate {
+        guard candidateFPS.isFinite else {
+            throw MediaIOError.invalidVideoFrameRate(candidateFPS)
+        }
+
+        let selectedFPS: Double
+        if candidateFPS > 0 {
+            selectedFPS = candidateFPS
+        } else if let fallbackFPS {
+            guard fallbackFPS.isFinite, fallbackFPS > 0 else {
+                throw MediaIOError.invalidVideoFrameRate(fallbackFPS)
+            }
+            selectedFPS = fallbackFPS
+        } else {
+            throw MediaIOError.invalidVideoFrameRate(candidateFPS)
+        }
+
+        let framesPerSecond = max(minimumFramesPerSecond, selectedFPS)
+        let roundedTimeScale = framesPerSecond.rounded()
+        guard roundedTimeScale >= 1,
+              roundedTimeScale <= Double(Int32.max) else {
+            throw MediaIOError.invalidVideoFrameRate(framesPerSecond)
+        }
+
+        return ResolvedMediaVideoFrameRate(
+            framesPerSecond: framesPerSecond,
+            timeScale: Int32(roundedTimeScale)
+        )
+    }
+}
+
+public struct MediaVideoDecodeLimits: Sendable, Equatable {
+    public let maximumPixelCountPerFrame: Int
+    public let maximumAggregatePixelCount: Int
+
+    public init(
+        maximumPixelCountPerFrame: Int,
+        maximumAggregatePixelCount: Int
+    ) {
+        self.maximumPixelCountPerFrame = maximumPixelCountPerFrame
+        self.maximumAggregatePixelCount = maximumAggregatePixelCount
+    }
+}
+
 public enum MediaVideoIO {
     public typealias BGRAFrameProvider = (_ frameIndex: Int) throws -> [UInt8]
 
@@ -126,12 +184,25 @@ public enum MediaVideoIO {
     public static func extractFrames(
         from videoURL: URL,
         into outputDirectoryURL: URL,
-        endFrame: Int? = nil
+        endFrame: Int? = nil,
+        decodeLimits: MediaVideoDecodeLimits? = nil,
+        validateDecodedSequence: ((Int, Int, Int) throws -> Void)? = nil
     ) throws -> VideoFrameSequence {
         #if canImport(AVFoundation) && canImport(CoreGraphics)
-        try AppleMediaVideoIO.extractFrames(from: videoURL, into: outputDirectoryURL, endFrame: endFrame)
+        try AppleMediaVideoIO.extractFrames(
+            from: videoURL,
+            into: outputDirectoryURL,
+            endFrame: endFrame,
+            validateDecodedSequence: validateDecodedSequence
+        )
         #else
-        try FFmpegMediaIO.extractFrames(from: videoURL, into: outputDirectoryURL, endFrame: endFrame)
+        try FFmpegMediaIO.extractFrames(
+            from: videoURL,
+            into: outputDirectoryURL,
+            endFrame: endFrame,
+            decodeLimits: decodeLimits,
+            validateDecodedSequence: validateDecodedSequence
+        )
         #endif
     }
 

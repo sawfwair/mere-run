@@ -1,8 +1,32 @@
 import Foundation
 import XCTest
 import AudioCore
+import MediaIO
+import NIOCore
 @testable import MereRunCLI
 @testable import MereRunCore
+
+private actor VFXRequestAdmissionTestGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func open() {
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private enum VFXRequestAdmissionTestError: Error {
+    case expected
+}
 
 final class APIServeCommandTests: XCTestCase {
     func testAPICommandExposesServeSubcommand() {
@@ -129,6 +153,182 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(envelope.diagnostics.contains { $0.id == "api_key_required_for_non_loopback" })
         let startServer = try XCTUnwrap(envelope.actions.first { $0.id == "start-api-server" })
         XCTAssertFalse(startServer.enabled)
+    }
+
+    func testVFXArtifactRoutePolicyUsesPeerSocketAndFailsClosed() throws {
+        XCTAssertEqual(APIVFXArtifactRoutePolicy.outputTTLSeconds, 3_600)
+        XCTAssertEqual(
+            APIArtifactDirectoryCleanupScheduler.productionDelayNanoseconds,
+            3_600_000_000_000
+        )
+        XCTAssertEqual(APIVFXArtifactRoutePolicy.routePaths, [
+            "/v1/vision/geometry",
+            "/v1/vision/geometry/multiview",
+            "/v1/vision/image-to-3d",
+            "/v1/vision/image-to-3d-multiview",
+            "/v1/vision/depth-video",
+        ])
+        XCTAssertTrue(APIVFXArtifactRoutePolicy.denialMessage.contains("loopback-only"))
+        XCTAssertTrue(APIVFXArtifactRoutePolicy.denialMessage.contains("file URLs"))
+
+        for address in ["127.0.0.1", "127.42.0.9", "::1", "::ffff:127.0.0.1"] {
+            XCTAssertTrue(APIVFXArtifactRoutePolicy.allows(
+                remoteAddress: try SocketAddress(ipAddress: address, port: 8_080)
+            ), address)
+        }
+        for address in ["0.0.0.0", "192.0.2.10", "2001:db8::1"] {
+            XCTAssertFalse(APIVFXArtifactRoutePolicy.allows(
+                remoteAddress: try SocketAddress(ipAddress: address, port: 8_080)
+            ), address)
+        }
+        XCTAssertFalse(APIVFXArtifactRoutePolicy.allows(remoteAddress: nil))
+    }
+
+    func testVFXRequestAdmissionSerializesAndReleasesSuccessAndFailure() async throws {
+        let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
+        let gate = VFXRequestAdmissionTestGate()
+        let first = Task {
+            try await withVFXRequestAdmission(using: admission) {
+                await gate.wait()
+                return "first"
+            }
+        }
+
+        var snapshot = await admission.snapshot()
+        for _ in 0..<100 where snapshot.activeRequests == 0 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+            snapshot = await admission.snapshot()
+        }
+        XCTAssertEqual(snapshot.activeRequests, 1)
+
+        let second = Task {
+            try await withVFXRequestAdmission(using: admission) {
+                "second"
+            }
+        }
+        for _ in 0..<100 where snapshot.queuedRequests == 0 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+            snapshot = await admission.snapshot()
+        }
+        XCTAssertEqual(snapshot.activeRequests, 1)
+        XCTAssertEqual(snapshot.queuedRequests, 1)
+
+        await gate.open()
+        let firstResult = try await first.value
+        let secondResult = try await second.value
+        XCTAssertEqual(firstResult, "first")
+        XCTAssertEqual(secondResult, "second")
+
+        do {
+            let _: Int = try await withVFXRequestAdmission(using: admission) {
+                throw VFXRequestAdmissionTestError.expected
+            }
+            XCTFail("Expected admitted operation to throw")
+        } catch VFXRequestAdmissionTestError.expected {
+            // Expected.
+        }
+
+        snapshot = await admission.snapshot()
+        XCTAssertEqual(snapshot.activeRequests, 0)
+        XCTAssertEqual(snapshot.queuedRequests, 0)
+        XCTAssertEqual(snapshot.totalAdmittedRequests, 3)
+        XCTAssertEqual(snapshot.totalCompletedRequests, 3)
+    }
+
+    func testVFXClientInputAndResourceErrorsAreBadRequests() {
+        let inputURL = URL(fileURLWithPath: "/tmp/client-input")
+        let errors: [Error] = [
+            MoGe2TokenGridError.tokenCountOutOfRange(
+                actual: 3_601,
+                minimum: 1,
+                maximum: 3_600
+            ),
+            VideoDepthAnythingLimitError.inputSizeOutOfRange(
+                actual: 0,
+                minimum: 14,
+                maximum: 1_008
+            ),
+            DepthAnything3LimitError.viewCountOutOfRange(
+                actual: 17,
+                minimum: 1,
+                maximum: 16
+            ),
+            MediaIOError.invalidVideoFrameRate(.infinity),
+            MediaIOError.imageDecodeFailed(inputURL),
+            VFXImageInputValidationError.dimensionLimitExceeded(
+                path: inputURL.path,
+                width: 9_000,
+                height: 1,
+                maximum: 8_192
+            ),
+            DepthAnything3CameraValidationError(index: 0, reason: "invalid focal length"),
+            DepthAnything3PreprocessingError.emptyImages,
+            VideoDepthAnythingPreprocessingError.emptyFrames,
+            VideoDepthAnythingWindowingError.invalidOriginalFrameCount(0),
+            MultiViewGeometryExportConfigurationError.invalidMaximumPointCount(0),
+            TripoSRPreprocessingError.emptyForeground,
+            InstantMeshPreprocessingError.invalidViewCount(3),
+        ]
+
+        for error in errors {
+            XCTAssertEqual(
+                APIVFXClientErrorPolicy.status(for: error),
+                .badRequest,
+                error.localizedDescription
+            )
+        }
+        XCTAssertNil(APIVFXClientErrorPolicy.status(for: VFXRequestAdmissionTestError.expected))
+    }
+
+    func testExtremeAspectMoGeTokenGridErrorIsABadRequest() throws {
+        do {
+            _ = try MoGe2TokenGrid.resolve(
+                imageWidth: 16_384,
+                imageHeight: 1,
+                requestedTokenCount: MoGe2TokenGrid.maximumTokenCount
+            )
+            XCTFail("Expected the derived MoGe-2 token grid to exceed the native workload limit")
+        } catch let error as MoGe2TokenGridError {
+            XCTAssertEqual(
+                error,
+                .tokenGridExceedsLimit(
+                    rows: 1,
+                    columns: 7_680,
+                    actual: 7_680,
+                    maximum: MoGe2TokenGrid.maximumTokenCount
+                )
+            )
+            XCTAssertEqual(APIVFXClientErrorPolicy.status(for: error), .badRequest)
+        } catch {
+            XCTFail("Expected MoGe2TokenGridError, received \(error)")
+        }
+    }
+
+    func testRemoteModelListingOmitsLoopbackArtifactModels() {
+        let installed = APIVFXArtifactRoutePolicy.modelIDs.union(["image-zimage-nano"])
+        let remoteIDs = APIServerContract.companionModelIDs(
+            installedModelIDs: installed,
+            includeLoopbackArtifactModels: false
+        )
+
+        XCTAssertTrue(remoteIDs.contains("image-zimage-nano"))
+        XCTAssertTrue(APIVFXArtifactRoutePolicy.modelIDs.isDisjoint(with: remoteIDs))
+    }
+
+    func testSuccessfulArtifactDirectoryIsRemovedAfterInjectedShortTTL() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-artifact-ttl-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("artifact".utf8).write(to: root.appendingPathComponent("mesh.glb"))
+
+        let scheduler = APIArtifactDirectoryCleanupScheduler(delayNanoseconds: 25_000_000)
+        scheduler.scheduleCleanup(of: root)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+        for _ in 0..<100 where FileManager.default.fileExists(atPath: root.path) {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
     }
 
     func testAPIServePreflightDoesNotExposeAPIKeyInActionArgv() throws {
@@ -372,6 +572,998 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(ids.contains("qwen-image-edit"))
         XCTAssertFalse(ids.contains("image-zimage-max"))
         XCTAssertFalse(ids.contains("speech-asr-qwen3"))
+    }
+
+    func testCompanionModelIDsIncludeInstalledGeometryPrimitive() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [
+            ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+        ])
+
+        XCTAssertEqual(ids, [ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue])
+    }
+
+    func testCompanionModelIDsIncludeInstalledMultiViewGeometryPrimitive() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [
+            ModelResolver.ModelID.visionGeometryDA3Small.rawValue,
+        ])
+
+        XCTAssertEqual(ids, [ModelResolver.ModelID.visionGeometryDA3Small.rawValue])
+    }
+
+    func testCompanionModelIDsIncludeInstalledImageTo3DPrimitive() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [
+            ModelResolver.ModelID.image3DTripoSR.rawValue,
+        ])
+
+        XCTAssertEqual(ids, [ModelResolver.ModelID.image3DTripoSR.rawValue])
+    }
+
+    func testCompanionModelIDsIncludeInstalledVideoDepthPrimitives() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [
+            ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+        ])
+
+        XCTAssertEqual(ids, [
+            ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+        ])
+    }
+
+    func testCompanionModelIDsRejectPinnedPlaceholderInstalls() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-api-pinned-models-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: root)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(root)
+
+        for pin in GeometryModelPins.all {
+            let modelID = try XCTUnwrap(ModelResolver.ModelID(rawValue: pin.modelID))
+            let install = root.appendingPathComponent(pin.modelID, isDirectory: true)
+            try FileManager.default.createDirectory(at: install, withIntermediateDirectories: true)
+            for artifact in pin.artifacts {
+                try Data([0]).write(to: install.appendingPathComponent(artifact.filename))
+            }
+            try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+                .write(to: install)
+        }
+
+        let ids = APIServerContract.companionModelIDs()
+        for pin in GeometryModelPins.all {
+            XCTAssertFalse(ids.contains(pin.modelID), pin.modelID)
+        }
+    }
+
+    func testGeometryContractAcceptsOnlyManagedMoGeAndValidControls() throws {
+        let form = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("vision-geometry-moge2-small".utf8)),
+            .init(name: "resolution_level", filename: nil, contentType: nil, body: Data("5".utf8)),
+            .init(name: "token_count", filename: nil, contentType: nil, body: Data("1800".utf8)),
+            .init(name: "max_points", filename: nil, contentType: nil, body: Data("250000".utf8)),
+        ])
+        let plan = try APIServerContract.geometryPlan(from: form)
+        XCTAssertEqual(plan.modelID, ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue)
+        XCTAssertEqual(plan.resolutionLevel, 5)
+        XCTAssertEqual(plan.tokenCount, 1_800)
+        XCTAssertEqual(plan.maximumPointCount, 250_000)
+
+        let pathForm = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("/tmp/model.onnx".utf8)),
+        ])
+        XCTAssertThrowsError(try APIServerContract.geometryPlan(from: pathForm))
+        let badResolution = MultipartFormData(parts: [
+            .init(name: "resolution_level", filename: nil, contentType: nil, body: Data("10".utf8)),
+        ])
+        XCTAssertThrowsError(try APIServerContract.geometryPlan(from: badResolution))
+        let unsafeTokenCount = MultipartFormData(parts: [
+            .init(
+                name: "token_count",
+                filename: nil,
+                contentType: nil,
+                body: Data(String(MoGe2InferenceConfiguration.maximumTokenCount + 1).utf8)
+            ),
+        ])
+        XCTAssertThrowsError(try APIServerContract.geometryPlan(from: unsafeTokenCount)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("token_count"))
+        }
+    }
+
+    func testGeometryResponseReturnsHashedServerOwnedArtifactURLs() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-geometry-response-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let inputURL = root.appendingPathComponent("input.png")
+        try Data("image-input".utf8).write(to: inputURL)
+        let intrinsics = GeometryCameraIntrinsics(
+            imageWidth: 2,
+            imageHeight: 2,
+            normalizedFX: 1,
+            normalizedFY: 1
+        )
+        let frame = try DenseGeometryFrame(
+            width: 2,
+            height: 2,
+            units: .meters,
+            intrinsics: intrinsics,
+            depth: [1, 2, 3, 4],
+            points: [
+                -0.25, -0.25, 1, 0.5, -0.5, 2,
+                -0.75, 0.75, 3, 1, 1, 4,
+            ],
+            normals: [Float](repeating: 0, count: 12),
+            validity: [1, 1, 1, 1],
+            confidence: [1, 1, 1, 1]
+        )
+        let export = try GeometryArtifactExporter.export(
+            frame: frame,
+            inputURL: inputURL,
+            outputDirectory: root,
+            provenance: GeometryModelProvenance(
+                modelID: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+                upstreamRepository: "Ruicheng/moge-2-vits-normal-onnx",
+                upstreamRevision: "pin",
+                license: "MIT"
+            ),
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let result = MoGe2RunResult(
+            export: export,
+            focalShift: MoGe2FocalShiftSolution(
+                focal: 1.5,
+                shift: 0.1,
+                iterationCount: 3,
+                residualMeanSquare: 0
+            ),
+            metricScale: 2,
+            tokenCount: 1_200,
+            modelLoadSeconds: 0.1,
+            inferenceSeconds: 0.2,
+            postprocessSeconds: 0.3
+        )
+        let response = try APIServerContract.geometryResponse(
+            from: result,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(response.created, 123)
+        XCTAssertEqual(response.object, "vision.geometry")
+        XCTAssertEqual(response.units, .meters)
+        XCTAssertEqual(response.camera.intrinsics, intrinsics)
+        XCTAssertEqual(response.artifacts.count, export.manifest.artifacts.count + 1)
+        let manifest = try XCTUnwrap(response.artifacts.first { $0.kind == .manifest })
+        XCTAssertTrue(manifest.url.hasPrefix("file://"))
+        XCTAssertEqual(manifest.sha256.count, 64)
+        XCTAssertGreaterThan(manifest.byteCount, 0)
+    }
+
+    func testMultiViewGeometryContractAcceptsManagedDA3ControlsAndInlineCameras() throws {
+        let camera = DepthAnything3KnownCamera(
+            intrinsics: GeometryCameraIntrinsics(
+                imageWidth: 2,
+                imageHeight: 2,
+                normalizedFX: 1,
+                normalizedFY: 1
+            ),
+            extrinsics: .identity
+        )
+        let cameraJSON = try JSONEncoder().encode(
+            DepthAnything3CameraDocument(cameras: [camera, camera])
+        )
+        let form = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("vision-geometry-da3-small".utf8)),
+            .init(name: "process_resolution", filename: nil, contentType: nil, body: Data("392".utf8)),
+            .init(name: "reference_view", filename: nil, contentType: nil, body: Data("first".utf8)),
+            .init(name: "confidence_percentile", filename: nil, contentType: nil, body: Data("55.5".utf8)),
+            .init(name: "max_points", filename: nil, contentType: nil, body: Data("250000".utf8)),
+            .init(name: "cameras", filename: nil, contentType: nil, body: cameraJSON),
+            .init(name: "image[]", filename: "a.png", contentType: "image/png", body: Data([1])),
+            .init(name: "image", filename: "b.jpg", contentType: "image/jpeg", body: Data([2])),
+        ])
+
+        let plan = try APIServerContract.multiViewGeometryPlan(from: form)
+
+        XCTAssertEqual(plan.modelID, ModelResolver.ModelID.visionGeometryDA3Small.rawValue)
+        XCTAssertEqual(plan.processResolution, 392)
+        XCTAssertEqual(plan.referenceViewStrategy, .first)
+        XCTAssertEqual(plan.confidencePercentile, 55.5)
+        XCTAssertEqual(plan.maximumPointCount, 250_000)
+        XCTAssertEqual(plan.knownCameras, [camera, camera])
+        XCTAssertTrue(plan.poseConditioned)
+    }
+
+    func testMultiViewGeometryContractAcceptsUploadedCameraDocumentAndDefaults() throws {
+        let camera = DepthAnything3KnownCamera(
+            intrinsics: GeometryCameraIntrinsics(
+                imageWidth: 4,
+                imageHeight: 3,
+                normalizedFX: 0.8,
+                normalizedFY: 0.9
+            ),
+            extrinsics: .identity
+        )
+        let cameraJSON = try JSONEncoder().encode(
+            DepthAnything3CameraDocument(cameras: [camera])
+        )
+        let plan = try APIServerContract.multiViewGeometryPlan(from: MultipartFormData(parts: [
+            .init(name: "image", filename: "view.png", contentType: "image/png", body: Data([1])),
+            .init(
+                name: "cameras",
+                filename: "cameras.json",
+                contentType: "application/json; charset=utf-8",
+                body: cameraJSON
+            ),
+        ]))
+
+        XCTAssertEqual(plan.modelID, ModelResolver.ModelID.visionGeometryDA3Small.rawValue)
+        XCTAssertEqual(plan.processResolution, 504)
+        XCTAssertEqual(plan.referenceViewStrategy, .saddleBalanced)
+        XCTAssertEqual(plan.confidencePercentile, 40)
+        XCTAssertEqual(plan.maximumPointCount, 1_000_000)
+        XCTAssertEqual(plan.knownCameras, [camera])
+    }
+
+    func testMultiViewGeometryRoutePolicyRequiresUploadedImagesAndRejectsClientPaths() throws {
+        XCTAssertEqual(
+            APIServerContract.multiViewGeometryRoutePath,
+            "/v1/vision/geometry/multiview"
+        )
+        XCTAssertEqual(
+            APIServerContract.multiViewGeometryRouterPath.description,
+            APIServerContract.multiViewGeometryRoutePath
+        )
+        XCTAssertEqual(
+            APIServerContract.maximumMultiViewGeometryUploadByteCount,
+            512 * 1024 * 1024
+        )
+        let upload = MultipartFormData.Part(
+            name: "image[]",
+            filename: "view.png",
+            contentType: "image/png",
+            body: Data([1])
+        )
+
+        for pathField in [
+            "input", "input_path", "image_path", "output", "output_path",
+            "output_directory", "model_path", "camera_path", "cameras_path",
+        ] {
+            XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+                from: MultipartFormData(parts: [
+                    .init(name: pathField, filename: nil, contentType: nil, body: Data("/tmp/client-path".utf8)),
+                    upload,
+                ])
+            )) { error in
+                XCTAssertTrue(error.localizedDescription.contains(pathField))
+            }
+        }
+
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "model", filename: nil, contentType: nil, body: Data("/tmp/model.safetensors".utf8)),
+                upload,
+            ])
+        ))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [])
+        ))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "image", filename: nil, contentType: nil, body: Data("/tmp/view.png".utf8)),
+            ])
+        ))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "image", filename: "empty.png", contentType: "image/png", body: Data()),
+            ])
+        ))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "image", filename: "view.txt", contentType: "text/plain", body: Data([1])),
+            ])
+        ))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                upload,
+                .init(name: "checkpoint", filename: "model.safetensors", contentType: "application/octet-stream", body: Data([1])),
+            ])
+        ))
+    }
+
+    func testMultiViewGeometryContractRejectsInvalidControlsAndCameraDocuments() throws {
+        let upload = MultipartFormData.Part(
+            name: "image",
+            filename: "view.png",
+            contentType: "image/png",
+            body: Data([1])
+        )
+        for (field, value) in [
+            ("process_resolution", "0"),
+            ("process_resolution", "13"),
+            ("process_resolution", "1009"),
+            ("max_points", "0"),
+            ("confidence_percentile", "-1"),
+            ("confidence_percentile", "101"),
+            ("confidence_percentile", "nan"),
+            ("reference_view", "last"),
+        ] {
+            XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+                from: MultipartFormData(parts: [
+                    .init(name: field, filename: nil, contentType: nil, body: Data(value.utf8)),
+                    upload,
+                ])
+            ), "field \(field) should reject \(value)")
+        }
+
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "cameras", filename: nil, contentType: nil, body: Data("/tmp/cameras.json".utf8)),
+                upload,
+            ])
+        ))
+
+        let zeroCameras = try JSONEncoder().encode(DepthAnything3CameraDocument(cameras: []))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "cameras", filename: nil, contentType: nil, body: zeroCameras),
+                upload,
+            ])
+        ))
+
+        let camera = DepthAnything3KnownCamera(
+            intrinsics: GeometryCameraIntrinsics(
+                imageWidth: 2,
+                imageHeight: 2,
+                normalizedFX: 1,
+                normalizedFY: 1
+            ),
+            extrinsics: .identity
+        )
+        let validCameraJSON = try JSONEncoder().encode(DepthAnything3CameraDocument(cameras: [camera]))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "cameras", filename: nil, contentType: nil, body: validCameraJSON),
+                .init(name: "cameras", filename: "cameras.json", contentType: "application/json", body: validCameraJSON),
+                upload,
+            ])
+        ))
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "cameras", filename: "cameras.txt", contentType: "text/plain", body: validCameraJSON),
+                upload,
+            ])
+        ))
+
+        let reflected = DepthAnything3KnownCamera(
+            intrinsics: camera.intrinsics,
+            extrinsics: try GeometryCameraExtrinsics(
+                rotation: [1, 0, 0, 0, 1, 0, 0, 0, -1],
+                translation: [0, 0, 0]
+            )
+        )
+        let reflectedJSON = try JSONEncoder().encode(
+            DepthAnything3CameraDocument(cameras: [reflected])
+        )
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: [
+                .init(name: "cameras", filename: nil, contentType: nil, body: reflectedJSON),
+                upload,
+            ])
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("determinant +1"))
+        }
+    }
+
+    func testMultiViewGeometryContractRejectsViewAndProcessedPixelBudgets() throws {
+        func uploads(_ count: Int) -> [MultipartFormData.Part] {
+            (0..<count).map { index in
+                .init(
+                    name: "image[]",
+                    filename: "view-\(index).png",
+                    contentType: "image/png",
+                    body: Data([1])
+                )
+            }
+        }
+
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: uploads(17) + [
+                .init(name: "process_resolution", filename: nil, contentType: nil, body: Data("14".utf8)),
+            ])
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("between 1 and 16"))
+        }
+        XCTAssertThrowsError(try APIServerContract.multiViewGeometryPlan(
+            from: MultipartFormData(parts: uploads(9))
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("activation budget"))
+        }
+    }
+
+    func testMultiViewGeometryResponseReturnsPinsCamerasAndEveryHashedArtifact() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-multiview-geometry-response-\(UUID().uuidString)", isDirectory: true)
+        let sourceRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-multiview-geometry-inputs-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        defer { try? FileManager.default.removeItem(at: sourceRoot) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let image = try MediaImage(
+            width: 2,
+            height: 2,
+            rgba8: [UInt8](repeating: 255, count: 16)
+        )
+        let intrinsics = GeometryCameraIntrinsics(
+            imageWidth: 2,
+            imageHeight: 2,
+            normalizedFX: 1,
+            normalizedFY: 1
+        )
+        let secondExtrinsics = try GeometryCameraExtrinsics(
+            rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            translation: [-1, 0, 0]
+        )
+        let sourceURLs = [
+            sourceRoot.appendingPathComponent("view-0.png"),
+            sourceRoot.appendingPathComponent("view-1.png"),
+        ]
+        try Data("view zero".utf8).write(to: sourceURLs[0])
+        try Data("view one".utf8).write(to: sourceURLs[1])
+        let viewResults = [
+            DepthAnything3ViewResult(
+                index: 0,
+                sourceURL: sourceURLs[0],
+                inputIdentity: try DepthAnything3InputIdentity.capture(sourceURLs[0]),
+                sourceImage: image,
+                processedImage: image,
+                preprocessingPlan: preprocessingPlan(index: 0),
+                depth: [1, 2, 3, 4],
+                confidence: [1, 2, 3, 4],
+                intrinsics: intrinsics,
+                extrinsics: .identity,
+                predictedIntrinsics: intrinsics,
+                predictedExtrinsics: .identity,
+                suppliedCamera: nil
+            ),
+            DepthAnything3ViewResult(
+                index: 1,
+                sourceURL: sourceURLs[1],
+                inputIdentity: try DepthAnything3InputIdentity.capture(sourceURLs[1]),
+                sourceImage: image,
+                processedImage: image,
+                preprocessingPlan: preprocessingPlan(index: 1),
+                depth: [2, 3, 4, 5],
+                confidence: [2, 3, 4, 5],
+                intrinsics: intrinsics,
+                extrinsics: secondExtrinsics,
+                predictedIntrinsics: intrinsics,
+                predictedExtrinsics: secondExtrinsics,
+                suppliedCamera: nil
+            ),
+        ]
+        let checkpoint = DepthAnything3Checkpoint(
+            modelID: ModelResolver.ModelID.visionGeometryDA3Small.rawValue,
+            repository: "depth-anything/DA3-SMALL",
+            revision: String(repeating: "a", count: 40),
+            sourceRepository: "ByteDance-Seed/Depth-Anything-3",
+            sourceRevision: String(repeating: "b", count: 40),
+            license: "Apache-2.0",
+            rootURL: root,
+            weightsURL: root.appendingPathComponent("model.safetensors"),
+            configurationURL: root.appendingPathComponent("config.json"),
+            weightsByteCount: 137_248_940,
+            weightsSHA256: String(repeating: "c", count: 64),
+            configurationByteCount: 1_202,
+            configurationSHA256: String(repeating: "d", count: 64)
+        )
+        let run = DepthAnything3RunResult(
+            views: viewResults,
+            checkpoint: checkpoint,
+            referenceViewStrategy: .saddleBalanced,
+            cameraSemantics: .predictedRelative,
+            cameraScaleAlignment: "predicted-relative",
+            depthScaleDivisor: 1,
+            processResolution: 504,
+            checkpointVerificationSeconds: 0.1,
+            decodingSeconds: 0.2,
+            preprocessingSeconds: 0.3,
+            modelLoadSeconds: 0.4,
+            inferenceSeconds: 0.5,
+            postprocessingSeconds: 0.6
+        )
+        let export = try MultiViewGeometryExporter.export(
+            run: run,
+            outputDirectory: root,
+            configuration: try MultiViewGeometryExportConfiguration(
+                confidencePercentile: 0,
+                maximumPointCount: 100
+            ),
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        let response = try APIServerContract.multiViewGeometryResponse(
+            from: run,
+            export: export,
+            exportSeconds: 0.7,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(response.created, 123)
+        XCTAssertEqual(response.object, "vision.geometry.multiview")
+        XCTAssertEqual(response.model, ModelResolver.ModelID.visionGeometryDA3Small.rawValue)
+        XCTAssertEqual(response.checkpoint.weightsSHA256, checkpoint.weightsSHA256)
+        XCTAssertEqual(response.checkpoint.configurationSHA256, checkpoint.configurationSHA256)
+        XCTAssertEqual(response.units, .relative)
+        XCTAssertEqual(response.coordinateSystem, .worldFromCameras)
+        XCTAssertEqual(response.cameraSemantics, .predictedRelative)
+        XCTAssertEqual(response.referenceViewStrategy, .saddleBalanced)
+        XCTAssertEqual(response.viewCount, 2)
+        XCTAssertEqual(response.cameraCount, 2)
+        XCTAssertEqual(response.cameras.map(\.viewIndex), [0, 1])
+        XCTAssertEqual(response.pointCount, 8)
+        XCTAssertEqual(response.pointCloudRepresentation, "colored-points-not-mesh")
+        XCTAssertFalse(response.containsMesh)
+        XCTAssertFalse(response.containsGaussianParameters)
+        XCTAssertFalse(response.threeDGaussianHandoff.containsGaussianParameters)
+        XCTAssertTrue(response.manifest.url.hasPrefix("file://"))
+        XCTAssertEqual(response.manifest.sha256.count, 64)
+        XCTAssertGreaterThan(response.manifest.byteCount, 0)
+        XCTAssertEqual(response.artifacts.count, export.manifest.artifacts.count)
+        XCTAssertTrue(response.artifacts.allSatisfy {
+            $0.url.hasPrefix("file://") && $0.sha256.count == 64 && $0.byteCount > 0
+        })
+        XCTAssertEqual(response.timing.totalSeconds, 2.8, accuracy: 0.000_001)
+
+        let encoded = try JSONEncoder().encode(response)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertEqual(object["contains_mesh"] as? Bool, false)
+        XCTAssertEqual(object["contains_gaussian_parameters"] as? Bool, false)
+        XCTAssertEqual(object["point_cloud_representation"] as? String, "colored-points-not-mesh")
+        XCTAssertNotNil(object["checkpoint"])
+        XCTAssertNotNil(object["manifest"])
+        XCTAssertNotNil(object["artifacts"])
+        XCTAssertNotNil(object["timing"])
+    }
+
+    func testImageTo3DContractAcceptsOnlyManagedModelAndValidControls() throws {
+        let upload = MultipartFormData.Part(
+            name: "image",
+            filename: "chair.png",
+            contentType: "image/png",
+            body: Data([1, 2, 3])
+        )
+        let plan = try APIServerContract.imageTo3DPlan(from: MultipartFormData(parts: [
+            .init(
+                name: "model",
+                filename: nil,
+                contentType: nil,
+                body: Data(ModelResolver.ModelID.image3DTripoSR.rawValue.utf8)
+            ),
+            .init(name: "resolution", filename: nil, contentType: nil, body: Data("192".utf8)),
+            .init(name: "density_threshold", filename: nil, contentType: nil, body: Data("21.5".utf8)),
+            .init(name: "foreground_ratio", filename: nil, contentType: nil, body: Data("0.9".utf8)),
+            .init(name: "already_framed", filename: nil, contentType: nil, body: Data("true".utf8)),
+            .init(name: "vertex_colors", filename: nil, contentType: nil, body: Data("0".utf8)),
+            upload,
+        ]))
+
+        XCTAssertEqual(plan.modelID, ModelResolver.ModelID.image3DTripoSR.rawValue)
+        XCTAssertEqual(plan.extractionResolution, 192)
+        XCTAssertEqual(plan.densityThreshold, 21.5)
+        XCTAssertEqual(plan.foregroundRatio, 0.9)
+        XCTAssertTrue(plan.alreadyFramed)
+        XCTAssertEqual(plan.foregroundPolicy, .alreadyFramed)
+        XCTAssertFalse(plan.includesVertexColors)
+
+        let defaults = try APIServerContract.imageTo3DPlan(
+            from: MultipartFormData(parts: [upload])
+        )
+        XCTAssertEqual(defaults.extractionResolution, 256)
+        XCTAssertEqual(defaults.densityThreshold, 25)
+        XCTAssertEqual(defaults.foregroundRatio, 0.85)
+        XCTAssertFalse(defaults.alreadyFramed)
+        XCTAssertTrue(defaults.includesVertexColors)
+    }
+
+    func testImageTo3DRouteRequiresUploadedBytesAndRejectsClientPaths() {
+        XCTAssertEqual(APIServerContract.imageTo3DRoutePath, "/v1/vision/image-to-3d")
+        XCTAssertEqual(
+            APIServerContract.imageTo3DRouterPath.description,
+            APIServerContract.imageTo3DRoutePath
+        )
+        XCTAssertEqual(APIServerContract.maximumImageTo3DUploadByteCount, 100 * 1024 * 1024)
+        let upload = MultipartFormData.Part(
+            name: "image",
+            filename: "chair.png",
+            contentType: "image/png",
+            body: Data([1])
+        )
+
+        for pathField in [
+            "input", "input_path", "image_path", "output", "output_path",
+            "output_directory", "model_path", "checkpoint", "checkpoint_path",
+        ] {
+            XCTAssertThrowsError(try APIServerContract.imageTo3DPlan(
+                from: MultipartFormData(parts: [
+                    .init(name: pathField, filename: nil, contentType: nil, body: Data("/tmp/client-path".utf8)),
+                    upload,
+                ])
+            )) { error in
+                XCTAssertTrue(error.localizedDescription.contains(pathField))
+            }
+        }
+
+        let invalidForms = [
+            MultipartFormData(parts: []),
+            MultipartFormData(parts: [
+                .init(name: "image", filename: nil, contentType: nil, body: Data("/tmp/chair.png".utf8)),
+            ]),
+            MultipartFormData(parts: [
+                .init(name: "image", filename: "empty.png", contentType: "image/png", body: Data()),
+            ]),
+            MultipartFormData(parts: [
+                .init(name: "image", filename: "chair.txt", contentType: "text/plain", body: Data([1])),
+            ]),
+            MultipartFormData(parts: [upload, upload]),
+            MultipartFormData(parts: [
+                .init(name: "model", filename: nil, contentType: nil, body: Data("/tmp/model.ckpt".utf8)),
+                upload,
+            ]),
+            MultipartFormData(parts: [
+                .init(name: "checkpoint", filename: "model.ckpt", contentType: "application/octet-stream", body: Data([1])),
+                upload,
+            ]),
+        ]
+        for form in invalidForms {
+            XCTAssertThrowsError(try APIServerContract.imageTo3DPlan(from: form))
+        }
+
+        for (field, value) in [
+            ("resolution", "1"),
+            ("resolution", "513"),
+            ("density_threshold", "nan"),
+            ("foreground_ratio", "0"),
+            ("foreground_ratio", "1.1"),
+            ("already_framed", "sometimes"),
+            ("vertex_colors", "yes"),
+        ] {
+            XCTAssertThrowsError(try APIServerContract.imageTo3DPlan(
+                from: MultipartFormData(parts: [
+                    .init(name: field, filename: nil, contentType: nil, body: Data(value.utf8)),
+                    upload,
+                ])
+            ), "field \(field) should reject \(value)")
+        }
+    }
+
+    func testImageTo3DResponseReturnsPinnedIdentityAndEveryHashedMeshArtifact() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-image-to-3d-response-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let inputURL = root.appendingPathComponent("chair.png")
+        try Data("temporary multipart upload".utf8).write(to: inputURL)
+        let mesh = try MeshAsset(
+            vertices: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+            indices: [0, 1, 2],
+            normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+            colorsRGBA8: [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255],
+            inferredUnseenGeometry: true
+        )
+        let checkpoint = TripoSRCheckpoint(
+            modelID: ModelResolver.ModelID.image3DTripoSR.rawValue,
+            repository: "stabilityai/TripoSR",
+            revision: "5b521936b01fbe1890f6f9baed0254ab6351c04a",
+            sourceRepository: "VAST-AI-Research/TripoSR",
+            sourceRevision: "107cefdc244c39106fa830359024f6a2f1c78871",
+            license: "MIT",
+            format: .pinnedPyTorch,
+            rootURL: root,
+            weightsURL: root.appendingPathComponent("model.ckpt"),
+            configurationURL: root.appendingPathComponent("config.yaml"),
+            weightsByteCount: 1_677_246_742,
+            weightsSHA256: "429e2c6b22a0923967459de24d67f05962b235f79cde6b032aa7ed2ffcd970ee",
+            sourceSHA256: "429e2c6b22a0923967459de24d67f05962b235f79cde6b032aa7ed2ffcd970ee",
+            configurationSHA256: "74ca708ce086bf68e97709ea6b3d91f14717921c04691e84043f0eb8fcc68e62"
+        )
+        let export = try TripoSRAssetExporter.export(
+            mesh: mesh,
+            inputURL: inputURL,
+            checkpoint: checkpoint,
+            outputDirectory: root,
+            stem: "chair",
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let runManifest = try TripoSRRunManifestExporter.export(
+            meshExport: export,
+            checkpoint: checkpoint,
+            inputURL: inputURL,
+            sourceWidth: 640,
+            sourceHeight: 480,
+            preparedWidth: 512,
+            preparedHeight: 512,
+            foregroundPolicy: "automatic-transparent-alpha",
+            foregroundRatio: 0.85,
+            croppedTransparentForeground: true,
+            extractionResolution: 256,
+            densityThreshold: 25,
+            includesVertexColors: true
+        )
+        let run = TripoSRRunResult(
+            export: export,
+            runManifest: runManifest,
+            checkpoint: checkpoint,
+            sourceWidth: 640,
+            sourceHeight: 480,
+            preparedWidth: 512,
+            preparedHeight: 512,
+            foregroundPolicy: "automatic-transparent-alpha",
+            foregroundRatio: 0.85,
+            croppedTransparentForeground: true,
+            extractionResolution: 256,
+            densityThreshold: 25,
+            includesVertexColors: true,
+            checkpointVerificationSeconds: 0.1,
+            decodingSeconds: 0.2,
+            preprocessingSeconds: 0.3,
+            modelLoadSeconds: 0.4,
+            sceneEncodingSeconds: 0.5,
+            meshExtractionSeconds: 0.6,
+            exportSeconds: 0.7
+        )
+
+        let response = try APIServerContract.imageTo3DResponse(
+            from: run,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(response.created, 123)
+        XCTAssertEqual(response.object, "vision.image-to-3d")
+        XCTAssertEqual(response.model, ModelResolver.ModelID.image3DTripoSR.rawValue)
+        XCTAssertEqual(response.checkpoint.weightsSHA256, checkpoint.weightsSHA256)
+        XCTAssertEqual(response.units, .normalizedObjectSpace)
+        XCTAssertEqual(response.coordinateSystem, .modelXRightYUpZForward)
+        XCTAssertTrue(response.inferredUnseenGeometry)
+        XCTAssertEqual(response.vertexCount, 3)
+        XCTAssertEqual(response.triangleCount, 1)
+        XCTAssertTrue(response.manifest.url.hasPrefix("file://"))
+        XCTAssertEqual(response.manifest.sha256.count, 64)
+        XCTAssertGreaterThan(response.manifest.byteCount, 0)
+        XCTAssertTrue(response.meshManifest.url.hasPrefix("file://"))
+        XCTAssertEqual(response.meshManifest.sha256.count, 64)
+        XCTAssertEqual(response.artifacts.count, 4)
+        XCTAssertEqual(
+            Set(response.artifacts.map(\.kind)),
+            ["obj", "ply", "glb", "mesh-manifest"]
+        )
+        XCTAssertTrue(response.artifacts.allSatisfy {
+            $0.url.hasPrefix("file://") && $0.sha256.count == 64 && $0.byteCount > 0
+        })
+        XCTAssertEqual(response.foregroundPolicy, "automatic-transparent-alpha")
+        XCTAssertEqual(response.foregroundRatio, 0.85)
+        XCTAssertEqual(response.timing.totalSeconds, 2.8, accuracy: 0.000_001)
+
+        let encoded = try JSONEncoder().encode(response)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertEqual(object["inferred_unseen_geometry"] as? Bool, true)
+        XCTAssertEqual(object["mesh_extraction_algorithm"] as? String, "native-marching-tetrahedra")
+        XCTAssertNotNil(object["checkpoint"])
+        XCTAssertNotNil(object["manifest"])
+        XCTAssertNotNil(object["mesh_manifest"])
+        XCTAssertNotNil(object["artifacts"])
+        XCTAssertNotNil(object["timing"])
+    }
+
+    func testDepthVideoContractAcceptsOnlyManagedModelsAndPositiveControls() throws {
+        let upload = MultipartFormData.Part(
+            name: "video",
+            filename: "shot.mp4",
+            contentType: "video/mp4",
+            body: Data([0, 1, 2, 3])
+        )
+        let relative = try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [upload]))
+        XCTAssertEqual(relative.modelID, ModelResolver.ModelID.visionDepthVDASmall.rawValue)
+        XCTAssertEqual(relative.inputSize, 518)
+        XCTAssertEqual(relative.maximumFrameCount, VideoDepthAnythingLimits.defaultMaximumFrameCount)
+
+        let metric = try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            .init(
+                name: "model",
+                filename: nil,
+                contentType: nil,
+                body: Data(ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue.utf8)
+            ),
+            .init(name: "input_size", filename: nil, contentType: nil, body: Data("756".utf8)),
+            .init(name: "max_frames", filename: nil, contentType: nil, body: Data("240".utf8)),
+            upload,
+        ]))
+        XCTAssertEqual(metric.modelID, ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue)
+        XCTAssertEqual(metric.inputSize, 756)
+        XCTAssertEqual(metric.maximumFrameCount, 240)
+
+        for (field, value) in [("input_size", "0"), ("max_frames", "-1"), ("max_frames", "nope")] {
+            let form = MultipartFormData(parts: [
+                .init(name: field, filename: nil, contentType: nil, body: Data(value.utf8)),
+                upload,
+            ])
+            XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: form)) { error in
+                XCTAssertTrue(error.localizedDescription.contains(field))
+            }
+        }
+
+        for (field, value) in [
+            ("input_size", String(VideoDepthAnythingLimits.maximumInputSize + 1)),
+            ("max_frames", String(VideoDepthAnythingLimits.maximumFrameCount + 1)),
+        ] {
+            let form = MultipartFormData(parts: [
+                .init(name: field, filename: nil, contentType: nil, body: Data(value.utf8)),
+                upload,
+            ])
+            XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: form)) { error in
+                XCTAssertTrue(error.localizedDescription.contains(field))
+            }
+        }
+
+        let unmanaged = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("/tmp/model.pth".utf8)),
+            upload,
+        ])
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: unmanaged)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("model"))
+        }
+    }
+
+    func testDepthVideoRoutePolicyRequiresUploadedBytesAndRejectsFilesystemControls() {
+        XCTAssertEqual(APIServerContract.depthVideoRoutePath, "/v1/vision/depth-video")
+        XCTAssertEqual(
+            APIServerContract.depthVideoRouterPath.description,
+            APIServerContract.depthVideoRoutePath
+        )
+        XCTAssertEqual(APIServerContract.maximumDepthVideoUploadByteCount, 512 * 1024 * 1024)
+
+        let upload = MultipartFormData.Part(
+            name: "video",
+            filename: "shot.mov",
+            contentType: "video/quicktime",
+            body: Data([1])
+        )
+        let pathInsteadOfUpload = MultipartFormData(parts: [
+            .init(name: "video", filename: nil, contentType: nil, body: Data("/tmp/shot.mov".utf8)),
+        ])
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: pathInsteadOfUpload))
+
+        for pathField in ["input", "input_path", "video_path", "output", "output_path", "output_directory", "model_path"] {
+            let form = MultipartFormData(parts: [
+                .init(name: pathField, filename: nil, contentType: nil, body: Data("/tmp/client-path".utf8)),
+                upload,
+            ])
+            XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: form)) { error in
+                XCTAssertTrue(error.localizedDescription.contains(pathField))
+            }
+        }
+
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            .init(name: "video", filename: "empty.mp4", contentType: "video/mp4", body: Data()),
+        ])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            upload,
+            upload,
+        ])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            .init(name: "video", filename: "frame.png", contentType: "image/png", body: Data([1])),
+        ])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            upload,
+            .init(name: "checkpoint", filename: "model.pth", contentType: "application/octet-stream", body: Data([1])),
+        ])))
+    }
+
+    func testDepthVideoResponseReturnsHashedServerOwnedSequenceArtifactsAndExplicitAbsences() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-depth-video-response-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let inputURL = root.appendingPathComponent("upload.mp4")
+        try Data("video-input".utf8).write(to: inputURL)
+        let frames = try [
+            DepthSequenceFrame(
+                index: 0,
+                timeSeconds: 0,
+                width: 2,
+                height: 2,
+                depth: [1, 2, 3, 4]
+            ),
+            DepthSequenceFrame(
+                index: 1,
+                timeSeconds: 0.125,
+                width: 2,
+                height: 2,
+                depth: [2, 3, 4, 5]
+            ),
+        ]
+        let export = try DepthSequenceArtifactExporter.export(
+            frames: frames,
+            inputURL: inputURL,
+            outputDirectory: root,
+            fps: 8,
+            semantics: .affineRelative,
+            provenance: GeometryModelProvenance(
+                modelID: ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+                upstreamRepository: "depth-anything/Video-Depth-Anything-Small",
+                upstreamRevision: "pin",
+                license: "Apache-2.0",
+                weightsSHA256: String(repeating: "a", count: 64)
+            ),
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let reviewURL = root.appendingPathComponent("depth-review.mp4")
+        try Data("review".utf8).write(to: reviewURL)
+        let review = VideoDepthReviewArtifact(
+            relativePath: reviewURL.lastPathComponent,
+            byteCount: 6,
+            sha256: try ModelArtifactPin.fileSHA256(reviewURL)
+        )
+        let checkpoint = VideoDepthAnythingCheckpoint(
+            variant: .relative,
+            format: .pinnedPyTorch,
+            weightsURL: root.appendingPathComponent("model.pth"),
+            weightsByteCount: 123,
+            weightsSHA256: String(repeating: "b", count: 64),
+            sourceSHA256: String(repeating: "b", count: 64)
+        )
+        let result = VideoDepthAnythingRunResult(
+            export: export,
+            reviewVideo: review,
+            checkpoint: checkpoint,
+            sourceFPS: 8,
+            windowCount: 1,
+            checkpointVerificationSeconds: 0.1,
+            frameExtractionSeconds: 0.2,
+            modelLoadSeconds: 0.3,
+            inferenceSeconds: 0.4,
+            exportSeconds: 0.5
+        )
+
+        let response = try APIServerContract.depthVideoResponse(
+            from: result,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+        XCTAssertEqual(response.created, 123)
+        XCTAssertEqual(response.object, "vision.depth-video")
+        XCTAssertEqual(response.model, ModelResolver.ModelID.visionDepthVDASmall.rawValue)
+        XCTAssertEqual(response.semantics, .affineRelative)
+        XCTAssertEqual(response.frameCount, 2)
+        XCTAssertEqual(response.windowCount, 1)
+        XCTAssertFalse(response.hasConfidence)
+        XCTAssertFalse(response.hasCameraIntrinsics)
+        XCTAssertFalse(response.hasCameraExtrinsics)
+        XCTAssertFalse(response.hasPointCloud)
+        XCTAssertTrue(response.manifest.url.hasPrefix("file://"))
+        XCTAssertEqual(response.manifest.sha256.count, 64)
+        XCTAssertGreaterThan(response.manifest.byteCount, 0)
+        XCTAssertEqual(response.review.url, reviewURL.absoluteString)
+        XCTAssertEqual(response.review.sha256, review.sha256)
+        XCTAssertEqual(response.artifacts.count, 4)
+        XCTAssertTrue(response.artifacts.allSatisfy { artifact in
+            artifact.url.hasPrefix("file://")
+                && artifact.sha256.count == 64
+                && artifact.byteCount > 0
+                && artifact.frameIndex != nil
+        })
+        XCTAssertEqual(response.timing.totalSeconds, 1.5, accuracy: 0.000_001)
+
+        let encoded = try JSONEncoder().encode(response)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertEqual(object["has_confidence"] as? Bool, false)
+        XCTAssertEqual(object["has_camera_intrinsics"] as? Bool, false)
+        XCTAssertEqual(object["has_camera_extrinsics"] as? Bool, false)
+        XCTAssertEqual(object["has_point_cloud"] as? Bool, false)
+        XCTAssertNotNil(object["manifest"])
+        XCTAssertNotNil(object["review"])
+        XCTAssertNotNil(object["artifacts"])
+        XCTAssertNotNil(object["timing"])
     }
 
     func testCompanionModelIDsHideMissingSidecarModels() {
@@ -1279,5 +2471,21 @@ final class APIServeCommandTests: XCTestCase {
 
         XCTAssertFalse(chatRequest.showThinking)
         XCTAssertNil(chatRequest.topK)
+    }
+
+    private func preprocessingPlan(index: Int) -> DepthAnything3PreprocessingPlan {
+        DepthAnything3PreprocessingPlan(
+            sourceWidth: 2,
+            sourceHeight: 2,
+            processResolution: 504,
+            boundaryWidth: 504,
+            boundaryHeight: 504,
+            divisibleWidth: 504,
+            divisibleHeight: 504,
+            batchCropLeft: index,
+            batchCropTop: 0,
+            processedWidth: 2,
+            processedHeight: 2
+        )
     }
 }

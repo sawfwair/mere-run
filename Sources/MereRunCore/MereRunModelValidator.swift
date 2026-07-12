@@ -107,6 +107,11 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .woosh
                     && spec.validationKind != .wooshClap
                     && spec.validationKind != .wooshSynchformer
+                    && spec.validationKind != .moge2
+                    && spec.validationKind != .videoDepthAnything
+                    && spec.validationKind != .depthAnything3
+                    && spec.validationKind != .tripoSR
+                    && spec.validationKind != .instantMesh
             }
         }()
         if !hasRootMarker && !usesMFluxZImage && requiresRootMarker {
@@ -140,7 +145,12 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .wooshClap
             || spec?.validationKind == .wooshSynchformer
             || spec?.validationKind == .ltxVideo
-            || spec?.validationKind == .ltxVideo23MLX {
+            || spec?.validationKind == .ltxVideo23MLX
+            || spec?.validationKind == .moge2
+            || spec?.validationKind == .videoDepthAnything
+            || spec?.validationKind == .depthAnything3
+            || spec?.validationKind == .tripoSR
+            || spec?.validationKind == .instantMesh {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -448,7 +458,8 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .ltxVideo?:
+            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .ltxVideo?,
+                 .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?:
                 return true
             default:
                 return false
@@ -497,6 +508,9 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
+        if modelId.hasPrefix("vision-geometry-") { return .geometry }
+        if modelId.hasPrefix("vision-depth-") { return .depth }
+        if modelId.hasPrefix("image-3d-") { return .threeD }
         if modelId.hasPrefix("speech-tts-") { return .tts }
         if modelId.hasPrefix("speech-asr-") { return .asr }
         if modelId.hasPrefix("text-embed-") { return .embed }

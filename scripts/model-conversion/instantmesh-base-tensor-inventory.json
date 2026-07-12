@@ -1,0 +1,2942 @@
+{
+  "encoder.camera_embedder.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.camera_embedder.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      16
+    ]
+  },
+  "encoder.camera_embedder.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.camera_embedder.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.embeddings.cls_token": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      1,
+      768
+    ]
+  },
+  "encoder.model.embeddings.patch_embeddings.projection.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.embeddings.patch_embeddings.projection.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3,
+      16,
+      16
+    ]
+  },
+  "encoder.model.embeddings.position_embeddings": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      197,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.0.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.0.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.0.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.1.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.1.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.1.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.1.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.10.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.10.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.10.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.10.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.11.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.11.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.11.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.11.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.2.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.2.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.2.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.2.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.3.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.3.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.3.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.3.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.4.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.4.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.4.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.4.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.5.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.5.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.5.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.5.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.6.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.6.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.6.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.6.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.7.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.7.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.7.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.7.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.8.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.8.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.8.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.8.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.9.adaLN_modulation.1.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.9.adaLN_modulation.1.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "encoder.model.encoder.layer.9.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.encoder.layer.9.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "encoder.model.layernorm.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "encoder.model.layernorm.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "synthesizer.decoder.net_deformation.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_deformation.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      120
+    ]
+  },
+  "synthesizer.decoder.net_deformation.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_deformation.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_deformation.4.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_deformation.4.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_deformation.6.bias": {
+    "dtype": "float32",
+    "shape": [
+      3
+    ]
+  },
+  "synthesizer.decoder.net_deformation.6.weight": {
+    "dtype": "float32",
+    "shape": [
+      3,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_rgb.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_rgb.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      120
+    ]
+  },
+  "synthesizer.decoder.net_rgb.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_rgb.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_rgb.4.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_rgb.4.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_rgb.6.bias": {
+    "dtype": "float32",
+    "shape": [
+      3
+    ]
+  },
+  "synthesizer.decoder.net_rgb.6.weight": {
+    "dtype": "float32",
+    "shape": [
+      3,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_sdf.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_sdf.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      120
+    ]
+  },
+  "synthesizer.decoder.net_sdf.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_sdf.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_sdf.4.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_sdf.4.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_sdf.6.bias": {
+    "dtype": "float32",
+    "shape": [
+      1
+    ]
+  },
+  "synthesizer.decoder.net_sdf.6.weight": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_weight.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_weight.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      960
+    ]
+  },
+  "synthesizer.decoder.net_weight.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_weight.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_weight.4.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "synthesizer.decoder.net_weight.4.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "synthesizer.decoder.net_weight.6.bias": {
+    "dtype": "float32",
+    "shape": [
+      21
+    ]
+  },
+  "synthesizer.decoder.net_weight.6.weight": {
+    "dtype": "float32",
+    "shape": [
+      21,
+      64
+    ]
+  },
+  "transformer.deconv.bias": {
+    "dtype": "float32",
+    "shape": [
+      40
+    ]
+  },
+  "transformer.deconv.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      40,
+      2,
+      2
+    ]
+  },
+  "transformer.layers.0.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.0.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.0.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.0.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.0.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.0.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.0.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.0.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.0.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.0.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.1.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.1.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.1.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.1.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.1.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.1.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.1.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.1.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.1.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.1.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.10.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.10.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.10.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.10.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.10.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.10.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.10.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.10.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.10.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.10.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.11.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.11.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.11.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.11.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.11.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.11.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.11.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.11.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.11.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.11.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.2.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.2.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.2.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.2.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.2.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.2.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.2.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.2.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.2.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.2.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.3.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.3.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.3.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.3.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.3.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.3.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.3.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.3.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.3.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.3.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.4.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.4.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.4.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.4.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.4.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.4.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.4.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.4.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.4.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.4.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.5.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.5.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.5.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.5.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.5.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.5.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.5.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.5.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.5.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.5.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.6.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.6.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.6.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.6.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.6.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.6.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.6.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.6.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.6.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.6.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.7.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.7.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.7.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.7.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.7.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.7.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.7.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.7.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.7.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.7.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.8.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.8.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.8.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.8.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.8.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.8.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.8.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.8.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.8.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.8.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.9.cross_attn.k_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.9.cross_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.9.cross_attn.q_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.layers.9.cross_attn.v_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "transformer.layers.9.mlp.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      4096
+    ]
+  },
+  "transformer.layers.9.mlp.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      4096,
+      1024
+    ]
+  },
+  "transformer.layers.9.mlp.3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.mlp.3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "transformer.layers.9.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.layers.9.self_attn.in_proj_weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "transformer.layers.9.self_attn.out_proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "transformer.norm.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.norm.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "transformer.pos_embed": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      3072,
+      1024
+    ]
+  }
+}

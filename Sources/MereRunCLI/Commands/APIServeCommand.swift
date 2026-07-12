@@ -28,6 +28,11 @@ struct APIServe: AsyncParsableCommand {
           POST /v1/embeddings       - Native Qwen3 text embeddings
           POST /v1/images/generations - Native image generation
           POST /v1/images/edits       - Native image editing
+          POST /v1/vision/geometry    - Native metric image geometry
+          POST /v1/vision/geometry/multiview - Native DA3 multi-view geometry and cameras
+          POST /v1/vision/image-to-3d - Native TripoSR object mesh reconstruction
+          POST /v1/vision/image-to-3d-multiview - Native InstantMesh reconstruction from uploaded views
+          POST /v1/vision/depth-video - Native temporally consistent video depth
           POST /v1/audio/speech      - Native text to speech
           POST /v1/audio/transcriptions - Native speech to text
 
@@ -83,6 +88,40 @@ struct APIServe: AsyncParsableCommand {
             -H "Content-Type: application/json" \\
             --output speech.wav \\
             --data '{"model":"speech-tts-qwen3-nano","input":"mere.run is online","voice":"nova","response_format":"wav"}'
+
+          # Recover metric depth, normals, camera, and a point cloud
+          curl http://localhost:8080/v1/vision/geometry \
+            -F model=vision-geometry-moge2-small \
+            -F resolution_level=9 \
+            -F image=@frame.png
+
+          # Solve relative multi-view geometry, confidence, and cameras
+          curl http://localhost:8080/v1/vision/geometry/multiview \
+            -F model=vision-geometry-da3-small \
+            -F process_resolution=504 \
+            -F 'image[]=@view-0.png' \
+            -F 'image[]=@view-1.png'
+
+          # Reconstruct a normalized colored object mesh from uploaded image bytes
+          curl http://localhost:8080/v1/vision/image-to-3d \
+            -F model=image-3d-triposr \
+            -F resolution=256 \
+            -F image=@object.png
+
+          # Reconstruct from exactly four or six uploaded, user-supplied views
+          curl http://localhost:8080/v1/vision/image-to-3d-multiview \
+            -F model=image-3d-instantmesh-base \
+            -F resolution=128 \
+            -F 'image[]=@view-0.png' \
+            -F 'image[]=@view-1.png' \
+            -F 'image[]=@view-2.png' \
+            -F 'image[]=@view-3.png'
+
+          # Recover temporally consistent relative depth from uploaded video bytes
+          curl http://localhost:8080/v1/vision/depth-video \
+            -F model=vision-depth-vda-small \
+            -F input_size=518 \
+            -F video=@shot.mp4
 
           # Transcribe audio
           curl http://localhost:8080/v1/audio/transcriptions \\
@@ -472,6 +511,422 @@ struct APIHealthStatus: Codable, Equatable, Sendable {
     let status: String
 }
 
+struct APIGeometryArtifactResponse: Codable, Equatable, Sendable {
+    let kind: GeometryArtifactKind
+    let url: String
+    let mediaType: String
+    let byteCount: Int64
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case url
+        case mediaType = "media_type"
+        case byteCount = "byte_count"
+        case sha256
+    }
+}
+
+struct APIGeometryTimingResponse: Codable, Equatable, Sendable {
+    let modelLoadSeconds: Double
+    let inferenceSeconds: Double
+    let postprocessSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case modelLoadSeconds = "model_load_seconds"
+        case inferenceSeconds = "inference_seconds"
+        case postprocessSeconds = "postprocess_seconds"
+    }
+}
+
+struct APIGeometryResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let status: String
+    let model: String
+    let width: Int
+    let height: Int
+    let units: GeometryValueUnits
+    let coordinateSystem: GeometryCoordinateSystem
+    let camera: GeometryCameraManifest
+    let depthStatistics: GeometryDepthStatistics
+    let focal: Double
+    let shift: Double
+    let metricScale: Double
+    let tokenCount: Int
+    let manifestURL: String
+    let artifacts: [APIGeometryArtifactResponse]
+    let timing: APIGeometryTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case status
+        case model
+        case width
+        case height
+        case units
+        case coordinateSystem = "coordinate_system"
+        case camera
+        case depthStatistics = "depth_statistics"
+        case focal
+        case shift
+        case metricScale = "metric_scale"
+        case tokenCount = "token_count"
+        case manifestURL = "manifest_url"
+        case artifacts
+        case timing
+    }
+}
+
+struct APIDepthVideoArtifactResponse: Codable, Equatable, Sendable {
+    let kind: String
+    let frameIndex: Int?
+    let url: String
+    let mediaType: String
+    let byteCount: Int64
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case frameIndex = "frame_index"
+        case url
+        case mediaType = "media_type"
+        case byteCount = "byte_count"
+        case sha256
+    }
+}
+
+struct APIDepthVideoTimingResponse: Codable, Equatable, Sendable {
+    let checkpointVerificationSeconds: Double
+    let frameExtractionSeconds: Double
+    let modelLoadSeconds: Double
+    let inferenceSeconds: Double
+    let exportSeconds: Double
+    let totalSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case checkpointVerificationSeconds = "checkpoint_verification_seconds"
+        case frameExtractionSeconds = "frame_extraction_seconds"
+        case modelLoadSeconds = "model_load_seconds"
+        case inferenceSeconds = "inference_seconds"
+        case exportSeconds = "export_seconds"
+        case totalSeconds = "total_seconds"
+    }
+}
+
+struct APIDepthVideoResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let status: String
+    let model: String
+    let semantics: DepthSemantics
+    let checkpointFormat: VideoDepthAnythingCheckpointFormat
+    let checkpointSHA256: String
+    let width: Int
+    let height: Int
+    let fps: Double
+    let frameCount: Int
+    let windowCount: Int
+    let temporalWindowLength: Int
+    let temporalOverlap: Int
+    let hasConfidence: Bool
+    let hasCameraIntrinsics: Bool
+    let hasCameraExtrinsics: Bool
+    let hasPointCloud: Bool
+    let manifest: APIDepthVideoArtifactResponse
+    let review: APIDepthVideoArtifactResponse
+    let artifacts: [APIDepthVideoArtifactResponse]
+    let timing: APIDepthVideoTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case status
+        case model
+        case semantics
+        case checkpointFormat = "checkpoint_format"
+        case checkpointSHA256 = "checkpoint_sha256"
+        case width
+        case height
+        case fps
+        case frameCount = "frame_count"
+        case windowCount = "window_count"
+        case temporalWindowLength = "temporal_window_length"
+        case temporalOverlap = "temporal_overlap"
+        case hasConfidence = "has_confidence"
+        case hasCameraIntrinsics = "has_camera_intrinsics"
+        case hasCameraExtrinsics = "has_camera_extrinsics"
+        case hasPointCloud = "has_point_cloud"
+        case manifest
+        case review
+        case artifacts
+        case timing
+    }
+}
+
+struct APIMultiViewGeometryCheckpointResponse: Codable, Equatable, Sendable {
+    let repository: String
+    let revision: String
+    let sourceRepository: String
+    let sourceRevision: String
+    let license: String
+    let weightsByteCount: Int64
+    let weightsSHA256: String
+    let configurationByteCount: Int64
+    let configurationSHA256: String
+
+    enum CodingKeys: String, CodingKey {
+        case repository
+        case revision
+        case sourceRepository = "source_repository"
+        case sourceRevision = "source_revision"
+        case license
+        case weightsByteCount = "weights_byte_count"
+        case weightsSHA256 = "weights_sha256"
+        case configurationByteCount = "configuration_byte_count"
+        case configurationSHA256 = "configuration_sha256"
+    }
+}
+
+struct APIMultiViewGeometryArtifactResponse: Codable, Equatable, Sendable {
+    let kind: String
+    let viewIndex: Int?
+    let url: String
+    let mediaType: String
+    let byteCount: Int64
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case viewIndex = "view_index"
+        case url
+        case mediaType = "media_type"
+        case byteCount = "byte_count"
+        case sha256
+    }
+}
+
+struct APIMultiViewGeometryCameraResponse: Codable, Equatable, Sendable {
+    let viewIndex: Int
+    let width: Int
+    let height: Int
+    let intrinsics: GeometryCameraIntrinsics
+    let extrinsics: GeometryCameraExtrinsics
+    let selectedPointCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case viewIndex = "view_index"
+        case width
+        case height
+        case intrinsics
+        case extrinsics
+        case selectedPointCount = "selected_point_count"
+    }
+}
+
+struct APIMultiViewGeometryTimingResponse: Codable, Equatable, Sendable {
+    let checkpointVerificationSeconds: Double
+    let decodingSeconds: Double
+    let preprocessingSeconds: Double
+    let modelLoadSeconds: Double
+    let inferenceSeconds: Double
+    let postprocessingSeconds: Double
+    let exportSeconds: Double
+    let totalSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case checkpointVerificationSeconds = "checkpoint_verification_seconds"
+        case decodingSeconds = "decoding_seconds"
+        case preprocessingSeconds = "preprocessing_seconds"
+        case modelLoadSeconds = "model_load_seconds"
+        case inferenceSeconds = "inference_seconds"
+        case postprocessingSeconds = "postprocessing_seconds"
+        case exportSeconds = "export_seconds"
+        case totalSeconds = "total_seconds"
+    }
+}
+
+struct APIMultiViewGeometryResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let status: String
+    let model: String
+    let checkpoint: APIMultiViewGeometryCheckpointResponse
+    let units: GeometryValueUnits
+    let coordinateSystem: GeometryCoordinateSystem
+    let poseConditioned: Bool
+    let cameraSemantics: DepthAnything3CameraSemantics
+    let cameraScaleAlignment: String
+    let referenceViewStrategy: DepthAnything3ReferenceViewStrategy
+    let depthScaleDivisor: Float
+    let processResolution: Int
+    let confidencePercentile: Double
+    let confidenceThreshold: Float
+    let viewCount: Int
+    let cameraCount: Int
+    let pointCount: Int
+    let pointCloudRepresentation: String
+    let containsMesh: Bool
+    let containsGaussianParameters: Bool
+    let threeDGaussianHandoff: Geometry3DGSHandoffManifest
+    let cameras: [APIMultiViewGeometryCameraResponse]
+    let manifest: APIMultiViewGeometryArtifactResponse
+    let artifacts: [APIMultiViewGeometryArtifactResponse]
+    let timing: APIMultiViewGeometryTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case status
+        case model
+        case checkpoint
+        case units
+        case coordinateSystem = "coordinate_system"
+        case poseConditioned = "pose_conditioned"
+        case cameraSemantics = "camera_semantics"
+        case cameraScaleAlignment = "camera_scale_alignment"
+        case referenceViewStrategy = "reference_view_strategy"
+        case depthScaleDivisor = "depth_scale_divisor"
+        case processResolution = "process_resolution"
+        case confidencePercentile = "confidence_percentile"
+        case confidenceThreshold = "confidence_threshold"
+        case viewCount = "view_count"
+        case cameraCount = "camera_count"
+        case pointCount = "point_count"
+        case pointCloudRepresentation = "point_cloud_representation"
+        case containsMesh = "contains_mesh"
+        case containsGaussianParameters = "contains_gaussian_parameters"
+        case threeDGaussianHandoff = "three_d_gaussian_handoff"
+        case cameras
+        case manifest
+        case artifacts
+        case timing
+    }
+}
+
+struct APIImageTo3DCheckpointResponse: Codable, Equatable, Sendable {
+    let repository: String
+    let revision: String
+    let sourceRepository: String
+    let sourceRevision: String
+    let license: String
+    let format: TripoSRCheckpointFormat
+    let weightsByteCount: Int64
+    let weightsSHA256: String
+    let sourceSHA256: String
+    let configurationSHA256: String
+
+    enum CodingKeys: String, CodingKey {
+        case repository
+        case revision
+        case sourceRepository = "source_repository"
+        case sourceRevision = "source_revision"
+        case license
+        case format
+        case weightsByteCount = "weights_byte_count"
+        case weightsSHA256 = "weights_sha256"
+        case sourceSHA256 = "source_sha256"
+        case configurationSHA256 = "configuration_sha256"
+    }
+}
+
+struct APIImageTo3DArtifactResponse: Codable, Equatable, Sendable {
+    let kind: String
+    let url: String
+    let mediaType: String
+    let byteCount: Int64
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case url
+        case mediaType = "media_type"
+        case byteCount = "byte_count"
+        case sha256
+    }
+}
+
+struct APIImageTo3DTimingResponse: Codable, Equatable, Sendable {
+    let checkpointVerificationSeconds: Double
+    let decodingSeconds: Double
+    let preprocessingSeconds: Double
+    let modelLoadSeconds: Double
+    let sceneEncodingSeconds: Double
+    let meshExtractionSeconds: Double
+    let exportSeconds: Double
+    let totalSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case checkpointVerificationSeconds = "checkpoint_verification_seconds"
+        case decodingSeconds = "decoding_seconds"
+        case preprocessingSeconds = "preprocessing_seconds"
+        case modelLoadSeconds = "model_load_seconds"
+        case sceneEncodingSeconds = "scene_encoding_seconds"
+        case meshExtractionSeconds = "mesh_extraction_seconds"
+        case exportSeconds = "export_seconds"
+        case totalSeconds = "total_seconds"
+    }
+}
+
+struct APIImageTo3DResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let status: String
+    let model: String
+    let checkpoint: APIImageTo3DCheckpointResponse
+    let sourceWidth: Int
+    let sourceHeight: Int
+    let preparedWidth: Int
+    let preparedHeight: Int
+    let foregroundPolicy: String
+    let foregroundRatio: Float?
+    let croppedTransparentForeground: Bool
+    let extractionResolution: Int
+    let densityThreshold: Float
+    let includesVertexColors: Bool
+    let meshExtractionAlgorithm: String
+    let coordinateSystem: MeshCoordinateSystem
+    let units: MeshUnits
+    let inferredUnseenGeometry: Bool
+    let vertexCount: Int
+    let triangleCount: Int
+    let bounds: MeshBounds
+    let manifest: APIImageTo3DArtifactResponse
+    let meshManifest: APIImageTo3DArtifactResponse
+    let artifacts: [APIImageTo3DArtifactResponse]
+    let timing: APIImageTo3DTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case status
+        case model
+        case checkpoint
+        case sourceWidth = "source_width"
+        case sourceHeight = "source_height"
+        case preparedWidth = "prepared_width"
+        case preparedHeight = "prepared_height"
+        case foregroundPolicy = "foreground_policy"
+        case foregroundRatio = "foreground_ratio"
+        case croppedTransparentForeground = "cropped_transparent_foreground"
+        case extractionResolution = "extraction_resolution"
+        case densityThreshold = "density_threshold"
+        case includesVertexColors = "includes_vertex_colors"
+        case meshExtractionAlgorithm = "mesh_extraction_algorithm"
+        case coordinateSystem = "coordinate_system"
+        case units
+        case inferredUnseenGeometry = "inferred_unseen_geometry"
+        case vertexCount = "vertex_count"
+        case triangleCount = "triangle_count"
+        case bounds
+        case manifest
+        case meshManifest = "mesh_manifest"
+        case artifacts
+        case timing
+    }
+}
+
 enum APIServerContract {
     static let defaultMaxTokens = 2048
     static let maxEmbeddingInputCount = 256
@@ -482,6 +937,21 @@ enum APIServerContract {
     static let defaultImageModelID = ModelResolver.ModelID.zetaNano.rawValue
     static let defaultSpeechModelID = Qwen3TTSResources.defaultModelId
     static let defaultTranscriptionModelID = ParakeetResources.defaultModelId
+    static let defaultGeometryModelID = ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue
+    static let defaultMultiViewGeometryModelID = ModelResolver.ModelID.visionGeometryDA3Small.rawValue
+    static let defaultImageTo3DModelID = ModelResolver.ModelID.image3DTripoSR.rawValue
+    static let defaultDepthVideoModelID = ModelResolver.ModelID.visionDepthVDASmall.rawValue
+    static let geometryRoutePath = "/v1/vision/geometry"
+    static let geometryRouterPath = RouterPath(geometryRoutePath)
+    static let multiViewGeometryRoutePath = "/v1/vision/geometry/multiview"
+    static let multiViewGeometryRouterPath = RouterPath(multiViewGeometryRoutePath)
+    static let maximumMultiViewGeometryUploadByteCount = 512 * 1024 * 1024
+    static let imageTo3DRoutePath = "/v1/vision/image-to-3d"
+    static let imageTo3DRouterPath = RouterPath(imageTo3DRoutePath)
+    static let maximumImageTo3DUploadByteCount = 100 * 1024 * 1024
+    static let depthVideoRoutePath = "/v1/vision/depth-video"
+    static let depthVideoRouterPath = RouterPath(depthVideoRoutePath)
+    static let maximumDepthVideoUploadByteCount = 512 * 1024 * 1024
 
     static func decodeImageGenerationRequest(from data: Data) throws -> OpenAIImageGenerationRequest {
         try decodeJSONRequest(OpenAIImageGenerationRequest.self, from: data)
@@ -552,6 +1022,53 @@ enum APIServerContract {
         let responseFormat: String
         let task: ASRTask
         let maxTokens: Int
+    }
+
+    struct GeometryPlan: Equatable, Sendable {
+        let modelID: String
+        let resolutionLevel: Int
+        let tokenCount: Int?
+        let maximumPointCount: Int?
+
+        var configuration: MoGe2InferenceConfiguration {
+            MoGe2InferenceConfiguration(
+                resolutionLevel: resolutionLevel,
+                tokenCount: tokenCount,
+                maximumPointCount: maximumPointCount
+            )
+        }
+    }
+
+    struct MultiViewGeometryPlan: Equatable, Sendable {
+        let modelID: String
+        let processResolution: Int
+        let referenceViewStrategy: DepthAnything3ReferenceViewStrategy
+        let confidencePercentile: Double
+        let maximumPointCount: Int
+        let knownCameras: [DepthAnything3KnownCamera]?
+
+        var poseConditioned: Bool { knownCameras != nil }
+    }
+
+    struct ImageTo3DPlan: Equatable, Sendable {
+        let modelID: String
+        let extractionResolution: Int
+        let densityThreshold: Float
+        let foregroundRatio: Float
+        let alreadyFramed: Bool
+        let includesVertexColors: Bool
+
+        var foregroundPolicy: TripoSRForegroundPolicy {
+            alreadyFramed
+                ? .alreadyFramed
+                : .automaticTransparentAlpha(foregroundRatio: foregroundRatio)
+        }
+    }
+
+    struct DepthVideoPlan: Equatable, Sendable {
+        let modelID: String
+        let inputSize: Int
+        let maximumFrameCount: Int
     }
 
     static func healthStatus() -> APIHealthStatus {
@@ -641,11 +1158,18 @@ enum APIServerContract {
 
     static func companionModelIDs(
         fileManager: FileManager = .default,
-        installedModelIDs: Set<String>? = nil
+        installedModelIDs: Set<String>? = nil,
+        includeLoopbackArtifactModels: Bool = true
     ) -> [String] {
-        let categories: Set<ManagedModelCategory> = [.image, .speechTTS, .speechASR, .textEmbed]
+        let categories: Set<ManagedModelCategory> = [
+            .image, .image3D, .speechTTS, .speechASR, .textEmbed, .visionGeometry, .visionDepth,
+        ]
         let ids = ManagedModelCatalog.allSpecs
             .filter { categories.contains($0.category) }
+            .filter {
+                includeLoopbackArtifactModels
+                    || !APIVFXArtifactRoutePolicy.modelIDs.contains($0.id)
+            }
             .filter { isCompanionModelInstalled($0, fileManager: fileManager, installedModelIDs: installedModelIDs) }
             .map(\.id)
         var uniqueIDs = Set(ids)
@@ -653,6 +1177,838 @@ enum APIServerContract {
             uniqueIDs.insert(QwenImageEditRepository.modelId)
         }
         return Array(uniqueIDs).sorted()
+    }
+
+    static func geometryPlan(from form: MultipartFormData) throws -> GeometryPlan {
+        let modelID = normalizedModelID(form.field("model"), defaultID: defaultGeometryModelID)
+        guard modelID == defaultGeometryModelID else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "only \(defaultGeometryModelID) is supported"
+            )
+        }
+        let resolutionLevel: Int
+        if let raw = normalizedOptional(form.field("resolution_level")) {
+            guard let value = Int(raw), (0...9).contains(value) else {
+                throw APIRequestValidationError.invalidField(
+                    "resolution_level",
+                    "must be an integer between 0 and 9"
+                )
+            }
+            resolutionLevel = value
+        } else {
+            resolutionLevel = 9
+        }
+        let tokenCount = try optionalPositiveIntField(form.field("token_count"), field: "token_count")
+        if let tokenCount,
+           (tokenCount < MoGe2InferenceConfiguration.minimumTokenCount
+            || tokenCount > MoGe2InferenceConfiguration.maximumTokenCount) {
+            throw APIRequestValidationError.invalidField(
+                "token_count",
+                "must be an integer between 1 and 3600"
+            )
+        }
+        return GeometryPlan(
+            modelID: modelID,
+            resolutionLevel: resolutionLevel,
+            tokenCount: tokenCount,
+            maximumPointCount: try optionalPositiveIntField(form.field("max_points"), field: "max_points")
+        )
+    }
+
+    static func geometryResponse(
+        from result: MoGe2RunResult,
+        createdAt: Date = Date()
+    ) throws -> APIGeometryResponse {
+        let manifest = result.export.manifest
+        let root = URL(fileURLWithPath: manifest.outputDirectory, isDirectory: true)
+        var artifacts = manifest.artifacts.map { artifact in
+            APIGeometryArtifactResponse(
+                kind: artifact.kind,
+                url: root.appendingPathComponent(artifact.relativePath).absoluteString,
+                mediaType: artifact.mediaType,
+                byteCount: artifact.byteCount,
+                sha256: artifact.sha256
+            )
+        }
+        let manifestURL = result.export.manifestURL
+        let attributes = try FileManager.default.attributesOfItem(atPath: manifestURL.path)
+        artifacts.append(
+            APIGeometryArtifactResponse(
+                kind: .manifest,
+                url: manifestURL.absoluteString,
+                mediaType: "application/json",
+                byteCount: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+                sha256: try ModelArtifactPin.fileSHA256(manifestURL)
+            )
+        )
+        artifacts.sort { lhs, rhs in
+            if lhs.kind.rawValue == rhs.kind.rawValue { return lhs.url < rhs.url }
+            return lhs.kind.rawValue < rhs.kind.rawValue
+        }
+        return APIGeometryResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            object: "vision.geometry",
+            status: "completed",
+            model: manifest.model.modelID,
+            width: manifest.width,
+            height: manifest.height,
+            units: manifest.units,
+            coordinateSystem: manifest.coordinateSystem,
+            camera: manifest.camera,
+            depthStatistics: manifest.depthStatistics,
+            focal: result.focalShift.focal,
+            shift: result.focalShift.shift,
+            metricScale: result.metricScale,
+            tokenCount: result.tokenCount,
+            manifestURL: manifestURL.absoluteString,
+            artifacts: artifacts,
+            timing: APIGeometryTimingResponse(
+                modelLoadSeconds: result.modelLoadSeconds,
+                inferenceSeconds: result.inferenceSeconds,
+                postprocessSeconds: result.postprocessSeconds
+            )
+        )
+    }
+
+    static func multiViewGeometryPlan(from form: MultipartFormData) throws -> MultiViewGeometryPlan {
+        let allowedTextFields: Set<String> = [
+            "model",
+            "process_resolution",
+            "reference_view",
+            "confidence_percentile",
+            "max_points",
+            "cameras",
+        ]
+        let allowedFileFields: Set<String> = ["image", "image[]", "cameras"]
+        for part in form.parts {
+            if part.filename != nil {
+                guard allowedFileFields.contains(part.name) else {
+                    throw APIRequestValidationError.invalidField(
+                        part.name,
+                        "unsupported file part; only uploaded image/image[] and cameras JSON files are accepted"
+                    )
+                }
+            } else {
+                guard allowedTextFields.contains(part.name) else {
+                    throw APIRequestValidationError.invalidField(
+                        part.name,
+                        "unsupported field; client input, output, model, and camera filesystem paths are not accepted"
+                    )
+                }
+                guard String(data: part.body, encoding: .utf8) != nil else {
+                    throw APIRequestValidationError.invalidField(part.name, "must contain valid UTF-8 text")
+                }
+            }
+        }
+        for field in allowedTextFields
+        where form.parts.filter({ $0.name == field && $0.filename == nil }).count > 1 {
+            throw APIRequestValidationError.invalidField(field, "must be supplied at most once")
+        }
+
+        // Multipart order is the view order. Do not regroup image and image[]
+        // aliases because cameras are indexed against this exact sequence.
+        let imageUploads = form.parts.filter {
+            $0.filename != nil && ($0.name == "image" || $0.name == "image[]")
+        }
+        guard !imageUploads.isEmpty, imageUploads.allSatisfy({ !$0.body.isEmpty }) else {
+            throw APIRequestValidationError.invalidField(
+                "image",
+                "one or more non-empty uploaded image/image[] files are required"
+            )
+        }
+        for image in imageUploads {
+            if let rawContentType = image.contentType {
+                let contentType = rawContentType
+                    .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: true)
+                    .first?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased() ?? ""
+                guard contentType.hasPrefix("image/") || contentType == "application/octet-stream" else {
+                    throw APIRequestValidationError.invalidField(
+                        image.name,
+                        "uploaded parts must have an image content type"
+                    )
+                }
+            }
+        }
+
+        let modelID = normalizedModelID(
+            form.field("model"),
+            defaultID: defaultMultiViewGeometryModelID
+        ).lowercased()
+        guard modelID == defaultMultiViewGeometryModelID else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "only the managed model id \(defaultMultiViewGeometryModelID) is supported"
+            )
+        }
+
+        let processResolution = try optionalPositiveIntField(
+            form.field("process_resolution"),
+            field: "process_resolution"
+        ) ?? 504
+        do {
+            try DepthAnything3Limits.validateRequest(
+                viewCount: imageUploads.count,
+                processResolution: processResolution
+            )
+        } catch let error as DepthAnything3LimitError {
+            let field: String
+            switch error {
+            case .processResolutionOutOfRange:
+                field = "process_resolution"
+            case .viewCountOutOfRange, .processedPixelBudgetExceeded,
+                 .invalidSourceDimensions, .sourcePixelBudgetExceeded,
+                 .totalSourcePixelBudgetExceeded, .encodedByteBudgetExceeded,
+                 .totalEncodedByteBudgetExceeded:
+                field = "image"
+            }
+            throw APIRequestValidationError.invalidField(field, error.localizedDescription)
+        }
+        let maximumPointCount = try optionalPositiveIntField(
+            form.field("max_points"),
+            field: "max_points"
+        ) ?? 1_000_000
+
+        let confidencePercentile: Double
+        if let raw = normalizedOptional(form.field("confidence_percentile")) {
+            guard let value = Double(raw), value.isFinite, (0...100).contains(value) else {
+                throw APIRequestValidationError.invalidField(
+                    "confidence_percentile",
+                    "must be a finite number between 0 and 100"
+                )
+            }
+            confidencePercentile = value
+        } else {
+            confidencePercentile = 40
+        }
+
+        let referenceViewRaw = normalizedOptional(form.field("reference_view"))?.lowercased()
+            ?? DepthAnything3ReferenceViewStrategy.saddleBalanced.rawValue
+        guard let referenceViewStrategy = DepthAnything3ReferenceViewStrategy(
+            rawValue: referenceViewRaw
+        ) else {
+            throw APIRequestValidationError.invalidField(
+                "reference_view",
+                "must be one of \(DepthAnything3ReferenceViewStrategy.allCases.map(\.rawValue).joined(separator: ", "))"
+            )
+        }
+
+        let cameraFileParts = form.files(named: "cameras")
+        let cameraTextParts = form.parts.filter { $0.name == "cameras" && $0.filename == nil }
+        guard cameraFileParts.count <= 1 else {
+            throw APIRequestValidationError.invalidField("cameras", "must be supplied at most once")
+        }
+        guard cameraFileParts.isEmpty || cameraTextParts.isEmpty else {
+            throw APIRequestValidationError.invalidField(
+                "cameras",
+                "supply either an uploaded JSON document or an inline JSON document, not both"
+            )
+        }
+        if let cameraFile = cameraFileParts.first {
+            guard !cameraFile.body.isEmpty else {
+                throw APIRequestValidationError.invalidField("cameras", "uploaded JSON document must not be empty")
+            }
+            if let rawContentType = cameraFile.contentType {
+                let contentType = rawContentType
+                    .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: true)
+                    .first?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased() ?? ""
+                guard contentType == "application/json"
+                    || contentType.hasSuffix("+json")
+                    || contentType == "application/octet-stream"
+                    || contentType == "text/json" else {
+                    throw APIRequestValidationError.invalidField(
+                        "cameras",
+                        "uploaded camera document must have a JSON content type"
+                    )
+                }
+            }
+        }
+        let cameraData = cameraFileParts.first?.body ?? cameraTextParts.first?.body
+        let knownCameras = try cameraData.map {
+            try decodeMultiViewCameraDocument($0, expectedCount: imageUploads.count)
+        }
+
+        return MultiViewGeometryPlan(
+            modelID: modelID,
+            processResolution: processResolution,
+            referenceViewStrategy: referenceViewStrategy,
+            confidencePercentile: confidencePercentile,
+            maximumPointCount: maximumPointCount,
+            knownCameras: knownCameras
+        )
+    }
+
+    static func multiViewGeometryResponse(
+        from result: DepthAnything3RunResult,
+        export: MultiViewGeometryExportResult,
+        exportSeconds: Double,
+        createdAt: Date = Date()
+    ) throws -> APIMultiViewGeometryResponse {
+        let scene = export.manifest
+        let root = URL(fileURLWithPath: scene.outputDirectory, isDirectory: true)
+        let manifest = try multiViewGeometryFileArtifact(
+            kind: "manifest",
+            viewIndex: nil,
+            url: export.manifestURL,
+            mediaType: "application/json"
+        )
+        let artifacts = scene.artifacts.map { artifact in
+            APIMultiViewGeometryArtifactResponse(
+                kind: artifact.kind.rawValue,
+                viewIndex: artifact.viewIndex,
+                url: root.appendingPathComponent(artifact.relativePath).absoluteString,
+                mediaType: artifact.mediaType,
+                byteCount: artifact.byteCount,
+                sha256: artifact.sha256
+            )
+        }.sorted { lhs, rhs in
+            if lhs.viewIndex != rhs.viewIndex {
+                return (lhs.viewIndex ?? Int.max) < (rhs.viewIndex ?? Int.max)
+            }
+            if lhs.kind != rhs.kind { return lhs.kind < rhs.kind }
+            return lhs.url < rhs.url
+        }
+        let cameras = try scene.views.map { view in
+            guard let extrinsics = view.camera.extrinsics else {
+                throw APIRequestValidationError.invalidField(
+                    "result",
+                    "multi-view camera \(view.index) is missing extrinsics"
+                )
+            }
+            return APIMultiViewGeometryCameraResponse(
+                viewIndex: view.index,
+                width: view.width,
+                height: view.height,
+                intrinsics: view.camera.intrinsics,
+                extrinsics: extrinsics,
+                selectedPointCount: view.selectedPointCount
+            )
+        }.sorted { $0.viewIndex < $1.viewIndex }
+        let totalSeconds = result.checkpointVerificationSeconds
+            + result.decodingSeconds
+            + result.preprocessingSeconds
+            + result.modelLoadSeconds
+            + result.inferenceSeconds
+            + result.postprocessingSeconds
+            + exportSeconds
+        return APIMultiViewGeometryResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            object: "vision.geometry.multiview",
+            status: "completed",
+            model: result.checkpoint.modelID,
+            checkpoint: APIMultiViewGeometryCheckpointResponse(
+                repository: result.checkpoint.repository,
+                revision: result.checkpoint.revision,
+                sourceRepository: result.checkpoint.sourceRepository,
+                sourceRevision: result.checkpoint.sourceRevision,
+                license: result.checkpoint.license,
+                weightsByteCount: result.checkpoint.weightsByteCount,
+                weightsSHA256: result.checkpoint.weightsSHA256,
+                configurationByteCount: result.checkpoint.configurationByteCount,
+                configurationSHA256: result.checkpoint.configurationSHA256
+            ),
+            units: scene.units,
+            coordinateSystem: scene.coordinateSystem,
+            poseConditioned: scene.poseConditioned,
+            cameraSemantics: result.cameraSemantics,
+            cameraScaleAlignment: result.cameraScaleAlignment,
+            referenceViewStrategy: result.referenceViewStrategy,
+            depthScaleDivisor: result.depthScaleDivisor,
+            processResolution: result.processResolution,
+            confidencePercentile: scene.confidencePercentile,
+            confidenceThreshold: scene.confidenceThreshold,
+            viewCount: scene.views.count,
+            cameraCount: cameras.count,
+            pointCount: scene.pointCount,
+            pointCloudRepresentation: scene.pointCloudRepresentation,
+            containsMesh: false,
+            containsGaussianParameters: scene.threeDGaussianHandoff.containsGaussianParameters,
+            threeDGaussianHandoff: scene.threeDGaussianHandoff,
+            cameras: cameras,
+            manifest: manifest,
+            artifacts: artifacts,
+            timing: APIMultiViewGeometryTimingResponse(
+                checkpointVerificationSeconds: result.checkpointVerificationSeconds,
+                decodingSeconds: result.decodingSeconds,
+                preprocessingSeconds: result.preprocessingSeconds,
+                modelLoadSeconds: result.modelLoadSeconds,
+                inferenceSeconds: result.inferenceSeconds,
+                postprocessingSeconds: result.postprocessingSeconds,
+                exportSeconds: exportSeconds,
+                totalSeconds: totalSeconds
+            )
+        )
+    }
+
+    private static func decodeMultiViewCameraDocument(
+        _ data: Data,
+        expectedCount: Int
+    ) throws -> [DepthAnything3KnownCamera] {
+        let document: DepthAnything3CameraDocument
+        do {
+            document = try JSONDecoder().decode(DepthAnything3CameraDocument.self, from: data)
+        } catch {
+            throw APIRequestValidationError.invalidField(
+                "cameras",
+                "must be a valid schemaVersion 1 camera JSON document"
+            )
+        }
+        guard document.schemaVersion == 1 else {
+            throw APIRequestValidationError.invalidField(
+                "cameras",
+                "unsupported schemaVersion \(document.schemaVersion); expected 1"
+            )
+        }
+        guard document.cameras.count == expectedCount else {
+            throw APIRequestValidationError.invalidField(
+                "cameras",
+                "contains \(document.cameras.count) cameras for \(expectedCount) uploaded images"
+            )
+        }
+        for (index, camera) in document.cameras.enumerated() {
+            do {
+                try DepthAnything3CameraValidation.validate(camera, index: index)
+            } catch {
+                throw APIRequestValidationError.invalidField(
+                    "cameras",
+                    error.localizedDescription
+                )
+            }
+        }
+        return document.cameras
+    }
+
+    private static func multiViewGeometryFileArtifact(
+        kind: String,
+        viewIndex: Int?,
+        url: URL,
+        mediaType: String
+    ) throws -> APIMultiViewGeometryArtifactResponse {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return APIMultiViewGeometryArtifactResponse(
+            kind: kind,
+            viewIndex: viewIndex,
+            url: url.absoluteString,
+            mediaType: mediaType,
+            byteCount: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+            sha256: try ModelArtifactPin.fileSHA256(url)
+        )
+    }
+
+    static func imageTo3DPlan(from form: MultipartFormData) throws -> ImageTo3DPlan {
+        let allowedTextFields: Set<String> = [
+            "model",
+            "resolution",
+            "density_threshold",
+            "foreground_ratio",
+            "already_framed",
+            "vertex_colors",
+        ]
+        for part in form.parts {
+            if part.filename != nil {
+                guard part.name == "image" else {
+                    throw APIRequestValidationError.invalidField(
+                        part.name,
+                        "only one uploaded image file is accepted"
+                    )
+                }
+            } else {
+                guard allowedTextFields.contains(part.name) else {
+                    throw APIRequestValidationError.invalidField(
+                        part.name,
+                        "unsupported field; client input, output, and checkpoint paths are not accepted"
+                    )
+                }
+                guard String(data: part.body, encoding: .utf8) != nil else {
+                    throw APIRequestValidationError.invalidField(part.name, "must contain valid UTF-8 text")
+                }
+            }
+        }
+        for field in allowedTextFields
+        where form.parts.filter({ $0.name == field && $0.filename == nil }).count > 1 {
+            throw APIRequestValidationError.invalidField(field, "must be supplied at most once")
+        }
+
+        let uploads = form.files(named: "image")
+        guard uploads.count == 1, let upload = uploads.first, !upload.body.isEmpty else {
+            throw APIRequestValidationError.invalidField(
+                "image",
+                "exactly one non-empty uploaded image file is required"
+            )
+        }
+        if let rawContentType = upload.contentType {
+            let contentType = rawContentType
+                .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: true)
+                .first?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() ?? ""
+            guard contentType.hasPrefix("image/") || contentType == "application/octet-stream" else {
+                throw APIRequestValidationError.invalidField(
+                    "image",
+                    "uploaded part must have an image content type"
+                )
+            }
+        }
+
+        let modelID = normalizedModelID(
+            form.field("model"),
+            defaultID: defaultImageTo3DModelID
+        ).lowercased()
+        guard modelID == defaultImageTo3DModelID else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "only the managed model id \(defaultImageTo3DModelID) is supported"
+            )
+        }
+
+        let extractionResolution = try optionalPositiveIntField(
+            form.field("resolution"),
+            field: "resolution"
+        ) ?? 256
+        guard (2...512).contains(extractionResolution) else {
+            throw APIRequestValidationError.invalidField(
+                "resolution",
+                "must be an integer between 2 and 512"
+            )
+        }
+
+        let densityThreshold: Float
+        if let raw = normalizedOptional(form.field("density_threshold")) {
+            guard let value = Float(raw), value.isFinite else {
+                throw APIRequestValidationError.invalidField(
+                    "density_threshold",
+                    "must be a finite number"
+                )
+            }
+            densityThreshold = value
+        } else {
+            densityThreshold = TripoSRConfiguration.production.densityThreshold
+        }
+
+        let foregroundRatio: Float
+        if let raw = normalizedOptional(form.field("foreground_ratio")) {
+            guard let value = Float(raw), value.isFinite, value > 0, value <= 1 else {
+                throw APIRequestValidationError.invalidField(
+                    "foreground_ratio",
+                    "must be greater than 0 and at most 1"
+                )
+            }
+            foregroundRatio = value
+        } else {
+            foregroundRatio = 0.85
+        }
+
+        return ImageTo3DPlan(
+            modelID: modelID,
+            extractionResolution: extractionResolution,
+            densityThreshold: densityThreshold,
+            foregroundRatio: foregroundRatio,
+            alreadyFramed: try multipartBoolean(
+                form.field("already_framed"),
+                field: "already_framed",
+                defaultValue: false
+            ),
+            includesVertexColors: try multipartBoolean(
+                form.field("vertex_colors"),
+                field: "vertex_colors",
+                defaultValue: true
+            )
+        )
+    }
+
+    static func imageTo3DResponse(
+        from result: TripoSRRunResult,
+        createdAt: Date = Date()
+    ) throws -> APIImageTo3DResponse {
+        let mesh = result.export.manifest
+        let root = URL(fileURLWithPath: mesh.outputDirectory, isDirectory: true)
+        let artifacts = result.runManifest.manifest.artifacts.map { artifact in
+            APIImageTo3DArtifactResponse(
+                kind: artifact.kind,
+                url: root.appendingPathComponent(artifact.relativePath).absoluteString,
+                mediaType: artifact.mediaType,
+                byteCount: artifact.byteCount,
+                sha256: artifact.sha256
+            )
+        }.sorted { lhs, rhs in
+            if lhs.kind != rhs.kind { return lhs.kind < rhs.kind }
+            return lhs.url < rhs.url
+        }
+        let manifest = try imageTo3DFileArtifact(
+            kind: "manifest",
+            url: result.runManifest.manifestURL,
+            mediaType: "application/json"
+        )
+        let meshManifest = try imageTo3DFileArtifact(
+            kind: "mesh-manifest",
+            url: result.export.manifestURL,
+            mediaType: "application/json"
+        )
+        let totalSeconds = result.checkpointVerificationSeconds
+            + result.decodingSeconds
+            + result.preprocessingSeconds
+            + result.modelLoadSeconds
+            + result.sceneEncodingSeconds
+            + result.meshExtractionSeconds
+            + result.exportSeconds
+        return APIImageTo3DResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            object: "vision.image-to-3d",
+            status: "completed",
+            model: result.checkpoint.modelID,
+            checkpoint: APIImageTo3DCheckpointResponse(
+                repository: result.checkpoint.repository,
+                revision: result.checkpoint.revision,
+                sourceRepository: result.checkpoint.sourceRepository,
+                sourceRevision: result.checkpoint.sourceRevision,
+                license: result.checkpoint.license,
+                format: result.checkpoint.format,
+                weightsByteCount: result.checkpoint.weightsByteCount,
+                weightsSHA256: result.checkpoint.weightsSHA256,
+                sourceSHA256: result.checkpoint.sourceSHA256,
+                configurationSHA256: result.checkpoint.configurationSHA256
+            ),
+            sourceWidth: result.sourceWidth,
+            sourceHeight: result.sourceHeight,
+            preparedWidth: result.preparedWidth,
+            preparedHeight: result.preparedHeight,
+            foregroundPolicy: result.foregroundPolicy,
+            foregroundRatio: result.foregroundRatio,
+            croppedTransparentForeground: result.croppedTransparentForeground,
+            extractionResolution: result.extractionResolution,
+            densityThreshold: result.densityThreshold,
+            includesVertexColors: result.includesVertexColors,
+            meshExtractionAlgorithm: TripoSRRunManifestExporter.extractionAlgorithm,
+            coordinateSystem: mesh.coordinateSystem,
+            units: mesh.units,
+            inferredUnseenGeometry: mesh.inferredUnseenGeometry,
+            vertexCount: mesh.vertexCount,
+            triangleCount: mesh.triangleCount,
+            bounds: mesh.bounds,
+            manifest: manifest,
+            meshManifest: meshManifest,
+            artifacts: artifacts,
+            timing: APIImageTo3DTimingResponse(
+                checkpointVerificationSeconds: result.checkpointVerificationSeconds,
+                decodingSeconds: result.decodingSeconds,
+                preprocessingSeconds: result.preprocessingSeconds,
+                modelLoadSeconds: result.modelLoadSeconds,
+                sceneEncodingSeconds: result.sceneEncodingSeconds,
+                meshExtractionSeconds: result.meshExtractionSeconds,
+                exportSeconds: result.exportSeconds,
+                totalSeconds: totalSeconds
+            )
+        )
+    }
+
+    private static func imageTo3DFileArtifact(
+        kind: String,
+        url: URL,
+        mediaType: String
+    ) throws -> APIImageTo3DArtifactResponse {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return APIImageTo3DArtifactResponse(
+            kind: kind,
+            url: url.absoluteString,
+            mediaType: mediaType,
+            byteCount: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+            sha256: try ModelArtifactPin.fileSHA256(url)
+        )
+    }
+
+    private static func multipartBoolean(
+        _ raw: String?,
+        field: String,
+        defaultValue: Bool
+    ) throws -> Bool {
+        guard let value = normalizedOptional(raw)?.lowercased() else { return defaultValue }
+        switch value {
+        case "true", "1": return true
+        case "false", "0": return false
+        default:
+            throw APIRequestValidationError.invalidField(
+                field,
+                "must be true, false, 1, or 0"
+            )
+        }
+    }
+
+    static func depthVideoPlan(from form: MultipartFormData) throws -> DepthVideoPlan {
+        let allowedFields: Set<String> = ["model", "input_size", "max_frames"]
+        for part in form.parts {
+            if part.filename != nil {
+                guard part.name == "video" else {
+                    throw APIRequestValidationError.invalidField(
+                        part.name,
+                        "only a single uploaded 'video' file is accepted"
+                    )
+                }
+            } else if !allowedFields.contains(part.name) {
+                throw APIRequestValidationError.invalidField(
+                    part.name,
+                    "unsupported field; client filesystem paths are not accepted"
+                )
+            }
+        }
+        for field in allowedFields where form.parts.filter({ $0.name == field && $0.filename == nil }).count > 1 {
+            throw APIRequestValidationError.invalidField(field, "must be supplied at most once")
+        }
+
+        let uploads = form.files(named: "video")
+        guard uploads.count == 1, let upload = uploads.first, !upload.body.isEmpty else {
+            throw APIRequestValidationError.invalidField(
+                "video",
+                "exactly one non-empty uploaded video file is required"
+            )
+        }
+        if let contentType = upload.contentType?.lowercased(),
+           !contentType.hasPrefix("video/"),
+           contentType != "application/octet-stream" {
+            throw APIRequestValidationError.invalidField(
+                "video",
+                "uploaded part must have a video content type"
+            )
+        }
+
+        let modelID = normalizedModelID(
+            form.field("model"),
+            defaultID: defaultDepthVideoModelID
+        ).lowercased()
+        let supportedModelIDs = Set(VideoDepthAnythingVariant.allCases.map(\.modelID))
+        guard supportedModelIDs.contains(modelID) else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "only \(supportedModelIDs.sorted().joined(separator: ", ")) are supported"
+            )
+        }
+
+        let inputSize = try optionalPositiveIntField(
+                form.field("input_size"),
+                field: "input_size"
+            ) ?? VideoDepthAnythingLimits.defaultInputSize
+        let maximumFrameCount = try optionalPositiveIntField(
+                form.field("max_frames"),
+                field: "max_frames"
+            ) ?? VideoDepthAnythingLimits.defaultMaximumFrameCount
+        do {
+            _ = try VideoDepthAnythingLimits.validateRequest(
+                inputSize: inputSize,
+                maximumFrameCount: maximumFrameCount
+            )
+        } catch let error as VideoDepthAnythingLimitError {
+            let field: String
+            switch error {
+            case .inputSizeOutOfRange:
+                field = "input_size"
+            default:
+                field = "max_frames"
+            }
+            throw APIRequestValidationError.invalidField(field, error.localizedDescription)
+        } catch {
+            throw APIRequestValidationError.invalidField("video", error.localizedDescription)
+        }
+        return DepthVideoPlan(
+            modelID: modelID,
+            inputSize: inputSize,
+            maximumFrameCount: maximumFrameCount
+        )
+    }
+
+    static func depthVideoResponse(
+        from result: VideoDepthAnythingRunResult,
+        createdAt: Date = Date()
+    ) throws -> APIDepthVideoResponse {
+        let sequence = result.export.manifest
+        let root = URL(fileURLWithPath: sequence.outputDirectory, isDirectory: true)
+        let manifest = try depthVideoFileArtifact(
+            kind: GeometryArtifactKind.manifest.rawValue,
+            frameIndex: nil,
+            url: result.export.manifestURL,
+            mediaType: "application/json"
+        )
+        let review = APIDepthVideoArtifactResponse(
+            kind: result.reviewVideo.kind,
+            frameIndex: nil,
+            url: root.appendingPathComponent(result.reviewVideo.relativePath).absoluteString,
+            mediaType: result.reviewVideo.mediaType,
+            byteCount: result.reviewVideo.byteCount,
+            sha256: result.reviewVideo.sha256
+        )
+        let artifacts = sequence.frames.flatMap { frame in
+            frame.artifacts.map { artifact in
+                APIDepthVideoArtifactResponse(
+                    kind: artifact.kind.rawValue,
+                    frameIndex: frame.index,
+                    url: root.appendingPathComponent(artifact.relativePath).absoluteString,
+                    mediaType: artifact.mediaType,
+                    byteCount: artifact.byteCount,
+                    sha256: artifact.sha256
+                )
+            }
+        }.sorted { lhs, rhs in
+            if lhs.frameIndex != rhs.frameIndex {
+                return (lhs.frameIndex ?? -1) < (rhs.frameIndex ?? -1)
+            }
+            if lhs.kind != rhs.kind { return lhs.kind < rhs.kind }
+            return lhs.url < rhs.url
+        }
+        let timing = APIDepthVideoTimingResponse(
+            checkpointVerificationSeconds: result.checkpointVerificationSeconds,
+            frameExtractionSeconds: result.frameExtractionSeconds,
+            modelLoadSeconds: result.modelLoadSeconds,
+            inferenceSeconds: result.inferenceSeconds,
+            exportSeconds: result.exportSeconds,
+            totalSeconds: result.checkpointVerificationSeconds
+                + result.frameExtractionSeconds
+                + result.modelLoadSeconds
+                + result.inferenceSeconds
+                + result.exportSeconds
+        )
+        return APIDepthVideoResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            object: "vision.depth-video",
+            status: "completed",
+            model: sequence.model.modelID,
+            semantics: sequence.semantics,
+            checkpointFormat: result.checkpoint.format,
+            checkpointSHA256: result.checkpoint.weightsSHA256,
+            width: sequence.width,
+            height: sequence.height,
+            fps: sequence.fps,
+            frameCount: sequence.frameCount,
+            windowCount: result.windowCount,
+            temporalWindowLength: sequence.temporalWindowLength,
+            temporalOverlap: sequence.temporalOverlap,
+            hasConfidence: sequence.frames.contains { $0.confidencePath != nil },
+            hasCameraIntrinsics: sequence.frames.contains { $0.intrinsics != nil },
+            hasCameraExtrinsics: false,
+            hasPointCloud: false,
+            manifest: manifest,
+            review: review,
+            artifacts: artifacts,
+            timing: timing
+        )
+    }
+
+    private static func depthVideoFileArtifact(
+        kind: String,
+        frameIndex: Int?,
+        url: URL,
+        mediaType: String
+    ) throws -> APIDepthVideoArtifactResponse {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return APIDepthVideoArtifactResponse(
+            kind: kind,
+            frameIndex: frameIndex,
+            url: url.absoluteString,
+            mediaType: mediaType,
+            byteCount: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+            sha256: try ModelArtifactPin.fileSHA256(url)
+        )
     }
 
     static func imageGenerationPlan(
@@ -1724,6 +3080,134 @@ private extension Data {
     }
 }
 
+struct APIServerRequestContext: RequestContext, RemoteAddressRequestContext {
+    var coreContext: CoreRequestContextStorage
+    let remoteAddress: SocketAddress?
+
+    init(source: Source) {
+        self.coreContext = CoreRequestContextStorage(source: source)
+        self.remoteAddress = source.channel.remoteAddress
+    }
+}
+
+enum APIVFXArtifactRoutePolicy {
+    /// Successful responses expose server-local `file:` URLs for this long.
+    static let outputTTLSeconds: UInt64 = 60 * 60
+    static let denialMessage = "VFX artifact routes are loopback-only because responses contain server-local file URLs; authenticated remote clients cannot use this route."
+
+    static var routePaths: Set<String> {
+        [
+            APIServerContract.geometryRoutePath,
+            APIServerContract.multiViewGeometryRoutePath,
+            APIServerContract.imageTo3DRoutePath,
+            APIServerContract.instantMeshRoutePath,
+            APIServerContract.depthVideoRoutePath,
+        ]
+    }
+
+    static var modelIDs: Set<String> {
+        [
+            APIServerContract.defaultGeometryModelID,
+            APIServerContract.defaultMultiViewGeometryModelID,
+            APIServerContract.defaultImageTo3DModelID,
+            APIServerContract.defaultInstantMeshModelID,
+            ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+        ]
+    }
+
+    /// Trust only the connected peer socket. Proxy headers are intentionally
+    /// ignored because this server has no trusted-proxy configuration.
+    static func allows(remoteAddress: SocketAddress?) -> Bool {
+        guard let remoteAddress else { return false }
+        switch remoteAddress {
+        case .v4:
+            guard let address = remoteAddress.ipAddress else { return false }
+            return address.split(separator: ".", omittingEmptySubsequences: false).first == "127"
+        case .v6:
+            guard let address = remoteAddress.ipAddress?.lowercased() else { return false }
+            return address == "::1" || address.hasPrefix("::ffff:127.")
+        case .unixDomainSocket:
+            return true
+        }
+    }
+}
+
+enum APIVFXClientErrorPolicy {
+    static func status(for error: Error) -> HTTPResponse.Status? {
+        switch error {
+        case is MoGe2TokenGridError,
+             is VideoDepthAnythingLimitError,
+             is DepthAnything3LimitError,
+             is MediaIOError,
+             is VFXImageInputValidationError,
+             is DepthAnything3CameraValidationError,
+             is DepthAnything3CameraConditioningError,
+             is DepthAnything3PreprocessingError,
+             is VideoDepthAnythingPreprocessingError,
+             is VideoDepthAnythingWindowingError,
+             is MultiViewGeometryExportConfigurationError,
+             is TripoSRPreprocessingError,
+             is InstantMeshPreprocessingError:
+            return .badRequest
+        default:
+            return nil
+        }
+    }
+}
+
+struct APIArtifactDirectoryCleanupScheduler: Sendable {
+    static let productionDelayNanoseconds = APIVFXArtifactRoutePolicy.outputTTLSeconds * 1_000_000_000
+
+    let delayNanoseconds: UInt64
+    private let sleeper: @Sendable (UInt64) async throws -> Void
+    private let removeDirectory: @Sendable (URL) -> Void
+
+    init(
+        delayNanoseconds: UInt64 = productionDelayNanoseconds,
+        sleeper: @escaping @Sendable (UInt64) async throws -> Void = {
+            try await Task.sleep(nanoseconds: $0)
+        },
+        removeDirectory: @escaping @Sendable (URL) -> Void = {
+            try? FileManager.default.removeItem(at: $0)
+        }
+    ) {
+        self.delayNanoseconds = delayNanoseconds
+        self.sleeper = sleeper
+        self.removeDirectory = removeDirectory
+    }
+
+    func scheduleCleanup(of directory: URL) {
+        let delayNanoseconds = delayNanoseconds
+        let sleeper = sleeper
+        let removeDirectory = removeDirectory
+        Task.detached(priority: .utility) {
+            do {
+                try await sleeper(delayNanoseconds)
+            } catch {
+                return
+            }
+            removeDirectory(directory)
+        }
+    }
+}
+
+func withVFXRequestAdmission<T: Sendable>(
+    using admission: RuntimeRequestAdmission,
+    isolation _: isolated (any Actor)? = #isolation,
+    operation: () async throws -> T
+) async throws -> T {
+    let lease = try await admission.acquire()
+    do {
+        let result = try await operation()
+        await lease.release()
+        return result
+    } catch {
+        await lease.release()
+        throw error
+    }
+}
+
 // MARK: - Server Implementation
 
 actor CodeGenServer {
@@ -1735,6 +3219,7 @@ actor CodeGenServer {
     private let requestAdmission: RuntimeRequestAdmission
     private let pool: RuntimeModelPool
     private let sidecarPool: APISidecarModelPool
+    private let artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler
 
     init(
         defaultModelID: String,
@@ -1746,13 +3231,15 @@ actor CodeGenServer {
         engine: APIEngine,
         contextSize: Int = 32768,
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
-        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
+        artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler = APIArtifactDirectoryCleanupScheduler()
     ) async throws {
         self.apiKey = apiKey
         self.contextSize = contextSize
         self.fallbackLoraPath = fallbackLoraPath
         self.defaultModelID = defaultModelID
         self.requestLimiter = APIRateLimiter(limitPerMinute: rateLimitPerMinute)
+        self.artifactCleanupScheduler = artifactCleanupScheduler
         // Continuous batching follows the request-concurrency setting: any
         // --max-active-requests above 1 enables it for the engines that
         // support it, with the per-engine env switches as explicit overrides.
@@ -1807,6 +3294,12 @@ actor CodeGenServer {
         print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
         print("Images endpoint: http://\(host):\(port)/v1/images/generations")
         print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
+        print("VFX artifact endpoints are loopback-only; local file URLs expire after one hour.")
+        print("Geometry endpoint: http://\(host):\(port)/v1/vision/geometry")
+        print("Multi-view geometry endpoint: http://\(host):\(port)\(APIServerContract.multiViewGeometryRoutePath)")
+        print("Image-to-3D endpoint: http://\(host):\(port)\(APIServerContract.imageTo3DRoutePath)")
+        print("Multi-view image-to-3D endpoint: http://\(host):\(port)\(APIServerContract.instantMeshRoutePath)")
+        print("Video depth endpoint: http://\(host):\(port)\(APIServerContract.depthVideoRoutePath)")
         print("Speech endpoint: http://\(host):\(port)/v1/audio/speech")
         print("Transcriptions endpoint: http://\(host):\(port)/v1/audio/transcriptions")
         print("Press Ctrl+C to stop.")
@@ -1814,8 +3307,8 @@ actor CodeGenServer {
         try await app.runService()
     }
 
-    nonisolated func buildRouter() -> Router<BasicRequestContext> {
-        let router = Router()
+    nonisolated func buildRouter() -> Router<APIServerRequestContext> {
+        let router = Router(context: APIServerRequestContext.self)
 
         // Health check
         router.get("/health") { _, _ in
@@ -1828,8 +3321,11 @@ actor CodeGenServer {
         }
 
         // List models
-        router.get("/v1/models") { [self] request, _ in
-            return try await self.handleModels(request)
+        router.get("/v1/models") { [self] request, context in
+            return try await self.handleModels(
+                request,
+                remoteAddress: context.remoteAddress
+            )
         }
 
         // Chat completions
@@ -1848,6 +3344,41 @@ actor CodeGenServer {
 
         router.post("/v1/images/edits") { [self] request, _ in
             return try await self.handleImageEdits(request)
+        }
+
+        router.post(APIServerContract.geometryRouterPath) { [self] request, context in
+            return try await self.handleVisionGeometry(
+                request,
+                remoteAddress: context.remoteAddress
+            )
+        }
+
+        router.post(APIServerContract.multiViewGeometryRouterPath) { [self] request, context in
+            return try await self.handleVisionMultiViewGeometry(
+                request,
+                remoteAddress: context.remoteAddress
+            )
+        }
+
+        router.post(APIServerContract.imageTo3DRouterPath) { [self] request, context in
+            return try await self.handleVisionImageTo3D(
+                request,
+                remoteAddress: context.remoteAddress
+            )
+        }
+
+        router.post(APIServerContract.instantMeshRouterPath) { [self] request, context in
+            return try await self.handleVisionInstantMesh(
+                request,
+                remoteAddress: context.remoteAddress
+            )
+        }
+
+        router.post(APIServerContract.depthVideoRouterPath) { [self] request, context in
+            return try await self.handleVisionDepthVideo(
+                request,
+                remoteAddress: context.remoteAddress
+            )
         }
 
         router.post("/v1/audio/speech") { [self] request, _ in
@@ -1909,12 +3440,23 @@ actor CodeGenServer {
         return router
     }
 
-    private func handleModels(_ request: Request) async throws -> Response {
+    private func handleModels(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
         }
+        let includeLoopbackArtifactModels = APIVFXArtifactRoutePolicy.allows(
+            remoteAddress: remoteAddress
+        )
         var models = try await pool.modelsResponse()
-        for modelID in APIServerContract.companionModelIDs()
+        if !includeLoopbackArtifactModels {
+            models.data.removeAll { APIVFXArtifactRoutePolicy.modelIDs.contains($0.id) }
+        }
+        for modelID in APIServerContract.companionModelIDs(
+            includeLoopbackArtifactModels: includeLoopbackArtifactModels
+        )
             where !models.data.contains(where: { $0.id == modelID }) {
             models.data.append(
                 OpenAIModel(
@@ -2166,7 +3708,10 @@ actor CodeGenServer {
         }
 
         do {
-            let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
+            let form = try MultipartFormData.parse(
+                body: Data(body.readableBytesView),
+                boundary: boundary
+            )
             let imageFiles = (form.files(named: "image") + form.files(named: "image[]"))
                 .filter { !$0.body.isEmpty }
             guard !imageFiles.isEmpty else {
@@ -2200,6 +3745,459 @@ actor CodeGenServer {
         }
     }
 
+    private func handleVisionGeometry(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
+        if let rejection = vfxArtifactAccessResponseIfNeeded(
+            for: request,
+            remoteAddress: remoteAddress
+        ) {
+            return rejection
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        do {
+            return try await withVFXRequestAdmission(using: requestAdmission) {
+                let body: ByteBuffer
+                do {
+                    body = try await request.body.collect(upTo: 100 * 1024 * 1024)
+                } catch {
+                    return makeErrorResponse(
+                        status: .badRequest,
+                        message: "Invalid request body.",
+                        type: "invalid_request_error"
+                    )
+                }
+                let form = try MultipartFormData.parse(
+                    body: Data(body.readableBytesView),
+                    boundary: boundary
+                )
+                guard let image = form.file(named: "image"), !image.body.isEmpty else {
+                    throw APIRequestValidationError.invalidField("image", "image file is required")
+                }
+                if let contentType = image.contentType?.lowercased(),
+                    !contentType.hasPrefix("image/") && contentType != "application/octet-stream"
+                {
+                    throw APIRequestValidationError.invalidField("image", "uploaded part must be an image")
+                }
+                let plan = try APIServerContract.geometryPlan(from: form)
+                let inputURL = try writeMultipartFile(
+                    image,
+                    directoryName: "mere-run-api-geometry-inputs",
+                    defaultExtension: "png"
+                )
+                defer { try? FileManager.default.removeItem(at: inputURL) }
+                let outputDirectory = try temporaryOutputDirectory(directoryName: "mere-run-api-geometry")
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                let generator = MoGe2Generator()
+                do {
+                    let result = try await generator.generate(
+                        imageURL: inputURL,
+                        outputDirectory: outputDirectory,
+                        model: nil,
+                        configuration: plan.configuration,
+                        progress: nil
+                    )
+                    await generator.unload()
+                    return try retainedArtifactJSONResponse(
+                        APIServerContract.geometryResponse(from: result),
+                        outputDirectory: outputDirectory
+                    )
+                } catch {
+                    await generator.unload()
+                    try? FileManager.default.removeItem(at: outputDirectory)
+                    throw error
+                }
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleVisionMultiViewGeometry(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
+        if let rejection = vfxArtifactAccessResponseIfNeeded(
+            for: request,
+            remoteAddress: remoteAddress
+        ) {
+            return rejection
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        do {
+            return try await withVFXRequestAdmission(using: requestAdmission) {
+                let body: ByteBuffer
+                do {
+                    body = try await request.body.collect(
+                        upTo: APIServerContract.maximumMultiViewGeometryUploadByteCount
+                    )
+                } catch {
+                    return makeErrorResponse(
+                        status: .badRequest,
+                        message: "Invalid request body or multi-view upload exceeds 512 MiB.",
+                        type: "invalid_request_error"
+                    )
+                }
+                let form = try MultipartFormData.parse(
+                    body: Data(body.readableBytesView),
+                    boundary: boundary
+                )
+                let plan = try APIServerContract.multiViewGeometryPlan(from: form)
+                let imageParts = form.parts.filter {
+                    $0.filename != nil && ($0.name == "image" || $0.name == "image[]")
+                }
+                let inputURLs = try imageParts.map {
+                    try writeMultipartFile(
+                        $0,
+                        directoryName: "mere-run-api-geometry-multiview-inputs",
+                        defaultExtension: "png"
+                    )
+                }
+                defer {
+                    for url in inputURLs { try? FileManager.default.removeItem(at: url) }
+                }
+                let outputDirectory = try temporaryOutputDirectory(
+                    directoryName: "mere-run-api-geometry-multiview"
+                )
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                let generator = DepthAnything3Generator()
+                do {
+                    let result = try await generator.generate(
+                        imageURLs: inputURLs,
+                        model: plan.modelID,
+                        knownCameras: plan.knownCameras,
+                        referenceViewStrategy: plan.referenceViewStrategy,
+                        processResolution: plan.processResolution,
+                        progress: nil
+                    )
+                    let exportStart = Date()
+                    let export = try MultiViewGeometryExporter.export(
+                        run: result,
+                        outputDirectory: outputDirectory,
+                        configuration: try MultiViewGeometryExportConfiguration(
+                            confidencePercentile: plan.confidencePercentile,
+                            maximumPointCount: plan.maximumPointCount
+                        )
+                    )
+                    let exportSeconds = Date().timeIntervalSince(exportStart)
+                    await generator.unload()
+                    return try retainedArtifactJSONResponse(
+                        APIServerContract.multiViewGeometryResponse(
+                            from: result,
+                            export: export,
+                            exportSeconds: exportSeconds
+                        ),
+                        outputDirectory: outputDirectory
+                    )
+                } catch {
+                    await generator.unload()
+                    try? FileManager.default.removeItem(at: outputDirectory)
+                    throw error
+                }
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleVisionImageTo3D(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
+        if let rejection = vfxArtifactAccessResponseIfNeeded(
+            for: request,
+            remoteAddress: remoteAddress
+        ) {
+            return rejection
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        do {
+            return try await withVFXRequestAdmission(using: requestAdmission) {
+                let body: ByteBuffer
+                do {
+                    body = try await request.body.collect(
+                        upTo: APIServerContract.maximumImageTo3DUploadByteCount
+                    )
+                } catch {
+                    return makeErrorResponse(
+                        status: .badRequest,
+                        message: "Invalid request body or image upload exceeds 100 MiB.",
+                        type: "invalid_request_error"
+                    )
+                }
+                let form = try MultipartFormData.parse(
+                    body: Data(body.readableBytesView),
+                    boundary: boundary
+                )
+                let plan = try APIServerContract.imageTo3DPlan(from: form)
+                guard let image = form.file(named: "image") else {
+                    throw APIRequestValidationError.invalidField(
+                        "image",
+                        "exactly one non-empty uploaded image file is required"
+                    )
+                }
+                let inputURL = try writeMultipartFile(
+                    image,
+                    directoryName: "mere-run-api-image-to-3d-inputs",
+                    defaultExtension: "png"
+                )
+                defer { try? FileManager.default.removeItem(at: inputURL) }
+                let outputDirectory = try temporaryOutputDirectory(
+                    directoryName: "mere-run-api-image-to-3d"
+                )
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                let generator = TripoSRGenerator()
+                do {
+                    let result = try await generator.generate(
+                        imageURL: inputURL,
+                        outputDirectory: outputDirectory,
+                        model: plan.modelID,
+                        foregroundPolicy: plan.foregroundPolicy,
+                        extractionResolution: plan.extractionResolution,
+                        densityThreshold: plan.densityThreshold,
+                        includeVertexColors: plan.includesVertexColors,
+                        progress: nil
+                    )
+                    await generator.unload()
+                    return try retainedArtifactJSONResponse(
+                        APIServerContract.imageTo3DResponse(from: result),
+                        outputDirectory: outputDirectory
+                    )
+                } catch {
+                    await generator.unload()
+                    try? FileManager.default.removeItem(at: outputDirectory)
+                    throw error
+                }
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleVisionInstantMesh(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
+        if let rejection = vfxArtifactAccessResponseIfNeeded(
+            for: request,
+            remoteAddress: remoteAddress
+        ) {
+            return rejection
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        do {
+            return try await withVFXRequestAdmission(using: requestAdmission) {
+                let body: ByteBuffer
+                do {
+                    body = try await request.body.collect(
+                        upTo: APIServerContract.maximumInstantMeshUploadByteCount
+                    )
+                } catch {
+                    return makeErrorResponse(
+                        status: .badRequest,
+                        message: "Invalid request body or multi-view upload exceeds 512 MiB.",
+                        type: "invalid_request_error"
+                    )
+                }
+                let form = try MultipartFormData.parse(
+                    body: Data(body.readableBytesView),
+                    boundary: boundary
+                )
+                let plan = try APIServerContract.instantMeshPlan(from: form)
+                let uploads = form.parts
+                    .filter { $0.filename != nil && ($0.name == "image" || $0.name == "image[]") }
+                    .filter { !$0.body.isEmpty }
+                let inputURLs = try uploads.map {
+                    try writeMultipartFile(
+                        $0,
+                        directoryName: "mere-run-api-instantmesh-inputs",
+                        defaultExtension: "png"
+                    )
+                }
+                defer {
+                    for inputURL in inputURLs {
+                        try? FileManager.default.removeItem(at: inputURL)
+                    }
+                }
+                let outputDirectory = try temporaryOutputDirectory(
+                    directoryName: "mere-run-api-instantmesh"
+                )
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                let generator = InstantMeshGenerator()
+                do {
+                    let result = try await generator.generate(
+                        viewURLs: inputURLs,
+                        outputDirectory: outputDirectory,
+                        model: plan.modelID,
+                        cameras: plan.cameras,
+                        extractionResolution: plan.extractionResolution,
+                        includeVertexColors: plan.includesVertexColors,
+                        progress: nil
+                    )
+                    await generator.unload()
+                    return try retainedArtifactJSONResponse(
+                        APIServerContract.instantMeshResponse(from: result),
+                        outputDirectory: outputDirectory
+                    )
+                } catch {
+                    await generator.unload()
+                    try? FileManager.default.removeItem(at: outputDirectory)
+                    throw error
+                }
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleVisionDepthVideo(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
+        if let rejection = vfxArtifactAccessResponseIfNeeded(
+            for: request,
+            remoteAddress: remoteAddress
+        ) {
+            return rejection
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        do {
+            return try await withVFXRequestAdmission(using: requestAdmission) {
+                let body: ByteBuffer
+                do {
+                    body = try await request.body.collect(
+                        upTo: APIServerContract.maximumDepthVideoUploadByteCount
+                    )
+                } catch {
+                    return makeErrorResponse(
+                        status: .badRequest,
+                        message: "Invalid request body or video upload exceeds 512 MiB.",
+                        type: "invalid_request_error"
+                    )
+                }
+                let form = try MultipartFormData.parse(
+                    body: Data(body.readableBytesView),
+                    boundary: boundary
+                )
+                let plan = try APIServerContract.depthVideoPlan(from: form)
+                guard let video = form.file(named: "video") else {
+                    throw APIRequestValidationError.invalidField(
+                        "video",
+                        "exactly one non-empty uploaded video file is required"
+                    )
+                }
+                let inputURL = try writeMultipartFile(
+                    video,
+                    directoryName: "mere-run-api-depth-video-inputs",
+                    defaultExtension: "mp4"
+                )
+                defer { try? FileManager.default.removeItem(at: inputURL) }
+                let outputDirectory = try temporaryOutputDirectory(
+                    directoryName: "mere-run-api-depth-video"
+                )
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                let generator = VideoDepthAnythingGenerator()
+                do {
+                    let result = try await generator.generate(
+                        videoURL: inputURL,
+                        outputDirectory: outputDirectory,
+                        model: plan.modelID,
+                        inputSize: plan.inputSize,
+                        maximumFrameCount: plan.maximumFrameCount,
+                        progress: nil
+                    )
+                    await generator.unload()
+                    return try retainedArtifactJSONResponse(
+                        APIServerContract.depthVideoResponse(from: result),
+                        outputDirectory: outputDirectory
+                    )
+                } catch {
+                    await generator.unload()
+                    try? FileManager.default.removeItem(at: outputDirectory)
+                    throw error
+                }
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
     private func handleAudioSpeech(_ request: Request) async throws -> Response {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
@@ -2223,7 +4221,8 @@ actor CodeGenServer {
         do {
             body = try await request.body.collect(upTo: 10 * 1024 * 1024)
         } catch {
-            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+            return makeErrorResponse(
+                status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
         }
 
         do {
@@ -2275,7 +4274,8 @@ actor CodeGenServer {
         do {
             body = try await request.body.collect(upTo: 100 * 1024 * 1024)
         } catch {
-            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+            return makeErrorResponse(
+                status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
         }
 
         do {
@@ -2452,7 +4452,8 @@ actor CodeGenServer {
                 modelPath: resolved.rootURL.path,
                 request: request
             )
-        case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
+        case .gemma, .liquid, .qwen, .sam, .falcon, .geometry, .depth, .threeD,
+             .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
                 "model \(resolved.modelID) is not an image generation model"
@@ -2615,11 +4616,21 @@ actor CodeGenServer {
         return directory.appendingPathComponent("\(UUID().uuidString).\(pathExtension)")
     }
 
+    private nonisolated func temporaryOutputDirectory(directoryName: String) throws -> URL {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        let directory = parent.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        return directory
+    }
+
     private nonisolated func writeMultipartFile(
         _ file: MultipartFormData.Part,
-        directoryName: String
+        directoryName: String,
+        defaultExtension: String = "wav"
     ) throws -> URL {
-        let pathExtension = sanitizedPathExtension(from: file.filename) ?? "wav"
+        let pathExtension = sanitizedPathExtension(from: file.filename) ?? defaultExtension
         let outputURL = try temporaryOutputURL(directoryName: directoryName, extension: pathExtension)
         try file.body.write(to: outputURL)
         return outputURL
@@ -3069,6 +5080,34 @@ actor CodeGenServer {
         return nil
     }
 
+    /// Authentication is evaluated first so a remote caller never learns
+    /// route details without a valid bearer token on non-loopback binds.
+    private func vfxArtifactAccessResponseIfNeeded(
+        for request: Request,
+        remoteAddress: SocketAddress?
+    ) -> Response? {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIVFXArtifactRoutePolicy.allows(remoteAddress: remoteAddress) else {
+            return makeErrorResponse(
+                status: .forbidden,
+                message: APIVFXArtifactRoutePolicy.denialMessage,
+                type: "permission_error"
+            )
+        }
+        return nil
+    }
+
+    private func retainedArtifactJSONResponse<T: Encodable>(
+        _ payload: T,
+        outputDirectory: URL
+    ) throws -> Response {
+        let response = try jsonResponse(payload)
+        artifactCleanupScheduler.scheduleCleanup(of: outputDirectory)
+        return response
+    }
+
     private nonisolated func jsonResponse<T: Encodable>(
         _ payload: T,
         status: HTTPResponse.Status = .ok
@@ -3090,6 +5129,13 @@ actor CodeGenServer {
     }
 
     private nonisolated func runtimeErrorResponse(_ error: Error) -> Response {
+        if let status = APIVFXClientErrorPolicy.status(for: error) {
+            return makeErrorResponse(
+                status: status,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
+        }
         switch error {
         case let error as RuntimeModelPoolError:
             switch error {
@@ -3131,6 +5177,12 @@ actor CodeGenServer {
                 type: "invalid_request_error"
             )
         case let error as ManagedModelResolver.ResolverError:
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
+            )
+        case let error as InstantMeshResourceError:
             return makeErrorResponse(
                 status: .badRequest,
                 message: error.localizedDescription,

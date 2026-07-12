@@ -28,6 +28,9 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("image-ideogram4-") { return .ideogram }
             if id.hasPrefix("vision-segment-") { return .sam }
             if id.hasPrefix("vision-ground-") { return .falcon }
+            if id.hasPrefix("vision-geometry-") { return .geometry }
+            if id.hasPrefix("vision-depth-") { return .depth }
+            if id.hasPrefix("image-3d-") { return .threeD }
             if id.hasPrefix("text-code-north-mini") { return .code }
             return nil
         }
@@ -52,6 +55,9 @@ public enum QuantizedModelManifestWriter {
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
             case .falconPerception: return .falcon
+            case .moge2, .depthAnything3: return .geometry
+            case .videoDepthAnything: return .depth
+            case .tripoSR, .instantMesh: return .threeD
             case .qwen3TTS: return .tts
             case .qwen3ASR, .parakeetASR: return .asr
             case .qwen3Embedding: return .embed
@@ -69,7 +75,9 @@ public enum QuantizedModelManifestWriter {
         let tier = baseManifest.tier ?? inferTier(from: id)
 
         let variant = baseManifest.variant ?? {
-            if family == .sam || family == .falcon { return .standard }
+            if family == .sam || family == .falcon || family == .geometry || family == .depth || family == .threeD {
+                return .standard
+            }
             if tier == .base { return .base }
             return .distilled
         }()
@@ -107,6 +115,16 @@ public enum QuantizedModelManifestWriter {
                     return [.visionSegmentation, .visionTracking]
                 case .falconPerception:
                     return [.visionGrounding, .visionDetection, .visionSegmentation]
+                case .moge2:
+                    return [.metricDepth, .surfaceNormals, .pointMap, .cameraIntrinsics, .pointCloud]
+                case .videoDepthAnything:
+                    return [.temporalDepth]
+                case .depthAnything3:
+                    return [.relativeDepth, .cameraIntrinsics, .cameraExtrinsics, .pointCloud]
+                case .tripoSR:
+                    return [.imageTo3D, .meshGeneration]
+                case .instantMesh:
+                    return [.multiViewReconstruction, .meshGeneration]
                 case .qwen3TTS:
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR:
@@ -197,7 +215,8 @@ public enum QuantizedModelManifestWriter {
                 break
             case .qwen35HybridMoE:
                 break
-            case .samSegmentation, .falconPerception:
+            case .samSegmentation, .falconPerception, .moge2, .videoDepthAnything, .depthAnything3,
+                 .tripoSR, .instantMesh:
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .psiChat, .deepseekV4Flash,

@@ -24,6 +24,7 @@ Supported engines:
   `/v1/embeddings` for RAG and semantic search.
 - Image generation: any installed `image-*` generation model, such as
   `image-zimage-nano`.
+- Image-to-3D: `image-3d-triposr` through a native uploaded-image mesh route.
 - Text-to-speech: `speech-tts-qwen3-nano`.
 - Speech-to-text: `speech-asr-parakeet` or `speech-asr-qwen3`.
 
@@ -71,6 +72,31 @@ mere.run status
   8-bit can increase its KV residency; `default` restores the selected
   engine/model/server default, not necessarily full precision.
 
+## Local VFX artifact boundary
+
+The five artifact-producing VFX routes are loopback-only, even when the API
+server binds `0.0.0.0`, a LAN address, or another non-loopback interface:
+
+- `/v1/vision/geometry`
+- `/v1/vision/geometry/multiview`
+- `/v1/vision/image-to-3d`
+- `/v1/vision/image-to-3d-multiview`
+- `/v1/vision/depth-video`
+
+On authenticated non-loopback servers, authentication is checked first and an
+authenticated remote request then receives `403 permission_error` before its
+body is collected or any model work begins. The policy uses the connected peer
+socket and does not trust forwarded-address headers. `/v1/models` also omits
+the MoGe, DA3, TripoSR, InstantMesh, and relative/metric VDA companion model IDs
+for non-loopback clients.
+
+These responses contain server-local `file:` URLs rather than downloadable
+artifacts. Successful output directories remain available for one hour after
+the response is created and are then removed automatically while the server is
+running; copy any needed files before that TTL expires. Failed requests remove
+their output directory immediately. The API intentionally provides no artifact
+download route.
+
 ## Usage Patterns
 
 - Keep loopback binds for local-only tools.
@@ -93,6 +119,10 @@ mere.run status
 - Test `/v1/embeddings` with `text-embed-qwen3-0.6b` when wiring a RAG client.
 - Test `/v1/images/generations` with `image-zimage-nano` when wiring an image client.
 - Test `/v1/images/edits` with multipart `image` uploads when wiring image editing.
+- Test `/v1/vision/image-to-3d` with a multipart `image` upload when wiring
+  single-image object reconstruction.
+- Test `/v1/vision/image-to-3d-multiview` with exactly four or six multipart
+  `image[]` uploads when wiring InstantMesh reconstruction.
 - Test `/v1/audio/speech` with `speech-tts-qwen3-nano` when wiring TTS.
 - Test `/v1/audio/transcriptions` with `speech-asr-parakeet` when wiring STT.
 - Request `model` resolves by runtime alias, then curated catalog id, then the
@@ -178,6 +208,24 @@ mere.run status
   The same dimension, total-pixel, and step limits apply. Masks are accepted for
   client compatibility; current native edit models use whole-image
   conditioning rather than strict masked inpainting.
+- `/v1/vision/image-to-3d` accepts one uploaded `image` plus the managed
+  `image-3d-triposr` id. Server-owned OBJ, PLY, GLB, and manifest artifacts are
+  returned as local URLs with byte counts and SHA-256 values. Request fields
+  cannot select client filesystem input, output, or checkpoint paths. The
+  authoritative run `manifest` records every reconstruction control and exact
+  checkpoint identity; `mesh_manifest` exposes the shared mesh contract.
+- `/v1/vision/image-to-3d-multiview` accepts exactly four or six ordered,
+  user-supplied `image[]` uploads plus the managed `image-3d-instantmesh-base`
+  id. The managed source `.ckpt` must first be converted offline into its
+  `native` child package; the server never interprets Pickle. Client paths,
+  uploaded checkpoints, view generation, Zero123++, runtime Python, and
+  proprietary FlexiCubes code are excluded. Responses return hashed OBJ, PLY,
+  GLB, and manifest artifacts and state that native marching-tetrahedra
+  topology is not upstream FlexiCubes topology.
+- Native geometry and reconstruction routes enforce decoded-image admission
+  independently of multipart byte limits: at most 16,384 pixels per side, 64
+  million pixels per image, and 256 million aggregate pixels. Oversized image
+  headers return `400 invalid_request_error` before full decode or model load.
 - `/v1/audio/speech` accepts `input`, `model`, `voice`, `speed`, and
   `response_format`. It returns WAV by default and can transcode to `mp3`,
   `opus`, `aac`, or `flac` when `ffmpeg` is available. OpenAI model names such
@@ -257,6 +305,25 @@ curl http://localhost:8080/v1/images/edits \
   -F size=1024x1024 \
   -F response_format=b64_json \
   -F image=@input.png
+```
+
+```bash
+curl http://localhost:8080/v1/vision/image-to-3d \
+  -H "Authorization: Bearer $MERERUN_API_KEY" \
+  -F model=image-3d-triposr \
+  -F resolution=256 \
+  -F image=@chair.png
+```
+
+```bash
+curl http://localhost:8080/v1/vision/image-to-3d-multiview \
+  -H "Authorization: Bearer $MERERUN_API_KEY" \
+  -F model=image-3d-instantmesh-base \
+  -F resolution=128 \
+  -F 'image[]=@view-0.png' \
+  -F 'image[]=@view-1.png' \
+  -F 'image[]=@view-2.png' \
+  -F 'image[]=@view-3.png'
 ```
 
 ```bash

@@ -31,7 +31,29 @@ enum ModelInventory {
             let flatInstalled = isNonEmptyDirectory(flatDir, fileManager: fileManager)
             let gemmaAliasInstall = gemmaAliasInstallURL(for: id, fileManager: fileManager)
 
-            if let resolution = resolvedViaResolver {
+            if let spec, spec.usesPinnedGeometryArtifacts {
+                if let resolution = resolvedViaResolver {
+                    status = "installed"
+                    let bytes = FileSystemHelper.directorySize(at: resolution.rootURL)
+                    size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+                } else if spec.requiresManagedConversion,
+                          ManagedModelResolver.isManagedInstallComplete(
+                              spec: spec,
+                              at: flatDir,
+                              fileManager: fileManager
+                          ) {
+                    status = "conversion-required"
+                    let bytes = FileSystemHelper.directorySize(at: flatDir)
+                    size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+                } else if flatInstalled {
+                    status = "invalid"
+                    let bytes = FileSystemHelper.directorySize(at: flatDir)
+                    size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+                } else {
+                    status = "missing"
+                    size = "—"
+                }
+            } else if let resolution = resolvedViaResolver {
                 status = "installed"
                 let bytes = FileSystemHelper.directorySize(at: resolution.rootURL)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
