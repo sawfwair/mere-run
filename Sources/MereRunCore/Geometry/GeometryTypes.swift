@@ -6,6 +6,10 @@ import Foundation
 /// away from the camera. Pixel centers are sampled at `(x + 0.5, y + 0.5)`.
 public enum GeometryCoordinateSystem: String, Codable, CaseIterable, Sendable {
     case cameraXRightYDownZForward = "camera-x-right-y-down-z-forward"
+    /// World frame recovered from a set of predicted or supplied cameras.
+    /// Its orientation is anchored by the first/reference camera and therefore
+    /// has no external geodetic meaning.
+    case worldFromCameras = "world-from-cameras-x-right-y-down-z-forward"
 }
 
 public enum GeometryValueUnits: String, Codable, CaseIterable, Sendable {
@@ -85,11 +89,14 @@ public struct GeometryCameraExtrinsics: Codable, Equatable, Sendable {
     }
 
     public static var identity: GeometryCameraExtrinsics {
-        // Counts are compile-time constants and therefore cannot fail.
-        try! GeometryCameraExtrinsics(
-            rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1],
-            translation: [0, 0, 0]
-        )
+        do {
+            return try GeometryCameraExtrinsics(
+                rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                translation: [0, 0, 0]
+            )
+        } catch {
+            preconditionFailure("Static identity camera dimensions are invalid: \(error)")
+        }
     }
 }
 
@@ -292,6 +299,8 @@ public struct GeometryOutputManifest: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let createdAt: Date
     public let inputPath: String
+    public let inputByteCount: Int64
+    public let inputSHA256: String
     public let outputDirectory: String
     public let frameIndex: Int?
     public let frameTimeSeconds: Double?
@@ -305,9 +314,11 @@ public struct GeometryOutputManifest: Codable, Equatable, Sendable {
     public let artifacts: [GeometryArtifact]
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         createdAt: Date = Date(),
         inputPath: String,
+        inputByteCount: Int64,
+        inputSHA256: String,
         outputDirectory: String,
         frameIndex: Int? = nil,
         frameTimeSeconds: Double? = nil,
@@ -323,6 +334,8 @@ public struct GeometryOutputManifest: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.inputPath = inputPath
+        self.inputByteCount = inputByteCount
+        self.inputSHA256 = inputSHA256.lowercased()
         self.outputDirectory = outputDirectory
         self.frameIndex = frameIndex
         self.frameTimeSeconds = frameTimeSeconds

@@ -1,9 +1,92 @@
 import AudioCodecs
 import Foundation
-import MediaIO
+@testable import MediaIO
 import XCTest
 
 final class MediaIOTests: XCTestCase {
+    private enum ExtractionRejection: Error, Equatable {
+        case rejected
+    }
+
+    func testVideoFrameRateResolverRejectsNonFiniteValues() {
+        for fps in [Double.nan, .infinity, -.infinity] {
+            XCTAssertThrowsError(
+                try MediaVideoFrameRateResolver.resolve(fps, fallbackFPS: 30)
+            ) { error in
+                guard case .invalidVideoFrameRate(let actual) = error as? MediaIOError else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+                if fps.isNaN {
+                    XCTAssertTrue(actual.isNaN)
+                } else {
+                    XCTAssertEqual(actual, fps)
+                }
+            }
+        }
+    }
+
+    func testVideoFrameRateResolverUsesExplicitNonPositiveFallback() throws {
+        for fps in [0.0, -1.0, -Double.greatestFiniteMagnitude] {
+            let resolved = try MediaVideoFrameRateResolver.resolve(fps, fallbackFPS: 30)
+            XCTAssertEqual(resolved.framesPerSecond, 30)
+            XCTAssertEqual(resolved.timeScale, 30)
+        }
+
+        XCTAssertThrowsError(try MediaVideoFrameRateResolver.resolve(0)) { error in
+            guard case .invalidVideoFrameRate(let actual) = error as? MediaIOError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(actual, 0)
+        }
+    }
+
+    func testVideoFrameRateResolverClampsSubOneRate() throws {
+        let resolved = try MediaVideoFrameRateResolver.resolve(0.25)
+        XCTAssertEqual(resolved.framesPerSecond, 1)
+        XCTAssertEqual(resolved.timeScale, 1)
+    }
+
+    func testVideoFrameRateResolverGuardsInt32RoundingBoundary() throws {
+        let maximum = Double(Int32.max)
+        let maximumResolved = try MediaVideoFrameRateResolver.resolve(maximum)
+        XCTAssertEqual(maximumResolved.framesPerSecond, maximum)
+        XCTAssertEqual(maximumResolved.timeScale, Int32.max)
+
+        let stillRepresentable = try MediaVideoFrameRateResolver.resolve(maximum + 0.49)
+        XCTAssertEqual(stillRepresentable.timeScale, Int32.max)
+
+        for fps in [maximum + 0.5, Double(Float(Int32.max))] {
+            XCTAssertThrowsError(try MediaVideoFrameRateResolver.resolve(fps)) { error in
+                guard case .invalidVideoFrameRate = error as? MediaIOError else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+            }
+        }
+    }
+
+    #if canImport(AVFoundation) && canImport(CoreGraphics)
+    func testAppleVideoWriterRejectsInvalidFPSBeforeReadingFrames() {
+        let missingFrameURL = URL(fileURLWithPath: "/definitely-missing/frame.png")
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("invalid-fps-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+
+        for fps in [Double.nan, .infinity, Double(Float(Int32.max))] {
+            XCTAssertThrowsError(
+                try AppleMediaVideoIO.writeVideo(
+                    frameURLs: [missingFrameURL],
+                    fps: fps,
+                    to: outputURL
+                )
+            ) { error in
+                guard case .invalidVideoFrameRate = error as? MediaIOError else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+            }
+        }
+    }
+    #endif
+
     func testImageResizeAndCenterCropUseStableRGBAStorage() throws {
         let image = try MediaImage(
             width: 2,
@@ -95,6 +178,163 @@ final class MediaIOTests: XCTestCase {
 
         let data = try Data(contentsOf: mp3URL)
         XCTAssertGreaterThan(data.count, 0)
+    }
+
+    func testVideoExtractionValidatesDecodedBudgetBeforeWritingFrames() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-video-limits-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let videoURL = root.appendingPathComponent("input.mp4")
+        let framesURL = root.appendingPathComponent("frames", isDirectory: true)
+        try MediaVideoIO.writeMP4(
+            rgb24: [UInt8](repeating: 127, count: 2 * 2 * 3 * 2),
+            width: 2,
+            height: 2,
+            frameCount: 2,
+            fps: 2,
+            to: videoURL
+        )
+
+        XCTAssertThrowsError(
+            try MediaVideoIO.extractFrames(
+                from: videoURL,
+                into: framesURL,
+                endFrame: 1,
+                decodeLimits: MediaVideoDecodeLimits(
+                    maximumPixelCountPerFrame: 64,
+                    maximumAggregatePixelCount: 128
+                ),
+                validateDecodedSequence: { width, height, frameCount in
+                    XCTAssertEqual(width, 2)
+                    XCTAssertEqual(height, 2)
+                    XCTAssertEqual(frameCount, 2)
+                    throw ExtractionRejection.rejected
+                }
+            )
+        ) { error in
+            guard let rejection = error as? ExtractionRejection else {
+                return XCTFail("Unexpected FFmpeg admission error: \(error)")
+            }
+            XCTAssertEqual(rejection, .rejected)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: framesURL.path))
+    }
+
+    func testFFmpegExtractionRunsFrameAdmissionBeforeCreatingOutputDirectory() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are required")
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-ffmpeg-admission-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let videoURL = root.appendingPathComponent("input.mp4")
+        let framesURL = root.appendingPathComponent("frames", isDirectory: true)
+        try FFmpegMediaIO.writeMP4(
+            rgb24: [UInt8](repeating: 127, count: 2 * 2 * 3 * 2),
+            width: 2,
+            height: 2,
+            frameCount: 2,
+            fps: 2,
+            to: videoURL
+        )
+        var validationCount = 0
+
+        XCTAssertThrowsError(
+            try FFmpegMediaIO.extractFrames(
+                from: videoURL,
+                into: framesURL,
+                endFrame: 1,
+                decodeLimits: MediaVideoDecodeLimits(
+                    maximumPixelCountPerFrame: 64,
+                    maximumAggregatePixelCount: 128
+                ),
+                validateDecodedSequence: { width, height, frameCount in
+                    XCTAssertEqual(width, 2)
+                    XCTAssertEqual(height, 2)
+                    XCTAssertEqual(frameCount, 2)
+                    validationCount += 1
+                    if validationCount == 1 {
+                        return
+                    }
+                    throw ExtractionRejection.rejected
+                }
+            )
+        ) { error in
+            guard let rejection = error as? ExtractionRejection else {
+                return XCTFail("Unexpected FFmpeg admission error: \(error)")
+            }
+            XCTAssertEqual(rejection, .rejected)
+        }
+        XCTAssertEqual(validationCount, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: framesURL.path))
+    }
+
+    func testFFmpegFrameAdmissionUsesAllProbedFrameDimensions() throws {
+        let metadata = """
+        [Parsed_showinfo_0] n: 0 pts: 0 s:1920x1080
+        [Parsed_showinfo_0] n: 1 pts: 1 s:1280x2160
+        [Parsed_showinfo_0] n: 2 pts: 2 s:4096x720
+        """
+
+        let plan = try FFmpegMediaIO.frameAdmissionPlan(
+            fromFFmpegShowInfo: metadata,
+            maximumFrameCount: 3
+        )
+
+        XCTAssertEqual(plan.frameCount, 3)
+        XCTAssertEqual(plan.maximumWidth, 4096)
+        XCTAssertEqual(plan.maximumHeight, 2160)
+    }
+
+    func testFFmpegFrameAdmissionAllowsAutorotatedOutput() throws {
+        let metadata = "[Parsed_showinfo_0] n: 0 pts: 0 s:1920x1080"
+        let plan = try FFmpegMediaIO.frameAdmissionPlan(
+            fromFFmpegShowInfo: metadata,
+            maximumFrameCount: 1
+        )
+
+        XCTAssertTrue(plan.admits(width: 1080, height: 1920))
+        XCTAssertFalse(plan.admits(width: 1080, height: 1921))
+    }
+
+    func testFFmpegFrameAdmissionRejectsUnboundedProbeOutput() throws {
+        let metadata = """
+        [Parsed_showinfo_0] n: 0 pts: 0 s:2x2
+        [Parsed_showinfo_0] n: 1 pts: 1 s:2x2
+        """
+
+        XCTAssertThrowsError(
+            try FFmpegMediaIO.frameAdmissionPlan(
+                fromFFmpegShowInfo: metadata,
+                maximumFrameCount: 1
+            )
+        ) { error in
+            guard case MediaIOError.videoOperationFailed(let message) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(message.contains("2 frames"))
+        }
+    }
+
+    func testFFmpegFrameAdmissionFailsClosedOnInvalidDimensions() throws {
+        let metadata = "[Parsed_showinfo_0] n: 0 pts: 0 s:1920x0"
+
+        XCTAssertThrowsError(
+            try FFmpegMediaIO.frameAdmissionPlan(
+                fromFFmpegShowInfo: metadata,
+                maximumFrameCount: 1
+            )
+        ) { error in
+            guard case MediaIOError.videoOperationFailed(let message) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(message.contains("invalid decoded frame dimensions"))
+        }
     }
 
     func testRealFFTPlanSupportsASRAndPowerOfTwoFrameSizes() throws {

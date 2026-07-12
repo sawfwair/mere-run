@@ -96,8 +96,11 @@ done < <(find Sources -type d | sort)
 dynamic_boundary_files=(
   "Sources/AudioSTT/Qwen3ASR/Qwen3ASRTokenizer.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
+  "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
   "Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift"
   "Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Chat.swift"
+  "Sources/MereRunCore/Geometry/MultiViewGeometryExporter.swift"
+  "Sources/MereRunCore/Geometry/PointCloudGLBWriter.swift"
   "Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift"
   "Sources/MereRunCore/LoRA/LoRACheckpointResolver.swift"
   "Sources/MereRunCore/LoRA/LoRAWeightLoader.swift"

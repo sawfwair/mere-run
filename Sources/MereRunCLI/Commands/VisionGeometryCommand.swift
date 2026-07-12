@@ -21,7 +21,7 @@ struct VisionGeometry: AsyncParsableCommand {
     @Option(name: [.long], help: "Quality level from 0 through 9. (default: 9)")
     var resolutionLevel: Int = 9
 
-    @Option(name: [.long], help: "Override the DINO base-token count.")
+    @Option(name: [.long], help: "Override the DINO base-token count (1...3600).")
     var tokenCount: Int?
 
     @Option(name: [.long], help: "Maximum number of points written to PLY.")
@@ -37,7 +37,11 @@ struct VisionGeometry: AsyncParsableCommand {
         guard (0...9).contains(resolutionLevel) else {
             throw ValidationError("--resolution-level must be between 0 and 9")
         }
-        if let tokenCount, tokenCount <= 0 { throw ValidationError("--token-count must be positive") }
+        if let tokenCount,
+           (tokenCount < MoGe2InferenceConfiguration.minimumTokenCount
+            || tokenCount > MoGe2InferenceConfiguration.maximumTokenCount) {
+            throw ValidationError("--token-count must be between 1 and 3600")
+        }
         if let maxPoints, maxPoints <= 0 { throw ValidationError("--max-points must be positive") }
 
         let inputURL = URL(fileURLWithPath: input).standardizedFileURL

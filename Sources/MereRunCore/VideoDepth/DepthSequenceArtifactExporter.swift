@@ -22,6 +22,7 @@ public enum DepthSequenceArtifactExporter {
         provenance: GeometryModelProvenance,
         temporalWindowLength: Int = VideoDepthAnythingWindowing.windowLength,
         temporalOverlap: Int = VideoDepthAnythingWindowing.overlap,
+        inputRecord admittedInputRecord: MeshInputRecord? = nil,
         createdAt: Date = Date()
     ) throws -> DepthSequenceExportResult {
         guard let first = frames.first else {
@@ -38,6 +39,23 @@ public enum DepthSequenceArtifactExporter {
             }
         }
         let outputDirectory = outputDirectory.standardizedFileURL
+        let standardizedInput = inputURL.standardizedFileURL
+        let inputRecord: MeshInputRecord
+        if let admittedInputRecord {
+            guard admittedInputRecord.path == standardizedInput.path else {
+                throw MeshInputProvenanceError.inputRecordPathMismatch(
+                    expected: standardizedInput.path,
+                    actual: admittedInputRecord.path
+                )
+            }
+            inputRecord = admittedInputRecord
+        } else {
+            inputRecord = MeshInputRecord(
+                path: standardizedInput.path,
+                byteCount: try ModelArtifactPin.fileByteCount(standardizedInput),
+                sha256: try ModelArtifactPin.fileSHA256(standardizedInput)
+            )
+        }
         let framesDirectory = outputDirectory.appendingPathComponent("frames", isDirectory: true)
         try FileManager.default.createDirectory(at: framesDirectory, withIntermediateDirectories: true)
         let previewRange = try globalPreviewRange(frames)
@@ -100,7 +118,9 @@ public enum DepthSequenceArtifactExporter {
 
         let manifest = DepthSequenceManifest(
             createdAt: createdAt,
-            inputPath: inputURL.standardizedFileURL.path,
+            inputPath: inputRecord.path,
+            inputByteCount: inputRecord.byteCount,
+            inputSHA256: inputRecord.sha256,
             outputDirectory: outputDirectory.path,
             width: first.width,
             height: first.height,

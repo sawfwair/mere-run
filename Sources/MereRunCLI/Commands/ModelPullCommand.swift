@@ -111,7 +111,15 @@ struct ModelPull: AsyncParsableCommand {
     private func pull(_ spec: ManagedModelSpec) async throws {
         let modelDir = spec.managedInstallRootURL()
         if !force, ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir) {
-            if !quiet { stderr("[\(spec.id)] already installed, skipping (use --force to re-download)") }
+            if !quiet {
+                if !spec.isManagedRuntimeReady(modelDir),
+                   let guidance = spec.managedConversionGuidance(at: modelDir) {
+                    stderr("[\(spec.id)] source already downloaded, skipping (use --force to re-download)")
+                    stderr("  \(guidance)")
+                } else {
+                    stderr("[\(spec.id)] already installed, skipping (use --force to re-download)")
+                }
+            }
             return
         }
         try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir) { warning in
@@ -160,7 +168,13 @@ struct ModelPull: AsyncParsableCommand {
             }
             var errors = report.errors
             if spec.managedRuntimeURL() == nil {
-                errors.append("Model was pulled but is not discoverable by `mere.run model list`.")
+                if spec.requiresManagedConversion,
+                   ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir),
+                   let guidance = spec.managedConversionGuidance(at: modelDir) {
+                    if !quiet { stderr("  \(guidance)") }
+                } else {
+                    errors.append("Model was pulled but is not runnable or discoverable by `mere.run model list`.")
+                }
             }
             if !errors.isEmpty {
                 throw ModelPullInstallError(

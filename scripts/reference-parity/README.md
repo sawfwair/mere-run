@@ -49,3 +49,68 @@ template/tokenizer, not numerics). Norm ratios drifting ±2% late in the stack
 is normal quantized-kernel accumulation noise; a *systematic* ratio away from
 1.0 that compounds layer over layer is a real defect, and the first stage
 where it appears names the guilty component.
+
+## Video Depth Anything Small
+
+`export_vda_small_fixture.py` runs only in an isolated development/reference
+environment. It verifies the official VDA source revision and the selected
+relative or metric Small checkpoint SHA-256, then freezes deterministic
+normalized input and raw depth arrays for the native MLX parity gate. Pass
+`--variant metric` for the metrically trained checkpoint; the default is
+`relative`. It is not used by runtime inference.
+
+`export_vda_preprocess_fixture.py` separately freezes the reference OpenCV
+`INTER_CUBIC` resize, multiple-of-14 sizing, and ImageNet normalization path.
+
+## TripoSR
+
+`export_triposr_fixture.py` freezes the official TripoSR image-tokenizer,
+triplane-transformer, scene-code, and neural-field query outputs. It accepts
+only the exact MIT checkpoint and requires the official source checkout at
+commit `107cefdc244c39106fa830359024f6a2f1c78871`. The script uses the
+weights-only memory-mapped loader; it is parity tooling, never a runtime
+dependency.
+
+```bash
+python scripts/reference-parity/export_triposr_fixture.py \
+  --checkpoint model.ckpt \
+  --config config.yaml \
+  --upstream /path/to/TripoSR \
+  --output /tmp/triposr-parity \
+  --device mps
+```
+
+## InstantMesh Base reconstruction
+
+`export_instantmesh_base_fixture.py` freezes the official reconstruction-only
+image encoder, camera-conditioned multi-view tokens, triplane transformer,
+scene code, and fixed neural-field queries. It accepts only the exact pinned
+Apache-2.0 `instant_mesh_base.ckpt` and the official source checkout at commit
+`08822c52fdc399b93ea00e4fa9e596344ed52ccc`. Zero123++, diffusion, and view
+generation are not imported. The fixture exporter is reference tooling only;
+runtime inference loads verified safetensors in native Swift/MLX.
+
+```bash
+python scripts/reference-parity/export_instantmesh_base_fixture.py \
+  --checkpoint instant_mesh_base.ckpt \
+  --upstream /path/to/InstantMesh \
+  --output /tmp/instantmesh-parity \
+  --device mps
+```
+
+Parity covers the learned field. Native marching-tetrahedra output is tested
+for deterministic valid geometry, but its topology is intentionally not
+compared with NVIDIA FlexiCubes.
+
+`export_instantmesh_preprocess_fixture.py` separately freezes the exact pinned
+Torchvision tensor-resize path used before reconstruction: bicubic
+`interpolation=3`, antialiasing enabled, then clamp to `[0, 1]`. Its default
+257-to-320 square fixture deliberately exercises a non-320 input without
+introducing non-square size semantics.
+
+```bash
+python scripts/reference-parity/export_instantmesh_preprocess_fixture.py \
+  --output /tmp/instantmesh-preprocess-parity
+MERERUN_TEST_INSTANTMESH_PREPROCESS=/tmp/instantmesh-preprocess-parity \
+  swift test --filter InstantMeshPreprocessorTests
+```

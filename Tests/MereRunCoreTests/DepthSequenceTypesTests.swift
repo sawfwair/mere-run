@@ -13,6 +13,8 @@ final class DepthSequenceTypesTests: XCTestCase {
         XCTAssertNil(frame.intrinsics)
         let manifest = DepthSequenceManifest(
             inputPath: "/tmp/shot.mov",
+            inputByteCount: 123,
+            inputSHA256: String(repeating: "a", count: 64),
             outputDirectory: "/tmp/depth",
             width: 2,
             height: 2,
@@ -41,6 +43,8 @@ final class DepthSequenceTypesTests: XCTestCase {
         )
         let manifest = DepthSequenceManifest(
             inputPath: "/tmp/shot.mov",
+            inputByteCount: 123,
+            inputSHA256: String(repeating: "a", count: 64),
             outputDirectory: "/tmp/depth",
             width: 2,
             height: 2,

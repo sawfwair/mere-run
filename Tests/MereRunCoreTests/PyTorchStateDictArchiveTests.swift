@@ -146,6 +146,22 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
         }
     }
 
+    func testWholeFileDigestCallersCanSkipRedundantEntryCRC() throws {
+        let storage = floatData([7])
+        let url = try writeCheckpoint(
+            pickle: stateDictPickle(shape: [1], stride: [1], storageElementCount: 1),
+            storage: storage,
+            corruptStorageCRC: true
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let archive = try PyTorchStateDictArchive(
+            url: url,
+            verifyEntryChecksums: false
+        )
+        XCTAssertEqual(try archive.rawData(named: "weight"), storage)
+    }
+
     func testPinnedVideoDepthAnythingInventoryWhenFixtureIsAvailable() throws {
         let path = ProcessInfo.processInfo.environment["MERERUN_TEST_VDA_PTH"] ?? ""
         try XCTSkipIf(

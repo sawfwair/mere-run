@@ -54,6 +54,8 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(envelope.result.models.first?.status, "will_download")
         XCTAssertEqual(envelope.result.models.first?.hasDownloadSource, true)
         XCTAssertEqual(envelope.result.models.first?.installed, false)
+        XCTAssertEqual(envelope.result.models.first?.runtimeReady, false)
+        XCTAssertEqual(envelope.result.models.first?.conversionRequired, false)
         XCTAssertEqual(envelope.result.models.first?.willDownload, true)
         XCTAssertEqual(envelope.result.modelStore.path, modelStore.path)
         XCTAssertEqual(envelope.result.hubCache.path, hubCache.path)
@@ -73,6 +75,23 @@ final class ModelPullCommandParsingTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ModelPullPreflightEnvelope.self, from: Data(encoded.utf8))
         XCTAssertEqual(decoded.result.models.first?.id, "image-zimage-nano")
+        XCTAssertEqual(decoded.result.models.first?.runtimeReady, false)
+        XCTAssertEqual(decoded.result.models.first?.conversionRequired, false)
+    }
+
+    func testModelPullPreflightUsesExplicitConversionRequiredStatus() {
+        XCTAssertEqual(
+            ModelPullPreflightAnalyzer.modelStatus(
+                selected: true,
+                installed: true,
+                conversionRequired: true,
+                willDownload: false,
+                blockedBySupport: false,
+                blockedBySource: false,
+                all: false
+            ),
+            "conversion_required"
+        )
     }
 
     func testModelPullPreflightUsesMissingProcessModelStoreOverride() throws {

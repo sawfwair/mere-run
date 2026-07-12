@@ -39,9 +39,9 @@ final class VideoDepthAnythingPreprocessorTests: MereRunCoreTestCase {
         }
     }
 
-    func testDepthResizePreservesBatchAndFrameAxes() {
+    func testDepthResizePreservesBatchAndFrameAxes() throws {
         let depth = MLXArray((0..<16).map(Float.init)).reshaped(1, 2, 2, 4)
-        let resized = VideoDepthAnythingPreprocessor.resizeDepth(
+        let resized = try VideoDepthAnythingPreprocessor.resizeDepth(
             depth,
             sourceWidth: 8,
             sourceHeight: 6

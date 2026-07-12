@@ -113,8 +113,14 @@ public final class PyTorchStateDictArchive: @unchecked Sendable {
     private let tensorByName: [String: PyTorchTensorDescriptor]
     public let tensors: [PyTorchTensorDescriptor]
 
-    public init(url: URL) throws {
-        let zip = try MappedStoredZIP(url: url)
+    /// `verifyEntryChecksums` must remain enabled for arbitrary input. It may
+    /// be disabled only when the caller has just verified a trusted whole-file
+    /// digest, which supersedes the much slower per-entry CRC32 pass.
+    public init(url: URL, verifyEntryChecksums: Bool = true) throws {
+        let zip = try MappedStoredZIP(
+            url: url,
+            verifyEntryChecksums: verifyEntryChecksums
+        )
         let pickleEntries = zip.entries.values.filter { $0.name.hasSuffix("/data.pkl") }
         guard pickleEntries.count == 1, let pickleEntry = pickleEntries.first else {
             throw PyTorchStateDictError.missingDataPickle

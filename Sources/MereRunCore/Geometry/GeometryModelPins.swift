@@ -1,5 +1,42 @@
 import Foundation
 
+public struct GeometryModelLicenseEvidence: Codable, Equatable, Sendable {
+    public let resourceName: String
+    public let resourcePin: ModelArtifactPin
+    public let installedPin: ModelArtifactPin
+
+    public init(
+        resourceName: String,
+        byteCount: Int64,
+        sha256: String,
+        resourceByteCount: Int64? = nil,
+        resourceSHA256: String? = nil
+    ) {
+        self.resourceName = resourceName
+        self.resourcePin = ModelArtifactPin(
+            filename: resourceName,
+            byteCount: resourceByteCount ?? byteCount,
+            sha256: resourceSHA256 ?? sha256
+        )
+        self.installedPin = ModelArtifactPin(
+            filename: "MERERUN_UPSTREAM_LICENSE",
+            byteCount: byteCount,
+            sha256: sha256
+        )
+    }
+}
+
+public enum GeometryModelLicenseError: Error, Equatable, LocalizedError, Sendable {
+    case bundledEvidenceMissing(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .bundledEvidenceMissing(let name):
+            "Bundled upstream VFX license evidence is missing: \(name)."
+        }
+    }
+}
+
 public struct GeometryModelPin: Codable, Equatable, Sendable {
     public let modelID: String
     public let repository: String
@@ -7,6 +44,7 @@ public struct GeometryModelPin: Codable, Equatable, Sendable {
     public let sourceCodeRepository: String
     public let sourceCodeRevision: String
     public let license: String
+    public let licenseEvidence: GeometryModelLicenseEvidence?
     public let artifacts: [ModelArtifactPin]
 
     public init(
@@ -16,6 +54,7 @@ public struct GeometryModelPin: Codable, Equatable, Sendable {
         sourceCodeRepository: String,
         sourceCodeRevision: String,
         license: String,
+        licenseEvidence: GeometryModelLicenseEvidence? = nil,
         artifacts: [ModelArtifactPin]
     ) {
         self.modelID = modelID
@@ -24,12 +63,54 @@ public struct GeometryModelPin: Codable, Equatable, Sendable {
         self.sourceCodeRepository = sourceCodeRepository
         self.sourceCodeRevision = sourceCodeRevision
         self.license = license
+        self.licenseEvidence = licenseEvidence
         self.artifacts = artifacts
+    }
+
+    public var runtimeArtifacts: [ModelArtifactPin] {
+        artifacts + (licenseEvidence.map { [$0.installedPin] } ?? [])
     }
 
     @discardableResult
     public func verify(in rootURL: URL, fileManager: FileManager = .default) throws -> [URL] {
-        try artifacts.map { try $0.verify(in: rootURL, fileManager: fileManager) }
+        try runtimeArtifacts.map { try $0.verify(in: rootURL, fileManager: fileManager) }
+    }
+
+    public func installBundledLicenseEvidence(
+        in rootURL: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        guard let licenseEvidence else { return }
+        let resourceURL = Bundle.module.url(
+            forResource: licenseEvidence.resourceName,
+            withExtension: nil,
+            subdirectory: "VFXLicenses"
+        ) ?? Bundle.module.url(forResource: licenseEvidence.resourceName, withExtension: nil)
+        guard let resourceURL else {
+            throw GeometryModelLicenseError.bundledEvidenceMissing(licenseEvidence.resourceName)
+        }
+        let bundlePin = ModelArtifactPin(
+            filename: resourceURL.lastPathComponent,
+            byteCount: licenseEvidence.resourcePin.byteCount,
+            sha256: licenseEvidence.resourcePin.sha256
+        )
+        _ = try bundlePin.verify(in: resourceURL.deletingLastPathComponent(), fileManager: fileManager)
+        let destination = rootURL.appendingPathComponent(licenseEvidence.installedPin.filename)
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        if licenseEvidence.resourcePin.byteCount == licenseEvidence.installedPin.byteCount,
+           licenseEvidence.resourcePin.sha256 == licenseEvidence.installedPin.sha256 {
+            try fileManager.copyItem(at: resourceURL, to: destination)
+        } else {
+            let resourceBytes = try Data(contentsOf: resourceURL)
+            guard licenseEvidence.installedPin.byteCount <= Int64(resourceBytes.count) else {
+                throw GeometryModelLicenseError.bundledEvidenceMissing(licenseEvidence.resourceName)
+            }
+            try Data(resourceBytes.prefix(Int(licenseEvidence.installedPin.byteCount)))
+                .write(to: destination, options: .atomic)
+        }
+        _ = try licenseEvidence.installedPin.verify(in: rootURL, fileManager: fileManager)
     }
 }
 
@@ -41,6 +122,11 @@ public enum GeometryModelPins {
         sourceCodeRepository: "microsoft/MoGe",
         sourceCodeRevision: "07444410f1e33f402353b99d6ccd26bd31e469e8",
         license: "MIT",
+        licenseEvidence: GeometryModelLicenseEvidence(
+            resourceName: "MoGe-LICENSE",
+            byteCount: 12_500,
+            sha256: "ad7d951c80c5fc2b2bce035f2041bc0a0dbf9028c8ecc4c9a8e1fba8130b6b59"
+        ),
         artifacts: [
             ModelArtifactPin(
                 filename: "model.onnx",
@@ -57,6 +143,13 @@ public enum GeometryModelPins {
         sourceCodeRepository: "DepthAnything/Video-Depth-Anything",
         sourceCodeRevision: "4f5ae23172ba60fd7bc11ef671cca678842c7072",
         license: "Apache-2.0",
+        licenseEvidence: GeometryModelLicenseEvidence(
+            resourceName: "Video-Depth-Anything-LICENSE",
+            byteCount: 11_356,
+            sha256: "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+            resourceByteCount: 11_357,
+            resourceSHA256: "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        ),
         artifacts: [
             ModelArtifactPin(
                 filename: "video_depth_anything_vits.pth",
@@ -73,6 +166,13 @@ public enum GeometryModelPins {
         sourceCodeRepository: "DepthAnything/Video-Depth-Anything",
         sourceCodeRevision: "4f5ae23172ba60fd7bc11ef671cca678842c7072",
         license: "Apache-2.0",
+        licenseEvidence: GeometryModelLicenseEvidence(
+            resourceName: "Video-Depth-Anything-LICENSE",
+            byteCount: 11_356,
+            sha256: "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+            resourceByteCount: 11_357,
+            resourceSHA256: "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        ),
         artifacts: [
             ModelArtifactPin(
                 filename: "metric_video_depth_anything_vits.pth",
@@ -89,6 +189,11 @@ public enum GeometryModelPins {
         sourceCodeRepository: "ByteDance-Seed/Depth-Anything-3",
         sourceCodeRevision: "41736238f5bced4debf3f2a12375d2466874866d",
         license: "Apache-2.0",
+        licenseEvidence: GeometryModelLicenseEvidence(
+            resourceName: "Depth-Anything-3-LICENSE",
+            byteCount: 11_355,
+            sha256: "78446e29c48900cda82620a8df183cca61f0a595e05a49d0401a5fd604dd1870"
+        ),
         artifacts: [
             ModelArtifactPin(
                 filename: "config.json",
@@ -110,6 +215,11 @@ public enum GeometryModelPins {
         sourceCodeRepository: "VAST-AI-Research/TripoSR",
         sourceCodeRevision: "107cefdc244c39106fa830359024f6a2f1c78871",
         license: "MIT",
+        licenseEvidence: GeometryModelLicenseEvidence(
+            resourceName: "TripoSR-LICENSE",
+            byteCount: 1_080,
+            sha256: "ade0a66629bdd7e01e46b3296b3851cff0fd27989bca53da470ad6e96ed620fb"
+        ),
         artifacts: [
             ModelArtifactPin(
                 filename: "config.yaml",

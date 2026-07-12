@@ -86,9 +86,11 @@ enum AppleMediaVideoIO {
         to outputURL: URL,
         fillFrame: (_ frameIndex: Int, _ destination: UnsafeMutablePointer<UInt8>, _ bytesPerRow: Int) throws -> Void
     ) throws {
-        guard fps >= 1, width > 0, height > 0, frameCount > 0 else {
+        guard width > 0, height > 0, frameCount > 0 else {
             throw MediaIOError.videoOperationFailed("Invalid MP4 dimensions or frame rate.")
         }
+        let frameRate = try MediaVideoFrameRateResolver.resolve(Double(fps))
+        let integerFPS = Int(frameRate.timeScale)
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -103,7 +105,7 @@ enum AppleMediaVideoIO {
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: max(1_000_000, width * height * fps * 4),
+                AVVideoAverageBitRateKey: max(1_000_000, width * height * integerFPS * 4),
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
             ],
         ]
@@ -155,14 +157,14 @@ enum AppleMediaVideoIO {
                 throw error
             }
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-            let time = CMTime(value: Int64(frameIndex), timescale: CMTimeScale(fps))
+            let time = CMTime(value: Int64(frameIndex), timescale: frameRate.timeScale)
             guard adaptor.append(pixelBuffer, withPresentationTime: time) else {
                 throw MediaIOError.videoOperationFailed("Failed to append frame \(frameIndex).")
             }
         }
 
         input.markAsFinished()
-        writer.endSession(atSourceTime: CMTime(value: Int64(frameCount), timescale: CMTimeScale(fps)))
+        writer.endSession(atSourceTime: CMTime(value: Int64(frameCount), timescale: frameRate.timeScale))
         let semaphore = DispatchSemaphore(value: 0)
         writer.finishWriting { semaphore.signal() }
         semaphore.wait()
@@ -195,17 +197,62 @@ enum AppleMediaVideoIO {
     static func extractFrames(
         from videoURL: URL,
         into outputDirectoryURL: URL,
-        endFrame: Int?
+        endFrame: Int?,
+        validateDecodedSequence: ((Int, Int, Int) throws -> Void)?
     ) throws -> VideoFrameSequence {
-        try FileManager.default.createDirectory(at: outputDirectoryURL, withIntermediateDirectories: true)
         let asset = AVURLAsset(url: videoURL)
         guard let track = asset.tracks(withMediaType: .video).first else {
             throw MediaIOError.videoOperationFailed("Video track missing in asset: \(videoURL.path)")
         }
-        let fps = max(1.0, Double(track.nominalFrameRate > 0 ? track.nominalFrameRate : 30.0))
+        let frameRate = try MediaVideoFrameRateResolver.resolve(
+            Double(track.nominalFrameRate),
+            fallbackFPS: 30
+        )
+        let fps = frameRate.framesPerSecond
         let durationSeconds = CMTimeGetSeconds(asset.duration)
-        let estimatedFrameCount = max(1, Int((durationSeconds * fps).rounded(.toNearestOrEven)))
-        let frameCount = min(endFrame.map { $0 + 1 } ?? estimatedFrameCount, estimatedFrameCount)
+        let estimatedFrameCountValue = (durationSeconds * fps).rounded(.toNearestOrEven)
+        let requestedFrameCount: Int?
+        if let endFrame {
+            let (count, overflow) = endFrame.addingReportingOverflow(1)
+            guard endFrame >= 0, !overflow else {
+                throw MediaIOError.videoOperationFailed("Invalid end frame \(endFrame).")
+            }
+            requestedFrameCount = count
+        } else {
+            requestedFrameCount = nil
+        }
+        let estimatedFrameCount: Int
+        if estimatedFrameCountValue.isFinite,
+           estimatedFrameCountValue > 0,
+           estimatedFrameCountValue <= Double(Int.max) {
+            estimatedFrameCount = max(1, Int(estimatedFrameCountValue))
+        } else if let requestedFrameCount {
+            estimatedFrameCount = requestedFrameCount
+        } else {
+            throw MediaIOError.videoOperationFailed("Video frame count is not finite or representable.")
+        }
+        let frameCount = min(requestedFrameCount ?? estimatedFrameCount, estimatedFrameCount)
+        if let validateDecodedSequence {
+            let transformedBounds = CGRect(origin: .zero, size: track.naturalSize)
+                .applying(track.preferredTransform)
+            let metadataWidth = abs(transformedBounds.width).rounded(.up)
+            let metadataHeight = abs(transformedBounds.height).rounded(.up)
+            guard metadataWidth.isFinite,
+                  metadataHeight.isFinite,
+                  metadataWidth > 0,
+                  metadataHeight > 0,
+                  metadataWidth <= Double(Int.max),
+                  metadataHeight <= Double(Int.max) else {
+                throw MediaIOError.videoOperationFailed(
+                    "Video frame dimensions are not finite or representable."
+                )
+            }
+            try validateDecodedSequence(
+                Int(metadataWidth),
+                Int(metadataHeight),
+                frameCount
+            )
+        }
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
@@ -215,11 +262,18 @@ enum AppleMediaVideoIO {
         var frameWidth = 0
         var frameHeight = 0
         for frameIndex in 0..<frameCount {
-            let time = CMTime(value: CMTimeValue(frameIndex), timescale: CMTimeScale(max(1, Int32(fps.rounded()))))
+            let time = CMTime(value: CMTimeValue(frameIndex), timescale: frameRate.timeScale)
             let image = try generator.copyCGImage(at: time, actualTime: nil)
             if frameWidth == 0 || frameHeight == 0 {
                 frameWidth = image.width
                 frameHeight = image.height
+                try validateDecodedSequence?(frameWidth, frameHeight, frameCount)
+                try FileManager.default.createDirectory(
+                    at: outputDirectoryURL,
+                    withIntermediateDirectories: true
+                )
+            } else if image.width != frameWidth || image.height != frameHeight {
+                try validateDecodedSequence?(image.width, image.height, frameCount)
             }
             let frameURL = outputDirectoryURL
                 .appendingPathComponent(String(format: "frame_%05d", frameIndex))
@@ -231,6 +285,7 @@ enum AppleMediaVideoIO {
     }
 
     static func writeVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
+        let frameRate = try MediaVideoFrameRateResolver.resolve(fps, fallbackFPS: 1)
         guard let firstURL = frameURLs.first,
               let firstImage = loadCGImage(firstURL) else {
             throw MediaIOError.videoOperationFailed("No frames supplied for video writing.")
@@ -254,7 +309,7 @@ enum AppleMediaVideoIO {
             width: firstImage.width,
             height: firstImage.height,
             frameCount: frameURLs.count,
-            fps: max(1, Int(fps.rounded())),
+            fps: Int(frameRate.timeScale),
             to: outputURL
         )
     }

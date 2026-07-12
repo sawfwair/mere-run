@@ -11,6 +11,9 @@ public enum VideoDepthAnythingPreprocessingError: Error, Equatable, LocalizedErr
         actualWidth: Int,
         actualHeight: Int
     )
+    case allocationSizeOverflow
+    case invalidDepthShape([Int])
+    case unexpectedResizeDimensions(expectedWidth: Int, expectedHeight: Int, actualWidth: Int, actualHeight: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -18,6 +21,12 @@ public enum VideoDepthAnythingPreprocessingError: Error, Equatable, LocalizedErr
             "Video Depth Anything requires at least one decoded frame."
         case let .inconsistentFrameDimensions(expectedWidth, expectedHeight, actualWidth, actualHeight):
             "Video frame dimensions changed: expected \(expectedWidth)x\(expectedHeight), found \(actualWidth)x\(actualHeight)."
+        case .allocationSizeOverflow:
+            "Video Depth Anything preprocessing dimensions overflow the host allocation limit."
+        case .invalidDepthShape(let shape):
+            "Video Depth Anything depth must have [batch, frames, height, width] shape; found \(shape)."
+        case let .unexpectedResizeDimensions(expectedWidth, expectedHeight, actualWidth, actualHeight):
+            "Video Depth Anything resize produced \(actualWidth)x\(actualHeight); expected \(expectedWidth)x\(expectedHeight)."
         }
     }
 }
@@ -27,7 +36,7 @@ public enum VideoDepthAnythingPreprocessor {
     /// by ImageNet normalization. Output layout is `[1, T, H, W, 3]`.
     public static func normalizedVideo(
         frames: [MediaImage],
-        inputSize: Int = 518
+        inputSize: Int = VideoDepthAnythingLimits.defaultInputSize
     ) throws -> (video: MLXArray, plan: VideoDepthAnythingPreprocessingPlan) {
         guard let first = frames.first else {
             throw VideoDepthAnythingPreprocessingError.emptyFrames
@@ -40,13 +49,24 @@ public enum VideoDepthAnythingPreprocessor {
                 actualHeight: frame.height
             )
         }
-        let plan = VideoDepthAnythingPreprocessingPlan(
+        try VideoDepthAnythingLimits.validateDecodedSequence(
+            width: first.width,
+            height: first.height,
+            frameCount: frames.count
+        )
+        let plan = try VideoDepthAnythingPreprocessingPlan(
             sourceWidth: first.width,
             sourceHeight: first.height,
             requestedInputSize: inputSize
         )
+        let (pixelCount, pixelOverflow) = first.width.multipliedReportingOverflow(by: first.height)
+        let (framePixels, frameOverflow) = pixelCount.multipliedReportingOverflow(by: frames.count)
+        let (valueCount, valueOverflow) = framePixels.multipliedReportingOverflow(by: 3)
+        guard !pixelOverflow, !frameOverflow, !valueOverflow else {
+            throw VideoDepthAnythingPreprocessingError.allocationSizeOverflow
+        }
         var values = [Float]()
-        values.reserveCapacity(frames.count * first.width * first.height * 3)
+        values.reserveCapacity(valueCount)
         for frame in frames {
             for pixel in 0..<(frame.width * frame.height) {
                 let offset = pixel * 4
@@ -65,7 +85,14 @@ public enum VideoDepthAnythingPreprocessor {
                 mode: .cubic(alignCorners: false)
             )(video)
         }
-        precondition(video.dim(1) == plan.networkHeight && video.dim(2) == plan.networkWidth)
+        guard video.dim(1) == plan.networkHeight, video.dim(2) == plan.networkWidth else {
+            throw VideoDepthAnythingPreprocessingError.unexpectedResizeDimensions(
+                expectedWidth: plan.networkWidth,
+                expectedHeight: plan.networkHeight,
+                actualWidth: video.dim(2),
+                actualHeight: video.dim(1)
+            )
+        }
         let mean = MLXArray([Float(0.485), 0.456, 0.406]).reshaped(1, 1, 1, 3)
         let standardDeviation = MLXArray([Float(0.229), 0.224, 0.225]).reshaped(1, 1, 1, 3)
         video = ((video - mean) / standardDeviation)
@@ -79,8 +106,15 @@ public enum VideoDepthAnythingPreprocessor {
         _ depth: MLXArray,
         sourceWidth: Int,
         sourceHeight: Int
-    ) -> MLXArray {
-        precondition(depth.ndim == 4 && sourceWidth > 1 && sourceHeight > 1)
+    ) throws -> MLXArray {
+        guard depth.ndim == 4 else {
+            throw VideoDepthAnythingPreprocessingError.invalidDepthShape(depth.shape)
+        }
+        try VideoDepthAnythingLimits.validateDecodedSequence(
+            width: sourceWidth,
+            height: sourceHeight,
+            frameCount: depth.dim(1)
+        )
         if depth.dim(2) == sourceHeight && depth.dim(3) == sourceWidth { return depth }
         let batch = depth.dim(0)
         let frames = depth.dim(1)
@@ -91,7 +125,14 @@ public enum VideoDepthAnythingPreprocessor {
             ]),
             mode: .linear(alignCorners: true)
         )(depth.reshaped(batch * frames, depth.dim(2), depth.dim(3), 1))
-        precondition(resized.dim(1) == sourceHeight && resized.dim(2) == sourceWidth)
+        guard resized.dim(1) == sourceHeight, resized.dim(2) == sourceWidth else {
+            throw VideoDepthAnythingPreprocessingError.unexpectedResizeDimensions(
+                expectedWidth: sourceWidth,
+                expectedHeight: sourceHeight,
+                actualWidth: resized.dim(2),
+                actualHeight: resized.dim(1)
+            )
+        }
         return resized.squeezed(axis: -1).reshaped(batch, frames, sourceHeight, sourceWidth)
     }
 }

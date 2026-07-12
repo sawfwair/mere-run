@@ -23,10 +23,42 @@ public struct MeshArtifactRecord: Codable, Equatable, Sendable {
     }
 }
 
+public struct MeshInputRecord: Codable, Equatable, Sendable {
+    public let path: String
+    public let byteCount: Int64
+    public let sha256: String
+
+    public init(path: String, byteCount: Int64, sha256: String) {
+        self.path = path
+        self.byteCount = byteCount
+        self.sha256 = sha256
+    }
+}
+
+public enum MeshInputProvenanceError: Error, Equatable, LocalizedError, Sendable {
+    case missingInputRecord(String)
+    case inputRecordCountMismatch(expected: Int, actual: Int)
+    case inputRecordPathMismatch(expected: String, actual: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingInputRecord(let path):
+            "Mesh manifest does not contain durable input provenance for \(path)."
+        case .inputRecordCountMismatch(let expected, let actual):
+            "Mesh input provenance expected \(expected) records but received \(actual)."
+        case .inputRecordPathMismatch(let expected, let actual):
+            "Mesh input provenance expected path \(expected) but received \(actual)."
+        }
+    }
+}
+
 public struct MeshOutputManifest: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let createdAt: Date
+    /// Retained for readers of the original schema. New writers also populate
+    /// `inputs` with durable byte counts and hashes.
     public let inputPaths: [String]
+    public let inputs: [MeshInputRecord]?
     public let outputDirectory: String
     public let model: GeometryModelProvenance
     public let coordinateSystem: MeshCoordinateSystem
@@ -41,6 +73,7 @@ public struct MeshOutputManifest: Codable, Equatable, Sendable {
         schemaVersion: Int = 1,
         createdAt: Date = Date(),
         inputPaths: [String],
+        inputs: [MeshInputRecord]? = nil,
         outputDirectory: String,
         model: GeometryModelProvenance,
         coordinateSystem: MeshCoordinateSystem,
@@ -54,6 +87,7 @@ public struct MeshOutputManifest: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.inputPaths = inputPaths
+        self.inputs = inputs
         self.outputDirectory = outputDirectory
         self.model = model
         self.coordinateSystem = coordinateSystem
@@ -63,6 +97,14 @@ public struct MeshOutputManifest: Codable, Equatable, Sendable {
         self.triangleCount = triangleCount
         self.bounds = bounds
         self.artifacts = artifacts
+    }
+
+    public func inputRecord(for url: URL) throws -> MeshInputRecord {
+        let path = url.standardizedFileURL.path
+        guard let record = inputs?.first(where: { $0.path == path }) else {
+            throw MeshInputProvenanceError.missingInputRecord(path)
+        }
+        return record
     }
 }
 
@@ -79,10 +121,37 @@ public enum MeshArtifactExporter {
         outputDirectory: URL,
         stem: String = "asset",
         provenance: GeometryModelProvenance,
+        inputRecords admittedInputRecords: [MeshInputRecord]? = nil,
         createdAt: Date = Date()
     ) throws -> MeshExportResult {
         let root = outputDirectory.standardizedFileURL
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let standardizedInputs = inputURLs.map(\.standardizedFileURL)
+        let inputs: [MeshInputRecord]
+        if let admittedInputRecords {
+            guard admittedInputRecords.count == standardizedInputs.count else {
+                throw MeshInputProvenanceError.inputRecordCountMismatch(
+                    expected: standardizedInputs.count,
+                    actual: admittedInputRecords.count
+                )
+            }
+            for (url, record) in zip(standardizedInputs, admittedInputRecords)
+                where record.path != url.path {
+                throw MeshInputProvenanceError.inputRecordPathMismatch(
+                    expected: url.path,
+                    actual: record.path
+                )
+            }
+            inputs = admittedInputRecords
+        } else {
+            inputs = try standardizedInputs.map { url in
+                MeshInputRecord(
+                    path: url.path,
+                    byteCount: try ModelArtifactPin.fileByteCount(url),
+                    sha256: try ModelArtifactPin.fileSHA256(url)
+                )
+            }
+        }
         let cleanStem = sanitizedStem(stem)
         let outputs: [(MeshArtifactKind, String, String, (MeshAsset, URL) throws -> Void)] = [
             (.obj, "obj", "model/obj", MeshOBJWriter.write),
@@ -104,7 +173,8 @@ public enum MeshArtifactExporter {
         }
         let manifest = MeshOutputManifest(
             createdAt: createdAt,
-            inputPaths: inputURLs.map { $0.standardizedFileURL.path },
+            inputPaths: standardizedInputs.map(\.path),
+            inputs: inputs,
             outputDirectory: root.path,
             model: provenance,
             coordinateSystem: mesh.coordinateSystem,

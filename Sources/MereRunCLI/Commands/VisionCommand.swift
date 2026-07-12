@@ -15,6 +15,9 @@ struct Vision: ParsableCommand {
             VisionFlow.self,
             VisionDepthVideo.self,
             VisionGeometry.self,
+            VisionGeometryMultiView.self,
+            VisionImageTo3D.self,
+            VisionImageTo3DMultiview.self,
             VisionOCR.self,
         ]
     )

@@ -4,11 +4,13 @@ import XCTest
 
 final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
     func testStreamingExportMatchesLegacyArtifactsWithoutRetainingFrames() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let legacyRoot = root.appendingPathComponent("legacy", isDirectory: true)
         let streamingRoot = root.appendingPathComponent("streaming", isDirectory: true)
         let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let inputURL = root.appendingPathComponent("input.mov")
+        try Data("video-input".utf8).write(to: inputURL)
         let frames = try (0..<3).map { index in
             try DepthSequenceFrame(
                 index: index,
@@ -22,7 +24,7 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
         let provenance = fixtureProvenance()
         let legacy = try DepthSequenceArtifactExporter.export(
             frames: frames,
-            inputURL: root.appendingPathComponent("input.mov"),
+            inputURL: inputURL,
             outputDirectory: legacyRoot,
             fps: 24,
             semantics: .affineRelative,
@@ -31,7 +33,7 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
         )
         let exporter = try DepthSequenceStreamingArtifactExporter(
             expectedFrameCount: frames.count,
-            inputURL: root.appendingPathComponent("input.mov"),
+            inputURL: inputURL,
             outputDirectory: streamingRoot,
             width: 2,
             height: 2,
@@ -45,6 +47,8 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
         let streaming = try exporter.finalize()
 
         XCTAssertEqual(streaming.manifest.frameCount, legacy.manifest.frameCount)
+        XCTAssertEqual(streaming.manifest.inputByteCount, legacy.manifest.inputByteCount)
+        XCTAssertEqual(streaming.manifest.inputSHA256, legacy.manifest.inputSHA256)
         XCTAssertEqual(streaming.manifest.frames.map(\.index), [0, 1, 2])
         XCTAssertEqual(streaming.manifest.frames.map(\.confidencePath), legacy.manifest.frames.map(\.confidencePath))
         XCTAssertEqual(
@@ -55,7 +59,7 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
     }
 
     func testRejectsOutOfOrderAndIncompleteSequences() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let exporter = try makeExporter(root: root, expectedFrameCount: 2, width: 1, height: 1)
         let outOfOrder = try DepthSequenceFrame(
@@ -88,7 +92,7 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
     }
 
     func testPreviewSamplingIsCappedIndependentlyOfSequenceLength() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let width = 1_000_001
         let exporter = try makeExporter(root: root, expectedFrameCount: 2, width: width, height: 1)
@@ -114,9 +118,13 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
         width: Int,
         height: Int
     ) throws -> DepthSequenceStreamingArtifactExporter {
-        try DepthSequenceStreamingArtifactExporter(
+        let inputURL = root.appendingPathComponent("input.mov")
+        if !FileManager.default.fileExists(atPath: inputURL.path) {
+            try Data("video-input".utf8).write(to: inputURL)
+        }
+        return try DepthSequenceStreamingArtifactExporter(
             expectedFrameCount: expectedFrameCount,
-            inputURL: root.appendingPathComponent("input.mov"),
+            inputURL: inputURL,
             outputDirectory: root.appendingPathComponent("output", isDirectory: true),
             width: width,
             height: height,
@@ -136,12 +144,12 @@ final class DepthSequenceStreamingArtifactExporterTests: XCTestCase {
         )
     }
 
-    private func temporaryDirectory() -> URL {
+    private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(
             "depth-streaming-exporter-tests-\(UUID().uuidString)",
             isDirectory: true
         )
-        try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
 }

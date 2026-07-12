@@ -56,6 +56,41 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertTrue(rendered.contains("does not fabricate confidence maps"))
     }
 
+    func testGeometryGuidesResolvePinnedNativeModels() throws {
+        let still = try GuideCommand.resolveEntry(
+            commandPath: ["vision", "geometry"],
+            model: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue
+        )
+        let multi = try GuideCommand.resolveEntry(
+            commandPath: ["vision", "geometry-multiview"],
+            model: ModelResolver.ModelID.visionGeometryDA3Small.rawValue
+        )
+
+        XCTAssertEqual(still.topic, "vision-geometry")
+        XCTAssertEqual(multi.topic, "vision-geometry-multiview")
+        let rendered = try GuideCommand.render(entry: multi, model: nil, json: false)
+        XCTAssertTrue(rendered.contains("# Vision Geometry Multiview"))
+        XCTAssertTrue(rendered.contains("point-cloud primitive, not a triangle mesh"))
+        XCTAssertTrue(rendered.contains("containsGaussianParameters: false"))
+    }
+
+    func testImageTo3DGuideResolvesBothCommandSpellings() throws {
+        let vision = try GuideCommand.resolveEntry(
+            commandPath: ["vision", "image-to-3d"],
+            model: ModelResolver.ModelID.image3DTripoSR.rawValue
+        )
+        let image = try GuideCommand.resolveEntry(
+            commandPath: ["image", "reconstruct-3d"],
+            model: ModelResolver.ModelID.image3DTripoSR.rawValue
+        )
+        XCTAssertEqual(vision, image)
+        XCTAssertEqual(vision.topic, "vision-image-to-3d")
+        let rendered = try GuideCommand.render(entry: vision, model: nil, json: false)
+        XCTAssertTrue(rendered.contains("native Swift/MLX"))
+        XCTAssertTrue(rendered.contains("inferredUnseenGeometry: true"))
+        XCTAssertTrue(rendered.contains("native marching tetrahedra"))
+    }
+
     func testGuideMusicGenerateModelFocusParsesAndRenders() throws {
         let command = try GuideCommand.parse([
             "music",

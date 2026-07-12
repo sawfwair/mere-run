@@ -7,6 +7,9 @@ final class DepthSequenceArtifactExporterTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("depth-sequence-export-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let inputURL = root.appendingPathComponent("clip.mov")
+        try Data("video-input".utf8).write(to: inputURL)
         let frames = [
             try DepthSequenceFrame(
                 index: 0,
@@ -25,7 +28,7 @@ final class DepthSequenceArtifactExporterTests: XCTestCase {
         ]
         let result = try DepthSequenceArtifactExporter.export(
             frames: frames,
-            inputURL: URL(fileURLWithPath: "/tmp/clip.mov"),
+            inputURL: inputURL,
             outputDirectory: root,
             fps: 24,
             semantics: .affineRelative,
@@ -40,6 +43,9 @@ final class DepthSequenceArtifactExporterTests: XCTestCase {
         )
 
         XCTAssertEqual(result.manifest.frameCount, 2)
+        XCTAssertEqual(result.manifest.schemaVersion, 2)
+        XCTAssertEqual(result.manifest.inputByteCount, 11)
+        XCTAssertEqual(result.manifest.inputSHA256, try ModelArtifactPin.fileSHA256(inputURL))
         XCTAssertEqual(result.manifest.semantics, .affineRelative)
         XCTAssertFalse(result.manifest.canProjectEveryFrameToPoints)
         XCTAssertEqual(result.manifest.frames[0].artifacts.count, 2)

@@ -41,6 +41,12 @@ directory of depth EXRs and PNG previews, and `depth-review.mp4` assembled at
 the source FPS. Relative-model values are affine-relative; metric-model values
 are camera-space Z depth in meters.
 
+Requests are bounded before checkpoint or output work begins. `--input-size`
+accepts 14 through 1008. `--max-frames` defaults to 240 and accepts at most
+2400. Decoded frames are also checked for side length, per-frame pixels, total
+extracted pixels, and the patch-aligned network tensor budget; reduce
+`--max-frames` for high-resolution plates that exceed the aggregate budget.
+
 The local API exposes the same native path with multipart upload-only input:
 
 ```bash
@@ -65,9 +71,9 @@ spooled immediately, while only the eight frames that a later window can still
 crossfade remain in memory. EXRs and the sequence-wide normalized previews are
 then emitted one frame at a time. Encoder and DPT-tail work is micro-batched by
 default on Apple Silicon; temporal attention still spans each 32-frame window
-to preserve the authoritative graph. `--max-frames` remains useful for
-turnaround control, but is not required to prevent depth frames accumulating in
-RAM.
+to preserve the authoritative graph. Increase the bounded `--max-frames`
+control explicitly when a shot needs more than the 240-frame production
+default.
 
 ## Sources
 

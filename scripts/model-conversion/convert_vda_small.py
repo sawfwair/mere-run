@@ -13,12 +13,15 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import sys
 import tempfile
 from typing import Any
 
+import numpy
+import safetensors
 import torch
 from safetensors.torch import save_file
 
@@ -32,6 +35,8 @@ CHECKPOINTS: dict[str, dict[str, Any]] = {
         "sha256": "13379300b739e659f076a59d52e9801bd8d38c541a7e71f73bbca4dcfb013609",
         "modelID": "vision-depth-vda-small",
         "depthSemantics": "affine-relative",
+        "sourceCodeRepository": "DepthAnything/Video-Depth-Anything",
+        "sourceCodeRevision": "4f5ae23172ba60fd7bc11ef671cca678842c7072",
     },
     "metric": {
         "repository": "depth-anything/Metric-Video-Depth-Anything-Small",
@@ -41,11 +46,56 @@ CHECKPOINTS: dict[str, dict[str, Any]] = {
         "sha256": "3c28432b4e1f0d7bb31cad5151b6313b49457db5aa58d82e85bfb0f8b1311b33",
         "modelID": "vision-depth-vda-small-metric",
         "depthSemantics": "metric-meters",
+        "sourceCodeRepository": "DepthAnything/Video-Depth-Anything",
+        "sourceCodeRevision": "4f5ae23172ba60fd7bc11ef671cca678842c7072",
     },
 }
 
 EXPECTED_TENSOR_COUNT = 351
 EXPECTED_SCALAR_COUNT = 29_080_193
+CONVERTER_VERSION = 1
+CONVERSION_ENVIRONMENT = {
+    "python": "3.11.15",
+    "numpy": "2.4.3",
+    "torch": "2.13.0",
+    "safetensors": "0.8.0",
+}
+LICENSE_PIN = {
+    "byteCount": 11_356,
+    "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+}
+EXPECTED_OUTPUTS: dict[str, dict[str, dict[str, Any]]] = {
+    "relative": {
+        "model.safetensors": {
+            "byteCount": 116_362_340,
+            "sha256": "85c583474dcafda4d417776431343afcdfdfc97952d8ec00029d3452c55a05a2",
+        },
+        "config.json": {
+            "byteCount": 418,
+            "sha256": "5e9a1dc52e91799e2b91db2676bfc19a3832b6a29becba7f49473adfc29d7b62",
+        },
+        "SOURCE.json": {
+            "byteCount": 942,
+            "sha256": "a9f1ed205023b00ec7263e42a6b8b7b8e02cf07ed0e2834121f0b57d4d47622e",
+        },
+        "LICENSE": LICENSE_PIN,
+    },
+    "metric": {
+        "model.safetensors": {
+            "byteCount": 116_362_340,
+            "sha256": "0acf1e186750abddf5ae867a3a659ed67cd0c041e4e524e698a0dcb40195c779",
+        },
+        "config.json": {
+            "byteCount": 416,
+            "sha256": "e78fb3f37caa2fc93f25ddd3e0fefedb694fcda0eb7bbdd8d86c7e638003f7ec",
+        },
+        "SOURCE.json": {
+            "byteCount": 963,
+            "sha256": "30a4cb7dffebbc2b51f153514a4b2365931f03b7177224019db35a11fcc3bcf5",
+        },
+        "LICENSE": LICENSE_PIN,
+    },
+}
 
 
 def sha256(path: Path) -> str:
@@ -60,6 +110,33 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def validate_environment() -> None:
+    actual = {
+        "python": platform.python_version(),
+        "numpy": numpy.__version__,
+        "torch": torch.__version__.split("+")[0],
+        "safetensors": safetensors.__version__,
+    }
+    if actual != CONVERSION_ENVIRONMENT:
+        raise ValueError(
+            "conversion environment mismatch: "
+            f"expected {CONVERSION_ENVIRONMENT}, found {actual}; install "
+            "scripts/model-conversion/requirements-vfx.txt with Python 3.11.15"
+        )
+
+
+def validate_output(path: Path, variant: str) -> None:
+    expected = EXPECTED_OUTPUTS[variant][path.name]
+    actual_byte_count = path.stat().st_size
+    actual_sha256 = sha256(path)
+    if actual_byte_count != expected["byteCount"] or actual_sha256 != expected["sha256"]:
+        raise ValueError(
+            f"{variant} {path.name} reproducibility mismatch: expected "
+            f"{expected['byteCount']} bytes/{expected['sha256']}, found "
+            f"{actual_byte_count} bytes/{actual_sha256}"
+        )
+
+
 def tensor_inventory(state: dict[str, torch.Tensor]) -> dict[str, dict[str, Any]]:
     return {
         key: {"dtype": str(value.dtype).removeprefix("torch."), "shape": list(value.shape)}
@@ -68,8 +145,8 @@ def tensor_inventory(state: dict[str, torch.Tensor]) -> dict[str, dict[str, Any]
 
 
 def validate_source(path: Path, expected: dict[str, Any]) -> None:
-    if not path.is_file():
-        raise ValueError(f"source checkpoint does not exist: {path}")
+    if not path.is_file() or path.is_symlink():
+        raise ValueError(f"source checkpoint must be a regular non-symlink file: {path}")
     actual_size = path.stat().st_size
     if actual_size != expected["byteCount"]:
         raise ValueError(
@@ -125,6 +202,7 @@ def validate_inventory(
 
 
 def convert(args: argparse.Namespace) -> None:
+    validate_environment()
     source = args.source.resolve()
     output = args.output.resolve()
     inventory_path = args.inventory.resolve()
@@ -165,7 +243,8 @@ def convert(args: argparse.Namespace) -> None:
         source_record = {
             "conversion": {
                 "converter": Path(__file__).name,
-                "converterSHA256": sha256(Path(__file__).resolve()),
+                "converterVersion": CONVERTER_VERSION,
+                "environment": CONVERSION_ENVIRONMENT,
                 "outputByteCount": weights_path.stat().st_size,
                 "outputFile": weights_path.name,
                 "outputSHA256": weights_hash,
@@ -180,11 +259,19 @@ def convert(args: argparse.Namespace) -> None:
                 "repository": expected["repository"],
                 "revision": expected["revision"],
                 "sha256": expected["sha256"],
+                "sourceCodeRepository": expected["sourceCodeRepository"],
+                "sourceCodeRevision": expected["sourceCodeRevision"],
             },
         }
         write_json(staging / "SOURCE.json", source_record)
-        if args.license_file:
-            shutil.copyfile(args.license_file.resolve(), staging / "LICENSE")
+        license_file = args.license_file.resolve()
+        if not license_file.is_file() or license_file.is_symlink():
+            raise ValueError(f"license must be a regular non-symlink file: {license_file}")
+        if license_file.stat().st_size != LICENSE_PIN["byteCount"] or sha256(license_file) != LICENSE_PIN["sha256"]:
+            raise ValueError("license does not match the exact pinned upstream Apache-2.0 bytes")
+        shutil.copyfile(license_file, staging / "LICENSE")
+        for name in EXPECTED_OUTPUTS[args.variant]:
+            validate_output(staging / name, args.variant)
         os.replace(staging, output)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
@@ -202,7 +289,7 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(__file__).with_name("vda-small-tensor-inventory.json"),
     )
-    result.add_argument("--license-file", type=Path)
+    result.add_argument("--license-file", required=True, type=Path)
     result.add_argument(
         "--write-inventory-only",
         action="store_true",

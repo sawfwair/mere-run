@@ -360,7 +360,10 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
 
     func testVisionSubcommandsIncludeSegment() {
         let visionNames = Set(Vision.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(visionNames, Set(["caption", "inspect", "segment", "ground", "track", "track-live", "pose", "flow", "ocr"]))
+        XCTAssertEqual(visionNames, Set([
+            "caption", "inspect", "segment", "ground", "track", "track-live", "pose", "flow", "ocr",
+            "depth-video", "geometry", "geometry-multiview", "image-to-3d", "image-to-3d-multiview",
+        ]))
     }
 
     private func makeTempDir() throws -> URL {

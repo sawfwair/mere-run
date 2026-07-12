@@ -7,6 +7,8 @@ struct Image: ParsableCommand {
         subcommands: [
             ImageDataset.self,
             ImageGenerate.self,
+            ImageReconstruct3D.self,
+            ImageReconstruct3DMultiview.self,
             ImageRunPlan.self,
             ImageTrainLoRA.self,
             ImageVisualizeRun.self,

@@ -68,6 +68,7 @@ public enum GeometryPLYWriter {
         property float y
         property float z
         """
+        header += "\n"
         if hasNormals {
             header += "property float nx\nproperty float ny\nproperty float nz\n"
         }

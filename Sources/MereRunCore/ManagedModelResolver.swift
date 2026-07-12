@@ -150,6 +150,11 @@ public enum ManagedModelResolver {
             }
 
             let snapshotURL = try await downloadHubSnapshot(config: hubFallback, progress: progress)
+            try installBundledGeometryLicenseIfNeeded(
+                for: spec,
+                rootURL: snapshotURL,
+                fileManager: fileManager
+            )
             let normalized = spec.normalizedRootURL(snapshotURL, fileManager: fileManager)
             let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
             guard missing.isEmpty else {
@@ -303,6 +308,17 @@ public enum ManagedModelResolver {
         return spec
     }
 
+    private static func installBundledGeometryLicenseIfNeeded(
+        for spec: ManagedModelSpec,
+        rootURL: URL,
+        fileManager: FileManager
+    ) throws {
+        guard let pin = GeometryModelPins.pin(for: spec.id), pin.licenseEvidence != nil else {
+            return
+        }
+        try pin.installBundledLicenseEvidence(in: rootURL, fileManager: fileManager)
+    }
+
     private static func downloadHubSnapshot(
         config: HubFallbackConfig,
         progress: (@Sendable (PretrainedModelLoader.ProgressEvent) -> Void)?
@@ -414,6 +430,12 @@ public enum ManagedModelResolver {
             try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true)
             try materializeSnapshotEntries(from: sourceURL, to: destinationURL, fileManager: fileManager)
         }
+
+        try installBundledGeometryLicenseIfNeeded(
+            for: spec,
+            rootURL: spec.normalizedRootURL(modelDir, fileManager: fileManager),
+            fileManager: fileManager
+        )
 
         return try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
     }

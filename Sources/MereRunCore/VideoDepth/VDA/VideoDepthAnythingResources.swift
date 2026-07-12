@@ -1,3 +1,4 @@
+import Crypto
 import Foundation
 @preconcurrency import MLX
 
@@ -34,6 +35,63 @@ public enum VideoDepthAnythingVariant: String, Codable, CaseIterable, Hashable, 
 public enum VideoDepthAnythingCheckpointFormat: String, Codable, Hashable, Sendable {
     case pinnedPyTorch = "pinned-pytorch-state-dict"
     case convertedSafetensors = "verified-converted-safetensors"
+}
+
+public struct VideoDepthAnythingConvertedPackagePins: Equatable, Sendable {
+    public let weights: ModelArtifactPin
+    public let configuration: ModelArtifactPin
+    public let sourceManifest: ModelArtifactPin
+    public let license: ModelArtifactPin
+}
+
+public extension VideoDepthAnythingVariant {
+    var convertedPackagePins: VideoDepthAnythingConvertedPackagePins {
+        let license = ModelArtifactPin(
+            filename: "LICENSE",
+            byteCount: 11_356,
+            sha256: "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+        )
+        switch self {
+        case .relative:
+            return VideoDepthAnythingConvertedPackagePins(
+                weights: ModelArtifactPin(
+                    filename: "model.safetensors",
+                    byteCount: 116_362_340,
+                    sha256: "85c583474dcafda4d417776431343afcdfdfc97952d8ec00029d3452c55a05a2"
+                ),
+                configuration: ModelArtifactPin(
+                    filename: "config.json",
+                    byteCount: 418,
+                    sha256: "5e9a1dc52e91799e2b91db2676bfc19a3832b6a29becba7f49473adfc29d7b62"
+                ),
+                sourceManifest: ModelArtifactPin(
+                    filename: "SOURCE.json",
+                    byteCount: 942,
+                    sha256: "a9f1ed205023b00ec7263e42a6b8b7b8e02cf07ed0e2834121f0b57d4d47622e"
+                ),
+                license: license
+            )
+        case .metric:
+            return VideoDepthAnythingConvertedPackagePins(
+                weights: ModelArtifactPin(
+                    filename: "model.safetensors",
+                    byteCount: 116_362_340,
+                    sha256: "0acf1e186750abddf5ae867a3a659ed67cd0c041e4e524e698a0dcb40195c779"
+                ),
+                configuration: ModelArtifactPin(
+                    filename: "config.json",
+                    byteCount: 416,
+                    sha256: "e78fb3f37caa2fc93f25ddd3e0fefedb694fcda0eb7bbdd8d86c7e638003f7ec"
+                ),
+                sourceManifest: ModelArtifactPin(
+                    filename: "SOURCE.json",
+                    byteCount: 963,
+                    sha256: "30a4cb7dffebbc2b51f153514a4b2365931f03b7177224019db35a11fcc3bcf5"
+                ),
+                license: license
+            )
+        }
+    }
 }
 
 public struct VideoDepthAnythingCheckpoint: Codable, Equatable, Hashable, Sendable {
@@ -230,14 +288,20 @@ public enum VideoDepthAnythingResources {
     ) throws -> VideoDepthAnythingCheckpoint {
         let sourceURL = directory.appendingPathComponent("SOURCE.json")
         let configURL = directory.appendingPathComponent("config.json")
+        let licenseURL = directory.appendingPathComponent("LICENSE")
         guard FileManager.default.fileExists(atPath: sourceURL.path),
-              FileManager.default.fileExists(atPath: configURL.path) else {
+              FileManager.default.fileExists(atPath: configURL.path),
+              FileManager.default.fileExists(atPath: licenseURL.path) else {
             throw VideoDepthAnythingResourceError.invalidConvertedPackage(
-                "SOURCE.json and config.json are required beside model.safetensors"
+                "SOURCE.json, config.json, and the pinned upstream LICENSE are required beside model.safetensors"
             )
         }
-        let source = try decode(ConvertedSource.self, at: sourceURL)
-        guard let variant = VideoDepthAnythingVariant.modelID(source.modelID) else {
+        let (variant, sourceData) = try verifiedSourceData(
+            at: sourceURL,
+            expectedVariant: expectedVariant
+        )
+        let source = try decode(ConvertedSource.self, from: sourceData, at: sourceURL)
+        guard VideoDepthAnythingVariant.modelID(source.modelID) == variant else {
             throw VideoDepthAnythingResourceError.invalidConvertedPackage(
                 "unsupported source model id '\(source.modelID)'"
             )
@@ -249,21 +313,20 @@ public enum VideoDepthAnythingResources {
             )
         }
         try validate(source: source, variant: variant)
-        try validate(config: decode(ConvertedConfig.self, at: configURL), variant: variant)
-
-        let weightsURL = directory.appendingPathComponent(source.conversion.outputFile)
-        let outputPin = ModelArtifactPin(
-            filename: weightsURL.lastPathComponent,
-            byteCount: source.conversion.outputByteCount,
-            sha256: source.conversion.outputSHA256
+        let pins = variant.convertedPackagePins
+        let configData = try verifiedData(for: pins.configuration, at: configURL)
+        try validate(
+            config: decode(ConvertedConfig.self, from: configData, at: configURL),
+            variant: variant
         )
-        _ = try outputPin.verify(in: directory)
+        _ = try pins.license.verify(in: directory)
+        let weightsURL = try pins.weights.verify(in: directory)
         return VideoDepthAnythingCheckpoint(
             variant: variant,
             format: .convertedSafetensors,
             weightsURL: weightsURL,
-            weightsByteCount: source.conversion.outputByteCount,
-            weightsSHA256: source.conversion.outputSHA256,
+            weightsByteCount: pins.weights.byteCount,
+            weightsSHA256: pins.weights.sha256,
             sourceSHA256: source.source.sha256
         )
     }
@@ -292,11 +355,17 @@ public enum VideoDepthAnythingResources {
               source.source.sha256.lowercased() == artifact.sha256,
               source.source.repository == pin.repository,
               source.source.revision == pin.revision,
+              source.source.sourceCodeRepository == pin.sourceCodeRepository,
+              source.source.sourceCodeRevision == pin.sourceCodeRevision,
               source.conversion.converter == "convert_vda_small.py",
+              source.conversion.converterVersion == 1,
+              source.conversion.environment.python == "3.11.15",
+              source.conversion.environment.numpy == "2.4.3",
+              source.conversion.environment.torch == "2.13.0",
+              source.conversion.environment.safetensors == "0.8.0",
               source.conversion.outputFile == "model.safetensors",
-              source.conversion.outputByteCount > 0,
-              isSHA256(source.conversion.outputSHA256),
-              isSHA256(source.conversion.converterSHA256),
+              source.conversion.outputByteCount == variant.convertedPackagePins.weights.byteCount,
+              source.conversion.outputSHA256.lowercased() == variant.convertedPackagePins.weights.sha256,
               source.conversion.tensorCount == VideoDepthAnythingWeights.sourceTensorCount,
               source.conversion.scalarCount == VideoDepthAnythingWeights.sourceScalarCount else {
             throw VideoDepthAnythingResourceError.invalidConvertedPackage(
@@ -323,9 +392,93 @@ public enum VideoDepthAnythingResources {
         }
     }
 
-    private static func decode<Value: Decodable>(_ type: Value.Type, at url: URL) throws -> Value {
+    /// Reads only enough bytes to prove that `SOURCE.json` is one of the two
+    /// fixed conversion manifests. No attacker-controlled JSON is decoded
+    /// before its exact byte count and checksum match a known pin.
+    private static func verifiedSourceData(
+        at url: URL,
+        expectedVariant: VideoDepthAnythingVariant?
+    ) throws -> (variant: VideoDepthAnythingVariant, data: Data) {
+        let variants = VideoDepthAnythingVariant.allCases
+        let maximumByteCount = variants.map { $0.convertedPackagePins.sourceManifest.byteCount }.max() ?? 0
+        let data = try boundedData(at: url, maximumByteCount: maximumByteCount)
+        let digest = sha256(data)
+        let matches = variants.filter {
+            let pin = $0.convertedPackagePins.sourceManifest
+            return Int64(data.count) == pin.byteCount && digest == pin.sha256
+        }
+        guard let variant = matches.first, matches.count == 1 else {
+            throw VideoDepthAnythingResourceError.invalidConvertedPackage(
+                "SOURCE.json does not match an exact pinned conversion manifest"
+            )
+        }
+        if let expectedVariant, expectedVariant != variant {
+            throw VideoDepthAnythingResourceError.checkpointVariantMismatch(
+                expected: expectedVariant.modelID,
+                actual: variant.modelID
+            )
+        }
+        return (variant, data)
+    }
+
+    /// Returns the same bounded bytes whose length and checksum were verified,
+    /// closing the verify-then-decode replacement window for small metadata.
+    private static func verifiedData(for pin: ModelArtifactPin, at url: URL) throws -> Data {
+        let data = try boundedData(at: url, maximumByteCount: pin.byteCount)
+        guard Int64(data.count) == pin.byteCount else {
+            throw VideoDepthAnythingResourceError.invalidConvertedPackage(
+                "\(pin.filename) has \(data.count) bytes; expected exactly \(pin.byteCount)"
+            )
+        }
+        let digest = sha256(data)
+        guard digest == pin.sha256 else {
+            throw VideoDepthAnythingResourceError.invalidConvertedPackage(
+                "\(pin.filename) checksum mismatch: expected \(pin.sha256), found \(digest)"
+            )
+        }
+        return data
+    }
+
+    /// Reads at most one byte beyond the fixed contract. This detects an
+    /// oversized file without ever allocating from attacker-controlled size.
+    private static func boundedData(at url: URL, maximumByteCount: Int64) throws -> Data {
+        guard maximumByteCount >= 0, maximumByteCount < Int64(Int.max) else {
+            throw VideoDepthAnythingResourceError.invalidConvertedPackage(
+                "invalid metadata byte limit for \(url.lastPathComponent)"
+            )
+        }
         do {
-            return try JSONDecoder().decode(type, from: Data(contentsOf: url))
+            let handle = try FileHandle(forReadingFrom: url.resolvingSymlinksInPath())
+            defer { try? handle.close() }
+            let limit = Int(maximumByteCount) + 1
+            var data = Data()
+            data.reserveCapacity(limit)
+            while data.count < limit {
+                let chunk = try handle.read(upToCount: min(4_096, limit - data.count)) ?? Data()
+                if chunk.isEmpty { break }
+                data.append(chunk)
+            }
+            return data
+        } catch let error as VideoDepthAnythingResourceError {
+            throw error
+        } catch {
+            throw VideoDepthAnythingResourceError.invalidConvertedPackage(
+                "could not read \(url.lastPathComponent): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func decode<Value: Decodable>(
+        _ type: Value.Type,
+        from data: Data,
+        at url: URL
+    ) throws -> Value {
+        do {
+            return try JSONDecoder().decode(type, from: data)
         } catch {
             throw VideoDepthAnythingResourceError.invalidConvertedPackage(
                 "could not decode \(url.lastPathComponent): \(error.localizedDescription)"
@@ -338,17 +491,20 @@ public enum VideoDepthAnythingResources {
             || ["pth", "safetensors"].contains(URL(fileURLWithPath: value).pathExtension.lowercased())
     }
 
-    private static func isSHA256(_ value: String) -> Bool {
-        value.utf8.count == 64 && value.utf8.allSatisfy {
-            (0x30...0x39).contains($0) || (0x61...0x66).contains($0)
-        }
-    }
 }
 
 private struct ConvertedSource: Decodable {
     struct Conversion: Decodable {
+        struct Environment: Decodable {
+            let python: String
+            let numpy: String
+            let torch: String
+            let safetensors: String
+        }
+
         let converter: String
-        let converterSHA256: String
+        let converterVersion: Int
+        let environment: Environment
         let outputByteCount: Int64
         let outputFile: String
         let outputSHA256: String
@@ -362,6 +518,8 @@ private struct ConvertedSource: Decodable {
         let repository: String
         let revision: String
         let sha256: String
+        let sourceCodeRepository: String
+        let sourceCodeRevision: String
     }
 
     let conversion: Conversion

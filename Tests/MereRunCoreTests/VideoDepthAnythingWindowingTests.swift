@@ -2,8 +2,8 @@ import MereRunCore
 import XCTest
 
 final class VideoDepthAnythingWindowingTests: XCTestCase {
-    func testPreprocessingPlanMatchesReferenceLowerBoundSizing() {
-        let landscape = VideoDepthAnythingPreprocessingPlan(
+    func testPreprocessingPlanMatchesReferenceLowerBoundSizing() throws {
+        let landscape = try VideoDepthAnythingPreprocessingPlan(
             sourceWidth: 1_920,
             sourceHeight: 1_080
         )
@@ -11,7 +11,7 @@ final class VideoDepthAnythingWindowingTests: XCTestCase {
         XCTAssertEqual(landscape.networkWidth, 924)
         XCTAssertEqual(landscape.networkHeight, 518)
 
-        let ultrawide = VideoDepthAnythingPreprocessingPlan(
+        let ultrawide = try VideoDepthAnythingPreprocessingPlan(
             sourceWidth: 3_840,
             sourceHeight: 1_080
         )
@@ -19,7 +19,7 @@ final class VideoDepthAnythingWindowingTests: XCTestCase {
         XCTAssertEqual(ultrawide.networkWidth, 896)
         XCTAssertEqual(ultrawide.networkHeight, 252)
 
-        let portrait = VideoDepthAnythingPreprocessingPlan(
+        let portrait = try VideoDepthAnythingPreprocessingPlan(
             sourceWidth: 1_080,
             sourceHeight: 1_920
         )
@@ -76,6 +76,32 @@ final class VideoDepthAnythingWindowingTests: XCTestCase {
         XCTAssertEqual(result.alignments[1], VideoDepthAnythingAffineAlignment(scale: 1, shift: 0))
         XCTAssertEqual(result.frames[31], [7])
         XCTAssertEqual(result.frames[32], [7])
+    }
+
+    func testSolveAffineRejectsMismatchedFramesWithoutTrapping() {
+        XCTAssertThrowsError(
+            try VideoDepthAnythingWindowing.solveAffine(
+                prediction: [[1]],
+                target: [[1], [2]]
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? VideoDepthAnythingWindowingError,
+                .affineFrameCountMismatch(prediction: 1, target: 2)
+            )
+        }
+
+        XCTAssertThrowsError(
+            try VideoDepthAnythingWindowing.solveAffine(
+                prediction: [[1, 2]],
+                target: [[1]]
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? VideoDepthAnythingWindowingError,
+                .affineDepthElementCountMismatch(frame: 0, prediction: 2, target: 1)
+            )
+        }
     }
 
     func testStreamingAlignmentMatchesBatchAndRetainsOnlyMutableTail() throws {

@@ -1,6 +1,24 @@
 import Foundation
 
 enum FFmpegMediaIO {
+    struct FrameAdmissionPlan: Equatable, Sendable {
+        let frameCount: Int
+        let maximumWidth: Int
+        let maximumHeight: Int
+        let maximumLongSide: Int
+        let maximumShortSide: Int
+        let maximumPixelCount: Int
+
+        func admits(width: Int, height: Int) -> Bool {
+            guard width > 0, height > 0 else { return false }
+            let (pixelCount, overflow) = width.multipliedReportingOverflow(by: height)
+            guard !overflow else { return false }
+            return max(width, height) <= maximumLongSide
+                && min(width, height) <= maximumShortSide
+                && pixelCount <= maximumPixelCount
+        }
+    }
+
     static func imageSize(of url: URL) throws -> (width: Int, height: Int) {
         let result = try FFmpegProcess.run(
             tool: MediaTool.ffprobePath,
@@ -247,17 +265,91 @@ enum FFmpegMediaIO {
     static func extractFrames(
         from videoURL: URL,
         into directoryURL: URL,
-        endFrame: Int?
+        endFrame: Int?,
+        decodeLimits: MediaVideoDecodeLimits?,
+        validateDecodedSequence: ((Int, Int, Int) throws -> Void)?
     ) throws -> VideoFrameSequence {
+        let sourceSize = try imageSize(of: videoURL)
+        let requestedFrameCount: Int?
+        if let endFrame {
+            let (count, overflow) = endFrame.addingReportingOverflow(1)
+            guard endFrame >= 0, !overflow else {
+                throw MediaIOError.videoOperationFailed("Invalid end frame \(endFrame).")
+            }
+            requestedFrameCount = count
+        } else {
+            requestedFrameCount = nil
+        }
+
+        let admissionPlan: FrameAdmissionPlan?
+        if let validateDecodedSequence {
+            guard let requestedFrameCount else {
+                throw MediaIOError.videoOperationFailed(
+                    "A finite end frame is required when validating decoded video resources."
+                )
+            }
+            guard let decodeLimits, decodeLimits.maximumPixelCountPerFrame > 0 else {
+                throw MediaIOError.videoOperationFailed(
+                    "Validated FFmpeg extraction requires a positive decoder pixel limit."
+                )
+            }
+            guard decodeLimits.maximumAggregatePixelCount >= requestedFrameCount else {
+                throw MediaIOError.videoOperationFailed(
+                    "Validated FFmpeg extraction requires an aggregate pixel limit "
+                        + "covering at least one pixel per requested frame."
+                )
+            }
+            // Reject unsafe coded dimensions without opening the decoder. The
+            // exact bounded pass below then proves aggregate and dynamic-frame
+            // limits before any PNG is written.
+            try validateDecodedSequence(
+                sourceSize.width,
+                sourceSize.height,
+                requestedFrameCount
+            )
+            let plan = try decodeFrameAdmission(
+                videoURL,
+                maximumFrameCount: requestedFrameCount,
+                decodeLimits: decodeLimits
+            )
+            try validateDecodedSequence(
+                plan.maximumWidth,
+                plan.maximumHeight,
+                plan.frameCount
+            )
+            admissionPlan = plan
+        } else {
+            admissionPlan = nil
+        }
+
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let pattern = directoryURL.appendingPathComponent("frame_%05d.png")
         var arguments = [
             "-v", "error",
             "-y",
-            "-i", videoURL.path
         ]
-        if let endFrame {
-            arguments += ["-frames:v", "\(max(0, endFrame) + 1)"]
+        if let decodeLimits {
+            let frameLimit = admissionPlan?.frameCount ?? requestedFrameCount
+            guard let frameLimit,
+                  frameLimit > 0,
+                  decodeLimits.maximumPixelCountPerFrame > 0,
+                  decodeLimits.maximumAggregatePixelCount >= frameLimit else {
+                throw MediaIOError.videoOperationFailed(
+                    "FFmpeg decoder pixel and aggregate limits must be positive and bounded."
+                )
+            }
+            let maximumDecodedPixels = min(
+                decodeLimits.maximumPixelCountPerFrame,
+                decodeLimits.maximumAggregatePixelCount / frameLimit
+            )
+            arguments += ["-max_pixels", "\(maximumDecodedPixels)"]
+        }
+        arguments += [
+            "-i", videoURL.path,
+            "-map", "0:v:0",
+        ]
+        if let frameCount = admissionPlan?.frameCount ?? requestedFrameCount {
+            arguments += ["-frames:v", "\(frameCount)"]
         }
         arguments.append(pattern.path)
         _ = try FFmpegProcess.run(tool: MediaTool.ffmpegPath, arguments: arguments)
@@ -267,15 +359,143 @@ enum FFmpegMediaIO {
             includingPropertiesForKeys: nil
         ))?.filter { $0.pathExtension.lowercased() == "png" }.sorted { $0.path < $1.path } ?? []
 
-        guard let first = frameURLs.first else {
+        guard !frameURLs.isEmpty else {
             throw MediaIOError.videoOperationFailed("No frames extracted from \(videoURL.path).")
         }
-        let size = try imageSize(of: first)
+        var firstFrameSize: (width: Int, height: Int)?
+        var maximumWidth = 0
+        var maximumHeight = 0
+        for frameURL in frameURLs {
+            let frameSize = try imageSize(of: frameURL)
+            if firstFrameSize == nil {
+                firstFrameSize = frameSize
+            }
+            maximumWidth = max(maximumWidth, frameSize.width)
+            maximumHeight = max(maximumHeight, frameSize.height)
+            if let admissionPlan, !admissionPlan.admits(width: frameSize.width, height: frameSize.height) {
+                throw MediaIOError.videoOperationFailed(
+                    "FFmpeg extracted a \(frameSize.width)x\(frameSize.height) frame outside "
+                        + "the orientation-invariant admission bounds."
+                )
+            }
+        }
+        if let admissionPlan {
+            guard frameURLs.count <= admissionPlan.frameCount else {
+                throw MediaIOError.videoOperationFailed(
+                    "FFmpeg extracted \(frameURLs.count) frames after admission allowed "
+                        + "\(admissionPlan.frameCount)."
+                )
+            }
+        }
+        try validateDecodedSequence?(maximumWidth, maximumHeight, frameURLs.count)
+        guard let firstFrameSize else {
+            throw MediaIOError.videoOperationFailed("No frame dimensions were extracted.")
+        }
         return VideoFrameSequence(
             frameURLs: frameURLs,
-            fps: videoFPS(videoURL) ?? 30.0,
-            frameWidth: size.width,
-            frameHeight: size.height
+            fps: try videoFPS(videoURL),
+            frameWidth: firstFrameSize.width,
+            frameHeight: firstFrameSize.height
+        )
+    }
+
+    static func frameAdmissionPlan(
+        fromFFmpegShowInfo output: String,
+        maximumFrameCount: Int
+    ) throws -> FrameAdmissionPlan {
+        guard maximumFrameCount > 0 else {
+            throw MediaIOError.videoOperationFailed(
+                "FFmpeg frame admission requires a positive frame limit."
+            )
+        }
+        var dimensions: [(width: Int, height: Int)] = []
+        for line in output.split(whereSeparator: \.isNewline) {
+            let fields = line.split(whereSeparator: \.isWhitespace)
+            guard fields.contains("n:"),
+                  let sizeField = fields.first(where: { $0.hasPrefix("s:") }) else {
+                continue
+            }
+            let pieces = sizeField.dropFirst(2).split(separator: "x", maxSplits: 1)
+            guard pieces.count == 2,
+                  let width = Int(pieces[0]),
+                  let height = Int(pieces[1]) else {
+                throw MediaIOError.videoOperationFailed(
+                    "FFmpeg showinfo returned malformed per-frame dimensions."
+                )
+            }
+            dimensions.append((width, height))
+        }
+        guard !dimensions.isEmpty else {
+            throw MediaIOError.videoOperationFailed(
+                "FFmpeg showinfo did not return any decodable video frames."
+            )
+        }
+        guard dimensions.count <= maximumFrameCount else {
+            throw MediaIOError.videoOperationFailed(
+                "FFmpeg showinfo returned \(dimensions.count) frames for a \(maximumFrameCount)-frame decode."
+            )
+        }
+
+        var maximumWidth = 0
+        var maximumHeight = 0
+        var maximumLongSide = 0
+        var maximumShortSide = 0
+        var maximumPixelCount = 0
+        for frame in dimensions {
+            guard frame.width > 0, frame.height > 0 else {
+                throw MediaIOError.videoOperationFailed(
+                    "FFmpeg showinfo returned invalid decoded frame dimensions "
+                        + "\(frame.width)x\(frame.height)."
+                )
+            }
+            let (pixelCount, overflow) = frame.width.multipliedReportingOverflow(by: frame.height)
+            guard !overflow else {
+                throw MediaIOError.videoOperationFailed(
+                    "FFmpeg showinfo frame dimensions overflow the pixel count."
+                )
+            }
+            maximumWidth = max(maximumWidth, frame.width)
+            maximumHeight = max(maximumHeight, frame.height)
+            maximumLongSide = max(maximumLongSide, max(frame.width, frame.height))
+            maximumShortSide = max(maximumShortSide, min(frame.width, frame.height))
+            maximumPixelCount = max(maximumPixelCount, pixelCount)
+        }
+        return FrameAdmissionPlan(
+            frameCount: dimensions.count,
+            maximumWidth: maximumWidth,
+            maximumHeight: maximumHeight,
+            maximumLongSide: maximumLongSide,
+            maximumShortSide: maximumShortSide,
+            maximumPixelCount: maximumPixelCount
+        )
+    }
+
+    private static func decodeFrameAdmission(
+        _ url: URL,
+        maximumFrameCount: Int,
+        decodeLimits: MediaVideoDecodeLimits
+    ) throws -> FrameAdmissionPlan {
+        let maximumDecodedPixels = min(
+            decodeLimits.maximumPixelCountPerFrame,
+            decodeLimits.maximumAggregatePixelCount / maximumFrameCount
+        )
+        let result = try FFmpegProcess.run(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "info",
+                "-max_pixels", "\(maximumDecodedPixels)",
+                "-i", url.path,
+                "-map", "0:v:0",
+                "-vf", "showinfo",
+                "-frames:v", "\(maximumFrameCount)",
+                "-an", "-sn", "-dn",
+                "-f", "null",
+                "-",
+            ]
+        )
+        return try frameAdmissionPlan(
+            fromFFmpegShowInfo: result.stderr,
+            maximumFrameCount: maximumFrameCount
         )
     }
 
@@ -286,7 +506,8 @@ enum FFmpegMediaIO {
         let tempDir = first.deletingLastPathComponent()
         let listURL = tempDir.appendingPathComponent("mererun-frames-\(UUID().uuidString).txt")
         defer { try? FileManager.default.removeItem(at: listURL) }
-        let duration = 1.0 / max(fps, 1.0)
+        let resolvedFPS = try MediaVideoFrameRateResolver.resolve(fps)
+        let duration = 1.0 / resolvedFPS.framesPerSecond
         let list = frameURLs.map { "file '\($0.path.replacingOccurrences(of: "'", with: "'\\''"))'\nduration \(duration)" }
             .joined(separator: "\n")
         try list.write(to: listURL, atomically: true, encoding: .utf8)
@@ -298,7 +519,7 @@ enum FFmpegMediaIO {
                 "-f", "concat",
                 "-safe", "0",
                 "-i", listURL.path,
-                "-r", "\(max(1, Int(fps.rounded())))",
+                "-r", "\(resolvedFPS.timeScale)",
                 "-c:v", "libx264",
                 "-pix_fmt", "yuv420p",
                 outputURL.path
@@ -324,7 +545,7 @@ enum FFmpegMediaIO {
         return !text.isEmpty
     }
 
-    private static func videoFPS(_ url: URL) -> Double? {
+    private static func videoFPS(_ url: URL) throws -> Double {
         guard let result = try? FFmpegProcess.run(
             tool: MediaTool.ffprobePath,
             arguments: [
@@ -335,14 +556,24 @@ enum FFmpegMediaIO {
                 url.path
             ]
         ) else {
-            return nil
+            return try MediaVideoFrameRateResolver.resolve(0, fallbackFPS: 30).framesPerSecond
         }
         let text = String(decoding: result.stdout, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = text.split(separator: "/").compactMap { Double($0) }
         if parts.count == 2, parts[1] != 0 {
-            return parts[0] / parts[1]
+            return try MediaVideoFrameRateResolver.resolve(
+                parts[0] / parts[1],
+                fallbackFPS: 30
+            ).framesPerSecond
         }
-        return Double(text)
+        guard let candidateFPS = Double(text) else {
+            return try MediaVideoFrameRateResolver.resolve(0, fallbackFPS: 30).framesPerSecond
+        }
+        return try MediaVideoFrameRateResolver.resolve(
+            candidateFPS,
+            fallbackFPS: 30
+        ).framesPerSecond
     }
+
 }

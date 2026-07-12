@@ -4,7 +4,7 @@ import XCTest
 
 final class GeometryExportersTests: XCTestCase {
     func testOpenEXRHasMagicHeaderAndScanlineOffsets() throws {
-        let directory = temporaryDirectory()
+        let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("depth.exr")
         try OpenEXRWriter.writeFloatChannels(
@@ -22,7 +22,7 @@ final class GeometryExportersTests: XCTestCase {
     }
 
     func testPLYWritesOnlyValidPointsAndProperties() throws {
-        let directory = temporaryDirectory()
+        let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let frame = try makeFrame()
         let url = directory.appendingPathComponent("points.ply")
@@ -40,13 +40,15 @@ final class GeometryExportersTests: XCTestCase {
         let text = String(decoding: data.prefix(800), as: UTF8.self)
         XCTAssertTrue(text.contains("format binary_little_endian 1.0"))
         XCTAssertTrue(text.contains("element vertex 3"))
+        XCTAssertTrue(text.contains("property float z\nproperty float nx\n"))
+        XCTAssertFalse(text.contains("zproperty"))
         XCTAssertTrue(text.contains("property float nx"))
         XCTAssertTrue(text.contains("property uchar red"))
         XCTAssertTrue(text.contains("property float confidence"))
     }
 
     func testArtifactExporterWritesManifestAndChecksums() throws {
-        let directory = temporaryDirectory()
+        let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let frame = try makeFrame()
         let provenance = GeometryModelProvenance(
@@ -56,15 +58,20 @@ final class GeometryExportersTests: XCTestCase {
             license: "MIT",
             weightsSHA256: String(repeating: "a", count: 64)
         )
+        let inputURL = directory.appendingPathComponent("input.png")
+        try Data("image-input".utf8).write(to: inputURL)
         let result = try GeometryArtifactExporter.export(
             frame: frame,
-            inputURL: URL(fileURLWithPath: "/tmp/input.png"),
+            inputURL: inputURL,
             outputDirectory: directory,
             provenance: provenance,
             createdAt: Date(timeIntervalSince1970: 0),
             options: GeometryExportOptions(stem: "shot-001")
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.manifestURL.path))
+        XCTAssertEqual(result.manifest.schemaVersion, 2)
+        XCTAssertEqual(result.manifest.inputByteCount, 11)
+        XCTAssertEqual(result.manifest.inputSHA256, try ModelArtifactPin.fileSHA256(inputURL))
         XCTAssertEqual(result.manifest.depthStatistics.validPixelCount, 3)
         XCTAssertEqual(result.manifest.artifacts.count, 8)
         XCTAssertEqual(Set(result.manifest.artifacts.map(\.sha256.count)), [64])
@@ -109,10 +116,10 @@ final class GeometryExportersTests: XCTestCase {
         )
     }
 
-    private func temporaryDirectory() -> URL {
+    private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-geometry-tests-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
 

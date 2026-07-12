@@ -12,7 +12,7 @@ final class MoGe2ModelTests: MereRunCoreTestCase {
             archive: ONNXInitializerArchive(url: URL(fileURLWithPath: path))
         )
         let image = MLX.ones([1, 28, 28, 3], dtype: .float32) * MLXArray(Float(0.5))
-        let output = model(image, tokenCount: 4)
+        let output = try model(image, tokenCount: 4)
         MLX.eval(output.points, output.normals, output.maskProbability, output.metricScale)
         XCTAssertEqual(output.points.shape, [1, 28, 28, 3])
         XCTAssertEqual(output.normals.shape, [1, 28, 28, 3])

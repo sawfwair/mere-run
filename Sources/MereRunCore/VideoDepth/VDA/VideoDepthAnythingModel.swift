@@ -26,20 +26,70 @@ public struct VideoDepthAnythingConfiguration: Equatable, Sendable {
         temporalTransformerBlockCount: Int = 1,
         temporalAttentionBlockCount: Int = 2,
         temporalGroupCount: Int = 32
-    ) {
-        precondition(intermediateLayers.count == 4)
-        precondition(Set(intermediateLayers).count == 4)
-        precondition(intermediateLayers.allSatisfy { $0 >= 0 && $0 < backbone.layerCount })
-        precondition(projectedChannels.count == 4)
-        precondition(featureChannels > 0 && projectedChannels.allSatisfy { $0 > 0 })
-        precondition(temporalFrameCount > 0)
-        precondition(temporalHeadCount > 0)
-        precondition(temporalTransformerBlockCount > 0)
-        precondition(temporalAttentionBlockCount > 0)
-        precondition(temporalGroupCount > 0)
+    ) throws {
+        guard intermediateLayers.count == 4,
+              Set(intermediateLayers).count == 4,
+              intermediateLayers.allSatisfy({ $0 >= 0 && $0 < backbone.layerCount }) else {
+            throw VideoDepthAnythingConfigurationError.invalidIntermediateLayers(
+                intermediateLayers,
+                backboneLayerCount: backbone.layerCount
+            )
+        }
+        guard projectedChannels.count == 4 else {
+            throw VideoDepthAnythingConfigurationError.invalidProjectedChannels(projectedChannels)
+        }
+        guard featureChannels > 0, projectedChannels.allSatisfy({ $0 > 0 }) else {
+            throw VideoDepthAnythingConfigurationError.nonPositiveFeatureChannels(
+                featureChannels: featureChannels,
+                projectedChannels: projectedChannels
+            )
+        }
+        guard temporalFrameCount > 0,
+              temporalHeadCount > 0,
+              temporalTransformerBlockCount > 0,
+              temporalAttentionBlockCount > 0,
+              temporalGroupCount > 0 else {
+            throw VideoDepthAnythingConfigurationError.nonPositiveTemporalParameter
+        }
         let temporalChannels = [projectedChannels[2], projectedChannels[3], featureChannels, featureChannels]
-        precondition(temporalChannels.allSatisfy { $0.isMultiple(of: temporalHeadCount) })
-        precondition(temporalChannels.allSatisfy { $0.isMultiple(of: temporalGroupCount) })
+        guard temporalChannels.allSatisfy({ $0.isMultiple(of: temporalHeadCount) }) else {
+            throw VideoDepthAnythingConfigurationError.temporalChannelsNotDivisible(
+                channels: temporalChannels,
+                divisor: temporalHeadCount,
+                parameter: "temporalHeadCount"
+            )
+        }
+        guard temporalChannels.allSatisfy({ $0.isMultiple(of: temporalGroupCount) }) else {
+            throw VideoDepthAnythingConfigurationError.temporalChannelsNotDivisible(
+                channels: temporalChannels,
+                divisor: temporalGroupCount,
+                parameter: "temporalGroupCount"
+            )
+        }
+        self.init(
+            validatedBackbone: backbone,
+            intermediateLayers: intermediateLayers,
+            featureChannels: featureChannels,
+            projectedChannels: projectedChannels,
+            temporalFrameCount: temporalFrameCount,
+            temporalHeadCount: temporalHeadCount,
+            temporalTransformerBlockCount: temporalTransformerBlockCount,
+            temporalAttentionBlockCount: temporalAttentionBlockCount,
+            temporalGroupCount: temporalGroupCount
+        )
+    }
+
+    private init(
+        validatedBackbone backbone: DINOv2Configuration,
+        intermediateLayers: [Int],
+        featureChannels: Int,
+        projectedChannels: [Int],
+        temporalFrameCount: Int,
+        temporalHeadCount: Int,
+        temporalTransformerBlockCount: Int,
+        temporalAttentionBlockCount: Int,
+        temporalGroupCount: Int
+    ) {
         self.backbone = backbone
         self.intermediateLayers = intermediateLayers
         self.featureChannels = featureChannels
@@ -51,7 +101,40 @@ public struct VideoDepthAnythingConfiguration: Equatable, Sendable {
         self.temporalGroupCount = temporalGroupCount
     }
 
-    public static let small = VideoDepthAnythingConfiguration()
+    public static let small = VideoDepthAnythingConfiguration(
+        validatedBackbone: .smallPatch14,
+        intermediateLayers: [2, 5, 8, 11],
+        featureChannels: 64,
+        projectedChannels: [48, 96, 192, 384],
+        temporalFrameCount: 32,
+        temporalHeadCount: 8,
+        temporalTransformerBlockCount: 1,
+        temporalAttentionBlockCount: 2,
+        temporalGroupCount: 32
+    )
+}
+
+public enum VideoDepthAnythingConfigurationError: Error, Equatable, LocalizedError, Sendable {
+    case invalidIntermediateLayers([Int], backboneLayerCount: Int)
+    case invalidProjectedChannels([Int])
+    case nonPositiveFeatureChannels(featureChannels: Int, projectedChannels: [Int])
+    case nonPositiveTemporalParameter
+    case temporalChannelsNotDivisible(channels: [Int], divisor: Int, parameter: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidIntermediateLayers(layers, backboneLayerCount):
+            "VDA requires four unique intermediate layers in 0..<\(backboneLayerCount); received \(layers)."
+        case .invalidProjectedChannels(let channels):
+            "VDA requires exactly four projected channel counts; received \(channels)."
+        case let .nonPositiveFeatureChannels(featureChannels, projectedChannels):
+            "VDA feature channels must be positive; received feature=\(featureChannels), projected=\(projectedChannels)."
+        case .nonPositiveTemporalParameter:
+            "VDA temporal frame, head, block, attention, and group counts must be positive."
+        case let .temporalChannelsNotDivisible(channels, divisor, parameter):
+            "VDA temporal channels \(channels) must be divisible by \(parameter)=\(divisor)."
+        }
+    }
 }
 
 /// Execution-only memory controls. These values do not change the graph or
@@ -67,20 +150,55 @@ public struct VideoDepthAnythingMemoryConfiguration: Equatable, Sendable {
     public init(
         encoderMicroBatchSize: Int? = 4,
         dptTailMicroBatchSize: Int? = 4
+    ) throws {
+        if let encoderMicroBatchSize, encoderMicroBatchSize <= 0 {
+            throw VideoDepthAnythingMemoryConfigurationError.invalidEncoderMicroBatchSize(
+                encoderMicroBatchSize
+            )
+        }
+        if let dptTailMicroBatchSize, dptTailMicroBatchSize <= 0 {
+            throw VideoDepthAnythingMemoryConfigurationError.invalidDPTTailMicroBatchSize(
+                dptTailMicroBatchSize
+            )
+        }
+        self.init(
+            validatedEncoderMicroBatchSize: encoderMicroBatchSize,
+            dptTailMicroBatchSize: dptTailMicroBatchSize
+        )
+    }
+
+    private init(
+        validatedEncoderMicroBatchSize encoderMicroBatchSize: Int?,
+        dptTailMicroBatchSize: Int?
     ) {
-        precondition(encoderMicroBatchSize.map { $0 > 0 } ?? true)
-        precondition(dptTailMicroBatchSize.map { $0 > 0 } ?? true)
         self.encoderMicroBatchSize = encoderMicroBatchSize
         self.dptTailMicroBatchSize = dptTailMicroBatchSize
     }
 
     /// Conservative defaults for unified-memory Apple Silicon systems.
-    public static let appleSilicon = VideoDepthAnythingMemoryConfiguration()
+    public static let appleSilicon = VideoDepthAnythingMemoryConfiguration(
+        validatedEncoderMicroBatchSize: 4,
+        dptTailMicroBatchSize: 4
+    )
     /// Useful for parity checks and hosts with enough memory for all frames.
     public static let fullBatch = VideoDepthAnythingMemoryConfiguration(
-        encoderMicroBatchSize: nil,
+        validatedEncoderMicroBatchSize: nil,
         dptTailMicroBatchSize: nil
     )
+}
+
+public enum VideoDepthAnythingMemoryConfigurationError: Error, Equatable, LocalizedError, Sendable {
+    case invalidEncoderMicroBatchSize(Int)
+    case invalidDPTTailMicroBatchSize(Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidEncoderMicroBatchSize(let value):
+            "VDA encoder micro-batch size must be positive or nil; received \(value)."
+        case .invalidDPTTailMicroBatchSize(let value):
+            "VDA DPT-tail micro-batch size must be positive or nil; received \(value)."
+        }
+    }
 }
 
 public struct VideoDepthAnythingRawOutput {

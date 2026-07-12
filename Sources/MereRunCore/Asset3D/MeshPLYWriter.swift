@@ -18,6 +18,7 @@ public enum MeshPLYWriter {
         property float ny
         property float nz
         """
+        header += "\n"
         if hasColors {
             header += "property uchar red\nproperty uchar green\nproperty uchar blue\nproperty uchar alpha\n"
         }

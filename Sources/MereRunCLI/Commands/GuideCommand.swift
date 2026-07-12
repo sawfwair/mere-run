@@ -346,6 +346,40 @@ enum GuideRegistry {
             resourceName: "vision-flow.md"
         ),
         GuideTopic(
+            topic: "vision-geometry",
+            title: "Vision Geometry",
+            commandPaths: [["vision", "geometry"]],
+            models: ["vision-geometry-moge2-small"],
+            resourceName: "vision-geometry.md"
+        ),
+        GuideTopic(
+            topic: "vision-geometry-multiview",
+            title: "Vision Geometry Multiview",
+            commandPaths: [["vision", "geometry-multiview"]],
+            models: ["vision-geometry-da3-small"],
+            resourceName: "vision-geometry-multiview.md"
+        ),
+        GuideTopic(
+            topic: "vision-image-to-3d",
+            title: "Native Image to 3D",
+            commandPaths: [
+                ["vision", "image-to-3d"],
+                ["image", "reconstruct-3d"],
+            ],
+            models: ["image-3d-triposr"],
+            resourceName: "vision-image-to-3d.md"
+        ),
+        GuideTopic(
+            topic: "vision-image-to-3d-multiview",
+            title: "Native Multi-view Image to 3D",
+            commandPaths: [
+                ["vision", "image-to-3d-multiview"],
+                ["image", "reconstruct-3d-multiview"],
+            ],
+            models: ["image-3d-instantmesh-base"],
+            resourceName: "vision-image-to-3d-multiview.md"
+        ),
+        GuideTopic(
             topic: "vision-depth-video",
             title: "Vision Depth Video",
             commandPaths: [["vision", "depth-video"]],

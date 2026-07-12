@@ -20,21 +20,33 @@ struct VisionDepthVideo: AsyncParsableCommand {
     )
     var model: String?
 
-    @Option(name: [.long], help: "Longest network input edge before aspect-ratio adjustment. (default: 518)")
-    var inputSize: Int = 518
+    @Option(
+        name: [.long],
+        help: "Longest network input edge (14...1008) before aspect-ratio adjustment. (default: 518)"
+    )
+    var inputSize: Int = VideoDepthAnythingLimits.defaultInputSize
 
-    @Option(name: [.long], help: "Decode at most this many source frames.")
-    var maxFrames: Int?
+    @Option(name: [.long], help: "Decode at most 1...2400 source frames. (default: 240)")
+    var maxFrames: Int = VideoDepthAnythingLimits.defaultMaximumFrameCount
 
-    @Flag(name: [.long], help: "Verify inputs and checkpoint, then print the plan without inference.")
+    @Flag(
+        name: [.long],
+        help: "Snapshot/hash and decode the bounded input, verify media/network limits and checkpoint, then print the plan without inference."
+    )
     var dryRun = false
 
     @Flag(name: [.long], help: "Print the structured result on stdout.")
     var json = false
 
     mutating func run() async throws {
-        guard inputSize > 0 else { throw ValidationError("--input-size must be positive") }
-        if let maxFrames, maxFrames <= 0 { throw ValidationError("--max-frames must be positive") }
+        do {
+            _ = try VideoDepthAnythingLimits.validateRequest(
+                inputSize: inputSize,
+                maximumFrameCount: maxFrames
+            )
+        } catch {
+            throw ValidationError(error.localizedDescription)
+        }
 
         let inputURL = URL(fileURLWithPath: input).standardizedFileURL
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
@@ -43,13 +55,18 @@ struct VisionDepthVideo: AsyncParsableCommand {
         let outputURL = Self.resolveOutputURL(output, inputURL: inputURL)
 
         if dryRun {
-            let checkpoint = try await VideoDepthAnythingResources.resolve(requestedModel: model)
+            let preflight = try await VideoDepthAnythingGenerator.preflight(
+                videoURL: inputURL,
+                model: model,
+                inputSize: inputSize,
+                maximumFrameCount: maxFrames
+            )
             print(try Self.jsonString(Self.makePlan(
                 inputURL: inputURL,
                 outputURL: outputURL,
                 inputSize: inputSize,
                 maximumFrameCount: maxFrames,
-                checkpoint: checkpoint
+                preflight: preflight
             )))
             return
         }
@@ -90,12 +107,16 @@ struct VisionDepthVideo: AsyncParsableCommand {
         inputURL: URL,
         outputURL: URL,
         inputSize: Int,
-        maximumFrameCount: Int?,
-        checkpoint: VideoDepthAnythingCheckpoint
+        maximumFrameCount: Int,
+        preflight: VideoDepthAnythingPreflightResult
     ) -> VisionDepthVideoPlanPayload {
-        VisionDepthVideoPlanPayload(
+        let checkpoint = preflight.checkpoint
+        return VisionDepthVideoPlanPayload(
+            schemaVersion: 2,
             status: "planned",
             inputPath: inputURL.path,
+            inputByteCount: preflight.input.byteCount,
+            inputSHA256: preflight.input.sha256,
             outputDirectory: outputURL.path,
             modelID: checkpoint.variant.modelID,
             semantics: checkpoint.variant.semantics,
@@ -104,7 +125,21 @@ struct VisionDepthVideo: AsyncParsableCommand {
             checkpointSHA256: checkpoint.weightsSHA256,
             checkpointVerified: true,
             inputSize: inputSize,
+            effectiveInputSize: preflight.effectiveInputSize,
             maximumFrameCount: maximumFrameCount,
+            decodedWidth: preflight.sourceWidth,
+            decodedHeight: preflight.sourceHeight,
+            decodedFrameCount: preflight.frameCount,
+            sourceFPS: preflight.sourceFPS,
+            networkWidth: preflight.networkWidth,
+            networkHeight: preflight.networkHeight,
+            windowCount: preflight.windowCount,
+            maximumEncodedVideoBytes: VideoDepthAnythingLimits.maximumEncodedVideoBytes,
+            maximumDecodedFrameDimension: VideoDepthAnythingLimits.maximumDecodedFrameDimension,
+            maximumDecodedPixelCountPerFrame: VideoDepthAnythingLimits.maximumDecodedPixelCountPerFrame,
+            maximumAggregateDecodedPixelCount: VideoDepthAnythingLimits.maximumAggregateDecodedPixelCount,
+            maximumNetworkDimension: VideoDepthAnythingLimits.maximumNetworkDimension,
+            maximumNetworkPixelCount: VideoDepthAnythingLimits.maximumNetworkPixelCount,
             temporalWindowLength: VideoDepthAnythingWindowing.windowLength,
             temporalOverlap: VideoDepthAnythingWindowing.overlap,
             frameStep: VideoDepthAnythingWindowing.frameStep,
@@ -112,6 +147,7 @@ struct VisionDepthVideo: AsyncParsableCommand {
             retainedAlignmentFrameLimit: VideoDepthAnythingWindowing.interpolationLength,
             encoderMicroBatchSize: VideoDepthAnythingMemoryConfiguration.appleSilicon.encoderMicroBatchSize,
             dptTailMicroBatchSize: VideoDepthAnythingMemoryConfiguration.appleSilicon.dptTailMicroBatchSize,
+            inferencePerformed: false,
             hasConfidence: false,
             hasCameraIntrinsics: false,
             hasPointCloud: false,
@@ -135,6 +171,8 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
     let schemaVersion: Int
     let status: String
     let inputPath: String
+    let inputByteCount: Int64
+    let inputSHA256: String
     let outputDirectory: String
     let modelID: String
     let semantics: DepthSemantics
@@ -143,7 +181,21 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
     let checkpointSHA256: String
     let checkpointVerified: Bool
     let inputSize: Int
-    let maximumFrameCount: Int?
+    let effectiveInputSize: Int
+    let maximumFrameCount: Int
+    let decodedWidth: Int
+    let decodedHeight: Int
+    let decodedFrameCount: Int
+    let sourceFPS: Double
+    let networkWidth: Int
+    let networkHeight: Int
+    let windowCount: Int
+    let maximumEncodedVideoBytes: Int64
+    let maximumDecodedFrameDimension: Int
+    let maximumDecodedPixelCountPerFrame: Int
+    let maximumAggregateDecodedPixelCount: Int
+    let maximumNetworkDimension: Int
+    let maximumNetworkPixelCount: Int
     let temporalWindowLength: Int
     let temporalOverlap: Int
     let frameStep: Int
@@ -151,15 +203,18 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
     let retainedAlignmentFrameLimit: Int
     let encoderMicroBatchSize: Int?
     let dptTailMicroBatchSize: Int?
+    let inferencePerformed: Bool
     let hasConfidence: Bool
     let hasCameraIntrinsics: Bool
     let hasPointCloud: Bool
     let outputKinds: [String]
 
     init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         status: String,
         inputPath: String,
+        inputByteCount: Int64,
+        inputSHA256: String,
         outputDirectory: String,
         modelID: String,
         semantics: DepthSemantics,
@@ -168,7 +223,21 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
         checkpointSHA256: String,
         checkpointVerified: Bool,
         inputSize: Int,
-        maximumFrameCount: Int?,
+        effectiveInputSize: Int,
+        maximumFrameCount: Int,
+        decodedWidth: Int,
+        decodedHeight: Int,
+        decodedFrameCount: Int,
+        sourceFPS: Double,
+        networkWidth: Int,
+        networkHeight: Int,
+        windowCount: Int,
+        maximumEncodedVideoBytes: Int64,
+        maximumDecodedFrameDimension: Int,
+        maximumDecodedPixelCountPerFrame: Int,
+        maximumAggregateDecodedPixelCount: Int,
+        maximumNetworkDimension: Int,
+        maximumNetworkPixelCount: Int,
         temporalWindowLength: Int,
         temporalOverlap: Int,
         frameStep: Int,
@@ -176,6 +245,7 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
         retainedAlignmentFrameLimit: Int,
         encoderMicroBatchSize: Int?,
         dptTailMicroBatchSize: Int?,
+        inferencePerformed: Bool,
         hasConfidence: Bool,
         hasCameraIntrinsics: Bool,
         hasPointCloud: Bool,
@@ -184,6 +254,8 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
         self.schemaVersion = schemaVersion
         self.status = status
         self.inputPath = inputPath
+        self.inputByteCount = inputByteCount
+        self.inputSHA256 = inputSHA256
         self.outputDirectory = outputDirectory
         self.modelID = modelID
         self.semantics = semantics
@@ -192,7 +264,21 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
         self.checkpointSHA256 = checkpointSHA256
         self.checkpointVerified = checkpointVerified
         self.inputSize = inputSize
+        self.effectiveInputSize = effectiveInputSize
         self.maximumFrameCount = maximumFrameCount
+        self.decodedWidth = decodedWidth
+        self.decodedHeight = decodedHeight
+        self.decodedFrameCount = decodedFrameCount
+        self.sourceFPS = sourceFPS
+        self.networkWidth = networkWidth
+        self.networkHeight = networkHeight
+        self.windowCount = windowCount
+        self.maximumEncodedVideoBytes = maximumEncodedVideoBytes
+        self.maximumDecodedFrameDimension = maximumDecodedFrameDimension
+        self.maximumDecodedPixelCountPerFrame = maximumDecodedPixelCountPerFrame
+        self.maximumAggregateDecodedPixelCount = maximumAggregateDecodedPixelCount
+        self.maximumNetworkDimension = maximumNetworkDimension
+        self.maximumNetworkPixelCount = maximumNetworkPixelCount
         self.temporalWindowLength = temporalWindowLength
         self.temporalOverlap = temporalOverlap
         self.frameStep = frameStep
@@ -200,6 +286,7 @@ struct VisionDepthVideoPlanPayload: Codable, Equatable {
         self.retainedAlignmentFrameLimit = retainedAlignmentFrameLimit
         self.encoderMicroBatchSize = encoderMicroBatchSize
         self.dptTailMicroBatchSize = dptTailMicroBatchSize
+        self.inferencePerformed = inferencePerformed
         self.hasConfidence = hasConfidence
         self.hasCameraIntrinsics = hasCameraIntrinsics
         self.hasPointCloud = hasPointCloud

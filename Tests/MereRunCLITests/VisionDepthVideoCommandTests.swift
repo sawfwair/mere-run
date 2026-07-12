@@ -11,6 +11,7 @@ final class VisionDepthVideoCommandTests: XCTestCase {
             "--model", "vision-depth-vda-small-metric",
             "--input-size", "392",
             "--max-frames", "88",
+            "--dry-run",
             "--json",
         ])
         XCTAssertEqual(command.input, "/tmp/shot.mp4")
@@ -18,6 +19,7 @@ final class VisionDepthVideoCommandTests: XCTestCase {
         XCTAssertEqual(command.model, "vision-depth-vda-small-metric")
         XCTAssertEqual(command.inputSize, 392)
         XCTAssertEqual(command.maxFrames, 88)
+        XCTAssertTrue(command.dryRun)
         XCTAssertTrue(command.json)
     }
 
@@ -33,17 +35,45 @@ final class VisionDepthVideoCommandTests: XCTestCase {
             weightsSHA256: VideoDepthAnythingVariant.metric.pin.artifacts[0].sha256,
             sourceSHA256: VideoDepthAnythingVariant.metric.pin.artifacts[0].sha256
         )
+        let preflight = VideoDepthAnythingPreflightResult(
+            input: MeshInputRecord(
+                path: input.path,
+                byteCount: 12_345,
+                sha256: String(repeating: "c", count: 64)
+            ),
+            checkpoint: checkpoint,
+            sourceWidth: 1_920,
+            sourceHeight: 1_080,
+            sourceFPS: 23.976,
+            frameCount: 45,
+            effectiveInputSize: 518,
+            networkWidth: 924,
+            networkHeight: 518,
+            windowCount: 3
+        )
         let plan = VisionDepthVideo.makePlan(
             inputURL: input,
             outputURL: output,
             inputSize: 518,
-            maximumFrameCount: nil,
-            checkpoint: checkpoint
+            maximumFrameCount: VideoDepthAnythingLimits.defaultMaximumFrameCount,
+            preflight: preflight
         )
+        XCTAssertEqual(plan.schemaVersion, 2)
+        XCTAssertEqual(plan.inputByteCount, 12_345)
+        XCTAssertEqual(plan.inputSHA256, String(repeating: "c", count: 64))
         XCTAssertEqual(plan.modelID, "vision-depth-vda-small-metric")
         XCTAssertEqual(plan.semantics, .metricMeters)
+        XCTAssertEqual(plan.decodedWidth, 1_920)
+        XCTAssertEqual(plan.decodedHeight, 1_080)
+        XCTAssertEqual(plan.decodedFrameCount, 45)
+        XCTAssertEqual(plan.sourceFPS, 23.976)
+        XCTAssertEqual(plan.networkWidth, 924)
+        XCTAssertEqual(plan.networkHeight, 518)
+        XCTAssertEqual(plan.windowCount, 3)
+        XCTAssertFalse(plan.inferencePerformed)
         XCTAssertEqual(plan.temporalWindowLength, 32)
         XCTAssertEqual(plan.temporalOverlap, 10)
+        XCTAssertEqual(plan.maximumFrameCount, VideoDepthAnythingLimits.defaultMaximumFrameCount)
         XCTAssertEqual(plan.frameStep, 22)
         XCTAssertTrue(plan.streamsFinalizedFrames)
         XCTAssertEqual(plan.retainedAlignmentFrameLimit, 8)
@@ -54,6 +84,12 @@ final class VisionDepthVideoCommandTests: XCTestCase {
         XCTAssertFalse(plan.hasCameraIntrinsics)
         XCTAssertFalse(plan.hasPointCloud)
         XCTAssertTrue(plan.outputKinds.contains("depth-review-mp4"))
+    }
+
+    func testDryRunHelpDisclosesBoundedDecodeAndNoInference() {
+        let help = VisionDepthVideo.helpMessage()
+        XCTAssertTrue(help.contains("Snapshot/hash and decode the bounded input"))
+        XCTAssertTrue(help.contains("without inference"))
     }
 
     func testVisionRegistersDepthVideo() {
@@ -78,6 +114,8 @@ final class VisionDepthVideoCommandTests: XCTestCase {
         )
         let manifest = DepthSequenceManifest(
             inputPath: "/tmp/shot.mp4",
+            inputByteCount: 123,
+            inputSHA256: String(repeating: "a", count: 64),
             outputDirectory: "/tmp/shot-depth",
             width: 2,
             height: 2,

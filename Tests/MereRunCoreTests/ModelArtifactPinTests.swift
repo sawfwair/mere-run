@@ -4,7 +4,7 @@ import XCTest
 
 final class ModelArtifactPinTests: XCTestCase {
     func testVerifiesSizeAndSHA256() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let data = Data("mere.run geometry\n".utf8)
         try data.write(to: root.appendingPathComponent("model.bin"))
@@ -17,7 +17,7 @@ final class ModelArtifactPinTests: XCTestCase {
     }
 
     func testRejectsWrongSizeBeforeHashing() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         try Data([1, 2, 3]).write(to: root.appendingPathComponent("model.bin"))
         let pin = ModelArtifactPin(filename: "model.bin", byteCount: 4, sha256: String(repeating: "0", count: 64))
@@ -30,7 +30,7 @@ final class ModelArtifactPinTests: XCTestCase {
     }
 
     func testVerifiesManagedSymlinkTargetSizeAndHash() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let cache = root.appendingPathComponent("cache", isDirectory: true)
         let install = root.appendingPathComponent("install", isDirectory: true)
@@ -66,10 +66,10 @@ final class ModelArtifactPinTests: XCTestCase {
         )
     }
 
-    private func temporaryDirectory() -> URL {
+    private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-artifact-pin-tests-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
 }

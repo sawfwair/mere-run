@@ -3,6 +3,9 @@ import MediaIO
 @preconcurrency import MLX
 
 public struct MoGe2InferenceConfiguration: Equatable, Sendable {
+    public static let minimumTokenCount = MoGe2TokenGrid.minimumTokenCount
+    public static let maximumTokenCount = MoGe2TokenGrid.maximumTokenCount
+
     public let resolutionLevel: Int
     public let tokenCount: Int?
     public let maximumPointCount: Int?
@@ -35,11 +38,14 @@ public struct MoGe2RunResult: Sendable {
 public enum MoGe2GeneratorError: Error, Equatable, LocalizedError, Sendable {
     case modelFileNotFound(String)
     case unsupportedBatch
+    case tokenCountOutOfRange(actual: Int, minimum: Int, maximum: Int)
 
     public var errorDescription: String? {
         switch self {
         case .modelFileNotFound(let path): "MoGe-2 model.onnx was not found at \(path)."
         case .unsupportedBatch: "MoGe-2 production export currently accepts one image per run."
+        case let .tokenCountOutOfRange(actual, minimum, maximum):
+            "MoGe-2 token count must be between \(minimum) and \(maximum); received \(actual)."
         }
     }
 }
@@ -57,20 +63,42 @@ public actor MoGe2Generator {
         configuration: MoGe2InferenceConfiguration = MoGe2InferenceConfiguration(),
         progress: (@Sendable (String) -> Void)? = nil
     ) async throws -> MoGe2RunResult {
+        let tokenCount = configuration.effectiveTokenCount
+        guard tokenCount >= MoGe2InferenceConfiguration.minimumTokenCount,
+              tokenCount <= MoGe2InferenceConfiguration.maximumTokenCount else {
+            throw MoGe2GeneratorError.tokenCountOutOfRange(
+                actual: tokenCount,
+                minimum: MoGe2InferenceConfiguration.minimumTokenCount,
+                maximum: MoGe2InferenceConfiguration.maximumTokenCount
+            )
+        }
         let standardizedImage = imageURL.standardizedFileURL
+        let admittedInput = try VFXImageInputSnapshotBatch.capture([standardizedImage])
+        defer { admittedInput.cleanup() }
+        let snapshotURL = admittedInput.snapshotURLs[0]
+
+        progress?("Decoding \(standardizedImage.lastPathComponent)")
+        let image = try MediaImageIO.decode(snapshotURL)
+        let dimensions = try VFXImageInputValidator.validate(
+            width: image.width,
+            height: image.height,
+            path: standardizedImage.path
+        )
+        let tokenGrid = try MoGe2TokenGrid.resolve(
+            imageWidth: dimensions.width,
+            imageHeight: dimensions.height,
+            requestedTokenCount: tokenCount
+        )
+        let input = Self.rgbNHWC(image)
+
         progress?("Resolving pinned MoGe-2 weights")
         let loadStart = Date()
         let nativeModel = try await loadModelIfNeeded(requestedModel: model)
         let loadSeconds = Date().timeIntervalSince(loadStart)
 
-        progress?("Decoding \(standardizedImage.lastPathComponent)")
-        let image = try MediaImageIO.decode(standardizedImage)
-        let input = Self.rgbNHWC(image)
-        let tokenCount = configuration.effectiveTokenCount
-
         progress?("Running native MLX geometry inference at \(tokenCount) tokens")
         let inferenceStart = Date()
-        let raw = nativeModel(input, tokenCount: tokenCount)
+        let raw = nativeModel(input, tokenGrid: tokenGrid)
         MLX.eval(raw.points, raw.normals, raw.maskProbability, raw.metricScale)
         let inferenceSeconds = Date().timeIntervalSince(inferenceStart)
 
@@ -90,9 +118,10 @@ public actor MoGe2Generator {
         let export = try GeometryArtifactExporter.export(
             frame: processed.frame,
             inputURL: standardizedImage,
-            sourceImageURL: standardizedImage,
+            sourceImageURL: snapshotURL,
             outputDirectory: outputDirectory,
             provenance: provenance,
+            inputRecord: admittedInput.inputRecords[0],
             options: GeometryExportOptions(
                 stem: standardizedImage.deletingPathExtension().lastPathComponent,
                 maximumPointCount: configuration.maximumPointCount

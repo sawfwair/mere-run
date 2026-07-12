@@ -20,8 +20,9 @@ final class MappedStoredZIP: @unchecked Sendable {
 
     let mappedData: Data
     let entries: [String: StoredZIPEntry]
+    private let verifyEntryChecksums: Bool
 
-    init(url: URL) throws {
+    init(url: URL, verifyEntryChecksums: Bool = true) throws {
         let data = try Data(contentsOf: url, options: [.alwaysMapped])
         let eocd = try Self.endOfCentralDirectory(in: data)
         guard try data.uint16(at: eocd + 4) == 0, try data.uint16(at: eocd + 6) == 0 else {
@@ -94,6 +95,7 @@ final class MappedStoredZIP: @unchecked Sendable {
         }
         self.mappedData = data
         self.entries = result
+        self.verifyEntryChecksums = verifyEntryChecksums
     }
 
     func utf8Entry(named name: String) throws -> String {
@@ -110,7 +112,7 @@ final class MappedStoredZIP: @unchecked Sendable {
     }
 
     func validatedDataRange(for entry: StoredZIPEntry) throws -> Range<Int> {
-        guard Self.crc32(mappedData, range: entry.dataRange) == entry.crc32 else {
+        guard !verifyEntryChecksums || Self.crc32(mappedData, range: entry.dataRange) == entry.crc32 else {
             throw PyTorchStateDictError.checksumMismatch(entry.name)
         }
         return entry.dataRange

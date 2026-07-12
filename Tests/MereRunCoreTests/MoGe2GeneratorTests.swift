@@ -4,6 +4,99 @@ import XCTest
 @testable import MereRunCore
 
 final class MoGe2GeneratorTests: XCTestCase {
+    func testTokenGridPreservesNormalAspectRatiosWithinWorkloadLimit() throws {
+        let landscape = try MoGe2TokenGrid.resolve(
+            imageWidth: 1_920,
+            imageHeight: 1_080,
+            requestedTokenCount: 1_200
+        )
+        XCTAssertEqual(landscape.rows, 26)
+        XCTAssertEqual(landscape.columns, 46)
+        XCTAssertEqual(landscape.count, 1_196)
+
+        let portrait = try MoGe2TokenGrid.resolve(
+            imageWidth: 1_080,
+            imageHeight: 1_920,
+            requestedTokenCount: 1_200
+        )
+        XCTAssertEqual(portrait.rows, 46)
+        XCTAssertEqual(portrait.columns, 26)
+        XCTAssertEqual(portrait.count, 1_196)
+
+        let maximumSquare = try MoGe2TokenGrid.resolve(
+            imageWidth: 1_024,
+            imageHeight: 1_024,
+            requestedTokenCount: MoGe2TokenGrid.maximumTokenCount
+        )
+        XCTAssertEqual(maximumSquare.rows, 60)
+        XCTAssertEqual(maximumSquare.columns, 60)
+        XCTAssertEqual(maximumSquare.count, MoGe2TokenGrid.maximumTokenCount)
+    }
+
+    func testRejectsExtremeAspectTokenGridBeforeModelWork() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("moge2-extreme-aspect-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let imageURL = root.appendingPathComponent("extreme.png")
+        try MediaImageIO.writePNG(
+            try MediaImage(
+                width: 16_384,
+                height: 1,
+                rgba8: [UInt8](repeating: 255, count: 16_384 * 4)
+            ),
+            to: imageURL
+        )
+
+        let generator = MoGe2Generator()
+        do {
+            _ = try await generator.generate(
+                imageURL: imageURL,
+                outputDirectory: root.appendingPathComponent("output", isDirectory: true),
+                model: root.appendingPathComponent("missing-model.onnx").path,
+                configuration: MoGe2InferenceConfiguration(
+                    tokenCount: MoGe2InferenceConfiguration.maximumTokenCount
+                )
+            )
+            XCTFail("Expected the derived token grid to exceed the native workload limit")
+        } catch {
+            XCTAssertEqual(
+                error as? MoGe2TokenGridError,
+                .tokenGridExceedsLimit(
+                    rows: 1,
+                    columns: 7_680,
+                    actual: 7_680,
+                    maximum: MoGe2TokenGrid.maximumTokenCount
+                )
+            )
+        }
+    }
+
+    func testRejectsUnsafeTokenCountBeforeInputOrModelWork() async {
+        let generator = MoGe2Generator()
+        do {
+            _ = try await generator.generate(
+                imageURL: URL(fileURLWithPath: "/definitely/missing/frame.png"),
+                outputDirectory: URL(fileURLWithPath: "/definitely/missing/output"),
+                model: "/definitely/missing/model.onnx",
+                configuration: MoGe2InferenceConfiguration(
+                    tokenCount: MoGe2InferenceConfiguration.maximumTokenCount + 1
+                )
+            )
+            XCTFail("Expected token count validation to fail")
+        } catch {
+            XCTAssertEqual(
+                error as? MoGe2GeneratorError,
+                .tokenCountOutOfRange(
+                    actual: MoGe2InferenceConfiguration.maximumTokenCount + 1,
+                    minimum: MoGe2InferenceConfiguration.minimumTokenCount,
+                    maximum: MoGe2InferenceConfiguration.maximumTokenCount
+                )
+            )
+        }
+    }
+
     func testPinnedModelProducesCompleteMetricArtifactBundle() async throws {
         guard let fixture = ProcessInfo.processInfo.environment["MERERUN_TEST_MOGE_ONNX"] else {
             throw XCTSkip("Set MERERUN_TEST_MOGE_ONNX to the pinned model.onnx fixture.")

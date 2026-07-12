@@ -1,4 +1,6 @@
-# Native image geometry
+# Vision Geometry
+
+## Purpose
 
 `mere.run vision geometry` runs MoGe-2 ViT-S Normal inside the native Swift/MLX
 runtime. It produces metric camera-space depth and points, normals, a validity
@@ -17,7 +19,8 @@ mere.run vision geometry ./frame.png --dry-run
 ```
 
 Quality is controlled with `--resolution-level 0...9` (default `9`) or an
-explicit `--token-count`. Use `--max-points` to cap only the PLY density; EXR
+explicit `--token-count` between 1 and the production ceiling of 3600. Use
+`--max-points` to cap only the PLY density; EXR
 and camera outputs remain full resolution.
 
 Coordinate convention is X right, Y down, Z forward. Depth and point values are
@@ -36,3 +39,8 @@ curl http://127.0.0.1:8080/v1/vision/geometry \
 The server owns the upload and output locations; the request cannot supply
 arbitrary filesystem paths. The response includes camera/depth metadata plus
 `file:` URLs, byte counts, and SHA-256 values for every artifact and manifest.
+
+## Sources
+
+- [Pinned MoGe-2 ViT-S Normal checkpoint](https://huggingface.co/Ruicheng/moge-2-vits-normal-onnx/tree/e50ffda41565591092adea54c6ac83d6212e1e23)
+- [MoGe source](https://github.com/microsoft/MoGe/tree/07444410f1e33f402353b99d6ccd26bd31e469e8)

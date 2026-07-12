@@ -410,6 +410,27 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(row.size, ByteCountFormatter.string(fromByteCount: 42, countStyle: .file))
     }
 
+    func testModelInventoryMarksPinnedPlaceholderInstallInvalid() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-pinned-inventory-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: root)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(root)
+
+        let modelID = ModelResolver.ModelID.visionGeometryMoGe2Small
+        let modelRoot = root.appendingPathComponent(modelID.rawValue, isDirectory: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        try Data([0]).write(to: modelRoot.appendingPathComponent("model.onnx"))
+        try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+            .write(to: modelRoot)
+
+        let row = try XCTUnwrap(ModelInventory.rows().first { $0.id == modelID.rawValue })
+        XCTAssertEqual(row.status, "invalid")
+        XCTAssertFalse(row.isInstalled)
+    }
+
     func testPiBinaryFinderSkipsDirectoryNamedPi() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-pi-finder-\(UUID().uuidString)", isDirectory: true)

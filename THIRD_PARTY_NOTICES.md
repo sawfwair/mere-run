@@ -47,6 +47,50 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### Native VFX geometry and reconstruction ports
+
+The following native Swift/MLX implementations reproduce model graphs and
+pre/post-processing behavior from pinned permissively licensed upstream code.
+Model weights are downloaded separately into the user's model store and are
+verified against the exact repository revision, byte count, and SHA-256 listed
+in `Sources/MereRunCore/Geometry/GeometryModelPins.swift`. Direct managed model
+installs also contain `MERERUN_UPSTREAM_LICENSE`, materialized from the pinned
+source revision and checksum-verified as part of runtime readiness.
+
+- **MoGe-2 ViT-S Normal** — geometry, camera, normal, and validity inference
+  derived from [`microsoft/MoGe`](https://github.com/microsoft/MoGe) commit
+  `07444410f1e33f402353b99d6ccd26bd31e469e8`; MIT. Its DINOv2 encoder behavior
+  derives from [`facebookresearch/dinov2`](https://github.com/facebookresearch/dinov2);
+  Apache License 2.0.
+- **Video Depth Anything Small and Metric Small** — temporal depth graph and
+  windowing derived from
+  [`DepthAnything/Video-Depth-Anything`](https://github.com/DepthAnything/Video-Depth-Anything)
+  commit `4f5ae23172ba60fd7bc11ef671cca678842c7072`; Apache License 2.0. The shared
+  DINOv2 encoder remains Apache License 2.0.
+- **Depth Anything 3 Small** — multiview depth, confidence, camera, and pose
+  conditioning derived from
+  [`ByteDance-Seed/Depth-Anything-3`](https://github.com/ByteDance-Seed/Depth-Anything-3)
+  commit `41736238f5bced4debf3f2a12375d2466874866d`; Apache License 2.0. The shared
+  DINOv2 encoder remains Apache License 2.0.
+- **TripoSR** — reconstruction graph, camera conditioning, field decoder, and
+  preprocessing derived from
+  [`VAST-AI-Research/TripoSR`](https://github.com/VAST-AI-Research/TripoSR)
+  commit `107cefdc244c39106fa830359024f6a2f1c78871`; MIT. The exact MIT license is
+  mandatory in every converted package.
+- **InstantMesh Base reconstruction** — sparse-view reconstruction graph,
+  official camera conditioning, learned field, deformation, color, and the
+  behavioral contract for the upstream empty-field sign repair follow
+  [`TencentARC/InstantMesh`](https://github.com/TencentARC/InstantMesh) commit
+  `08822c52fdc399b93ea00e4fa9e596344ed52ccc`; Apache License 2.0. The exact
+  Apache-2.0 license is mandatory in every converted package. The native sign
+  repair and polygonizer are independently implemented in Swift.
+
+The InstantMesh integration is reconstruction-only. It does not include the
+Zero123++ view generator or its weights. It also does not copy, import, compile,
+or distribute NVIDIA's separately proprietary FlexiCubes or renderer source;
+mesh topology is produced by mere.run's native marching-tetrahedra code and no
+FlexiCubes topology-parity claim is made.
+
 ### MuScriptor
 
 - purpose: native MLX audio-to-MIDI model, tokenizer, event decoder, and MIDI behavior

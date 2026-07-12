@@ -70,6 +70,8 @@ struct ModelPullModelPreflightSummary: Codable, Equatable {
     let supportReasons: [String]
     let hasDownloadSource: Bool
     let installed: Bool
+    let runtimeReady: Bool
+    let conversionRequired: Bool
     let willDownload: Bool
     let force: Bool
     let installPath: String
@@ -90,6 +92,8 @@ struct ModelPullModelPreflightSummary: Codable, Equatable {
         case supportReasons = "support_reasons"
         case hasDownloadSource = "has_download_source"
         case installed
+        case runtimeReady = "runtime_ready"
+        case conversionRequired = "conversion_required"
         case willDownload = "will_download"
         case force
         case installPath = "install_path"
@@ -227,16 +231,20 @@ struct ModelPullPreflightAnalyzer {
         let installPath = modelStore.appendingPathComponent(spec.id, isDirectory: true).standardizedFileURL
         let installed = ManagedModelResolver.isManagedInstallComplete(spec: spec, at: installPath, fileManager: fileManager)
         let runtimeURL = runtimeURL(for: spec, installPath: installPath, installed: installed)
+        let runtimeReady = runtimeURL != nil
+        let conversionRequired = spec.requiresManagedConversion && installed && !runtimeReady
         let selected = input.all || spec.id == input.target
         let blockedBySupport = !input.allowUnsupported && !support.isSupported
         let blockedBySource = !hasSource
         let willDownload = selected && hasSource && !blockedBySupport && (input.force || !installed)
-        let status = modelStatus(
+        let status = Self.modelStatus(
             selected: selected,
             installed: installed,
+            conversionRequired: conversionRequired,
             willDownload: willDownload,
             blockedBySupport: blockedBySupport,
-            blockedBySource: blockedBySource
+            blockedBySource: blockedBySource,
+            all: input.all
         )
 
         if !input.all, blockedBySupport {
@@ -260,6 +268,18 @@ struct ModelPullPreflightAnalyzer {
                 )
             )
         }
+        if !input.all, conversionRequired,
+           let guidance = spec.managedConversionGuidance(at: installPath) {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "model_conversion_required",
+                    severity: .warning,
+                    title: "Downloaded model requires conversion",
+                    message: guidance,
+                    locations: [.init(kind: "directory", path: installPath.path)]
+                )
+            )
+        }
 
         return ModelPullModelPreflightSummary(
             id: spec.id,
@@ -271,6 +291,8 @@ struct ModelPullPreflightAnalyzer {
             supportReasons: support.reasons,
             hasDownloadSource: hasSource,
             installed: installed,
+            runtimeReady: runtimeReady,
+            conversionRequired: conversionRequired,
             willDownload: willDownload,
             force: input.force,
             installPath: installPath.path,
@@ -283,25 +305,28 @@ struct ModelPullPreflightAnalyzer {
         )
     }
 
-    private func modelStatus(
+    static func modelStatus(
         selected: Bool,
         installed: Bool,
+        conversionRequired: Bool,
         willDownload: Bool,
         blockedBySupport: Bool,
-        blockedBySource: Bool
+        blockedBySource: Bool,
+        all: Bool
     ) -> String {
         if !selected { return "not_selected" }
-        if blockedBySupport { return input.all ? "skipped_unsupported" : "blocked_unsupported" }
-        if blockedBySource { return input.all ? "skipped_no_source" : "blocked_no_source" }
+        if blockedBySupport { return all ? "skipped_unsupported" : "blocked_unsupported" }
+        if blockedBySource { return all ? "skipped_no_source" : "blocked_no_source" }
         if willDownload { return "will_download" }
+        if conversionRequired { return "conversion_required" }
         if installed { return "installed" }
         return "ready"
     }
 
     private func runtimeURL(for spec: ManagedModelSpec, installPath: URL, installed: Bool) -> URL? {
-        guard installed else { return nil }
+        guard installed, spec.isManagedRuntimeReady(installPath, fileManager: fileManager) else { return nil }
         guard modelStoreURL == nil else { return installPath }
-        return spec.managedRuntimeURL(fileManager: fileManager) ?? installPath
+        return spec.managedRuntimeURL(fileManager: fileManager)
     }
 
     private func appendAggregateDiskDiagnostics(

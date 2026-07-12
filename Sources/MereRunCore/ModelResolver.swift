@@ -193,14 +193,14 @@ public struct ModelResolver {
         }
 
         guard let expectedModelID else {
-            return spec.isManagedRootComplete(url, fileManager: fileManager)
+            return spec.isManagedRuntimeReady(url, fileManager: fileManager)
         }
 
         let manifestURL = url.appendingPathComponent(MereRunModelManifest.filename)
         if fileManager.fileExists(atPath: manifestURL.path),
            let loaded = try? MereRunModelManifest.loadRequired(from: url, fileManager: fileManager),
            loaded.id == expectedModelID.rawValue {
-            return spec.isManagedRootComplete(url, fileManager: fileManager)
+            return spec.isManagedRuntimeReady(url, fileManager: fileManager)
         }
 
         return false

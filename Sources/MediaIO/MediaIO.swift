@@ -64,6 +64,7 @@ public enum MediaIOError: LocalizedError, Sendable, Equatable {
     case imageMetadataFailed(URL)
     case audioDecodeFailed(URL, String)
     case audioEncodeFailed(URL, String)
+    case invalidVideoFrameRate(Double)
     case videoOperationFailed(String)
     case missingTool(String)
     case processFailed(tool: String, status: Int32, stderr: String)
@@ -85,6 +86,8 @@ public enum MediaIOError: LocalizedError, Sendable, Equatable {
             return "Failed to decode audio \(url.path): \(details)"
         case .audioEncodeFailed(let url, let details):
             return "Failed to encode audio \(url.path): \(details)"
+        case .invalidVideoFrameRate(let fps):
+            return "Invalid video frame rate \(fps). Expected a finite, positive rate whose rounded time scale fits in Int32."
         case .videoOperationFailed(let details):
             return "Video operation failed: \(details)"
         case .missingTool(let tool):

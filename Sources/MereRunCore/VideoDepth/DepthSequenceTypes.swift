@@ -81,6 +81,8 @@ public struct DepthSequenceManifest: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let createdAt: Date
     public let inputPath: String
+    public let inputByteCount: Int64
+    public let inputSHA256: String
     public let outputDirectory: String
     public let width: Int
     public let height: Int
@@ -93,9 +95,11 @@ public struct DepthSequenceManifest: Codable, Equatable, Sendable {
     public let frames: [DepthSequenceFrameManifest]
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         createdAt: Date = Date(),
         inputPath: String,
+        inputByteCount: Int64,
+        inputSHA256: String,
         outputDirectory: String,
         width: Int,
         height: Int,
@@ -109,6 +113,8 @@ public struct DepthSequenceManifest: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.inputPath = inputPath
+        self.inputByteCount = inputByteCount
+        self.inputSHA256 = inputSHA256.lowercased()
         self.outputDirectory = outputDirectory
         self.width = width
         self.height = height

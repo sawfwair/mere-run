@@ -45,6 +45,7 @@ public enum GeometryArtifactExporter {
         sourceImageURL: URL? = nil,
         outputDirectory: URL,
         provenance: GeometryModelProvenance,
+        inputRecord admittedInputRecord: MeshInputRecord? = nil,
         frameIndex: Int? = nil,
         frameTimeSeconds: Double? = nil,
         createdAt: Date = Date(),
@@ -52,6 +53,23 @@ public enum GeometryArtifactExporter {
     ) throws -> GeometryExportResult {
         let fileManager = FileManager.default
         let outputDirectory = outputDirectory.standardizedFileURL
+        let standardizedInput = inputURL.standardizedFileURL
+        let inputRecord: MeshInputRecord
+        if let admittedInputRecord {
+            guard admittedInputRecord.path == standardizedInput.path else {
+                throw MeshInputProvenanceError.inputRecordPathMismatch(
+                    expected: standardizedInput.path,
+                    actual: admittedInputRecord.path
+                )
+            }
+            inputRecord = admittedInputRecord
+        } else {
+            inputRecord = MeshInputRecord(
+                path: standardizedInput.path,
+                byteCount: try ModelArtifactPin.fileByteCount(standardizedInput),
+                sha256: try ModelArtifactPin.fileSHA256(standardizedInput)
+            )
+        }
         try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
         var sourcePixels: [UInt8]?
@@ -137,7 +155,9 @@ public enum GeometryArtifactExporter {
         let statistics = try GeometryProjection.depthStatistics(for: frame)
         let manifest = GeometryOutputManifest(
             createdAt: createdAt,
-            inputPath: inputURL.standardizedFileURL.path,
+            inputPath: inputRecord.path,
+            inputByteCount: inputRecord.byteCount,
+            inputSHA256: inputRecord.sha256,
             outputDirectory: outputDirectory.path,
             frameIndex: frameIndex,
             frameTimeSeconds: frameTimeSeconds,

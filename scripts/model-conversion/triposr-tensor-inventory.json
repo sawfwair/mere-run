@@ -1,0 +1,3554 @@
+{
+  "backbone.norm.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.norm.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.proj_in.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.proj_in.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.proj_out.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.proj_out.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.0.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.0.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.0.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.0.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.0.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.1.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.1.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.1.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.1.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.1.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.10.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.10.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.10.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.10.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.10.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.11.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.11.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.11.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.11.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.11.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.12.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.12.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.12.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.12.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.12.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.13.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.13.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.13.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.13.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.13.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.14.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.14.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.14.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.14.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.14.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.15.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.15.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.15.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.15.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.15.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.2.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.2.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.2.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.2.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.2.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.3.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.3.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.3.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.3.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.3.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.4.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.4.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.4.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.4.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.4.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.5.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.5.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.5.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.5.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.5.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.6.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.6.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.6.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.6.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.6.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.7.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.7.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.7.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.7.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.7.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.8.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.8.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.8.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.8.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.8.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn1.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn1.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn1.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn1.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn1.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn2.to_k.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.9.attn2.to_out.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn2.to_out.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn2.to_q.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.attn2.to_v.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      768
+    ]
+  },
+  "backbone.transformer_blocks.9.ff.net.0.proj.bias": {
+    "dtype": "float32",
+    "shape": [
+      8192
+    ]
+  },
+  "backbone.transformer_blocks.9.ff.net.0.proj.weight": {
+    "dtype": "float32",
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.ff.net.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.ff.net.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "backbone.transformer_blocks.9.norm1.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.norm1.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.norm2.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.norm2.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.norm3.bias": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "backbone.transformer_blocks.9.norm3.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.layers.0.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.0.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      120
+    ]
+  },
+  "decoder.layers.10.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.10.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.12.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.12.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.14.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.14.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.16.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.16.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.18.bias": {
+    "dtype": "float32",
+    "shape": [
+      4
+    ]
+  },
+  "decoder.layers.18.weight": {
+    "dtype": "float32",
+    "shape": [
+      4,
+      64
+    ]
+  },
+  "decoder.layers.2.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.2.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.4.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.4.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.6.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.6.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "decoder.layers.8.bias": {
+    "dtype": "float32",
+    "shape": [
+      64
+    ]
+  },
+  "decoder.layers.8.weight": {
+    "dtype": "float32",
+    "shape": [
+      64,
+      64
+    ]
+  },
+  "image_tokenizer.model.embeddings.cls_token": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      1,
+      768
+    ]
+  },
+  "image_tokenizer.model.embeddings.patch_embeddings.projection.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.embeddings.patch_embeddings.projection.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3,
+      16,
+      16
+    ]
+  },
+  "image_tokenizer.model.embeddings.position_embeddings": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      197,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.0.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.1.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.10.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.11.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.2.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.3.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.4.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.5.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.6.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.7.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.8.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.attention.key.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.attention.key.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.attention.query.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.attention.query.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.attention.value.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.attention.value.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.attention.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.intermediate.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      3072
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.intermediate.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      3072,
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.layernorm_after.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.layernorm_after.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.layernorm_before.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.layernorm_before.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.output.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.encoder.layer.9.output.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      3072
+    ]
+  },
+  "image_tokenizer.model.layernorm.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.layernorm.weight": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.pooler.dense.bias": {
+    "dtype": "float32",
+    "shape": [
+      768
+    ]
+  },
+  "image_tokenizer.model.pooler.dense.weight": {
+    "dtype": "float32",
+    "shape": [
+      768,
+      768
+    ]
+  },
+  "post_processor.upsample.bias": {
+    "dtype": "float32",
+    "shape": [
+      40
+    ]
+  },
+  "post_processor.upsample.weight": {
+    "dtype": "float32",
+    "shape": [
+      1024,
+      40,
+      2,
+      2
+    ]
+  },
+  "tokenizer.embeddings": {
+    "dtype": "float32",
+    "shape": [
+      3,
+      1024,
+      32,
+      32
+    ]
+  }
+}

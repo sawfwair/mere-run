@@ -4,6 +4,40 @@ import MLX
 import XCTest
 
 final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
+    func testPublicConfigurationRejectsInvalidValuesWithTypedErrors() {
+        XCTAssertThrowsError(
+            try VideoDepthAnythingConfiguration(intermediateLayers: [2, 5, 8])
+        ) { error in
+            guard case .invalidIntermediateLayers = error as? VideoDepthAnythingConfigurationError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertThrowsError(
+            try VideoDepthAnythingConfiguration(temporalHeadCount: 0)
+        ) { error in
+            XCTAssertEqual(
+                error as? VideoDepthAnythingConfigurationError,
+                .nonPositiveTemporalParameter
+            )
+        }
+        XCTAssertThrowsError(
+            try VideoDepthAnythingMemoryConfiguration(encoderMicroBatchSize: 0)
+        ) { error in
+            XCTAssertEqual(
+                error as? VideoDepthAnythingMemoryConfigurationError,
+                .invalidEncoderMicroBatchSize(0)
+            )
+        }
+        XCTAssertThrowsError(
+            try VideoDepthAnythingMemoryConfiguration(dptTailMicroBatchSize: -1)
+        ) { error in
+            XCTAssertEqual(
+                error as? VideoDepthAnythingMemoryConfigurationError,
+                .invalidDPTTailMicroBatchSize(-1)
+            )
+        }
+    }
+
     func testDINOv2UsesPyTorchOffsetSamplingGrid() {
         let coordinates = dinoV2PyTorchInterpolationCoordinates(
             sourceSize: 37,
@@ -55,7 +89,7 @@ final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
         )
     }
 
-    func testMiniatureGraphRunsTemporalDPTForward() {
+    func testMiniatureGraphRunsTemporalDPTForward() throws {
         let backbone = DINOv2Configuration(
             hiddenSize: 12,
             layerCount: 4,
@@ -64,7 +98,7 @@ final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
             patchSize: 2,
             positionGridSize: 2
         )
-        let configuration = VideoDepthAnythingConfiguration(
+        let configuration = try VideoDepthAnythingConfiguration(
             backbone: backbone,
             intermediateLayers: [0, 1, 2, 3],
             featureChannels: 8,
@@ -83,7 +117,7 @@ final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
         XCTAssertTrue(output.asArray(Float.self).allSatisfy { $0.isFinite && $0 >= 0 })
     }
 
-    func testEncoderAndDPTMicroBatchingMatchFullBatch() {
+    func testEncoderAndDPTMicroBatchingMatchFullBatch() throws {
         let backbone = DINOv2Configuration(
             hiddenSize: 12,
             layerCount: 4,
@@ -92,7 +126,7 @@ final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
             patchSize: 2,
             positionGridSize: 2
         )
-        let configuration = VideoDepthAnythingConfiguration(
+        let configuration = try VideoDepthAnythingConfiguration(
             backbone: backbone,
             intermediateLayers: [0, 1, 2, 3],
             featureChannels: 8,
@@ -114,7 +148,7 @@ final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
         MLX.eval(fullBatch)
         let microBatched = model(
             input,
-            memoryConfiguration: VideoDepthAnythingMemoryConfiguration(
+            memoryConfiguration: try VideoDepthAnythingMemoryConfiguration(
                 encoderMicroBatchSize: 2,
                 dptTailMicroBatchSize: 2
             )
@@ -229,7 +263,7 @@ final class VideoDepthAnythingModelTests: MereRunCoreTestCase {
         }
         let output = model(
             input,
-            memoryConfiguration: VideoDepthAnythingMemoryConfiguration(
+            memoryConfiguration: try VideoDepthAnythingMemoryConfiguration(
                 encoderMicroBatchSize: 2,
                 dptTailMicroBatchSize: 2
             )

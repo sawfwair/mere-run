@@ -242,13 +242,23 @@ public final class MoGe2Model: Module {
 
     /// Input is NHWC RGB in [0, 1]. This is the authoritative raw forward pass;
     /// focal/shift recovery and camera reprojection are performed separately.
-    public func callAsFunction(_ image: MLXArray, tokenCount: Int) -> MoGe2RawOutput {
+    public func callAsFunction(_ image: MLXArray, tokenCount: Int) throws -> MoGe2RawOutput {
+        precondition(image.ndim == 4 && image.dim(3) == 3)
+        let tokenGrid = try MoGe2TokenGrid.resolve(
+            imageWidth: image.dim(2),
+            imageHeight: image.dim(1),
+            requestedTokenCount: tokenCount
+        )
+        return callAsFunction(image, tokenGrid: tokenGrid)
+    }
+
+    func callAsFunction(_ image: MLXArray, tokenGrid: MoGe2TokenGrid) -> MoGe2RawOutput {
         precondition(image.ndim == 4 && image.dim(3) == 3)
         let originalHeight = image.dim(1)
         let originalWidth = image.dim(2)
         let aspect = Float(originalWidth) / Float(originalHeight)
-        let tokenRows = max(1, Int(round(sqrt(Float(tokenCount) / aspect))))
-        let tokenColumns = max(1, Int(round(sqrt(Float(tokenCount) * aspect))))
+        let tokenRows = tokenGrid.rows
+        let tokenColumns = tokenGrid.columns
         let encoded = encoder(image, tokenRows: tokenRows, tokenColumns: tokenColumns)
         var pyramid: [MLXArray] = []
         for level in 0..<5 {

@@ -161,21 +161,99 @@ final class ManagedModelCatalogTests: XCTestCase {
             let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
             XCTAssertEqual(spec.hubFallback?.repoId, pin.repo)
             XCTAssertEqual(spec.hubFallback?.revision, pin.revision)
-            XCTAssertEqual(Set(spec.hubFallback?.patterns ?? []), pin.files)
+            let patterns = Set(spec.hubFallback?.patterns ?? [])
+            XCTAssertTrue(pin.files.isSubset(of: patterns))
+            XCTAssertTrue(patterns.contains("LICENSE*"), "\(id) should retain upstream license files")
+            XCTAssertTrue(patterns.contains("NOTICE*"), "\(id) should retain upstream notice files")
             XCTAssertEqual(spec.upstreamRevision, pin.revision)
             XCTAssertEqual(spec.estimatedDownloadBytes, pin.bytes)
         }
     }
 
-    func testGeometryModelValidationRequiresPinnedFiles() throws {
+    func testGeometryAnd3DManagedValidationRejectsOneByteFalsePositives() throws {
+        for pin in GeometryModelPins.all {
+            let root = try makeTemporaryDirectory()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: pin.modelID))
+            for artifact in pin.artifacts {
+                try Data([0]).write(to: root.appendingPathComponent(artifact.filename))
+            }
+
+            XCTAssertFalse(spec.isManagedRootComplete(root), pin.modelID)
+            XCTAssertFalse(spec.isManagedRuntimeReady(root), pin.modelID)
+            XCTAssertFalse(spec.missingPaths(in: root).isEmpty, pin.modelID)
+            XCTAssertTrue(
+                spec.validationMessages(in: root).contains { $0.contains("wrong size") },
+                pin.modelID
+            )
+        }
+    }
+
+    func testInstantMeshManagedValidationDistinguishesRawDownloadFromNativeRuntime() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.image3DInstantMeshBase.rawValue)
+        )
+        let sourceRoot = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: sourceRoot) }
+        XCTAssertEqual(
+            spec.missingPaths(in: sourceRoot).map(\.lastPathComponent),
+            ["instant_mesh_base.ckpt"]
+        )
+        try Data([0]).write(to: sourceRoot.appendingPathComponent("instant_mesh_base.ckpt"))
+        XCTAssertFalse(spec.missingPaths(in: sourceRoot).isEmpty)
+        XCTAssertFalse(spec.isManagedRootComplete(sourceRoot))
+        XCTAssertFalse(spec.isManagedRuntimeReady(sourceRoot))
+        XCTAssertTrue(spec.requiresManagedConversion)
+        XCTAssertTrue(spec.managedConversionGuidance(at: sourceRoot)?.contains("--output") == true)
+
+        let convertedRoot = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: convertedRoot) }
+        let native = convertedRoot.appendingPathComponent(
+            InstantMeshResources.managedConvertedDirectoryName,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
+        for filename in ["model.safetensors", "config.json", "SOURCE.json", "LICENSE"] {
+            try Data([0]).write(to: native.appendingPathComponent(filename))
+        }
+        XCTAssertFalse(spec.missingPaths(in: convertedRoot).isEmpty)
+        XCTAssertFalse(spec.isManagedRootComplete(convertedRoot))
+        XCTAssertFalse(spec.isManagedRuntimeReady(convertedRoot))
+    }
+
+    func testInstantMeshPinnedRawFixtureIsDownloadedButConversionRequiredWhenAvailable() throws {
+        let fixturePath = ProcessInfo.processInfo.environment["MERERUN_TEST_INSTANTMESH_SOURCE"] ?? ""
+        try XCTSkipIf(fixturePath.isEmpty || !FileManager.default.fileExists(atPath: fixturePath))
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.image3DInstantMeshBase.rawValue)
+        )
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.visionGeometryDA3Small.rawValue))
-        XCTAssertEqual(Set(spec.missingPaths(in: root).map(\.lastPathComponent)), ["config.json", "model.safetensors"])
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("instant_mesh_base.ckpt"),
+            withDestinationURL: URL(fileURLWithPath: fixturePath)
+        )
 
-        try Data("{}".utf8).write(to: root.appendingPathComponent("config.json"))
-        try Data([0]).write(to: root.appendingPathComponent("model.safetensors"))
-        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+        XCTAssertTrue(spec.isManagedRootComplete(root))
+        XCTAssertFalse(spec.isManagedRuntimeReady(root))
+        XCTAssertTrue(spec.managedConversionGuidance(at: root)?.contains("conversion") == true)
+    }
+
+    func testPinnedManagedValidationRejectsCorrectSizeWithWrongChecksum() throws {
+        let pin = GeometryModelPins.moge2Small
+        let artifact = try XCTUnwrap(pin.artifacts.first)
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: pin.modelID))
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent(artifact.filename)
+        XCTAssertTrue(FileManager.default.createFile(atPath: file.path, contents: nil))
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: UInt64(artifact.byteCount))
+        try handle.close()
+
+        XCTAssertFalse(spec.isManagedRootComplete(root))
+        XCTAssertFalse(spec.isManagedRuntimeReady(root))
+        XCTAssertTrue(spec.validationMessages(in: root).contains { $0.contains("checksum mismatch") })
     }
 
     func testKleinNanoUsesExplicitHubSourceFiles() throws {

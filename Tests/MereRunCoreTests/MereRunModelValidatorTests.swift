@@ -267,7 +267,7 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.isEmpty)
     }
 
-    func testGeometryAndDepthManagedModelsUseDirectArtifactValidation() throws {
+    func testGeometryAndDepthManagedModelsRejectPlaceholderArtifacts() throws {
         let cases: [(ModelResolver.ModelID, String)] = [
             (.visionGeometryMoGe2Small, "model.onnx"),
             (.visionDepthVDASmall, "video_depth_anything_vits.pth"),
@@ -285,7 +285,8 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
                 modelRoot: root,
                 expectedModelID: modelID.rawValue
             )
-            XCTAssertTrue(report.isValid, "\(modelID.rawValue): \(report.errors)")
+            XCTAssertFalse(report.isValid, "\(modelID.rawValue): \(report.errors)")
+            XCTAssertTrue(report.errors.contains { $0.contains("wrong size") })
             XCTAssertFalse(report.warnings.contains { $0.contains("model root marker") })
             XCTAssertFalse(report.errors.contains { $0.contains("text_encoder") || $0.contains("tokenizer") })
         }

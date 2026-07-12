@@ -22,12 +22,15 @@ final class MeshAssetTests: XCTestCase {
     }
 
     func testExportsOBJPLYAndValidGLBHeader() throws {
-        let root = temporaryDirectory()
+        let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let mesh = try triangleMesh(normals: true)
+        let inputURL = root.appendingPathComponent("object.png")
+        let inputData = Data("durable mesh input".utf8)
+        try inputData.write(to: inputURL)
         let result = try MeshArtifactExporter.export(
             mesh: mesh,
-            inputURLs: [URL(fileURLWithPath: "/tmp/object.png")],
+            inputURLs: [inputURL],
             outputDirectory: root,
             stem: "object asset",
             provenance: GeometryModelProvenance(
@@ -41,11 +44,36 @@ final class MeshAssetTests: XCTestCase {
         XCTAssertEqual(result.manifest.vertexCount, 3)
         XCTAssertEqual(result.manifest.triangleCount, 1)
         XCTAssertTrue(result.manifest.inferredUnseenGeometry)
+        XCTAssertEqual(result.manifest.inputPaths, [inputURL.path])
+        XCTAssertEqual(result.manifest.inputs, [MeshInputRecord(
+            path: inputURL.path,
+            byteCount: Int64(inputData.count),
+            sha256: try ModelArtifactPin.fileSHA256(inputURL)
+        )])
         XCTAssertEqual(Set(result.manifest.artifacts.map(\.kind)), [.obj, .ply, .glb])
+        let ply = try Data(contentsOf: root.appendingPathComponent("object-asset.ply"))
+        let headerEnd = try XCTUnwrap(ply.range(of: Data("end_header\n".utf8)))
+        let plyHeader = String(decoding: ply[..<headerEnd.upperBound], as: UTF8.self)
+        XCTAssertTrue(plyHeader.contains("property float nz\nproperty uchar red\n"))
+        XCTAssertFalse(plyHeader.contains("nzproperty"))
         let glb = try Data(contentsOf: root.appendingPathComponent("object-asset.glb"))
         XCTAssertEqual(Array(glb.prefix(4)), [0x67, 0x6C, 0x54, 0x46])
         XCTAssertEqual(readUInt32(glb, offset: 4), 2)
         XCTAssertEqual(Int(readUInt32(glb, offset: 8)), glb.count)
+
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: result.manifestURL))
+                as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "inputs")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let legacy = try decoder.decode(
+            MeshOutputManifest.self,
+            from: JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        XCTAssertEqual(legacy.inputPaths, [inputURL.path])
+        XCTAssertNil(legacy.inputs)
     }
 
     private func triangleMesh(normals: Bool) throws -> MeshAsset {
@@ -59,10 +87,10 @@ final class MeshAssetTests: XCTestCase {
         )
     }
 
-    private func temporaryDirectory() -> URL {
+    private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-mesh-tests-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
 

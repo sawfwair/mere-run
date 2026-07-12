@@ -8,8 +8,20 @@ public struct VideoDepthAnythingPreprocessingPlan: Equatable, Sendable {
     public let networkWidth: Int
     public let networkHeight: Int
 
-    public init(sourceWidth: Int, sourceHeight: Int, requestedInputSize: Int = 518) {
-        precondition(sourceWidth > 0 && sourceHeight > 0 && requestedInputSize > 0)
+    public init(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        requestedInputSize: Int = VideoDepthAnythingLimits.defaultInputSize
+    ) throws {
+        try VideoDepthAnythingLimits.validateDecodedSequence(
+            width: sourceWidth,
+            height: sourceHeight,
+            frameCount: 1
+        )
+        _ = try VideoDepthAnythingLimits.validateRequest(
+            inputSize: requestedInputSize,
+            maximumFrameCount: 1
+        )
         self.sourceWidth = sourceWidth
         self.sourceHeight = sourceHeight
         self.requestedInputSize = requestedInputSize
@@ -17,7 +29,16 @@ public struct VideoDepthAnythingPreprocessingPlan: Equatable, Sendable {
         let ratio = Double(max(sourceWidth, sourceHeight)) / Double(min(sourceWidth, sourceHeight))
         let adjusted: Int
         if ratio > 1.78 {
-            let reduced = Int(Double(requestedInputSize) * 1.777 / ratio)
+            let reducedValue = Double(requestedInputSize) * 1.777 / ratio
+            guard reducedValue.isFinite,
+                  reducedValue >= 0,
+                  reducedValue <= Double(Int.max) else {
+                throw VideoDepthAnythingLimitError.invalidNetworkDimensions(
+                    width: sourceWidth,
+                    height: sourceHeight
+                )
+            }
+            let reduced = Int(reducedValue)
             adjusted = max(14, Self.nearestMultiple(reduced, of: 14))
         } else {
             adjusted = requestedInputSize
@@ -28,23 +49,41 @@ public struct VideoDepthAnythingPreprocessingPlan: Equatable, Sendable {
             Double(adjusted) / Double(sourceWidth),
             Double(adjusted) / Double(sourceHeight)
         )
-        networkWidth = Self.lowerBoundMultiple(
+        let plannedWidth = try Self.lowerBoundMultiple(
             Double(sourceWidth) * scale,
             minimum: adjusted,
             multiple: 14
         )
-        networkHeight = Self.lowerBoundMultiple(
+        let plannedHeight = try Self.lowerBoundMultiple(
             Double(sourceHeight) * scale,
             minimum: adjusted,
             multiple: 14
         )
+        try VideoDepthAnythingLimits.validateNetworkDimensions(
+            width: plannedWidth,
+            height: plannedHeight
+        )
+        networkWidth = plannedWidth
+        networkHeight = plannedHeight
     }
 
     private static func nearestMultiple(_ value: Int, of multiple: Int) -> Int {
         Int((Double(value) / Double(multiple)).rounded(.toNearestOrEven)) * multiple
     }
 
-    private static func lowerBoundMultiple(_ value: Double, minimum: Int, multiple: Int) -> Int {
+    private static func lowerBoundMultiple(
+        _ value: Double,
+        minimum: Int,
+        multiple: Int
+    ) throws -> Int {
+        guard value.isFinite,
+              value > 0,
+              value <= Double(Int.max - multiple) else {
+            throw VideoDepthAnythingLimitError.invalidNetworkDimensions(
+                width: minimum,
+                height: minimum
+            )
+        }
         var result = Int((value / Double(multiple)).rounded(.toNearestOrEven)) * multiple
         if result < minimum {
             result = Int(ceil(value / Double(multiple))) * multiple
@@ -105,6 +144,8 @@ public enum VideoDepthAnythingWindowingError: Error, Equatable, LocalizedError, 
     case invalidOriginalFrameCount(Int)
     case invalidWindowLength(window: Int, expected: Int, actual: Int)
     case inconsistentDepthElementCount(expected: Int, actual: Int)
+    case affineFrameCountMismatch(prediction: Int, target: Int)
+    case affineDepthElementCountMismatch(frame: Int, prediction: Int, target: Int)
     case streamingAlignmentAlreadyFinished
 
     public var errorDescription: String? {
@@ -115,6 +156,10 @@ public enum VideoDepthAnythingWindowingError: Error, Equatable, LocalizedError, 
             "Depth window \(window) has \(actual) frames; expected \(expected)."
         case .inconsistentDepthElementCount(let expected, let actual):
             "A depth frame has \(actual) values; expected \(expected)."
+        case let .affineFrameCountMismatch(prediction, target):
+            "Affine alignment received \(prediction) prediction frames and \(target) target frames."
+        case let .affineDepthElementCountMismatch(frame, prediction, target):
+            "Affine alignment frame \(frame) has \(prediction) prediction values and \(target) target values."
         case .streamingAlignmentAlreadyFinished:
             "The Video Depth Anything streaming alignment has already finished."
         }
@@ -250,7 +295,7 @@ public enum VideoDepthAnythingWindowing {
                 case .metricMeters:
                     transform = VideoDepthAnythingAffineAlignment(scale: 1, shift: 0)
                 case .affineRelative:
-                    transform = solveAffine(
+                    transform = try solveAffine(
                         prediction: [window[0], window[1]],
                         target: referenceAlignment
                     )
@@ -306,15 +351,27 @@ public enum VideoDepthAnythingWindowing {
     public static func solveAffine(
         prediction: [[Float]],
         target: [[Float]]
-    ) -> VideoDepthAnythingAffineAlignment {
-        precondition(prediction.count == target.count)
+    ) throws -> VideoDepthAnythingAffineAlignment {
+        guard prediction.count == target.count else {
+            throw VideoDepthAnythingWindowingError.affineFrameCountMismatch(
+                prediction: prediction.count,
+                target: target.count
+            )
+        }
         var a00: Float = 0
         var a01: Float = 0
         var a11: Float = 0
         var b0: Float = 0
         var b1: Float = 0
-        for (predictionFrame, targetFrame) in zip(prediction, target) {
-            precondition(predictionFrame.count == targetFrame.count)
+        for (frameIndex, frames) in zip(prediction, target).enumerated() {
+            let (predictionFrame, targetFrame) = frames
+            guard predictionFrame.count == targetFrame.count else {
+                throw VideoDepthAnythingWindowingError.affineDepthElementCountMismatch(
+                    frame: frameIndex,
+                    prediction: predictionFrame.count,
+                    target: targetFrame.count
+                )
+            }
             for (value, reference) in zip(predictionFrame, targetFrame) {
                 a00 += value * value
                 a01 += value
@@ -327,10 +384,12 @@ public enum VideoDepthAnythingWindowing {
         guard determinant != 0, determinant.isFinite else {
             return VideoDepthAnythingAffineAlignment(scale: 1, shift: 0)
         }
-        return VideoDepthAnythingAffineAlignment(
-            scale: (a11 * b0 - a01 * b1) / determinant,
-            shift: (-a01 * b0 + a00 * b1) / determinant
-        )
+        let scale = (a11 * b0 - a01 * b1) / determinant
+        let shift = (-a01 * b0 + a00 * b1) / determinant
+        guard scale.isFinite, shift.isFinite else {
+            return VideoDepthAnythingAffineAlignment(scale: 1, shift: 0)
+        }
+        return VideoDepthAnythingAffineAlignment(scale: scale, shift: shift)
     }
 
     private static func transformedAndClamped(

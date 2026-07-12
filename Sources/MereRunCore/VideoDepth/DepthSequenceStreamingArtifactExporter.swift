@@ -49,6 +49,7 @@ public final class DepthSequenceStreamingArtifactExporter {
     public let height: Int
 
     private let inputURL: URL
+    private let inputRecord: MeshInputRecord
     private let outputDirectory: URL
     private let fps: Double
     private let semantics: DepthSemantics
@@ -75,6 +76,7 @@ public final class DepthSequenceStreamingArtifactExporter {
         provenance: GeometryModelProvenance,
         temporalWindowLength: Int = VideoDepthAnythingWindowing.windowLength,
         temporalOverlap: Int = VideoDepthAnythingWindowing.overlap,
+        inputRecord admittedInputRecord: MeshInputRecord? = nil,
         createdAt: Date = Date()
     ) throws {
         guard expectedFrameCount > 0 else {
@@ -87,7 +89,23 @@ public final class DepthSequenceStreamingArtifactExporter {
             throw DepthSequenceStreamingExporterError.invalidFrameRate(fps)
         }
         self.expectedFrameCount = expectedFrameCount
-        self.inputURL = inputURL.standardizedFileURL
+        let standardizedInput = inputURL.standardizedFileURL
+        self.inputURL = standardizedInput
+        if let admittedInputRecord {
+            guard admittedInputRecord.path == standardizedInput.path else {
+                throw MeshInputProvenanceError.inputRecordPathMismatch(
+                    expected: standardizedInput.path,
+                    actual: admittedInputRecord.path
+                )
+            }
+            self.inputRecord = admittedInputRecord
+        } else {
+            self.inputRecord = MeshInputRecord(
+                path: standardizedInput.path,
+                byteCount: try ModelArtifactPin.fileByteCount(standardizedInput),
+                sha256: try ModelArtifactPin.fileSHA256(standardizedInput)
+            )
+        }
         self.outputDirectory = outputDirectory.standardizedFileURL
         self.width = width
         self.height = height
@@ -255,7 +273,9 @@ public final class DepthSequenceStreamingArtifactExporter {
 
         let manifest = DepthSequenceManifest(
             createdAt: createdAt,
-            inputPath: inputURL.path,
+            inputPath: inputRecord.path,
+            inputByteCount: inputRecord.byteCount,
+            inputSHA256: inputRecord.sha256,
             outputDirectory: outputDirectory.path,
             width: width,
             height: height,

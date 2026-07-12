@@ -86,7 +86,10 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(speechNames, Set(["synthesize", "transcribe", "profile"]))
 
         let visionNames = Set(Vision.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(visionNames, Set(["caption", "inspect", "ground", "segment", "track", "track-live", "pose", "flow", "ocr"]))
+        XCTAssertEqual(visionNames, Set([
+            "caption", "inspect", "ground", "segment", "track", "track-live", "pose", "flow", "ocr",
+            "depth-video", "geometry", "geometry-multiview", "image-to-3d", "image-to-3d-multiview",
+        ]))
 
         let videoNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(videoNames, Set(["generate", "export-latents"]))

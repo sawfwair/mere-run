@@ -1,0 +1,5 @@
+# Audited conversion environment for deterministic VDA-S, TripoSR, and
+# InstantMesh release packages. Use CPython 3.11.15.
+numpy==2.4.3
+torch==2.13.0
+safetensors==0.8.0

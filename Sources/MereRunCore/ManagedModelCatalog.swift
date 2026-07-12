@@ -1080,7 +1080,7 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "Ruicheng/moge-2-vits-normal-onnx",
                 revision: "e50ffda41565591092adea54c6ac83d6212e1e23",
-                patterns: ["model.onnx"]
+                patterns: ["model.onnx", "LICENSE*", "NOTICE*"]
             ),
             upstreamRepoId: "Ruicheng/moge-2-vits-normal-onnx",
             upstreamRevision: "e50ffda41565591092adea54c6ac83d6212e1e23",
@@ -1095,7 +1095,7 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "depth-anything/Video-Depth-Anything-Small",
                 revision: "256875362cff76724b920335dfb4b29dd611f66e",
-                patterns: ["video_depth_anything_vits.pth"]
+                patterns: ["video_depth_anything_vits.pth", "LICENSE*", "NOTICE*"]
             ),
             upstreamRepoId: "depth-anything/Video-Depth-Anything-Small",
             upstreamRevision: "256875362cff76724b920335dfb4b29dd611f66e",
@@ -1111,7 +1111,7 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "depth-anything/Metric-Video-Depth-Anything-Small",
                 revision: "273d090f2ce17df50c2872d82c8322c45da5b4dd",
-                patterns: ["metric_video_depth_anything_vits.pth"]
+                patterns: ["metric_video_depth_anything_vits.pth", "LICENSE*", "NOTICE*"]
             ),
             upstreamRepoId: "depth-anything/Metric-Video-Depth-Anything-Small",
             upstreamRevision: "273d090f2ce17df50c2872d82c8322c45da5b4dd",
@@ -1127,7 +1127,7 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "depth-anything/DA3-SMALL",
                 revision: "e08cab65ca0ec38e7826075418411ab90cab4da3",
-                patterns: ["config.json", "model.safetensors"]
+                patterns: ["config.json", "model.safetensors", "LICENSE*", "NOTICE*"]
             ),
             upstreamRepoId: "depth-anything/DA3-SMALL",
             upstreamRevision: "e08cab65ca0ec38e7826075418411ab90cab4da3",
@@ -1142,14 +1142,14 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "stabilityai/TripoSR",
                 revision: "5b521936b01fbe1890f6f9baed0254ab6351c04a",
-                patterns: ["config.yaml", "model.ckpt"]
+                patterns: ["config.yaml", "model.ckpt", "LICENSE*", "NOTICE*"]
             ),
             upstreamRepoId: "stabilityai/TripoSR",
             upstreamRevision: "5b521936b01fbe1890f6f9baed0254ab6351c04a",
             validationKind: .tripoSR,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_677_247_729,
-            defaultCLICommands: ["image reconstruct-3d"]
+            defaultCLICommands: ["image reconstruct-3d", "vision image-to-3d"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.image3DInstantMeshBase.rawValue,
@@ -1158,14 +1158,17 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "TencentARC/InstantMesh",
                 revision: "b785b4ecfb6636ef34a08c748f96f6a5686244d0",
-                patterns: ["instant_mesh_base.ckpt"]
+                patterns: ["instant_mesh_base.ckpt", "LICENSE*", "NOTICE*"]
             ),
             upstreamRepoId: "TencentARC/InstantMesh",
             upstreamRevision: "b785b4ecfb6636ef34a08c748f96f6a5686244d0",
             validationKind: .instantMesh,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_253_574_354,
-            defaultCLICommands: ["image reconstruct-3d --views"]
+            defaultCLICommands: [
+                "image reconstruct-3d-multiview",
+                "vision image-to-3d-multiview",
+            ]
         ),
         ManagedModelSpec(
             id: "music-acestep",
@@ -1599,6 +1602,32 @@ public extension ManagedModelSpec {
         hubFallback != nil || !mountedHubFallbacks.isEmpty
     }
 
+    var usesPinnedGeometryArtifacts: Bool {
+        switch validationKind {
+        case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR, .instantMesh:
+            true
+        default:
+            false
+        }
+    }
+
+    var requiresManagedConversion: Bool {
+        validationKind == .instantMesh
+    }
+
+    func managedConversionGuidance(at rootURL: URL) -> String? {
+        guard requiresManagedConversion else { return nil }
+        let source = rootURL.appendingPathComponent("instant_mesh_base.ckpt").path
+        let output = rootURL.appendingPathComponent(
+            InstantMeshResources.managedConvertedDirectoryName,
+            isDirectory: true
+        ).path
+        let license = rootURL.appendingPathComponent("LICENSE").path
+        return "Pinned InstantMesh source downloaded at \(source). Conversion is required before runtime; "
+            + "run scripts/model-conversion/convert_instantmesh_base.py "
+            + "--source \"\(source)\" --output \"\(output)\" --license-file \"\(license)\"."
+    }
+
     func hasAnyManagedDownloadSource() -> Bool {
         hubFallback != nil || !mountedHubFallbacks.isEmpty
     }
@@ -1663,19 +1692,15 @@ public extension ManagedModelSpec {
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
             return FalconPerceptionResources(rootURL: rootURL).validate(fileManager: fileManager)
-        case .moge2:
-            return Self.missingFiles(["model.onnx"], in: rootURL, fileManager: fileManager)
-        case .videoDepthAnything:
-            let sourceName = id == ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue
-                ? "metric_video_depth_anything_vits.pth"
-                : "video_depth_anything_vits.pth"
-            return Self.missingFiles([sourceName], in: rootURL, fileManager: fileManager)
-        case .depthAnything3:
-            return Self.missingFiles(["config.json", "model.safetensors"], in: rootURL, fileManager: fileManager)
-        case .tripoSR:
-            return Self.missingFiles(["config.yaml", "model.ckpt"], in: rootURL, fileManager: fileManager)
+        case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
+            guard let pin = GeometryModelPins.pin(for: id) else { return [rootURL] }
+            return Self.invalidPinnedArtifacts(pin.runtimeArtifacts, in: rootURL, fileManager: fileManager)
         case .instantMesh:
-            return Self.missingFiles(["instant_mesh_base.ckpt"], in: rootURL, fileManager: fileManager)
+            if Self.invalidInstantMeshNativeArtifacts(in: rootURL, fileManager: fileManager).isEmpty {
+                return []
+            }
+            guard let pin = GeometryModelPins.pin(for: id) else { return [rootURL] }
+            return Self.invalidPinnedArtifacts(pin.artifacts, in: rootURL, fileManager: fileManager)
         case .qwen3TTS:
             return Self.missingQwen3TTSPaths(in: rootURL, fileManager: fileManager)
         case .qwen3ASR:
@@ -1725,6 +1750,28 @@ public extension ManagedModelSpec {
 
     func validationMessages(in rootURL: URL, fileManager: FileManager = .default) -> [String] {
         switch validationKind {
+        case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
+            guard let pin = GeometryModelPins.pin(for: id) else {
+                return ["Missing exact artifact pin for managed model \(id)."]
+            }
+            return Self.pinnedArtifactValidationMessages(
+                pin.runtimeArtifacts,
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            )
+        case .instantMesh:
+            let normalized = normalizedRootURL(rootURL, fileManager: fileManager)
+            if Self.invalidInstantMeshNativeArtifacts(in: normalized, fileManager: fileManager).isEmpty {
+                return []
+            }
+            guard let pin = GeometryModelPins.pin(for: id) else {
+                return ["Missing exact artifact pin for managed model \(id)."]
+            }
+            return Self.pinnedArtifactValidationMessages(
+                pin.artifacts,
+                in: normalized,
+                fileManager: fileManager
+            )
         case .sam31:
             return SAM31Resources.validateRoot(normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
         case .falconPerception:
@@ -1751,6 +1798,26 @@ public extension ManagedModelSpec {
     func isManagedRootComplete(_ rootURL: URL, fileManager: FileManager = .default) -> Bool {
         missingPaths(in: rootURL, fileManager: fileManager).isEmpty
             && managedSourceMatches(rootURL, fileManager: fileManager)
+    }
+
+    func isManagedRuntimeReady(_ rootURL: URL, fileManager: FileManager = .default) -> Bool {
+        let normalized = normalizedRootURL(rootURL, fileManager: fileManager)
+        switch validationKind {
+        case .instantMesh:
+            return Self.invalidInstantMeshNativeArtifacts(
+                in: normalized,
+                fileManager: fileManager
+            ).isEmpty
+        case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
+            guard let pin = GeometryModelPins.pin(for: id) else { return false }
+            return Self.invalidPinnedArtifacts(
+                pin.runtimeArtifacts,
+                in: normalized,
+                fileManager: fileManager
+            ).isEmpty
+        default:
+            return isManagedRootComplete(normalized, fileManager: fileManager)
+        }
     }
 
     private func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
@@ -1832,6 +1899,56 @@ public extension ManagedModelSpec {
         relativePaths
             .map { rootURL.appendingPathComponent($0) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private static func invalidPinnedArtifacts(
+        _ artifacts: [ModelArtifactPin],
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        artifacts.compactMap { artifact in
+            do {
+                _ = try artifact.verify(in: rootURL, fileManager: fileManager)
+                return nil
+            } catch {
+                return rootURL.appendingPathComponent(artifact.filename)
+            }
+        }
+    }
+
+    private static func pinnedArtifactValidationMessages(
+        _ artifacts: [ModelArtifactPin],
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [String] {
+        artifacts.compactMap { artifact in
+            do {
+                _ = try artifact.verify(in: rootURL, fileManager: fileManager)
+                return nil
+            } catch {
+                return error.localizedDescription
+            }
+        }
+    }
+
+    private static func invalidInstantMeshNativeArtifacts(
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        let native = rootURL.appendingPathComponent(
+            InstantMeshResources.managedConvertedDirectoryName,
+            isDirectory: true
+        )
+        return invalidPinnedArtifacts(
+            [
+                InstantMeshResources.convertedWeightsPin,
+                InstantMeshResources.convertedConfigurationPin,
+                InstantMeshResources.convertedSourceManifestPin,
+                InstantMeshResources.convertedLicensePin,
+            ],
+            in: native,
+            fileManager: fileManager
+        )
     }
 
     private static func missingQwen3TTSPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
