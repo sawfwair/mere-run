@@ -12,6 +12,9 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case visionChat = "vision-chat"
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
+    case visionGeometry = "vision-geometry"
+    case visionDepth = "vision-depth"
+    case image3D = "image-3d"
     case music = "music"
     case sfx = "sfx"
     case video = "video"
@@ -45,6 +48,11 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case lightOnOCR
     case sam31
     case falconPerception
+    case moge2
+    case videoDepthAnything
+    case depthAnything3
+    case tripoSR
+    case instantMesh
     case aceStep
     case magentaRT2
     case muScriptor
@@ -1066,6 +1074,100 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["vision ground"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+            category: .visionGeometry,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "Ruicheng/moge-2-vits-normal-onnx",
+                revision: "e50ffda41565591092adea54c6ac83d6212e1e23",
+                patterns: ["model.onnx"]
+            ),
+            upstreamRepoId: "Ruicheng/moge-2-vits-normal-onnx",
+            upstreamRevision: "e50ffda41565591092adea54c6ac83d6212e1e23",
+            validationKind: .moge2,
+            estimatedDownloadBytes: 140_852_051,
+            defaultCLICommands: ["vision geometry"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+            category: .visionDepth,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "depth-anything/Video-Depth-Anything-Small",
+                revision: "256875362cff76724b920335dfb4b29dd611f66e",
+                patterns: ["video_depth_anything_vits.pth"]
+            ),
+            upstreamRepoId: "depth-anything/Video-Depth-Anything-Small",
+            upstreamRevision: "256875362cff76724b920335dfb4b29dd611f66e",
+            validationKind: .videoDepthAnything,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 116_440_756,
+            defaultCLICommands: ["vision depth-video"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+            category: .visionDepth,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "depth-anything/Metric-Video-Depth-Anything-Small",
+                revision: "273d090f2ce17df50c2872d82c8322c45da5b4dd",
+                patterns: ["metric_video_depth_anything_vits.pth"]
+            ),
+            upstreamRepoId: "depth-anything/Metric-Video-Depth-Anything-Small",
+            upstreamRevision: "273d090f2ce17df50c2872d82c8322c45da5b4dd",
+            validationKind: .videoDepthAnything,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 116_444_063,
+            defaultCLICommands: ["vision depth-video"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.visionGeometryDA3Small.rawValue,
+            category: .visionGeometry,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "depth-anything/DA3-SMALL",
+                revision: "e08cab65ca0ec38e7826075418411ab90cab4da3",
+                patterns: ["config.json", "model.safetensors"]
+            ),
+            upstreamRepoId: "depth-anything/DA3-SMALL",
+            upstreamRevision: "e08cab65ca0ec38e7826075418411ab90cab4da3",
+            validationKind: .depthAnything3,
+            estimatedDownloadBytes: 137_248_940,
+            defaultCLICommands: ["vision geometry-multiview"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.image3DTripoSR.rawValue,
+            category: .image3D,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "stabilityai/TripoSR",
+                revision: "5b521936b01fbe1890f6f9baed0254ab6351c04a",
+                patterns: ["config.yaml", "model.ckpt"]
+            ),
+            upstreamRepoId: "stabilityai/TripoSR",
+            upstreamRevision: "5b521936b01fbe1890f6f9baed0254ab6351c04a",
+            validationKind: .tripoSR,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 1_677_247_729,
+            defaultCLICommands: ["image reconstruct-3d"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.image3DInstantMeshBase.rawValue,
+            category: .image3D,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "TencentARC/InstantMesh",
+                revision: "b785b4ecfb6636ef34a08c748f96f6a5686244d0",
+                patterns: ["instant_mesh_base.ckpt"]
+            ),
+            upstreamRepoId: "TencentARC/InstantMesh",
+            upstreamRevision: "b785b4ecfb6636ef34a08c748f96f6a5686244d0",
+            validationKind: .instantMesh,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 1_253_574_354,
+            defaultCLICommands: ["image reconstruct-3d --views"]
+        ),
+        ManagedModelSpec(
             id: "music-acestep",
             category: .music,
             installShape: .structuredRoot,
@@ -1561,6 +1663,19 @@ public extension ManagedModelSpec {
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
             return FalconPerceptionResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .moge2:
+            return Self.missingFiles(["model.onnx"], in: rootURL, fileManager: fileManager)
+        case .videoDepthAnything:
+            let sourceName = id == ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue
+                ? "metric_video_depth_anything_vits.pth"
+                : "video_depth_anything_vits.pth"
+            return Self.missingFiles([sourceName], in: rootURL, fileManager: fileManager)
+        case .depthAnything3:
+            return Self.missingFiles(["config.json", "model.safetensors"], in: rootURL, fileManager: fileManager)
+        case .tripoSR:
+            return Self.missingFiles(["config.yaml", "model.ckpt"], in: rootURL, fileManager: fileManager)
+        case .instantMesh:
+            return Self.missingFiles(["instant_mesh_base.ckpt"], in: rootURL, fileManager: fileManager)
         case .qwen3TTS:
             return Self.missingQwen3TTSPaths(in: rootURL, fileManager: fileManager)
         case .qwen3ASR:
@@ -1707,6 +1822,16 @@ public extension ManagedModelSpec {
         case .directoryRoot, .structuredRoot:
             return missingPaths(in: url, fileManager: fileManager)
         }
+    }
+
+    private static func missingFiles(
+        _ relativePaths: [String],
+        in rootURL: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        relativePaths
+            .map { rootURL.appendingPathComponent($0) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     private static func missingQwen3TTSPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {

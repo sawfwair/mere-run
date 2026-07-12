@@ -34,6 +34,28 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(entry.topic, "sfx-generate")
     }
 
+    func testGuideVisionDepthVideoResolvesBothPinnedModels() throws {
+        let command = try GuideCommand.parse([
+            "vision",
+            "depth-video",
+            "--model",
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+        ])
+        let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
+        let rendered = try GuideCommand.render(entry: entry, model: command.model, json: false)
+
+        XCTAssertEqual(entry.topic, "vision-depth-video")
+        XCTAssertEqual(
+            entry.models,
+            [
+                ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+                ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+            ]
+        )
+        XCTAssertTrue(rendered.contains("# Vision Depth Video"))
+        XCTAssertTrue(rendered.contains("does not fabricate confidence maps"))
+    }
+
     func testGuideMusicGenerateModelFocusParsesAndRenders() throws {
         let command = try GuideCommand.parse([
             "music",

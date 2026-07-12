@@ -346,6 +346,16 @@ enum GuideRegistry {
             resourceName: "vision-flow.md"
         ),
         GuideTopic(
+            topic: "vision-depth-video",
+            title: "Vision Depth Video",
+            commandPaths: [["vision", "depth-video"]],
+            models: [
+                "vision-depth-vda-small",
+                "vision-depth-vda-small-metric",
+            ],
+            resourceName: "vision-depth-video.md"
+        ),
+        GuideTopic(
             topic: "vision-ocr",
             title: "Vision OCR",
             commandPaths: [["vision", "ocr"]],

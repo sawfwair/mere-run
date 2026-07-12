@@ -34,6 +34,16 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case samSegmentation = "sam-segmentation"
         /// Falcon Perception grounded detection and segmentation family.
         case falconPerception = "falcon-perception"
+        /// MoGe-2 metric monocular geometry family.
+        case moge2 = "moge-2"
+        /// Video Depth Anything temporal depth family.
+        case videoDepthAnything = "video-depth-anything"
+        /// Depth Anything 3 multi-view geometry family.
+        case depthAnything3 = "depth-anything-3"
+        /// TripoSR single-image object reconstruction family.
+        case tripoSR = "triposr"
+        /// InstantMesh multi-view object reconstruction family.
+        case instantMesh = "instantmesh"
         /// Qwen3 TTS family.
         case qwen3TTS = "qwen3-tts"
         /// Qwen3 ASR family.
@@ -77,6 +87,9 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen
         case sam
         case falcon
+        case geometry
+        case depth
+        case threeD = "3d"
         case tts
         case asr
         case embed
@@ -144,6 +157,17 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case soundEffectGeneration = "sound_effect_generation"
         case soundEffectEmbedding = "sound_effect_embedding"
         case videoToAudioGeneration = "video_to_audio_generation"
+        case metricDepth = "metric_depth"
+        case relativeDepth = "relative_depth"
+        case temporalDepth = "temporal_depth"
+        case surfaceNormals = "surface_normals"
+        case pointMap = "point_map"
+        case cameraIntrinsics = "camera_intrinsics"
+        case cameraExtrinsics = "camera_extrinsics"
+        case pointCloud = "point_cloud"
+        case imageTo3D = "image_to_3d"
+        case multiViewReconstruction = "multi_view_reconstruction"
+        case meshGeneration = "mesh_generation"
     }
 
     public enum ComponentRef: Codable, Hashable, Sendable {
@@ -1113,6 +1137,74 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.visionGrounding, .visionDetection, .visionSegmentation],
                 components: falconPerceptionComponents,
                 upstreamRepoId: "tiiuae/Falcon-Perception",
+                createdAt: createdAt
+            )
+        case .visionGeometryMoGe2Small:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .moge2,
+                family: .geometry,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.metricDepth, .surfaceNormals, .pointMap, .cameraIntrinsics, .pointCloud],
+                components: nil,
+                upstreamRepoId: "Ruicheng/moge-2-vits-normal-onnx@e50ffda41565591092adea54c6ac83d6212e1e23",
+                createdAt: createdAt
+            )
+        case .visionDepthVDASmall, .visionDepthVDASmallMetric:
+            let metric = modelID == .visionDepthVDASmallMetric
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .videoDepthAnything,
+                family: .depth,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: metric ? [.metricDepth, .temporalDepth] : [.relativeDepth, .temporalDepth],
+                components: nil,
+                upstreamRepoId: metric
+                    ? "depth-anything/Metric-Video-Depth-Anything-Small@273d090f2ce17df50c2872d82c8322c45da5b4dd"
+                    : "depth-anything/Video-Depth-Anything-Small@256875362cff76724b920335dfb4b29dd611f66e",
+                createdAt: createdAt
+            )
+        case .visionGeometryDA3Small:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .depthAnything3,
+                family: .geometry,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.relativeDepth, .cameraIntrinsics, .cameraExtrinsics, .pointCloud],
+                components: nil,
+                upstreamRepoId: "depth-anything/DA3-SMALL@e08cab65ca0ec38e7826075418411ab90cab4da3",
+                createdAt: createdAt
+            )
+        case .image3DTripoSR:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .tripoSR,
+                family: .threeD,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.imageTo3D, .meshGeneration],
+                components: nil,
+                upstreamRepoId: "stabilityai/TripoSR@5b521936b01fbe1890f6f9baed0254ab6351c04a",
+                createdAt: createdAt
+            )
+        case .image3DInstantMeshBase:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .instantMesh,
+                family: .threeD,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.multiViewReconstruction, .meshGeneration],
+                components: nil,
+                upstreamRepoId: "TencentARC/InstantMesh@b785b4ecfb6636ef34a08c748f96f6a5686244d0",
                 createdAt: createdAt
             )
         case .psiAgent:

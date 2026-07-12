@@ -117,6 +117,67 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/*"), false)
     }
 
+    func testGeometryAnd3DModelsUsePinnedAuthoritativeSources() throws {
+        let expected: [String: (repo: String, revision: String, files: Set<String>, bytes: Int64)] = [
+            ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue: (
+                "Ruicheng/moge-2-vits-normal-onnx",
+                "e50ffda41565591092adea54c6ac83d6212e1e23",
+                ["model.onnx"],
+                140_852_051
+            ),
+            ModelResolver.ModelID.visionDepthVDASmall.rawValue: (
+                "depth-anything/Video-Depth-Anything-Small",
+                "256875362cff76724b920335dfb4b29dd611f66e",
+                ["video_depth_anything_vits.pth"],
+                116_440_756
+            ),
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue: (
+                "depth-anything/Metric-Video-Depth-Anything-Small",
+                "273d090f2ce17df50c2872d82c8322c45da5b4dd",
+                ["metric_video_depth_anything_vits.pth"],
+                116_444_063
+            ),
+            ModelResolver.ModelID.visionGeometryDA3Small.rawValue: (
+                "depth-anything/DA3-SMALL",
+                "e08cab65ca0ec38e7826075418411ab90cab4da3",
+                ["config.json", "model.safetensors"],
+                137_248_940
+            ),
+            ModelResolver.ModelID.image3DTripoSR.rawValue: (
+                "stabilityai/TripoSR",
+                "5b521936b01fbe1890f6f9baed0254ab6351c04a",
+                ["config.yaml", "model.ckpt"],
+                1_677_247_729
+            ),
+            ModelResolver.ModelID.image3DInstantMeshBase.rawValue: (
+                "TencentARC/InstantMesh",
+                "b785b4ecfb6636ef34a08c748f96f6a5686244d0",
+                ["instant_mesh_base.ckpt"],
+                1_253_574_354
+            ),
+        ]
+
+        for (id, pin) in expected {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+            XCTAssertEqual(spec.hubFallback?.repoId, pin.repo)
+            XCTAssertEqual(spec.hubFallback?.revision, pin.revision)
+            XCTAssertEqual(Set(spec.hubFallback?.patterns ?? []), pin.files)
+            XCTAssertEqual(spec.upstreamRevision, pin.revision)
+            XCTAssertEqual(spec.estimatedDownloadBytes, pin.bytes)
+        }
+    }
+
+    func testGeometryModelValidationRequiresPinnedFiles() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.visionGeometryDA3Small.rawValue))
+        XCTAssertEqual(Set(spec.missingPaths(in: root).map(\.lastPathComponent)), ["config.json", "model.safetensors"])
+
+        try Data("{}".utf8).write(to: root.appendingPathComponent("config.json"))
+        try Data([0]).write(to: root.appendingPathComponent("model.safetensors"))
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
     func testKleinNanoUsesExplicitHubSourceFiles() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-klein-nano"))
 

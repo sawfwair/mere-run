@@ -534,6 +534,48 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+                "Metric image geometry",
+                "Predicts metric depth, point maps, normals, masks, and camera intrinsics with MoGe-2 Small.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+                "Temporal relative depth",
+                "Predicts temporally consistent affine-relative video depth with Video Depth Anything Small.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+                "Temporal metric depth",
+                "Predicts temporally consistent metric video depth with Video Depth Anything Small.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionGeometryDA3Small.rawValue,
+                "Multi-view scene geometry",
+                "Predicts relative depth, confidence, intrinsics, and extrinsics across multiple views with DA3 Small.",
+                minimum: 12,
+                recommended: 24
+            ),
+            descriptor(
+                ModelResolver.ModelID.image3DTripoSR.rawValue,
+                "Single-image object mesh",
+                "Reconstructs a normalized object mesh and vertex colors from one image with TripoSR.",
+                minimum: 16,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.image3DInstantMeshBase.rawValue,
+                "Multi-view object mesh",
+                "Reconstructs a FlexiCubes object mesh from licensed user-supplied views with InstantMesh Base.",
+                minimum: 24,
+                recommended: 48
+            ),
+            descriptor(
                 "music-acestep",
                 "Music generation",
                 "Generates music from text prompts with the ACE-Step model stack.",

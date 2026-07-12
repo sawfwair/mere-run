@@ -374,6 +374,310 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(ids.contains("speech-asr-qwen3"))
     }
 
+    func testCompanionModelIDsIncludeInstalledGeometryPrimitive() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [
+            ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+        ])
+
+        XCTAssertEqual(ids, [ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue])
+    }
+
+    func testCompanionModelIDsIncludeInstalledVideoDepthPrimitives() {
+        let ids = APIServerContract.companionModelIDs(installedModelIDs: [
+            ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+        ])
+
+        XCTAssertEqual(ids, [
+            ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+            ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+        ])
+    }
+
+    func testGeometryContractAcceptsOnlyManagedMoGeAndValidControls() throws {
+        let form = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("vision-geometry-moge2-small".utf8)),
+            .init(name: "resolution_level", filename: nil, contentType: nil, body: Data("5".utf8)),
+            .init(name: "token_count", filename: nil, contentType: nil, body: Data("1800".utf8)),
+            .init(name: "max_points", filename: nil, contentType: nil, body: Data("250000".utf8)),
+        ])
+        let plan = try APIServerContract.geometryPlan(from: form)
+        XCTAssertEqual(plan.modelID, ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue)
+        XCTAssertEqual(plan.resolutionLevel, 5)
+        XCTAssertEqual(plan.tokenCount, 1_800)
+        XCTAssertEqual(plan.maximumPointCount, 250_000)
+
+        let pathForm = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("/tmp/model.onnx".utf8)),
+        ])
+        XCTAssertThrowsError(try APIServerContract.geometryPlan(from: pathForm))
+        let badResolution = MultipartFormData(parts: [
+            .init(name: "resolution_level", filename: nil, contentType: nil, body: Data("10".utf8)),
+        ])
+        XCTAssertThrowsError(try APIServerContract.geometryPlan(from: badResolution))
+    }
+
+    func testGeometryResponseReturnsHashedServerOwnedArtifactURLs() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-geometry-response-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let intrinsics = GeometryCameraIntrinsics(
+            imageWidth: 2,
+            imageHeight: 2,
+            normalizedFX: 1,
+            normalizedFY: 1
+        )
+        let frame = try DenseGeometryFrame(
+            width: 2,
+            height: 2,
+            units: .meters,
+            intrinsics: intrinsics,
+            depth: [1, 2, 3, 4],
+            points: [
+                -0.25, -0.25, 1, 0.5, -0.5, 2,
+                -0.75, 0.75, 3, 1, 1, 4,
+            ],
+            normals: [Float](repeating: 0, count: 12),
+            validity: [1, 1, 1, 1],
+            confidence: [1, 1, 1, 1]
+        )
+        let export = try GeometryArtifactExporter.export(
+            frame: frame,
+            inputURL: URL(fileURLWithPath: "/tmp/input.png"),
+            outputDirectory: root,
+            provenance: GeometryModelProvenance(
+                modelID: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+                upstreamRepository: "Ruicheng/moge-2-vits-normal-onnx",
+                upstreamRevision: "pin",
+                license: "MIT"
+            ),
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let result = MoGe2RunResult(
+            export: export,
+            focalShift: MoGe2FocalShiftSolution(
+                focal: 1.5,
+                shift: 0.1,
+                iterationCount: 3,
+                residualMeanSquare: 0
+            ),
+            metricScale: 2,
+            tokenCount: 1_200,
+            modelLoadSeconds: 0.1,
+            inferenceSeconds: 0.2,
+            postprocessSeconds: 0.3
+        )
+        let response = try APIServerContract.geometryResponse(
+            from: result,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(response.created, 123)
+        XCTAssertEqual(response.object, "vision.geometry")
+        XCTAssertEqual(response.units, .meters)
+        XCTAssertEqual(response.camera.intrinsics, intrinsics)
+        XCTAssertEqual(response.artifacts.count, export.manifest.artifacts.count + 1)
+        let manifest = try XCTUnwrap(response.artifacts.first { $0.kind == .manifest })
+        XCTAssertTrue(manifest.url.hasPrefix("file://"))
+        XCTAssertEqual(manifest.sha256.count, 64)
+        XCTAssertGreaterThan(manifest.byteCount, 0)
+    }
+
+    func testDepthVideoContractAcceptsOnlyManagedModelsAndPositiveControls() throws {
+        let upload = MultipartFormData.Part(
+            name: "video",
+            filename: "shot.mp4",
+            contentType: "video/mp4",
+            body: Data([0, 1, 2, 3])
+        )
+        let relative = try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [upload]))
+        XCTAssertEqual(relative.modelID, ModelResolver.ModelID.visionDepthVDASmall.rawValue)
+        XCTAssertEqual(relative.inputSize, 518)
+        XCTAssertNil(relative.maximumFrameCount)
+
+        let metric = try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            .init(
+                name: "model",
+                filename: nil,
+                contentType: nil,
+                body: Data(ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue.utf8)
+            ),
+            .init(name: "input_size", filename: nil, contentType: nil, body: Data("756".utf8)),
+            .init(name: "max_frames", filename: nil, contentType: nil, body: Data("240".utf8)),
+            upload,
+        ]))
+        XCTAssertEqual(metric.modelID, ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue)
+        XCTAssertEqual(metric.inputSize, 756)
+        XCTAssertEqual(metric.maximumFrameCount, 240)
+
+        for (field, value) in [("input_size", "0"), ("max_frames", "-1"), ("max_frames", "nope")] {
+            let form = MultipartFormData(parts: [
+                .init(name: field, filename: nil, contentType: nil, body: Data(value.utf8)),
+                upload,
+            ])
+            XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: form)) { error in
+                XCTAssertTrue(error.localizedDescription.contains(field))
+            }
+        }
+
+        let unmanaged = MultipartFormData(parts: [
+            .init(name: "model", filename: nil, contentType: nil, body: Data("/tmp/model.pth".utf8)),
+            upload,
+        ])
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: unmanaged)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("model"))
+        }
+    }
+
+    func testDepthVideoRoutePolicyRequiresUploadedBytesAndRejectsFilesystemControls() {
+        XCTAssertEqual(APIServerContract.depthVideoRoutePath, "/v1/vision/depth-video")
+        XCTAssertEqual(
+            APIServerContract.depthVideoRouterPath.description,
+            APIServerContract.depthVideoRoutePath
+        )
+        XCTAssertEqual(APIServerContract.maximumDepthVideoUploadByteCount, 512 * 1024 * 1024)
+
+        let upload = MultipartFormData.Part(
+            name: "video",
+            filename: "shot.mov",
+            contentType: "video/quicktime",
+            body: Data([1])
+        )
+        let pathInsteadOfUpload = MultipartFormData(parts: [
+            .init(name: "video", filename: nil, contentType: nil, body: Data("/tmp/shot.mov".utf8)),
+        ])
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: pathInsteadOfUpload))
+
+        for pathField in ["input", "input_path", "video_path", "output", "output_path", "output_directory", "model_path"] {
+            let form = MultipartFormData(parts: [
+                .init(name: pathField, filename: nil, contentType: nil, body: Data("/tmp/client-path".utf8)),
+                upload,
+            ])
+            XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: form)) { error in
+                XCTAssertTrue(error.localizedDescription.contains(pathField))
+            }
+        }
+
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            .init(name: "video", filename: "empty.mp4", contentType: "video/mp4", body: Data()),
+        ])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            upload,
+            upload,
+        ])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            .init(name: "video", filename: "frame.png", contentType: "image/png", body: Data([1])),
+        ])))
+        XCTAssertThrowsError(try APIServerContract.depthVideoPlan(from: MultipartFormData(parts: [
+            upload,
+            .init(name: "checkpoint", filename: "model.pth", contentType: "application/octet-stream", body: Data([1])),
+        ])))
+    }
+
+    func testDepthVideoResponseReturnsHashedServerOwnedSequenceArtifactsAndExplicitAbsences() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-depth-video-response-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let frames = try [
+            DepthSequenceFrame(
+                index: 0,
+                timeSeconds: 0,
+                width: 2,
+                height: 2,
+                depth: [1, 2, 3, 4]
+            ),
+            DepthSequenceFrame(
+                index: 1,
+                timeSeconds: 0.125,
+                width: 2,
+                height: 2,
+                depth: [2, 3, 4, 5]
+            ),
+        ]
+        let export = try DepthSequenceArtifactExporter.export(
+            frames: frames,
+            inputURL: URL(fileURLWithPath: "/server-owned/upload.mp4"),
+            outputDirectory: root,
+            fps: 8,
+            semantics: .affineRelative,
+            provenance: GeometryModelProvenance(
+                modelID: ModelResolver.ModelID.visionDepthVDASmall.rawValue,
+                upstreamRepository: "depth-anything/Video-Depth-Anything-Small",
+                upstreamRevision: "pin",
+                license: "Apache-2.0",
+                weightsSHA256: String(repeating: "a", count: 64)
+            ),
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let reviewURL = root.appendingPathComponent("depth-review.mp4")
+        try Data("review".utf8).write(to: reviewURL)
+        let review = VideoDepthReviewArtifact(
+            relativePath: reviewURL.lastPathComponent,
+            byteCount: 6,
+            sha256: try ModelArtifactPin.fileSHA256(reviewURL)
+        )
+        let checkpoint = VideoDepthAnythingCheckpoint(
+            variant: .relative,
+            format: .pinnedPyTorch,
+            weightsURL: root.appendingPathComponent("model.pth"),
+            weightsByteCount: 123,
+            weightsSHA256: String(repeating: "b", count: 64),
+            sourceSHA256: String(repeating: "b", count: 64)
+        )
+        let result = VideoDepthAnythingRunResult(
+            export: export,
+            reviewVideo: review,
+            checkpoint: checkpoint,
+            sourceFPS: 8,
+            windowCount: 1,
+            checkpointVerificationSeconds: 0.1,
+            frameExtractionSeconds: 0.2,
+            modelLoadSeconds: 0.3,
+            inferenceSeconds: 0.4,
+            exportSeconds: 0.5
+        )
+
+        let response = try APIServerContract.depthVideoResponse(
+            from: result,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+        XCTAssertEqual(response.created, 123)
+        XCTAssertEqual(response.object, "vision.depth-video")
+        XCTAssertEqual(response.model, ModelResolver.ModelID.visionDepthVDASmall.rawValue)
+        XCTAssertEqual(response.semantics, .affineRelative)
+        XCTAssertEqual(response.frameCount, 2)
+        XCTAssertEqual(response.windowCount, 1)
+        XCTAssertFalse(response.hasConfidence)
+        XCTAssertFalse(response.hasCameraIntrinsics)
+        XCTAssertFalse(response.hasCameraExtrinsics)
+        XCTAssertFalse(response.hasPointCloud)
+        XCTAssertTrue(response.manifest.url.hasPrefix("file://"))
+        XCTAssertEqual(response.manifest.sha256.count, 64)
+        XCTAssertGreaterThan(response.manifest.byteCount, 0)
+        XCTAssertEqual(response.review.url, reviewURL.absoluteString)
+        XCTAssertEqual(response.review.sha256, review.sha256)
+        XCTAssertEqual(response.artifacts.count, 4)
+        XCTAssertTrue(response.artifacts.allSatisfy { artifact in
+            artifact.url.hasPrefix("file://")
+                && artifact.sha256.count == 64
+                && artifact.byteCount > 0
+                && artifact.frameIndex != nil
+        })
+        XCTAssertEqual(response.timing.totalSeconds, 1.5, accuracy: 0.000_001)
+
+        let encoded = try JSONEncoder().encode(response)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertEqual(object["has_confidence"] as? Bool, false)
+        XCTAssertEqual(object["has_camera_intrinsics"] as? Bool, false)
+        XCTAssertEqual(object["has_camera_extrinsics"] as? Bool, false)
+        XCTAssertEqual(object["has_point_cloud"] as? Bool, false)
+        XCTAssertNotNil(object["manifest"])
+        XCTAssertNotNil(object["review"])
+        XCTAssertNotNil(object["artifacts"])
+        XCTAssertNotNil(object["timing"])
+    }
+
     func testCompanionModelIDsHideMissingSidecarModels() {
         let ids = APIServerContract.companionModelIDs(installedModelIDs: [])
 

@@ -28,6 +28,8 @@ struct APIServe: AsyncParsableCommand {
           POST /v1/embeddings       - Native Qwen3 text embeddings
           POST /v1/images/generations - Native image generation
           POST /v1/images/edits       - Native image editing
+          POST /v1/vision/geometry    - Native metric image geometry
+          POST /v1/vision/depth-video - Native temporally consistent video depth
           POST /v1/audio/speech      - Native text to speech
           POST /v1/audio/transcriptions - Native speech to text
 
@@ -83,6 +85,18 @@ struct APIServe: AsyncParsableCommand {
             -H "Content-Type: application/json" \\
             --output speech.wav \\
             --data '{"model":"speech-tts-qwen3-nano","input":"mere.run is online","voice":"nova","response_format":"wav"}'
+
+          # Recover metric depth, normals, camera, and a point cloud
+          curl http://localhost:8080/v1/vision/geometry \
+            -F model=vision-geometry-moge2-small \
+            -F resolution_level=9 \
+            -F image=@frame.png
+
+          # Recover temporally consistent relative depth from uploaded video bytes
+          curl http://localhost:8080/v1/vision/depth-video \
+            -F model=vision-depth-vda-small \
+            -F input_size=518 \
+            -F video=@shot.mp4
 
           # Transcribe audio
           curl http://localhost:8080/v1/audio/transcriptions \\
@@ -472,6 +486,160 @@ struct APIHealthStatus: Codable, Equatable, Sendable {
     let status: String
 }
 
+struct APIGeometryArtifactResponse: Codable, Equatable, Sendable {
+    let kind: GeometryArtifactKind
+    let url: String
+    let mediaType: String
+    let byteCount: Int64
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case url
+        case mediaType = "media_type"
+        case byteCount = "byte_count"
+        case sha256
+    }
+}
+
+struct APIGeometryTimingResponse: Codable, Equatable, Sendable {
+    let modelLoadSeconds: Double
+    let inferenceSeconds: Double
+    let postprocessSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case modelLoadSeconds = "model_load_seconds"
+        case inferenceSeconds = "inference_seconds"
+        case postprocessSeconds = "postprocess_seconds"
+    }
+}
+
+struct APIGeometryResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let status: String
+    let model: String
+    let width: Int
+    let height: Int
+    let units: GeometryValueUnits
+    let coordinateSystem: GeometryCoordinateSystem
+    let camera: GeometryCameraManifest
+    let depthStatistics: GeometryDepthStatistics
+    let focal: Double
+    let shift: Double
+    let metricScale: Double
+    let tokenCount: Int
+    let manifestURL: String
+    let artifacts: [APIGeometryArtifactResponse]
+    let timing: APIGeometryTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case status
+        case model
+        case width
+        case height
+        case units
+        case coordinateSystem = "coordinate_system"
+        case camera
+        case depthStatistics = "depth_statistics"
+        case focal
+        case shift
+        case metricScale = "metric_scale"
+        case tokenCount = "token_count"
+        case manifestURL = "manifest_url"
+        case artifacts
+        case timing
+    }
+}
+
+struct APIDepthVideoArtifactResponse: Codable, Equatable, Sendable {
+    let kind: String
+    let frameIndex: Int?
+    let url: String
+    let mediaType: String
+    let byteCount: Int64
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case frameIndex = "frame_index"
+        case url
+        case mediaType = "media_type"
+        case byteCount = "byte_count"
+        case sha256
+    }
+}
+
+struct APIDepthVideoTimingResponse: Codable, Equatable, Sendable {
+    let checkpointVerificationSeconds: Double
+    let frameExtractionSeconds: Double
+    let modelLoadSeconds: Double
+    let inferenceSeconds: Double
+    let exportSeconds: Double
+    let totalSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case checkpointVerificationSeconds = "checkpoint_verification_seconds"
+        case frameExtractionSeconds = "frame_extraction_seconds"
+        case modelLoadSeconds = "model_load_seconds"
+        case inferenceSeconds = "inference_seconds"
+        case exportSeconds = "export_seconds"
+        case totalSeconds = "total_seconds"
+    }
+}
+
+struct APIDepthVideoResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let status: String
+    let model: String
+    let semantics: DepthSemantics
+    let checkpointFormat: VideoDepthAnythingCheckpointFormat
+    let checkpointSHA256: String
+    let width: Int
+    let height: Int
+    let fps: Double
+    let frameCount: Int
+    let windowCount: Int
+    let temporalWindowLength: Int
+    let temporalOverlap: Int
+    let hasConfidence: Bool
+    let hasCameraIntrinsics: Bool
+    let hasCameraExtrinsics: Bool
+    let hasPointCloud: Bool
+    let manifest: APIDepthVideoArtifactResponse
+    let review: APIDepthVideoArtifactResponse
+    let artifacts: [APIDepthVideoArtifactResponse]
+    let timing: APIDepthVideoTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case status
+        case model
+        case semantics
+        case checkpointFormat = "checkpoint_format"
+        case checkpointSHA256 = "checkpoint_sha256"
+        case width
+        case height
+        case fps
+        case frameCount = "frame_count"
+        case windowCount = "window_count"
+        case temporalWindowLength = "temporal_window_length"
+        case temporalOverlap = "temporal_overlap"
+        case hasConfidence = "has_confidence"
+        case hasCameraIntrinsics = "has_camera_intrinsics"
+        case hasCameraExtrinsics = "has_camera_extrinsics"
+        case hasPointCloud = "has_point_cloud"
+        case manifest
+        case review
+        case artifacts
+        case timing
+    }
+}
+
 enum APIServerContract {
     static let defaultMaxTokens = 2048
     static let maxEmbeddingInputCount = 256
@@ -482,6 +650,11 @@ enum APIServerContract {
     static let defaultImageModelID = ModelResolver.ModelID.zetaNano.rawValue
     static let defaultSpeechModelID = Qwen3TTSResources.defaultModelId
     static let defaultTranscriptionModelID = ParakeetResources.defaultModelId
+    static let defaultGeometryModelID = ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue
+    static let defaultDepthVideoModelID = ModelResolver.ModelID.visionDepthVDASmall.rawValue
+    static let depthVideoRoutePath = "/v1/vision/depth-video"
+    static let depthVideoRouterPath = RouterPath(depthVideoRoutePath)
+    static let maximumDepthVideoUploadByteCount = 512 * 1024 * 1024
 
     static func decodeImageGenerationRequest(from data: Data) throws -> OpenAIImageGenerationRequest {
         try decodeJSONRequest(OpenAIImageGenerationRequest.self, from: data)
@@ -552,6 +725,27 @@ enum APIServerContract {
         let responseFormat: String
         let task: ASRTask
         let maxTokens: Int
+    }
+
+    struct GeometryPlan: Equatable, Sendable {
+        let modelID: String
+        let resolutionLevel: Int
+        let tokenCount: Int?
+        let maximumPointCount: Int?
+
+        var configuration: MoGe2InferenceConfiguration {
+            MoGe2InferenceConfiguration(
+                resolutionLevel: resolutionLevel,
+                tokenCount: tokenCount,
+                maximumPointCount: maximumPointCount
+            )
+        }
+    }
+
+    struct DepthVideoPlan: Equatable, Sendable {
+        let modelID: String
+        let inputSize: Int
+        let maximumFrameCount: Int?
     }
 
     static func healthStatus() -> APIHealthStatus {
@@ -643,7 +837,9 @@ enum APIServerContract {
         fileManager: FileManager = .default,
         installedModelIDs: Set<String>? = nil
     ) -> [String] {
-        let categories: Set<ManagedModelCategory> = [.image, .speechTTS, .speechASR, .textEmbed]
+        let categories: Set<ManagedModelCategory> = [
+            .image, .speechTTS, .speechASR, .textEmbed, .visionGeometry, .visionDepth,
+        ]
         let ids = ManagedModelCatalog.allSpecs
             .filter { categories.contains($0.category) }
             .filter { isCompanionModelInstalled($0, fileManager: fileManager, installedModelIDs: installedModelIDs) }
@@ -653,6 +849,244 @@ enum APIServerContract {
             uniqueIDs.insert(QwenImageEditRepository.modelId)
         }
         return Array(uniqueIDs).sorted()
+    }
+
+    static func geometryPlan(from form: MultipartFormData) throws -> GeometryPlan {
+        let modelID = normalizedModelID(form.field("model"), defaultID: defaultGeometryModelID)
+        guard modelID == defaultGeometryModelID else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "only \(defaultGeometryModelID) is supported"
+            )
+        }
+        let resolutionLevel: Int
+        if let raw = normalizedOptional(form.field("resolution_level")) {
+            guard let value = Int(raw), (0...9).contains(value) else {
+                throw APIRequestValidationError.invalidField(
+                    "resolution_level",
+                    "must be an integer between 0 and 9"
+                )
+            }
+            resolutionLevel = value
+        } else {
+            resolutionLevel = 9
+        }
+        return GeometryPlan(
+            modelID: modelID,
+            resolutionLevel: resolutionLevel,
+            tokenCount: try optionalPositiveIntField(form.field("token_count"), field: "token_count"),
+            maximumPointCount: try optionalPositiveIntField(form.field("max_points"), field: "max_points")
+        )
+    }
+
+    static func geometryResponse(
+        from result: MoGe2RunResult,
+        createdAt: Date = Date()
+    ) throws -> APIGeometryResponse {
+        let manifest = result.export.manifest
+        let root = URL(fileURLWithPath: manifest.outputDirectory, isDirectory: true)
+        var artifacts = manifest.artifacts.map { artifact in
+            APIGeometryArtifactResponse(
+                kind: artifact.kind,
+                url: root.appendingPathComponent(artifact.relativePath).absoluteString,
+                mediaType: artifact.mediaType,
+                byteCount: artifact.byteCount,
+                sha256: artifact.sha256
+            )
+        }
+        let manifestURL = result.export.manifestURL
+        let attributes = try FileManager.default.attributesOfItem(atPath: manifestURL.path)
+        artifacts.append(
+            APIGeometryArtifactResponse(
+                kind: .manifest,
+                url: manifestURL.absoluteString,
+                mediaType: "application/json",
+                byteCount: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+                sha256: try ModelArtifactPin.fileSHA256(manifestURL)
+            )
+        )
+        artifacts.sort { lhs, rhs in
+            if lhs.kind.rawValue == rhs.kind.rawValue { return lhs.url < rhs.url }
+            return lhs.kind.rawValue < rhs.kind.rawValue
+        }
+        return APIGeometryResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            object: "vision.geometry",
+            status: "completed",
+            model: manifest.model.modelID,
+            width: manifest.width,
+            height: manifest.height,
+            units: manifest.units,
+            coordinateSystem: manifest.coordinateSystem,
+            camera: manifest.camera,
+            depthStatistics: manifest.depthStatistics,
+            focal: result.focalShift.focal,
+            shift: result.focalShift.shift,
+            metricScale: result.metricScale,
+            tokenCount: result.tokenCount,
+            manifestURL: manifestURL.absoluteString,
+            artifacts: artifacts,
+            timing: APIGeometryTimingResponse(
+                modelLoadSeconds: result.modelLoadSeconds,
+                inferenceSeconds: result.inferenceSeconds,
+                postprocessSeconds: result.postprocessSeconds
+            )
+        )
+    }
+
+    static func depthVideoPlan(from form: MultipartFormData) throws -> DepthVideoPlan {
+        let allowedFields: Set<String> = ["model", "input_size", "max_frames"]
+        for part in form.parts {
+            if part.filename != nil {
+                guard part.name == "video" else {
+                    throw APIRequestValidationError.invalidField(
+                        part.name,
+                        "only a single uploaded 'video' file is accepted"
+                    )
+                }
+            } else if !allowedFields.contains(part.name) {
+                throw APIRequestValidationError.invalidField(
+                    part.name,
+                    "unsupported field; client filesystem paths are not accepted"
+                )
+            }
+        }
+        for field in allowedFields where form.parts.filter({ $0.name == field && $0.filename == nil }).count > 1 {
+            throw APIRequestValidationError.invalidField(field, "must be supplied at most once")
+        }
+
+        let uploads = form.files(named: "video")
+        guard uploads.count == 1, let upload = uploads.first, !upload.body.isEmpty else {
+            throw APIRequestValidationError.invalidField(
+                "video",
+                "exactly one non-empty uploaded video file is required"
+            )
+        }
+        if let contentType = upload.contentType?.lowercased(),
+           !contentType.hasPrefix("video/"),
+           contentType != "application/octet-stream" {
+            throw APIRequestValidationError.invalidField(
+                "video",
+                "uploaded part must have a video content type"
+            )
+        }
+
+        let modelID = normalizedModelID(
+            form.field("model"),
+            defaultID: defaultDepthVideoModelID
+        ).lowercased()
+        let supportedModelIDs = Set(VideoDepthAnythingVariant.allCases.map(\.modelID))
+        guard supportedModelIDs.contains(modelID) else {
+            throw APIRequestValidationError.invalidField(
+                "model",
+                "only \(supportedModelIDs.sorted().joined(separator: ", ")) are supported"
+            )
+        }
+
+        return DepthVideoPlan(
+            modelID: modelID,
+            inputSize: try optionalPositiveIntField(
+                form.field("input_size"),
+                field: "input_size"
+            ) ?? 518,
+            maximumFrameCount: try optionalPositiveIntField(
+                form.field("max_frames"),
+                field: "max_frames"
+            )
+        )
+    }
+
+    static func depthVideoResponse(
+        from result: VideoDepthAnythingRunResult,
+        createdAt: Date = Date()
+    ) throws -> APIDepthVideoResponse {
+        let sequence = result.export.manifest
+        let root = URL(fileURLWithPath: sequence.outputDirectory, isDirectory: true)
+        let manifest = try depthVideoFileArtifact(
+            kind: GeometryArtifactKind.manifest.rawValue,
+            frameIndex: nil,
+            url: result.export.manifestURL,
+            mediaType: "application/json"
+        )
+        let review = APIDepthVideoArtifactResponse(
+            kind: result.reviewVideo.kind,
+            frameIndex: nil,
+            url: root.appendingPathComponent(result.reviewVideo.relativePath).absoluteString,
+            mediaType: result.reviewVideo.mediaType,
+            byteCount: result.reviewVideo.byteCount,
+            sha256: result.reviewVideo.sha256
+        )
+        let artifacts = sequence.frames.flatMap { frame in
+            frame.artifacts.map { artifact in
+                APIDepthVideoArtifactResponse(
+                    kind: artifact.kind.rawValue,
+                    frameIndex: frame.index,
+                    url: root.appendingPathComponent(artifact.relativePath).absoluteString,
+                    mediaType: artifact.mediaType,
+                    byteCount: artifact.byteCount,
+                    sha256: artifact.sha256
+                )
+            }
+        }.sorted { lhs, rhs in
+            if lhs.frameIndex != rhs.frameIndex {
+                return (lhs.frameIndex ?? -1) < (rhs.frameIndex ?? -1)
+            }
+            if lhs.kind != rhs.kind { return lhs.kind < rhs.kind }
+            return lhs.url < rhs.url
+        }
+        let timing = APIDepthVideoTimingResponse(
+            checkpointVerificationSeconds: result.checkpointVerificationSeconds,
+            frameExtractionSeconds: result.frameExtractionSeconds,
+            modelLoadSeconds: result.modelLoadSeconds,
+            inferenceSeconds: result.inferenceSeconds,
+            exportSeconds: result.exportSeconds,
+            totalSeconds: result.checkpointVerificationSeconds
+                + result.frameExtractionSeconds
+                + result.modelLoadSeconds
+                + result.inferenceSeconds
+                + result.exportSeconds
+        )
+        return APIDepthVideoResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            object: "vision.depth-video",
+            status: "completed",
+            model: sequence.model.modelID,
+            semantics: sequence.semantics,
+            checkpointFormat: result.checkpoint.format,
+            checkpointSHA256: result.checkpoint.weightsSHA256,
+            width: sequence.width,
+            height: sequence.height,
+            fps: sequence.fps,
+            frameCount: sequence.frameCount,
+            windowCount: result.windowCount,
+            temporalWindowLength: sequence.temporalWindowLength,
+            temporalOverlap: sequence.temporalOverlap,
+            hasConfidence: sequence.frames.contains { $0.confidencePath != nil },
+            hasCameraIntrinsics: sequence.frames.contains { $0.intrinsics != nil },
+            hasCameraExtrinsics: false,
+            hasPointCloud: false,
+            manifest: manifest,
+            review: review,
+            artifacts: artifacts,
+            timing: timing
+        )
+    }
+
+    private static func depthVideoFileArtifact(
+        kind: String,
+        frameIndex: Int?,
+        url: URL,
+        mediaType: String
+    ) throws -> APIDepthVideoArtifactResponse {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return APIDepthVideoArtifactResponse(
+            kind: kind,
+            frameIndex: frameIndex,
+            url: url.absoluteString,
+            mediaType: mediaType,
+            byteCount: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+            sha256: try ModelArtifactPin.fileSHA256(url)
+        )
     }
 
     static func imageGenerationPlan(
@@ -1807,6 +2241,8 @@ actor CodeGenServer {
         print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
         print("Images endpoint: http://\(host):\(port)/v1/images/generations")
         print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
+        print("Geometry endpoint: http://\(host):\(port)/v1/vision/geometry")
+        print("Video depth endpoint: http://\(host):\(port)\(APIServerContract.depthVideoRoutePath)")
         print("Speech endpoint: http://\(host):\(port)/v1/audio/speech")
         print("Transcriptions endpoint: http://\(host):\(port)/v1/audio/transcriptions")
         print("Press Ctrl+C to stop.")
@@ -1848,6 +2284,14 @@ actor CodeGenServer {
 
         router.post("/v1/images/edits") { [self] request, _ in
             return try await self.handleImageEdits(request)
+        }
+
+        router.post("/v1/vision/geometry") { [self] request, _ in
+            return try await self.handleVisionGeometry(request)
+        }
+
+        router.post(APIServerContract.depthVideoRouterPath) { [self] request, _ in
+            return try await self.handleVisionDepthVideo(request)
         }
 
         router.post("/v1/audio/speech") { [self] request, _ in
@@ -2200,6 +2644,153 @@ actor CodeGenServer {
         }
     }
 
+    private func handleVisionGeometry(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 100 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(
+                status: .badRequest,
+                message: "Invalid request body.",
+                type: "invalid_request_error"
+            )
+        }
+
+        do {
+            let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
+            guard let image = form.file(named: "image"), !image.body.isEmpty else {
+                throw APIRequestValidationError.invalidField("image", "image file is required")
+            }
+            if let contentType = image.contentType?.lowercased(),
+               !contentType.hasPrefix("image/") && contentType != "application/octet-stream" {
+                throw APIRequestValidationError.invalidField("image", "uploaded part must be an image")
+            }
+            let plan = try APIServerContract.geometryPlan(from: form)
+            let inputURL = try writeMultipartFile(
+                image,
+                directoryName: "mere-run-api-geometry-inputs",
+                defaultExtension: "png"
+            )
+            defer { try? FileManager.default.removeItem(at: inputURL) }
+            let outputDirectory = try temporaryOutputDirectory(directoryName: "mere-run-api-geometry")
+            try MLXBundleSupport.ensureAvailable(quiet: true)
+            let generator = MoGe2Generator()
+            do {
+                let result = try await generator.generate(
+                    imageURL: inputURL,
+                    outputDirectory: outputDirectory,
+                    model: nil,
+                    configuration: plan.configuration,
+                    progress: nil
+                )
+                await generator.unload()
+                return try jsonResponse(APIServerContract.geometryResponse(from: result))
+            } catch {
+                await generator.unload()
+                try? FileManager.default.removeItem(at: outputDirectory)
+                throw error
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleVisionDepthVideo(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(
+                upTo: APIServerContract.maximumDepthVideoUploadByteCount
+            )
+        } catch {
+            return makeErrorResponse(
+                status: .badRequest,
+                message: "Invalid request body or video upload exceeds 512 MiB.",
+                type: "invalid_request_error"
+            )
+        }
+
+        do {
+            let form = try MultipartFormData.parse(
+                body: Data(body.readableBytesView),
+                boundary: boundary
+            )
+            let plan = try APIServerContract.depthVideoPlan(from: form)
+            guard let video = form.file(named: "video") else {
+                throw APIRequestValidationError.invalidField(
+                    "video",
+                    "exactly one non-empty uploaded video file is required"
+                )
+            }
+            let inputURL = try writeMultipartFile(
+                video,
+                directoryName: "mere-run-api-depth-video-inputs",
+                defaultExtension: "mp4"
+            )
+            defer { try? FileManager.default.removeItem(at: inputURL) }
+            let outputDirectory = try temporaryOutputDirectory(
+                directoryName: "mere-run-api-depth-video"
+            )
+            try MLXBundleSupport.ensureAvailable(quiet: true)
+            let generator = VideoDepthAnythingGenerator()
+            do {
+                let result = try await generator.generate(
+                    videoURL: inputURL,
+                    outputDirectory: outputDirectory,
+                    model: plan.modelID,
+                    inputSize: plan.inputSize,
+                    maximumFrameCount: plan.maximumFrameCount,
+                    progress: nil
+                )
+                await generator.unload()
+                return try jsonResponse(APIServerContract.depthVideoResponse(from: result))
+            } catch {
+                await generator.unload()
+                try? FileManager.default.removeItem(at: outputDirectory)
+                throw error
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
     private func handleAudioSpeech(_ request: Request) async throws -> Response {
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
@@ -2452,7 +3043,8 @@ actor CodeGenServer {
                 modelPath: resolved.rootURL.path,
                 request: request
             )
-        case .gemma, .liquid, .qwen, .sam, .falcon, .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
+        case .gemma, .liquid, .qwen, .sam, .falcon, .geometry, .depth, .threeD,
+             .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
                 "model \(resolved.modelID) is not an image generation model"
@@ -2615,11 +3207,21 @@ actor CodeGenServer {
         return directory.appendingPathComponent("\(UUID().uuidString).\(pathExtension)")
     }
 
+    private nonisolated func temporaryOutputDirectory(directoryName: String) throws -> URL {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        let directory = parent.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        return directory
+    }
+
     private nonisolated func writeMultipartFile(
         _ file: MultipartFormData.Part,
-        directoryName: String
+        directoryName: String,
+        defaultExtension: String = "wav"
     ) throws -> URL {
-        let pathExtension = sanitizedPathExtension(from: file.filename) ?? "wav"
+        let pathExtension = sanitizedPathExtension(from: file.filename) ?? defaultExtension
         let outputURL = try temporaryOutputURL(directoryName: directoryName, extension: pathExtension)
         try file.body.write(to: outputURL)
         return outputURL
