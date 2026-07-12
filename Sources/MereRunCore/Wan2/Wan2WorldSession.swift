@@ -72,6 +72,7 @@ public struct Wan2WorldCameraControl: Codable, Hashable, Sendable {
 
 public enum Wan2WorldConditioningMode: String, Codable, Hashable, Sendable {
     case textAndFirstFrame
+    case projectiveCameraLatents
     case causalCameraLatents
 }
 
@@ -176,6 +177,7 @@ public actor Wan2WorldSession {
     public let stateDirectory: URL
 
     private let generator: Wan2TI2VGenerator
+    private let causalGenerator: Wan2CausalWorldGenerator?
     private var phase: Wan2WorldSessionPhase = .cold
     private var transitionCount = 0
     private var currentStateID: UUID?
@@ -184,18 +186,34 @@ public actor Wan2WorldSession {
     public init(
         resources: Wan2Resources,
         stateDirectory: URL,
+        cameraWeightsURL: URL? = nil,
+        causalWeightsURL: URL? = nil,
         sessionID: UUID = UUID()
     ) {
+        precondition(cameraWeightsURL == nil || causalWeightsURL == nil)
         self.resources = resources
         self.stateDirectory = stateDirectory.standardizedFileURL
         self.sessionID = sessionID
-        self.generator = Wan2TI2VGenerator()
+        self.generator = Wan2TI2VGenerator(cameraWeightsURL: cameraWeightsURL)
+        self.causalGenerator = causalWeightsURL.map(Wan2CausalWorldGenerator.init(weightsURL:))
+    }
+
+    private var conditioningMode: Wan2WorldConditioningMode {
+        causalGenerator == nil ? generator.conditioningMode : .causalCameraLatents
+    }
+
+    private var isWarm: Bool {
+        causalGenerator?.isWarm ?? generator.isWarm
     }
 
     public func prepare(progress: (@Sendable (String) -> Void)? = nil) throws {
         guard phase != .generating else { throw Wan2WorldSessionError.busy }
         try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
-        try generator.prepare(resources: resources, progress: progress)
+        if let causalGenerator {
+            try causalGenerator.prepare(resources: resources, progress: progress)
+        } else {
+            try generator.prepare(resources: resources, progress: progress)
+        }
         phase = .ready
     }
 
@@ -217,31 +235,57 @@ public actor Wan2WorldSession {
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        let effectivePrompt = request.prompt + "\n\nCamera behavior: " + request.camera.promptClause
-        let options = try Wan2GenerationOptions(
-            prompt: effectivePrompt,
-            negativePrompt: request.negativePrompt,
-            sourceImageURL: sourceImageURL,
-            outputURL: outputURL,
-            width: request.width,
-            height: request.height,
-            numFrames: request.numFrames,
-            steps: request.steps,
-            guidanceScale: request.guidanceScale,
-            shift: request.shift,
-            seed: request.seed,
-            fps: request.fps
-        )
-
+        let usesProjectiveCamera = conditioningMode == .projectiveCameraLatents
+        let effectivePrompt = usesProjectiveCamera
+            ? request.prompt
+            : request.prompt + "\n\nCamera behavior: " + request.camera.promptClause
+        let cameraConditioning = usesProjectiveCamera
+            ? Wan2DreamXCameraTrajectory.compile(
+                control: request.camera,
+                pixelFrameCount: request.numFrames
+            )
+            : nil
         phase = .generating
         do {
-            let result = try await generator.generate(
-                options: options,
-                resources: resources,
-                useChainedSourceLatent: !usesExplicitSource,
-                captureTerminalFrameLatent: true,
-                progressHandler: progressHandler
-            )
+            let result: Wan2VideoGenerationResult
+            if let causalGenerator {
+                if usesExplicitSource, transitionCount > 0 {
+                    causalGenerator.reset()
+                }
+                result = try await causalGenerator.generateBlock(
+                    prompt: request.prompt,
+                    camera: request.camera,
+                    sourceImageURL: causalGenerator.latentFrameCount == 0 ? sourceImageURL : nil,
+                    resources: resources,
+                    width: request.width,
+                    height: request.height,
+                    seed: request.seed,
+                    progressHandler: progressHandler
+                )
+            } else {
+                let options = try Wan2GenerationOptions(
+                    prompt: effectivePrompt,
+                    negativePrompt: request.negativePrompt,
+                    sourceImageURL: sourceImageURL,
+                    outputURL: outputURL,
+                    width: request.width,
+                    height: request.height,
+                    numFrames: request.numFrames,
+                    steps: request.steps,
+                    guidanceScale: request.guidanceScale,
+                    shift: request.shift,
+                    seed: request.seed,
+                    fps: request.fps,
+                    cameraConditioning: cameraConditioning
+                )
+                result = try await generator.generate(
+                    options: options,
+                    resources: resources,
+                    useChainedSourceLatent: !usesExplicitSource,
+                    captureTerminalFrameLatent: true,
+                    progressHandler: progressHandler
+                )
+            }
             guard result.terminalFrameLatent != nil else {
                 throw Wan2WorldSessionError.terminalLatentMissing
             }
@@ -272,11 +316,11 @@ public actor Wan2WorldSession {
                 outputURL: outputURL,
                 terminalFrameURL: terminalFrameURL,
                 camera: request.camera,
-                conditioningMode: .textAndFirstFrame,
+                conditioningMode: conditioningMode,
                 seed: result.seed
             )
         } catch {
-            phase = generator.isWarm ? .ready : .cold
+            phase = isWarm ? .ready : .cold
             throw error
         }
     }
@@ -284,15 +328,23 @@ public actor Wan2WorldSession {
     public func reset(sourceImageURL: URL? = nil) throws {
         guard phase != .generating else { throw Wan2WorldSessionError.busy }
         currentFrameURL = sourceImageURL
-        generator.clearChain()
+        if let causalGenerator {
+            causalGenerator.reset()
+        } else {
+            generator.clearChain()
+        }
         currentStateID = sourceImageURL == nil ? nil : UUID()
         transitionCount = 0
-        phase = generator.isWarm ? .ready : .cold
+        phase = isWarm ? .ready : .cold
     }
 
     public func unload() throws {
         guard phase != .generating else { throw Wan2WorldSessionError.busy }
-        generator.unload()
+        if let causalGenerator {
+            causalGenerator.unload()
+        } else {
+            generator.unload()
+        }
         phase = .cold
     }
 
@@ -303,9 +355,10 @@ public actor Wan2WorldSession {
             transitionCount: transitionCount,
             currentStateID: currentStateID,
             currentFrameURL: currentFrameURL,
-            conditioningMode: .textAndFirstFrame,
-            keepsModelsWarm: generator.isWarm,
-            keepsTerminalLatent: generator.hasChainedTerminalFrameLatent
+            conditioningMode: conditioningMode,
+            keepsModelsWarm: isWarm,
+            keepsTerminalLatent: causalGenerator.map { $0.latentFrameCount > 0 }
+                ?? generator.hasChainedTerminalFrameLatent
         )
     }
 }

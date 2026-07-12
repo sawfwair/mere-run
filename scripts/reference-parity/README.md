@@ -114,3 +114,42 @@ python scripts/reference-parity/export_instantmesh_preprocess_fixture.py \
 MERERUN_TEST_INSTANTMESH_PREPROCESS=/tmp/instantmesh-preprocess-parity \
   swift test --filter InstantMeshPreprocessorTests
 ```
+
+## DreamX camera conditioning
+
+`export_dreamx_camera_fixture.py` imports the pinned DreamX trajectory and
+PRoPE source files directly and freezes relative views, normalized intrinsics,
+and projective Q/K/V/output transforms. `export_dreamx_camera_block_fixture.py`
+adds the released block-0 camera weights and freezes a complete learned
+camera-attention output. `export_dreamx_camera_transformer_fixture.py` combines
+the native Wan base with the extracted camera adapter and freezes a tiny full
+30-block BF16 forward pass without downloading a duplicate 24.5 GB checkpoint.
+
+```bash
+uv run --with torch --with safetensors --with numpy --with pillow \
+  --with einops --with packaging \
+  python scripts/reference-parity/export_dreamx_camera_fixture.py \
+  --dreamx-root /path/to/DreamX-World \
+  --output /tmp/dreamx-camera-fixture.json
+
+uv run --with torch --with safetensors --with numpy --with pillow \
+  --with einops --with packaging \
+  python scripts/reference-parity/export_dreamx_camera_block_fixture.py \
+  --dreamx-root /path/to/DreamX-World \
+  --camera-weights /path/to/camera_adapter.safetensors \
+  --output /tmp/dreamx-camera-block0.safetensors
+
+uv run --with torch --with safetensors --with numpy --with scipy \
+  --with diffusers --with einops --with packaging \
+  python scripts/reference-parity/export_dreamx_camera_transformer_fixture.py \
+  --dreamx-root /path/to/DreamX-World \
+  --base-weights /path/to/model.safetensors \
+  --camera-weights /path/to/camera_adapter.safetensors \
+  --output /tmp/dreamx-camera-transformer.safetensors
+```
+
+Set `MERERUN_DREAMX_CAMERA_FIXTURE`, `MERERUN_DREAMX_CAMERA_WEIGHTS`, and
+`MERERUN_DREAMX_CAMERA_BLOCK_FIXTURE` or
+`MERERUN_DREAMX_CAMERA_TRANSFORMER_FIXTURE` when running the corresponding
+Swift parity tests. These scripts are reference tooling and are never imported
+by the runtime.

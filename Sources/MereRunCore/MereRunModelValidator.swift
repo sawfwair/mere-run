@@ -112,6 +112,7 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .depthAnything3
                     && spec.validationKind != .tripoSR
                     && spec.validationKind != .instantMesh
+                    && spec.validationKind != .dreamXCausalMLX
             }
         }()
         if !hasRootMarker && !usesMFluxZImage && requiresRootMarker {
@@ -151,7 +152,8 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .depthAnything3
             || spec?.validationKind == .tripoSR
             || spec?.validationKind == .instantMesh
-            || spec?.validationKind == .wan22TI2VMLX {
+            || spec?.validationKind == .wan22TI2VMLX
+            || spec?.validationKind == .dreamXCausalMLX {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil

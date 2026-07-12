@@ -15,6 +15,8 @@ public struct Wan2TransformerConfiguration: Hashable, Sendable {
     public let headCount: Int
     public let layerCount: Int
     public let epsilon: Float
+    public let projectiveCameraConditioning: Bool
+    public let projectiveCameraAttentionCompression: Int
 
     public init(
         patchSize: [Int] = [1, 2, 2],
@@ -27,11 +29,16 @@ public struct Wan2TransformerConfiguration: Hashable, Sendable {
         outputChannels: Int = 48,
         headCount: Int = 24,
         layerCount: Int = 30,
-        epsilon: Float = 1e-6
+        epsilon: Float = 1e-6,
+        projectiveCameraConditioning: Bool = false,
+        projectiveCameraAttentionCompression: Int = 1
     ) {
         precondition(patchSize.count == 3)
         precondition(hiddenSize % headCount == 0)
         precondition((hiddenSize / headCount) % 2 == 0)
+        precondition(projectiveCameraAttentionCompression > 0)
+        precondition(hiddenSize.isMultiple(of: projectiveCameraAttentionCompression))
+        precondition(headCount.isMultiple(of: projectiveCameraAttentionCompression))
         self.patchSize = patchSize
         self.textLength = textLength
         self.inputChannels = inputChannels
@@ -43,6 +50,8 @@ public struct Wan2TransformerConfiguration: Hashable, Sendable {
         self.headCount = headCount
         self.layerCount = layerCount
         self.epsilon = epsilon
+        self.projectiveCameraConditioning = projectiveCameraConditioning
+        self.projectiveCameraAttentionCompression = projectiveCameraAttentionCompression
     }
 }
 
@@ -151,14 +160,30 @@ enum Wan2RoPE {
         return MLX.concatenated(tables, axis: 1)
     }
 
-    static func prepare(grid: Wan2GridSize, frequencies: MLXArray, dtype: DType) -> Cache {
+    static func prepare(
+        grid: Wan2GridSize,
+        frequencies: MLXArray,
+        dtype: DType,
+        temporalFrameIndices: [Int]? = nil
+    ) -> Cache {
         let halfDimension = frequencies.dim(1)
         let temporalDimension = halfDimension - 2 * (halfDimension / 3)
         let heightDimension = halfDimension / 3
         let widthDimension = halfDimension / 3
         let typed = frequencies.asType(.float32)
+        let temporalRows: MLXArray
+        if let temporalFrameIndices {
+            precondition(temporalFrameIndices.count == grid.frames)
+            temporalRows = MLX.take(
+                typed,
+                MLXArray(temporalFrameIndices.map(Int32.init)),
+                axis: 0
+            )[0..., 0..<temporalDimension]
+        } else {
+            temporalRows = typed[0..<grid.frames, 0..<temporalDimension]
+        }
         let temporal = MLX.broadcast(
-            typed[0..<grid.frames, 0..<temporalDimension]
+            temporalRows
                 .reshaped(grid.frames, 1, 1, temporalDimension, 2),
             to: [grid.frames, grid.height, grid.width, temporalDimension, 2]
         )
@@ -326,6 +351,7 @@ final class Wan2TransformerBlock: Module {
     @ModuleInfo(key: "cross_attn") var crossAttention: Wan2CrossAttention
     @ModuleInfo(key: "norm2") var feedForwardNorm: Wan2LayerNorm
     @ModuleInfo(key: "ffn") var feedForward: Wan2FeedForward
+    @ModuleInfo(key: "cam_self_attn") var cameraAttention: Wan2ProjectiveSelfAttention?
     @ModuleInfo(key: "modulation") var modulation: MLXArray
 
     init(configuration: Wan2TransformerConfiguration) {
@@ -351,6 +377,14 @@ final class Wan2TransformerBlock: Module {
             dimensions: dimensions,
             hiddenDimensions: configuration.feedForwardSize
         )
+        self._cameraAttention.wrappedValue = configuration.projectiveCameraConditioning
+            ? Wan2ProjectiveSelfAttention(
+                dimensions: dimensions,
+                attentionDimensions: dimensions / configuration.projectiveCameraAttentionCompression,
+                heads: configuration.headCount,
+                epsilon: configuration.epsilon
+            )
+            : nil
         self._modulation.wrappedValue = MLX.zeros([1, 6, dimensions], dtype: .float32)
     }
 
@@ -361,19 +395,27 @@ final class Wan2TransformerBlock: Module {
         grid: Wan2GridSize,
         rope: Wan2RoPE.Cache,
         selfMask: MLXArray?,
-        crossCache: Wan2AttentionKVCache?
+        crossCache: Wan2AttentionKVCache?,
+        cameraConditioning: Wan2ProjectiveCameraConditioning?
     ) -> MLXArray {
         let parts = MLX.split(modulation.expandedDimensions(axis: 1) + modulationInput, parts: 6, axis: 2)
             .map { $0.squeezed(axis: 2) }
         var hidden = input
         let hiddenType = hidden.dtype
         let selfInput = selfNorm(hidden.asType(.float32)) * (1 + parts[1]) + parts[0]
-        let selfOutput = selfAttention(
+        var selfOutput = selfAttention(
             selfInput.asType(hiddenType),
             grid: grid,
             rope: rope,
             mask: selfMask
         )
+        if let cameraAttention, let cameraConditioning {
+            precondition(cameraConditioning.frameCount == grid.frames)
+            selfOutput = selfOutput + cameraAttention(
+                selfInput.asType(hiddenType),
+                conditioning: cameraConditioning
+            )
+        }
         hidden = (hidden.asType(.float32) + selfOutput * parts[2]).asType(hiddenType)
 
         let crossInput = crossNorm(hidden.asType(.float32)).asType(hiddenType)
@@ -505,7 +547,10 @@ public final class Wan2TransformerModel: Module {
         latents: [MLXArray],
         timesteps: MLXArray,
         embeddedContext: MLXArray,
-        crossCaches: [Wan2AttentionKVCache]? = nil
+        crossCaches: [Wan2AttentionKVCache]? = nil,
+        cameraConditioning: Wan2ProjectiveCameraConditioning? = nil,
+        causalState: Wan2CausalTransformerState? = nil,
+        currentStartToken: Int = 0
     ) -> [MLXArray] {
         precondition(!latents.isEmpty)
         let patchified = latents.map(patchify)
@@ -528,16 +573,34 @@ public final class Wan2TransformerModel: Module {
                 to: [hidden.dim(0), embeddedContext.dim(1), embeddedContext.dim(2)]
             )
         let rope = Wan2RoPE.prepare(grid: grid, frequencies: ropeFrequencies, dtype: patchProjection.weight.dtype)
+        if let causalState {
+            precondition(causalState.blocks.count == blocks.count)
+        }
         for (index, block) in blocks.enumerated() {
-            hidden = block(
-                hidden,
-                modulationInput: modulation,
-                context: context,
-                grid: grid,
-                rope: rope,
-                selfMask: nil,
-                crossCache: crossCaches?[index]
-            )
+            if let causalState {
+                hidden = block.callCausal(
+                    hidden,
+                    modulationInput: modulation,
+                    context: context,
+                    grid: grid,
+                    frequencies: ropeFrequencies,
+                    crossCache: crossCaches?[index],
+                    cameraConditioning: cameraConditioning,
+                    state: causalState.blocks[index],
+                    currentStartToken: currentStartToken
+                )
+            } else {
+                hidden = block(
+                    hidden,
+                    modulationInput: modulation,
+                    context: context,
+                    grid: grid,
+                    rope: rope,
+                    selfMask: nil,
+                    crossCache: crossCaches?[index],
+                    cameraConditioning: cameraConditioning
+                )
+            }
         }
         let projected = outputHead(hidden, timestepEmbedding: timestepEmbedding)
         return unpatchify(projected, grid: grid)

@@ -1493,6 +1493,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(Wan2Resources.managedRepoID)@\(Wan2Resources.managedRevision)",
                 createdAt: createdAt
             )
+        case .dreamXWorld5BARMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .wanVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 4, cfg: 1.0, sigmaShift: 5.0),
+                supports: [.videoGeneration],
+                components: Components(
+                    tokenizer: nil,
+                    textEncoder: nil,
+                    transformer: .local(path: Wan2DreamXCausalResources.weightsFilename),
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(Wan2DreamXCausalResources.upstreamRepoID)@\(Wan2DreamXCausalResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         }
     }
 }

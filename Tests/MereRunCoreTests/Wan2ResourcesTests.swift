@@ -61,6 +61,32 @@ final class Wan2ResourcesTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.defaults?.sigmaShift, 5.0)
     }
 
+    func testDreamXCausalModelIsLocalOnlyAndDeclaresWanCompanion() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Wan2DreamXCausalResources.modelID))
+        XCTAssertEqual(spec.modelID, .dreamXWorld5BARMLX)
+        XCTAssertEqual(spec.validationKind, .dreamXCausalMLX)
+        XCTAssertNil(spec.hubFallback)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.companionModelIDs, [Wan2Resources.modelID])
+
+        let manifest = MereRunModelManifest.template(
+            for: .dreamXWorld5BARMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.engine, .wanVideo)
+        XCTAssertEqual(manifest.defaults?.steps, 4)
+        XCTAssertEqual(manifest.defaults?.cfg, 1)
+    }
+
+    func testDreamXCausalResourcesRequireConvertedWeights() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let resources = Wan2DreamXCausalResources(rootURL: root)
+        XCTAssertEqual(resources.validate().map(\.lastPathComponent), ["model.safetensors"])
+        try TestFileSystem.writeFile(resources.weightsURL, contents: Data())
+        XCTAssertTrue(resources.validate().isEmpty)
+    }
+
     private func writeValidRoot(_ root: URL, modelType: String = "ti2v") throws {
         let config = """
         {
