@@ -74,6 +74,18 @@ struct MusicTranscribe: ParsableCommand {
     @Option(name: [.long], help: "Model compute type: bfloat16, float16, or float32.")
     var dtype: String = "bfloat16"
 
+    @Flag(
+        name: [.customLong("no-musical-context")],
+        help: "Keep legacy fixed-tempo MIDI instead of detecting tempo, meter, key, and beat phase."
+    )
+    var noMusicalContext: Bool = false
+
+    @Option(
+        name: [.customLong("context-output")],
+        help: "Write detected musical context and beat positions as JSON. Use '-' for stdout."
+    )
+    var contextOutput: String?
+
     @Flag(name: [.short, .long], help: "Suppress progress diagnostics on stderr.")
     var quiet: Bool = false
 
@@ -96,6 +108,12 @@ struct MusicTranscribe: ParsableCommand {
         }
         guard ["bfloat16", "float16", "float32"].contains(dtype.lowercased()) else {
             throw ValidationError("--dtype must be bfloat16, float16, or float32")
+        }
+        guard !noMusicalContext || contextOutput == nil else {
+            throw ValidationError("--context-output cannot be combined with --no-musical-context")
+        }
+        guard output != "-" || contextOutput != "-" else {
+            throw ValidationError("MIDI/events and musical context cannot both use stdout")
         }
     }
 
@@ -155,10 +173,42 @@ struct MusicTranscribe: ParsableCommand {
             progress: progress
         )
 
+        let shouldAnalyzeContext = !noMusicalContext && (format == .midi || contextOutput != nil)
+        let musicalContext: MuScriptorMusicalContext?
+        if shouldAnalyzeContext {
+            if !quiet {
+                CLIStderr.write("Detecting tempo, meter, key, and beat phase\n")
+            }
+            musicalContext = try MuScriptorMusicalContextAnalyzer().analyze(
+                samples: decoded.samples,
+                sampleRate: 16_000,
+                notes: transcription.notes
+            )
+            if !quiet, let musicalContext {
+                CLIStderr.write("Musical context: \(musicalContext.summary)\n")
+            }
+        } else {
+            musicalContext = nil
+        }
+
+        if let contextOutput, let musicalContext {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try write(encoder.encode(musicalContext), to: contextOutput)
+            if !quiet, contextOutput != "-" {
+                CLIStderr.write("Saved musical context to \(Self.userURL(contextOutput).path)\n")
+            }
+        }
+
         let destination = output ?? Self.defaultOutput(for: inputURL, format: format)
         switch format {
         case .midi:
-            try write(MuScriptorMIDI.encode(notes: transcription.notes), to: destination)
+            let data = if let musicalContext {
+                try MuScriptorMIDI.encode(notes: transcription.notes, context: musicalContext)
+            } else {
+                try MuScriptorMIDI.encode(notes: transcription.notes)
+            }
+            try write(data, to: destination)
         case .json:
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

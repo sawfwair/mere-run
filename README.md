@@ -473,7 +473,9 @@ swift run mere.run music analyze ./song.mp3 \
 
 # Transcribe a full mix into instrument-separated MIDI with MuScriptor
 swift run mere.run model pull music-muscriptor-medium
-swift run mere.run music transcribe ./song.mp3 --output ./song.mid
+swift run mere.run music transcribe ./song.mp3 \
+  --output ./song.mid \
+  --context-output ./song-context.json
 
 # Generate a style-transfer cover from a source song
 swift run mere.run music generate \

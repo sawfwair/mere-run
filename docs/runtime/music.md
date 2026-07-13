@@ -92,6 +92,16 @@ swift run mere.run model pull music-muscriptor-medium
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 ```
 
+MuScriptor predicts notes, instruments, and absolute event times. For MIDI
+output, mere.run adds a native musical-context pass that estimates tempo and
+beat phase from source-audio accents plus decoded note onsets, estimates meter
+from the beat-accent cycle, and estimates key from duration-weighted pitch
+classes. Standard tempo, time-signature, and key-signature events are embedded,
+with the meter repeated at the first downbeat to establish the bar boundary,
+without quantizing or moving notes. Use `--context-output` to inspect the
+values, confidence scores, and beat positions as JSON, or
+`--no-musical-context` for the legacy fixed-120-BPM writer.
+
 MuScriptor treats `--chunk-batch-size` (default `4`) as an upper bound, not a
 forced allocation. On Apple Silicon, the runtime subtracts current MLX active
 and cache allocations plus a reserve of the greater of 4 GiB or one-eighth of

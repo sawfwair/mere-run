@@ -39,6 +39,31 @@ List the exact instrument group names with:
 mere.run music transcribe --list-instruments
 ```
 
+## Musical context
+
+MIDI output detects tempo, beat phase, time signature, and key after MuScriptor
+finishes decoding. The native post-processor combines spectral-flux accents
+from the source audio with MuScriptor note onsets, then estimates key from the
+duration-weighted pitch classes. It writes standard MIDI tempo (`FF 51`), time
+signature (`FF 58`), and key signature (`FF 59`) events. The meter event is
+repeated at the first detected downbeat to establish the bar boundary, and a
+marker labels it without quantizing notes or changing their timing relative to
+the source audio.
+
+Write the detected values, per-field confidence scores, and beat positions to
+reviewable JSON with:
+
+```bash
+mere.run music transcribe ./song.mp3 \
+  --output ./song.mid \
+  --context-output ./song-context.json
+```
+
+Low-evidence meter or key fields are omitted instead of guessed. Use
+`--no-musical-context` when byte-compatible legacy behavior with the fixed
+120 BPM conductor track is required. JSON and JSONL note-event output remains
+unchanged unless `--context-output` is requested.
+
 ## Structured output
 
 Use JSON for one event array or JSONL for a stream-friendly file. Stdout stays

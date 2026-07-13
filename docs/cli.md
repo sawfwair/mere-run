@@ -1149,6 +1149,9 @@ Key options:
   reduce it for current unified-memory headroom and model/beam saturation;
   `1` always selects the single-chunk path.
 - `--dtype`: `bfloat16`, `float16`, or `float32`
+- `--context-output`: optional JSON path for detected tempo, meter, key,
+  confidence scores, and beat positions; use `-` for stdout
+- `--no-musical-context`: retain the legacy fixed-120-BPM MIDI conductor track
 - `--quiet`
 
 The model repositories are gated and the weights are CC BY-NC 4.0. Accept the
@@ -1157,10 +1160,19 @@ upstream Hugging Face terms before pulling.
 ```bash
 swift run mere.run model pull music-muscriptor-medium
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
+swift run mere.run music transcribe ./song.mp3 \
+  --output ./song.mid --context-output ./song-context.json
 swift run mere.run music transcribe ./song.wav \
   --instruments voice,drums,electric_bass \
   --format jsonl --output -
 ```
+
+MIDI output detects musical context by default and writes Standard MIDI File
+tempo, time-signature, and key-signature meta events. The detector combines
+source-audio accents with MuScriptor note onsets and preserves absolute note
+timing. It repeats the meter event and adds a marker at the first detected
+downbeat rather than quantizing the notes. Fields without sufficient evidence
+are omitted.
 
 ### `mere.run music realtime`
 
