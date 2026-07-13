@@ -107,6 +107,7 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .woosh
                     && spec.validationKind != .wooshClap
                     && spec.validationKind != .wooshSynchformer
+                    && spec.validationKind != .mmaudio
                     && spec.validationKind != .moge2
                     && spec.validationKind != .videoDepthAnything
                     && spec.validationKind != .depthAnything3
@@ -145,6 +146,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .woosh
             || spec?.validationKind == .wooshClap
             || spec?.validationKind == .wooshSynchformer
+            || spec?.validationKind == .mmaudio
             || spec?.validationKind == .ltxVideo
             || spec?.validationKind == .ltxVideo23MLX
             || spec?.validationKind == .moge2
@@ -385,8 +387,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr or qwen3.5-hybrid-moe.")
             case .music where engine != .aceStep && engine != .magentaRT2 && engine != .muScriptor:
                 warnings.append("Manifest engine mismatch: family=music expects ace-step, magenta-rt2, or muscriptor.")
-            case .sfx where engine != .woosh:
-                warnings.append("Manifest engine mismatch: family=sfx expects woosh.")
+            case .sfx where engine != .woosh && engine != .mmaudio:
+                warnings.append("Manifest engine mismatch: family=sfx expects woosh or mmaudio.")
             case .video where engine != .ltxVideo && engine != .wanVideo:
                 warnings.append("Manifest engine mismatch: family=video expects ltx-video or wan-video.")
             case .psi where engine != .psiChat:
@@ -461,7 +463,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?:
                 return true
             default:

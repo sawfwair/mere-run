@@ -674,6 +674,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                ModelResolver.ModelID.mmaudioLarge44kV2.rawValue,
+                "MMAudio large 44.1 kHz v2",
+                "Generates 44.1 kHz sound effects from text or synchronized video with native MMAudio.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 "video-ltx-av",
                 "Video generation",
                 "Generates short audio-video clips with the LTX unified AV model stack.",

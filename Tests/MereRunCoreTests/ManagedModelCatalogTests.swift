@@ -970,6 +970,70 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
     }
 
+    func testMMAudioSpecUsesPinnedNativeAssetsAndNonCommercialCheckpointSource() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.mmaudioLarge44kV2.rawValue)
+        )
+
+        XCTAssertEqual(spec.category, .sfx)
+        XCTAssertEqual(spec.validationKind, .mmaudio)
+        XCTAssertEqual(spec.hubFallback?.repoId, MMAudioResources.convertedWeightsRepoID)
+        XCTAssertEqual(spec.hubFallback?.revision, MMAudioResources.convertedWeightsRevision)
+        XCTAssertEqual(spec.defaultCLICommands, ["sfx generate", "sfx video generate"])
+        XCTAssertEqual(spec.mountedHubFallbacks.map(\.destinationPath), ["clip", "bigvgan"])
+        XCTAssertEqual(spec.upstreamRevision, MMAudioResources.upstreamRevision)
+        XCTAssertEqual(MMAudioResources.architectureLicense, "MIT")
+        XCTAssertEqual(MMAudioResources.checkpointLicense, "CC-BY-NC-4.0")
+        XCTAssertEqual(
+            MMAudioResources.clipModelLicense,
+            "Apple Machine Learning Research Model License Agreement"
+        )
+        XCTAssertEqual(MMAudioResources.bigVGANLicense, "MIT")
+    }
+
+    func testMMAudioRootRequiresGeneratorConditionersCodecAndVocoder() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.mmaudioLarge44kV2.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let clip = root.appendingPathComponent("clip", isDirectory: true)
+        let bigvgan = root.appendingPathComponent("bigvgan", isDirectory: true)
+        try FileManager.default.createDirectory(at: clip, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: bigvgan, withIntermediateDirectories: true)
+        for file in [
+            MMAudioResources.networkFilename,
+            MMAudioResources.clipFilename,
+            MMAudioResources.synchformerFilename,
+            MMAudioResources.vaeFilename,
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data()
+            ))
+        }
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: clip.appendingPathComponent("tokenizer.json").path,
+            contents: Data("{}".utf8)
+        ))
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: bigvgan.appendingPathComponent("config.json").path,
+            contents: Data("{}".utf8)
+        ))
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: bigvgan.appendingPathComponent(MMAudioResources.bigVGANPyTorchFilename).path,
+            contents: Data()
+        ))
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent(MMAudioResources.vaeFilename))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            [MMAudioResources.vaeFilename]
+        )
+    }
+
     func testLTX23MLXSpecUsesDgrauetSplitSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue))
 

@@ -68,6 +68,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case muScriptor = "muscriptor"
         /// Sony Research Woosh sound-effect generation family.
         case woosh = "woosh"
+        /// MMAudio synchronized video-to-audio and text-to-audio family.
+        case mmaudio = "mmaudio"
         /// LTX video family.
         case ltxVideo = "ltx-video"
         /// Wan2 native video family.
@@ -1456,6 +1458,23 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.videoToAudioGeneration],
                 components: nil,
                 upstreamRepoId: WooshResources.synchformerRepoId,
+                createdAt: createdAt
+            )
+        case .mmaudioLarge44kV2:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .mmaudio,
+                family: .sfx,
+                tier: .max,
+                variant: .standard,
+                precision: .fp16,
+                defaults: Defaults(
+                    steps: MMAudioResources.defaultSteps,
+                    cfg: Double(MMAudioResources.defaultGuidanceScale)
+                ),
+                supports: [.soundEffectGeneration, .videoToAudioGeneration],
+                components: nil,
+                upstreamRepoId: "\(MMAudioResources.upstreamRepoID)@\(MMAudioResources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .ltxVideoAV, .ltxVideo23AVMLX:

@@ -65,7 +65,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen3Coder, .northMiniCode: return .code
             case .lightOnOCR: return .ocr
             case .aceStep, .magentaRT2, .muScriptor: return .music
-            case .woosh: return .sfx
+            case .woosh, .mmaudio: return .sfx
             case .ltxVideo, .wanVideo: return .video
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
@@ -143,6 +143,8 @@ public enum QuantizedModelManifestWriter {
                     return [.musicTranscription]
                 case .woosh:
                     return [.soundEffectGeneration]
+                case .mmaudio:
+                    return [.soundEffectGeneration, .videoToAudioGeneration]
                 case .ltxVideo, .wanVideo:
                     return [.videoGeneration]
                 case .psiChat:
@@ -219,7 +221,7 @@ public enum QuantizedModelManifestWriter {
                  .tripoSR, .instantMesh:
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter,
-                 .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .psiChat, .deepseekV4Flash,
+                 .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:

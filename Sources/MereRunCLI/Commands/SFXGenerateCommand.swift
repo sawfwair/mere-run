@@ -18,19 +18,22 @@ struct SFXGenerate: AsyncParsableCommand {
     @Argument(help: "Prompt describing the target sound effect.")
     var prompt: String
 
+    @Option(name: [.customLong("negative-prompt")], help: "Negative text conditioning (MMAudio only).")
+    var negativePrompt: String = ""
+
     @Option(name: [.customShort("o"), .long], help: "Output WAV path (default: ./mererun-sfx-<timestamp>.wav).")
     var output: String?
 
-    @Option(name: [.customShort("m"), .long], help: "Managed model id or local Woosh checkpoints root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local Woosh/MMAudio root.")
     var model: String = ModelResolver.ModelID.wooshDFlow.rawValue
 
-    @Option(name: [.customLong("duration")], help: "Output duration in seconds.")
-    var durationSeconds: Float = 5.0
+    @Option(name: [.customLong("duration")], help: "Output duration in seconds (default: 5 for Woosh, 8 for MMAudio).")
+    var durationOverride: Float?
 
-    @Option(name: [.customShort("s"), .long], help: "Number of denoise steps. DFlow usually uses 4; Flow usually uses 32.")
-    var steps: Int = 4
+    @Option(name: [.customShort("s"), .customLong("steps")], help: "Denoise steps (default: 4 for Woosh DFlow, 25 for MMAudio).")
+    var stepsOverride: Int?
 
-    @Option(name: [.customLong("cfg")], help: "Woosh guidance scale.")
+    @Option(name: [.customLong("cfg")], help: "Classifier-free guidance scale.")
     var guidanceScale: Float = 4.5
 
     @Option(name: [.long], help: "Seed for deterministic generation.")
@@ -42,6 +45,18 @@ struct SFXGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    var durationSeconds: Float {
+        durationOverride ?? (SFXMMAudioRuntime.isMMAudio(model: model)
+            ? MMAudioResources.defaultDurationSeconds
+            : 5)
+    }
+
+    var steps: Int {
+        stepsOverride ?? (SFXMMAudioRuntime.isMMAudio(model: model)
+            ? MMAudioResources.defaultSteps
+            : 4)
+    }
+
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
         guard durationSeconds > 0 else {
@@ -52,6 +67,13 @@ struct SFXGenerate: AsyncParsableCommand {
         }
         guard guidanceScale >= 0 else {
             throw ValidationError("--cfg must be >= 0")
+        }
+        if SFXMMAudioRuntime.isMMAudio(model: model) {
+            try await runMMAudio()
+            return
+        }
+        guard negativePrompt.isEmpty else {
+            throw ValidationError("--negative-prompt is only supported by MMAudio models.")
         }
         let renoiseSchedule = try parseRenoiseSchedule()
 
@@ -79,6 +101,49 @@ struct SFXGenerate: AsyncParsableCommand {
         )
 
         try SFXWAVWriter.writeMonoPCM16(samples: result.samples, to: outputURL, sampleRate: result.sampleRate)
+        if !quiet {
+            CLIStderr.write("Saved audio: \(outputURL.path)\n")
+        }
+        print(outputURL.path)
+    }
+
+    private func runMMAudio() async throws {
+        guard renoise == nil else {
+            throw ValidationError("--renoise is only supported by Woosh models.")
+        }
+        let outputURL = CLIOutput.resolveOutputURL(
+            output,
+            defaultPrefix: "mererun-mmaudio",
+            defaultExtension: "wav"
+        )
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let resources = try await SFXMMAudioRuntime.resolve(model: model, quiet: quiet)
+        if !quiet {
+            CLIStderr.write("Loading native MMAudio assets from \(resources.rootURL.path)\n")
+        }
+        let generator = try MMAudioGenerator(resources: resources)
+        let result = try await generator.generateText(
+            prompt: prompt,
+            negativePrompt: negativePrompt,
+            config: MMAudioGenerationConfig(
+                durationSeconds: durationSeconds,
+                steps: steps,
+                guidanceScale: guidanceScale,
+                seed: seed
+            ),
+            progress: { completed, total in
+                guard !quiet else { return }
+                CLIStderr.write("Generated MMAudio step \(completed)/\(total)\n")
+            }
+        )
+        try SFXWAVWriter.writeMonoPCM16(
+            samples: result.samples,
+            to: outputURL,
+            sampleRate: result.sampleRate
+        )
         if !quiet {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
@@ -133,6 +198,49 @@ struct SFXGenerate: AsyncParsableCommand {
         let missing = resources.missingFiles()
         guard missing.isEmpty else {
             throw ValidationError(WooshError.missingFiles(missing).localizedDescription)
+        }
+        return resources
+    }
+}
+
+enum SFXMMAudioRuntime {
+    static func isMMAudio(model: String, fileManager: FileManager = .default) -> Bool {
+        if model == MMAudioResources.modelID {
+            return true
+        }
+        let root = URL(fileURLWithPath: model).standardizedFileURL
+        return fileManager.fileExists(
+            atPath: root.appendingPathComponent(MMAudioResources.networkFilename).path
+        )
+    }
+
+    static func resolve(model: String, quiet: Bool) async throws -> MMAudioModelResources {
+        let explicit = URL(fileURLWithPath: model).standardizedFileURL
+        if FileManager.default.fileExists(atPath: explicit.path), isMMAudio(model: model) {
+            let resources = MMAudioModelResources(rootURL: explicit)
+            let missing = resources.validate()
+            guard missing.isEmpty else {
+                throw ValidationError(MMAudioGeneratorError.missingFiles(missing).localizedDescription)
+            }
+            return resources
+        }
+        let resolution = try await ManagedModelResolver.resolveForRuntime(
+            requestedModel: model,
+            defaultModelID: MMAudioResources.modelID,
+            progress: { event in
+                guard !quiet else { return }
+                switch event {
+                case .downloading(let percent):
+                    CLIStderr.write("Downloading MMAudio assets... \(percent)%\n")
+                case .extracting:
+                    CLIStderr.write("Extracting MMAudio assets...\n")
+                }
+            }
+        )
+        let resources = MMAudioModelResources(rootURL: resolution.url)
+        let missing = resources.validate()
+        guard missing.isEmpty else {
+            throw ValidationError(MMAudioGeneratorError.missingFiles(missing).localizedDescription)
         }
         return resources
     }

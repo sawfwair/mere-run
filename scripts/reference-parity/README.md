@@ -1,5 +1,23 @@
 # Reference-parity harness (Q35 / Qwen-family)
 
+## MMAudio component oracle
+
+`export_mmaudio_trace.py` runs the pinned upstream PyTorch modules against the
+same managed checkpoints used by the native runtime. It writes deterministic
+CLIP, preprocessing, MMDiT, VAE, BigVGAN-v2, and Synchformer traces. The Swift
+comparison suite is opt-in because the fixture and installed model are large.
+
+```bash
+python scripts/reference-parity/export_mmaudio_trace.py \
+  --model-root "$HOME/Library/Application Support/MereRun/models/sfx-mmaudio-large-44k-v2" \
+  --mmaudio-source /path/to/hkchengrex/MMAudio \
+  --output /tmp/mmaudio-reference.safetensors
+
+MERERUN_TEST_MMAUDIO_ROOT="$HOME/Library/Application Support/MereRun/models/sfx-mmaudio-large-44k-v2" \
+MERERUN_TEST_MMAUDIO_TRACE=/tmp/mmaudio-reference.safetensors \
+swift test --filter MMAudioParityTests
+```
+
 Byte-identical greedy parity gates compare this runtime against itself, so they
 cannot catch a whole class of bug: a systematically wrong forward pass that is
 wrong the same way on both sides of a refactor. This harness compares the

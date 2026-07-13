@@ -510,7 +510,7 @@ swift run mere.run music realtime \
   --midi-cc 1=temp:0.2:1.4 \
   --midi-cc 2=drums:0:2
 
-# Generate a Foley / sound-effect WAV with Woosh
+# Generate a Foley / sound-effect WAV with Woosh or MMAudio
 swift run mere.run model pull sfx-woosh-dflow
 swift run mere.run model pull sfx-woosh-flow
 swift run mere.run sfx generate \
@@ -537,6 +537,17 @@ swift run mere.run sfx video generate \
   --output ./hallway-footsteps.wav \
   --preflight \
   --json
+swift run mere.run model pull sfx-mmaudio-large-44k-v2
+swift run mere.run sfx generate \
+  "ocean waves striking a stone breakwater" \
+  --negative-prompt "speech, music" \
+  --model sfx-mmaudio-large-44k-v2 \
+  --duration 8 \
+  --steps 25 \
+  --output ./breakwater.wav
+
+# MMAudio weights are non-commercial; its Apple CLIP component is research-only.
+# See docs/model-sources.md for the component-level licenses.
 
 # Generate a fast video-only draft
 swift run mere.run video generate \
@@ -711,7 +722,7 @@ Core guides:
 - [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day
 - [`docs/testing.md`](./docs/testing.md): validation layers, smoke runs, and troubleshooting
 - [`docs/runtime/vision.md`](./docs/runtime/vision.md): native SAM 3.1 segmentation and tracking details
-- [`docs/runtime/sfx.md`](./docs/runtime/sfx.md): native Woosh SFX generation, CLAP scoring, and V2A feature-conditioned generation details
+- [`docs/runtime/sfx.md`](./docs/runtime/sfx.md): native Woosh and MMAudio SFX generation, CLAP scoring, and video-conditioned generation details
 
 Configuration and model management:
 

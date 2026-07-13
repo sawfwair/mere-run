@@ -19,6 +19,7 @@ This page covers the native sound-effect runtime exposed through `mere.run sfx`.
 - `sfx-woosh-synchformer`
 - `sfx-woosh-dvflow-8s`
 - `sfx-woosh-vflow-8s`
+- `sfx-mmaudio-large-44k-v2`
 
 ## Guides
 
@@ -86,6 +87,34 @@ swift run mere.run sfx video generate \
   -o ./hallway-footsteps.wav
 ```
 
+MMAudio provides a second, native 44.1 kHz path for both text-to-audio and
+video-to-audio generation:
+
+```bash
+swift run mere.run model pull sfx-mmaudio-large-44k-v2
+swift run mere.run sfx generate \
+  "ocean waves striking a stone breakwater, close and detailed" \
+  --negative-prompt "speech, music" \
+  --model sfx-mmaudio-large-44k-v2 \
+  --duration 8 \
+  --steps 25 \
+  --output ./breakwater.wav
+
+swift run mere.run sfx video generate \
+  "a skateboard rolling over rough pavement" \
+  ./skateboard.mp4 \
+  --negative-prompt "speech, music" \
+  --model sfx-mmaudio-large-44k-v2 \
+  --clip-batch-size 4 \
+  --sync-batch-size 1 \
+  --output ./skateboard.wav
+```
+
+MMAudio video generation needs the original video because it conditions on
+both DFN5B CLIP frames and Synchformer features. A Synchformer-only `.npy`
+input cannot supply the CLIP stream. The model produces 44.1 kHz audio and
+defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
+
 ## Runtime entrypoints
 
 ### CLI
@@ -107,6 +136,11 @@ swift run mere.run sfx video generate \
 - `Sources/MereRunCore/Woosh/WooshRobertaTextEncoder.swift`
 - `Sources/MereRunCore/Woosh/WooshVocosDecoder.swift`
 - `Sources/MereRunCore/Woosh/WooshResources.swift`
+- `Sources/MereRunCore/MMAudio/MMAudioGenerator.swift`
+- `Sources/MereRunCore/MMAudio/MMAudioNetwork.swift`
+- `Sources/MereRunCore/MMAudio/MMAudioCLIP.swift`
+- `Sources/MereRunCore/MMAudio/MMAudioVAE.swift`
+- `Sources/MereRunCore/MMAudio/MMAudioBigVGAN.swift`
 
 ## Reading order
 
@@ -137,3 +171,9 @@ swift run mere.run sfx video generate \
   `[frames, 768]` or `[1, frames, 768]`.
 - The open weights are CC-BY-NC 4.0. Generated outputs inherit the
   non-commercial restriction described by the mirror and upstream release.
+- The MMAudio architecture source is MIT, while the released MMAudio
+  checkpoints are separately licensed CC-BY-NC 4.0. The managed catalog and
+  model-source documentation preserve that non-commercial checkpoint boundary.
+- MMAudio's mounted Apple DFN5B CLIP conditioner is separately research-only
+  under the Apple Machine Learning Research Model License Agreement. The
+  managed model keeps Apple's exact license file under `clip/LICENSE`.

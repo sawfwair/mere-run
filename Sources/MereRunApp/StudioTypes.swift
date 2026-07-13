@@ -980,6 +980,20 @@ struct StudioRunProgress: Equatable {
 /// human `Generating (2/4)` form and the `--progress-json` NDJSON event stream — into a
 /// single determinate-or-indeterminate value the canvas can render.
 enum StudioProgressParser {
+    private struct GenerationProgressEvent: Decodable {
+        let event: String
+        let stage: String
+        let step: Int
+        let totalSteps: Int
+
+        enum CodingKeys: String, CodingKey {
+            case event
+            case stage
+            case step
+            case totalSteps = "total_steps"
+        }
+    }
+
     static func parse(_ rawLine: String) -> StudioRunProgress? {
         let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -1018,23 +1032,16 @@ enum StudioProgressParser {
     /// stages stay indeterminate and are left to the running overlay's status line).
     private static func parseGenerationJSON(_ line: String) -> StudioRunProgress? {
         guard let data = line.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              (object["event"] as? String) == "progress",
-              (object["stage"] as? String) == "denoising",
-              let step = intValue(object["step"]),
-              let total = intValue(object["total_steps"]), total > 0 else { return nil }
-        let current = min(step + 1, total) // the CLI emits a 0-based step index
+              let progress = try? JSONDecoder().decode(GenerationProgressEvent.self, from: data),
+              progress.event == "progress",
+              progress.stage == "denoising",
+              progress.totalSteps > 0 else { return nil }
+        let current = min(progress.step + 1, progress.totalSteps) // the CLI emits a 0-based step index
         return StudioRunProgress(
             label: "Generating",
-            fractionCompleted: Double(current) / Double(total),
-            detail: "Step \(current) of \(total)"
+            fractionCompleted: Double(current) / Double(progress.totalSteps),
+            detail: "Step \(current) of \(progress.totalSteps)"
         )
-    }
-
-    private static func intValue(_ value: Any?) -> Int? {
-        if let int = value as? Int { return int }
-        if let double = value as? Double { return Int(double) }
-        return nil
     }
 
     private static func parseDownloadLine(_ line: String) -> StudioRunProgress? {

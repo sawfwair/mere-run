@@ -39,6 +39,46 @@ final class SFXGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.output, "/tmp/wrench-clang.wav")
     }
 
+    func testSFXGenerateParsesMMAudioConditioningOptions() throws {
+        let cmd = try SFXGenerate.parse([
+            "waves breaking against a stone pier",
+            "--negative-prompt", "speech, music",
+            "--model", MMAudioResources.modelID,
+            "--duration", "8",
+            "--steps", "25",
+            "--cfg", "4.5",
+        ])
+
+        XCTAssertEqual(cmd.negativePrompt, "speech, music")
+        XCTAssertEqual(cmd.model, MMAudioResources.modelID)
+        XCTAssertEqual(cmd.durationSeconds, 8)
+        XCTAssertEqual(cmd.steps, 25)
+        XCTAssertEqual(cmd.guidanceScale, 4.5)
+    }
+
+    func testSFXGenerateUsesModelSpecificMMAudioDefaults() throws {
+        let cmd = try SFXGenerate.parse([
+            "waves breaking against a stone pier",
+            "--model", MMAudioResources.modelID,
+        ])
+
+        XCTAssertEqual(cmd.durationSeconds, MMAudioResources.defaultDurationSeconds)
+        XCTAssertEqual(cmd.steps, MMAudioResources.defaultSteps)
+        XCTAssertEqual(cmd.guidanceScale, MMAudioResources.defaultGuidanceScale)
+    }
+
+    func testSFXGeneratePreservesExplicitWooshDefaultsForMMAudio() throws {
+        let cmd = try SFXGenerate.parse([
+            "short impact",
+            "--model", MMAudioResources.modelID,
+            "--duration", "5",
+            "--steps", "4",
+        ])
+
+        XCTAssertEqual(cmd.durationSeconds, 5)
+        XCTAssertEqual(cmd.steps, 4)
+    }
+
     func testSFXGenerateRejectsWrongRenoiseCount() throws {
         let cmd = try SFXGenerate.parse([
             "glass break",
@@ -125,11 +165,66 @@ final class SFXGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.steps, 4)
         XCTAssertEqual(cmd.guidanceScale, 3)
         XCTAssertEqual(cmd.syncBatchSize, 2)
+        XCTAssertEqual(cmd.clipBatchSize, 4)
         XCTAssertEqual(try cmd.parseRenoiseSchedule(steps: 4), [0, 0.5, 0.5, 0.3])
         XCTAssertEqual(cmd.output, "/tmp/video-sfx.wav")
         XCTAssertTrue(cmd.quiet)
         XCTAssertFalse(cmd.preflight)
         XCTAssertFalse(cmd.json)
+    }
+
+    func testSFXVideoGenerateParsesMMAudioOptions() throws {
+        let cmd = try SFXVideoGenerate.parse([
+            "a skateboard rolling over rough pavement",
+            "/tmp/skateboard.mp4",
+            "--negative-prompt", "music",
+            "--model", MMAudioResources.modelID,
+            "--clip-batch-size", "3",
+            "--sync-batch-size", "2",
+        ])
+
+        XCTAssertEqual(cmd.negativePrompt, "music")
+        XCTAssertEqual(cmd.model, MMAudioResources.modelID)
+        XCTAssertEqual(cmd.clipBatchSize, 3)
+        XCTAssertEqual(cmd.syncBatchSize, 2)
+    }
+
+    func testSFXVideoPreflightReportsNativeMMAudioPlan() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("mmaudio", isDirectory: true)
+        try writeMinimalMMAudioModel(at: modelRoot)
+        let videoURL = try makeTempFile(name: "skateboard.mp4", in: temp)
+        let outputURL = temp.appendingPathComponent("skateboard.wav")
+        let cmd = try SFXVideoGenerate.parse([
+            "a skateboard rolling over rough pavement",
+            videoURL.path,
+            "--model", modelRoot.path,
+            "--output", outputURL.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            inputURL: videoURL,
+            outputURL: outputURL,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.variant, "large_44k_v2")
+        XCTAssertTrue(envelope.result.model.supportedForVideo == true)
+        XCTAssertNil(envelope.result.synchformer)
+        XCTAssertFalse(envelope.result.input.requiresSynchformer)
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, MMAudioResources.defaultSteps)
+        XCTAssertEqual(
+            envelope.result.plan.effectiveGuidanceScale,
+            MMAudioResources.defaultGuidanceScale,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(envelope.result.plan.sampleRate, MMAudioResources.sampleRate)
     }
 
     func testSFXVideoGenerateParsesPreflightJSONFlags() throws {
@@ -355,5 +450,28 @@ final class SFXGenerateCommandParsingTests: XCTestCase {
         try Data("fixture".utf8).write(
             to: root.appendingPathComponent(WooshResources.synchformerFilename)
         )
+    }
+
+    private func writeMinimalMMAudioModel(at root: URL) throws {
+        let resources = MMAudioModelResources(rootURL: root)
+        try FileManager.default.createDirectory(
+            at: resources.clipTokenizerURL,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: resources.bigVGANURL,
+            withIntermediateDirectories: true
+        )
+        for url in [
+            resources.networkWeightsURL,
+            resources.clipWeightsURL,
+            resources.synchformerWeightsURL,
+            resources.vaeWeightsURL,
+            resources.clipTokenizerURL.appendingPathComponent("tokenizer.json"),
+            resources.bigVGANConfigURL,
+            resources.bigVGANURL.appendingPathComponent(MMAudioResources.bigVGANPyTorchFilename),
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
+        }
     }
 }

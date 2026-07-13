@@ -53,6 +53,81 @@ public final class WooshSynchformer {
         )
     }
 
+    public func extractMMAudioFeatures(
+        videoURL: URL,
+        durationSeconds: Float,
+        segmentBatchSize: Int = 1
+    ) throws -> MLXArray {
+        guard durationSeconds > 0, segmentBatchSize > 0 else {
+            throw WooshError.invalidVideoShape([Int(durationSeconds), segmentBatchSize])
+        }
+        let framesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mererun-mmaudio-sync-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: framesDirectory) }
+        let sequence = try MediaVideoIO.extractFrames(from: videoURL, into: framesDirectory)
+        let frames = try Self.loadMMAudioSyncFrames(
+            sequence: sequence,
+            durationSeconds: durationSeconds
+        )
+        return try extractMMAudioFeatures(
+            framesCHW: frames.values,
+            frameCount: frames.frameCount,
+            segmentBatchSize: segmentBatchSize
+        )
+    }
+
+    public func extractMMAudioFeatures(
+        framesCHW: [Float],
+        frameCount: Int,
+        segmentBatchSize: Int = 1
+    ) throws -> MLXArray {
+        let spatialSize = WooshSynchformerConfig.imageSize * WooshSynchformerConfig.imageSize
+        let frameStride = WooshSynchformerConfig.channels * spatialSize
+        guard frameCount >= WooshSynchformerConfig.segmentSize,
+              framesCHW.count == frameCount * frameStride,
+              segmentBatchSize > 0 else {
+            throw WooshError.invalidVideoShape([frameCount, framesCHW.count, segmentBatchSize])
+        }
+        let segmentCount = (frameCount - WooshSynchformerConfig.segmentSize)
+            / WooshSynchformerConfig.stepSize + 1
+        var outputs: [MLXArray] = []
+        var segmentStart = 0
+        while segmentStart < segmentCount {
+            let currentBatch = min(segmentBatchSize, segmentCount - segmentStart)
+            var segmentValues: [Float] = []
+            segmentValues.reserveCapacity(
+                currentBatch * WooshSynchformerConfig.channels
+                    * WooshSynchformerConfig.segmentSize * spatialSize
+            )
+            for batchOffset in 0..<currentBatch {
+                let sourceStart = (segmentStart + batchOffset) * WooshSynchformerConfig.stepSize
+                for channel in 0..<WooshSynchformerConfig.channels {
+                    for localFrame in 0..<WooshSynchformerConfig.segmentSize {
+                        let sourceOffset = ((sourceStart + localFrame) * frameStride) + (channel * spatialSize)
+                        segmentValues.append(contentsOf: framesCHW[sourceOffset..<(sourceOffset + spatialSize)])
+                    }
+                }
+            }
+            let input = MLXArray(segmentValues).reshaped(
+                currentBatch,
+                1,
+                WooshSynchformerConfig.channels,
+                WooshSynchformerConfig.segmentSize,
+                WooshSynchformerConfig.imageSize,
+                WooshSynchformerConfig.imageSize
+            ).asType(.float32)
+            let features = model(input).reshaped(
+                1,
+                currentBatch * WooshSynchformerConfig.outputFramesPerSegment,
+                WooshSynchformerConfig.dim
+            )
+            MLX.eval(features)
+            outputs.append(features)
+            segmentStart += currentBatch
+        }
+        return outputs.count == 1 ? outputs[0] : MLX.concatenated(outputs, axis: 1)
+    }
+
     public func extractFeatures(
         framesCHW: [Float],
         frameCount: Int,
@@ -164,6 +239,35 @@ public final class WooshSynchformer {
                 height: WooshSynchformerConfig.imageSize
             )
             values.append(contentsOf: MediaImageIO.rgbCHWFloat(cropped, normalizedToMinusOneToOne: true))
+        }
+        return (values, indices.count)
+    }
+
+    private static func loadMMAudioSyncFrames(
+        sequence: VideoFrameSequence,
+        durationSeconds: Float
+    ) throws -> (values: [Float], frameCount: Int) {
+        guard !sequence.frameURLs.isEmpty else {
+            throw WooshError.invalidVideoShape([0])
+        }
+        let targetCount = max(
+            WooshSynchformerConfig.segmentSize,
+            Int((durationSeconds * Float(MMAudioResources.syncInputFramesPerSecond)).rounded())
+        )
+        let indices = MMAudioVideoPreprocessor.sampledFrameIndices(
+            sourceFrameRate: max(1, sequence.fps),
+            sourceFrameCount: sequence.frameURLs.count,
+            targetFrameRate: Double(MMAudioResources.syncInputFramesPerSecond),
+            targetFrameCount: targetCount
+        )
+        let frameStride = WooshSynchformerConfig.channels
+            * WooshSynchformerConfig.imageSize
+            * WooshSynchformerConfig.imageSize
+        var values: [Float] = []
+        values.reserveCapacity(indices.count * frameStride)
+        for index in indices {
+            let image = try MediaImageIO.decode(sequence.frameURLs[index])
+            values.append(contentsOf: MMAudioVideoPreprocessor.normalizedSynchformerFrameCHW(image))
         }
         return (values, indices.count)
     }
