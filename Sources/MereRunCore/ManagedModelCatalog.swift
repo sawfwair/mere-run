@@ -59,6 +59,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case woosh
     case wooshClap
     case wooshSynchformer
+    case mmaudio
     case ltxVideo
     case ltxVideo23MLX
     case wan22TI2VMLX
@@ -234,6 +235,27 @@ public enum ManagedModelCatalog {
         "special_tokens_map.json",
         "vocab.json",
         "merges.txt",
+    ]
+    private static let mmaudioSnapshotPatterns = [
+        "README.md",
+        MMAudioResources.networkFilename,
+        MMAudioResources.clipFilename,
+        MMAudioResources.synchformerFilename,
+        MMAudioResources.vaeFilename,
+    ]
+    private static let mmaudioCLIPTokenizerPatterns = [
+        "LICENSE",
+        "open_clip_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "vocab.json",
+        "merges.txt",
+    ]
+    private static let mmaudioBigVGANPatterns = [
+        "LICENSE",
+        "config.json",
+        MMAudioResources.bigVGANPyTorchFilename,
     ]
     private static let ltx23MLXUpstreamRepoId = "dgrauet/ltx-2.3-mlx"
     private static let ltx23MLXSnapshotPatterns = [
@@ -1502,6 +1524,39 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["sfx video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.mmaudioLarge44kV2.rawValue,
+            category: .sfx,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MMAudioResources.convertedWeightsRepoID,
+                revision: MMAudioResources.convertedWeightsRevision,
+                patterns: mmaudioSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "clip",
+                    hubFallback: HubFallbackConfig(
+                        repoId: MMAudioResources.clipRepoID,
+                        revision: MMAudioResources.clipRevision,
+                        patterns: mmaudioCLIPTokenizerPatterns
+                    )
+                ),
+                MountedHubFallbackConfig(
+                    destinationPath: "bigvgan",
+                    hubFallback: HubFallbackConfig(
+                        repoId: MMAudioResources.bigVGANRepoID,
+                        revision: MMAudioResources.bigVGANRevision,
+                        patterns: mmaudioBigVGANPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: "\(MMAudioResources.upstreamRepoID)@\(MMAudioResources.upstreamRevision)",
+            upstreamRevision: MMAudioResources.upstreamRevision,
+            validationKind: .mmaudio,
+            estimatedDownloadBytes: 5_700_000_000,
+            defaultCLICommands: ["sfx generate", "sfx video generate"]
+        ),
+        ManagedModelSpec(
             id: "video-ltx-av",
             category: .video,
             installShape: .structuredRoot,
@@ -1769,6 +1824,8 @@ public extension ManagedModelSpec {
         case .wooshSynchformer:
             return WooshSynchformerResources(rootURL: rootURL)
                 .missingFiles(fileManager: fileManager)
+        case .mmaudio:
+            return MMAudioModelResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .ltxVideo:
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23MLX:

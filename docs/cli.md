@@ -1255,7 +1255,8 @@ swift run mere.run music realtime \
 
 Generate a mono WAV sound effect from a text prompt. The default model uses the
 native Sony Research Woosh DFlow path; the original Woosh Flow checkpoint is
-also available as `sfx-woosh-flow`.
+also available as `sfx-woosh-flow`. `sfx-mmaudio-large-44k-v2` selects the
+native 44.1 kHz MMAudio large-v2 runtime.
 
 ```bash
 swift run mere.run sfx generate "<prompt>" [options]
@@ -1263,7 +1264,9 @@ swift run mere.run sfx generate "<prompt>" [options]
 
 Key options:
 
-- `--model`: `sfx-woosh-dflow`, `sfx-woosh-flow`, or a local Woosh checkpoints root
+- `--model`: `sfx-woosh-dflow`, `sfx-woosh-flow`,
+  `sfx-mmaudio-large-44k-v2`, or a matching local model root
+- `--negative-prompt`: negative text conditioning for MMAudio
 - `--output`
 - `--duration`
 - `--steps`
@@ -1282,6 +1285,16 @@ swift run mere.run sfx generate \
   --steps 4 \
   --cfg 4.5 \
   --output ./wrench-clang.wav
+```
+
+```bash
+swift run mere.run sfx generate \
+  "ocean waves striking a stone breakwater" \
+  --negative-prompt "speech, music" \
+  --model sfx-mmaudio-large-44k-v2 \
+  --duration 8 \
+  --steps 25 \
+  --output ./breakwater.wav
 ```
 
 ### `mere.run sfx ae`
@@ -1316,7 +1329,8 @@ swift run mere.run sfx clap score "glass breaking" ./glass.wav
 
 Generate a mono WAV sound effect from a raw video file or precomputed
 Synchformer video features. `.npy` feature inputs must have shape
-`[frames, 768]` or `[1, frames, 768]`.
+`[frames, 768]` or `[1, frames, 768]` for Woosh. MMAudio requires the original
+video so it can compute both CLIP and Synchformer conditioning.
 
 ```bash
 swift run mere.run model pull sfx-woosh-synchformer
@@ -1328,8 +1342,19 @@ swift run mere.run sfx video generate \
   --output ./hallway-footsteps.wav
 ```
 
+```bash
+swift run mere.run sfx video generate \
+  "a skateboard rolling over rough pavement" \
+  ./skateboard.mp4 \
+  --model sfx-mmaudio-large-44k-v2 \
+  --negative-prompt "speech, music" \
+  --clip-batch-size 4 \
+  --sync-batch-size 1 \
+  --output ./skateboard.wav
+```
+
 Use `--preflight --json` to inspect input mode, output path state, VFlow/DVFlow
-model availability, raw-video Synchformer requirements, duration, effective
+model availability, raw-video conditioning requirements, duration, effective
 step count, CFG, renoise schedule, and follow-up actions before loading MLX or
 generating audio. `.npy` feature inputs do not require Synchformer during
 preflight or generation.

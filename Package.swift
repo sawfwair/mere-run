@@ -296,6 +296,7 @@ targets.append(contentsOf: [
       "LTX/README.md",
       "LoRA/README.md",
       "MagentaRT2/README.md",
+      "MMAudio/README.md",
       "PrivacyFilter/README.md",
       "Pose/README.md",
       "OpticalFlow/README.md",

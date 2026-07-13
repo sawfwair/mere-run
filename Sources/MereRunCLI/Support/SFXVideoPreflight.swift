@@ -300,6 +300,16 @@ struct SFXVideoPreflightAnalyzer {
                     message: ".npy feature inputs are not loaded during preflight; runtime still validates shape [frames, 768] or [1, frames, 768]."
                 )
             )
+            if isMMAudioRequest {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "mmaudio_requires_video",
+                        severity: .blocker,
+                        title: "MMAudio requires the original video",
+                        message: "MMAudio needs both CLIP and Synchformer video features; a Synchformer-only .npy input is insufficient."
+                    )
+                )
+            }
         }
         return SFXVideoInputPreflightSummary(
             requested: input.inputURL.path,
@@ -307,7 +317,7 @@ struct SFXVideoPreflightAnalyzer {
             exists: exists,
             isDirectory: exists && isDirectory.boolValue,
             kind: kind,
-            requiresSynchformer: kind != "features"
+            requiresSynchformer: kind != "features" && !isMMAudioRequest
         )
     }
 
@@ -364,7 +374,10 @@ struct SFXVideoPreflightAnalyzer {
     }
 
     private func modelSummary(diagnostics: inout [PreflightDiagnostic]) -> SFXVideoModelPreflightSummary {
-        wooshModelSummary(
+        if isMMAudioRequest {
+            return mmaudioModelSummary(diagnostics: &diagnostics)
+        }
+        return wooshModelSummary(
             requested: input.model,
             role: "model",
             missingDiagnosticID: "model_missing",
@@ -372,6 +385,102 @@ struct SFXVideoPreflightAnalyzer {
             suggestedActionID: "pull-model",
             requireVideoVariant: true,
             diagnostics: &diagnostics
+        )
+    }
+
+    private var isMMAudioRequest: Bool {
+        SFXMMAudioRuntime.isMMAudio(model: input.model, fileManager: fileManager)
+    }
+
+    private func mmaudioModelSummary(
+        diagnostics: inout [PreflightDiagnostic]
+    ) -> SFXVideoModelPreflightSummary {
+        let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let explicitURL = URL(fileURLWithPath: requested).standardizedFileURL
+        if fileManager.fileExists(atPath: explicitURL.path) {
+            let resources = MMAudioModelResources(rootURL: explicitURL)
+            let missing = resources.validate(fileManager: fileManager)
+            if !missing.isEmpty {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "model_missing_files",
+                        severity: .blocker,
+                        title: "MMAudio files missing",
+                        message: "MMAudio is missing \(missing.count) required file(s).",
+                        locations: missing.map { .init(kind: "file", path: $0.path) }
+                    )
+                )
+            }
+            return modelResult(
+                requested: requested,
+                kind: "local_path",
+                installed: missing.isEmpty,
+                path: explicitURL.path,
+                variant: "large_44k_v2",
+                supportedForVideo: true,
+                missingFiles: missing.map(\.path),
+                upstreamRepoID: MMAudioResources.upstreamRepoID
+            )
+        }
+
+        guard let modelID = ModelResolver.ModelID(rawValue: requested),
+              modelID == .mmaudioLarge44kV2,
+              let spec = ManagedModelCatalog.spec(for: requested) else {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "model_unknown",
+                    severity: .blocker,
+                    title: "Unknown MMAudio model",
+                    message: "MMAudio path not found and not a known model id: \(requested)."
+                )
+            )
+            return modelResult(requested: requested, kind: "unknown", installed: false)
+        }
+        if let resolution = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) {
+            let resources = MMAudioModelResources(rootURL: resolution.rootURL)
+            let missing = resources.validate(fileManager: fileManager)
+            if !missing.isEmpty {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "model_missing_files",
+                        severity: .blocker,
+                        title: "MMAudio files missing",
+                        message: "Installed MMAudio is missing \(missing.count) required file(s).",
+                        locations: missing.map { .init(kind: "file", path: $0.path) }
+                    )
+                )
+            }
+            return modelResult(
+                requested: requested,
+                kind: "managed_model",
+                installed: missing.isEmpty,
+                path: resolution.rootURL.path,
+                id: modelID.rawValue,
+                variant: "large_44k_v2",
+                supportedForVideo: true,
+                missingFiles: missing.map(\.path),
+                upstreamRepoID: spec.upstreamRepoId,
+                estimatedDownloadBytes: spec.estimatedDownloadBytes
+            )
+        }
+        diagnostics.append(
+            PreflightDiagnostic(
+                id: "model_missing",
+                severity: .blocker,
+                title: "MMAudio model missing",
+                message: "Model \(requested) is not installed. Pull it before generation.",
+                suggestedActionIDs: ["pull-model"]
+            )
+        )
+        return modelResult(
+            requested: requested,
+            kind: "managed_model",
+            installed: false,
+            id: modelID.rawValue,
+            variant: "large_44k_v2",
+            supportedForVideo: true,
+            upstreamRepoID: spec.upstreamRepoId,
+            estimatedDownloadBytes: spec.estimatedDownloadBytes
         )
     }
 
@@ -682,6 +791,23 @@ struct SFXVideoPreflightAnalyzer {
         model: SFXVideoModelPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
     ) -> SFXVideoPlanPreflightSummary {
+        if isMMAudioRequest {
+            if input.renoise != nil {
+                diagnostics.append(renoiseDiagnostic("--renoise is only supported by Woosh models."))
+            }
+            return SFXVideoPlanPreflightSummary(
+                inputKind: input.inputURL.pathExtension.lowercased() == "npy" ? "features" : "video",
+                durationSeconds: input.durationSeconds,
+                requestedSteps: input.steps,
+                effectiveSteps: input.steps ?? MMAudioResources.defaultSteps,
+                requestedGuidanceScale: input.guidanceScale,
+                effectiveGuidanceScale: input.guidanceScale ?? MMAudioResources.defaultGuidanceScale,
+                seed: input.seed,
+                renoiseSchedule: [],
+                syncBatchSize: input.syncBatchSize,
+                sampleRate: MMAudioResources.sampleRate
+            )
+        }
         let variant = model.variant.flatMap(WooshVariant.init(rawValue:))
             ?? WooshVariant.resolve(model: input.model, fileManager: fileManager)
             ?? .dvflow8s

@@ -27,6 +27,9 @@ struct SFXVideoGenerate: AsyncParsableCommand {
     @Argument(help: "Prompt describing the video sound.")
     var prompt: String
 
+    @Option(name: [.customLong("negative-prompt")], help: "Negative text conditioning (MMAudio only).")
+    var negativePrompt: String = ""
+
     @Argument(help: "Input video file, or Synchformer .npy features.")
     var input: String
 
@@ -56,6 +59,9 @@ struct SFXVideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.customLong("sync-batch-size")], help: "Synchformer segment batch size for raw video input.")
     var syncBatchSize: Int = 1
+
+    @Option(name: [.customLong("clip-batch-size")], help: "MMAudio CLIP video-frame batch size.")
+    var clipBatchSize: Int = 4
 
     @Flag(name: [.customLong("preflight")], help: "Inspect the SFX video request without loading MLX or generating audio.")
     var preflight: Bool = false
@@ -92,14 +98,22 @@ struct SFXVideoGenerate: AsyncParsableCommand {
                 throw ValidationError("--cfg must be >= 0")
             }
         }
-        guard syncBatchSize > 0 else {
-            throw ValidationError("--sync-batch-size must be >= 1")
+        guard syncBatchSize > 0, clipBatchSize > 0 else {
+            throw ValidationError("--sync-batch-size and --clip-batch-size must be >= 1")
         }
 
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
             throw ValidationError("Input not found: \(input)")
         }
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+        if SFXMMAudioRuntime.isMMAudio(model: model) {
+            try await runMMAudio(inputURL: inputURL, outputURL: outputURL)
+            return
+        }
+        guard negativePrompt.isEmpty else {
+            throw ValidationError("--negative-prompt is only supported by MMAudio models.")
+        }
 
         let resolved = try await SFXWooshRuntime.resolve(model: model, quiet: quiet)
         guard resolved.variant == .vflow8s || resolved.variant == .dvflow8s else {
@@ -131,6 +145,48 @@ struct SFXVideoGenerate: AsyncParsableCommand {
         )
 
         try SFXWAVWriter.writeMonoPCM16(samples: result.samples, to: outputURL, sampleRate: result.sampleRate)
+        if !quiet {
+            CLIStderr.write("Saved audio: \(outputURL.path)\n")
+        }
+        print(outputURL.path)
+    }
+
+    private func runMMAudio(inputURL: URL, outputURL: URL) async throws {
+        guard inputURL.pathExtension.lowercased() != "npy" else {
+            throw ValidationError("MMAudio video generation requires the original video, not Synchformer-only .npy features.")
+        }
+        guard renoise == nil else {
+            throw ValidationError("--renoise is only supported by Woosh models.")
+        }
+        let resources = try await SFXMMAudioRuntime.resolve(model: model, quiet: quiet)
+        let stepCount = steps ?? MMAudioResources.defaultSteps
+        let cfg = guidanceScale ?? MMAudioResources.defaultGuidanceScale
+        if !quiet {
+            CLIStderr.write("Loading native MMAudio assets from \(resources.rootURL.path)\n")
+        }
+        let generator = try MMAudioGenerator(resources: resources)
+        let result = try await generator.generateVideo(
+            prompt: prompt,
+            negativePrompt: negativePrompt,
+            videoURL: inputURL,
+            config: MMAudioGenerationConfig(
+                durationSeconds: durationSeconds,
+                steps: stepCount,
+                guidanceScale: cfg,
+                seed: seed
+            ),
+            clipBatchSize: clipBatchSize,
+            syncBatchSize: syncBatchSize,
+            progress: { completed, total in
+                guard !quiet else { return }
+                CLIStderr.write("Generated MMAudio step \(completed)/\(total)\n")
+            }
+        )
+        try SFXWAVWriter.writeMonoPCM16(
+            samples: result.samples,
+            to: outputURL,
+            sampleRate: result.sampleRate
+        )
         if !quiet {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }

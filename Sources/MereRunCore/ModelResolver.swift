@@ -78,6 +78,7 @@ public struct ModelResolver {
         case wooshSynchformer = "sfx-woosh-synchformer"
         case wooshVFlow8s = "sfx-woosh-vflow-8s"
         case wooshDVFlow8s = "sfx-woosh-dvflow-8s"
+        case mmaudioLarge44kV2 = "sfx-mmaudio-large-44k-v2"
         case ltxVideoAV = "video-ltx-av"
         case ltxVideo23AVMLX = "video-ltx23-av-mlx"
         case wan22TI2V5BMLX = "video-wan22-ti2v-5b-mlx"

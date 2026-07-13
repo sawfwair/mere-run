@@ -71,12 +71,15 @@ struct RestrictedStateDictPickle {
             case 0x71: try memoize(Int(readByte())) // BINPUT
             case 0x72: try memoize(Int(readUInt32())) // LONG_BINPUT
             case 0x68: try push(memoized(Int(readByte()))) // BINGET
+            case 0x6A: try push(memoized(Int(readUInt32()))) // LONG_BINGET
             case 0x74: try buildTuple() // TUPLE
             case 0x85: try buildFixedTuple(1) // TUPLE1
             case 0x86: try buildFixedTuple(2) // TUPLE2
             case 0x87: try buildFixedTuple(3) // TUPLE3
             case 0x51: try persistentStorage() // BINPERSID
             case 0x52: try reduce() // REDUCE
+            case 0x62: try build() // BUILD (OrderedDict metadata only)
+            case 0x73: try setItem() // SETITEM
             case 0x75: try setItems() // SETITEMS
             case 0x2E: return try finish() // STOP
             default: throw PyTorchStateDictError.unsupportedPickleOpcode(opcode, offset: opcodeOffset)
@@ -108,9 +111,9 @@ struct RestrictedStateDictPickle {
     private mutating func persistentStorage() throws {
         guard case .tuple(let fields) = try pop(), fields.count == 5,
               case .string("storage") = fields[0], case .global(.storage(let type)) = fields[1],
-              case .string(let key) = fields[2], case .string("cpu") = fields[3],
+              case .string(let key) = fields[2], case .string(let device) = fields[3],
               case .integer(let count) = fields[4], count >= 0,
-              isASCIIDecimal(key) else {
+              isASCIIDecimal(key), isSupportedStorageDevice(device) else {
             throw PyTorchStateDictError.malformedPickle("invalid persistent storage identifier")
         }
         try push(.storage(ParsedStorage(key: key, dataType: type, elementCount: count)))
@@ -166,11 +169,51 @@ struct RestrictedStateDictPickle {
         try push(.dictionary(dictionary))
     }
 
+    private mutating func setItem() throws {
+        let value = try pop()
+        guard case .string(let key) = try pop(),
+              case .dictionary(var dictionary) = try pop(),
+              !dictionary.contains(where: { $0.0 == key }) else {
+            throw PyTorchStateDictError.malformedPickle("SETITEM requires a unique string key and dictionary")
+        }
+        dictionary.append((key, value))
+        try push(.dictionary(dictionary))
+    }
+
+    private mutating func build() throws {
+        guard case .dictionary(let state) = try pop(),
+              case .dictionary(let instance) = try pop(),
+              state.count == 1,
+              state[0].0 == "_metadata",
+              isSafeOrderedDictionaryMetadata(state[0].1) else {
+            throw PyTorchStateDictError.malformedPickle("BUILD only accepts OrderedDict tensor metadata")
+        }
+        try push(.dictionary(instance))
+    }
+
+    private func isSafeOrderedDictionaryMetadata(_ value: PickleValue) -> Bool {
+        guard case .dictionary(let entries) = value else { return false }
+        return entries.allSatisfy { _, metadata in
+            guard case .dictionary(let fields) = metadata else { return false }
+            return fields.count == 1
+                && fields[0].0 == "version"
+                && { if case .integer = fields[0].1 { true } else { false } }()
+        }
+    }
+
     private mutating func finish() throws -> [ParsedTensor] {
         guard index == data.count, stack.count == 1, case .dictionary(let dictionary) = stack[0] else {
             throw PyTorchStateDictError.malformedPickle("STOP did not terminate one state dictionary")
         }
-        return try dictionary.map { name, value in
+        let stateDictionary: [(String, PickleValue)]
+        if dictionary.count == 1,
+           dictionary[0].0 == "generator",
+           case .dictionary(let generator) = dictionary[0].1 {
+            stateDictionary = generator
+        } else {
+            stateDictionary = dictionary
+        }
+        return try stateDictionary.map { name, value in
             guard case .tensor(let tensor) = value else {
                 throw PyTorchStateDictError.malformedPickle("state-dict value '\(name)' is not a tensor")
             }
@@ -277,5 +320,11 @@ struct RestrictedStateDictPickle {
 
     private func isASCIIDecimal(_ value: String) -> Bool {
         !value.isEmpty && value.utf8.allSatisfy { (0x30...0x39).contains($0) }
+    }
+
+    private func isSupportedStorageDevice(_ value: String) -> Bool {
+        if value == "cpu" { return true }
+        guard value.hasPrefix("cuda:") else { return false }
+        return isASCIIDecimal(String(value.dropFirst("cuda:".count)))
     }
 }

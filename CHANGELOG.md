@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added native MMAudio large 44.1 kHz text-to-audio and video-to-audio SFX
+  generation, including managed pinned assets, DFN5B CLIP and Synchformer video
+  conditioning, the joint/fused MMDiT flow model, magnitude-preserving VAE,
+  BigVGAN-v2 decoding, negative prompts, preflight support, and explicit
+  CC-BY-NC-4.0 checkpoint, Apple research-only CLIP, and MIT BigVGAN licensing
+  metadata.
 - added explicit affine 8-bit resident KV caches for Gemma4, Qwen-family, and
   LFM2 plus opt-in compressed-MLA and fused sparse-MoE execution for the native
   Psi/GLM runtime, with numerical, structural-memory, and policy tests. Affine

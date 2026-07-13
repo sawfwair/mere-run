@@ -93,6 +93,7 @@ from the runtime catalog used by `mere.run model list`,
 | `sfx` | `sfx-woosh-synchformer` |
 | `sfx` | `sfx-woosh-vflow-8s` |
 | `sfx` | `sfx-woosh-dvflow-8s` |
+| `sfx` | `sfx-mmaudio-large-44k-v2` |
 | `video` | `video-ltx-av` |
 | `video` | `video-ltx23-av-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
@@ -519,6 +520,38 @@ Both include `checkpoints/Woosh-AE/` and `checkpoints/TextConditionerV/`.
 `Kijai/MMAudio_safetensors`. `mere.run sfx video generate` uses it when the
 input is a raw video file; `.npy` inputs can still provide precomputed
 Synchformer `synch_out` features directly.
+
+### `sfx-mmaudio-large-44k-v2`
+
+The native MMAudio install combines pinned public artifacts into one managed
+root:
+
+```text
+.../models/sfx-mmaudio-large-44k-v2
+├── mmaudio_large_44k_v2_fp16.safetensors
+├── apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors
+├── mmaudio_synchformer_fp16.safetensors
+├── mmaudio_vae_44k_fp16.safetensors
+├── clip/tokenizer.json
+└── bigvgan/
+    ├── config.json
+    └── bigvgan_generator.pt
+```
+
+The MMAudio, CLIP, Synchformer, and VAE safetensors come from the pinned
+`Kijai/MMAudio_safetensors` snapshot. CLIP tokenizer/config files are mounted
+from Apple's pinned DFN5B CLIP repository. BigVGAN-v2 config and generator
+weights are mounted from NVIDIA's pinned 44.1 kHz repository. The Swift runtime
+loads the official BigVGAN PyTorch state dictionary with a restricted parser;
+it does not execute Python or arbitrary pickle globals.
+
+The `hkchengrex/MMAudio` architecture source is MIT-licensed. The released
+MMAudio checkpoints are separately CC-BY-NC-4.0 and therefore non-commercial.
+Apple's mounted DFN5B CLIP model is separately restricted to research purposes
+under the Apple Machine Learning Research Model License Agreement. NVIDIA's
+BigVGAN-v2 source and model are MIT-licensed. The managed install retains the
+exact Apple and NVIDIA license files beside those components. Review all model
+terms before downloading or using generated output.
 
 ### `video-ltx-av`
 

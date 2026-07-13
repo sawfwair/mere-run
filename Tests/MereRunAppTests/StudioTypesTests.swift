@@ -257,6 +257,13 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(fractional?.fractionCompleted ?? -1, 0.004, accuracy: 0.0001)
         XCTAssertEqual(fractional?.detail, "4 MB / 1 GB 2 MB/s ETA 8m 18s")
 
+        let generation = StudioProgressParser.parse(
+            #"{"event":"progress","stage":"denoising","step":2,"total_steps":4}"#
+        )
+        XCTAssertEqual(generation?.label, "Generating")
+        XCTAssertEqual(generation?.fractionCompleted ?? -1, 0.75, accuracy: 0.001)
+        XCTAssertEqual(generation?.detail, "Step 3 of 4")
+
         // Non-progress lines are not misclassified.
         XCTAssertNil(StudioProgressParser.parse("just a normal log line"))
         XCTAssertNil(StudioProgressParser.parse("[info] starting up"))

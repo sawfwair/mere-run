@@ -122,6 +122,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### MMAudio and bundled conditioning/decoding models
+
+- purpose: native Swift/MLX text-to-audio and synchronized video-to-audio
+  runtime
+- architecture source: [`hkchengrex/MMAudio`](https://github.com/hkchengrex/MMAudio)
+  at commit `974010a026c731054592d8f777218bd9d85a6c24`; MIT
+- MMAudio model weights: downloaded separately; CC-BY-NC-4.0
+- DFN5B CLIP model: downloaded separately from
+  `apple/DFN5B-CLIP-ViT-H-14-378`; Apple Machine Learning Research Model
+  License Agreement (research-only)
+- BigVGAN-v2 source and model: downloaded separately from
+  `nvidia/bigvgan_v2_44khz_128band_512x`; MIT
+
+Managed installs retain the exact Apple and NVIDIA license files at
+`clip/LICENSE` and `bigvgan/LICENSE`. These model licenses are separate from
+the mere.run source license and from the MIT license on the MMAudio graph.
+
 ## Vendored artifacts
 
 ### `vendor/llama.xcframework`

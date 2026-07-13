@@ -27,6 +27,33 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
         XCTAssertEqual(array.asArray(Float.self), [1.5, -2])
     }
 
+    func testAcceptsExactGeneratorStateDictWrapper() throws {
+        let url = try writeCheckpoint(
+            pickle: generatorStateDictPickle(shape: [2], stride: [1], storageElementCount: 2),
+            storage: floatData([1.5, -2])
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let archive = try PyTorchStateDictArchive(url: url)
+        XCTAssertEqual(archive.tensors.map(\.name), ["weight"])
+        XCTAssertEqual(try archive.rawData(named: "weight"), floatData([1.5, -2]))
+    }
+
+    func testAcceptsCUDAStorageLocationWithoutExecutingDeviceCode() throws {
+        let url = try writeCheckpoint(
+            pickle: stateDictPickle(
+                shape: [1],
+                stride: [1],
+                storageElementCount: 1,
+                storageDevice: "cuda:0"
+            ),
+            storage: floatData([2])
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertEqual(try PyTorchStateDictArchive(url: url).rawData(named: "weight"), floatData([2]))
+    }
+
     func testAcceptsExactModernTorchSerializationIdentifier() throws {
         let url = try writeCheckpoint(
             pickle: stateDictPickle(shape: [1], stride: [1], storageElementCount: 1),
@@ -188,6 +215,20 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
         XCTAssertEqual(cls.size, 384)
     }
 
+    func testPinnedMMAudioBigVGANInventoryWhenFixtureIsAvailable() throws {
+        let path = ProcessInfo.processInfo.environment["MERERUN_TEST_MMAUDIO_BIGVGAN"] ?? ""
+        try XCTSkipIf(
+            path.isEmpty || !FileManager.default.fileExists(atPath: path),
+            "Set MERERUN_TEST_MMAUDIO_BIGVGAN to the pinned bigvgan_generator.pt fixture."
+        )
+
+        let archive = try PyTorchStateDictArchive(url: URL(fileURLWithPath: path))
+        XCTAssertEqual(archive.tensors.count, 783)
+        XCTAssertNotNil(archive.descriptor(named: "conv_pre.bias"))
+        XCTAssertNotNil(archive.descriptor(named: "conv_post.weight_g"))
+        XCTAssertNotNil(archive.descriptor(named: "conv_post.weight_v"))
+    }
+
     private func writeCheckpoint(
         pickle: Data,
         storage: Data,
@@ -226,6 +267,7 @@ private func stateDictPickle(
     stride: [Int],
     storageElementCount: Int,
     storageKey: String = "0",
+    storageDevice: String = "cpu",
     rebuildGlobal: (module: String, name: String) = ("torch._utils", "_rebuild_tensor_v2")
 ) -> Data {
     var data = Data([0x80, 0x02, 0x7D, 0x28]) // PROTO 2, EMPTY_DICT, MARK
@@ -236,7 +278,7 @@ private func stateDictPickle(
     appendUnicode("storage", to: &data)
     appendGlobal("torch", "FloatStorage", to: &data)
     appendUnicode(storageKey, to: &data)
-    appendUnicode("cpu", to: &data)
+    appendUnicode(storageDevice, to: &data)
     appendInteger(storageElementCount, to: &data)
     data.append(contentsOf: [0x74, 0x51]) // TUPLE, BINPERSID
     appendInteger(0, to: &data)
@@ -246,6 +288,26 @@ private func stateDictPickle(
     appendGlobal("collections", "OrderedDict", to: &data)
     data.append(contentsOf: [0x29, 0x52]) // EMPTY_TUPLE, REDUCE
     data.append(contentsOf: [0x74, 0x52]) // TUPLE, REDUCE
+    data.append(contentsOf: [0x75, 0x2E]) // SETITEMS, STOP
+    return data
+}
+
+private func generatorStateDictPickle(
+    shape: [Int],
+    stride: [Int],
+    storageElementCount: Int
+) -> Data {
+    var inner = stateDictPickle(
+        shape: shape,
+        stride: stride,
+        storageElementCount: storageElementCount
+    )
+    inner.removeFirst(2) // The outer container owns PROTO 2.
+    inner.removeLast() // The outer container owns STOP.
+
+    var data = Data([0x80, 0x02, 0x7D, 0x28]) // PROTO 2, EMPTY_DICT, MARK
+    appendUnicode("generator", to: &data)
+    data.append(inner)
     data.append(contentsOf: [0x75, 0x2E]) // SETITEMS, STOP
     return data
 }
