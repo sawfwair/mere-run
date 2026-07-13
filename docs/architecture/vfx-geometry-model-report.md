@@ -1,13 +1,14 @@
 # OSS depth and 3D models for native VFX workflows
 
-Research snapshot: 2026-07-11.
+Research snapshot: 2026-07-13.
 
-This report records the five permissively licensed model lanes selected for
-native Swift/MLX execution in `mere.run`. It separates what each neural model
-actually predicts from downstream files that `mere.run` derives, and it makes
-the InstantMesh licensing boundary explicit. The exact artifact identities in
-this document come from `GeometryModelPins`; upstream capability and license
-claims link to the corresponding Hugging Face model card or source repository.
+This report records five permissively licensed model lanes plus the separately
+license-gated DINOv3 dependency used by TRELLIS.2, all selected for native
+Swift/MLX execution in `mere.run`. It separates what each neural model actually
+predicts from downstream files that `mere.run` derives, and it makes the
+InstantMesh and DINOv3 licensing boundaries explicit. Exact TRELLIS.2 artifact
+identities live in `Trellis2Resources`; the other geometry identities live in
+`GeometryModelPins`.
 
 ## Recommendation at a glance
 
@@ -17,10 +18,12 @@ claims link to the corresponding Hugging Face model card or source repository.
 | Stable depth through a shot | Video Depth Anything Small | A decoded video sequence | Temporally aligned relative or metric depth frames | Depth mattes, rack-focus/DOF, fog, occlusion, depth-aware grading |
 | Geometry and cameras from views | Depth Anything 3 Small | One or more RGB views; cameras optional | Relative depth, confidence, camera intrinsics/extrinsics, colored points | Camera/point-cloud bootstrap, set reconstruction, 3DGS/Nerfstudio initialization |
 | Fast object proxy from one image | TripoSR | One isolated object image | Normalized colored object mesh | Prop proxy, previz asset, collision/holdout mesh, rendered turntable |
+| PBR object proxy from one image | TRELLIS.2-4B 512 | One isolated object image with alpha or explicit framing | Normalized colored object mesh plus sparse base-color/metallic/roughness/alpha O-Voxels | Material-aware prop proxy, look-development handoff, previz asset |
 | Better object proxy from supplied views | InstantMesh Base, reconstruction only | Exactly 4 or 6 ordered object views; cameras optional | Normalized colored object mesh | Turntable-to-mesh, multi-view prop reconstruction, set dressing and occluders |
 
 Use MoGe for a single scene image, VDA for a temporal plate, DA3 for a
-multi-view scene, TripoSR for a single isolated object, and InstantMesh when
+multi-view scene, TripoSR for a fast single-image proxy, TRELLIS.2 when a
+single-image result needs a retained PBR O-Voxel field, and InstantMesh when
 four or six licensed object views already exist. These models complement one
 another; they are not interchangeable depth checkpoints.
 
@@ -92,6 +95,21 @@ Metric variant:
 - License boundary: Apache-2.0 reconstruction checkpoint only. The runtime
   excludes view synthesis and NVIDIA's proprietary FlexiCubes implementation.
 
+### TRELLIS.2-4B 512
+
+- Managed ID: `image-3d-trellis2-4b`
+- Pinned model: [`microsoft/TRELLIS.2-4B@af44b45`](https://huggingface.co/microsoft/TRELLIS.2-4B/tree/af44b45f2e35a493886929c6d786e563ec68364d)
+- Pinned source: [`microsoft/TRELLIS.2`](https://github.com/microsoft/TRELLIS.2)
+- Pinned sparse-structure dependency:
+  [`microsoft/TRELLIS-image-large@25e0d31`](https://huggingface.co/microsoft/TRELLIS-image-large/tree/25e0d31ffbebe4b5a97464dd851910efc3002d96)
+- Pinned conditioner:
+  [`facebook/dinov3-vitl16-pretrain-lvd1689m@ea8dc28`](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m/tree/ea8dc2863c51be0a264bab82070e3e8836b02d51)
+- Seven pinned safetensors total 11,010,775,158 bytes; each byte count and
+  SHA-256 is enforced by `Trellis2Resources`.
+- License boundary: TRELLIS.2 code and weights are MIT. DINOv3 has separate
+  terms and a gated model repository; users must accept those terms and
+  authenticate before installation.
+
 ## Native conversion and runtime status
 
 | Model | Published format | Native admission path | Offline conversion status |
@@ -101,6 +119,7 @@ Metric variant:
 | DA3-S | Safetensors | Exact pinned safetensors and config are checksum-verified and loaded directly | No conversion required |
 | TripoSR | Lightning/PyTorch CKPT | Exact CKPT is accepted by the restricted state-dict grammar; verified converted safetensors is also accepted | Deterministic conversion proven byte-identical twice |
 | InstantMesh Base | Lightning CKPT | Runtime accepts only the verified reconstruction-only safetensors package | Deterministic conversion proven byte-identical twice; view-generation tensors are never accepted |
+| TRELLIS.2-4B 512 | Safetensors | Official BF16/FP16 files are checksum-verified and loaded directly into native dense/sparse MLX graphs | No conversion required |
 
 Every inference path is native Swift/MLX. Python appears only in audited
 release conversion and upstream-reference fixture generation, never as a
@@ -246,11 +265,38 @@ isosurface chunking for Apple Silicon. The benchmark ledger now includes native
 six-view grid-16 and grid-24 runs through the verified converted package; the
 measured figures are summarized below.
 
+### 6. TRELLIS.2-4B 512
+
+Microsoft describes TRELLIS.2 as an image-to-3D system built around a sparse
+O-Voxel representation. The native 512 pipeline uses DINOv3 ViT-L/16 image
+tokens, a dense sparse-structure flow and decoder, separate sparse shape and
+texture flows, adaptive sparse ConvNeXt decoders, and flexible-dual-grid mesh
+extraction. The three flow stages use the pinned 30-block, 1,536-channel graph
+and official 12-step Euler schedules.
+
+Official BF16 and FP16 safetensors load directly into MLX. Stages are loaded
+and released independently rather than retaining the roughly 11 GB checkpoint
+set at once. The result includes normalized colored OBJ, PLY, and GLB meshes.
+A deterministic `.pbrvox` sidecar preserves base color RGB, metallic,
+roughness, and alpha for every decoded sparse voxel; the current canonical GLB
+writer does not claim a synthesized texture-atlas representation.
+
+The native public surface deliberately starts with 512. It does not claim the
+1024/1536 cascade, real-world scale, or byte-identical face ordering with the
+CUDA reference implementation. Transparent alpha is required by default;
+opaque input needs explicit already-framed consent, and no hidden background
+removal service is invoked.
+
 ## License and commercial-use boundary
 
 The selected MoGe, VDA, DA3, TripoSR, and InstantMesh reconstruction artifacts
 have permissive MIT or Apache-2.0 lanes. That does not make every file mentioned
 by an upstream project safe to ship. The engineering boundary is:
+
+- **DINOv3 is separately gated.** TRELLIS.2 is MIT, but its DINOv3 ViT-L/16
+  conditioner has separate terms and a gated Hugging Face repository. Model
+  installation must surface license acceptance/authentication instead of
+  mirroring or silently substituting that dependency.
 
 - **Zero123++ is excluded.** The official Zero123++ repository states that its
   code is Apache-2.0 but its weights are CC-BY-NC-4.0 and cannot be used in a
@@ -352,6 +398,9 @@ Keep model truth explicit in plugin outputs:
   as initialization only. Never imply learned Gaussians or a triangle mesh.
 - Label TripoSR and InstantMesh meshes as normalized object space unless a
   separate scale/alignment operation establishes world units.
+- Label TRELLIS.2 meshes as normalized object space and keep the `.pbrvox`
+  sidecar attached when metallic, roughness, or alpha must survive handoff;
+  vertex-colored GLB alone is not full PBR parity.
 - For InstantMesh, reject inputs other than four or six views and expose that
   view generation is absent. Do not offer Zero123++ as an automatic fallback.
 - Record the native polygonizer and state plainly that TripoSR and InstantMesh

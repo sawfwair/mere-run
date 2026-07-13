@@ -363,6 +363,7 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         XCTAssertEqual(visionNames, Set([
             "caption", "inspect", "segment", "ground", "track", "track-live", "pose", "flow", "ocr",
             "depth-video", "geometry", "geometry-multiview", "image-to-3d", "image-to-3d-multiview",
+            "image-to-3d-trellis2",
         ]))
     }
 

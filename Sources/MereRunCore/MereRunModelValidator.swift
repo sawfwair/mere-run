@@ -113,6 +113,7 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .depthAnything3
                     && spec.validationKind != .tripoSR
                     && spec.validationKind != .instantMesh
+                    && spec.validationKind != .trellis2
                     && spec.validationKind != .dreamXCausalMLX
             }
         }()
@@ -154,6 +155,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .depthAnything3
             || spec?.validationKind == .tripoSR
             || spec?.validationKind == .instantMesh
+            || spec?.validationKind == .trellis2
             || spec?.validationKind == .wan22TI2VMLX
             || spec?.validationKind == .dreamXCausalMLX {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
