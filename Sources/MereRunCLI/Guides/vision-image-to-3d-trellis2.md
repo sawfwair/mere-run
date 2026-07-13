@@ -24,7 +24,7 @@ the object before 512px DINOv3 conditioning. Fully opaque images fail with an
 actionable error. Pass `--already-framed` only when the image is already an
 isolated, centered object on an appropriate black background.
 
-`--max-tokens` is a decoded O-Voxel safety limit and defaults to 1,048,576.
+`--max-tokens` is a decoded O-Voxel safety limit and defaults to 2,097,152.
 Raising it can materially increase unified-memory use. This is deliberately
 separate from Microsoft's 49,152-token cascade-resolution budget, which does
 not cap the direct 512 decoder. The three flow stages use the official 12-step
@@ -46,6 +46,8 @@ seven checkpoint components are named, pinned, and hashed in provenance.
 
 Coordinates are normalized object space with X right, Y up, and Z forward.
 They are not meters, and unseen geometry is inferred from the single image.
+The `.pbrvox` sidecar instead preserves integer indices in TRELLIS.2's native
+Z-up O-Voxel grid so its six-channel material field stays lossless.
 
 This command currently supports the official 512 pipeline. It does not claim
 support for the 1024/1536 cascade or byte-identical mesh ordering with the CUDA

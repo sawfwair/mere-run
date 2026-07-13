@@ -102,7 +102,7 @@ public actor Trellis2Generator {
     /// Safety ceiling for decoded 512-resolution O-Voxels. Microsoft's
     /// 49,152-token option is only used to select a cascade resolution and is
     /// not a decoder limit for the direct 512 pipeline.
-    public static let defaultMaximumSparseTokens = 1_048_576
+    public static let defaultMaximumSparseTokens = 2_097_152
 
     public init() {}
 

@@ -466,7 +466,7 @@ public enum MereRunModelValidator {
             }
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .mmaudio?, .ltxVideo?,
-                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?:
+                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?:
                 return true
             default:
                 return false

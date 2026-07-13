@@ -16,9 +16,10 @@ does not launch Python, PyTorch, or CUDA.
 4. `Trellis2SparseDecoder.swift` decodes the adaptive shape subdivision tree
    and the matching six-channel PBR O-Voxel field using native sparse
    submanifold convolutions.
-5. `Trellis2FlexibleDualGrid.swift` extracts the indexed 512-grid mesh, fills
-   small boundary loops at the reference threshold, and samples RGBA,
-   metallic, and roughness at its vertices.
+5. `Trellis2FlexibleDualGrid.swift` extracts the indexed 512-grid mesh, rotates
+   O-Voxel's Z-up basis into the canonical Y-up mesh contract, fills small
+   boundary loops at the reference threshold, and samples RGBA, metallic, and
+   roughness at its vertices.
 6. `Trellis2ArtifactExporter.swift` writes canonical OBJ, PLY, and GLB meshes,
    plus a deterministic `.pbrvox` sidecar that preserves all six PBR channels.
 
@@ -42,7 +43,9 @@ The initial native surface is the official 512 pipeline. The 1024/1536 cascade
 checkpoints and texture-atlas conversion are not represented as supported.
 GLB/PLY/OBJ carry sampled vertex RGBA. Metallic, roughness, alpha, and base
 color remain losslessly available in the hashed `.pbrvox` sidecar and run
-manifest.
+manifest. Mesh artifacts use the canonical X-right, Y-up, Z-forward basis;
+`.pbrvox` coordinates remain integer O-Voxel indices in the model's native
+Z-up grid so consumers can reproduce material sampling exactly.
 
 The TRELLIS.2 weights are MIT-licensed. DINOv3 is a separately pinned,
 license-gated dependency; users must accept its terms and authenticate with

@@ -45,6 +45,22 @@ final class Trellis2ResourcesAndManifestTests: XCTestCase {
         )
     }
 
+    func testManifestTemplateDoesNotRequireDiffusersComponents() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "trellis2-manifest-validation-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: .image3DTrellis2).write(to: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: Trellis2Resources.defaultModelID
+        )
+        XCTAssertFalse(report.errors.contains("Manifest missing components."))
+    }
+
     func testPBRWriterAndRunManifestPreserveAllMaterialChannelsAndHashes() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
             "trellis2-run-manifest-\(UUID().uuidString)",

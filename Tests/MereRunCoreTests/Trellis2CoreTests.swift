@@ -139,6 +139,7 @@ final class Trellis2CoreTests: MereRunCoreTestCase {
         )
         XCTAssertEqual(decoded.mesh.vertexCount, 8)
         XCTAssertGreaterThan(decoded.mesh.triangleCount, 0)
+        XCTAssertEqual(Array(decoded.mesh.vertices.prefix(3)), [-0.25, -0.25, 0.25])
         XCTAssertEqual(decoded.mesh.colorsRGBA8?.count, 32)
         XCTAssertEqual(decoded.pbrVoxels.coordinates, coordinates)
         XCTAssertEqual(decoded.pbrVoxels.attributes.count, 48)

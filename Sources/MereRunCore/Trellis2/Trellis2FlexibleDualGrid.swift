@@ -92,14 +92,22 @@ enum Trellis2FlexibleDualGrid {
         splitWeights.reserveCapacity(shape.count)
         for index in 0..<shape.count {
             let coordinate = shape.coordinates[index]
+            var rawPosition = [Float]()
+            rawPosition.reserveCapacity(3)
             for axis in 0..<3 {
                 let offset = 2 * sigmoid(shapeValues[index * 7 + axis]) - 0.5
                 dualOffsets.append(offset)
-                vertices.append(
+                rawPosition.append(
                     (Float(coordinate[axis]) + offset) / Float(resolution) - 0.5
                 )
                 intersections.append(shapeValues[index * 7 + 3 + axis] > 0)
             }
+            // O-Voxel geometry is Z-up. The shared mesh exporters and glTF
+            // contract use X-right, Y-up, Z-forward, so rotate into that
+            // canonical basis without changing handedness.
+            vertices.append(rawPosition[0])
+            vertices.append(rawPosition[2])
+            vertices.append(-rawPosition[1])
             splitWeights.append(softplus(shapeValues[index * 7 + 6]))
         }
 

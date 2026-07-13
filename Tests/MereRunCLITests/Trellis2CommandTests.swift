@@ -34,7 +34,7 @@ final class Trellis2CommandTests: XCTestCase {
     func testImageCommandUsesMatchingDefaults() throws {
         let command = try ImageReconstruct3DTrellis2.parse(["/tmp/chair.png"])
         XCTAssertEqual(command.seed, 42)
-        XCTAssertEqual(command.maxTokens, 1_048_576)
+        XCTAssertEqual(command.maxTokens, 2_097_152)
         XCTAssertFalse(command.alreadyFramed)
         XCTAssertFalse(command.dryRun)
     }
