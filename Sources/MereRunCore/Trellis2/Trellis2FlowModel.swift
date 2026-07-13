@@ -321,7 +321,8 @@ struct Trellis2FlowModel {
         let gamma = try weights.tensor("\(prefix).gamma").asType(.float32)
         let squaredNorm = MLX.sum(input.asType(.float32) * input.asType(.float32), axis: -1, keepDims: true)
         let normalized = input.asType(.float32) * MLX.rsqrt(MLX.maximum(squaredNorm, MLXArray(1e-24)))
-        return (normalized * gamma * sqrt(Float(configuration.headDimension))).asType(input.dtype)
+        let scale = MLXArray(sqrt(Float(configuration.headDimension)))
+        return (normalized * gamma * scale).asType(input.dtype)
     }
 
     private func attention(query: MLXArray, key: MLXArray, value: MLXArray) -> MLXArray {
