@@ -80,8 +80,8 @@ private final class MMAudioCLIPTokenizer {
         tokenRegex.enumerateMatches(in: normalized, range: fullRange) { match, _, _ in
             guard let match else { return }
             let token = nsText.substring(with: match.range)
-            let encoded = token.utf8.map { byteEncoder[$0]! }.joined()
-            ids.append(contentsOf: bytePairEncode(encoded).map { vocabulary[$0] ?? 49_407 })
+            let encoded = token.utf8.map { self.byteEncoder[$0]! }.joined()
+            ids.append(contentsOf: self.bytePairEncode(encoded).map { self.vocabulary[$0] ?? 49_407 })
         }
         ids.append(49_407)
         return ids
