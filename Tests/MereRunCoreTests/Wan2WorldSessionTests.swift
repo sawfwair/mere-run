@@ -37,6 +37,23 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
         XCTAssertNotEqual(near.viewMatrices, far.viewMatrices)
     }
 
+    func testCausalCameraControlReachesRequestedMagnitudeAtLastAlignedView() {
+        let yaw = Wan2DreamXARTrajectory.compile(
+            control: .yawLeft(degrees: 30),
+            pixelFrameCount: 9
+        )
+        let yawLast = Array(yaw.viewMatrices.suffix(16))
+        XCTAssertEqual(yawLast[0], cos(.pi / 6), accuracy: 1e-5)
+        XCTAssertEqual(abs(yawLast[2]), sin(.pi / 6), accuracy: 1e-5)
+
+        let forward = Wan2DreamXARTrajectory.compile(
+            control: .forward(meters: 0.25),
+            pixelFrameCount: 9
+        )
+        let forwardLast = Array(forward.viewMatrices.suffix(16))
+        XCTAssertEqual(abs(forwardLast[11]), 0.25, accuracy: 1e-5)
+    }
+
     func testColdSessionCanResetToAnExplicitWorldFrame() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("wan-session-model-\(UUID().uuidString)")

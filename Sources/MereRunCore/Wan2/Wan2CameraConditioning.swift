@@ -226,19 +226,25 @@ public enum Wan2DreamXARTrajectory {
         precondition(pixelFrameCount > 0)
         let translation = control.translationMeters.map(abs).max() ?? 0
         let rotation = control.rotationDegrees.map(abs).max() ?? 0
+        let travelSteps = alignedTravelSteps(pixelFrameCount: pixelFrameCount)
         switch control.motion {
         case .hold:
             return 1.5
         case .forward, .backward, .strafeLeft, .strafeRight:
-            return max(translation / (0.05 * Float(pixelFrameCount)), 0.001)
+            return max(translation / (0.05 * travelSteps), 0.001)
         case .yawLeft, .yawRight:
-            return max(rotation / Float(pixelFrameCount), 0.001)
+            return max(rotation / travelSteps, 0.001)
         case .custom:
             return max(
-                max(translation / (0.05 * Float(pixelFrameCount)), rotation / Float(pixelFrameCount)),
+                max(translation / (0.05 * travelSteps), rotation / travelSteps),
                 0.001
             )
         }
+    }
+
+    private static func alignedTravelSteps(pixelFrameCount: Int) -> Float {
+        let alignedIndices = [0] + Array(stride(from: 1, to: pixelFrameCount, by: 4))
+        return Float(max((alignedIndices.last ?? 0) - (alignedIndices.first ?? 0), 1))
     }
 
     public static func compile(
