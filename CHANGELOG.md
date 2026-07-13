@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added native Swift/MLX Microsoft TRELLIS.2-4B image-to-3D reconstruction at
+  512 resolution, including direct official safetensors loading, pinned DINOv3
+  ViT-L/16 conditioning, three 12-step flow stages, sparse ConvNeXt O-Voxel
+  shape/PBR decoding, flexible-dual-grid mesh extraction, managed model pull,
+  reference-threshold small-hole repair, separate image/vision CLI commands,
+  and hashed OBJ/PLY/GLB plus six-channel `.pbrvox` material artifacts. The DINOv3 dependency remains separately
+  license-gated and requires user acceptance/authentication.
 - added native MMAudio large 44.1 kHz text-to-audio and video-to-audio SFX
   generation, including managed pinned assets, DFN5B CLIP and Synchformer video
   conditioning, the joint/fused MMDiT flow model, magnitude-preserving VAE,

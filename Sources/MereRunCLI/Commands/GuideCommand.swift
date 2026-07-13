@@ -370,6 +370,16 @@ enum GuideRegistry {
             resourceName: "vision-image-to-3d.md"
         ),
         GuideTopic(
+            topic: "vision-image-to-3d-trellis2",
+            title: "Native TRELLIS.2 Image to 3D",
+            commandPaths: [
+                ["vision", "image-to-3d-trellis2"],
+                ["image", "reconstruct-3d-trellis2"],
+            ],
+            models: ["image-3d-trellis2-4b"],
+            resourceName: "vision-image-to-3d-trellis2.md"
+        ),
+        GuideTopic(
             topic: "vision-image-to-3d-multiview",
             title: "Native Multi-view Image to 3D",
             commandPaths: [

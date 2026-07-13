@@ -119,10 +119,10 @@ final class DINOv3Attention: Module {
         self.scale = 1.0 / sqrt(Float(headDim))
 
         let hiddenSize = config.hiddenSize
-        self._qProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: false)
-        self._kProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: false)
-        self._vProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: false)
-        self._oProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: true)
+        self._qProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: config.queryBias)
+        self._kProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: config.keyBias)
+        self._vProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: config.valueBias)
+        self._oProj.wrappedValue = Linear(hiddenSize, hiddenSize, bias: config.projectionBias)
     }
 
     func callAsFunction(
@@ -208,25 +208,28 @@ final class DINOv3Attention: Module {
     }
 }
 
-// MARK: - DINOv3 MLP (SwiGLU)
+// MARK: - DINOv3 MLP
 
 final class DINOv3MLP: Module {
-    @ModuleInfo(key: "gate_proj") private var gateProj: Linear
+    @ModuleInfo(key: "gate_proj") private var gateProj: Linear?
     @ModuleInfo(key: "up_proj") private var upProj: Linear
     @ModuleInfo(key: "down_proj") private var downProj: Linear
 
     init(config: DINOv3Config) {
-        // SwiGLU: gate and up project to intermediate, down projects back
-        // intermediate is 8192 for 7B model (2x hidden)
-        let intermediateSize = config.hiddenSize * 2  // 4096 * 2 = 8192
-        self._gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: true)
-        self._upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: true)
-        self._downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: true)
+        let intermediateSize = config.intermediateSize
+        self._gateProj.wrappedValue = config.useGatedMLP
+            ? Linear(config.hiddenSize, intermediateSize, bias: config.mlpBias)
+            : nil
+        self._upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: config.mlpBias)
+        self._downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: config.mlpBias)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        // SwiGLU activation: silu(gate) * up, then down
-        return downProj(silu(gateProj(x)) * upProj(x))
+        let up = upProj(x)
+        if let gateProj {
+            return downProj(silu(gateProj(x)) * up)
+        }
+        return downProj(gelu(up))
     }
 }
 
@@ -356,8 +359,7 @@ public final class DINOv3VisionModel: Module {
         self._norm.wrappedValue = LayerNorm(dimensions: config.hiddenSize, eps: config.layerNormEps)
     }
 
-    /// Forward pass returning CLS token and patch embeddings
-    public func callAsFunction(_ pixelValues: MLXArray) -> (cls: MLXArray, patches: MLXArray) {
+    private func transformerHiddenStates(_ pixelValues: MLXArray) -> (hidden: MLXArray, prefixTokens: Int) {
         // Embed patches and prepend special tokens
         let (embeds, numPrefixTokens, gridH, gridW) = embeddings(pixelValues)
 
@@ -373,10 +375,34 @@ public final class DINOv3VisionModel: Module {
                 rotarySin: rotarySin,
                 numPrefixTokens: numPrefixTokens
             )
+            MLX.eval(hiddenStates)
+            Memory.clearCache()
         }
 
-        // Final layer norm
-        hiddenStates = norm(hiddenStates)
+        return (hiddenStates, numPrefixTokens)
+    }
+
+    /// Return every CLS, register, and patch token after the model's learned
+    /// final norm. This is useful to consumers that need the complete token
+    /// sequence rather than the pooled CLS representation.
+    public func normalizedTokens(_ pixelValues: MLXArray) -> MLXArray {
+        let states = transformerHiddenStates(pixelValues)
+        return norm(states.hidden)
+    }
+
+    /// Return every token after an affine-free layer norm. Microsoft's
+    /// TRELLIS.2 feature extractor consumes DINOv3's pre-norm hidden states in
+    /// exactly this form instead of applying the checkpoint's final norm.
+    public func preNormalizedTokens(_ pixelValues: MLXArray) -> MLXArray {
+        let states = transformerHiddenStates(pixelValues)
+        return MLXFast.layerNorm(states.hidden, eps: config.layerNormEps)
+    }
+
+    /// Forward pass returning CLS token and patch embeddings.
+    public func callAsFunction(_ pixelValues: MLXArray) -> (cls: MLXArray, patches: MLXArray) {
+        let states = transformerHiddenStates(pixelValues)
+        let hiddenStates = norm(states.hidden)
+        let numPrefixTokens = states.prefixTokens
 
         // Extract CLS token and patches
         let cls = hiddenStates[0..., 0, 0...]  // [batch, hidden]

@@ -53,6 +53,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case depthAnything3
     case tripoSR
     case instantMesh
+    case trellis2
     case aceStep
     case magentaRT2
     case muScriptor
@@ -1195,6 +1196,22 @@ public enum ManagedModelCatalog {
             ]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.image3DTrellis2.rawValue,
+            category: .image3D,
+            installShape: .structuredRoot,
+            hubFallback: Trellis2Resources.primaryHubFallback,
+            mountedHubFallbacks: Trellis2Resources.mountedHubFallbacks,
+            upstreamRepoId: Trellis2Resources.repository,
+            upstreamRevision: Trellis2Resources.revision,
+            validationKind: .trellis2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 11_010_775_158,
+            defaultCLICommands: [
+                "image reconstruct-3d-trellis2",
+                "vision image-to-3d-trellis2",
+            ]
+        ),
+        ManagedModelSpec(
             id: "music-acestep",
             category: .music,
             installShape: .structuredRoot,
@@ -1689,7 +1706,7 @@ public extension ManagedModelSpec {
 
     var usesPinnedGeometryArtifacts: Bool {
         switch validationKind {
-        case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR, .instantMesh:
+        case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR, .instantMesh, .trellis2:
             true
         default:
             false
@@ -1786,6 +1803,8 @@ public extension ManagedModelSpec {
             }
             guard let pin = GeometryModelPins.pin(for: id) else { return [rootURL] }
             return Self.invalidPinnedArtifacts(pin.artifacts, in: rootURL, fileManager: fileManager)
+        case .trellis2:
+            return Trellis2Resources.validate(rootURL: rootURL, fileManager: fileManager)
         case .qwen3TTS:
             return Self.missingQwen3TTSPaths(in: rootURL, fileManager: fileManager)
         case .qwen3ASR:
@@ -1861,6 +1880,11 @@ public extension ManagedModelSpec {
             return Self.pinnedArtifactValidationMessages(
                 pin.artifacts,
                 in: normalized,
+                fileManager: fileManager
+            )
+        case .trellis2:
+            return Trellis2Resources.validationMessages(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
                 fileManager: fileManager
             )
         case .sam31:

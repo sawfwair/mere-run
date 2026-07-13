@@ -64,6 +64,7 @@ public struct ModelResolver {
         case visionGeometryDA3Small = "vision-geometry-da3-small"
         case image3DTripoSR = "image-3d-triposr"
         case image3DInstantMeshBase = "image-3d-instantmesh-base"
+        case image3DTrellis2 = "image-3d-trellis2-4b"
         case aceStep = "music-acestep"
         case aceStepXLTurbo = "music-acestep-xl-turbo"
         case aceStepXLTurboLM4B = "music-acestep-xl-turbo-lm4b"

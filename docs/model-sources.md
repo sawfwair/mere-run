@@ -79,6 +79,7 @@ from the runtime catalog used by `mere.run model list`,
 | `vision-geometry` | `vision-geometry-da3-small` |
 | `image-3d` | `image-3d-triposr` |
 | `image-3d` | `image-3d-instantmesh-base` |
+| `image-3d` | `image-3d-trellis2-4b` |
 | `music` | `music-acestep` |
 | `music` | `music-acestep-xl-turbo` |
 | `music` | `music-acestep-xl-turbo-lm4b` |

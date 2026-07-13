@@ -75,6 +75,8 @@ Key subdirectories:
 - `Gemma4/`, `Q35/`, `LFM2/`, `Psi/`, `MeBot/`: text/chat model families
 - `Embeddings/`: embedding-generation support
 - `LightOnOCR/`: OCR runtime
+- `Asset3D/`, `TripoSR/`, `InstantMesh/`, `Trellis2/`: canonical mesh export
+  plus native single-view and multiview object reconstruction
 - `VLM/`: vision-language model helpers
 - `ACEStep/`: music generation pipeline
 - `Woosh/`: sound-effect generation pipeline

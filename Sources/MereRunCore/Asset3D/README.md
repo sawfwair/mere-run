@@ -15,4 +15,7 @@ PLY, and binary glTF writers used by native reconstruction runtimes.
   boundary, which is why it is listed in the repository's dynamic-JSON
   inventory. No untyped JSON escapes this writer.
 
-Model-specific inference and provenance belong in `TripoSR` and `InstantMesh`.
+Model-specific inference and provenance belong in `TripoSR`, `InstantMesh`, and
+`Trellis2`. TRELLIS.2 additionally writes its six-channel sparse PBR field as a
+model-specific `.pbrvox` sidecar because the canonical mesh contract currently
+stores vertex color, not a generated texture atlas.

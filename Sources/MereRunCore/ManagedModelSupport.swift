@@ -576,6 +576,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 48
             ),
             descriptor(
+                ModelResolver.ModelID.image3DTrellis2.rawValue,
+                "PBR O-Voxel object mesh",
+                "Reconstructs a 512-resolution PBR O-Voxel mesh with the native Swift MLX TRELLIS.2 runtime.",
+                minimum: 64,
+                recommended: 128
+            ),
+            descriptor(
                 "music-acestep",
                 "Music generation",
                 "Generates music from text prompts with the ACE-Step model stack.",

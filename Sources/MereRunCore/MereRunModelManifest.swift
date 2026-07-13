@@ -44,6 +44,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case tripoSR = "triposr"
         /// InstantMesh multi-view object reconstruction family.
         case instantMesh = "instantmesh"
+        /// Microsoft TRELLIS.2 image-to-PBR-mesh family.
+        case trellis2 = "trellis2"
         /// Qwen3 TTS family.
         case qwen3TTS = "qwen3-tts"
         /// Qwen3 ASR family.
@@ -1209,6 +1211,19 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.multiViewReconstruction, .meshGeneration],
                 components: nil,
                 upstreamRepoId: "TencentARC/InstantMesh@b785b4ecfb6636ef34a08c748f96f6a5686244d0",
+                createdAt: createdAt
+            )
+        case .image3DTrellis2:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .trellis2,
+                family: .threeD,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.imageTo3D, .meshGeneration],
+                components: nil,
+                upstreamRepoId: "microsoft/TRELLIS.2-4B@af44b45f2e35a493886929c6d786e563ec68364d",
                 createdAt: createdAt
             )
         case .psiAgent:

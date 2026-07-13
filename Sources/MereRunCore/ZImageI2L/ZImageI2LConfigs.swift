@@ -32,6 +32,15 @@ public struct DINOv3Config: Sendable {
     public var numRegisterTokens: Int = 4
     public var useRoPE: Bool = true
     public var ropeTheta: Float = 100.0
+    /// The original Z-Image-i2L checkpoint uses a gated SwiGLU MLP. Standard
+    /// DINOv3 ViT checkpoints, including the ViT-L/16 encoder used by
+    /// TRELLIS.2, use a single GELU projection instead.
+    public var useGatedMLP: Bool = true
+    public var queryBias: Bool = false
+    public var keyBias: Bool = false
+    public var valueBias: Bool = false
+    public var projectionBias: Bool = true
+    public var mlpBias: Bool = true
 
     public var headDim: Int { hiddenSize / numAttentionHeads }
 

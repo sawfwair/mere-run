@@ -113,6 +113,7 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .depthAnything3
                     && spec.validationKind != .tripoSR
                     && spec.validationKind != .instantMesh
+                    && spec.validationKind != .trellis2
                     && spec.validationKind != .dreamXCausalMLX
             }
         }()
@@ -154,6 +155,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .depthAnything3
             || spec?.validationKind == .tripoSR
             || spec?.validationKind == .instantMesh
+            || spec?.validationKind == .trellis2
             || spec?.validationKind == .wan22TI2VMLX
             || spec?.validationKind == .dreamXCausalMLX {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
@@ -464,7 +466,7 @@ public enum MereRunModelValidator {
             }
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .mmaudio?, .ltxVideo?,
-                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?:
+                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?:
                 return true
             default:
                 return false

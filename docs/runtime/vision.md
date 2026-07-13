@@ -1,6 +1,7 @@
 # Vision Runtime
 
-This page covers captioning, inspection, grounding, segmentation, tracking, pose extraction, optical flow, and OCR.
+This page covers captioning, inspection, grounding, segmentation, tracking,
+pose extraction, optical flow, image-to-3D reconstruction, and OCR.
 
 ## Public surface
 
@@ -12,6 +13,9 @@ This page covers captioning, inspection, grounding, segmentation, tracking, pose
 - `mere.run vision track-live`
 - `mere.run vision pose`
 - `mere.run vision flow`
+- `mere.run vision image-to-3d`
+- `mere.run vision image-to-3d-trellis2`
+- `mere.run vision image-to-3d-multiview`
 - `mere.run vision ocr`
 
 ## Model family
@@ -19,6 +23,9 @@ This page covers captioning, inspection, grounding, segmentation, tracking, pose
 - `vision-ocr-lighton`
 - `vision-ground-falcon-perception`
 - `vision-segment-sam31`
+- `image-3d-triposr`
+- `image-3d-trellis2-4b`
+- `image-3d-instantmesh-base`
 
 Captioning and inspect flows also depend on vision-language support code in
 `MereRunCore`.
@@ -135,6 +142,23 @@ swift run mere.run vision flow ./frame-001.png ./frame-002.png \
 The two images must have equal dimensions. Output vectors use the Middlebury
 `.flo` format and preserve full-resolution 32-bit horizontal and vertical
 motion components.
+
+### Reconstruct a PBR object with TRELLIS.2
+
+Accept the DINOv3 checkpoint license on Hugging Face before the first pull,
+then run the native 512-resolution pipeline:
+
+```bash
+swift run mere.run model pull image-3d-trellis2-4b
+swift run mere.run vision image-to-3d-trellis2 ./object.png \
+  --output ./object-trellis2 \
+  --seed 42
+```
+
+Transparent alpha is required by default. `--already-framed` explicitly opts
+an opaque, isolated object into black-background conditioning. The result
+contains canonical colored OBJ/PLY/GLB meshes and a hashed `.pbrvox` sidecar
+that preserves base color, metallic, roughness, and alpha.
 
 ## Output artifacts
 

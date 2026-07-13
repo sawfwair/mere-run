@@ -133,6 +133,18 @@ Segmentation and tracking runtime:
   - `Sources/MereRunCore/SAM3/SAM31VideoTracker.swift`
   - `Sources/MereRunCore/SAM3/SAM31CameraCapture.swift`
 
+Native object reconstruction:
+
+- CLI:
+  - `Sources/MereRunCLI/Commands/VisionImageTo3DCommand.swift`
+  - `Sources/MereRunCLI/Commands/VisionImageTo3DTrellis2Command.swift`
+  - `Sources/MereRunCLI/Commands/ImageReconstruct3DMultiviewCommand.swift`
+- Shared mesh contract: `Sources/MereRunCore/Asset3D`
+- Native runtimes:
+  - `Sources/MereRunCore/TripoSR/TripoSRGenerator.swift`
+  - `Sources/MereRunCore/Trellis2/Trellis2Generator.swift`
+  - `Sources/MereRunCore/InstantMesh/InstantMeshGenerator.swift`
+
 ## Music, SFX, and video
 
 Music generation:
