@@ -516,6 +516,207 @@ final class MuScriptorTests: MereRunCoreTestCase {
         XCTAssertEqual(Array(data[10..<12]), [0, 3])
         XCTAssertEqual(data.windows(ofCount: 4).filter { Array($0) == Array("MTrk".utf8) }.count, 3)
     }
+
+    func testMusicalContextAnalyzerDetectsTempoMeterAndKey() throws {
+        let sampleRate = 16_000
+        let bpm = 120.0
+        let beatDuration = 60 / bpm
+        let beatCount = 32
+        var samples = [Float](repeating: 0, count: Int(Double(sampleRate) * beatDuration * Double(beatCount)))
+        var notes: [MuScriptorNote] = []
+
+        for beat in 0..<beatCount {
+            let start = Int((Double(beat) * beatDuration * Double(sampleRate)).rounded())
+            let amplitude: Float = beat.isMultiple(of: 4) ? 1 : 0.35
+            for offset in 0..<min(240, samples.count - start) {
+                let decay = exp(-Float(offset) / 45)
+                samples[start + offset] += amplitude * decay * sin(2 * Float.pi * 1_200 * Float(offset) / Float(sampleRate))
+            }
+            for pitch in [60, 64, 67] {
+                notes.append(MuScriptorNote(
+                    instrument: "acoustic_piano",
+                    program: 0,
+                    pitch: pitch,
+                    onset: Double(beat) * beatDuration,
+                    offset: Double(beat + 1) * beatDuration - 0.05,
+                    isDrum: false
+                ))
+            }
+        }
+
+        let context = try MuScriptorMusicalContextAnalyzer().analyze(
+            samples: samples,
+            sampleRate: sampleRate,
+            notes: notes
+        )
+        let tempo = try XCTUnwrap(context.tempo)
+        XCTAssertEqual(tempo.bpm, bpm, accuracy: 2)
+        XCTAssertGreaterThan(tempo.confidence, 0.1)
+        let meter = try XCTUnwrap(context.timeSignature)
+        XCTAssertEqual(meter.numerator, 4)
+        XCTAssertEqual(meter.denominator, 4)
+        let key = try XCTUnwrap(context.keySignature)
+        XCTAssertEqual(key.name, "C major")
+        XCTAssertEqual(key.sharpsFlats, 0)
+        XCTAssertFalse(key.isMinor)
+        XCTAssertEqual(context.beats.filter(\.isDownbeat).count, 8)
+    }
+
+    func testMusicalContextAnalyzerLeavesRhythmNilForShortAudio() throws {
+        let notes = [60, 64, 67].map { pitch in
+            MuScriptorNote(
+                instrument: "acoustic_piano",
+                program: 0,
+                pitch: pitch,
+                onset: 0,
+                offset: 1,
+                isDrum: false
+            )
+        }
+        let context = try MuScriptorMusicalContextAnalyzer().analyze(
+            samples: [Float](repeating: 0, count: 16_000),
+            sampleRate: 16_000,
+            notes: notes
+        )
+        XCTAssertNil(context.tempo)
+        XCTAssertNil(context.timeSignature)
+        XCTAssertNotNil(context.keySignature)
+        XCTAssertTrue(context.beats.isEmpty)
+    }
+
+    func testMusicalContextAnalyzerDetectsTripleMeterWithoutPitchedNotes() throws {
+        let sampleRate = 16_000
+        let bpm = 90.0
+        let beatDuration = 60 / bpm
+        let beatCount = 24
+        var samples = [Float](repeating: 0, count: Int(Double(sampleRate) * beatDuration * Double(beatCount)))
+        var notes: [MuScriptorNote] = []
+
+        for beat in 0..<beatCount {
+            let onset = Double(beat) * beatDuration
+            let start = Int((onset * Double(sampleRate)).rounded())
+            let amplitude: Float = beat.isMultiple(of: 3) ? 1 : 0.3
+            for offset in 0..<min(200, samples.count - start) {
+                samples[start + offset] += amplitude * exp(-Float(offset) / 40)
+            }
+            notes.append(MuScriptorNote(
+                instrument: "drums",
+                program: 128,
+                pitch: beat.isMultiple(of: 3) ? 36 : 42,
+                onset: onset,
+                offset: onset + 0.05,
+                isDrum: true
+            ))
+        }
+
+        let context = try MuScriptorMusicalContextAnalyzer().analyze(
+            samples: samples,
+            sampleRate: sampleRate,
+            notes: notes
+        )
+        XCTAssertEqual(try XCTUnwrap(context.tempo).bpm, bpm, accuracy: 2)
+        XCTAssertEqual(try XCTUnwrap(context.timeSignature).numerator, 3)
+        XCTAssertNil(context.keySignature)
+    }
+
+    func testMusicalContextAnalyzerRejectsDoubleTempoAlias() throws {
+        let sampleRate = 16_000
+        let bpm = 101.0
+        let eighthDuration = 30 / bpm
+        let eighthCount = 64
+        var samples = [Float](
+            repeating: 0,
+            count: Int(Double(sampleRate) * eighthDuration * Double(eighthCount))
+        )
+        var notes: [MuScriptorNote] = []
+
+        for eighth in 0..<eighthCount {
+            let onset = Double(eighth) * eighthDuration
+            let start = Int((onset * Double(sampleRate)).rounded())
+            let amplitude: Float = if eighth.isMultiple(of: 8) {
+                1
+            } else if eighth.isMultiple(of: 2) {
+                0.65
+            } else {
+                0.45
+            }
+            for offset in 0..<min(180, samples.count - start) {
+                samples[start + offset] += amplitude * exp(-Float(offset) / 35)
+            }
+            notes.append(MuScriptorNote(
+                instrument: "drums",
+                program: 128,
+                pitch: eighth.isMultiple(of: 2) ? 36 : 42,
+                onset: onset,
+                offset: onset + 0.04,
+                isDrum: true
+            ))
+        }
+
+        let context = try MuScriptorMusicalContextAnalyzer().analyze(
+            samples: samples,
+            sampleRate: sampleRate,
+            notes: notes
+        )
+        XCTAssertEqual(try XCTUnwrap(context.tempo).bpm, bpm, accuracy: 2)
+        XCTAssertEqual(try XCTUnwrap(context.timeSignature).numerator, 4)
+    }
+
+    func testMusicalContextAnalyzerPreservesSlowTempoWithoutSubdivisionEvidence() throws {
+        let sampleRate = 16_000
+        let bpm = 60.0
+        let beatCount = 16
+        var samples = [Float](repeating: 0, count: sampleRate * beatCount)
+        var notes: [MuScriptorNote] = []
+
+        for beat in 0..<beatCount {
+            let start = beat * sampleRate
+            let amplitude: Float = beat.isMultiple(of: 4) ? 1 : 0.4
+            for offset in 0..<180 {
+                samples[start + offset] += amplitude * exp(-Float(offset) / 35)
+            }
+            notes.append(MuScriptorNote(
+                instrument: "drums",
+                program: 128,
+                pitch: 36,
+                onset: Double(beat),
+                offset: Double(beat) + 0.05,
+                isDrum: true
+            ))
+        }
+
+        let context = try MuScriptorMusicalContextAnalyzer().analyze(
+            samples: samples,
+            sampleRate: sampleRate,
+            notes: notes
+        )
+        XCTAssertEqual(try XCTUnwrap(context.tempo).bpm, bpm, accuracy: 2)
+    }
+
+    func testMIDIEncoderWritesMusicalContextMetaEvents() throws {
+        let context = MuScriptorMusicalContext(
+            tempo: MuScriptorTempo(bpm: 90, beatOffsetSeconds: 0, confidence: 0.9),
+            timeSignature: MuScriptorTimeSignature(
+                numerator: 3,
+                denominator: 4,
+                downbeatOffsetSeconds: 0.5,
+                confidence: 0.8
+            ),
+            keySignature: MuScriptorKeySignature(
+                name: "F major",
+                sharpsFlats: -1,
+                isMinor: false,
+                confidence: 0.7
+            ),
+            beats: []
+        )
+        let data = try MuScriptorMIDI.encode(notes: [], context: context)
+        XCTAssertTrue(data.contains(bytes: [0xFF, 0x51, 0x03, 0x0A, 0x2C, 0x2B]))
+        XCTAssertTrue(data.contains(bytes: [0xFF, 0x58, 0x04, 0x03, 0x02, 0x18, 0x08]))
+        XCTAssertEqual(data.count(of: [0xFF, 0x58, 0x04, 0x03, 0x02, 0x18, 0x08]), 2)
+        XCTAssertTrue(data.contains(bytes: [0xFF, 0x59, 0x02, 0xFF, 0x00]))
+        XCTAssertTrue(data.contains(bytes: Array("Detected downbeat".utf8)))
+    }
 }
 
 private extension Data {
@@ -524,5 +725,13 @@ private extension Data {
         return (startIndex...index(endIndex, offsetBy: -count)).map { start in
             self[start..<index(start, offsetBy: count)]
         }
+    }
+
+    func contains(bytes: [UInt8]) -> Bool {
+        windows(ofCount: bytes.count).contains { Array($0) == bytes }
+    }
+
+    func count(of bytes: [UInt8]) -> Int {
+        windows(ofCount: bytes.count).filter { Array($0) == bytes }.count
     }
 }

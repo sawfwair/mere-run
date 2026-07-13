@@ -84,6 +84,7 @@ public enum MuScriptorError: LocalizedError {
     case invalidToken(Int)
     case generationLimit(chunk: Int, limit: Int)
     case malformedTokenStream(String)
+    case invalidAudio(String)
     case invalidMIDI(String)
 
     public var errorDescription: String? {
@@ -102,6 +103,8 @@ public enum MuScriptorError: LocalizedError {
             "MuScriptor chunk \(chunk) did not emit EOS within \(limit) tokens."
         case .malformedTokenStream(let message):
             "Malformed MuScriptor token stream: \(message)"
+        case .invalidAudio(let message):
+            "Could not analyze MuScriptor audio: \(message)"
         case .invalidMIDI(let message):
             "Could not encode MuScriptor MIDI: \(message)"
         }

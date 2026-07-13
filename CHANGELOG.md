@@ -28,6 +28,10 @@ The format is based on Keep a Changelog.
   `music transcribe`, with managed small/medium/large checkpoints, exact HTK
   mel preprocessing, MLX transformer inference, instrument conditioning,
   JSON/JSONL note events, and multi-track MIDI output.
+- added native MuScriptor musical-context enrichment for MIDI output: tempo,
+  beat phase, meter, and key detection with per-field confidence, reviewable
+  beat-position JSON, and standard MIDI tempo/time/key meta events without
+  quantizing source-relative note timing.
 
 ### Changed
 

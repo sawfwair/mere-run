@@ -11,6 +11,8 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.dtype, "bfloat16")
         XCTAssertFalse(command.sampling)
         XCTAssertEqual(command.chunkBatchSize, 4)
+        XCTAssertFalse(command.noMusicalContext)
+        XCTAssertNil(command.contextOutput)
     }
 
     func testParsesStructuredOutputAndConditioning() throws {
@@ -25,6 +27,7 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
             "--strict-eos",
             "--chunk-batch-size", "2",
             "--dtype", "float32",
+            "--context-output", "song-context.json",
         ])
         XCTAssertEqual(command.model, ModelResolver.ModelID.muScriptorSmall.rawValue)
         XCTAssertEqual(command.format, .jsonl)
@@ -36,6 +39,7 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.beamSize, 1)
         XCTAssertEqual(command.chunkBatchSize, 2)
         XCTAssertEqual(command.dtype, "float32")
+        XCTAssertEqual(command.contextOutput, "song-context.json")
     }
 
     func testParsesBeamSearch() throws {
@@ -59,9 +63,22 @@ final class MusicTranscribeCommandParsingTests: XCTestCase {
         XCTAssertThrowsError(try command.validate())
     }
 
+    func testRejectsContextOutputWhenDetectionIsDisabled() throws {
+        XCTAssertThrowsError(try MusicTranscribe.parse([
+            "song.wav",
+            "--no-musical-context",
+            "--context-output", "context.json",
+        ]))
+        XCTAssertNoThrow(try MusicTranscribe.parse([
+            "song.wav",
+            "--no-musical-context",
+        ]))
+    }
+
     func testHelpDescribesChunkBatchSizeAsAdaptiveMaximum() {
         let help = MusicTranscribe.helpMessage()
         XCTAssertTrue(help.contains("Maximum five-second chunks"))
         XCTAssertTrue(help.contains("live-beam limits may reduce it"))
+        XCTAssertTrue(help.contains("tempo, meter, key, and beat phase"))
     }
 }
