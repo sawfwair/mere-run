@@ -76,6 +76,39 @@ final class MeshAssetTests: XCTestCase {
         XCTAssertNil(legacy.inputs)
     }
 
+    func testGLBMaterialFactorsDefaultAndOverride() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mesh = try triangleMesh(normals: true)
+
+        let plain = root.appendingPathComponent("plain.glb")
+        try MeshGLBWriter.write(mesh, to: plain)
+        var material = try glbMaterial(at: plain)
+        XCTAssertEqual(material["metallicFactor"] as? Double, 0)
+        XCTAssertEqual(material["roughnessFactor"] as? Double, 1)
+
+        let pbr = root.appendingPathComponent("pbr.glb")
+        try MeshGLBWriter.write(
+            mesh,
+            to: pbr,
+            material: MeshPBRMaterialFactors(metallicFactor: 0.25, roughnessFactor: 0.625)
+        )
+        material = try glbMaterial(at: pbr)
+        XCTAssertEqual(try XCTUnwrap(material["metallicFactor"] as? Double), 0.25, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(material["roughnessFactor"] as? Double), 0.625, accuracy: 1e-6)
+    }
+
+    private func glbMaterial(at url: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: url)
+        let jsonLength = Int(readUInt32(data, offset: 12))
+        let document = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data.subdata(in: 20..<(20 + jsonLength)))
+                as? [String: Any]
+        )
+        let materials = try XCTUnwrap(document["materials"] as? [[String: Any]])
+        return try XCTUnwrap(materials[0]["pbrMetallicRoughness"] as? [String: Any])
+    }
+
     private func triangleMesh(normals: Bool) throws -> MeshAsset {
         try MeshAsset(
             vertices: [0, 0, 0, 1, 0, 0, 0, 1, 0],

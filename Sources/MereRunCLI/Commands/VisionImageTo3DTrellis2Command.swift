@@ -21,11 +21,23 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
     @Option(name: [.long], help: "Deterministic MLX random seed.")
     var seed: UInt64 = 42
 
+    @Option(name: [.long], help: "Re-roll only the texture flow with this seed, keeping the geometry of --seed. Searches palette without touching a good reconstruction.")
+    var textureSeed: UInt64?
+
     @Option(name: [.long], help: "Safety limit for decoded 512-resolution O-Voxels.")
     var maxTokens: Int = Trellis2Generator.defaultMaximumSparseTokens
 
     @Flag(name: [.long], help: "Preserve framing and composite alpha over black without foreground cropping.")
     var alreadyFramed = false
+
+    @Flag(name: [.long], help: "Export the raw porous dual-grid crust instead of the watertight narrow-band remesh.")
+    var noRemesh = false
+
+    @Option(name: [.long], help: "Narrow-band half-width in voxels for the watertight remesh; crust tears narrower than roughly twice this seal shut.")
+    var remeshBand: Float = 1
+
+    @Option(name: [.long], help: "Morphological-closing radius in voxels; occluded cavities with mouths narrower than roughly twice this are sealed with a membrane. 0 disables.")
+    var sealRadius: Int = 12
 
     @Flag(name: [.long], help: "Verify inputs and checkpoints, then print the execution plan without loading weights.")
     var dryRun = false
@@ -39,8 +51,12 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
             output: output,
             model: model,
             seed: seed,
+            textureSeed: textureSeed,
             maxTokens: maxTokens,
             alreadyFramed: alreadyFramed,
+            noRemesh: noRemesh,
+            remeshBand: remeshBand,
+            sealRadius: sealRadius,
             dryRun: dryRun,
             json: json
         )
@@ -51,11 +67,21 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
         output: String?,
         model: String?,
         seed: UInt64,
+        textureSeed: UInt64? = nil,
         maxTokens: Int,
         alreadyFramed: Bool,
+        noRemesh: Bool = false,
+        remeshBand: Float = 1,
+        sealRadius: Int = 12,
         dryRun: Bool,
         json: Bool
     ) async throws {
+        guard remeshBand > 0, remeshBand <= 8 else {
+            throw ValidationError("--remesh-band must be in (0, 8]")
+        }
+        guard sealRadius >= 0, sealRadius <= 32 else {
+            throw ValidationError("--seal-radius must be in [0, 32]")
+        }
         guard maxTokens >= 4_096 else {
             throw ValidationError("--max-tokens must be at least 4096")
         }
@@ -96,7 +122,11 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
                 model: model,
                 foregroundPolicy: policy,
                 seed: seed,
+                textureSeed: textureSeed,
                 maximumSparseTokens: maxTokens,
+                remesh: noRemesh
+                    ? nil
+                    : Trellis2RemeshConfiguration(band: remeshBand, sealRadius: sealRadius),
                 progress: { event in
                     CLIStderr.write("[image-to-3d-trellis2] \(event.message)\n")
                 }

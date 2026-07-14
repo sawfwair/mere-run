@@ -1,5 +1,9 @@
 import Foundation
 
+/// An 8-bit RGBA raster whose `rgba8` samples use straight (un-premultiplied)
+/// alpha, matching PNG storage and FFmpeg's `rgba` pixel format. Backends
+/// convert premultiplied sources on decode and must declare straight alpha on
+/// encode so semi-transparent RGB survives round trips byte-exactly.
 public struct MediaImage: Sendable, Hashable {
     public let width: Int
     public let height: Int

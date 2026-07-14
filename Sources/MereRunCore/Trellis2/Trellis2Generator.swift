@@ -15,6 +15,7 @@ public enum Trellis2Progress: Equatable, Sendable {
     case decodingShape
     case decodingTexture
     case extractingMesh
+    case remeshingMesh
     case exportingAssets
 
     public var message: String {
@@ -41,6 +42,8 @@ public enum Trellis2Progress: Equatable, Sendable {
             "Decoding six-channel PBR O-Voxels"
         case .extractingMesh:
             "Extracting flexible-dual-grid mesh and filling small boundary holes"
+        case .remeshingMesh:
+            "Remeshing to the watertight narrow-band dual-contour envelope"
         case .exportingAssets:
             "Writing OBJ, PLY, GLB, PBR voxels, and manifests"
         }
@@ -112,7 +115,9 @@ public actor Trellis2Generator {
         model requestedModel: String? = nil,
         foregroundPolicy: Trellis2ForegroundPolicy = .transparentAlpha,
         seed: UInt64 = 42,
+        textureSeed: UInt64? = nil,
         maximumSparseTokens: Int = defaultMaximumSparseTokens,
+        remesh: Trellis2RemeshConfiguration? = Trellis2RemeshConfiguration(),
         progress: (@Sendable (Trellis2Progress) -> Void)? = nil
     ) async throws -> Trellis2RunResult {
         let inputURL = imageURL.standardizedFileURL
@@ -177,6 +182,12 @@ public actor Trellis2Generator {
             checkpointURL: checkpoint.shapeFlowURL,
             progress: progress
         )
+        // An explicit texture seed re-rolls only the appearance: structure
+        // and shape stay bit-identical to the base seed's geometry, letting
+        // palette drift be searched without touching a good reconstruction.
+        if let textureSeed {
+            MLXRandom.seed(textureSeed)
+        }
         let textureLatent = try sampleTexture(
             coordinates: coordinates,
             normalizedShape: shapeLatents.normalized,
@@ -210,6 +221,9 @@ public actor Trellis2Generator {
         )
         MLX.Memory.clearCache()
 
+        if remesh != nil {
+            progress?(.remeshingMesh)
+        }
         progress?(.exportingAssets)
         let policyName = foregroundPolicy == .alreadyFramed
             ? "already-framed"
@@ -226,7 +240,9 @@ public actor Trellis2Generator {
             foregroundPolicy: policyName,
             croppedTransparentForeground: prepared.croppedTransparentForeground,
             seed: seed,
-            maximumSparseTokens: maximumSparseTokens
+            textureSeed: textureSeed,
+            maximumSparseTokens: maximumSparseTokens,
+            remesh: remesh
         )
         MLX.Memory.clearCache()
         return Trellis2RunResult(

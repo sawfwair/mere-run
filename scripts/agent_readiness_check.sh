@@ -111,6 +111,7 @@ dynamic_boundary_files=(
   "Sources/MereRunCore/QwenImageEdit/Tokenizer/Qwen25VLTokenizer.swift"
   "Sources/MereRunCore/SAM3/SAM31Tokenizer.swift"
   "Sources/MereRunCore/SAM3/SAM31VideoIO.swift"
+  "Sources/MereRunCore/Trellis2/Trellis2TexturedGLBWriter.swift"
   "Sources/MereRunCore/VLM/Qwen3VLAutoCaptioner.swift"
   "Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/LLMGeneration/QwenGeneration.swift"
   "Sources/MereRunCore/ZImageTurbo/Tokenizer/QwenTokenizer.swift"

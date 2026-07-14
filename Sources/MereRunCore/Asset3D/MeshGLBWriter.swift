@@ -2,7 +2,11 @@ import Foundation
 
 /// Dependency-free glTF 2.0 binary writer for indexed, vertex-colored meshes.
 public enum MeshGLBWriter {
-    public static func write(_ source: MeshAsset, to url: URL) throws {
+    public static func write(
+        _ source: MeshAsset,
+        to url: URL,
+        material: MeshPBRMaterialFactors? = nil
+    ) throws {
         let mesh = source.normals == nil ? try source.withGeneratedNormals() : source
         var binary = Data()
         var bufferViews: [[String: Any]] = []
@@ -101,11 +105,11 @@ public enum MeshGLBWriter {
             ]],
             "materials": [[
                 "name": "Vertex Colors",
-                "doubleSided": true,
+                "doubleSided": material?.doubleSided ?? true,
                 "pbrMetallicRoughness": [
                     "baseColorFactor": [1, 1, 1, 1],
-                    "metallicFactor": 0,
-                    "roughnessFactor": 1,
+                    "metallicFactor": material?.metallicFactor ?? 0,
+                    "roughnessFactor": material?.roughnessFactor ?? 1,
                 ],
             ]],
             "buffers": [["byteLength": binary.count]],

@@ -29,6 +29,10 @@ Raising it can materially increase unified-memory use. This is deliberately
 separate from Microsoft's 49,152-token cascade-resolution budget, which does
 not cap the direct 512 decoder. The three flow stages use the official 12-step
 Euler schedules. `--seed` controls deterministic MLX noise and defaults to 42.
+`--texture-seed` re-rolls only the texture flow while structure and shape
+replay bit-identically from `--seed`: when a seed produces good geometry with
+a drifted palette, search texture seeds without touching the reconstruction.
+Both seeds are recorded in the run manifest.
 
 Use `--dry-run` to validate the input, checksum every pinned component, and
 print the plan without loading a neural graph:
@@ -37,12 +41,28 @@ print the plan without loading a neural graph:
 mere.run image reconstruct-3d-trellis2 ./chair.png --dry-run --already-framed
 ```
 
+The exported mesh is, by default, the watertight narrow-band dual-contour
+envelope of the raw crust (band 1 voxel, no projection), mirroring upstream's
+shipped `to_glb` remesh: the flexible dual grid's open seams and pinholes are
+sealed and the material renders single-sided. Two additional sealing stages
+close what the envelope alone cannot: large clean boundary rims are capped
+before remeshing, and a morphological-closing classification of the occupancy
+(dilate, flood the exterior, erode) spans membranes across occluded cavities
+whose mouths are narrower than roughly twice `--seal-radius` (default 12
+voxels; 0 disables). Membrane and lid colors are sampled at the closest point
+on the original crust, so sealed regions blend into the surrounding fur
+rather than going dark. Raise `--remesh-band` for extra tear tolerance (each
+unit inflates the surface by one voxel, about 0.2% of the object); pass
+`--no-remesh` to export the raw porous dual-grid crust instead (double-sided,
+upstream's non-remesh topology).
+
 The output directory contains OBJ, binary PLY, and GLB files with sampled RGBA
-vertex color; a shared mesh manifest; a `.pbrvox` sparse material field; and an
-authoritative TRELLIS.2 run manifest. `.pbrvox` preserves base color RGB,
-metallic, roughness, and alpha for every decoded O-Voxel because the canonical
-mesh formats currently do not author a texture atlas. All artifacts and all
-seven checkpoint components are named, pinned, and hashed in provenance.
+vertex color; a `-textured.glb` whose per-quad atlas bakes the field into
+standard glTF PBR textures; a shared mesh manifest; a `.pbrvox` sparse material
+field; and an authoritative TRELLIS.2 run manifest. `.pbrvox` preserves base
+color RGB, metallic, roughness, and alpha for every decoded O-Voxel. All
+artifacts and all seven checkpoint components are named, pinned, and hashed in
+provenance.
 
 Coordinates are normalized object space with X right, Y up, and Z forward.
 They are not meters, and unseen geometry is inferred from the single image.

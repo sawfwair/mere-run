@@ -77,9 +77,10 @@ final class Trellis2ResourcesAndManifestTests: XCTestCase {
             colorsRGBA8: [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255],
             inferredUnseenGeometry: true
         )
+        // Resolution 64 keeps the narrow-band remesh cheap in debug builds.
         let coordinates = [Trellis2VoxelCoordinate(x: 1, y: 2, z: 3)]
         let grid = try Trellis2PBRVoxelGrid(
-            resolution: 512,
+            resolution: 64,
             coordinates: coordinates,
             attributes: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
         )
@@ -116,11 +117,17 @@ final class Trellis2ResourcesAndManifestTests: XCTestCase {
         XCTAssertEqual(exported.run.manifest.input.sha256, inputRecord.sha256)
         XCTAssertEqual(exported.run.manifest.generation.pipelineResolution, 512)
         XCTAssertEqual(exported.run.manifest.generation.seed, 42)
+        XCTAssertEqual(
+            exported.run.manifest.generation.extractionAlgorithm,
+            Trellis2ArtifactExporter.remeshExtractionAlgorithm
+        )
+        XCTAssertEqual(exported.run.manifest.generation.remeshBand, 1)
+        XCTAssertEqual(exported.run.manifest.generation.remeshProjectBack, 0)
         XCTAssertEqual(exported.run.manifest.mesh.pbrVoxelCount, 1)
         XCTAssertTrue(exported.run.manifest.mesh.includesMetallicRoughnessSidecar)
         XCTAssertEqual(
             Set(exported.run.manifest.artifacts.map(\.kind)),
-            ["obj", "ply", "glb", "pbr-voxels", "mesh-manifest"]
+            ["obj", "ply", "glb", "glb-textured", "pbr-voxels", "mesh-manifest"]
         )
         XCTAssertTrue(exported.run.manifest.artifacts.allSatisfy {
             $0.byteCount > 0 && $0.sha256.count == 64

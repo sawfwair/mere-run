@@ -39,6 +39,23 @@ public struct MeshBounds: Codable, Equatable, Sendable {
     }
 }
 
+/// Uniform PBR scalars for an exported material. glTF viewers multiply these
+/// with per-vertex color, so they carry the field-level metallic/roughness
+/// that the vertex-color mesh contract cannot express per vertex.
+public struct MeshPBRMaterialFactors: Codable, Equatable, Sendable {
+    public let metallicFactor: Float
+    public let roughnessFactor: Float
+    /// Watertight meshes with consistent outward orientation render
+    /// single-sided; the porous default stays double-sided.
+    public let doubleSided: Bool
+
+    public init(metallicFactor: Float, roughnessFactor: Float, doubleSided: Bool = true) {
+        self.metallicFactor = min(max(metallicFactor, 0), 1)
+        self.roughnessFactor = min(max(roughnessFactor, 0), 1)
+        self.doubleSided = doubleSided
+    }
+}
+
 /// Canonical indexed triangle mesh used by native object reconstruction.
 public struct MeshAsset: Sendable {
     public let vertices: [Float]

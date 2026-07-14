@@ -3,6 +3,10 @@ import Foundation
 @testable import MediaIO
 import XCTest
 
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+
 final class MediaIOTests: XCTestCase {
     private enum ExtractionRejection: Error, Equatable {
         case rejected
@@ -109,6 +113,69 @@ final class MediaIOTests: XCTestCase {
         XCTAssertEqual(cropped.height, 1)
         XCTAssertEqual(cropped.rgba8.count, 4)
     }
+
+    func testPNGRoundTripPreservesStraightAlphaBytes() throws {
+        #if !canImport(CoreGraphics)
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are required")
+        }
+        #endif
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-alpha-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Straight-alpha samples, including RGB under partial and zero alpha.
+        // A premultiplied encode or decode step corrupts every non-opaque one.
+        let image = try MediaImage(
+            width: 2,
+            height: 2,
+            rgba8: [
+                200, 200, 200, 128,
+                200, 0, 0, 64,
+                0, 200, 0, 255,
+                50, 60, 70, 0,
+            ]
+        )
+        let url = tempDir.appendingPathComponent("straight-alpha.png")
+        try MediaImageIO.writePNG(image, to: url)
+
+        let decoded = try MediaImageIO.decode(url)
+        XCTAssertEqual(decoded.width, image.width)
+        XCTAssertEqual(decoded.height, image.height)
+        XCTAssertEqual(decoded.rgba8, image.rgba8)
+
+        let decodedFromData = try MediaImageIO.decode(data: Data(contentsOf: url))
+        XCTAssertEqual(decodedFromData.rgba8, image.rgba8)
+    }
+
+    #if canImport(CoreGraphics)
+    func testCGImageDecodeUnpremultipliesNonDirectFormats() throws {
+        // Premultiplied (100, 100, 100, 128) has no direct-copy path, so the
+        // draw fallback must un-premultiply back to straight ≈ (199, 199, 199).
+        let provider = try XCTUnwrap(CGDataProvider(data: Data([100, 100, 100, 128]) as CFData))
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        let premultiplied = try XCTUnwrap(CGImage(
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        ))
+
+        let decoded = try AppleMediaImageIO.mediaImage(from: premultiplied)
+        XCTAssertEqual(decoded.rgba8[3], 128)
+        for channel in 0..<3 {
+            XCTAssertEqual(Int(decoded.rgba8[channel]), 199, accuracy: 1)
+        }
+    }
+    #endif
 
     func testFloatWAVWriterProducesPortableHeader() throws {
         let tempURL = FileManager.default.temporaryDirectory

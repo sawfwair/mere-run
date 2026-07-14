@@ -122,6 +122,7 @@ public enum MeshArtifactExporter {
         stem: String = "asset",
         provenance: GeometryModelProvenance,
         inputRecords admittedInputRecords: [MeshInputRecord]? = nil,
+        material: MeshPBRMaterialFactors? = nil,
         createdAt: Date = Date()
     ) throws -> MeshExportResult {
         let root = outputDirectory.standardizedFileURL
@@ -156,7 +157,7 @@ public enum MeshArtifactExporter {
         let outputs: [(MeshArtifactKind, String, String, (MeshAsset, URL) throws -> Void)] = [
             (.obj, "obj", "model/obj", MeshOBJWriter.write),
             (.ply, "ply", "application/ply", MeshPLYWriter.write),
-            (.glb, "glb", "model/gltf-binary", MeshGLBWriter.write),
+            (.glb, "glb", "model/gltf-binary", { try MeshGLBWriter.write($0, to: $1, material: material) }),
         ]
         var artifacts: [MeshArtifactRecord] = []
         for (kind, extensionName, mediaType, writer) in outputs {
