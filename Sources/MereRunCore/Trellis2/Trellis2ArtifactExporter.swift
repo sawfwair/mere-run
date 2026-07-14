@@ -90,6 +90,7 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
     public let pbrRepresentation: String
     public let remeshBand: Float?
     public let remeshProjectBack: Float?
+    public let remeshCapBoundaryLoopPerimeter: Float?
 
     public init(
         seed: UInt64,
@@ -101,7 +102,8 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
         extractionAlgorithm: String,
         pbrRepresentation: String,
         remeshBand: Float? = nil,
-        remeshProjectBack: Float? = nil
+        remeshProjectBack: Float? = nil,
+        remeshCapBoundaryLoopPerimeter: Float? = nil
     ) {
         self.seed = seed
         self.pipelineResolution = pipelineResolution
@@ -113,6 +115,7 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
         self.pbrRepresentation = pbrRepresentation
         self.remeshBand = remeshBand
         self.remeshProjectBack = remeshProjectBack
+        self.remeshCapBoundaryLoopPerimeter = remeshCapBoundaryLoopPerimeter
     }
 }
 
@@ -194,11 +197,23 @@ public enum Trellis2ArtifactExporter {
         var crustSurface: Trellis2TriangleBVH?
         if let remesh {
             let bvh = Trellis2TriangleBVH(vertices: asset.mesh.vertices, indices: asset.mesh.indices)
+            // Cap large closed rims so occluded pockets seal instead of
+            // surviving as tunnels; the band field sees the capped crust,
+            // while colors keep projecting onto the real (uncapped) crust.
+            let sealedCrust = remesh.capBoundaryLoopPerimeter > 0
+                ? try Trellis2MeshHoleFiller.fillSmallHoles(
+                    in: asset.mesh,
+                    maximumPerimeter: remesh.capBoundaryLoopPerimeter
+                )
+                : asset.mesh
+            let sealedBVH = sealedCrust.indices.count == asset.mesh.indices.count
+                ? bvh
+                : Trellis2TriangleBVH(vertices: sealedCrust.vertices, indices: sealedCrust.indices)
             let remeshed = try Trellis2NarrowBandRemesher.remesh(
-                mesh: asset.mesh,
+                mesh: sealedCrust,
                 resolution: asset.pbrVoxels.resolution,
                 configuration: remesh,
-                bvh: bvh
+                bvh: sealedBVH
             )
             // Envelope vertices sit up to `band` voxels off the crust, where
             // the sparse field has no data. Match upstream's to_glb: sample
@@ -349,7 +364,8 @@ public enum Trellis2ArtifactExporter {
                 extractionAlgorithm: algorithm,
                 pbrRepresentation: pbrRepresentation,
                 remeshBand: remesh?.band,
-                remeshProjectBack: remesh?.projectBack
+                remeshProjectBack: remesh?.projectBack,
+                remeshCapBoundaryLoopPerimeter: remesh?.capBoundaryLoopPerimeter
             ),
             mesh: Trellis2MeshManifest(
                 coordinateSystem: mesh.manifest.coordinateSystem,

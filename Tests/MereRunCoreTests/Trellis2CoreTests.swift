@@ -410,6 +410,23 @@ final class Trellis2CoreTests: MereRunCoreTestCase {
         return Set((0..<mesh.vertexCount).map(find)).count
     }
 
+    func testHoleFillerCapsLargeClosedRimOnlyAtRaisedThreshold() throws {
+        // The open face's edges are all side*sqrt(2) diagonals, so the rim
+        // perimeter is ~0.17: beyond the 0.03 reference threshold, within
+        // the remesh pipeline's 0.2 rim-capping threshold.
+        let side: Float = 0.04
+        let mesh = try MeshAsset(
+            vertices: [0, 0, 0, side, 0, 0, 0, side, 0, 0, 0, side],
+            indices: [0, 2, 1, 0, 1, 3, 0, 3, 2],
+            inferredUnseenGeometry: true
+        )
+        let reference = try Trellis2MeshHoleFiller.fillSmallHoles(in: mesh)
+        XCTAssertEqual(reference.triangleCount, 3, "reference threshold must leave the large rim open")
+        let capped = try Trellis2MeshHoleFiller.fillSmallHoles(in: mesh, maximumPerimeter: 0.2)
+        XCTAssertEqual(capped.triangleCount, 4, "raised threshold must cap the rim")
+        XCTAssertEqual(capped.vertexCount, 4)
+    }
+
     func testSmallHoleFillerCapsReferenceThresholdBoundaryWithoutAddingVertices() throws {
         let side: Float = 0.005
         let mesh = try MeshAsset(

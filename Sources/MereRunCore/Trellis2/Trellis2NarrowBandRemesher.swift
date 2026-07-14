@@ -6,10 +6,21 @@ public struct Trellis2RemeshConfiguration: Equatable, Sendable {
     /// Fraction to move dual vertices toward the closest crust point;
     /// upstream's shipped app uses 0 (surface stays on the band envelope).
     public let projectBack: Float
+    /// Closed crust boundary loops up to this normalized perimeter are
+    /// capped before the band field is built, so large clean rims (an
+    /// occluded cheek pocket, for example) become sealed surface instead of
+    /// tunnels through the envelope. Zero disables; colors never sample the
+    /// synthetic lids because projection targets the uncapped crust.
+    public let capBoundaryLoopPerimeter: Float
 
-    public init(band: Float = 1, projectBack: Float = 0) {
+    public init(
+        band: Float = 1,
+        projectBack: Float = 0,
+        capBoundaryLoopPerimeter: Float = 0.2
+    ) {
         self.band = band
         self.projectBack = projectBack
+        self.capBoundaryLoopPerimeter = capBoundaryLoopPerimeter
     }
 }
 

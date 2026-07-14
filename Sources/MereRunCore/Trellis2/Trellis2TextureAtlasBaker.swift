@@ -10,10 +10,8 @@ struct Trellis2BakedTexturedMesh {
     let atlasWidth: Int
     let atlasHeight: Int
     /// sRGB-encoded base color, matching glTF's baseColorTexture transfer
-    /// expectations. Alpha is constant 255: the material renders opaque, the
-    /// field's alpha channel stays in the `.pbrvox` sidecar, and straight
-    /// alpha below 255 would be corrupted by the premultiplied-alpha PNG
-    /// encode path (ImageIO divides RGB by alpha on write).
+    /// expectations. Alpha is constant 255: the material renders opaque and
+    /// the field's alpha channel stays in the `.pbrvox` sidecar.
     let baseColorRGBA8: [UInt8]
     /// Linear-encoded occupancy/roughness/metallic per the glTF
     /// metallicRoughnessTexture channel layout (G = roughness, B = metallic).
