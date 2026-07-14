@@ -35,6 +35,8 @@ case "$(uname -m)" in
 esac
 
 output_dir="$fixture_root/output"
+mkdir -p "$output_dir"
+printf 'stale checksum manifest\n' >"$output_dir/SHA256SUMS"
 
 cat >"$fake_build/mere.run" <<'CLI'
 #!/usr/bin/env bash

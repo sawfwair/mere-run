@@ -599,6 +599,7 @@ fi
 
 (
   cd "$output_root"
+  rm -f SHA256SUMS
   sha256sum ./* | sed 's#  \./#  #' >SHA256SUMS
 )
 echo "[package-linux] wrote $output_dir/SHA256SUMS"
