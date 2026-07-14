@@ -6,15 +6,38 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.21.0 - 2026-07-14
+
 ### Added
 
 - added native Swift/MLX Microsoft TRELLIS.2-4B image-to-3D reconstruction at
   512 resolution, including direct official safetensors loading, pinned DINOv3
   ViT-L/16 conditioning, three 12-step flow stages, sparse ConvNeXt O-Voxel
   shape/PBR decoding, flexible-dual-grid mesh extraction, managed model pull,
-  reference-threshold small-hole repair, separate image/vision CLI commands,
-  and hashed OBJ/PLY/GLB plus six-channel `.pbrvox` material artifacts. The DINOv3 dependency remains separately
+  separate image/vision CLI commands, and hashed OBJ/PLY/GLB plus six-channel
+  `.pbrvox` material artifacts. The DINOv3 dependency remains separately
   license-gated and requires user acceptance/authentication.
+- added native Apple-platform VFX primitives through `vision pose` and
+  `vision flow`, with body/hand/face landmark JSON and dense Middlebury `.flo`
+  optical-flow output from the system Vision framework.
+- added native Swift/MLX geometry and depth workflows: MoGe-2 single-image
+  metric geometry, Video Depth Anything temporal depth, and Depth Anything 3
+  multi-view camera solving and point geometry. The commands emit bounded,
+  provenance-rich depth, confidence, camera, EXR, PLY, GLB, preview, and
+  3DGS-initialization artifacts as appropriate to each model.
+- added native TripoSR single-image and InstantMesh four/six-view object
+  reconstruction, with managed converted checkpoints, deterministic input
+  admission, native isosurface extraction, and hashed OBJ/PLY/GLB run
+  artifacts. InstantMesh intentionally does not bundle or invoke Zero123++.
+- added native Swift/MLX Wan 2.2 TI2V-5B image-to-video generation and reusable
+  warm world sessions with first-frame conditioning, camera controls, terminal
+  latent chaining, managed checkpoint verification, and MP4/PNG artifacts.
+- added the native DreamX causal world runtime and `world` CLI, including the
+  converted AR transformer, persistent block-causal and cross-attention caches,
+  PRoPE camera conditioning, multi-transition session state, and a loopback
+  `world serve` API with asynchronous jobs, progress, cancellation, reset, and
+  unload. The converted causal checkpoint remains a local-only managed artifact
+  because the public FP32 file is not the streamed BF16 MLX layout.
 - added native MMAudio large 44.1 kHz text-to-audio and video-to-audio SFX
   generation, including managed pinned assets, DFN5B CLIP and Synchformer video
   conditioning, the joint/fused MMDiT flow model, magnitude-preserving VAE,
@@ -39,9 +62,18 @@ The format is based on Keep a Changelog.
   beat phase, meter, and key detection with per-field confidence, reviewable
   beat-position JSON, and standard MIDI tempo/time/key meta events without
   quantizing source-relative note timing.
+- added catalog-backed managed-model download size estimates so model listings,
+  capabilities, Studio readiness, and pull preflights can show the expected
+  local storage commitment before a checkpoint download begins.
 
 ### Changed
 
+- upgraded TRELLIS.2 appearance and geometry export with glTF-spec linearized
+  vertex colors, material-factor normalization, deterministic PBR texture-atlas
+  baking into self-contained textured GLB, a watertight narrow-band remesh,
+  closed-rim capping, morphological cavity sealing, and closest-surface color
+  projection. `--texture-seed` can now re-roll appearance independently while
+  preserving structure and shape from the base seed.
 - polished the macOS Studio app: narrow windows keep an icon rail for mode
   navigation instead of hiding the sidebar; image generation shows a
   determinate per-step progress bar (parsing both the human `Generating (N/M)`
@@ -52,6 +84,8 @@ The format is based on Keep a Changelog.
   clipboard holds an image; results cap to a readable width on wide windows;
   Listen uses a mic-badged waveform icon; sidebar footer controls use themed
   styling.
+- overhauled the public docs theme with bundled typography, refreshed code
+  presentation, and upgraded local search styling.
 - reduced autoregressive prefill and decode work across shared Qwen, ACE-Step,
   ASR, TTS, OCR, VLM, MuScriptor, and Falcon paths with final-position output
   projection, pipelined GPU sampling, compact grouped-query caches, and true
@@ -152,6 +186,21 @@ The format is based on Keep a Changelog.
 - gated default CUDA `.deb` metadata on a linked CUDA 13 `libcudart` SONAME;
   other or unknown toolkit majors now fail closed unless a maintainer supplies
   the complete `MERERUN_PACKAGE_LINUX_DEPS` override. Tar packaging is unchanged.
+- changed the default code-benchmark model set to the models supported and
+  recommended for the current machine instead of a fixed cross-machine trio.
+
+### Fixed
+
+- fixed explicit `--models-root` and `MERERUN_MODELS_DIR` overrides so model
+  pull preflight reports and follow-up actions keep the requested path even
+  before that model-store directory exists.
+- fixed DreamX camera compilation so the final aligned view reaches the
+  requested translation or rotation magnitude instead of scaling motion by the
+  full pixel-frame count.
+- fixed Linux Swift 6 build compatibility across package manifests and the new
+  MMAudio and TRELLIS.2 runtime paths.
+- fixed repeat Linux packaging in an existing output directory so the
+  regenerated checksum manifest does not include and invalidate its previous copy.
 
 ## 0.20.0 - 2026-07-07
 
