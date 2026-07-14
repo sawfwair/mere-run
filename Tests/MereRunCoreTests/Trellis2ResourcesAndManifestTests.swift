@@ -120,7 +120,7 @@ final class Trellis2ResourcesAndManifestTests: XCTestCase {
         XCTAssertTrue(exported.run.manifest.mesh.includesMetallicRoughnessSidecar)
         XCTAssertEqual(
             Set(exported.run.manifest.artifacts.map(\.kind)),
-            ["obj", "ply", "glb", "pbr-voxels", "mesh-manifest"]
+            ["obj", "ply", "glb", "glb-textured", "pbr-voxels", "mesh-manifest"]
         )
         XCTAssertTrue(exported.run.manifest.artifacts.allSatisfy {
             $0.byteCount > 0 && $0.sha256.count == 64

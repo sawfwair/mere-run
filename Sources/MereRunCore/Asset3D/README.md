@@ -29,6 +29,7 @@ PLY, and binary glTF writers used by native reconstruction runtimes.
 
 Model-specific inference and provenance belong in `TripoSR`, `InstantMesh`, and
 `Trellis2`. TRELLIS.2 additionally writes its six-channel sparse PBR field as a
-model-specific `.pbrvox` sidecar because the canonical mesh contract currently
-stores vertex color, not a generated texture atlas; its field-median metallic
-and roughness ride along as the GLB's uniform material factors.
+model-specific `.pbrvox` sidecar because the canonical mesh contract stores
+vertex color, not a texture atlas; its field-median metallic and roughness
+ride along as the canonical GLB's uniform material factors, and a separate
+model-specific `-textured.glb` bakes the field into real glTF PBR textures.

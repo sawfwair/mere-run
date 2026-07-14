@@ -179,43 +179,21 @@ enum Trellis2FlexibleDualGrid {
         coordinateIndices: [Trellis2VoxelCoordinate: Int],
         dualOffsets: [Float]
     ) -> [Float] {
+        let sampler = Trellis2SparseFieldSampler(
+            attributes: attributes,
+            coordinateIndices: coordinateIndices
+        )
         var result = [Float](repeating: 0, count: coordinates.count * 6)
         for vertex in 0..<coordinates.count {
             let coordinate = coordinates[vertex]
-            let sample = [
-                Float(coordinate.x) + dualOffsets[vertex * 3],
-                Float(coordinate.y) + dualOffsets[vertex * 3 + 1],
-                Float(coordinate.z) + dualOffsets[vertex * 3 + 2],
-            ]
-            let base = sample.map { Int32(floor($0)) }
-            let fraction = zip(sample, base).map { $0 - Float($1) }
-            var occupiedWeight: Float = 0
-            for corner in 0..<8 {
-                let x = Int32(corner & 1)
-                let y = Int32((corner >> 1) & 1)
-                let z = Int32((corner >> 2) & 1)
-                let weight = (x == 0 ? 1 - fraction[0] : fraction[0])
-                    * (y == 0 ? 1 - fraction[1] : fraction[1])
-                    * (z == 0 ? 1 - fraction[2] : fraction[2])
-                let neighbor = Trellis2VoxelCoordinate(
-                    x: base[0] + x,
-                    y: base[1] + y,
-                    z: base[2] + z
-                )
-                guard let source = coordinateIndices[neighbor] else { continue }
-                occupiedWeight += weight
-                for channel in 0..<6 {
-                    result[vertex * 6 + channel] += attributes[source * 6 + channel] * weight
-                }
-            }
-            if occupiedWeight > 1e-6 {
-                for channel in 0..<6 {
-                    result[vertex * 6 + channel] /= occupiedWeight
-                }
-            } else {
-                for channel in 0..<6 {
-                    result[vertex * 6 + channel] = attributes[vertex * 6 + channel]
-                }
+            let values = sampler.trilinear(
+                x: Float(coordinate.x) + dualOffsets[vertex * 3],
+                y: Float(coordinate.y) + dualOffsets[vertex * 3 + 1],
+                z: Float(coordinate.z) + dualOffsets[vertex * 3 + 2]
+            )
+            for channel in 0..<6 {
+                result[vertex * 6 + channel] = values?[channel]
+                    ?? attributes[vertex * 6 + channel]
             }
         }
         return result

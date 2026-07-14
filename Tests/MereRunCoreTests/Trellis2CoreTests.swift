@@ -197,6 +197,133 @@ final class Trellis2CoreTests: MereRunCoreTestCase {
         XCTAssertNil(Trellis2ArtifactExporter.medianMaterialFactors(metallic: [], roughness: []))
     }
 
+    func testAtlasBakeMatchesVertexSamplesThroughUVLookup() throws {
+        // Distinct red per voxel; the baked atlas texel under each split
+        // corner's UV must equal the per-vertex sample of the same field.
+        var coordinates = [Trellis2VoxelCoordinate]()
+        for x in 0..<2 {
+            for y in 0..<2 {
+                for z in 0..<2 {
+                    coordinates.append(.init(x: Int32(x), y: Int32(y), z: Int32(z)))
+                }
+            }
+        }
+        let shapeRow: [Float] = [0, 0, 0, 1, 1, 1, 0]
+        let textureRows = (0..<8).map { [Float(-1) + 2 * Float($0) / 7, -1, 1, 0, 0, 1] }
+        let decoded = try Trellis2FlexibleDualGrid.decode(
+            shape: try Trellis2SparseTensor(
+                features: MLXArray(Array(repeating: shapeRow, count: 8).flatMap { $0 }).reshaped(8, 7),
+                coordinates: coordinates
+            ),
+            texture: try Trellis2SparseTensor(
+                features: MLXArray(textureRows.flatMap { $0 }).reshaped(8, 6),
+                coordinates: coordinates
+            ),
+            resolution: 2
+        )
+        let baked = Trellis2TextureAtlasBaker.bake(mesh: decoded.mesh, field: decoded.pbrVoxels)
+
+        XCTAssertEqual(baked.indices.count, decoded.mesh.indices.count)
+        XCTAssertEqual(baked.uvs.count, baked.vertexCount * 2)
+        XCTAssertEqual(baked.normals.count, baked.positions.count)
+        XCTAssertEqual(
+            baked.baseColorRGBA8.count,
+            baked.atlasWidth * baked.atlasHeight * 4
+        )
+
+        var originalByPosition = [[UInt32]: Int]()
+        for vertex in 0..<decoded.mesh.vertexCount {
+            let key = (0..<3).map { decoded.mesh.vertices[vertex * 3 + $0].bitPattern }
+            originalByPosition[key] = vertex
+        }
+        let colors = try XCTUnwrap(decoded.mesh.colorsRGBA8)
+        for vertex in 0..<baked.vertexCount {
+            let key = (0..<3).map { baked.positions[vertex * 3 + $0].bitPattern }
+            let original = try XCTUnwrap(originalByPosition[key], "split corner must be an original vertex")
+            let texelX = Int((baked.uvs[vertex * 2] * Float(baked.atlasWidth) - 0.5).rounded())
+            let texelY = Int((baked.uvs[vertex * 2 + 1] * Float(baked.atlasHeight) - 0.5).rounded())
+            let pixel = (texelY * baked.atlasWidth + texelX) * 4
+            for channel in 0..<4 {
+                XCTAssertEqual(
+                    Int(baked.baseColorRGBA8[pixel + channel]),
+                    Int(colors[original * 4 + channel]),
+                    accuracy: 1,
+                    "vertex \(vertex) channel \(channel)"
+                )
+            }
+            XCTAssertEqual(baked.metallicRoughnessRGBA8[pixel], 255)
+            XCTAssertEqual(Int(baked.metallicRoughnessRGBA8[pixel + 1]), 128, accuracy: 1)
+            XCTAssertEqual(Int(baked.metallicRoughnessRGBA8[pixel + 2]), 128, accuracy: 1)
+        }
+    }
+
+    func testTexturedGLBEmbedsAtlasTexturesAndUVs() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "trellis2-textured-glb-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        var coordinates = [Trellis2VoxelCoordinate]()
+        for x in 0..<2 {
+            for y in 0..<2 {
+                for z in 0..<2 {
+                    coordinates.append(.init(x: Int32(x), y: Int32(y), z: Int32(z)))
+                }
+            }
+        }
+        let shapeRow: [Float] = [0, 0, 0, 1, 1, 1, 0]
+        let textureRow: [Float] = [1, -1, -1, 0, 0, 1]
+        let decoded = try Trellis2FlexibleDualGrid.decode(
+            shape: try Trellis2SparseTensor(
+                features: MLXArray(Array(repeating: shapeRow, count: 8).flatMap { $0 }).reshaped(8, 7),
+                coordinates: coordinates
+            ),
+            texture: try Trellis2SparseTensor(
+                features: MLXArray(Array(repeating: textureRow, count: 8).flatMap { $0 }).reshaped(8, 6),
+                coordinates: coordinates
+            ),
+            resolution: 2
+        )
+        let baked = Trellis2TextureAtlasBaker.bake(mesh: decoded.mesh, field: decoded.pbrVoxels)
+        let url = root.appendingPathComponent("baked.glb")
+        try Trellis2TexturedGLBWriter.write(
+            baked,
+            coordinateSystem: decoded.mesh.coordinateSystem,
+            units: decoded.mesh.units,
+            inferredUnseenGeometry: decoded.mesh.inferredUnseenGeometry,
+            to: url
+        )
+
+        let data = try Data(contentsOf: url)
+        let jsonLength = Int(data[12]) | (Int(data[13]) << 8) | (Int(data[14]) << 16) | (Int(data[15]) << 24)
+        let document = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data.subdata(in: 20..<(20 + jsonLength))) as? [String: Any]
+        )
+        let primitive = try XCTUnwrap(
+            ((document["meshes"] as? [[String: Any]])?.first?["primitives"] as? [[String: Any]])?.first
+        )
+        let attributes = try XCTUnwrap(primitive["attributes"] as? [String: Any])
+        XCTAssertNotNil(attributes["TEXCOORD_0"])
+        XCTAssertNil(attributes["COLOR_0"], "textured GLB must not double-apply color")
+        let material = try XCTUnwrap((document["materials"] as? [[String: Any]])?.first)
+        let pbr = try XCTUnwrap(material["pbrMetallicRoughness"] as? [String: Any])
+        XCTAssertNotNil(pbr["baseColorTexture"])
+        XCTAssertNotNil(pbr["metallicRoughnessTexture"])
+        let images = try XCTUnwrap(document["images"] as? [[String: Any]])
+        XCTAssertEqual(images.count, 2)
+
+        let binaryStart = 20 + jsonLength + 8
+        let views = try XCTUnwrap(document["bufferViews"] as? [[String: Any]])
+        let imageView = views[try XCTUnwrap(images[0]["bufferView"] as? Int)]
+        let offset = binaryStart + (imageView["byteOffset"] as? Int ?? 0)
+        let length = try XCTUnwrap(imageView["byteLength"] as? Int)
+        let png = data.subdata(in: offset..<(offset + length))
+        XCTAssertEqual(Array(png.prefix(4)), [0x89, 0x50, 0x4E, 0x47])
+        let image = try MediaImageIO.decode(data: png)
+        XCTAssertEqual(image.width, baked.atlasWidth)
+        XCTAssertEqual(image.height, baked.atlasHeight)
+    }
+
     func testSmallHoleFillerCapsReferenceThresholdBoundaryWithoutAddingVertices() throws {
         let side: Float = 0.005
         let mesh = try MeshAsset(

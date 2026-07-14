@@ -21,7 +21,10 @@ does not launch Python, PyTorch, or CUDA.
    boundary loops at the reference threshold, and samples RGBA, metallic, and
    roughness at its vertices.
 6. `Trellis2ArtifactExporter.swift` writes canonical OBJ, PLY, and GLB meshes,
-   plus a deterministic `.pbrvox` sidecar that preserves all six PBR channels.
+   a deterministic `.pbrvox` sidecar that preserves all six PBR channels, and
+   a self-contained `-textured.glb` whose per-quad atlas blocks
+   (`Trellis2TextureAtlasBaker`) bake the field into an sRGB baseColorTexture
+   and a linear metallicRoughnessTexture.
 
 Every large stage is loaded and released separately so the three 1.3B flow
 checkpoints and two sparse decoders are not resident together.
@@ -40,8 +43,11 @@ rejected unless the caller explicitly passes `--already-framed`; the runtime
 does not hide a background-removal service or model behind this command.
 
 The initial native surface is the official 512 pipeline. The 1024/1536 cascade
-checkpoints and texture-atlas conversion are not represented as supported.
-GLB/PLY/OBJ carry sampled vertex RGBA. Metallic, roughness, alpha, and base
+checkpoints are not represented as supported. GLB/PLY/OBJ carry sampled vertex
+RGBA; the additional `-textured.glb` artifact bakes the field into standard
+glTF PBR textures over a per-quad block atlas (dual-grid quads recovered from
+consecutive triangle pairs; blocks Morton-ordered by quad centroid so mip
+levels blend surface-local colors). Metallic, roughness, alpha, and base
 color remain losslessly available in the hashed `.pbrvox` sidecar and run
 manifest. Mesh artifacts use the canonical X-right, Y-up, Z-forward basis;
 `.pbrvox` coordinates remain integer O-Voxel indices in the model's native

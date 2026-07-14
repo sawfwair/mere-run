@@ -133,7 +133,7 @@ public struct Trellis2RunManifestExport: Equatable, Sendable {
 
 public enum Trellis2ArtifactExporter {
     public static let extractionAlgorithm = "native-ovoxel-flexible-dual-grid-small-hole-fill"
-    public static let pbrRepresentation = "vertex-rgba-plus-sparse-pbrvox"
+    public static let pbrRepresentation = "vertex-rgba-plus-sparse-pbrvox-plus-baked-atlas"
 
     public static func export(
         asset: Trellis2DecodedAsset,
@@ -176,6 +176,14 @@ public enum Trellis2ArtifactExporter {
             asset.pbrVoxels,
             to: root.appendingPathComponent("\(cleanStem).pbrvox")
         )
+        let texturedURL = root.appendingPathComponent("\(cleanStem)-textured.glb")
+        try Trellis2TexturedGLBWriter.write(
+            Trellis2TextureAtlasBaker.bake(mesh: asset.mesh, field: asset.pbrVoxels),
+            coordinateSystem: asset.mesh.coordinateSystem,
+            units: asset.mesh.units,
+            inferredUnseenGeometry: asset.mesh.inferredUnseenGeometry,
+            to: texturedURL
+        )
         let input = try mesh.manifest.inputRecord(for: inputURL)
         var artifacts = mesh.manifest.artifacts.map {
             Trellis2RunArtifact(
@@ -192,6 +200,11 @@ public enum Trellis2ArtifactExporter {
             mediaType: pbr.mediaType,
             byteCount: pbr.byteCount,
             sha256: pbr.sha256
+        ))
+        artifacts.append(try artifact(
+            kind: "glb-textured",
+            url: texturedURL,
+            mediaType: "model/gltf-binary"
         ))
         artifacts.append(try artifact(
             kind: "mesh-manifest",
