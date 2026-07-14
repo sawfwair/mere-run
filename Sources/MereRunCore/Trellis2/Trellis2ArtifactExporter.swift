@@ -91,6 +91,7 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
     public let remeshBand: Float?
     public let remeshProjectBack: Float?
     public let remeshCapBoundaryLoopPerimeter: Float?
+    public let remeshSealRadius: Int?
 
     public init(
         seed: UInt64,
@@ -103,7 +104,8 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
         pbrRepresentation: String,
         remeshBand: Float? = nil,
         remeshProjectBack: Float? = nil,
-        remeshCapBoundaryLoopPerimeter: Float? = nil
+        remeshCapBoundaryLoopPerimeter: Float? = nil,
+        remeshSealRadius: Int? = nil
     ) {
         self.seed = seed
         self.pipelineResolution = pipelineResolution
@@ -116,6 +118,7 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
         self.remeshBand = remeshBand
         self.remeshProjectBack = remeshProjectBack
         self.remeshCapBoundaryLoopPerimeter = remeshCapBoundaryLoopPerimeter
+        self.remeshSealRadius = remeshSealRadius
     }
 }
 
@@ -213,7 +216,8 @@ public enum Trellis2ArtifactExporter {
                 mesh: sealedCrust,
                 resolution: asset.pbrVoxels.resolution,
                 configuration: remesh,
-                bvh: sealedBVH
+                bvh: sealedBVH,
+                fieldCoordinates: asset.pbrVoxels.coordinates
             )
             // Envelope vertices sit up to `band` voxels off the crust, where
             // the sparse field has no data. Match upstream's to_glb: sample
@@ -365,7 +369,8 @@ public enum Trellis2ArtifactExporter {
                 pbrRepresentation: pbrRepresentation,
                 remeshBand: remesh?.band,
                 remeshProjectBack: remesh?.projectBack,
-                remeshCapBoundaryLoopPerimeter: remesh?.capBoundaryLoopPerimeter
+                remeshCapBoundaryLoopPerimeter: remesh?.capBoundaryLoopPerimeter,
+                remeshSealRadius: remesh?.sealRadius
             ),
             mesh: Trellis2MeshManifest(
                 coordinateSystem: mesh.manifest.coordinateSystem,

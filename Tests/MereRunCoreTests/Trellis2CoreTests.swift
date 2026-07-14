@@ -410,6 +410,107 @@ final class Trellis2CoreTests: MereRunCoreTestCase {
         return Set((0..<mesh.vertexCount).map(find)).count
     }
 
+    func testSealedClassificationClosesTornCavityOnlyWithSufficientRadius() {
+        // A hollow 12-cube shell centered in a 32-grid, with a 4-cell hole
+        // punched through one face. Closing with radius >= 2 must classify
+        // the cavity interior; radius 0 must let the flood leak through.
+        var occupied = [Int32]()
+        let low: Int32 = 10, high: Int32 = 21
+        for x in low...high {
+            for y in low...high {
+                for z in low...high {
+                    let shell = x == low || x == high || y == low || y == high || z == low || z == high
+                    guard shell else { continue }
+                    let inHole = x == high && (14...17).contains(y) && (14...17).contains(z)
+                    if !inHole {
+                        occupied.append(contentsOf: [x, y, z])
+                    }
+                }
+            }
+        }
+        let sealed = Trellis2SealedClassification(resolution: 32, occupiedCells: occupied, radius: 3)
+        XCTAssertTrue(sealed.isInterior(x: 15, y: 15, z: 15), "cavity center must seal at radius 3")
+        XCTAssertFalse(sealed.isInterior(x: 2, y: 2, z: 2), "far corner must stay exterior")
+        XCTAssertFalse(sealed.isInterior(x: 29, y: 15, z: 15), "outside the holed face must stay exterior")
+        let leaky = Trellis2SealedClassification(resolution: 32, occupiedCells: occupied, radius: 0)
+        XCTAssertFalse(leaky.isInterior(x: 15, y: 15, z: 15), "radius 0 must leak through the hole")
+    }
+
+    func testRemeshMembraneSpansTornCavity() throws {
+        // The same torn shell as a crust mesh: without sealing, the envelope
+        // has a tunnel; with sealing, a membrane spans the hole. Compare
+        // enclosed volumes via the divergence theorem.
+        var vertices = [Float]()
+        var indices = [UInt32]()
+        // Build shell quads from occupied-face voxels directly: a coarse
+        // axis-aligned box surface with a hole, in mesh object space.
+        func addQuad(_ a: [Float], _ b: [Float], _ c: [Float], _ d: [Float]) {
+            let base = UInt32(vertices.count / 3)
+            vertices.append(contentsOf: a + b + c + d)
+            indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
+        }
+        let half: Float = 0.2
+        let step: Float = 0.05
+        var tiles = 0
+        for u in stride(from: -half, to: half, by: step) {
+            for v in stride(from: -half, to: half, by: step) {
+                let u2 = u + step, v2 = v + step
+                addQuad([u, v, -half], [u2, v, -half], [u2, v2, -half], [u, v2, -half])
+                let hole = abs(u + step / 2) < 0.05 && abs(v + step / 2) < 0.05
+                if !hole {
+                    addQuad([u, v, half], [u, v2, half], [u2, v2, half], [u2, v, half])
+                }
+                addQuad([u, -half, v], [u2, -half, v], [u2, -half, v2], [u, -half, v2])
+                addQuad([u, half, v], [u, half, v2], [u2, half, v2], [u2, half, v])
+                addQuad([-half, u, v], [-half, u, v2], [-half, u2, v2], [-half, u2, v])
+                addQuad([half, u, v], [half, u2, v], [half, u2, v2], [half, u, v2])
+                tiles += 1
+            }
+        }
+        let crust = try MeshAsset(vertices: vertices, indices: indices, inferredUnseenGeometry: true)
+        // Occupancy for the classification: voxelize the shell tiles into the
+        // field's Z-up grid (mesh (x,y,z) -> field (x, -z, y)).
+        var field = [Trellis2VoxelCoordinate]()
+        let resolution = 64
+        for triple in stride(from: 0, to: vertices.count, by: 9) {
+            let x = vertices[triple], y = vertices[triple + 1], z = vertices[triple + 2]
+            let fx = Int32((x + 0.5) * Float(resolution))
+            let fy = Int32((-z + 0.5) * Float(resolution))
+            let fz = Int32((y + 0.5) * Float(resolution))
+            field.append(.init(x: fx, y: fy, z: fz))
+        }
+
+        func enclosedVolume(_ mesh: MeshAsset) -> Float {
+            var volume: Float = 0
+            for triangle in stride(from: 0, to: mesh.indices.count, by: 3) {
+                let a = Int(mesh.indices[triangle]) * 3
+                let b = Int(mesh.indices[triangle + 1]) * 3
+                let c = Int(mesh.indices[triangle + 2]) * 3
+                let ax = mesh.vertices[a], ay = mesh.vertices[a + 1], az = mesh.vertices[a + 2]
+                let bx = mesh.vertices[b], by = mesh.vertices[b + 1], bz = mesh.vertices[b + 2]
+                let cx = mesh.vertices[c], cy = mesh.vertices[c + 1], cz = mesh.vertices[c + 2]
+                volume += (ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx)) / 6
+            }
+            return abs(volume)
+        }
+
+        let unsealed = try Trellis2NarrowBandRemesher.remesh(
+            mesh: crust,
+            resolution: resolution,
+            configuration: Trellis2RemeshConfiguration(band: 1, sealRadius: 0)
+        )
+        let sealedMesh = try Trellis2NarrowBandRemesher.remesh(
+            mesh: crust,
+            resolution: resolution,
+            configuration: Trellis2RemeshConfiguration(band: 1, sealRadius: 6),
+            fieldCoordinates: field
+        )
+        let boxVolume: Float = 0.4 * 0.4 * 0.4
+        XCTAssertLessThan(enclosedVolume(unsealed), boxVolume * 0.5, "tunnel envelope must not enclose the cavity")
+        XCTAssertGreaterThan(enclosedVolume(sealedMesh), boxVolume * 0.7, "sealed remesh must enclose the cavity")
+        XCTAssertEqual(boundaryEdgeCount(of: sealedMesh), 0)
+    }
+
     func testHoleFillerCapsLargeClosedRimOnlyAtRaisedThreshold() throws {
         // The open face's edges are all side*sqrt(2) diagonals, so the rim
         // perimeter is ~0.17: beyond the 0.03 reference threshold, within

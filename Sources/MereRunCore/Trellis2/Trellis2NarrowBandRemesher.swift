@@ -12,15 +12,23 @@ public struct Trellis2RemeshConfiguration: Equatable, Sendable {
     /// tunnels through the envelope. Zero disables; colors never sample the
     /// synthetic lids because projection targets the uncapped crust.
     public let capBoundaryLoopPerimeter: Float
+    /// Morphological-closing radius in voxels for the sealed inside/outside
+    /// classification. Cavities whose every mouth is narrower than roughly
+    /// twice this radius are classified interior even when their rims are
+    /// tangled open chains no loop capping can close, and the remesh spans a
+    /// membrane across the opening. Zero disables.
+    public let sealRadius: Int
 
     public init(
         band: Float = 1,
         projectBack: Float = 0,
-        capBoundaryLoopPerimeter: Float = 0.2
+        capBoundaryLoopPerimeter: Float = 0.2,
+        sealRadius: Int = 12
     ) {
         self.band = band
         self.projectBack = projectBack
         self.capBoundaryLoopPerimeter = capBoundaryLoopPerimeter
+        self.sealRadius = sealRadius
     }
 }
 
@@ -37,7 +45,8 @@ enum Trellis2NarrowBandRemesher {
         mesh: MeshAsset,
         resolution: Int,
         configuration: Trellis2RemeshConfiguration = Trellis2RemeshConfiguration(),
-        bvh providedBVH: Trellis2TriangleBVH? = nil
+        bvh providedBVH: Trellis2TriangleBVH? = nil,
+        fieldCoordinates: [Trellis2VoxelCoordinate]? = nil
     ) throws -> MeshAsset {
         let bvh = providedBVH ?? Trellis2TriangleBVH(vertices: mesh.vertices, indices: mesh.indices)
         // Upstream inflates the domain so the band never clips the grid:
@@ -45,6 +54,35 @@ enum Trellis2NarrowBandRemesher {
         // object cube, centered at the origin.
         let scale = (Float(resolution) + 3 * configuration.band) / Float(resolution)
         let eps = configuration.band * scale / Float(resolution)
+
+        // Sealed inside/outside classification on this grid. The occupancy
+        // arrives in the field's Z-up grid over the unscaled object cube;
+        // convert each voxel center into a remesh-grid cell. The surface of
+        // the union of the band envelope and the sealed solid spans
+        // membranes across openings whose mouths are narrower than roughly
+        // twice the seal radius.
+        var classification: Trellis2SealedClassification?
+        if let fieldCoordinates, configuration.sealRadius > 0 {
+            var cells = [Int32]()
+            cells.reserveCapacity(fieldCoordinates.count * 3)
+            let fieldResolution = Float(resolution)
+            for coordinate in fieldCoordinates {
+                let rawX = (Float(coordinate.x) + 0.5) / fieldResolution - 0.5
+                let rawY = (Float(coordinate.y) + 0.5) / fieldResolution - 0.5
+                let rawZ = (Float(coordinate.z) + 0.5) / fieldResolution - 0.5
+                // Z-up field to Y-up mesh, then into the inflated grid.
+                let meshX = rawX, meshY = rawZ, meshZ = -rawY
+                cells.append(Int32(((meshX / scale + 0.5) * Float(resolution)).rounded(.down)))
+                cells.append(Int32(((meshY / scale + 0.5) * Float(resolution)).rounded(.down)))
+                cells.append(Int32(((meshZ / scale + 0.5) * Float(resolution)).rounded(.down)))
+            }
+            classification = Trellis2SealedClassification(
+                resolution: resolution,
+                occupiedCells: cells,
+                radius: configuration.sealRadius
+            )
+        }
+        let sealMagnitude = Float(max(configuration.sealRadius, 1)) * scale / Float(resolution)
 
         // --- Sparse octree refinement toward the band isosurface ---
         var levelResolution = resolution
@@ -73,12 +111,19 @@ enum Trellis2NarrowBandRemesher {
                 coordinates.withUnsafeBufferPointer { input in
                     concurrentChunks(voxelCount) { range in
                         for voxel in range {
-                            let x = (Float(input[voxel * 3]) + 0.5) * inverseResolution - 0.5
-                            let y = (Float(input[voxel * 3 + 1]) + 0.5) * inverseResolution - 0.5
-                            let z = (Float(input[voxel * 3 + 2]) + 0.5) * inverseResolution - 0.5
+                            let cx = input[voxel * 3]
+                            let cy = input[voxel * 3 + 1]
+                            let cz = input[voxel * 3 + 2]
+                            let x = (Float(cx) + 0.5) * inverseResolution - 0.5
+                            let y = (Float(cy) + 0.5) * inverseResolution - 0.5
+                            let z = (Float(cz) + 0.5) * inverseResolution - 0.5
                             let distance = bvh.unsignedDistance(x: x * scale, y: y * scale, z: z * scale) - eps
                             // 0.87 ~ sqrt(3)/2 covers the voxel's diagonal radius.
                             output[voxel] = abs(distance) < 0.87 * cellSize
+                                || classification?.straddlesBoundary(
+                                    x: cx, y: cy, z: cz,
+                                    levelResolution: levelResolution
+                                ) == true
                         }
                     }
                 }
@@ -143,10 +188,23 @@ enum Trellis2NarrowBandRemesher {
             cornerCoordinates.withUnsafeBufferPointer { input in
                 concurrentChunks(cornerCount) { range in
                     for corner in range {
-                        let x = (Float(input[corner * 3]) * inverseResolution - 0.5) * scale
-                        let y = (Float(input[corner * 3 + 1]) * inverseResolution - 0.5) * scale
-                        let z = (Float(input[corner * 3 + 2]) * inverseResolution - 0.5) * scale
-                        output[corner] = bvh.unsignedDistance(x: x, y: y, z: z) - eps
+                        let gx = input[corner * 3]
+                        let gy = input[corner * 3 + 1]
+                        let gz = input[corner * 3 + 2]
+                        let x = (Float(gx) * inverseResolution - 0.5) * scale
+                        let y = (Float(gy) * inverseResolution - 0.5) * scale
+                        let z = (Float(gz) * inverseResolution - 0.5) * scale
+                        let envelope = bvh.unsignedDistance(x: x, y: y, z: z) - eps
+                        // Union of the band envelope and the sealed solid:
+                        // interior corners go negative, exterior corners keep
+                        // the (clamped) envelope value.
+                        if let classification {
+                            output[corner] = classification.isInterior(x: gx, y: gy, z: gz)
+                                ? -sealMagnitude
+                                : min(envelope, sealMagnitude)
+                        } else {
+                            output[corner] = envelope
+                        }
                     }
                 }
             }

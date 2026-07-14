@@ -23,8 +23,10 @@ does not launch Python, PyTorch, or CUDA.
 6. `Trellis2NarrowBandRemesher.swift` (default) replaces the porous crust with
    its watertight narrow-band dual-contour envelope — the native port of
    CuMesh's `remesh_narrow_band_dc` as upstream's `to_glb` invokes it (band 1,
-   no projection) — and re-samples vertex color and material scalars from the
-   field at the new vertices.
+   no projection) — unioned with `Trellis2SealedClassification`'s
+   morphological-closing solid so membranes span occluded cavities that no
+   band or rim capping can close, and re-samples vertex color and material
+   scalars from the field at each vertex's closest crust point.
 7. `Trellis2ArtifactExporter.swift` writes canonical OBJ, PLY, and GLB meshes,
    a deterministic `.pbrvox` sidecar that preserves all six PBR channels, and
    a self-contained `-textured.glb` whose per-quad atlas blocks

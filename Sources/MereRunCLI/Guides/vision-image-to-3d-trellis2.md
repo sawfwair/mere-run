@@ -40,13 +40,17 @@ mere.run image reconstruct-3d-trellis2 ./chair.png --dry-run --already-framed
 The exported mesh is, by default, the watertight narrow-band dual-contour
 envelope of the raw crust (band 1 voxel, no projection), mirroring upstream's
 shipped `to_glb` remesh: the flexible dual grid's open seams and pinholes are
-sealed and the material renders single-sided. Crust tears wider than roughly
-twice the band survive as tunnels; for fuzzy or furry subjects raise
-`--remesh-band` to 2 or 3 (each unit inflates the surface by one voxel,
-about 0.2% of the object). Colors are always sampled at the closest point on
-the original crust, so wider bands do not wash out or darken the appearance.
-Pass `--no-remesh` to export the raw porous dual-grid crust instead
-(double-sided, upstream's non-remesh topology).
+sealed and the material renders single-sided. Two additional sealing stages
+close what the envelope alone cannot: large clean boundary rims are capped
+before remeshing, and a morphological-closing classification of the occupancy
+(dilate, flood the exterior, erode) spans membranes across occluded cavities
+whose mouths are narrower than roughly twice `--seal-radius` (default 12
+voxels; 0 disables). Membrane and lid colors are sampled at the closest point
+on the original crust, so sealed regions blend into the surrounding fur
+rather than going dark. Raise `--remesh-band` for extra tear tolerance (each
+unit inflates the surface by one voxel, about 0.2% of the object); pass
+`--no-remesh` to export the raw porous dual-grid crust instead (double-sided,
+upstream's non-remesh topology).
 
 The output directory contains OBJ, binary PLY, and GLB files with sampled RGBA
 vertex color; a `-textured.glb` whose per-quad atlas bakes the field into
