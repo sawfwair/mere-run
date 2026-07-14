@@ -164,6 +164,10 @@ public enum Trellis2ArtifactExporter {
                 weightsSHA256: Trellis2Resources.primaryWeightsSHA256
             ),
             inputRecords: [inputRecord],
+            material: medianMaterialFactors(
+                metallic: asset.metallic,
+                roughness: asset.roughness
+            ),
             createdAt: createdAt
         )
         let cleanStem = mesh.manifestURL.lastPathComponent
@@ -247,6 +251,30 @@ public enum Trellis2ArtifactExporter {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(manifest).write(to: manifestURL, options: .atomic)
         return (mesh, pbr, Trellis2RunManifestExport(manifest: manifest, manifestURL: manifestURL))
+    }
+
+    /// Field-median metallic and roughness as uniform glTF material factors.
+    /// The per-vertex values stay in the `.pbrvox` sidecar; the median keeps
+    /// the GLB material honest for viewers that only read core glTF.
+    static func medianMaterialFactors(
+        metallic: [Float],
+        roughness: [Float]
+    ) -> MeshPBRMaterialFactors? {
+        guard let metallicMedian = median(of: metallic),
+              let roughnessMedian = median(of: roughness) else { return nil }
+        return MeshPBRMaterialFactors(
+            metallicFactor: metallicMedian,
+            roughnessFactor: roughnessMedian
+        )
+    }
+
+    private static func median(of values: [Float]) -> Float? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2)
+            ? (sorted[middle - 1] + sorted[middle]) / 2
+            : sorted[middle]
     }
 
     private static func artifact(kind: String, url: URL, mediaType: String) throws -> Trellis2RunArtifact {

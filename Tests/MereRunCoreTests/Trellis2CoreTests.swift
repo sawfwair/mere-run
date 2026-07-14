@@ -149,6 +149,54 @@ final class Trellis2CoreTests: MereRunCoreTestCase {
         XCTAssertEqual(decoded.pbrVoxels.attributes[5], 1, accuracy: 1e-6)
     }
 
+    func testDualGridSamplingIsUniformAcrossTheSparseShell() throws {
+        // Every voxel carries the same texture row, so every dual vertex must
+        // sample the identical full-magnitude value. Corner voxels of the 2^3
+        // grid interpolate over cells whose other corners are unoccupied;
+        // unnormalized weights would darken them (and their alpha) eightfold.
+        var coordinates = [Trellis2VoxelCoordinate]()
+        for x in 0..<2 {
+            for y in 0..<2 {
+                for z in 0..<2 {
+                    coordinates.append(.init(x: Int32(x), y: Int32(y), z: Int32(z)))
+                }
+            }
+        }
+        let shapeRow: [Float] = [0, 0, 0, 1, 1, 1, 0]
+        let textureRow: [Float] = [1, -1, -1, 0, 0, 1]
+        let decoded = try Trellis2FlexibleDualGrid.decode(
+            shape: try Trellis2SparseTensor(
+                features: MLXArray(Array(repeating: shapeRow, count: 8).flatMap { $0 }).reshaped(8, 7),
+                coordinates: coordinates
+            ),
+            texture: try Trellis2SparseTensor(
+                features: MLXArray(Array(repeating: textureRow, count: 8).flatMap { $0 }).reshaped(8, 6),
+                coordinates: coordinates
+            ),
+            resolution: 2
+        )
+        let colors = try XCTUnwrap(decoded.mesh.colorsRGBA8)
+        for vertex in 0..<decoded.mesh.vertexCount {
+            XCTAssertEqual(
+                Array(colors[(vertex * 4)..<(vertex * 4 + 4)]),
+                [255, 0, 0, 255],
+                "vertex \(vertex) should carry the uniform field value at full magnitude"
+            )
+        }
+        XCTAssertEqual(decoded.metallic, [Float](repeating: 0.5, count: 8))
+        XCTAssertEqual(decoded.roughness, [Float](repeating: 0.5, count: 8))
+    }
+
+    func testMedianMaterialFactors() throws {
+        let factors = try XCTUnwrap(Trellis2ArtifactExporter.medianMaterialFactors(
+            metallic: [0.1, 0.9, 0.2],
+            roughness: [0.3, 0.7, 0.5, 0.6]
+        ))
+        XCTAssertEqual(factors.metallicFactor, 0.2)
+        XCTAssertEqual(factors.roughnessFactor, 0.55, accuracy: 1e-6)
+        XCTAssertNil(Trellis2ArtifactExporter.medianMaterialFactors(metallic: [], roughness: []))
+    }
+
     func testSmallHoleFillerCapsReferenceThresholdBoundaryWithoutAddingVertices() throws {
         let side: Float = 0.005
         let mesh = try MeshAsset(

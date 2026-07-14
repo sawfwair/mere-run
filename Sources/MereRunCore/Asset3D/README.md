@@ -23,7 +23,12 @@ PLY, and binary glTF writers used by native reconstruction runtimes.
   format. Standards-compliant viewers (three.js, Blender) therefore display
   identical colors for all three artifacts.
 
+- Exporters may pass uniform `MeshPBRMaterialFactors` (metallic, roughness);
+  `MeshGLBWriter` writes them as core glTF material factors and defaults to a
+  fully rough dielectric when absent.
+
 Model-specific inference and provenance belong in `TripoSR`, `InstantMesh`, and
 `Trellis2`. TRELLIS.2 additionally writes its six-channel sparse PBR field as a
 model-specific `.pbrvox` sidecar because the canonical mesh contract currently
-stores vertex color, not a generated texture atlas.
+stores vertex color, not a generated texture atlas; its field-median metallic
+and roughness ride along as the GLB's uniform material factors.

@@ -168,7 +168,12 @@ enum Trellis2FlexibleDualGrid {
         )
     }
 
-    private static func sampleTextureAttributes(
+    /// Trilinear sampling of the sparse texture field at each dual vertex.
+    /// The interpolation cell straddles the occupied shell, so weights are
+    /// renormalized over the corners that exist; dropping them unnormalized
+    /// darkens every channel (including alpha) by the missing weight. A
+    /// vertex whose cell has no occupied corner falls back to its own voxel.
+    static func sampleTextureAttributes(
         coordinates: [Trellis2VoxelCoordinate],
         attributes: [Float],
         coordinateIndices: [Trellis2VoxelCoordinate: Int],
@@ -184,6 +189,7 @@ enum Trellis2FlexibleDualGrid {
             ]
             let base = sample.map { Int32(floor($0)) }
             let fraction = zip(sample, base).map { $0 - Float($1) }
+            var occupiedWeight: Float = 0
             for corner in 0..<8 {
                 let x = Int32(corner & 1)
                 let y = Int32((corner >> 1) & 1)
@@ -197,8 +203,18 @@ enum Trellis2FlexibleDualGrid {
                     z: base[2] + z
                 )
                 guard let source = coordinateIndices[neighbor] else { continue }
+                occupiedWeight += weight
                 for channel in 0..<6 {
                     result[vertex * 6 + channel] += attributes[source * 6 + channel] * weight
+                }
+            }
+            if occupiedWeight > 1e-6 {
+                for channel in 0..<6 {
+                    result[vertex * 6 + channel] /= occupiedWeight
+                }
+            } else {
+                for channel in 0..<6 {
+                    result[vertex * 6 + channel] = attributes[vertex * 6 + channel]
                 }
             }
         }
