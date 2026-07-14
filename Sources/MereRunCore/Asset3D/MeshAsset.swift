@@ -45,10 +45,14 @@ public struct MeshBounds: Codable, Equatable, Sendable {
 public struct MeshPBRMaterialFactors: Codable, Equatable, Sendable {
     public let metallicFactor: Float
     public let roughnessFactor: Float
+    /// Watertight meshes with consistent outward orientation render
+    /// single-sided; the porous default stays double-sided.
+    public let doubleSided: Bool
 
-    public init(metallicFactor: Float, roughnessFactor: Float) {
+    public init(metallicFactor: Float, roughnessFactor: Float, doubleSided: Bool = true) {
         self.metallicFactor = min(max(metallicFactor, 0), 1)
         self.roughnessFactor = min(max(roughnessFactor, 0), 1)
+        self.doubleSided = doubleSided
     }
 }
 

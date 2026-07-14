@@ -37,12 +37,24 @@ print the plan without loading a neural graph:
 mere.run image reconstruct-3d-trellis2 ./chair.png --dry-run --already-framed
 ```
 
+The exported mesh is, by default, the watertight narrow-band dual-contour
+envelope of the raw crust (band 1 voxel, no projection), mirroring upstream's
+shipped `to_glb` remesh: the flexible dual grid's open seams and pinholes are
+sealed and the material renders single-sided. Crust tears wider than roughly
+twice the band survive as tunnels; for fuzzy or furry subjects raise
+`--remesh-band` to 2 or 3 (each unit inflates the surface by one voxel,
+about 0.2% of the object). Colors are always sampled at the closest point on
+the original crust, so wider bands do not wash out or darken the appearance.
+Pass `--no-remesh` to export the raw porous dual-grid crust instead
+(double-sided, upstream's non-remesh topology).
+
 The output directory contains OBJ, binary PLY, and GLB files with sampled RGBA
-vertex color; a shared mesh manifest; a `.pbrvox` sparse material field; and an
-authoritative TRELLIS.2 run manifest. `.pbrvox` preserves base color RGB,
-metallic, roughness, and alpha for every decoded O-Voxel because the canonical
-mesh formats currently do not author a texture atlas. All artifacts and all
-seven checkpoint components are named, pinned, and hashed in provenance.
+vertex color; a `-textured.glb` whose per-quad atlas bakes the field into
+standard glTF PBR textures; a shared mesh manifest; a `.pbrvox` sparse material
+field; and an authoritative TRELLIS.2 run manifest. `.pbrvox` preserves base
+color RGB, metallic, roughness, and alpha for every decoded O-Voxel. All
+artifacts and all seven checkpoint components are named, pinned, and hashed in
+provenance.
 
 Coordinates are normalized object space with X right, Y up, and Z forward.
 They are not meters, and unseen geometry is inferred from the single image.

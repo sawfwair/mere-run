@@ -20,7 +20,12 @@ does not launch Python, PyTorch, or CUDA.
    O-Voxel's Z-up basis into the canonical Y-up mesh contract, fills small
    boundary loops at the reference threshold, and samples RGBA, metallic, and
    roughness at its vertices.
-6. `Trellis2ArtifactExporter.swift` writes canonical OBJ, PLY, and GLB meshes,
+6. `Trellis2NarrowBandRemesher.swift` (default) replaces the porous crust with
+   its watertight narrow-band dual-contour envelope — the native port of
+   CuMesh's `remesh_narrow_band_dc` as upstream's `to_glb` invokes it (band 1,
+   no projection) — and re-samples vertex color and material scalars from the
+   field at the new vertices.
+7. `Trellis2ArtifactExporter.swift` writes canonical OBJ, PLY, and GLB meshes,
    a deterministic `.pbrvox` sidecar that preserves all six PBR channels, and
    a self-contained `-textured.glb` whose per-quad atlas blocks
    (`Trellis2TextureAtlasBaker`) bake the field into an sRGB baseColorTexture

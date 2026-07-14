@@ -324,6 +324,92 @@ final class Trellis2CoreTests: MereRunCoreTestCase {
         XCTAssertEqual(image.height, baked.atlasHeight)
     }
 
+    func testTriangleBVHReturnsExactDistances() {
+        let bvh = Trellis2TriangleBVH(
+            vertices: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+            indices: [0, 1, 2]
+        )
+        XCTAssertEqual(bvh.unsignedDistance(x: 0.25, y: 0.25, z: 0.7), 0.7, accuracy: 1e-5)
+        XCTAssertEqual(bvh.unsignedDistance(x: -1, y: -1, z: 0), Float(2).squareRoot(), accuracy: 1e-5)
+        XCTAssertEqual(bvh.unsignedDistance(x: 2, y: 0, z: 0), 1, accuracy: 1e-5)
+        XCTAssertEqual(bvh.unsignedDistance(x: 0.5, y: -0.5, z: 0), 0.5, accuracy: 1e-5)
+        let closest = bvh.closestPoint(x: 0.25, y: 0.25, z: 0.7)
+        XCTAssertEqual(closest.x, 0.25, accuracy: 1e-5)
+        XCTAssertEqual(closest.y, 0.25, accuracy: 1e-5)
+        XCTAssertEqual(closest.z, 0, accuracy: 1e-5)
+    }
+
+    func testNarrowBandRemeshClosesFullyOpenSurface() throws {
+        // A lone triangle is the extreme torn crust: every edge is a
+        // boundary. Its band envelope must come back watertight.
+        let crust = try MeshAsset(
+            vertices: [-0.2, -0.2, 0, 0.2, -0.2, 0, 0, 0.2, 0],
+            indices: [0, 1, 2],
+            inferredUnseenGeometry: true
+        )
+        let remeshed = try Trellis2NarrowBandRemesher.remesh(mesh: crust, resolution: 64)
+        XCTAssertGreaterThan(remeshed.triangleCount, 0)
+        XCTAssertEqual(boundaryEdgeCount(of: remeshed), 0, "envelope must be closed")
+    }
+
+    func testNarrowBandRemeshSealsSubBandGapsAndConnectsSheets() throws {
+        // Two coplanar sheets separated by ~1.5 voxels at resolution 64.
+        // The band envelopes overlap across the gap, so the result must be
+        // one connected watertight surface.
+        let gap: Float = 0.012
+        let crust = try MeshAsset(
+            vertices: [
+                -0.3, -0.3, 0, -gap, -0.3, 0, -gap, 0.3, 0, -0.3, 0.3, 0,
+                gap, -0.3, 0, 0.3, -0.3, 0, 0.3, 0.3, 0, gap, 0.3, 0,
+            ],
+            indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
+            inferredUnseenGeometry: true
+        )
+        let remeshed = try Trellis2NarrowBandRemesher.remesh(mesh: crust, resolution: 64)
+        XCTAssertEqual(boundaryEdgeCount(of: remeshed), 0, "envelope must be closed")
+        XCTAssertEqual(connectedComponentCount(of: remeshed), 1, "gap must be sealed")
+    }
+
+    private func boundaryEdgeCount(of mesh: MeshAsset) -> Int {
+        var counts = [UInt64: Int]()
+        for triangle in stride(from: 0, to: mesh.indices.count, by: 3) {
+            let corners = [
+                mesh.indices[triangle],
+                mesh.indices[triangle + 1],
+                mesh.indices[triangle + 2],
+            ]
+            for edge in 0..<3 {
+                let a = UInt64(min(corners[edge], corners[(edge + 1) % 3]))
+                let b = UInt64(max(corners[edge], corners[(edge + 1) % 3]))
+                counts[(a << 32) | b, default: 0] += 1
+            }
+        }
+        return counts.values.filter { $0 == 1 }.count
+    }
+
+    private func connectedComponentCount(of mesh: MeshAsset) -> Int {
+        var parent = Array(0..<mesh.vertexCount)
+        func find(_ vertex: Int) -> Int {
+            var root = vertex
+            while parent[root] != root { root = parent[root] }
+            var current = vertex
+            while parent[current] != root {
+                let next = parent[current]
+                parent[current] = root
+                current = next
+            }
+            return root
+        }
+        for triangle in stride(from: 0, to: mesh.indices.count, by: 3) {
+            let a = find(Int(mesh.indices[triangle]))
+            let b = find(Int(mesh.indices[triangle + 1]))
+            let c = find(Int(mesh.indices[triangle + 2]))
+            parent[b] = a
+            parent[c] = a
+        }
+        return Set((0..<mesh.vertexCount).map(find)).count
+    }
+
     func testSmallHoleFillerCapsReferenceThresholdBoundaryWithoutAddingVertices() throws {
         let side: Float = 0.005
         let mesh = try MeshAsset(

@@ -27,6 +27,12 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
     @Flag(name: [.long], help: "Preserve framing and composite alpha over black without foreground cropping.")
     var alreadyFramed = false
 
+    @Flag(name: [.long], help: "Export the raw porous dual-grid crust instead of the watertight narrow-band remesh.")
+    var noRemesh = false
+
+    @Option(name: [.long], help: "Narrow-band half-width in voxels for the watertight remesh; crust tears narrower than roughly twice this seal shut.")
+    var remeshBand: Float = 1
+
     @Flag(name: [.long], help: "Verify inputs and checkpoints, then print the execution plan without loading weights.")
     var dryRun = false
 
@@ -41,6 +47,8 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
             seed: seed,
             maxTokens: maxTokens,
             alreadyFramed: alreadyFramed,
+            noRemesh: noRemesh,
+            remeshBand: remeshBand,
             dryRun: dryRun,
             json: json
         )
@@ -53,9 +61,14 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
         seed: UInt64,
         maxTokens: Int,
         alreadyFramed: Bool,
+        noRemesh: Bool = false,
+        remeshBand: Float = 1,
         dryRun: Bool,
         json: Bool
     ) async throws {
+        guard remeshBand > 0, remeshBand <= 8 else {
+            throw ValidationError("--remesh-band must be in (0, 8]")
+        }
         guard maxTokens >= 4_096 else {
             throw ValidationError("--max-tokens must be at least 4096")
         }
@@ -97,6 +110,7 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
                 foregroundPolicy: policy,
                 seed: seed,
                 maximumSparseTokens: maxTokens,
+                remesh: noRemesh ? nil : Trellis2RemeshConfiguration(band: remeshBand),
                 progress: { event in
                     CLIStderr.write("[image-to-3d-trellis2] \(event.message)\n")
                 }

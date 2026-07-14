@@ -49,6 +49,38 @@ struct Trellis2SparseFieldSampler {
         return values
     }
 
+    /// Per-vertex color and material attributes for a mesh in the canonical
+    /// Y-up object space (inverting the dual grid's Z-up rotation), for
+    /// meshes whose vertices were not produced by the dual grid itself —
+    /// e.g. the narrow-band remesh.
+    func meshVertexAttributes(
+        vertices: [Float],
+        resolution: Int
+    ) -> (colorsRGBA8: [UInt8], metallic: [Float], roughness: [Float]) {
+        let vertexCount = vertices.count / 3
+        var colors = [UInt8](repeating: 255, count: vertexCount * 4)
+        var metallic = [Float](repeating: 0, count: vertexCount)
+        var roughness = [Float](repeating: 0, count: vertexCount)
+        for vertex in 0..<vertexCount {
+            let values = sample(
+                x: (vertices[vertex * 3] + 0.5) * Float(resolution),
+                y: (-vertices[vertex * 3 + 2] + 0.5) * Float(resolution),
+                z: (vertices[vertex * 3 + 1] + 0.5) * Float(resolution)
+            )
+            colors[vertex * 4] = byte(values[0])
+            colors[vertex * 4 + 1] = byte(values[1])
+            colors[vertex * 4 + 2] = byte(values[2])
+            colors[vertex * 4 + 3] = byte(values[5])
+            metallic[vertex] = min(max(values[3], 0), 1)
+            roughness[vertex] = min(max(values[4], 0), 1)
+        }
+        return (colors, metallic, roughness)
+    }
+
+    private func byte(_ value: Float) -> UInt8 {
+        UInt8((255 * min(max(value, 0), 1)).rounded())
+    }
+
     /// Trilinear sample with a nearest-occupied-neighbor fallback; zeros when
     /// nothing in the 3x3x3 neighborhood is occupied.
     func sample(x: Float, y: Float, z: Float) -> [Float] {

@@ -10,6 +10,7 @@ enum Trellis2TexturedGLBWriter {
         coordinateSystem: MeshCoordinateSystem,
         units: MeshUnits,
         inferredUnseenGeometry: Bool,
+        doubleSided: Bool = true,
         to url: URL
     ) throws {
         let basePNG = try MediaImageIO.pngData(from: MediaImage(
@@ -107,7 +108,7 @@ enum Trellis2TexturedGLBWriter {
             ]],
             "materials": [[
                 "name": "Baked PBR",
-                "doubleSided": true,
+                "doubleSided": doubleSided,
                 "pbrMetallicRoughness": [
                     "baseColorTexture": ["index": 0],
                     "metallicRoughnessTexture": ["index": 1],

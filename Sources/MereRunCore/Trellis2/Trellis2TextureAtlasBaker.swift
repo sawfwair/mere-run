@@ -45,7 +45,16 @@ enum Trellis2TextureAtlasBaker {
         let triangles: [[UInt32]]
     }
 
-    static func bake(mesh: MeshAsset, field: Trellis2PBRVoxelGrid) -> Trellis2BakedTexturedMesh {
+    /// `projectionSurface` mirrors upstream's `to_glb` texel handling: every
+    /// sample position is snapped to its closest point on the original crust
+    /// before sampling the field, so remeshed envelopes (whose surface sits
+    /// up to `band` voxels off the crust) sample where the field actually
+    /// lives instead of falling off the occupied shell.
+    static func bake(
+        mesh: MeshAsset,
+        field: Trellis2PBRVoxelGrid,
+        projectionSurface: Trellis2TriangleBVH? = nil
+    ) -> Trellis2BakedTexturedMesh {
         let normals = mesh.normals ?? MeshNormals.generate(vertices: mesh.vertices, indices: mesh.indices)
         // Mip levels average neighboring atlas blocks, so blocks must be
         // spatially coherent in BOTH atlas axes or minified views converge
@@ -88,11 +97,6 @@ enum Trellis2TextureAtlasBaker {
             let (blockX, blockY) = morton2D(cellIndex)
             let cellX = blockX * block
             let cellY = blockY * block
-            let corners = cell.corners.map { index -> (Float, Float, Float) in
-                let base = Int(index) * 3
-                return (mesh.vertices[base], mesh.vertices[base + 1], mesh.vertices[base + 2])
-            }
-
             let firstSplit = UInt32(positions.count / 3)
             for (slot, original) in cell.corners.enumerated() {
                 let base = Int(original) * 3
@@ -108,27 +112,58 @@ enum Trellis2TextureAtlasBaker {
                     indices.append(firstSplit + UInt32(slot))
                 }
             }
+        }
 
+        baseColor.withUnsafeMutableBufferPointer { basePixels in
+            metallicRoughness.withUnsafeMutableBufferPointer { mrPixels in
+                Trellis2Parallel.chunks(cells.count, chunk: 1_024) { range in
+                    for cellIndex in range {
+                        let cell = cells[cellIndex]
+                        let (blockX, blockY) = morton2D(cellIndex)
+                        let cellX = blockX * block
+                        let cellY = blockY * block
+                        let corners = cell.corners.map { index -> (Float, Float, Float) in
+                            let base = Int(index) * 3
+                            return (mesh.vertices[base], mesh.vertices[base + 1], mesh.vertices[base + 2])
+                        }
+                        for texelY in 0..<block {
+                            let t = min(1, max(0, (Float(texelY) - Float(gutterTexels)) / span))
+                            for texelX in 0..<block {
+                                let s = min(1, max(0, (Float(texelX) - Float(gutterTexels)) / span))
+                                var point = interpolate(corners: corners, s: s, t: t)
+                                if let projectionSurface {
+                                    let closest = projectionSurface.closestPoint(
+                                        x: point.0, y: point.1, z: point.2
+                                    )
+                                    point = (closest.x, closest.y, closest.z)
+                                }
+                                // Mesh space is the Z-up field rotated to
+                                // Y-up; invert the rotation, then shift into
+                                // continuous voxel space.
+                                let voxelX = (point.0 + 0.5) * Float(field.resolution)
+                                let voxelY = (-point.2 + 0.5) * Float(field.resolution)
+                                let voxelZ = (point.1 + 0.5) * Float(field.resolution)
+                                let values = sampler.sample(x: voxelX, y: voxelY, z: voxelZ)
+                                let pixel = ((cellY + texelY) * width + cellX + texelX) * 4
+                                basePixels[pixel] = byte(values[0])
+                                basePixels[pixel + 1] = byte(values[1])
+                                basePixels[pixel + 2] = byte(values[2])
+                                basePixels[pixel + 3] = 255
+                                mrPixels[pixel] = 255
+                                mrPixels[pixel + 1] = byte(values[4])
+                                mrPixels[pixel + 2] = byte(values[3])
+                                mrPixels[pixel + 3] = 255
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for cellIndex in 0..<cells.count {
+            let (blockX, blockY) = morton2D(cellIndex)
             for texelY in 0..<block {
-                let t = min(1, max(0, (Float(texelY) - Float(gutterTexels)) / span))
                 for texelX in 0..<block {
-                    let s = min(1, max(0, (Float(texelX) - Float(gutterTexels)) / span))
-                    let point = interpolate(corners: corners, s: s, t: t)
-                    // Mesh space is the Z-up field rotated to Y-up; invert
-                    // the rotation, then shift into continuous voxel space.
-                    let voxelX = (point.0 + 0.5) * Float(field.resolution)
-                    let voxelY = (-point.2 + 0.5) * Float(field.resolution)
-                    let voxelZ = (point.1 + 0.5) * Float(field.resolution)
-                    let values = sampler.sample(x: voxelX, y: voxelY, z: voxelZ)
-                    let pixel = ((cellY + texelY) * width + cellX + texelX) * 4
-                    baseColor[pixel] = byte(values[0])
-                    baseColor[pixel + 1] = byte(values[1])
-                    baseColor[pixel + 2] = byte(values[2])
-                    baseColor[pixel + 3] = 255
-                    metallicRoughness[pixel] = 255
-                    metallicRoughness[pixel + 1] = byte(values[4])
-                    metallicRoughness[pixel + 2] = byte(values[3])
-                    metallicRoughness[pixel + 3] = 255
+                    let pixel = ((blockY * block + texelY) * width + blockX * block + texelX) * 4
                     colorSums[0] += Double(baseColor[pixel])
                     colorSums[1] += Double(baseColor[pixel + 1])
                     colorSums[2] += Double(baseColor[pixel + 2])

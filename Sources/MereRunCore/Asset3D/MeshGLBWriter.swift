@@ -105,7 +105,7 @@ public enum MeshGLBWriter {
             ]],
             "materials": [[
                 "name": "Vertex Colors",
-                "doubleSided": true,
+                "doubleSided": material?.doubleSided ?? true,
                 "pbrMetallicRoughness": [
                     "baseColorFactor": [1, 1, 1, 1],
                     "metallicFactor": material?.metallicFactor ?? 0,

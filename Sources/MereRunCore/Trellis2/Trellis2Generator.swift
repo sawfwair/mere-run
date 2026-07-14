@@ -15,6 +15,7 @@ public enum Trellis2Progress: Equatable, Sendable {
     case decodingShape
     case decodingTexture
     case extractingMesh
+    case remeshingMesh
     case exportingAssets
 
     public var message: String {
@@ -41,6 +42,8 @@ public enum Trellis2Progress: Equatable, Sendable {
             "Decoding six-channel PBR O-Voxels"
         case .extractingMesh:
             "Extracting flexible-dual-grid mesh and filling small boundary holes"
+        case .remeshingMesh:
+            "Remeshing to the watertight narrow-band dual-contour envelope"
         case .exportingAssets:
             "Writing OBJ, PLY, GLB, PBR voxels, and manifests"
         }
@@ -113,6 +116,7 @@ public actor Trellis2Generator {
         foregroundPolicy: Trellis2ForegroundPolicy = .transparentAlpha,
         seed: UInt64 = 42,
         maximumSparseTokens: Int = defaultMaximumSparseTokens,
+        remesh: Trellis2RemeshConfiguration? = Trellis2RemeshConfiguration(),
         progress: (@Sendable (Trellis2Progress) -> Void)? = nil
     ) async throws -> Trellis2RunResult {
         let inputURL = imageURL.standardizedFileURL
@@ -210,6 +214,9 @@ public actor Trellis2Generator {
         )
         MLX.Memory.clearCache()
 
+        if remesh != nil {
+            progress?(.remeshingMesh)
+        }
         progress?(.exportingAssets)
         let policyName = foregroundPolicy == .alreadyFramed
             ? "already-framed"
@@ -226,7 +233,8 @@ public actor Trellis2Generator {
             foregroundPolicy: policyName,
             croppedTransparentForeground: prepared.croppedTransparentForeground,
             seed: seed,
-            maximumSparseTokens: maximumSparseTokens
+            maximumSparseTokens: maximumSparseTokens,
+            remesh: remesh
         )
         MLX.Memory.clearCache()
         return Trellis2RunResult(
