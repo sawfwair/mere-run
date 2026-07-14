@@ -29,6 +29,10 @@ Raising it can materially increase unified-memory use. This is deliberately
 separate from Microsoft's 49,152-token cascade-resolution budget, which does
 not cap the direct 512 decoder. The three flow stages use the official 12-step
 Euler schedules. `--seed` controls deterministic MLX noise and defaults to 42.
+`--texture-seed` re-rolls only the texture flow while structure and shape
+replay bit-identically from `--seed`: when a seed produces good geometry with
+a drifted palette, search texture seeds without touching the reconstruction.
+Both seeds are recorded in the run manifest.
 
 Use `--dry-run` to validate the input, checksum every pinned component, and
 print the plan without loading a neural graph:

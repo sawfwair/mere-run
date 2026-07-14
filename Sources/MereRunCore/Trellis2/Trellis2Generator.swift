@@ -115,6 +115,7 @@ public actor Trellis2Generator {
         model requestedModel: String? = nil,
         foregroundPolicy: Trellis2ForegroundPolicy = .transparentAlpha,
         seed: UInt64 = 42,
+        textureSeed: UInt64? = nil,
         maximumSparseTokens: Int = defaultMaximumSparseTokens,
         remesh: Trellis2RemeshConfiguration? = Trellis2RemeshConfiguration(),
         progress: (@Sendable (Trellis2Progress) -> Void)? = nil
@@ -181,6 +182,12 @@ public actor Trellis2Generator {
             checkpointURL: checkpoint.shapeFlowURL,
             progress: progress
         )
+        // An explicit texture seed re-rolls only the appearance: structure
+        // and shape stay bit-identical to the base seed's geometry, letting
+        // palette drift be searched without touching a good reconstruction.
+        if let textureSeed {
+            MLXRandom.seed(textureSeed)
+        }
         let textureLatent = try sampleTexture(
             coordinates: coordinates,
             normalizedShape: shapeLatents.normalized,
@@ -233,6 +240,7 @@ public actor Trellis2Generator {
             foregroundPolicy: policyName,
             croppedTransparentForeground: prepared.croppedTransparentForeground,
             seed: seed,
+            textureSeed: textureSeed,
             maximumSparseTokens: maximumSparseTokens,
             remesh: remesh
         )

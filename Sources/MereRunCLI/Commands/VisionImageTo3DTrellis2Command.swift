@@ -21,6 +21,9 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
     @Option(name: [.long], help: "Deterministic MLX random seed.")
     var seed: UInt64 = 42
 
+    @Option(name: [.long], help: "Re-roll only the texture flow with this seed, keeping the geometry of --seed. Searches palette without touching a good reconstruction.")
+    var textureSeed: UInt64?
+
     @Option(name: [.long], help: "Safety limit for decoded 512-resolution O-Voxels.")
     var maxTokens: Int = Trellis2Generator.defaultMaximumSparseTokens
 
@@ -48,6 +51,7 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
             output: output,
             model: model,
             seed: seed,
+            textureSeed: textureSeed,
             maxTokens: maxTokens,
             alreadyFramed: alreadyFramed,
             noRemesh: noRemesh,
@@ -63,6 +67,7 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
         output: String?,
         model: String?,
         seed: UInt64,
+        textureSeed: UInt64? = nil,
         maxTokens: Int,
         alreadyFramed: Bool,
         noRemesh: Bool = false,
@@ -117,6 +122,7 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
                 model: model,
                 foregroundPolicy: policy,
                 seed: seed,
+                textureSeed: textureSeed,
                 maximumSparseTokens: maxTokens,
                 remesh: noRemesh
                     ? nil

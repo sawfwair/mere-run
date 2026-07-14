@@ -81,6 +81,7 @@ public struct Trellis2InputManifest: Codable, Equatable, Sendable {
 
 public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
     public let seed: UInt64
+    public let textureSeed: UInt64?
     public let pipelineResolution: Int
     public let maximumSparseTokens: Int
     public let sparseStructureSteps: Int
@@ -95,6 +96,7 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
 
     public init(
         seed: UInt64,
+        textureSeed: UInt64? = nil,
         pipelineResolution: Int,
         maximumSparseTokens: Int,
         sparseStructureSteps: Int,
@@ -108,6 +110,7 @@ public struct Trellis2GenerationManifest: Codable, Equatable, Sendable {
         remeshSealRadius: Int? = nil
     ) {
         self.seed = seed
+        self.textureSeed = textureSeed
         self.pipelineResolution = pipelineResolution
         self.maximumSparseTokens = maximumSparseTokens
         self.sparseStructureSteps = sparseStructureSteps
@@ -181,6 +184,7 @@ public enum Trellis2ArtifactExporter {
         foregroundPolicy: String,
         croppedTransparentForeground: Bool,
         seed: UInt64,
+        textureSeed: UInt64? = nil,
         maximumSparseTokens: Int,
         remesh: Trellis2RemeshConfiguration? = Trellis2RemeshConfiguration(),
         createdAt: Date = Date()
@@ -360,6 +364,7 @@ public enum Trellis2ArtifactExporter {
             ),
             generation: Trellis2GenerationManifest(
                 seed: seed,
+                textureSeed: textureSeed,
                 pipelineResolution: 512,
                 maximumSparseTokens: maximumSparseTokens,
                 sparseStructureSteps: Trellis2SamplerConfiguration.sparseStructure.steps,
