@@ -44,6 +44,7 @@ public struct MeshAsset: Sendable {
     public let vertices: [Float]
     public let indices: [UInt32]
     public let normals: [Float]?
+    /// sRGB-encoded RGB with linear alpha coverage; see `VertexColorTransfer`.
     public let colorsRGBA8: [UInt8]?
     public let textureCoordinates: [Float]?
     public let coordinateSystem: MeshCoordinateSystem

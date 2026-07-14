@@ -32,10 +32,12 @@ public enum PointCloudGLBWriter {
         ])
         var attributes: [String: Any] = ["POSITION": accessors.count - 1]
         if let colors = cloud.colorsRGBA8 {
-            let view = appendView(Data(colors))
+            // glTF defines COLOR_0 as linear; colorsRGBA8 is sRGB-encoded.
+            let linear = VertexColorTransfer.linearRGBA16(fromSRGBA8: colors)
+            let view = appendView(uint16Data(linear))
             accessors.append([
                 "bufferView": view,
-                "componentType": 5_121,
+                "componentType": 5_123,
                 "normalized": true,
                 "count": cloud.pointCount,
                 "type": "VEC4",
@@ -102,6 +104,16 @@ public enum PointCloudGLBWriter {
         var data = Data()
         data.reserveCapacity(values.count * 4)
         for value in values { appendUInt32(value.bitPattern, to: &data) }
+        return data
+    }
+
+    private static func uint16Data(_ values: [UInt16]) -> Data {
+        var data = Data()
+        data.reserveCapacity(values.count * 2)
+        for value in values {
+            var littleEndian = value.littleEndian
+            withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+        }
         return data
     }
 
