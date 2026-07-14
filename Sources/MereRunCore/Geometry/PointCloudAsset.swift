@@ -17,6 +17,7 @@ public enum PointCloudAssetError: Error, Equatable, LocalizedError, Sendable {
 /// Canonical colored point cloud for native multi-view geometry handoffs.
 public struct PointCloudAsset: Sendable {
     public let positions: [Float]
+    /// sRGB-encoded RGB with linear alpha coverage; see `VertexColorTransfer`.
     public let colorsRGBA8: [UInt8]?
     public let confidence: [Float]?
     public let viewIndices: [UInt32]?
