@@ -142,7 +142,7 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-lfm2, or text-chat-deepseek-v4-flash.")
     var engine: APIEngine = .textChatQ36
 
-    @Option(name: [.long], help: "Default LoRA adapter path for all requests.")
+    @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
     var lora: String?
 
     @Option(name: [.long], help: "Bearer token required by API endpoints. Also read from MERERUN_API_KEY.")
@@ -199,12 +199,14 @@ struct APIServe: AsyncParsableCommand {
         let resolvedAPIKey = resolveAPIKey()
         try validateServerSecurity(apiKey: resolvedAPIKey)
         let resolvedModelPath = try resolveModelPath()
+        let defaultModelID = defaultRuntimeModelID(modelPath: resolvedModelPath)
+        let resolvedLoraPath = try resolveLoraPath(modelPath: resolvedModelPath)
         let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
         let memoryPressurePolicy = try resolveMemoryPressurePolicy()
         let server = try await CodeGenServer(
-            defaultModelID: defaultRuntimeModelID(modelPath: resolvedModelPath),
+            defaultModelID: defaultModelID,
             modelPath: resolvedModelPath,
-            fallbackLoraPath: lora,
+            fallbackLoraPath: resolvedLoraPath,
             apiKey: resolvedAPIKey,
             rateLimitPerMinute: rateLimitPerMinute,
             maxActiveRequests: maxActiveRequests,
@@ -239,6 +241,17 @@ struct APIServe: AsyncParsableCommand {
         case .textChatDeepseekV4Flash:
             return DeepseekV4FlashResources.defaultModelId
         }
+    }
+
+    func resolveLoraPath(
+        modelPath: String?,
+        fileManager: FileManager = .default
+    ) throws -> String? {
+        try ManagedAdapterArgumentResolver.resolve(
+            lora,
+            baseModelID: defaultRuntimeModelID(modelPath: modelPath),
+            fileManager: fileManager
+        )
     }
 
     func resolveModelPath() throws -> String? {

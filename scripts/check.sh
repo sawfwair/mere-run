@@ -59,6 +59,9 @@ fi
 "$mere_run_bin" video generate --help >/dev/null
 "$mere_run_bin" video export-latents --help >/dev/null
 "$mere_run_bin" model --help >/dev/null
+"$mere_run_bin" adapter --help >/dev/null
+"$mere_run_bin" adapter list --help >/dev/null
+"$mere_run_bin" adapter pull --help >/dev/null
 "$mere_run_bin" model runtime --help >/dev/null
 "$mere_run_bin" model runtime get --help >/dev/null
 "$mere_run_bin" model runtime set --help >/dev/null

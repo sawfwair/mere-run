@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added a checksum-pinned public adapter catalog and `mere.run adapter list`
+  / `mere.run adapter pull` commands, beginning with the promoted Mere Platform
+  Assistant v22 release for Gemma 4 12B 4-bit. Text chat and API serving now
+  accept the catalog id `mere-platform-assistant` anywhere `--lora` accepts a
+  local adapter path.
+
 ## 0.21.0 - 2026-07-14
 
 ### Added

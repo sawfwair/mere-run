@@ -118,7 +118,7 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
-    @Option(name: [.customLong("lora")], help: "Optional local LoRA adapter .safetensors path for supported chat models.")
+    @Option(name: [.customLong("lora")], help: "Optional cataloged adapter id or local LoRA .safetensors path for supported chat models.")
     var loraPath: String?
 
     @Option(name: [.customLong("lora-scale")], help: "LoRA adapter scale.")
@@ -193,7 +193,11 @@ struct TextChat: AsyncParsableCommand {
 
         let lora: LoRA?
         if let loraPath, !loraPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lora = .local(path: URL(fileURLWithPath: loraPath).standardizedFileURL.path, scale: loraScale)
+            let resolved = try ManagedAdapterArgumentResolver.resolve(
+                loraPath,
+                baseModelID: model
+            )
+            lora = resolved.map { .local(path: $0, scale: loraScale) }
         } else {
             lora = nil
         }

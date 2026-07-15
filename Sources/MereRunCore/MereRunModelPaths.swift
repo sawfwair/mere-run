@@ -83,6 +83,11 @@ public enum MereRunModelPaths {
         applicationSupportBase.appendingPathComponent("downloads", isDirectory: true)
     }
 
+    /// `~/Library/Application Support/MereRun/adapters`
+    public static var adaptersDir: URL {
+        applicationSupportBase.appendingPathComponent("adapters", isDirectory: true)
+    }
+
     public static var outputDir: URL {
         applicationSupportBase.appendingPathComponent("output", isDirectory: true)
     }
