@@ -5,33 +5,87 @@
 <p align="center">
   <a href="https://mere.run">mere.run</a> ·
   <a href="https://docs.mere.run/">Docs</a> ·
-  <a href="https://docs.mere.run/linux-quickstart">Linux QuickStart</a> ·
-  <a href="https://mere.run/releases/mere-run.dmg">Download DMG</a> ·
+  <a href="https://mere.run/releases">Downloads</a> ·
+  <a href="https://relay.mere.run">Relay + Nodes</a> ·
+  <a href="https://plugins.mere.run">Plugins</a> ·
   <code>swift build</code>
 </p>
 
 # mere.run
 
-mere.run is a Swift package, CLI, and optional macOS studio for local-first inference on Apple Silicon. This OSS repo contains the core inference libraries, the public `mere.run` executable, and a SwiftUI app that keeps the user-facing experience prompt-first while still running the public CLI underneath.
+mere.run is a local-first inference runtime for Apple Silicon and headless Linux.
+One public CLI covers image, text, speech, vision, music, sound, video, 3D,
+worlds, training, and local API serving. The optional macOS Studio uses that
+same CLI, model store, and run history rather than a separate backend.
+
+## Start here
+
+Install a signed release from [mere.run/downloads](https://mere.run/releases),
+then let the CLI inspect the machine before pulling a large model:
+
+```bash
+mere.run setup
+mere.run model capabilities --recommended
+mere.run guide --list
+```
+
+For a small first image workflow:
+
+```bash
+mere.run model pull image-zimage-nano
+mere.run image generate \
+  --model image-zimage-nano \
+  --prompt "a ceramic mug in soft morning light" \
+  --output ./mug.png
+```
+
+Use `mere.run guide <command path>` for the packaged offline cookbook behind a
+creative or model-specific command, and `mere.run <group> --help` for the exact
+current flags.
 
 ## What works today
 
-The public OSS repo currently supports:
+| Area | Public commands | Current surface |
+| --- | --- | --- |
+| Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
+| Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
+| Vision understanding | `vision caption`, `inspect`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
+| Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
+| Video and worlds | `video generate`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, Wan 2.2 TI2V, and a warm DreamX causal world session with camera-conditioned transitions |
+| Music and sound | `music analyze`, `generate`, `realtime`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
+| Speech | `speech synthesize`, `speech transcribe`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 ASR, and Parakeet transcription |
+| Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
+| Automation | `--preflight --json`, `--progress-json`, `image run-plan`, `guide` | Typed preflight actions, machine-readable progress, replayable plans, durable run directories, checksums, and offline command cookbooks |
 
-- local image generation across Klein, ZImage, HiDream O1, Krea 2, and
-  Ideogram 4 families, including image-to-image, HiDream reference images,
-  Krea 2 Raw LoRA training, LoRA input, and deterministic image validation
-- local text chat, code generation, embeddings, and PII anonymization
-- local speech synthesis, transcription, and voice-profile management
-- local vision captioning, inspection, grounding, segmentation, tracking, live camera tracking, and OCR
-- native ACEStep music generation, Woosh sound-effect generation, and LTX video generation
-- Hugging Face-backed model pulls plus checksum-pinned public adapter pulls
-  that resolve into shared local model and adapter stores
-- offline command cookbooks through `mere.run guide`
-- a local OpenAI-compatible API surface for chat, embeddings, image generation,
-  TTS, and STT
-- a quick status snapshot for the local server, loaded API models, active requests, runtime capabilities, and installed model store
-- an optional macOS studio that wraps the public CLI instead of reimplementing runtime logic
+The [showcase](https://mere.run/#showcase) publishes real outputs across these
+surfaces. Model availability, memory fit, download size, and licensing still
+vary by command, so check `mere.run model capabilities` before a large pull and
+[`docs/model-sources.md`](./docs/model-sources.md) before redistributing model
+artifacts.
+
+## Relay, Nodes, and plugins
+
+The core runtime stays local, but it does not have to stay on one machine.
+
+- [Relay](https://relay.mere.run) pools Macs and Linux hosts approved under the
+  same mere.world account. The separate `mere.run node` desktop app advertises
+  each machine's models and availability, then accepts work through an outbound
+  connection. Current node downloads cover macOS, Linux x86_64, and Linux arm64.
+- [Official plugins](https://plugins.mere.run) are companion executables for
+  VFX, realtime performance, production tracking, private document workflows,
+  automation, and user-owned GPU training. They keep plans, manifests,
+  resumability, artifacts, and cleanup outside the core inference process.
+
+```bash
+mere.run plugin list
+mere.run plugin info mere-vfx-tools
+mere.run plugin install mere-vfx-tools --yes
+mere.run plugin doctor mere-vfx-tools
+```
+
+Relay/Node code lives in `sawfwair/relay-mere-run`; plugin contracts and source
+live in [`sawfwair/mere-run-plugins`](https://github.com/sawfwair/mere-run-plugins).
+Neither adds a hosted inference backend to this repository.
 
 ## What’s included in this repo
 
@@ -604,36 +658,23 @@ swift run mere.run video generate \
 The public CLI is modality-first:
 
 - `mere.run guide`
-- `mere.run image generate`
-- `mere.run image train-lora`
-- `mere.run image validate`
-- `mere.run text chat`
-- `mere.run text code`
-- `mere.run text embed`
-- `mere.run text anonymize`
-- `mere.run speech synthesize`
-- `mere.run speech transcribe`
+- `mere.run image { dataset, generate, reconstruct-3d, reconstruct-3d-trellis2, reconstruct-3d-multiview, run-plan, train-lora, visualize-run, validate }`
+- `mere.run text { chat, code, embed, anonymize, train-lora }`
+- `mere.run speech { synthesize, transcribe }`
 - `mere.run speech profile { list, create, delete }`
-- `mere.run vision caption`
-- `mere.run vision inspect`
-- `mere.run vision ground`
-- `mere.run vision segment`
-- `mere.run vision track`
-- `mere.run vision track-live`
-- `mere.run vision pose`
-- `mere.run vision flow`
-- `mere.run vision ocr`
-- `mere.run music analyze`
-- `mere.run music generate`
-- `mere.run music realtime`
-- `mere.run music transcribe`
-- `mere.run sfx generate`
-- `mere.run video generate`
-- `mere.run video export-latents`
+- `mere.run vision { caption, inspect, ground, segment, track, track-live, pose, flow, depth-video, geometry, geometry-multiview, image-to-3d, image-to-3d-trellis2, image-to-3d-multiview, ocr }`
+- `mere.run music { analyze, generate, realtime, transcribe }`
+- `mere.run sfx { ae, clap, condition, generate, video }`
+- `mere.run video { generate, export-latents }`
+- `mere.run world serve`
 - `mere.run run { list, inspect }`
-- `mere.run model { list, capabilities, info, pull, remove, runtime, repair-manifests }`
+- `mere.run model { list, pull, remove, info, capabilities, runtime, benchmark, repair-manifests }`
+- `mere.run adapter { list, pull }`
 - `mere.run status`
+- `mere.run gate`
+- `mere.run config { set, get, unset, list, path }`
 - `mere.run api serve`
+- `mere.run open-webui quickstart`
 - `mere.run plugin { list, info, install, doctor }`
 - `mere.run setup`
 - `mere.run agent { onboard, install-pi, start }`

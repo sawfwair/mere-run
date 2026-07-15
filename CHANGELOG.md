@@ -14,6 +14,12 @@ The format is based on Keep a Changelog.
   accept the catalog id `mere-platform-assistant` anywhere `--lora` accepts a
   local adapter path.
 
+### Fixed
+
+- updated the official plugin catalog default and bundled plugin guide to use
+  the live `sawfwair/mere-run-plugins` repository after the old catalog path
+  was retired.
+
 ## 0.21.0 - 2026-07-14
 
 ### Added

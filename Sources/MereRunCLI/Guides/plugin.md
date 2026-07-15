@@ -26,7 +26,7 @@ mere.run guide plugin
 ## Parameters
 
 - `--catalog-url`: plugin catalog URL or local JSON path. Defaults to the live
-  official catalog in `sawfwair/mere-plugins`.
+  official catalog in `sawfwair/mere-run-plugins`.
 - `--json`: print the catalog or plugin entry as JSON for scripts.
 - `--channel`: install channel, defaulting to the catalog's default channel.
 - `--yes`: execute the install command. Without it, `install` prints the exact
@@ -64,7 +64,7 @@ mere.run plugin doctor mere-runpod
 
 ```bash
 mere.run plugin list \
-  --catalog-url https://raw.githubusercontent.com/sawfwair/mere-plugins/main/catalog/plugins.v1.json \
+  --catalog-url https://raw.githubusercontent.com/sawfwair/mere-run-plugins/main/catalog/plugins.v1.json \
   --json
 ```
 
@@ -92,4 +92,4 @@ mere.run plugin list \
 ## Sources
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/PluginCommand.swift
-- https://github.com/sawfwair/mere-plugins/blob/main/catalog/plugins.v1.json
+- https://github.com/sawfwair/mere-run-plugins/blob/main/catalog/plugins.v1.json
