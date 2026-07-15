@@ -109,6 +109,12 @@ struct ImageGenerate: AsyncParsableCommand {
     )
     var kreaConditioningLayerWeights: String?
 
+    @Option(
+        name: [.customLong("krea-base-quantization-bits")],
+        help: "Quantize the frozen Krea transformer to 4 or 8 bits and load generation phases sequentially."
+    )
+    var kreaBaseQuantizationBits: Int?
+
     @Flag(name: [.customLong("preflight")], help: "Inspect the image generation request without running generation.")
     var preflight: Bool = false
 
@@ -207,6 +213,9 @@ struct ImageGenerate: AsyncParsableCommand {
         }
 
         let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
+        if kreaBaseQuantizationBits != nil, manifest.family != .krea {
+            throw ValidationError("--krea-base-quantization-bits is only supported for Krea 2 generation")
+        }
         let conditioning = Self.resolveConditioningInputs(
             family: manifest.family,
             inputImage: inputURL,
@@ -298,7 +307,8 @@ struct ImageGenerate: AsyncParsableCommand {
                 keepOriginalAspect: keepOriginalAspect,
                 useBetaSigmas: false,
                 sigmaShift: effectiveSigmaShift,
-                kreaConditioningRebalance: kreaConditioningRebalance
+                kreaConditioningRebalance: kreaConditioningRebalance,
+                kreaBaseQuantizationBits: kreaBaseQuantizationBits
             )
 
             let progressHandler: (@Sendable (GenerationProgress) -> Void)?
@@ -369,6 +379,9 @@ struct ImageGenerate: AsyncParsableCommand {
         if let strength, !(0.0...1.0).contains(strength) {
             throw ValidationError("--strength must be between 0.0 and 1.0")
         }
+        if let kreaBaseQuantizationBits, kreaBaseQuantizationBits != 4, kreaBaseQuantizationBits != 8 {
+            throw ValidationError("--krea-base-quantization-bits must be 4 or 8")
+        }
     }
 
     func makePreflightEnvelope(
@@ -401,6 +414,7 @@ struct ImageGenerate: AsyncParsableCommand {
             loraScale: loraScale,
             kreaConditioningMultiplier: kreaConditioningMultiplier,
             kreaConditioningLayerWeights: kreaConditioningLayerWeights,
+            kreaBaseQuantizationBits: kreaBaseQuantizationBits,
             generationArgv: generationActionArguments(outputURL: outputURL),
             cwd: fileManager.currentDirectoryPath
         )
@@ -488,6 +502,9 @@ struct ImageGenerate: AsyncParsableCommand {
         }
         if let kreaConditioningLayerWeights {
             args += ["--krea-conditioning-layer-weights", kreaConditioningLayerWeights]
+        }
+        if let kreaBaseQuantizationBits {
+            args += ["--krea-base-quantization-bits", String(kreaBaseQuantizationBits)]
         }
         if quiet {
             args.append("--quiet")

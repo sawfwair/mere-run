@@ -94,6 +94,12 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     @Flag(name: [.customLong("lite")], help: "Train only attention Q/V LoRA layers to reduce memory.")
     var lite: Bool = false
 
+    @Option(
+        name: [.customLong("base-quantization-bits")],
+        help: "Quantize the frozen Krea base transformer to 4 or 8 bits while training."
+    )
+    var baseQuantizationBits: Int?
+
     @Flag(name: [.customLong("exclude-preview-images")], help: "Ignore preview*.png/jpg/webp images in the dataset folder.")
     var excludePreviewImages: Bool = false
 
@@ -378,6 +384,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         if let adamWeightDecay, adamWeightDecay < 0 {
             throw ValidationError("--adam-weight-decay must be >= 0")
         }
+        if let baseQuantizationBits, baseQuantizationBits != 4, baseQuantizationBits != 8 {
+            throw ValidationError("--base-quantization-bits must be 4 or 8")
+        }
     }
 
     func makePreflightEnvelope(
@@ -391,6 +400,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             recipe: recipe,
             excludePreviewImages: excludePreviewImages,
             syntheticSamples: syntheticSamples,
+            requiresKleinModel: options.checkpointInterval != nil || hasKleinOnlyTrainingOptions(options: options),
             options: options,
             trainingArgv: trainingActionArguments(),
             runPlan: makeRunPlan(options: options, fileManager: fileManager, now: now),
@@ -462,6 +472,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
         if lite {
             args.append("--lite")
+        }
+        if let baseQuantizationBits {
+            args += ["--base-quantization-bits", String(baseQuantizationBits)]
         }
         if excludePreviewImages {
             args.append("--exclude-preview-images")
@@ -614,6 +627,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         config.loraAlpha = options.alpha
         config.captionDropout = options.captionDropout
         config.loraTargetSuffixes = lite ? Krea2LoRAInjector.liteTargetSuffixes : nil
+        config.baseQuantizationBits = baseQuantizationBits
         config.syntheticSampleCount = syntheticSamples
         config.datasetRoot = datasetRoot
         config.useCompile = !options.noCompile
@@ -651,6 +665,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         options: ResolvedLoRATrainingOptions,
         eventLogger: LoRATrainingEventLogger?
     ) async throws {
+        if baseQuantizationBits != nil {
+            throw ValidationError("--base-quantization-bits is only supported for Krea 2 LoRA training")
+        }
         if syntheticSamples != nil {
             throw ValidationError("--synthetic-samples is only supported for Krea 2 LoRA smoke tests")
         }

@@ -56,6 +56,7 @@ current flags.
 | Speech | `speech synthesize`, `speech transcribe`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 ASR, and Parakeet transcription |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
 | Automation | `--preflight --json`, `--progress-json`, `image run-plan`, `guide` | Typed preflight actions, machine-readable progress, replayable plans, durable run directories, checksums, and offline command cookbooks |
+| Portable workflows | `graph catalog`, `graph preflight`, `graph submit`, `executor`, `run watch`, `run fetch` | Immutable typed graphs and content-addressed bundles that run locally or through configured SSH and relay executors with the same events, diagnostics, and run directory |
 
 The [showcase](https://mere.run/#showcase) publishes real outputs across these
 surfaces. Model availability, memory fit, download size, and licensing still
@@ -772,6 +773,8 @@ Core guides:
 - [`docs/getting-started.md`](./docs/getting-started.md): build, first commands, first models
 - [`docs/linux-quickstart.md`](./docs/linux-quickstart.md): Linux CLI package install, first commands, and validation boundaries
 - [`docs/cli.md`](./docs/cli.md): full CLI guide and command reference
+- [`docs/workflows.md`](./docs/workflows.md): portable graphs, job bundles, SSH,
+  relay, worker protocol, and remote run lifecycle
 - [`docs/repository-tour.md`](./docs/repository-tour.md): top-level layout and module ownership
 - [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day
 - [`docs/testing.md`](./docs/testing.md): validation layers, smoke runs, and troubleshooting

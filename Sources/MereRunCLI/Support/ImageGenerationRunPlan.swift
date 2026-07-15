@@ -92,6 +92,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
     let loraScale: Double
     let kreaConditioningMultiplier: Double?
     let kreaConditioningLayerWeights: String?
+    let kreaBaseQuantizationBits: Int?
     let quiet: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -119,6 +120,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         case loraScale = "lora_scale"
         case kreaConditioningMultiplier = "krea_conditioning_multiplier"
         case kreaConditioningLayerWeights = "krea_conditioning_layer_weights"
+        case kreaBaseQuantizationBits = "krea_base_quantization_bits"
         case quiet
     }
 
@@ -159,6 +161,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
             loraScale: loraScale,
             kreaConditioningMultiplier: kreaConditioningMultiplier,
             kreaConditioningLayerWeights: kreaConditioningLayerWeights,
+            kreaBaseQuantizationBits: kreaBaseQuantizationBits,
             quiet: quiet
         )
     }
@@ -192,6 +195,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         args += ["--lora-scale", String(loraScale)]
         appendOption("--krea-conditioning-multiplier", kreaConditioningMultiplier, to: &args)
         appendOption("--krea-conditioning-layer-weights", kreaConditioningLayerWeights, to: &args)
+        appendOption("--krea-base-quantization-bits", kreaBaseQuantizationBits, to: &args)
         appendBoolFlag("--quiet", when: quiet, to: &args)
         return args
     }

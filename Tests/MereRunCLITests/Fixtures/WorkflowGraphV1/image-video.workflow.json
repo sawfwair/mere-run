@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/workflow-graph",
+  "name": "image-to-video",
+  "inputs": {
+    "prompt": { "type": "string" }
+  },
+  "nodes": [
+    {
+      "id": "make-image",
+      "kind": "image.generate",
+      "arguments": { "prompt": { "$ref": "inputs.prompt" }, "seed": 42 }
+    },
+    {
+      "id": "make-video",
+      "kind": "video.generate",
+      "arguments": {
+        "prompt": { "$ref": "inputs.prompt" },
+        "image": { "$ref": "nodes.make-image.outputs.image" },
+        "seed": 42
+      }
+    }
+  ],
+  "outputs": {
+    "image": { "$ref": "nodes.make-image.outputs.image" },
+    "video": { "$ref": "nodes.make-video.outputs.video" }
+  }
+}

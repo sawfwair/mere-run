@@ -136,6 +136,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.captionDropout, 0.05)
         XCTAssertEqual(cmd.seed, 0)
         XCTAssertFalse(cmd.lite)
+        XCTAssertNil(cmd.baseQuantizationBits)
         XCTAssertFalse(cmd.excludePreviewImages)
         XCTAssertNil(cmd.checkpointInterval)
         XCTAssertNil(cmd.maxResolution)
@@ -190,6 +191,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--caption-dropout", "0.1",
             "--seed", "7",
             "--lite",
+            "--base-quantization-bits", "4",
             "--exclude-preview-images",
             "--checkpoint-interval", "250",
             "--max-resolution", "1536",
@@ -234,6 +236,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.captionDropout, 0.1)
         XCTAssertEqual(cmd.seed, 7)
         XCTAssertTrue(cmd.lite)
+        XCTAssertEqual(cmd.baseQuantizationBits, 4)
         XCTAssertTrue(cmd.excludePreviewImages)
         XCTAssertEqual(cmd.checkpointInterval, 250)
         XCTAssertEqual(cmd.maxResolution, 1536)
@@ -749,6 +752,36 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(commandFromPlan.trainingSteps, 10)
         XCTAssertFalse(commandFromPlan.preflight)
         XCTAssertFalse(commandFromPlan.json)
+    }
+
+    func testTrainLoRAPreflightBlocksKleinPreviewOptionsForKreaModel() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data("image".utf8).write(to: dataset.appendingPathComponent("frame.png"))
+        try Data("caption".utf8).write(to: dataset.appendingPathComponent("frame.txt"))
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-krea", family: .krea, to: model)
+        let cmd = try ImageTrainLoRA.parse([
+            "--data", dataset.path,
+            "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path,
+            "--sample-prompt", "preview",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            options: try cmd.resolvedTrainingOptions(),
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains {
+            $0.id == "klein_training_options_require_klein_model" && $0.severity == .blocker
+        })
+        XCTAssertEqual(envelope.actions.first { $0.id == "start-training" }?.enabled, false)
     }
 
     func testImageRunPlanMaterializesDurableRunDirectory() throws {

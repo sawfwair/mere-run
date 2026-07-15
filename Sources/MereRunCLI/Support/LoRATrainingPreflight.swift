@@ -7,6 +7,7 @@ struct LoRATrainingPreflightInput {
     let recipe: String?
     let excludePreviewImages: Bool
     let syntheticSamples: Int?
+    let requiresKleinModel: Bool
     let options: ImageTrainLoRA.ResolvedLoRATrainingOptions
     let trainingArgv: [String]
     let runPlan: LoRATrainingRunPlan
@@ -320,6 +321,7 @@ struct LoRATrainingPreflightAnalyzer {
                 return modelResult(requested: requested, kind: "local_path", installed: false, path: localURL.path)
             }
             let family = loadManifestFamily(at: localURL, diagnostics: &diagnostics)
+            appendModelCompatibilityDiagnostics(family: family, diagnostics: &diagnostics)
             return modelResult(
                 requested: requested,
                 kind: "local_path",
@@ -333,6 +335,7 @@ struct LoRATrainingPreflightAnalyzer {
             let spec = ManagedModelCatalog.spec(for: modelID.rawValue)
             if let resolution = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) {
                 let family = loadManifestFamily(at: resolution.rootURL, diagnostics: &diagnostics)
+                appendModelCompatibilityDiagnostics(family: family, diagnostics: &diagnostics)
                 return modelResult(
                     requested: requested,
                     kind: "managed_model",
@@ -371,6 +374,22 @@ struct LoRATrainingPreflightAnalyzer {
             )
         )
         return modelResult(requested: requested, kind: "unknown", installed: false)
+    }
+
+    private func appendModelCompatibilityDiagnostics(
+        family: String?,
+        diagnostics: inout [PreflightDiagnostic]
+    ) {
+        guard family == MereRunModelManifest.Family.krea.rawValue,
+              input.requiresKleinModel else {
+            return
+        }
+        diagnostics.append(PreflightDiagnostic(
+            id: "klein_training_options_require_klein_model",
+            severity: .blocker,
+            title: "Klein model required",
+            message: "Klein training options require a FLUX.2 Klein base model."
+        ))
     }
 
     private func outputSummary(

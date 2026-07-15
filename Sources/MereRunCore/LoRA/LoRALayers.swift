@@ -110,6 +110,7 @@ public final class LoRAQuantizedLinear: Linear, TrainableLoRALayer {
     public let biases: MLXArray?
     public let residualDown: MLXArray?
     public let residualUp: MLXArray?
+    private let denseBaseFallback: Bool
 
     public let loraRank: Int
     public let loraAlpha: Float
@@ -144,6 +145,7 @@ public final class LoRAQuantizedLinear: Linear, TrainableLoRALayer {
             self.residualDown = nil
             self.residualUp = nil
         }
+        self.denseBaseFallback = base is PortableQuantizedLinear
 
         let (outDim, inDim) = base.shape
         self.loraRank = max(1, rank)
@@ -173,6 +175,7 @@ public final class LoRAQuantizedLinear: Linear, TrainableLoRALayer {
         self.biases = base.biases
         self.residualDown = base.residualDown
         self.residualUp = base.residualUp
+        self.denseBaseFallback = base.denseBaseFallback
 
         let (outDim, inDim) = base.shape
         self.loraRank = max(1, rank)
@@ -194,16 +197,30 @@ public final class LoRAQuantizedLinear: Linear, TrainableLoRALayer {
     }
 
     public override func callAsFunction(_ x: MLXArray) -> MLXArray {
-        var out = quantizedMM(
-            x,
-            weight,
-            scales: scales,
-            biases: biases,
-            transpose: true,
-            groupSize: groupSize,
-            bits: bits,
-            mode: mode
-        )
+        var out: MLXArray
+        if denseBaseFallback {
+            let denseWeight = MLX.dequantized(
+                weight,
+                scales: scales,
+                biases: biases,
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode,
+                dtype: x.dtype
+            )
+            out = MLX.matmul(x, denseWeight.T)
+        } else {
+            out = quantizedMM(
+                x,
+                weight,
+                scales: scales,
+                biases: biases,
+                transpose: true,
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode
+            )
+        }
         if let bias {
             out = out + bias
         }

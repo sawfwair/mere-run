@@ -42,6 +42,16 @@ public enum LoRATrainingEnvironment {
         return 16
     }()
 
+    /// MERERUN_LORA_TRAIN_DISK_CACHE=1 keeps prepared latents and prompt
+    /// embeddings on disk, staging only the current batch into accelerator
+    /// memory. This is useful for CUDA workers whose model and dataset caches
+    /// do not fit in device memory together.
+    public static let diskBackedCacheEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment["MERERUN_LORA_TRAIN_DISK_CACHE"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw == "1" || raw == "true" || raw == "on"
+    }()
+
     /// Adapter checkpoint cadence in optimizer steps for trainers without
     /// their own mid-run checkpointing. MERERUN_LORA_TRAIN_SAVE_EVERY
     /// overrides; 0 disables.

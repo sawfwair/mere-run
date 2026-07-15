@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/workflow-graph",
+  "name": "invalid-cycle",
+  "inputs": { "prompt": { "type": "string" } },
+  "nodes": [
+    {
+      "id": "first",
+      "kind": "image.generate",
+      "depends_on": ["second"],
+      "arguments": { "prompt": { "$ref": "inputs.prompt" } }
+    },
+    {
+      "id": "second",
+      "kind": "image.generate",
+      "depends_on": ["first"],
+      "arguments": { "prompt": { "$ref": "inputs.prompt" } }
+    }
+  ],
+  "outputs": { "image": { "$ref": "nodes.second.outputs.image" } }
+}

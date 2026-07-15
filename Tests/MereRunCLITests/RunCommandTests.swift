@@ -9,7 +9,7 @@ final class RunCommandTests: XCTestCase {
         XCTAssertTrue(names.contains("run"))
 
         let runNames = Set(Run.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(runNames, Set(["list", "inspect"]))
+        XCTAssertEqual(runNames, Set(["list", "inspect", "watch", "fetch", "cancel", "retry"]))
     }
 
     func testRunListReportsWorkspaceArtifacts() throws {

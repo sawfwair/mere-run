@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mere.run/schemas/graph-event-v1.schema.json",
+  "title": "mere.run Graph Event V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sequence", "created_at", "type", "state"],
+  "properties": {
+    "sequence": { "type": "integer", "minimum": 0 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "type": {
+      "enum": [
+        "run_started",
+        "node_preflight_started",
+        "node_started",
+        "node_resumed",
+        "node_finished",
+        "run_finished",
+        "run_failed",
+        "run_cancelled"
+      ]
+    },
+    "state": {
+      "enum": ["planned", "preflighting", "queued", "assigned", "running", "finished", "failed", "cancelled"]
+    },
+    "node_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "message": { "type": ["string", "null"] }
+  }
+}

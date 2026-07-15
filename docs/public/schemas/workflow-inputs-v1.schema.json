@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mere.run/schemas/workflow-inputs-v1.schema.json",
+  "title": "mere.run Workflow Inputs V1",
+  "type": "object",
+  "additionalProperties": {
+    "anyOf": [
+      { "type": "null" },
+      { "type": "string" },
+      { "type": "integer" },
+      { "type": "number" },
+      { "type": "boolean" },
+      { "type": "array" },
+      { "type": "object" }
+    ]
+  }
+}

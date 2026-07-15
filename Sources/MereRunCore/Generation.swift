@@ -39,6 +39,7 @@ public struct GenerationRequest: Sendable, Hashable {
     public var useBetaSigmas: Bool
     public var sigmaShift: Float?
     public var kreaConditioningRebalance: Krea2ConditioningRebalance?
+    public var kreaBaseQuantizationBits: Int?
 
     public init(
         prompt: String,
@@ -60,7 +61,8 @@ public struct GenerationRequest: Sendable, Hashable {
         keepOriginalAspect: Bool = false,
         useBetaSigmas: Bool = false,
         sigmaShift: Float? = nil,
-        kreaConditioningRebalance: Krea2ConditioningRebalance? = nil
+        kreaConditioningRebalance: Krea2ConditioningRebalance? = nil,
+        kreaBaseQuantizationBits: Int? = nil
     ) {
         self.prompt = prompt
         self.negativePrompt = negativePrompt
@@ -82,6 +84,7 @@ public struct GenerationRequest: Sendable, Hashable {
         self.useBetaSigmas = useBetaSigmas
         self.sigmaShift = sigmaShift
         self.kreaConditioningRebalance = kreaConditioningRebalance
+        self.kreaBaseQuantizationBits = kreaBaseQuantizationBits
     }
 }
 

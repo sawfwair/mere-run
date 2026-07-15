@@ -260,6 +260,7 @@ var mereRunCLIDependencies: [Target.Dependency] = [
   "AudioSTT",
   "AudioTTS",
   .product(name: "ArgumentParser", package: "swift-argument-parser"),
+  .product(name: "Crypto", package: "swift-crypto"),
   .product(name: "Hummingbird", package: "hummingbird")
 ]
 if hasMediaIOTarget {
@@ -395,6 +396,9 @@ targets.append(contentsOf: [
     name: "MereRunCLITests",
     dependencies: ["MereRunCLI"],
     path: "Tests/MereRunCLITests",
+    resources: [
+      .copy("Fixtures")
+    ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   ),
