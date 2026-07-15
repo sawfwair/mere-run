@@ -3,86 +3,186 @@ import MLX
 import XCTest
 @testable import MereRunCore
 
-final class Gemma4JSONConstrainedDecodingTests: XCTestCase {
-    // MARK: - JSONPrefixScanner
+final class JSONConstrainedDecodingTests: MereRunCoreTestCase {
+    // MARK: - JSONObjectPrefixGrammar
 
     func testAcceptsValidJSONIncrementally() {
-        var scanner = JSONPrefixScanner()
+        var grammar = JSONObjectPrefixGrammar()
         // Pieces shaped like real BPE output: fragments that split tokens mid-string.
         let pieces = ["{\"short", " desc", "ription\": \"A sign", " in a forest\",", " \"count\": 12.5,", " \"ok\": true}", ""]
         for piece in pieces {
-            XCTAssertTrue(scanner.accept(piece), "rejected valid piece: \(piece)")
+            XCTAssertTrue(grammar.accept(piece), "rejected valid piece: \(piece)")
         }
-        XCTAssertTrue(scanner.isComplete)
+        XCTAssertTrue(grammar.isComplete)
     }
 
     func testAcceptsNestedContainersAndEscapes() {
-        var scanner = JSONPrefixScanner()
-        XCTAssertTrue(scanner.accept(#"{"a": [{"b": "she said \"hi\""}, [1, -2.5e3, null]], "c": false}"#))
-        XCTAssertTrue(scanner.isComplete)
+        let json = "{\"a\":[{\"b\":\"she said \\\"hi\\\"\"},[1,-2.5e3,null]],\"c\":false}"
+        var grammar = JSONObjectPrefixGrammar()
+        XCTAssertTrue(grammar.accept(json))
+        XCTAssertTrue(grammar.isComplete)
+        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: Data(json.utf8)))
     }
 
-    func testAcceptsNonASCIIInsideStringsOnly() {
-        var inString = JSONPrefixScanner()
-        XCTAssertTrue(inString.accept(#"{"título": "señal — 標識 🌲"#))
+    func testAcceptsUnicodeAndEscapedStrings() {
+        let json = "{\"título\":\"señal — 標識 🌲\",\"escaped\":\"line\\nquote: \\\" and smile: \\u263A\"}"
+        var grammar = JSONObjectPrefixGrammar()
+        XCTAssertTrue(grammar.accept(json))
+        XCTAssertTrue(grammar.isComplete)
+        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: Data(json.utf8)))
 
-        var outside = JSONPrefixScanner()
-        XCTAssertFalse(outside.accept(#"{標識"#))
+        var outside = JSONObjectPrefixGrammar()
+        XCTAssertFalse(outside.accept("{標識"))
     }
 
     func testRejectsTokenSalad() {
-        var scanner = JSONPrefixScanner()
-        XCTAssertFalse(scanner.accept("{ed feetization mas Dod asked or<audio|>"))
+        var grammar = JSONObjectPrefixGrammar()
+        XCTAssertFalse(grammar.accept("{ed feetization mas Dod asked or<audio|>"))
 
-        var fresh = JSONPrefixScanner()
+        var fresh = JSONObjectPrefixGrammar()
         XCTAssertFalse(fresh.accept("<|image>"))
     }
 
     func testRejectsProseAndFencesBeforeJSONStarts() {
-        var scanner = JSONPrefixScanner()
-        XCTAssertFalse(scanner.accept("Here is the JSON you asked for: {"))
+        var grammar = JSONObjectPrefixGrammar()
+        XCTAssertFalse(grammar.accept("Here is the JSON you asked for: {"))
 
-        var fenced = JSONPrefixScanner()
+        var fenced = JSONObjectPrefixGrammar()
         XCTAssertFalse(fenced.accept("```json"))
 
-        var leadingWhitespace = JSONPrefixScanner()
+        var leadingWhitespace = JSONObjectPrefixGrammar()
         XCTAssertTrue(leadingWhitespace.accept("  \n\t{"))
     }
 
-    func testRejectsMismatchedBrackets() {
-        var scanner = JSONPrefixScanner()
-        XCTAssertFalse(scanner.accept(#"{"a": [1, 2}"#))
+    func testRequiresObjectRoot() {
+        for invalidRoot in ["[]", "true", "null", "\"text\"", "42"] {
+            var grammar = JSONObjectPrefixGrammar()
+            XCTAssertFalse(grammar.accept(invalidRoot), "accepted non-object root: \(invalidRoot)")
+        }
+    }
 
-        var underflow = JSONPrefixScanner()
+    func testRejectsInvalidObjectAndArrayState() {
+        let invalidDocuments = [
+            "{\"a\" 1}",
+            "{\"a\":1 \"b\":2}",
+            "{\"a\":1,}",
+            "{\"a\":[1,]}",
+            "{\"a\":[1,2}",
+            "{\"a\":{]}",
+        ]
+        for document in invalidDocuments {
+            var grammar = JSONObjectPrefixGrammar()
+            XCTAssertFalse(grammar.accept(document), "accepted invalid JSON: \(document)")
+        }
+
+        var underflow = JSONObjectPrefixGrammar()
         XCTAssertTrue(underflow.accept("{}"))
         XCTAssertFalse(underflow.accept("}"))
     }
 
+    func testRejectsInvalidNumbersLiteralsEscapesAndControlCharacters() {
+        let invalidDocuments = [
+            "{\"n\":01}",
+            "{\"n\":-}",
+            "{\"n\":1.}",
+            "{\"n\":1e}",
+            "{\"n\":1e+}",
+            "{\"v\":truth}",
+            "{\"v\":True}",
+            "{\"s\":\"bad\\xescape\"}",
+            "{\"s\":\"line\nbreak\"}",
+        ]
+        for document in invalidDocuments {
+            var grammar = JSONObjectPrefixGrammar()
+            XCTAssertFalse(grammar.accept(document), "accepted invalid JSON: \(document)")
+        }
+    }
+
     func testCompleteAllowsOnlyTrailingWhitespace() {
-        var scanner = JSONPrefixScanner()
-        XCTAssertTrue(scanner.accept(#"{"done": true}"#))
-        XCTAssertTrue(scanner.isComplete)
-        XCTAssertTrue(scanner.accept(" \n"))
-        XCTAssertFalse(scanner.accept("extra"))
+        var grammar = JSONObjectPrefixGrammar()
+        XCTAssertTrue(grammar.accept("{\"done\":true}"))
+        XCTAssertTrue(grammar.isComplete)
+        XCTAssertTrue(grammar.accept(" \n"))
+        XCTAssertFalse(grammar.accept("extra"))
     }
 
     func testAllowsOnlyJSONLiteralsOutsideStrings() {
-        var literals = JSONPrefixScanner()
-        XCTAssertTrue(literals.accept(#"{"a": true, "b": false, "c": null}"#))
+        var literals = JSONObjectPrefixGrammar()
+        XCTAssertTrue(literals.accept("{\"a\":true,\"b\":false,\"c\":null}"))
         XCTAssertTrue(literals.isComplete)
 
         // Split across BPE-style pieces.
-        var split = JSONPrefixScanner()
-        XCTAssertTrue(split.accept(#"{"a": tr"#))
+        var split = JSONObjectPrefixGrammar()
+        XCTAssertTrue(split.accept("{\"a\":tr"))
         XCTAssertTrue(split.accept("ue}"))
 
-        // Arbitrary words made of literal letters must not slip through —
-        // this was the context-poisoning vector for mid-generation salad.
-        var junk = JSONPrefixScanner()
-        XCTAssertFalse(junk.accept(#"{"a": ensure"#))
+        var junk = JSONObjectPrefixGrammar()
+        XCTAssertFalse(junk.accept("{\"a\":ensure"))
 
-        var uppercase = JSONPrefixScanner()
-        XCTAssertFalse(uppercase.accept(#"{"a": True"#))
+        var uppercase = JSONObjectPrefixGrammar()
+        XCTAssertFalse(uppercase.accept("{\"a\":True"))
+    }
+
+    func testEveryPrefixOfValidDocumentIsAccepted() {
+        let json = "{\"nested\":{\"array\":[-12,0,3.5,6.02e23,true,false,null,\"🌊\"]}}"
+        for end in json.indices {
+            let prefix = String(json[...end])
+            var grammar = JSONObjectPrefixGrammar()
+            XCTAssertTrue(grammar.accept(prefix), "rejected valid prefix: \(prefix)")
+        }
+    }
+
+    func testStreamingAndNonStreamingOutputAreIdenticalValidJSON() throws {
+        let output = "{\"summary\":\"café \\\"ready\\\"\",\"items\":[{\"id\":1},{\"id\":2}]}"
+        var nonStreaming = JSONObjectPrefixGrammar()
+        XCTAssertTrue(nonStreaming.accept(output))
+        XCTAssertTrue(nonStreaming.isComplete)
+
+        var streaming = JSONObjectPrefixGrammar()
+        let pieces = ["{\"sum", "mary\":\"caf", "é \\\"ready\\\"\",", "\"items\":[{\"id\":1}", ",", "{\"id\":2}]}" ]
+        for piece in pieces {
+            XCTAssertTrue(streaming.accept(piece), "rejected streaming piece: \(piece)")
+        }
+        XCTAssertTrue(streaming.isComplete)
+        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: Data(output.utf8)))
+    }
+
+    func testConstrainedTokenSearchesBeyondDistributionHead() {
+        var logits = (0..<80).map(Float.init)
+        logits[0] = -100
+        var grammar = JSONObjectPrefixGrammar()
+        let token = jsonConstrainedToken(
+            initial: 79,
+            logits: MLXArray(logits),
+            config: GenerationConfig(temperature: 0),
+            eosSet: [],
+            grammar: &grammar,
+            decode: { $0 == 0 ? "{" : "prose" }
+        )
+        XCTAssertEqual(token, 0)
+    }
+
+    func testEOSIsAdmittedOnlyAfterRootObjectCloses() {
+        var incomplete = JSONObjectPrefixGrammar()
+        XCTAssertNil(jsonConstrainedToken(
+            initial: 0,
+            logits: MLXArray([Float(1)]),
+            config: GenerationConfig(temperature: 0),
+            eosSet: [0],
+            grammar: &incomplete,
+            decode: { _ in "" }
+        ))
+
+        var complete = JSONObjectPrefixGrammar()
+        XCTAssertTrue(complete.accept("{}"))
+        XCTAssertEqual(jsonConstrainedToken(
+            initial: 0,
+            logits: MLXArray([Float(1)]),
+            config: GenerationConfig(temperature: 0),
+            eosSet: [0],
+            grammar: &complete,
+            decode: { _ in "" }
+        ), 0)
     }
 
     // MARK: - Token ban mask

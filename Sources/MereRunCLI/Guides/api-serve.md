@@ -191,6 +191,12 @@ download route.
 - `text-code` maps OpenAI `stop` sequences into native generation stops.
 - Function `tool_choice` values are accepted for native tool-capable engines;
   specific function choices narrow the advertised tools to the named function.
+- Native Gemma and Qwen-family chat engines accept
+  `response_format: {"type":"json_object"}`. JSON-object generation uses a
+  token-level prefix grammar, forces thinking off, and permits EOS only after
+  the root object closes. Qwen-family requests bypass MTP, continuous batching,
+  and pipelined decoding in this mode. `json_schema` and strict structured
+  output are not supported.
 - `/v1/embeddings` accepts OpenAI-compatible string or string-array `input`
   payloads and returns float embeddings from `text-embed-qwen3-0.6b`. A request
   may contain up to 256 texts and 2 MiB of UTF-8 content; inference truncates
@@ -269,6 +275,20 @@ mere.run api serve --engine text-chat-lfm2 --port 11434
 mere.run model pull text-agent-ornith-9b
 mere.run api serve --engine text-chat-q36 --model text-agent-ornith-9b --port 11434
 ```
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  --data '{
+    "model": "text-chat-q36-nano",
+    "messages": [{"role": "user", "content": "Return an object with a name and an array of tags."}],
+    "response_format": {"type": "json_object"}
+  }'
+```
+
+The Q36 JSON capability is native-MLX-only in this release. The Linux/GGUF
+Q36 runtime uses llama.cpp and continues to reject structured output until a
+llama.cpp JSON grammar is wired.
 
 ```bash
 export MERERUN_API_KEY=change-me

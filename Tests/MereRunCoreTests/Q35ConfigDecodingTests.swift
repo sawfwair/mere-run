@@ -364,6 +364,71 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "32"]), 16)
     }
 
+    func testQ35JSONModeAlwaysSelectsConstrainedSerialDecode() {
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: true,
+                continuousBatchingEnabled: true,
+                mtpSpeculationEnabled: true
+            ),
+            .jsonConstrainedSerial
+        )
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: true,
+                continuousBatchingEnabled: false,
+                mtpSpeculationEnabled: false
+            ),
+            .jsonConstrainedSerial
+        )
+    }
+
+    func testQ35UnconstrainedDecodePathKeepsAcceleratedModes() {
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: false,
+                continuousBatchingEnabled: true,
+                mtpSpeculationEnabled: true
+            ),
+            .continuousBatched
+        )
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: false,
+                continuousBatchingEnabled: false,
+                mtpSpeculationEnabled: true
+            ),
+            .mtpSpeculativeSerial
+        )
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: false,
+                continuousBatchingEnabled: false,
+                mtpSpeculationEnabled: false
+            ),
+            .pipelined
+        )
+    }
+
+    func testQ35TokenBudgetExhaustionReportsLength() {
+        XCTAssertEqual(
+            Q35Generator.finishReason(
+                generatedTokenCount: 8,
+                tokenBudget: 8,
+                matchedStopSequence: false
+            ),
+            .length
+        )
+        XCTAssertEqual(
+            Q35Generator.finishReason(
+                generatedTokenCount: 7,
+                tokenBudget: 8,
+                matchedStopSequence: false
+            ),
+            .stop
+        )
+    }
+
     func testQ35ConfigAllowsTextOnlyQwen36Layout() throws {
         var configObject = makeBaseConfig()
         configObject["model_type"] = "qwen3_5_moe"

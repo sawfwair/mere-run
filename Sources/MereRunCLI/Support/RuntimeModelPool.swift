@@ -2266,7 +2266,7 @@ extension RuntimeServingEngine {
         case .textChatGemma4:
             return .localTextWithToolsAndStructuredJSON
         case .textChatQ36, .textChatQ35:
-            return .localTextWithToolsAndVision
+            return .localTextWithToolsVisionAndStructuredJSON
         case .textChatLFM2:
             return .localTextWithTools
         case .textChatDeepseekV4Flash:

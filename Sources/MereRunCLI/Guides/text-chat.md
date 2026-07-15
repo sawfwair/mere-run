@@ -73,6 +73,9 @@ mere.run text train-lora \
 - `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache quantization controls. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
 - `--model-root`, `-m`: explicit local model root.
 - `--model`: canonical model id.
+- `--response-format`: `text` (default) or `json_object`. JSON-object mode is
+  available for native MLX Gemma and Qwen-family chat models, forces thinking
+  off, and validates every generated token against the JSON grammar.
 - `--thinking`, `--show-thinking`: include hidden reasoning output when supported.
 - `--stats`: print timing to stderr; Gemma4 runs also include MTP state and accept/draft counts.
 - `--stream`: stream tokens to stdout.
@@ -124,6 +127,20 @@ mere.run text chat \
 
 ```bash
 mere.run text chat \
+  --model text-chat-q36-nano \
+  --response-format json_object \
+  --prompt 'Return an object with keys "name", "features", and "stable".'
+```
+
+`json_object` requires one complete JSON object at the root. It supports nested
+objects and arrays, strings and escapes, Unicode, numbers, booleans, and null.
+Thinking and the Qwen-family MTP, continuous-batching, and pipelined decode
+paths are disabled so every token is checked before it is streamed. The
+llama.cpp/GGUF Q36 lane (`text-chat-q36-nano-gguf`, used by Linux packages)
+does not yet have a wired JSON grammar and rejects this option explicitly.
+
+```bash
+mere.run text chat \
   --model text-chat-lfm25-a1b-8bit \
   --prompt "Summarize the tradeoffs of mixture-of-experts chat models."
 ```
@@ -139,6 +156,9 @@ mere.run text chat \
 - Slow first run: the model may be downloading or compiling kernels.
 - Tool calls rejected: `shell_exec` requires `--allow-shell-exec`; absolute writes require `--allow-absolute-tool-paths`.
 - Output includes unwanted reasoning: omit `--thinking`.
+- JSON object mode rejected for a GGUF model: use the native MLX
+  `text-chat-q36-nano` model on Apple Silicon; the llama.cpp grammar is not yet
+  wired.
 
 ## Sources
 

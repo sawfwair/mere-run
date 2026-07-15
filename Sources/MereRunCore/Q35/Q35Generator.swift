@@ -29,6 +29,13 @@ private struct Q35BatchedDecodeResult {
     var firstTokenSeconds: Double? = nil
 }
 
+enum Q35DecodePath: Equatable {
+    case jsonConstrainedSerial
+    case continuousBatched
+    case mtpSpeculativeSerial
+    case pipelined
+}
+
 private struct Q35VisionReplacement {
     let embeddings: MLXArray
     let gridTHW: (Int, Int, Int)
@@ -400,6 +407,8 @@ public actor Q35Generator: ChatGenerator {
         }
 
         let messages = request.messages
+        let jsonConstrained = request.requiresJSON
+        let includeThinking = request.showThinking && !jsonConstrained
         let requestedContextLength = request.maxContextTokens ?? maxContextLength
         guard requestedContextLength > 0 else {
             throw Q35Error.generationFailed("maxContextTokens must be greater than zero.")
@@ -431,7 +440,7 @@ public actor Q35Generator: ChatGenerator {
             messages: messages,
             tools: request.tools,
             addGenerationPrompt: true,
-            includeThinking: request.showThinking,
+            includeThinking: includeThinking,
             maxLength: effectiveContext,
             imageTokenCounts: visionReplacements.map { max(1, $0.embeddings.dim(0)) }
         )
@@ -454,7 +463,8 @@ public actor Q35Generator: ChatGenerator {
         )
         let retainPrefillHidden =
             prefixKVCacheEnabled
-            || (Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
+            || (!jsonConstrained
+                && Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
                 && mtpModel != nil)
         let effectiveKVCacheMode: RuntimeKVCacheMode = request.kvCacheMode == .affine8
             ? .affine8
@@ -477,7 +487,7 @@ public actor Q35Generator: ChatGenerator {
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 messages: messages,
                 tools: request.tools,
-                includeThinking: request.showThinking,
+                includeThinking: includeThinking,
                 promptTokens: promptTokens,
                 maxContextLength: effectiveContext
             )
@@ -568,6 +578,7 @@ public actor Q35Generator: ChatGenerator {
             mropeRopeDelta: mropeRopeDelta,
             promptTokens: promptTokens,
             maxContextTokens: effectiveContext,
+            jsonConstrained: jsonConstrained,
             progressHandler: progressHandler
         )
 
@@ -575,12 +586,11 @@ public actor Q35Generator: ChatGenerator {
         let decodedRaw = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
         let trimmed = TextGenerationStopSequences.trimming(decodedRaw, sequences: stopSequences)
         let decoded = trimmed.text
-        let finishReason: ChatFinishReason = {
-            if trimmed.matchedSequence != nil {
-                return .stopSequence
-            }
-            return decodeResult.generatedTokens.count >= tokenBudget ? .length : .stop
-        }()
+        let finishReason = Self.finishReason(
+            generatedTokenCount: decodeResult.generatedTokens.count,
+            tokenBudget: tokenBudget,
+            matchedStopSequence: trimmed.matchedSequence != nil
+        )
         let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
             let parsed = Gemma4ToolParser.parseToolCalls(decoded)
             return parsed.isEmpty ? nil : parsed
@@ -589,7 +599,7 @@ public actor Q35Generator: ChatGenerator {
         return ChatResponse(
             generatedText: decoded,
             tokensGenerated: decodeResult.generatedTokens.count,
-            showThinking: request.showThinking,
+            showThinking: includeThinking,
             timing: ChatTiming(
                 loadSeconds: 0,
                 prefillSeconds: prefillSeconds,
@@ -603,6 +613,26 @@ public actor Q35Generator: ChatGenerator {
             promptTokens: promptTokens.count,
             finishReason: finishReason
         )
+    }
+
+    static func finishReason(
+        generatedTokenCount: Int,
+        tokenBudget: Int,
+        matchedStopSequence: Bool
+    ) -> ChatFinishReason {
+        if matchedStopSequence { return .stopSequence }
+        return generatedTokenCount >= tokenBudget ? .length : .stop
+    }
+
+    static func decodePath(
+        jsonConstrained: Bool,
+        continuousBatchingEnabled: Bool,
+        mtpSpeculationEnabled: Bool
+    ) -> Q35DecodePath {
+        if jsonConstrained { return .jsonConstrainedSerial }
+        if continuousBatchingEnabled { return .continuousBatched }
+        if mtpSpeculationEnabled { return .mtpSpeculativeSerial }
+        return .pipelined
     }
 
     /// Decide whether to use MTP speculative decode for a request.
@@ -663,24 +693,32 @@ public actor Q35Generator: ChatGenerator {
         mropeRopeDelta: Int?,
         promptTokens: [Int],
         maxContextTokens: Int,
+        jsonConstrained: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         guard tokenBudget > 0 else {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
-        guard continuousBatchingEnabled else {
-            // Use the loaded MTP head only when the prompt is long enough for
-            // speculation to pay off; otherwise decode without it (nil).
-            let speculationMTP = Self.shouldSpeculate(
-                promptTokenCount: promptTokens.count,
-                maxContextTokens: maxContextTokens
-            ) && mropeRopeDelta == nil ? mtpModel : nil
+        let speculationMTP = !jsonConstrained && Self.shouldSpeculate(
+            promptTokenCount: promptTokens.count,
+            maxContextTokens: maxContextTokens
+        ) && mropeRopeDelta == nil ? mtpModel : nil
+        let decodePath = Self.decodePath(
+            jsonConstrained: jsonConstrained,
+            continuousBatchingEnabled: continuousBatchingEnabled,
+            mtpSpeculationEnabled: speculationMTP != nil
+        )
+
+        // JSON mode owns mutable prefix-grammar state and must validate every
+        // token before it is streamed. Its plan therefore cannot select continuous
+        // batching, MTP speculation, or the shared pipelined decoder.
+        if decodePath != .continuousBatched {
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 initialLogits: initialLogits,
                 initialHidden: initialHidden,
-                mtpModel: speculationMTP,
+                mtpModel: decodePath == .mtpSpeculativeSerial ? speculationMTP : nil,
                 layerCaches: layerCaches,
                 eosSet: eosSet,
                 generationConfig: generationConfig,
@@ -688,6 +726,7 @@ public actor Q35Generator: ChatGenerator {
                 prefillTokenCount: prefillTokenCount,
                 mropeRopeDelta: mropeRopeDelta,
                 promptTokens: promptTokens,
+                jsonConstrained: decodePath == .jsonConstrainedSerial,
                 progressHandler: progressHandler
             )
         }
@@ -732,9 +771,10 @@ public actor Q35Generator: ChatGenerator {
         prefillTokenCount: Int,
         mropeRopeDelta: Int?,
         promptTokens: [Int],
+        jsonConstrained: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
-        if mtpModel == nil {
+        if mtpModel == nil, !jsonConstrained {
             return try await decodeTokensPipelined(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -757,7 +797,9 @@ public actor Q35Generator: ChatGenerator {
         generated.reserveCapacity(tokenBudget)
         var repetitionHistory = promptTokens
         var pendingProgressWhitespace = ""
+        var streamedJSONText = ""
         var firstTokenSeconds: Double?
+        var jsonGrammar = JSONObjectPrefixGrammar()
         let decodeStart = Date()
 
         func emit(_ token: Int) {
@@ -767,6 +809,27 @@ public actor Q35Generator: ChatGenerator {
                 firstTokenSeconds = Date().timeIntervalSince(decodeStart)
             }
             guard let progressHandler else { return }
+            if jsonConstrained {
+                // Byte-fallback BPE tokens can decode individually as U+FFFD even
+                // though the cumulative token sequence decodes to valid Unicode.
+                // Stream only the stable cumulative prefix and wait for trailing
+                // replacement scalars to resolve before exposing them.
+                var stableText = tokenizerAndTemplate.decode(tokens: generated)
+                while stableText.last == "\u{FFFD}" {
+                    stableText.removeLast()
+                }
+                guard stableText.hasPrefix(streamedJSONText) else { return }
+                let deltaStart = stableText.index(
+                    stableText.startIndex,
+                    offsetBy: streamedJSONText.count
+                )
+                let delta = String(stableText[deltaStart...])
+                streamedJSONText = stableText
+                if !delta.isEmpty {
+                    progressHandler(ChatProgress(stage: .generating, message: delta))
+                }
+                return
+            }
             let piece = tokenizerAndTemplate.decode(token: token)
             guard !piece.isEmpty else { return }
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -786,17 +849,35 @@ public actor Q35Generator: ChatGenerator {
 
         while generated.count < tokenBudget {
             try Task.checkCancellation()
-            let next = sampleToken(
+            var next = sampleToken(
                 logits: logits[0, -1, 0...],
                 config: generationConfig,
                 previousTokens: repetitionHistory
             )
+
+            if jsonConstrained {
+                guard let constrained = jsonConstrainedToken(
+                    initial: next,
+                    logits: logits[0, -1, 0...],
+                    config: generationConfig,
+                    eosSet: eosSet,
+                    grammar: &jsonGrammar,
+                    decode: { tokenizerAndTemplate.decode(token: $0) }
+                ) else {
+                    break
+                }
+                next = constrained
+            }
 
             if eosSet.contains(next) {
                 break
             }
 
             emit(next)
+
+            if jsonConstrained, jsonGrammar.isComplete {
+                break
+            }
 
             guard generated.count < tokenBudget else {
                 break

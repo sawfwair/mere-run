@@ -349,7 +349,11 @@ Engine compatibility:
   paths, `file://` URLs, or base64 data URLs; it does not fetch remote images.
 - `text-chat-q36-nano`: uses the Qwen-family serving engine with Qwen3.6
   35B-A3B OptiQ chat weights, accepts function tools, and accepts one image
-  content part per message.
+  content part per message. It also accepts
+  `response_format: {"type":"json_object"}` and reports structured-output
+  support with strict mode disabled. JSON-object mode forces thinking off and
+  uses token-level constrained serial decoding; it does not implement
+  `json_schema`.
 - `text-agent-ornith-9b`: uses the same Qwen-family serving engine for the
   Ornith 1.0 9B OptiQ coding-agent experiment; start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
@@ -371,6 +375,11 @@ Engine compatibility:
   `text-code-north-mini`, and `text-agent-ornith-35b`. It rejects tools,
   images, reasoning controls, logprobs, seed, and structured outputs with
   explicit errors.
+
+The JSON-object capability applies to the native MLX Qwen-family runtime,
+including Q35-compatible models that share that generator. The Linux/GGUF Q36
+lane still routes through llama.cpp and rejects structured output until its
+JSON grammar is wired.
 
 Streaming responses only emit assistant content tokens. Local progress labels
 stay in logs/stderr, and `stream_options.include_usage` adds the final usage

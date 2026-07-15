@@ -2269,6 +2269,74 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(chatRequest.requiresJSON)
     }
 
+    func testQ36EngineCapabilityAcceptsJSONObjectButNotStrictSchema() throws {
+        let capabilities = RuntimeServingEngine.textChatQ36.openAICompatibility
+        XCTAssertTrue(capabilities.supportsTools)
+        XCTAssertTrue(capabilities.supportsVisionContentParts)
+        XCTAssertTrue(capabilities.supportsStructuredOutputs)
+        XCTAssertFalse(capabilities.supportsStrictMode)
+
+        let objectRequest = OpenAIChatRequest(
+            model: Q35Resources.q36NanoModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "Return an object")],
+            response_format: OpenAIResponseFormat(type: "json_object")
+        )
+        let chatRequest = try APIServerContract.chatRequest(
+            from: objectRequest,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: capabilities,
+            servedModelID: Q35Resources.q36NanoModelId
+        )
+        XCTAssertTrue(chatRequest.requiresJSON)
+        XCTAssertFalse(chatRequest.showThinking)
+
+        let schemaRequest = OpenAIChatRequest(
+            model: Q35Resources.q36NanoModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "Return an object")],
+            response_format: OpenAIResponseFormat(type: "json_schema")
+        )
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: schemaRequest,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: capabilities,
+                servedModelID: Q35Resources.q36NanoModelId
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("strict JSON schema"))
+        }
+    }
+
+    func testJSONObjectModeForcesThinkingOffForNativeQ35Family() throws {
+        let request = OpenAIChatRequest(
+            model: Q35Resources.ornith35BMLXModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "Return an object")],
+            response_format: OpenAIResponseFormat(type: "json_object")
+        )
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textChatQ35.openAICompatibility,
+            servedModelID: Q35Resources.ornith35BMLXModelId
+        )
+
+        XCTAssertTrue(chatRequest.requiresJSON)
+        XCTAssertFalse(chatRequest.showThinking)
+    }
+
+    func testOpenAIFinishReasonReportsLengthForTokenBudgetExhaustion() {
+        let result = ChatResponse(
+            response: "{\"partial\":true",
+            tokensGenerated: 8,
+            finishReason: .length
+        )
+
+        XCTAssertEqual(CodeGenServer.openAIFinishReason(for: result), "length")
+    }
+
     func testChatRequestRejectsUnsupportedHighImpactFields() {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",

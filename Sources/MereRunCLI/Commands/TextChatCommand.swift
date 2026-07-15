@@ -9,6 +9,11 @@ import Glibc
 
 // MARK: - Text Chat Command
 
+enum TextChatResponseFormat: String, CaseIterable, ExpressibleByArgument {
+    case text
+    case jsonObject = "json_object"
+}
+
 struct TextChat: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "chat",
@@ -118,6 +123,12 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
+    @Option(
+        name: [.customLong("response-format")],
+        help: "Response format: text or json_object. json_object uses constrained decoding on native MLX chat models."
+    )
+    var responseFormat: TextChatResponseFormat = .text
+
     @Option(name: [.customLong("lora")], help: "Optional cataloged adapter id or local LoRA .safetensors path for supported chat models.")
     var loraPath: String?
 
@@ -159,6 +170,8 @@ struct TextChat: AsyncParsableCommand {
     var quiet: Bool = false
 
     func run() async throws {
+        let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        try Self.validate(responseFormat: responseFormat, modelID: normalizedModelId)
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let imageReference: String?
@@ -203,14 +216,16 @@ struct TextChat: AsyncParsableCommand {
         }
 
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
+        let requiresJSON = responseFormat == .jsonObject
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature ?? recommendedSampling?.temperature ?? 0.7,
             topP: topP ?? recommendedSampling?.topP ?? 0.9,
             topK: topK ?? recommendedSampling?.topK,
-            showThinking: thinking ?? Q35Resources.thinkingDefault(forModelId: model),
+            showThinking: requiresJSON ? false : (thinking ?? Q35Resources.thinkingDefault(forModelId: model)),
             lora: lora,
+            requiresJSON: requiresJSON,
             tools: toolDefs
         )
 
@@ -228,7 +243,6 @@ struct TextChat: AsyncParsableCommand {
         }
 
         let startTime = Date()
-        let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !quiet {
             CLIStderr.write("[runtime] text backend: \(Self.backendDescription(for: normalizedModelId))\n")
         }
@@ -294,7 +308,7 @@ struct TextChat: AsyncParsableCommand {
                     if stream && streamingOutput.hasWritten {
                         streamingOutput.finishLine()
                     } else {
-                        print(cleanResponse(result.response, showThinking: thinking == true))
+                        print(cleanResponse(result.response, showThinking: request.showThinking))
                     }
                     return
                 }
@@ -304,7 +318,7 @@ struct TextChat: AsyncParsableCommand {
                     .replacingOccurrences(of: "<\\|tool_call>.*?<tool_call\\|>", with: "", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !textBeforeTools.isEmpty {
-                    CLIStderr.write(cleanResponse(textBeforeTools, showThinking: thinking == true) + "\n")
+                    CLIStderr.write(cleanResponse(textBeforeTools, showThinking: request.showThinking) + "\n")
                 }
 
                 loopMessages.append(ChatMessage(role: .assistant, content: result.response))
@@ -376,7 +390,7 @@ struct TextChat: AsyncParsableCommand {
             if stream && streamingOutput.hasWritten {
                 streamingOutput.finishLine()
             } else {
-                print(cleanResponse(result.response, showThinking: thinking == true))
+                print(cleanResponse(result.response, showThinking: request.showThinking))
             }
         }
     }
@@ -392,6 +406,20 @@ struct TextChat: AsyncParsableCommand {
         }
         let reason = stats.reason.map { " reason=\($0)" } ?? ""
         return "mtp=\(state) block=\(stats.blockSize) threshold=\(stats.threshold) rounds=\(stats.rounds) drafted=\(stats.draftedTokens) accepted=\(stats.acceptedTokens) rejected=\(stats.rejectedTokens)\(reason)"
+    }
+
+    static func validate(responseFormat: TextChatResponseFormat, modelID: String) throws {
+        guard responseFormat == .jsonObject else { return }
+        if ManagedModelCatalog.spec(for: modelID)?.validationKind == .codegenGGUF {
+            throw ValidationError(
+                "--response-format json_object is not yet supported by the llama.cpp/GGUF chat runtime; use the native MLX text-chat-q36-nano model."
+            )
+        }
+        if modelID == Psi3ChatResources.defaultModelId || LFM2Resources.handles(modelSpec: modelID) {
+            throw ValidationError(
+                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models."
+            )
+        }
     }
 
     func cleanResponse(_ response: String, showThinking: Bool) -> String {
