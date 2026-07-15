@@ -759,6 +759,13 @@ func validateWorker(
     guard missingKinds.isEmpty else {
         throw ValidationError("Executor '\(executor)' is missing node kinds: \(missingKinds.joined(separator: ", ")).")
     }
+    let missingProviders = job.requirements.providers.filter { !worker.providers.contains($0) }
+    guard missingProviders.isEmpty else {
+        let descriptions = missingProviders.map { "\($0.id)@\($0.version) [\($0.catalogSHA256)]" }
+        throw ValidationError(
+            "Executor '\(executor)' is missing exact graph providers: \(descriptions.joined(separator: ", "))."
+        )
+    }
     let missingModels = job.requirements.modelIDs.filter { !worker.installedModelIDs.contains($0) }
     guard missingModels.isEmpty else {
         throw ValidationError("Executor '\(executor)' is missing models: \(missingModels.joined(separator: ", ")).")

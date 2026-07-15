@@ -29,12 +29,14 @@ struct GraphCatalogResult: Codable, Equatable {
     let graphSchemaVersion: Int
     let graphKind: String
     let jobContractVersion: String
+    let providers: [WorkflowGraphProviderRequirement]
     let nodes: [WorkflowNodeCatalogEntry]
 
     enum CodingKeys: String, CodingKey {
         case graphSchemaVersion = "graph_schema_version"
         case graphKind = "graph_kind"
         case jobContractVersion = "job_contract_version"
+        case providers
         case nodes
     }
 }
@@ -49,11 +51,20 @@ struct GraphCatalog: ParsableCommand {
     var json = false
 
     func run() throws {
+        let pluginCatalog = WorkflowGraphProviderRegistry.discoveredCatalog()
+        let pluginProviders = pluginCatalog.providers.map(\.requirement)
+        let builtIn = WorkflowGraphProviderRequirement(
+            id: WorkflowNodeProviderIdentity.builtInID,
+            version: WorkflowNodeRegistry.builtInProvider.version,
+            catalogSHA256: WorkflowNodeRegistry.builtInProvider.catalogSHA256,
+            nodeKinds: WorkflowNodeRegistry.entries.map(\.kind).sorted()
+        )
         let result = GraphCatalogResult(
             graphSchemaVersion: WorkflowGraphDocument.schemaVersion,
             graphKind: WorkflowGraphDocument.kind,
             jobContractVersion: WorkflowJobManifest.contractVersion,
-            nodes: WorkflowNodeRegistry.entries
+            providers: [builtIn] + pluginProviders,
+            nodes: WorkflowNodeRegistry.catalogEntries(pluginNodes: pluginCatalog.nodes)
         )
         if json {
             print(try StructuredRunOutput.encode(result))
@@ -155,6 +166,8 @@ struct GraphPreflightResult: Codable, Equatable {
     let requiredNodeKinds: [String]
     let requiredModelIDs: [String]
     let installedModelIDs: [String]
+    let requiredProviders: [WorkflowGraphProviderRequirement]
+    let availableProviders: [WorkflowGraphProviderRequirement]
     let executor: String
 
     enum CodingKeys: String, CodingKey {
@@ -163,6 +176,8 @@ struct GraphPreflightResult: Codable, Equatable {
         case requiredNodeKinds = "required_node_kinds"
         case requiredModelIDs = "required_model_ids"
         case installedModelIDs = "installed_model_ids"
+        case requiredProviders = "required_providers"
+        case availableProviders = "available_providers"
         case executor
     }
 }
@@ -212,12 +227,12 @@ struct GraphPreflight: AsyncParsableCommand {
                 message: "Executor '\(executor)' does not support \(WorkflowJobManifest.contractVersion)."
             ))
         }
-        if !["cuda", "metal"].contains(probe.acceleratorBackend), probe.acceleratorBackend != "mixed" {
+        if !requirements.acceleratorBackends.contains(probe.acceleratorBackend), probe.acceleratorBackend != "mixed" {
             diagnostics.append(.init(
                 id: "executor_accelerator_unsupported",
                 severity: .blocker,
                 title: "Executor accelerator is unsupported",
-                message: "Executor '\(executor)' reports accelerator backend '\(probe.acceleratorBackend)'."
+                message: "Executor '\(executor)' reports accelerator backend '\(probe.acceleratorBackend)'; this graph accepts \(requirements.acceleratorBackends.joined(separator: ", "))."
             ))
         }
         for kind in requirements.nodeKinds where !probe.nodeKinds.contains(kind) {
@@ -227,6 +242,17 @@ struct GraphPreflight: AsyncParsableCommand {
                 title: "Executor does not support workflow node",
                 message: "Executor '\(executor)' does not support node kind '\(kind)'."
             ))
+        }
+        for provider in requirements.providers {
+            guard probe.providers.contains(provider) else {
+                diagnostics.append(.init(
+                    id: "executor_provider_missing_\(provider.id)",
+                    severity: .blocker,
+                    title: "Executor graph provider is missing or incompatible",
+                    message: "Executor '\(executor)' requires provider '\(provider.id)' at version \(provider.version) with catalog \(provider.catalogSHA256)."
+                ))
+                continue
+            }
         }
         for modelID in requirements.modelIDs where !probe.installedModelIDs.contains(modelID) {
             diagnostics.append(.init(
@@ -272,6 +298,8 @@ struct GraphPreflight: AsyncParsableCommand {
                 requiredNodeKinds: requirements.nodeKinds,
                 requiredModelIDs: requirements.modelIDs,
                 installedModelIDs: probe.installedModelIDs,
+                requiredProviders: requirements.providers,
+                availableProviders: probe.providers,
                 executor: executor
             ),
             diagnostics: diagnostics,
@@ -645,9 +673,11 @@ struct GraphCancellationResult: Codable, Equatable {
 struct WorkflowGraphRequirements: Equatable {
     let nodeKinds: [String]
     let modelIDs: [String]
+    let providers: [WorkflowGraphProviderRequirement]
+    let acceleratorBackends: [String]
 
     static func resolve(graph: WorkflowGraphDocument, inputs: WorkflowInputsDocument) -> WorkflowGraphRequirements {
-        let modelIDs = graph.nodes.compactMap { node -> String? in
+        var modelIDs = graph.nodes.compactMap { node -> String? in
             if let model = node.arguments["model"] {
                 if case .string(let value) = model { return value }
                 if case .reference(let rawReference) = model,
@@ -663,9 +693,22 @@ struct WorkflowGraphRequirements: Equatable {
             default: return nil
             }
         }
+        for node in graph.nodes {
+            modelIDs.append(contentsOf: WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [])
+        }
+        var acceleratorBackends = Set(["cpu", "metal", "cuda", "rocm"])
+        for node in graph.nodes {
+            let accepted = WorkflowNodeRegistry.entry(for: node)?.requirements.acceleratorBackends ?? []
+            if !accepted.isEmpty { acceleratorBackends.formIntersection(accepted) }
+        }
         return .init(
             nodeKinds: Array(Set(graph.nodes.map(\.kind))).sorted(),
-            modelIDs: Array(Set(modelIDs)).sorted()
+            modelIDs: Array(Set(modelIDs)).sorted(),
+            providers: Array(Set(graph.nodes.compactMap { node -> WorkflowGraphProviderRequirement? in
+                guard node.resolvedProviderID != WorkflowNodeProviderIdentity.builtInID else { return nil }
+                return WorkflowGraphProviderRegistry.discoveredCatalog().provider(id: node.resolvedProviderID)?.requirement
+            })).sorted { $0.id < $1.id },
+            acceleratorBackends: acceleratorBackends.sorted()
         )
     }
 }
@@ -780,11 +823,11 @@ private func assetDiagnostics(
         )
     }
     for node in graph.nodes {
-        guard let catalog = WorkflowNodeRegistry.entry(for: node.kind) else { continue }
+        guard let catalog = WorkflowNodeRegistry.entry(for: node) else { continue }
         for field in catalog.inputs {
             guard let value = node.arguments[field.name] else { continue }
             let values: [WorkflowValue]
-            if field.type == .assetArray, case .array(let nested) = value {
+            if field.type == .assetArray || field.type == .assetCollection, case .array(let nested) = value {
                 values = nested
             } else if field.type == .asset || field.type == .assetDirectory {
                 values = [value]

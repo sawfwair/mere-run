@@ -40,9 +40,53 @@
         "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     },
+    "provider": {
+      "type": "object",
+      "required": ["id", "version", "catalog_sha256"],
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" },
+        "catalog_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["id", "catalog_sha256"],
+      "properties": {
+        "id": { "type": "string" },
+        "repository": { "type": "string" },
+        "revision": { "type": "string" },
+        "catalog_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "install_manifest_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "value": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "string" },
+        { "type": "integer" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "$ref": "#/$defs/value" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
+      ]
+    },
+    "node_output": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "enum": ["string", "integer", "number", "boolean", "enum", "json", "asset", "asset_directory", "asset_collection", "asset_array"] },
+        "value": { "$ref": "#/$defs/value" },
+        "path": { "type": "string" },
+        "content_type": { "type": "string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
     "node": {
       "type": "object",
-      "required": ["id", "kind", "state", "fingerprint", "artifacts"],
+      "required": ["id", "kind", "state", "fingerprint", "models", "artifacts", "outputs"],
       "properties": {
         "id": { "type": "string" },
         "kind": { "type": "string" },
@@ -51,7 +95,10 @@
         "completed_at": { "type": ["string", "null"], "format": "date-time" },
         "exit_status": { "type": ["integer", "null"] },
         "fingerprint": { "type": "string" },
+        "provider": { "$ref": "#/$defs/provider" },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/model" } },
         "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "outputs": { "type": "array", "items": { "$ref": "#/$defs/node_output" } },
         "error": { "type": ["string", "null"] }
       }
     }

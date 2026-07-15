@@ -94,6 +94,26 @@ final class PluginCommandTests: XCTestCase {
         }
     }
 
+    func testGraphProviderCatalogIsPinnedToVerifiedPluginIdentity() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PluginGraphProviderTests.\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = directory.appendingPathComponent("mere-fixture-tools")
+        try fixtureGraphProviderScript.write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+
+        let provider = try WorkflowGraphProviderRegistry.loadProvider(entrypoint: executable.path)
+
+        XCTAssertEqual(provider.identity.id, "mere-fixture-tools")
+        XCTAssertEqual(provider.identity.version, "1.2.3")
+        XCTAssertEqual(provider.identity.catalogSHA256.count, 64)
+        XCTAssertEqual(provider.nodes.map(\.kind), ["fixture.prepare"])
+        XCTAssertEqual(provider.nodes[0].outputs.map(\.type), [.assetDirectory, .json])
+        XCTAssertTrue(provider.nodes[0].traits.deterministic)
+        XCTAssertEqual(provider.requirement.nodeKinds, ["fixture.prepare"])
+    }
+
     private func writeCatalog() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("PluginCommandTests.\(UUID().uuidString)", isDirectory: true)
@@ -106,6 +126,19 @@ final class PluginCommandTests: XCTestCase {
         return catalogURL
     }
 }
+
+private let fixtureGraphProviderScript = #"""
+#!/bin/sh
+if [ "$1" = "manifest" ]; then
+  printf '%s\n' '{"contractVersion":"mere.run/plugin.v1","name":"mere-fixture-tools","version":"1.2.3","graphProvider":{"contractVersion":"mere.run/plugin-graph-provider.v1"}}'
+  exit 0
+fi
+if [ "$1" = "graph" ] && [ "$2" = "catalog" ]; then
+  printf '%s\n' '{"contract_version":"mere.run/plugin-graph-provider.v1","provider_id":"mere-fixture-tools","provider_version":"1.2.3","nodes":[{"kind":"fixture.prepare","title":"Prepare fixture","description":"Prepare deterministic fixture data.","category":"fixture","inputs":[{"name":"data","type":"asset_directory","required":true}],"outputs":[{"name":"dataset","type":"asset_directory","optional":false,"content_types":["application/vnd.mere.dataset"]},{"name":"stats","type":"json","optional":false}],"requirements":{"model_ids":[],"accelerator_backends":["cpu"],"minimum_accelerator_memory_bytes":null},"traits":{"deterministic":true,"cacheable":true,"side_effects":"none","supports_progress":true,"supports_previews":false}}]}'
+  exit 0
+fi
+exit 2
+"""#
 
 private let catalogJSON = """
 {

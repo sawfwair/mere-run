@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mere.run/contracts/graph-node-preflight.v1.schema.json",
+  "title": "mere.run Plugin Graph Node Preflight v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "status", "diagnostics", "requirements"],
+  "properties": {
+    "contract_version": {"const": "mere.run/plugin-graph-preflight.v1"},
+    "status": {"enum": ["ok", "warning", "blocked"]},
+    "diagnostics": {"type": "array", "items": {"$ref": "#/$defs/diagnostic"}},
+    "requirements": {"$ref": "#/$defs/requirements"}
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "title", "message"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"},
+        "severity": {"enum": ["info", "warning", "blocker"]},
+        "title": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "suggested_action_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_ids", "accelerator_backends"],
+      "properties": {
+        "model_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "accelerator_backends": {"type": "array", "uniqueItems": true, "items": {"enum": ["metal", "cuda", "rocm", "cpu"]}},
+        "minimum_accelerator_memory_bytes": {"type": ["integer", "null"], "minimum": 0}
+      }
+    }
+  }
+}

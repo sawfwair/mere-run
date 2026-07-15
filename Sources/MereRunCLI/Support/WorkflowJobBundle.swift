@@ -44,6 +44,8 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
     let minimumMereRunVersion: String
     let nodeKinds: [String]
     let modelIDs: [String]
+    let models: [WorkflowModelProvenance]
+    let providers: [WorkflowGraphProviderRequirement]
     let acceleratorBackends: [String]
     let minimumAcceleratorMemoryBytes: Int64?
 
@@ -51,8 +53,75 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
         case minimumMereRunVersion = "minimum_mere_run_version"
         case nodeKinds = "node_kinds"
         case modelIDs = "model_ids"
+        case models
+        case providers
         case acceleratorBackends = "accelerator_backends"
         case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+    }
+
+    init(
+        minimumMereRunVersion: String,
+        nodeKinds: [String],
+        modelIDs: [String],
+        models: [WorkflowModelProvenance] = [],
+        providers: [WorkflowGraphProviderRequirement] = [],
+        acceleratorBackends: [String],
+        minimumAcceleratorMemoryBytes: Int64?
+    ) {
+        self.minimumMereRunVersion = minimumMereRunVersion
+        self.nodeKinds = nodeKinds
+        self.modelIDs = modelIDs
+        self.models = models
+        self.providers = providers
+        self.acceleratorBackends = acceleratorBackends
+        self.minimumAcceleratorMemoryBytes = minimumAcceleratorMemoryBytes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        minimumMereRunVersion = try container.decode(String.self, forKey: .minimumMereRunVersion)
+        nodeKinds = try container.decode([String].self, forKey: .nodeKinds)
+        modelIDs = try container.decode([String].self, forKey: .modelIDs)
+        models = try container.decodeIfPresent([WorkflowModelProvenance].self, forKey: .models) ?? []
+        providers = try container.decodeIfPresent(
+            [WorkflowGraphProviderRequirement].self,
+            forKey: .providers
+        ) ?? []
+        acceleratorBackends = try container.decode([String].self, forKey: .acceleratorBackends)
+        minimumAcceleratorMemoryBytes = try container.decodeIfPresent(
+            Int64.self,
+            forKey: .minimumAcceleratorMemoryBytes
+        )
+    }
+}
+
+struct WorkflowModelProvenance: Codable, Equatable, Hashable, Sendable {
+    let id: String
+    let repository: String?
+    let revision: String?
+    let catalogSHA256: String
+    let installManifestSHA256: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case repository
+        case revision
+        case catalogSHA256 = "catalog_sha256"
+        case installManifestSHA256 = "install_manifest_sha256"
+    }
+
+    init(
+        id: String,
+        repository: String?,
+        revision: String?,
+        catalogSHA256: String,
+        installManifestSHA256: String? = nil
+    ) {
+        self.id = id
+        self.repository = repository
+        self.revision = revision
+        self.catalogSHA256 = catalogSHA256
+        self.installManifestSHA256 = installManifestSHA256
     }
 }
 
@@ -232,13 +301,21 @@ struct WorkflowBundleMaterializer {
 
     private func resolveSeeds() -> WorkflowGraphDocument {
         let nodes = graph.nodes.map { node -> WorkflowNode in
-            guard WorkflowNodeRegistry.entry(for: node.kind)?.inputs.contains(where: { $0.name == "seed" }) == true,
-                  node.arguments["seed"] == nil else {
-                return node
-            }
+            guard let catalog = WorkflowNodeRegistry.entry(for: node) else { return node }
             var arguments = node.arguments
-            arguments["seed"] = .integer(seed())
-            return WorkflowNode(id: node.id, kind: node.kind, arguments: arguments, dependsOn: node.dependsOn)
+            for field in catalog.inputs where arguments[field.name] == nil {
+                arguments[field.name] = field.defaultValue
+            }
+            if catalog.inputs.contains(where: { $0.name == "seed" }), arguments["seed"] == nil {
+                arguments["seed"] = .integer(seed())
+            }
+            return WorkflowNode(
+                id: node.id,
+                kind: node.kind,
+                provider: node.provider,
+                arguments: arguments,
+                dependsOn: node.dependsOn
+            )
         }
         return WorkflowGraphDocument(
             schemaVersion: graph.schemaVersion,
@@ -294,7 +371,7 @@ struct WorkflowBundleMaterializer {
         groups: inout [WorkflowAssetGroup]
     ) throws -> WorkflowGraphDocument {
         let nodes = try graph.nodes.map { node -> WorkflowNode in
-            guard let catalog = WorkflowNodeRegistry.entry(for: node.kind) else { return node }
+            guard let catalog = WorkflowNodeRegistry.entry(for: node) else { return node }
             var arguments = node.arguments
             for field in catalog.inputs {
                 guard let value = arguments[field.name] else { continue }
@@ -315,7 +392,7 @@ struct WorkflowBundleMaterializer {
                         assetsDirectory: assetsDirectory,
                         groups: &groups
                     )
-                case .assetArray:
+                case .assetArray, .assetCollection:
                     guard case .array(let values) = value else { continue }
                     arguments[field.name] = .array(try values.enumerated().map { index, nested in
                         try portableNodeAsset(
@@ -330,7 +407,13 @@ struct WorkflowBundleMaterializer {
                     break
                 }
             }
-            return WorkflowNode(id: node.id, kind: node.kind, arguments: arguments, dependsOn: node.dependsOn)
+            return WorkflowNode(
+                id: node.id,
+                kind: node.kind,
+                provider: node.provider,
+                arguments: arguments,
+                dependsOn: node.dependsOn
+            )
         }
         return WorkflowGraphDocument(
             schemaVersion: graph.schemaVersion,
@@ -418,7 +501,7 @@ struct WorkflowBundleMaterializer {
         graph: WorkflowGraphDocument,
         resolvedInputs: WorkflowInputsDocument
     ) -> WorkflowJobRequirements {
-        let modelIDs = Set(graph.nodes.compactMap { node -> String? in
+        var modelIDs = Set(graph.nodes.compactMap { node -> String? in
             if let value = node.arguments["model"] {
                 if let resolved = resolveStatic(value, inputs: resolvedInputs.values)?.stringValue {
                     return resolved
@@ -432,12 +515,47 @@ struct WorkflowBundleMaterializer {
             default: return nil
             }
         })
+        for node in graph.nodes {
+            modelIDs.formUnion(WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [])
+        }
+        let modelProvenance = modelIDs.sorted().map { modelID -> WorkflowModelProvenance in
+            let spec = ManagedModelCatalog.spec(for: modelID)
+            let catalogIdentity = WorkflowManagedModelIdentity(
+                id: modelID,
+                repository: spec?.upstreamRepoId,
+                revision: spec?.upstreamRevision
+            )
+            return WorkflowModelProvenance(
+                id: modelID,
+                repository: spec?.upstreamRepoId,
+                revision: spec?.upstreamRevision,
+                catalogSHA256: (try? WorkflowBundleCodec.hash(catalogIdentity)) ?? "",
+                installManifestSHA256: nil
+            )
+        }
+        let providers = Array(Set(graph.nodes.compactMap { node -> WorkflowGraphProviderRequirement? in
+            guard node.resolvedProviderID != WorkflowNodeProviderIdentity.builtInID else { return nil }
+            return WorkflowGraphProviderRegistry.discoveredCatalog().provider(id: node.resolvedProviderID)?.requirement
+        })).sorted { $0.id < $1.id }
+        var acceptedBackends = Set(["cpu", "metal", "cuda", "rocm"])
+        var minimumMemory: Int64?
+        for node in graph.nodes {
+            guard let requirements = WorkflowNodeRegistry.entry(for: node)?.requirements else { continue }
+            if !requirements.acceleratorBackends.isEmpty {
+                acceptedBackends.formIntersection(requirements.acceleratorBackends)
+            }
+            if let nodeMinimum = requirements.minimumAcceleratorMemoryBytes {
+                minimumMemory = max(minimumMemory ?? 0, nodeMinimum)
+            }
+        }
         return WorkflowJobRequirements(
             minimumMereRunVersion: MereRunCLIVersion.current,
             nodeKinds: Array(Set(graph.nodes.map(\.kind))).sorted(),
             modelIDs: modelIDs.sorted(),
-            acceleratorBackends: ["cuda", "metal"],
-            minimumAcceleratorMemoryBytes: nil
+            models: modelProvenance,
+            providers: providers,
+            acceleratorBackends: acceptedBackends.sorted(),
+            minimumAcceleratorMemoryBytes: minimumMemory
         )
     }
 
@@ -463,6 +581,12 @@ struct WorkflowBundleMaterializer {
         default: "application/octet-stream"
         }
     }
+}
+
+private struct WorkflowManagedModelIdentity: Codable {
+    let id: String
+    let repository: String?
+    let revision: String?
 }
 
 struct WorkflowPortableInputFingerprint: Codable {
@@ -499,6 +623,26 @@ struct GraphRunArtifact: Codable, Equatable, Sendable {
     }
 }
 
+struct GraphRunNodeOutput: Codable, Equatable, Sendable {
+    let name: String
+    let type: WorkflowPortType
+    let value: WorkflowValue?
+    let path: String?
+    let contentType: String?
+    let sizeBytes: Int64?
+    let sha256: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case type
+        case value
+        case path
+        case contentType = "content_type"
+        case sizeBytes = "size_bytes"
+        case sha256
+    }
+}
+
 struct GraphRunNodeRecord: Codable, Equatable, Sendable {
     let id: String
     let kind: String
@@ -507,7 +651,10 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
     var completedAt: Date?
     var exitStatus: Int32?
     var fingerprint: String
+    var provider: WorkflowNodeProviderIdentity?
+    var models: [WorkflowModelProvenance]
     var artifacts: [GraphRunArtifact]
+    var outputs: [GraphRunNodeOutput]
     var error: String?
 
     enum CodingKeys: String, CodingKey {
@@ -518,8 +665,55 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         case completedAt = "completed_at"
         case exitStatus = "exit_status"
         case fingerprint
+        case provider
+        case models
         case artifacts
+        case outputs
         case error
+    }
+
+    init(
+        id: String,
+        kind: String,
+        state: GraphRunState,
+        startedAt: Date?,
+        completedAt: Date?,
+        exitStatus: Int32?,
+        fingerprint: String,
+        provider: WorkflowNodeProviderIdentity? = nil,
+        models: [WorkflowModelProvenance] = [],
+        artifacts: [GraphRunArtifact],
+        outputs: [GraphRunNodeOutput] = [],
+        error: String?
+    ) {
+        self.id = id
+        self.kind = kind
+        self.state = state
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.exitStatus = exitStatus
+        self.fingerprint = fingerprint
+        self.provider = provider
+        self.models = models
+        self.artifacts = artifacts
+        self.outputs = outputs
+        self.error = error
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        kind = try container.decode(String.self, forKey: .kind)
+        state = try container.decode(GraphRunState.self, forKey: .state)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
+        exitStatus = try container.decodeIfPresent(Int32.self, forKey: .exitStatus)
+        fingerprint = try container.decode(String.self, forKey: .fingerprint)
+        provider = try container.decodeIfPresent(WorkflowNodeProviderIdentity.self, forKey: .provider)
+        models = try container.decodeIfPresent([WorkflowModelProvenance].self, forKey: .models) ?? []
+        artifacts = try container.decode([GraphRunArtifact].self, forKey: .artifacts)
+        outputs = try container.decodeIfPresent([GraphRunNodeOutput].self, forKey: .outputs) ?? []
+        error = try container.decodeIfPresent(String.self, forKey: .error)
     }
 }
 
@@ -575,6 +769,10 @@ struct GraphRunEvent: Codable, Equatable, Sendable {
     let state: GraphRunState
     let nodeID: String?
     let message: String?
+    let progress: GraphRunProgress?
+    let artifact: GraphRunEventArtifact?
+    let diagnostic: GraphRunEventDiagnostic?
+    let metric: GraphRunMetric?
 
     enum CodingKeys: String, CodingKey {
         case sequence
@@ -583,22 +781,128 @@ struct GraphRunEvent: Codable, Equatable, Sendable {
         case state
         case nodeID = "node_id"
         case message
+        case progress
+        case artifact
+        case diagnostic
+        case metric
+    }
+
+    init(
+        sequence: Int,
+        createdAt: Date,
+        type: String,
+        state: GraphRunState,
+        nodeID: String?,
+        message: String?,
+        progress: GraphRunProgress? = nil,
+        artifact: GraphRunEventArtifact? = nil,
+        diagnostic: GraphRunEventDiagnostic? = nil,
+        metric: GraphRunMetric? = nil
+    ) {
+        self.sequence = sequence
+        self.createdAt = createdAt
+        self.type = type
+        self.state = state
+        self.nodeID = nodeID
+        self.message = message
+        self.progress = progress
+        self.artifact = artifact
+        self.diagnostic = diagnostic
+        self.metric = metric
+    }
+}
+
+struct GraphRunProgress: Codable, Equatable, Sendable {
+    let phase: String?
+    let current: Double?
+    let total: Double?
+    let fraction: Double?
+    let unit: String?
+}
+
+struct GraphRunEventArtifact: Codable, Equatable, Sendable {
+    let name: String
+    let path: String
+    let contentType: String
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case path
+        case contentType = "content_type"
+    }
+}
+
+struct GraphRunEventDiagnostic: Codable, Equatable, Sendable {
+    let id: String
+    let severity: String
+    let title: String
+    let message: String
+}
+
+struct GraphRunMetric: Codable, Equatable, Sendable {
+    let name: String
+    let value: Double
+    let unit: String?
+}
+
+struct WorkflowInvocationOutput: Codable, Equatable, Sendable {
+    let type: WorkflowPortType
+    let path: String?
+    let optional: Bool
+    let contentTypes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case path
+        case optional
+        case contentTypes = "content_types"
+    }
+}
+
+struct WorkflowPluginNodeInvocationDocument: Codable, Equatable, Sendable {
+    static let contractVersion = "mere.run/plugin-graph-invocation.v1"
+
+    let contractVersion: String
+    let jobID: String
+    let nodeID: String
+    let kind: String
+    let arguments: [String: WorkflowValue]
+    let outputs: [String: WorkflowInvocationOutput]
+
+    enum CodingKeys: String, CodingKey {
+        case contractVersion = "contract_version"
+        case jobID = "job_id"
+        case nodeID = "node_id"
+        case kind
+        case arguments
+        case outputs
     }
 }
 
 struct WorkflowNodeInvocation: Equatable {
     let command: [String]
+    let executable: URL
     let preflightArguments: [String]
     let runArguments: [String]
-    let outputs: [String: URL]
+    let outputs: [String: WorkflowInvocationOutput]
+    let streamsEvents: Bool
 }
 
 enum WorkflowNodeCommandBuilder {
     static func invocation(
         node: WorkflowNode,
         arguments: [String: WorkflowValue],
-        nodeDirectory: URL
+        nodeDirectory: URL,
+        jobID: String = UUID().uuidString.lowercased()
     ) throws -> WorkflowNodeInvocation {
+        if node.resolvedProviderID != WorkflowNodeProviderIdentity.builtInID {
+            return try pluginInvocation(
+                node: node,
+                arguments: arguments,
+                nodeDirectory: nodeDirectory,
+                jobID: jobID
+            )
+        }
         let artifacts = nodeDirectory.appendingPathComponent("artifacts", isDirectory: true)
         switch node.kind {
         case "image.train-lora":
@@ -622,9 +926,11 @@ enum WorkflowNodeCommandBuilder {
             appendString("sample_prompt", flag: "--sample-prompt", from: arguments, to: &args)
             return .init(
                 command: ["image", "train-lora"],
+                executable: CurrentExecutable.url(),
                 preflightArguments: args + ["--preflight", "--json"],
                 runArguments: args + ["--quiet"],
-                outputs: ["adapter": output]
+                outputs: ["adapter": fileOutput(output, contentTypes: ["application/x-safetensors"])],
+                streamsEvents: false
             )
         case "image.generate":
             let output = artifacts.appendingPathComponent("image.png")
@@ -656,9 +962,11 @@ enum WorkflowNodeCommandBuilder {
             }
             return .init(
                 command: ["image", "generate"],
+                executable: CurrentExecutable.url(),
                 preflightArguments: args + ["--preflight", "--json"],
                 runArguments: args + ["--quiet"],
-                outputs: ["image": output]
+                outputs: ["image": fileOutput(output, contentTypes: ["image/png"])],
+                streamsEvents: false
             )
         case "video.generate":
             let output = artifacts.appendingPathComponent("video.mp4")
@@ -675,12 +983,93 @@ enum WorkflowNodeCommandBuilder {
             appendString("end_image", flag: "--end-image", from: arguments, to: &args)
             return .init(
                 command: ["video", "generate"],
+                executable: CurrentExecutable.url(),
                 preflightArguments: args + ["--preflight", "--json"],
                 runArguments: args + ["--quiet"],
-                outputs: ["video": output]
+                outputs: ["video": fileOutput(output, contentTypes: ["video/mp4"])],
+                streamsEvents: false
             )
         default:
             throw ValidationError("Unsupported workflow node kind '\(node.kind)'.")
+        }
+    }
+
+    private static func pluginInvocation(
+        node: WorkflowNode,
+        arguments: [String: WorkflowValue],
+        nodeDirectory: URL,
+        jobID: String
+    ) throws -> WorkflowNodeInvocation {
+        let provider = try WorkflowGraphProviderRegistry.requireProvider(id: node.resolvedProviderID)
+        guard let catalog = provider.nodes.first(where: { $0.kind == node.kind }),
+              let executable = PluginProcess.which(provider.executable) else {
+            throw ValidationError(
+                "Graph provider '\(node.resolvedProviderID)' does not expose node kind '\(node.kind)'."
+            )
+        }
+        var outputs: [String: WorkflowInvocationOutput] = [:]
+        for output in catalog.outputs {
+            outputs[output.name] = WorkflowInvocationOutput(
+                type: output.type,
+                path: outputPath(for: output),
+                optional: output.optional,
+                contentTypes: output.contentTypes
+            )
+        }
+        let request = WorkflowPluginNodeInvocationDocument(
+            contractVersion: WorkflowPluginNodeInvocationDocument.contractVersion,
+            jobID: jobID,
+            nodeID: node.id,
+            kind: node.kind,
+            arguments: arguments,
+            outputs: outputs
+        )
+        let requestURL = nodeDirectory.appendingPathComponent("invocation.json")
+        try WorkflowBundleCodec.write(request, to: requestURL)
+        let shared = ["--request", requestURL.path, "--run-dir", nodeDirectory.path]
+        return WorkflowNodeInvocation(
+            command: [provider.executable, "graph", "execute"],
+            executable: executable,
+            preflightArguments: ["graph", "preflight"] + shared + ["--json"],
+            runArguments: ["graph", "execute"] + shared + ["--json-stream"],
+            outputs: outputs,
+            streamsEvents: true
+        )
+    }
+
+    private static func fileOutput(_ url: URL, contentTypes: [String]) -> WorkflowInvocationOutput {
+        WorkflowInvocationOutput(
+            type: .asset,
+            path: url.path,
+            optional: false,
+            contentTypes: contentTypes
+        )
+    }
+
+    private static func outputPath(for output: WorkflowNodeOutput) -> String? {
+        switch output.type {
+        case .asset:
+            let pathExtension = outputExtension(contentTypes: output.contentTypes)
+            return "artifacts/\(output.name)\(pathExtension)"
+        case .assetDirectory:
+            return "artifacts/\(output.name)"
+        case .assetCollection, .assetArray:
+            return "artifacts/\(output.name).json"
+        default:
+            return nil
+        }
+    }
+
+    private static func outputExtension(contentTypes: [String]) -> String {
+        switch contentTypes.first {
+        case "image/png": ".png"
+        case "image/jpeg": ".jpg"
+        case "image/webp": ".webp"
+        case "video/mp4": ".mp4"
+        case "audio/wav": ".wav"
+        case "application/json": ".json"
+        case "application/x-safetensors": ".safetensors"
+        default: ""
         }
     }
 

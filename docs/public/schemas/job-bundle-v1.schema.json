@@ -14,11 +14,13 @@
     "requirements": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["minimum_mere_run_version", "node_kinds", "model_ids", "accelerator_backends"],
+      "required": ["minimum_mere_run_version", "node_kinds", "model_ids", "models", "providers", "accelerator_backends"],
       "properties": {
         "minimum_mere_run_version": { "type": "string", "minLength": 1 },
         "node_kinds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "model_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/model" } },
+        "providers": { "type": "array", "items": { "$ref": "#/$defs/provider" } },
         "accelerator_backends": { "type": "array", "items": { "enum": ["metal", "cuda", "rocm", "cpu"] }, "uniqueItems": true },
         "minimum_accelerator_memory_bytes": { "type": ["integer", "null"], "minimum": 0 }
       }
@@ -33,6 +35,32 @@
           "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
           "reference": { "type": "string", "pattern": "^nodes\\.[a-z][a-z0-9-]{0,63}\\.outputs\\.[a-z][a-z0-9-]{0,63}$" }
         }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "catalog_sha256"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "repository": { "type": "string" },
+        "revision": { "type": "string" },
+        "catalog_sha256": { "$ref": "#/$defs/sha256" },
+        "install_manifest_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "catalog_sha256", "node_kinds"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^mere-[a-z0-9-]+$" },
+        "version": { "type": "string", "minLength": 1 },
+        "catalog_sha256": { "$ref": "#/$defs/sha256" },
+        "node_kinds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       }
     }
   }

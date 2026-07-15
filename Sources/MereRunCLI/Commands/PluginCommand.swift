@@ -136,6 +136,9 @@ struct PluginInstall: ParsableCommand {
                 "Installed plugin manifest name mismatch: expected \(plugin.id), got \(manifest.name)"
             )
         }
+        if manifest.graphProvider != nil {
+            try WorkflowGraphProviderRegistry.register(entrypoint: plugin.entrypoint)
+        }
         print("Installed \(plugin.id) with \(install.manager).")
         print("Verified \(plugin.entrypoint) manifest version \(manifest.version).")
     }
@@ -222,6 +225,18 @@ struct PluginManifest: Decodable {
     let contractVersion: String
     let name: String
     let version: String
+    let graphProvider: PluginGraphProviderDeclaration?
+
+    enum CodingKeys: String, CodingKey {
+        case contractVersion
+        case name
+        case version
+        case graphProvider
+    }
+}
+
+struct PluginGraphProviderDeclaration: Decodable {
+    let contractVersion: String
 }
 
 enum PluginCatalogClient {
@@ -385,6 +400,11 @@ enum PluginVerifier {
 
 enum PluginProcess {
     static func which(_ name: String) -> URL? {
+        if name.contains("/") {
+            let url = URL(fileURLWithPath: NSString(string: name).expandingTildeInPath).standardizedFileURL
+            guard FileManager.default.isExecutableFile(atPath: url.path) else { return nil }
+            return url
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         process.arguments = [name]
