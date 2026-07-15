@@ -136,6 +136,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.captionDropout, 0.05)
         XCTAssertEqual(cmd.seed, 0)
         XCTAssertFalse(cmd.lite)
+        XCTAssertNil(cmd.baseQuantizationBits)
         XCTAssertFalse(cmd.excludePreviewImages)
         XCTAssertNil(cmd.checkpointInterval)
         XCTAssertNil(cmd.maxResolution)
@@ -190,6 +191,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--caption-dropout", "0.1",
             "--seed", "7",
             "--lite",
+            "--base-quantization-bits", "4",
             "--exclude-preview-images",
             "--checkpoint-interval", "250",
             "--max-resolution", "1536",
@@ -234,6 +236,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.captionDropout, 0.1)
         XCTAssertEqual(cmd.seed, 7)
         XCTAssertTrue(cmd.lite)
+        XCTAssertEqual(cmd.baseQuantizationBits, 4)
         XCTAssertTrue(cmd.excludePreviewImages)
         XCTAssertEqual(cmd.checkpointInterval, 250)
         XCTAssertEqual(cmd.maxResolution, 1536)

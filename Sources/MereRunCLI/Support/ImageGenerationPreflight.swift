@@ -26,6 +26,7 @@ struct ImageGenerationPreflightInput {
     let loraScale: Double
     let kreaConditioningMultiplier: Double?
     let kreaConditioningLayerWeights: String?
+    let kreaBaseQuantizationBits: Int?
     let generationArgv: [String]
     let cwd: String
 }
@@ -55,6 +56,7 @@ struct ImageGenerationPreflightRequest: Codable, Equatable {
     let loraScale: Double
     let kreaConditioningMultiplier: Double?
     let kreaConditioningLayerWeights: String?
+    let kreaBaseQuantizationBits: Int?
 
     enum CodingKeys: String, CodingKey {
         case prompt
@@ -81,6 +83,7 @@ struct ImageGenerationPreflightRequest: Codable, Equatable {
         case loraScale = "lora_scale"
         case kreaConditioningMultiplier = "krea_conditioning_multiplier"
         case kreaConditioningLayerWeights = "krea_conditioning_layer_weights"
+        case kreaBaseQuantizationBits = "krea_base_quantization_bits"
     }
 }
 
@@ -328,7 +331,8 @@ struct ImageGenerationPreflightAnalyzer {
             lora: input.lora,
             loraScale: input.loraScale,
             kreaConditioningMultiplier: input.kreaConditioningMultiplier,
-            kreaConditioningLayerWeights: input.kreaConditioningLayerWeights
+            kreaConditioningLayerWeights: input.kreaConditioningLayerWeights,
+            kreaBaseQuantizationBits: input.kreaBaseQuantizationBits
         )
     }
 
@@ -676,6 +680,7 @@ struct ImageGenerationPreflightAnalyzer {
                 loraScale: input.loraScale,
                 kreaConditioningMultiplier: input.kreaConditioningMultiplier,
                 kreaConditioningLayerWeights: input.kreaConditioningLayerWeights,
+                kreaBaseQuantizationBits: input.kreaBaseQuantizationBits,
                 quiet: input.generationArgv.contains("--quiet")
             ),
             resolved: resolved

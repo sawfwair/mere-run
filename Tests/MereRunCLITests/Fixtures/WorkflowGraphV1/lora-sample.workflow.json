@@ -14,6 +14,10 @@
         "data": { "$ref": "inputs.dataset" },
         "width": 256,
         "height": 256,
+        "max_text_length": 128,
+        "lite": true,
+        "base_quantization_bits": 4,
+        "rank": 4,
         "training_steps": 10
       }
     },
@@ -23,6 +27,7 @@
       "arguments": {
         "prompt": { "$ref": "inputs.prompt" },
         "model": "image-krea2-turbo",
+        "krea_base_quantization_bits": 4,
         "width": 256,
         "height": 256,
         "lora": { "$ref": "nodes.train-style.outputs.adapter" }

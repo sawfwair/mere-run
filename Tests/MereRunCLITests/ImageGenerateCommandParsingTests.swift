@@ -157,6 +157,20 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(rebalance?.layerWeights, [1, 1, 1, 1, 1, 1, 1, 2.5, 5, 1.1, 4, 1])
     }
 
+    func testParsesKreaBaseQuantizationBits() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a printed diner ticket",
+            "--model", "image-krea2-turbo",
+            "--krea-base-quantization-bits", "4",
+        ])
+
+        XCTAssertEqual(cmd.kreaBaseQuantizationBits, 4)
+        let envelope = cmd.makePreflightEnvelope(outputURL: URL(fileURLWithPath: "/tmp/krea.png"))
+        XCTAssertEqual(envelope.request.kreaBaseQuantizationBits, 4)
+        XCTAssertEqual(envelope.result.runPlan.arguments.kreaBaseQuantizationBits, 4)
+        XCTAssertTrue(envelope.result.runPlan.arguments.generateArguments().contains("--krea-base-quantization-bits"))
+    }
+
     func testKreaConditioningLayerWeightsAcceptSemicolonsAndWhitespace() throws {
         let weights = try ImageGenerate.parseKreaConditioningLayerWeights(" 1 ; 2.5, 3 ")
         XCTAssertEqual(weights, [1, 2.5, 3])

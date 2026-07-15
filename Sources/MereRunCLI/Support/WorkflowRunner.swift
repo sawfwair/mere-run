@@ -31,12 +31,16 @@ protocol WorkflowProcessRunning {
 }
 
 struct WorkflowProcessRunner: WorkflowProcessRunning {
+    static func stdoutCaptureURL(in directory: URL) -> URL {
+        directory.appendingPathComponent(".workflow-stdout-\(UUID().uuidString)")
+    }
+
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
         let process = Process()
         process.executableURL = CurrentExecutable.url()
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
-        let stdoutURL = currentDirectory.appendingPathComponent(".workflow-stdout-(UUID().uuidString)")
+        let stdoutURL = Self.stdoutCaptureURL(in: currentDirectory)
         guard FileManager.default.createFile(atPath: stdoutURL.path, contents: nil) else {
             throw ValidationError("Could not create workflow child stdout capture.")
         }

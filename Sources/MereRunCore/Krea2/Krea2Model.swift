@@ -134,6 +134,33 @@ final class Krea2TextFusionBlock: Module {
         out = out + ff(norm2(out))
         return out
     }
+
+    private var checkpointedWithoutMask: (([MLXArray]) -> [MLXArray])?
+    private var checkpointedWithMask: (([MLXArray]) -> [MLXArray])?
+
+    func checkpointed(_ x: MLXArray, mask: MLXArray? = nil) -> MLXArray {
+        if let mask {
+            if checkpointedWithMask == nil {
+                checkpointedWithMask = checkpoint(model: self) { block, inputs in
+                    [block(inputs[0], mask: stopGradient(inputs[1]))]
+                }
+            }
+            guard let checkpointedWithMask else {
+                preconditionFailure("Checkpointed Krea 2 text block was not initialized.")
+            }
+            return checkpointedWithMask([x, mask])[0]
+        }
+
+        if checkpointedWithoutMask == nil {
+            checkpointedWithoutMask = checkpoint(model: self) { block, inputs in
+                [block(inputs[0])]
+            }
+        }
+        guard let checkpointedWithoutMask else {
+            preconditionFailure("Checkpointed Krea 2 text block was not initialized.")
+        }
+        return checkpointedWithoutMask([x])[0]
+    }
 }
 
 final class Krea2TextFusionTransformer: Module {
@@ -164,20 +191,26 @@ final class Krea2TextFusionTransformer: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, mask: MLXArray?) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        mask: MLXArray?,
+        gradientCheckpointing: Bool = false
+    ) -> MLXArray {
         let batch = x.dim(0)
         let sequence = x.dim(1)
         let layerCount = x.dim(2)
         let dim = x.dim(3)
         var hidden = x.reshaped(batch * sequence, layerCount, dim)
         for block in layerwiseBlocks {
-            hidden = block(hidden)
+            hidden = gradientCheckpointing ? block.checkpointed(hidden) : block(hidden)
         }
         hidden = hidden.reshaped(batch, sequence, layerCount, dim)
             .transposed(0, 1, 3, 2)
         hidden = projector(hidden).squeezed(axis: -1)
         for block in refinerBlocks {
-            hidden = block(hidden, mask: mask)
+            hidden = gradientCheckpointing
+                ? block.checkpointed(hidden, mask: mask)
+                : block(hidden, mask: mask)
         }
         return hidden
     }
@@ -296,8 +329,8 @@ final class Krea2SingleStreamBlock: Module {
                 [block(
                     inputs[0],
                     modulation: inputs[1],
-                    rotary: (cos: inputs[2], sin: inputs[3]),
-                    mask: inputs[4]
+                    rotary: (cos: stopGradient(inputs[2]), sin: stopGradient(inputs[3])),
+                    mask: stopGradient(inputs[4])
                 )]
             }
         }
@@ -446,7 +479,11 @@ public final class Krea2Transformer: Module {
             validMask: textMask,
             dtype: imageHidden.dtype
         )
-        let textHidden = txtIn(textFusion(textContext, mask: textAttentionMask))
+        let textHidden = txtIn(textFusion(
+            textContext,
+            mask: textAttentionMask,
+            gradientCheckpointing: gradientCheckpointing
+        ))
         var combined = MLX.concatenated([textHidden, imageHidden], axis: 1)
         var combinedMask = validMask
         var combinedPositions = positionIds

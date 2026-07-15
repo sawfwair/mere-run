@@ -106,15 +106,22 @@ public enum MLXCUDAQuant {
 public final class PortableQuantizedLinear: QuantizedLinear {
     private var cachedDequantizedWeight: MLXArray?
     private var cachedDequantizedWeightDType: DType?
+    /// Training can prefer bounded residency over the native quantized kernel.
+    /// The dequantized weight remains part of the current lazy graph only and is
+    /// not retained by the module between calls.
+    public var useUncachedDenseFallback = false
 
     public override func callAsFunction(_ x: MLXArray) -> MLXArray {
         #if os(Linux)
         if Device.defaultDevice().deviceType == .gpu, mode == .affine {
+            if useUncachedDenseFallback {
+                return denseOutput(x, cacheWeight: false)
+            }
             switch MLXCUDAQuant.nativeDecision(for: .quantizedMM) {
             case .native:
                 return super.callAsFunction(x)
             case .dense:
-                return denseOutput(x)
+                return denseOutput(x, cacheWeight: true)
             case .probe:
                 let output = super.callAsFunction(x)
                 do {
@@ -123,7 +130,7 @@ public final class PortableQuantizedLinear: QuantizedLinear {
                     return output
                 } catch {
                     MLXCUDAQuant.completeProbe(operation: .quantizedMM, supported: false)
-                    return denseOutput(x)
+                    return denseOutput(x, cacheWeight: true)
                 }
             }
         }
@@ -132,8 +139,19 @@ public final class PortableQuantizedLinear: QuantizedLinear {
         return super.callAsFunction(x)
     }
 
-    private func denseOutput(_ x: MLXArray) -> MLXArray {
-        var output = MLX.matmul(x, dequantizedWeight(dtype: x.dtype).T)
+    private func denseOutput(_ x: MLXArray, cacheWeight: Bool) -> MLXArray {
+        let fullWeight = cacheWeight
+            ? dequantizedWeight(dtype: x.dtype)
+            : MLX.dequantized(
+                weight,
+                scales: scales,
+                biases: biases,
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode,
+                dtype: x.dtype
+            )
+        var output = MLX.matmul(x, fullWeight.T)
         if let bias {
             output = output + bias
         }

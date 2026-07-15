@@ -17,6 +17,7 @@ public enum Krea2LoRATrainerError: Error, LocalizedError {
     case baseModelNotTrainable(String)
     case invalidLRWarmupSteps(Int)
     case invalidLRMinFactor(Float)
+    case invalidBaseQuantizationBits(Int)
 
     public var errorDescription: String? {
         switch self {
@@ -46,6 +47,8 @@ public enum Krea2LoRATrainerError: Error, LocalizedError {
             return "LR warmup steps must be >= 0 (got \(steps))."
         case .invalidLRMinFactor(let factor):
             return "LR minimum factor must be between 0.0 and 1.0 (got \(factor))."
+        case .invalidBaseQuantizationBits(let bits):
+            return "Base quantization bits must be 4 or 8 (got \(bits))."
         }
     }
 }
@@ -85,6 +88,7 @@ public struct Krea2LoRATrainingConfig: Sendable {
     public var lrWarmupSteps: Int
     public var useCosineScheduler: Bool
     public var lrMinFactor: Float
+    public var baseQuantizationBits: Int?
 
     public init(
         width: Int = 1024,
@@ -110,7 +114,8 @@ public struct Krea2LoRATrainingConfig: Sendable {
         useCompile: Bool = true,
         lrWarmupSteps: Int = 0,
         useCosineScheduler: Bool = false,
-        lrMinFactor: Float = 0.0
+        lrMinFactor: Float = 0.0,
+        baseQuantizationBits: Int? = nil
     ) {
         self.width = width
         self.height = height
@@ -136,6 +141,7 @@ public struct Krea2LoRATrainingConfig: Sendable {
         self.lrWarmupSteps = lrWarmupSteps
         self.useCosineScheduler = useCosineScheduler
         self.lrMinFactor = lrMinFactor
+        self.baseQuantizationBits = baseQuantizationBits
     }
 }
 
@@ -194,6 +200,9 @@ public enum Krea2LoRATrainer {
         guard (0.0...1.0).contains(config.lrMinFactor) else {
             throw Krea2LoRATrainerError.invalidLRMinFactor(config.lrMinFactor)
         }
+        if let bits = config.baseQuantizationBits, bits != 4, bits != 8 {
+            throw Krea2LoRATrainerError.invalidBaseQuantizationBits(bits)
+        }
         guard outputURL.pathExtension.lowercased() == "safetensors" else {
             throw Krea2LoRATrainerError.outputMustBeSafetensors(outputURL)
         }
@@ -218,21 +227,24 @@ public enum Krea2LoRATrainer {
         let configs = try Krea2ModelConfigs.load(from: resources)
         let maxTextLength = min(config.maxTextLength, 512)
         let tokenizer = try QwenTokenizer.load(from: resources.tokenizerURL, maxLengthOverride: maxTextLength)
-        let textEncoder = try Krea2ModelLoader.loadTextEncoder(
+        var textEncoder: QwenEncoder? = try Krea2ModelLoader.loadTextEncoder(
             from: resources,
             configuration: configs.textEncoder
         )
-        let transformer = try Krea2ModelLoader.loadTransformer(
-            from: resources,
-            configuration: configs.transformer
-        )
-        let vae = try Krea2ModelLoader.loadVAE(from: resources, configuration: configs.vae)
-        MLX.eval(textEncoder, transformer, vae)
-        progressHandler?(Krea2LoRATrainingProgress(stage: .loadingModels, fraction: 1))
+        var vae: QwenImageEditVAE? = try Krea2ModelLoader.loadVAE(from: resources, configuration: configs.vae)
+        if let textEncoder, let vae {
+            MLX.eval(textEncoder, vae)
+        }
 
         struct PreparedExample {
             let imageTokens: MLXArray
             let textHiddenStates: MLXArray
+            let textMask: MLXArray
+            let positionIds: MLXArray
+            let validMask: MLXArray
+        }
+
+        struct PreparedMetadata {
             let textMask: MLXArray
             let positionIds: MLXArray
             let validMask: MLXArray
@@ -269,6 +281,7 @@ public enum Krea2LoRATrainer {
             "lr_warmup_steps:\(config.lrWarmupSteps)",
             "use_cosine_scheduler:\(config.useCosineScheduler)",
             "lr_min_factor:\(config.lrMinFactor)",
+            "base_quantization_bits:\(config.baseQuantizationBits.map(String.init) ?? "")",
         ].joined(separator: "\n")
         let configFingerprint = LoRATrainingFingerprint.sha256Hex(configFingerprintInput)
 
@@ -278,113 +291,173 @@ public enum Krea2LoRATrainer {
         let imageTokenWidth = latentWidth / configs.transformer.patchSize
         let imageTokenCount = imageTokenHeight * imageTokenWidth
         var prepared: [PreparedExample] = []
+        var cachedMetadata: [PreparedMetadata] = []
         let syntheticCount = config.syntheticSampleCount ?? 0
-
-        if syntheticCount > 0 {
-            prepared.reserveCapacity(syntheticCount)
-            for _ in 0..<syntheticCount {
-                let textLength = max(1, maxTextLength - 34)
-                let cleanLatents = MLXRandom.normal([
-                    1,
-                    configs.transformer.latentChannels,
-                    latentHeight,
-                    latentWidth,
-                ]).asType(.bfloat16)
-                let textHidden = MLXRandom.normal([
-                    1,
-                    textLength,
-                    configs.transformer.numTextLayers,
-                    configs.transformer.textHiddenDim,
-                ]).asType(.bfloat16)
-                let textMask = MLXArray.ones([1, textLength], dtype: .int32)
-                let preparedSample = Krea2SampleBuilder.prepare(
-                    latents: cleanLatents,
-                    textLength: textLength,
-                    textMask: textMask,
-                    patch: configs.transformer.patchSize
-                )
-                let validMask = MLX.concatenated([
-                    textMask,
-                    MLXArray.ones([1, imageTokenCount], dtype: .int32),
-                ], axis: 1)
-                prepared.append(
-                    PreparedExample(
-                        imageTokens: preparedSample.imageTokens.asType(.bfloat16),
-                        textHiddenStates: textHidden,
-                        textMask: textMask,
-                        positionIds: preparedSample.positionIds,
-                        validMask: validMask
-                    )
-                )
+        let preparedCache: TrainingDataCache? = try {
+            guard syntheticCount == 0, LoRATrainingEnvironment.diskBackedCacheEnabled else {
+                return nil
             }
-        } else {
-            prepared.reserveCapacity(examples.count)
-            for (index, example) in examples.enumerated() {
-                try Task.checkCancellation()
-                progressHandler?(Krea2LoRATrainingProgress(
-                    stage: .encodingDataset(current: index, total: examples.count),
-                    fraction: Float(index) / Float(max(examples.count, 1))
-                ))
-                let caption = example.caption.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !caption.isEmpty else {
-                    throw Krea2LoRATrainerError.captionEmpty(example.imageURL)
-                }
+            let directory = outputURL.deletingLastPathComponent()
+                .appendingPathComponent(".zero_cache", isDirectory: true)
+                .appendingPathComponent("krea2-\(UUID().uuidString)", isDirectory: true)
+            let cache = TrainingDataCache(cacheDir: directory)
+            try cache.initialize(wipe: true)
+            return cache
+        }()
+        defer {
+            if let preparedCache {
+                try? preparedCache.clear()
+            }
+        }
 
-                let text = try encodePrompt(
-                    caption,
-                    tokenizer: tokenizer,
-                    encoder: textEncoder,
-                    selectedLayers: configs.selectedTextLayers,
-                    maxLength: maxTextLength
-                )
-                let cleanLatents = try encodeTrainingImage(
-                    example.imageURL,
-                    vae: vae,
-                    config: configs.vae,
-                    width: config.width,
-                    height: config.height
-                )
-                let preparedSample = Krea2SampleBuilder.prepare(
-                    latents: cleanLatents,
-                    textLength: text.hiddenStates.dim(1),
-                    textMask: text.attentionMask,
-                    patch: configs.transformer.patchSize
-                )
-                prepared.append(
-                    PreparedExample(
+        let emptyPrompt: (hiddenStates: MLXArray, attentionMask: MLXArray)?
+        do {
+            guard let activeTextEncoder = textEncoder, let activeVAE = vae else {
+                preconditionFailure("Krea 2 conditioning models were released before dataset encoding.")
+            }
+            if syntheticCount > 0 {
+                prepared.reserveCapacity(syntheticCount)
+                for _ in 0..<syntheticCount {
+                    let textLength = max(1, maxTextLength - 34)
+                    let cleanLatents = MLXRandom.normal([
+                        1,
+                        configs.transformer.latentChannels,
+                        latentHeight,
+                        latentWidth,
+                    ]).asType(.bfloat16)
+                    let textHidden = MLXRandom.normal([
+                        1,
+                        textLength,
+                        configs.transformer.numTextLayers,
+                        configs.transformer.textHiddenDim,
+                    ]).asType(.bfloat16)
+                    let textMask = MLXArray.ones([1, textLength], dtype: .int32)
+                    let preparedSample = Krea2SampleBuilder.prepare(
+                        latents: cleanLatents,
+                        textLength: textLength,
+                        textMask: textMask,
+                        patch: configs.transformer.patchSize
+                    )
+                    let validMask = MLX.concatenated([
+                        textMask,
+                        MLXArray.ones([1, imageTokenCount], dtype: .int32),
+                    ], axis: 1)
+                    prepared.append(
+                        PreparedExample(
+                            imageTokens: preparedSample.imageTokens.asType(.bfloat16),
+                            textHiddenStates: textHidden,
+                            textMask: textMask,
+                            positionIds: preparedSample.positionIds,
+                            validMask: validMask
+                        )
+                    )
+                }
+            } else {
+                prepared.reserveCapacity(examples.count)
+                cachedMetadata.reserveCapacity(examples.count)
+                for (index, example) in examples.enumerated() {
+                    try Task.checkCancellation()
+                    progressHandler?(Krea2LoRATrainingProgress(
+                        stage: .encodingDataset(current: index, total: examples.count),
+                        fraction: Float(index) / Float(max(examples.count, 1))
+                    ))
+                    let caption = example.caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !caption.isEmpty else {
+                        throw Krea2LoRATrainerError.captionEmpty(example.imageURL)
+                    }
+
+                    let text = try encodePrompt(
+                        caption,
+                        tokenizer: tokenizer,
+                        encoder: activeTextEncoder,
+                        selectedLayers: configs.selectedTextLayers,
+                        maxLength: maxTextLength
+                    )
+                    let cleanLatents = try encodeTrainingImage(
+                        example.imageURL,
+                        vae: activeVAE,
+                        config: configs.vae,
+                        width: config.width,
+                        height: config.height
+                    )
+                    let preparedSample = Krea2SampleBuilder.prepare(
+                        latents: cleanLatents,
+                        textLength: text.hiddenStates.dim(1),
+                        textMask: text.attentionMask,
+                        patch: configs.transformer.patchSize
+                    )
+                    let item = PreparedExample(
                         imageTokens: preparedSample.imageTokens.asType(.bfloat16),
                         textHiddenStates: text.hiddenStates.asType(.bfloat16),
                         textMask: text.attentionMask,
                         positionIds: preparedSample.positionIds,
                         validMask: preparedSample.validMask
                     )
-                )
-                MLX.eval(prepared.last!.imageTokens, prepared.last!.textHiddenStates)
+                    MLX.eval(
+                        item.imageTokens,
+                        item.textHiddenStates,
+                        item.textMask,
+                        item.positionIds,
+                        item.validMask
+                    )
+                    if let preparedCache {
+                        try preparedCache.save(
+                            id: index,
+                            latents: item.imageTokens,
+                            cond: item.textHiddenStates,
+                            width: config.width,
+                            height: config.height
+                        )
+                        cachedMetadata.append(PreparedMetadata(
+                            textMask: item.textMask,
+                            positionIds: item.positionIds,
+                            validMask: item.validMask
+                        ))
+                        MLX.Memory.clearCache()
+                    } else {
+                        prepared.append(item)
+                    }
+                }
             }
+
+            let preparedCount = preparedCache == nil ? prepared.count : cachedMetadata.count
+            progressHandler?(Krea2LoRATrainingProgress(
+                stage: .encodingDataset(current: preparedCount, total: preparedCount),
+                fraction: 1
+            ))
+
+            emptyPrompt = try {
+                guard config.captionDropout > 0 else { return nil }
+                if syntheticCount > 0 {
+                    let sample = prepared[0]
+                    return (
+                        MLXArray.zeros(sample.textHiddenStates.shape, dtype: .bfloat16),
+                        MLXArray.zeros(sample.textMask.shape, dtype: .int32)
+                    )
+                }
+                return try encodePrompt(
+                    "",
+                    tokenizer: tokenizer,
+                    encoder: activeTextEncoder,
+                    selectedLayers: configs.selectedTextLayers,
+                    maxLength: maxTextLength
+                )
+            }()
         }
+        textEncoder = nil
+        vae = nil
+        MLX.Memory.clearCache()
+        let preparedCount = preparedCache == nil ? prepared.count : cachedMetadata.count
 
-        progressHandler?(Krea2LoRATrainingProgress(
-            stage: .encodingDataset(current: prepared.count, total: prepared.count),
-            fraction: 1
-        ))
-
-        let emptyPrompt: (hiddenStates: MLXArray, attentionMask: MLXArray)? = try {
-            guard config.captionDropout > 0 else { return nil }
-            if syntheticCount > 0 {
-                let sample = prepared[0]
-                return (
-                    MLXArray.zeros(sample.textHiddenStates.shape, dtype: .bfloat16),
-                    MLXArray.zeros(sample.textMask.shape, dtype: .int32)
-                )
-            }
-            return try encodePrompt(
-                "",
-                tokenizer: tokenizer,
-                encoder: textEncoder,
-                selectedLayers: configs.selectedTextLayers,
-                maxLength: maxTextLength
-            )
-        }()
+        let transformer = try Krea2ModelLoader.loadTransformer(
+            from: resources,
+            configuration: configs.transformer
+        )
+        if let bits = config.baseQuantizationBits {
+            quantizeTransformerBase(transformer, bits: bits)
+        }
+        MLX.eval(transformer)
+        progressHandler?(Krea2LoRATrainingProgress(stage: .loadingModels, fraction: 1))
 
         let effectiveAlpha = config.loraAlpha ?? Float(config.loraRank)
         let loraLayers = try Krea2LoRAInjector.inject(
@@ -463,10 +536,16 @@ public enum Krea2LoRATrainer {
         transformer.gradientCheckpointing = gradientCheckpointing
         if Self.trainingCacheLimitGB > 0 {
             MLX.Memory.cacheLimit = Self.trainingCacheLimitGB * 1_073_741_824
+            // The limit only affects future deallocations. Reclaim encoder and
+            // VAE precompute buffers before constructing the first train step.
+            MLX.Memory.clearCache()
         }
-        FileHandle.standardError.write(Data(
-            "[krea2-lora-train] grad_checkpoint=\(gradientCheckpointing) peak_pixels=\(config.width * config.height) cache_limit_gb=\(Self.trainingCacheLimitGB)\n".utf8
-        ))
+        let memory = MLX.Memory.snapshot()
+        let diagnostics = "[krea2-lora-train] grad_checkpoint=\(gradientCheckpointing) "
+            + "disk_cache=\(preparedCache != nil) peak_pixels=\(config.width * config.height) "
+            + "cache_limit_gb=\(Self.trainingCacheLimitGB) active_bytes=\(memory.activeMemory) "
+            + "cache_bytes=\(memory.cacheMemory)\n"
+        FileHandle.standardError.write(Data(diagnostics.utf8))
 
         let trainStep: ([MLXArray]) -> [MLXArray]
         // Checkpointed blocks are kept outside compile: nesting the
@@ -488,7 +567,7 @@ public enum Krea2LoRATrainer {
         for step in 0..<config.trainingSteps {
             try Task.checkCancellation()
             let stepStart = CFAbsoluteTimeGetCurrent()
-            let batchSize = min(config.batchSize, prepared.count)
+            let batchSize = min(config.batchSize, preparedCount)
             var cleanParts: [MLXArray] = []
             var noiseParts: [MLXArray] = []
             var textParts: [MLXArray] = []
@@ -497,8 +576,21 @@ public enum Krea2LoRATrainer {
             var timestepValues: [Float] = []
 
             for _ in 0..<batchSize {
-                let index = Int(rng.next() % UInt64(prepared.count))
-                let item = prepared[index]
+                let index = Int(rng.next() % UInt64(preparedCount))
+                let item: PreparedExample
+                if let preparedCache {
+                    let cached = try preparedCache.load(id: index)
+                    let metadata = cachedMetadata[index]
+                    item = PreparedExample(
+                        imageTokens: cached.latents,
+                        textHiddenStates: cached.cond,
+                        textMask: metadata.textMask,
+                        positionIds: metadata.positionIds,
+                        validMask: metadata.validMask
+                    )
+                } else {
+                    item = prepared[index]
+                }
                 cleanParts.append(item.imageTokens)
                 let useEmptyPrompt = emptyPrompt != nil
                     && Float(rng.next() % 1000) / 1000.0 < config.captionDropout
@@ -638,7 +730,7 @@ public enum Krea2LoRATrainer {
                     width: config.width,
                     height: config.height,
                     steps: config.trainingSteps,
-                    sampleCount: prepared.count
+                    sampleCount: preparedCount
                 ),
             ],
             phaseCursor: nil,
@@ -661,6 +753,7 @@ public enum Krea2LoRATrainer {
                 "lr_warmup_steps": "\(config.lrWarmupSteps)",
                 "use_cosine_scheduler": "\(config.useCosineScheduler)",
                 "lr_min_factor": "\(config.lrMinFactor)",
+                "base_quantization_bits": config.baseQuantizationBits.map(String.init) ?? "",
             ],
             lossCSVFile: metricsLogger.csvURL.lastPathComponent,
             lossHTMLFile: metricsLogger.htmlURL.lastPathComponent,
@@ -680,7 +773,7 @@ public enum Krea2LoRATrainer {
                 batchSize: config.batchSize,
                 learningRate: config.learningRate,
                 seed: effectiveSeed,
-                datasetCount: examples.isEmpty ? prepared.count : examples.count,
+                datasetCount: examples.isEmpty ? preparedCount : examples.count,
                 checkpointInterval: nil,
                 sampleInterval: nil,
                 samplePrompt: nil,
@@ -758,6 +851,57 @@ public enum Krea2LoRATrainer {
             ]
         )
         progressHandler?(Krea2LoRATrainingProgress(stage: .saving, fraction: 1))
+    }
+
+    static func quantizeTransformerBase(_ transformer: Krea2Transformer, bits: Int) {
+        quantizeLinearChildren(in: transformer, bits: bits) { path in
+            path == "img_in" || path == "time_mod_proj"
+        }
+        quantizeLinearChildren(in: transformer.txtIn, bits: bits)
+        quantizeLinearChildren(in: transformer.textFusion, bits: bits) { path in
+            path == "projector"
+        }
+        for block in transformer.textFusion.layerwiseBlocks {
+            quantizeLinearChildren(in: block, bits: bits)
+        }
+        for block in transformer.textFusion.refinerBlocks {
+            quantizeLinearChildren(in: block, bits: bits)
+        }
+        quantizeLinearChildren(in: transformer.timeEmbed, bits: bits)
+        for block in transformer.transformerBlocks {
+            quantizeLinearChildren(in: block, bits: bits)
+        }
+        quantizeLinearChildren(in: transformer.finalLayer, bits: bits)
+    }
+
+    private static func quantizeLinearChildren(
+        in module: Module,
+        bits: Int,
+        matching predicate: (String) -> Bool = { _ in true }
+    ) {
+        let leafModules = module.leafModules().flattened()
+        var replacements: [String: Module] = [:]
+        for (path, child) in leafModules where predicate(path) {
+            guard let linear = child as? Linear, !(linear is QuantizedLinear) else { continue }
+            guard let groupSize = [64, 32].first(where: { linear.shape.1.isMultiple(of: $0) }) else {
+                continue
+            }
+            #if os(Linux)
+            let quantized = PortableQuantizedLinear(linear, groupSize: groupSize, bits: bits)
+            quantized.useUncachedDenseFallback = true
+            #else
+            let quantized = QuantizedLinear(linear, groupSize: groupSize, bits: bits)
+            #endif
+            MLX.eval(quantized)
+            replacements[path] = quantized
+            MLX.Memory.clearCache()
+        }
+        Krea2LoRAInjector.applyModuleReplacements(
+            replacements,
+            leafModules: leafModules,
+            to: module
+        )
+        MLX.Memory.clearCache()
     }
 
     static func scheduledLearningRate(

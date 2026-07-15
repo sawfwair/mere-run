@@ -609,8 +609,16 @@ enum WorkflowNodeCommandBuilder {
             appendInteger("training_steps", flag: "--training-steps", from: arguments, to: &args)
             appendInteger("width", flag: "--width", from: arguments, to: &args)
             appendInteger("height", flag: "--height", from: arguments, to: &args)
+            appendInteger("max_text_length", flag: "--max-text-length", from: arguments, to: &args)
             appendInteger("seed", flag: "--seed", from: arguments, to: &args)
             appendInteger("rank", flag: "--rank", from: arguments, to: &args)
+            appendFlag("lite", flag: "--lite", from: arguments, to: &args)
+            appendInteger(
+                "base_quantization_bits",
+                flag: "--base-quantization-bits",
+                from: arguments,
+                to: &args
+            )
             appendString("sample_prompt", flag: "--sample-prompt", from: arguments, to: &args)
             return .init(
                 command: ["image", "train-lora"],
@@ -632,6 +640,12 @@ enum WorkflowNodeCommandBuilder {
             appendNumber("lora_scale", flag: "--lora-scale", from: arguments, to: &args)
             appendNumber("cfg_scale", flag: "--cfg", from: arguments, to: &args)
             appendNumber("strength", flag: "--strength", from: arguments, to: &args)
+            appendInteger(
+                "krea_base_quantization_bits",
+                flag: "--krea-base-quantization-bits",
+                from: arguments,
+                to: &args
+            )
             if case .array(let references)? = arguments["reference_images"] {
                 for reference in references {
                     guard let path = reference.stringValue else {
@@ -702,5 +716,14 @@ enum WorkflowNodeCommandBuilder {
         to output: inout [String]
     ) {
         if let value = arguments[name]?.numberValue { output += [flag, String(value)] }
+    }
+
+    private static func appendFlag(
+        _ name: String,
+        flag: String,
+        from arguments: [String: WorkflowValue],
+        to output: inout [String]
+    ) {
+        if arguments[name]?.booleanValue == true { output.append(flag) }
     }
 }

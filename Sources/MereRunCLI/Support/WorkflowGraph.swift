@@ -253,8 +253,11 @@ enum WorkflowNodeRegistry {
                 .init(name: "training_steps", type: .integer, required: false),
                 .init(name: "width", type: .integer, required: false),
                 .init(name: "height", type: .integer, required: false),
+                .init(name: "max_text_length", type: .integer, required: false),
                 .init(name: "seed", type: .integer, required: false),
                 .init(name: "rank", type: .integer, required: false),
+                .init(name: "lite", type: .boolean, required: false),
+                .init(name: "base_quantization_bits", type: .integer, required: false),
                 .init(name: "sample_prompt", type: .string, required: false),
             ],
             outputs: [.init(name: "adapter", type: .asset, contentTypes: ["application/x-safetensors"])]
@@ -277,6 +280,7 @@ enum WorkflowNodeRegistry {
                 .init(name: "lora_scale", type: .number, required: false),
                 .init(name: "cfg_scale", type: .number, required: false),
                 .init(name: "strength", type: .number, required: false),
+                .init(name: "krea_base_quantization_bits", type: .integer, required: false),
             ],
             outputs: [.init(name: "image", type: .asset, contentTypes: ["image/png"])]
         ),

@@ -78,6 +78,14 @@ public final class Krea2Generator: ImageGenerator {
         guard missing.isEmpty else {
             throw Krea2GeneratorError.missingModelFiles(missing)
         }
+        if let bits = request.kreaBaseQuantizationBits {
+            return try await generateMemoryEfficient(
+                request,
+                resources: resources,
+                bits: bits,
+                progressHandler: progressHandler
+            )
+        }
 
         if loadedModelPath != rootURL.path || transformer == nil {
             do {
@@ -112,9 +120,119 @@ public final class Krea2Generator: ImageGenerator {
         )
         progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 1, totalSteps: 1))
 
+        let denoised = try denoise(
+            request,
+            configs: configs,
+            transformer: transformer,
+            text: text,
+            progressHandler: progressHandler
+        )
+        return try decodeAndSave(
+            denoised.latents,
+            seed: denoised.seed,
+            request: request,
+            configs: configs,
+            vae: vae,
+            progressHandler: progressHandler
+        )
+    }
+
+    private func generateMemoryEfficient(
+        _ request: GenerationRequest,
+        resources: Krea2Resources,
+        bits: Int,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) async throws -> GenerationResult {
+        unload()
+        let loadedConfigs = try Krea2ModelConfigs.load(from: resources)
+        configs = loadedConfigs
+
+        progressHandler?(GenerationProgress(stage: .loadingEncoder, stepIndex: 0, totalSteps: 2))
+        let text: (hiddenStates: MLXArray, attentionMask: MLXArray)
+        do {
+            let activeTokenizer = try QwenTokenizer.load(from: resources.tokenizerURL, maxLengthOverride: 512)
+            let activeTextEncoder = try Krea2ModelLoader.loadTextEncoder(
+                from: resources,
+                configuration: loadedConfigs.textEncoder
+            )
+            progressHandler?(GenerationProgress(stage: .loadingEncoder, stepIndex: 2, totalSteps: 2))
+            progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 0, totalSteps: 1))
+            text = try encodePrompt(
+                request.prompt,
+                tokenizer: activeTokenizer,
+                encoder: activeTextEncoder,
+                selectedLayers: loadedConfigs.selectedTextLayers,
+                maxLength: min(request.maxSequenceLength, 512),
+                conditioningRebalance: request.kreaConditioningRebalance
+            )
+            MLX.eval(text.hiddenStates, text.attentionMask)
+            progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 1, totalSteps: 1))
+        }
+        MLX.Memory.clearCache()
+
+        progressHandler?(GenerationProgress(stage: .loadingTransformer, stepIndex: 0, totalSteps: 3))
+        transformer = try Krea2ModelLoader.loadTransformer(
+            from: resources,
+            configuration: loadedConfigs.transformer,
+            progressHandler: { shard in
+                progressHandler?(GenerationProgress(
+                    stage: .loadingTransformer,
+                    stepIndex: shard.shardIndex + 1,
+                    totalSteps: max(shard.shardCount, 1)
+                ))
+            }
+        )
+        guard let transformer else {
+            throw Krea2GeneratorError.modelsNotLoaded
+        }
+        Krea2LoRATrainer.quantizeTransformerBase(transformer, bits: bits)
+        MLX.eval(transformer)
+        MLX.Memory.clearCache()
+        progressHandler?(GenerationProgress(stage: .loadingTransformer, stepIndex: 3, totalSteps: 3))
+
+        try await applyLoRAIfNeeded(
+            request.lora,
+            resources: resources,
+            configuration: loadedConfigs.transformer,
+            progressHandler: progressHandler
+        )
+        let denoised = try denoise(
+            request,
+            configs: loadedConfigs,
+            transformer: transformer,
+            text: text,
+            progressHandler: progressHandler
+        )
+        MLX.eval(denoised.latents)
+        self.transformer = nil
+        transformerLoRALayers = nil
+        transformerLoRARank = nil
+        currentLoRA = nil
+        MLX.Memory.clearCache()
+
+        progressHandler?(GenerationProgress(stage: .loadingVAE, stepIndex: 0, totalSteps: 1))
+        let activeVAE = try Krea2ModelLoader.loadVAE(from: resources, configuration: loadedConfigs.vae)
+        progressHandler?(GenerationProgress(stage: .loadingVAE, stepIndex: 1, totalSteps: 1))
+        return try decodeAndSave(
+            denoised.latents,
+            seed: denoised.seed,
+            request: request,
+            configs: loadedConfigs,
+            vae: activeVAE,
+            progressHandler: progressHandler
+        )
+    }
+
+    private func denoise(
+        _ request: GenerationRequest,
+        configs: Krea2ModelConfigs,
+        transformer: Krea2Transformer,
+        text: (hiddenStates: MLXArray, attentionMask: MLXArray),
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) throws -> (latents: MLXArray, seed: UInt64) {
         let seed = request.seed ?? deterministicSeed(prompt: request.prompt)
         let aligned = Krea2SampleBuilder.alignedResolution(width: request.width, height: request.height)
-        var latents = MLXRandom.normal(
+        let initialLatents = MLXRandom.normal(
             [
                 1,
                 configs.transformer.latentChannels,
@@ -123,36 +241,28 @@ public final class Krea2Generator: ImageGenerator {
             ],
             key: MLXRandom.key(seed)
         ).asType(.bfloat16)
-
         let prepared = Krea2SampleBuilder.prepare(
-            latents: latents,
+            latents: initialLatents,
             textLength: text.hiddenStates.dim(1),
             textMask: text.attentionMask,
             patch: configs.transformer.patchSize
         )
         var imageTokens = prepared.imageTokens.asType(.float32)
-        let mu = request.sigmaShift ?? Krea2SampleBuilder.defaultMu
         let timesteps = Krea2SampleBuilder.timesteps(
             imageTokenCount: prepared.imageTokenCount,
             steps: request.steps,
-            mu: mu
+            mu: request.sigmaShift ?? Krea2SampleBuilder.defaultMu
         )
-
-        // The text context never changes across steps; casting it inside the
-        // loop rebuilt the same bfloat16 tensor every iteration. (The image
-        // tokens intentionally accumulate in float32 with a per-step bfloat16
-        // cast for the transformer — that precision policy stays.)
         let textContextBF16 = text.hiddenStates.asType(.bfloat16)
         for step in 0..<request.steps {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: request.steps))
             let tCurrent = timesteps[step]
             let tPrevious = timesteps[step + 1]
-            let timestep = MLXArray([tCurrent]).asType(.bfloat16)
             let velocity = transformer(
                 imageTokens: imageTokens.asType(.bfloat16),
                 textContext: textContextBF16,
-                timestep: timestep,
+                timestep: MLXArray([tCurrent]).asType(.bfloat16),
                 positionIds: prepared.positionIds,
                 validMask: prepared.validMask
             )
@@ -160,18 +270,33 @@ public final class Krea2Generator: ImageGenerator {
             MLX.eval(imageTokens)
         }
         progressHandler?(GenerationProgress(stage: .denoising, stepIndex: request.steps, totalSteps: request.steps))
-
-        progressHandler?(GenerationProgress(stage: .decoding, stepIndex: 0, totalSteps: 1))
-        latents = Krea2SampleBuilder.unpatchify(
+        let latents = Krea2SampleBuilder.unpatchify(
             imageTokens.asType(.bfloat16),
             tokenHeight: prepared.imageTokenHeight,
             tokenWidth: prepared.imageTokenWidth,
             channels: configs.transformer.latentChannels,
             patch: configs.transformer.patchSize
         )
-        let decoded = decodeLatents(latents, vae: vae, config: configs.vae, height: request.height, width: request.width)
-        progressHandler?(GenerationProgress(stage: .decoding, stepIndex: 1, totalSteps: 1))
+        return (latents, seed)
+    }
 
+    private func decodeAndSave(
+        _ latents: MLXArray,
+        seed: UInt64,
+        request: GenerationRequest,
+        configs: Krea2ModelConfigs,
+        vae: QwenImageEditVAE,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) throws -> GenerationResult {
+        progressHandler?(GenerationProgress(stage: .decoding, stepIndex: 0, totalSteps: 1))
+        let decoded = decodeLatents(
+            latents,
+            vae: vae,
+            config: configs.vae,
+            height: request.height,
+            width: request.width
+        )
+        progressHandler?(GenerationProgress(stage: .decoding, stepIndex: 1, totalSteps: 1))
         progressHandler?(GenerationProgress(stage: .saving, stepIndex: 0, totalSteps: 1))
         try ensureOutputDirectory(request.outputURL)
         try QwenImageIO.saveImage(array: decoded, to: request.outputURL)

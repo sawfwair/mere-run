@@ -187,6 +187,73 @@ final class WorkflowGraphTests: XCTestCase {
         })
     }
 
+    func testTrainLoRALiteArgumentUsesPublicCLIFlag() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "train",
+            kind: "image.train-lora",
+            arguments: [
+                "data": .string("/tmp/dataset"),
+                "lite": .boolean(true),
+                "max_text_length": .integer(128),
+                "base_quantization_bits": .integer(4),
+                "rank": .integer(4),
+            ],
+            dependsOn: nil
+        )
+
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        )
+
+        XCTAssertTrue(invocation.preflightArguments.contains("--lite"))
+        XCTAssertTrue(invocation.runArguments.contains("--lite"))
+        XCTAssertTrue(invocation.runArguments.contains("--max-text-length"))
+        XCTAssertTrue(invocation.runArguments.contains("128"))
+        XCTAssertTrue(invocation.runArguments.contains("--rank"))
+        XCTAssertTrue(invocation.runArguments.contains("4"))
+        XCTAssertTrue(invocation.runArguments.contains("--base-quantization-bits"))
+    }
+
+    func testKreaGenerationQuantizationUsesPublicCLIFlag() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "sample",
+            kind: "image.generate",
+            arguments: [
+                "prompt": .string("a neon street portrait"),
+                "model": .string("image-krea2-turbo"),
+                "krea_base_quantization_bits": .integer(4),
+            ],
+            dependsOn: nil
+        )
+
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        )
+
+        XCTAssertTrue(invocation.preflightArguments.contains("--krea-base-quantization-bits"))
+        XCTAssertTrue(invocation.runArguments.contains("--krea-base-quantization-bits"))
+        XCTAssertTrue(invocation.runArguments.contains("4"))
+    }
+
+    func testWorkflowChildStdoutCaptureUsesUniquePath() {
+        let directory = URL(fileURLWithPath: "/tmp/workflow-node", isDirectory: true)
+        let first = WorkflowProcessRunner.stdoutCaptureURL(in: directory)
+        let second = WorkflowProcessRunner.stdoutCaptureURL(in: directory)
+
+        XCTAssertEqual(first.deletingLastPathComponent(), directory)
+        XCTAssertTrue(first.lastPathComponent.hasPrefix(".workflow-stdout-"))
+        XCTAssertNotEqual(first, second)
+        XCTAssertFalse(first.lastPathComponent.contains("UUID()"))
+    }
+
     func testMaterializationFreezesSeedAndCanonicalFingerprints() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -518,6 +585,17 @@ final class WorkflowGraphTests: XCTestCase {
         })
         XCTAssertTrue(scpCalls.contains { $0.contains(where: { $0.hasSuffix(asset.digest) }) })
         XCTAssertEqual(shellQuote("a'b;$(touch nope)"), "'a'\\''b;$(touch nope)'")
+    }
+
+    func testSSHFetchUsesExplicitRunDirectoryEntries() {
+        let reports = SSHWorkflowExecutor.fetchRelativePaths(allArtifacts: false)
+        let allArtifacts = SSHWorkflowExecutor.fetchRelativePaths(allArtifacts: true)
+
+        XCTAssertTrue(reports.contains("outputs"))
+        XCTAssertFalse(reports.contains("nodes"))
+        XCTAssertTrue(allArtifacts.contains("nodes"))
+        XCTAssertTrue(allArtifacts.contains("actions.json"))
+        XCTAssertFalse(allArtifacts.contains("."))
     }
 
     func testRemoteReferenceParsingIsStrict() throws {

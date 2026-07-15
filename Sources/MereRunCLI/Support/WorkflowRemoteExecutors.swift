@@ -195,20 +195,10 @@ struct SSHWorkflowExecutor {
         let remotePath = try resolvedRemoteJobPath(jobID: jobID)
         var arguments = sshCommonArguments(executable: "scp")
         arguments.append("-r")
-        if !allArtifacts {
-            arguments.append(contentsOf: [
-                scpRemotePath("\(remotePath)/run.json"),
-                scpRemotePath("\(remotePath)/graph.json"),
-                scpRemotePath("\(remotePath)/inputs.json"),
-                scpRemotePath("\(remotePath)/job.json"),
-                scpRemotePath("\(remotePath)/assets.json"),
-                scpRemotePath("\(remotePath)/events.jsonl"),
-                scpRemotePath("\(remotePath)/outputs"),
-                destination.path,
-            ])
-        } else {
-            arguments.append(contentsOf: [scpRemotePath("\(remotePath)/."), destination.path])
-        }
+        arguments.append(contentsOf: Self.fetchRelativePaths(allArtifacts: allArtifacts).map {
+            scpRemotePath("\(remotePath)/\($0)")
+        })
+        arguments.append(destination.path)
         let result = try executableRunner(arguments, nil)
         guard result.status == 0 else {
             throw ValidationError("SSH workflow fetch failed with status \(result.status).")
@@ -335,6 +325,22 @@ struct SSHWorkflowExecutor {
 
     private func scpRemotePath(_ path: String) -> String {
         "\(profile.destination!):\(shellQuote(path))"
+    }
+
+    static func fetchRelativePaths(allArtifacts: Bool) -> [String] {
+        var paths = [
+            GraphRunManifest.filename,
+            "graph.json",
+            "inputs.json",
+            WorkflowJobManifest.filename,
+            WorkflowAssetManifest.filename,
+            "events.jsonl",
+            "outputs",
+        ]
+        if allArtifacts {
+            paths += ["actions.json", "nodes"]
+        }
+        return paths
     }
 }
 

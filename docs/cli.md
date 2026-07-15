@@ -261,6 +261,8 @@ Key options:
 - `--structured-prompt-model`: text chat model id for the adapter; defaults to `text-chat-gemma4-12b-4bit`
 - `--structured-prompt-output`: write the generated structured JSON caption to a file
 - `--lora`, `--lora-scale`
+- `--krea-base-quantization-bits 4|8`: quantize the frozen Krea transformer and
+  load the text encoder, transformer, and VAE sequentially to reduce peak memory
 - `--preflight`: inspect the generation request without loading the model or writing an image
 - `--json`: with `--preflight`, emit a structured JSON report
 - `--quiet`
@@ -290,7 +292,7 @@ swift run mere.run image generate --prompt "a black cat on a red sofa"
 swift run mere.run image generate --prompt "a black cat on a red sofa" --preflight --json
 swift run mere.run image generate --model image-zimage-nano --prompt "retro robot illustration" --output ./robot.png
 swift run mere.run image generate --model image-bonsai-binary --prompt "sunlit greenhouse bonsai" --output ./bonsai.png
-swift run mere.run image generate --model image-krea2-turbo --prompt "translucent portable speaker product photo" --steps 8 --output ./speaker.png
+swift run mere.run image generate --model image-krea2-turbo --prompt "translucent portable speaker product photo" --steps 8 --krea-base-quantization-bits 4 --output ./speaker.png
 swift run mere.run image generate --prompt "turn this into a pencil sketch" --input ./photo.png --strength 0.6
 swift run mere.run image generate --model image-ideogram4-sdnq-uint4 --prompt "a knight and a white horse in a sunny meadow" --structured-prompt --structured-prompt-output ./knight-prompt.json --output ./knight.png
 swift run mere.run image generate \
@@ -461,6 +463,7 @@ Key options:
 - `--lr-warmup-steps`, `--no-cosine-scheduler`, `--lr-min-factor`: Krea/Klein
   LR scheduler controls
 - `--lite`: train only attention Q/V layers to reduce memory
+- `--base-quantization-bits 4|8`: quantize the frozen Krea base transformer while training
 - `--exclude-preview-images`
 - `--checkpoint-interval`: save intermediate Klein LoRA adapters every N steps
 - `--max-resolution`: preserve source aspect ratio up to a maximum side length
