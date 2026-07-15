@@ -29,6 +29,9 @@ scripts/upload_release.sh
 .agents/
 live.wav
 
+# Maintainer-only local audit artifacts
+/docs/internals/cyclomatic-complexity-backlog.md
+
 # Local release/notarization credentials
 .notarize.local.env
 .upload_release.local.env

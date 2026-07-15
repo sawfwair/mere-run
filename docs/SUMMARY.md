@@ -6,6 +6,7 @@
 - [CLI Reference](./cli.md)
 - [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
+- [Portable Workflows](./workflows.md)
 - [Configuration](./configuration.md)
 - [Quality Gate](./gate.md)
 - [Model Sources](./model-sources.md)

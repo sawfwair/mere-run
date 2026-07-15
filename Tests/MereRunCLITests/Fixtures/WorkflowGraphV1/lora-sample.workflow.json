@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/workflow-graph",
+  "name": "train-style-and-sample",
+  "inputs": {
+    "dataset": { "type": "asset_directory" },
+    "prompt": { "type": "string" }
+  },
+  "nodes": [
+    {
+      "id": "train-style",
+      "kind": "image.train-lora",
+      "arguments": {
+        "data": { "$ref": "inputs.dataset" },
+        "width": 256,
+        "height": 256,
+        "training_steps": 10
+      }
+    },
+    {
+      "id": "sample-style",
+      "kind": "image.generate",
+      "arguments": {
+        "prompt": { "$ref": "inputs.prompt" },
+        "model": "image-krea2-turbo",
+        "width": 256,
+        "height": 256,
+        "lora": { "$ref": "nodes.train-style.outputs.adapter" }
+      }
+    }
+  ],
+  "outputs": {
+    "adapter": { "$ref": "nodes.train-style.outputs.adapter" },
+    "sample": { "$ref": "nodes.sample-style.outputs.image" }
+  }
+}

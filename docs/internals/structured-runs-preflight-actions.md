@@ -1,6 +1,6 @@
 # Structured Runs, Preflights, and Declarative Actions
 
-This document plans the implementation of a headless-first run contract for
+This document defines the headless-first run contract for
 `mere.run`: structured `--json` output, cheap `--preflight` checks, and
 declarative next actions that can later power optional local UIs without making
 the UI the source of behavior.
@@ -22,9 +22,12 @@ The ladder is:
 
 1. `--json`: emit machine-readable truth to stdout.
 2. `--preflight`: inspect the requested work before expensive compute.
-3. declarative actions: tell callers what safe next commands or artifact
+3. run plans and workflow graphs: describe work as portable, replayable data.
+4. declarative actions: tell callers what safe next commands or artifact
    operations are available.
-4. future `--visualize`: render the same contract in a loopback UI when useful.
+5. remote executors: let another machine run the same contract and return the
+   same run report and artifacts.
+6. future `--visualize`: render the same contract in a loopback UI when useful.
 
 The durable rule is: UI reads reports and actions emitted by the CLI. The CLI
 and runtime remain the behavioral source of truth.
@@ -44,7 +47,7 @@ This plan generalizes that pattern without requiring the next phase to build UI.
 
 ## Non-goals
 
-- Do not build a ComfyUI-style node canvas.
+- Do not build a ComfyUI-style node canvas as the first product surface.
 - Do not make the macOS app the canonical workflow engine.
 - Do not add hosted-service, billing, app-store, or private deployment surfaces.
 - Do not emit JSON mixed with diagnostics on stdout.
@@ -213,6 +216,60 @@ Candidate flags:
 Do not force this into the first `--preflight --json` slice. For
 `image train-lora`, continue deriving the run directory from the output path
 until the shared run contract exists.
+
+## Workflow graphs and remote jobs
+
+Workflow Graph V1 is the portable composition contract. References are typed
+objects, never interpolated strings:
+
+```json
+{ "$ref": "inputs.prompt" }
+```
+
+```json
+{ "$ref": "nodes.generate-frame.outputs.image" }
+```
+
+`graph materialize` and `graph export-job` produce the same generic immutable
+job bundle. There is no relay-specific export payload and no executor URL,
+credential, or machine path inside the bundle.
+
+```text
+job.json
+graph.json
+inputs.json
+assets.json
+assets/sha256/<digest>
+```
+
+The same bundle is accepted by the local runner, `graph worker execute`, the SSH
+executor, and relay graph nodes. `mere.run` owns graph validation, node adapters,
+preflight, canonical fingerprints, execution events, and run artifacts. SSH and
+relay transport that contract. Provider-specific fleet implementations remain
+outside this repository.
+
+```bash
+mere.run graph catalog --json
+mere.run graph validate workflow.json --inputs-json inputs.json --json
+mere.run graph preflight workflow.json --inputs-json inputs.json --executor relay:fleet --json
+mere.run graph export-job workflow.json --inputs-json inputs.json --output ./job-bundle --json
+mere.run graph run workflow.json --inputs-json inputs.json --run-dir ./runs/job --json
+mere.run graph submit workflow.json --inputs-json inputs.json --executor ssh:gpu-box --run-dir ./runs/job --json
+mere.run graph submit workflow.json --inputs-json inputs.json --executor relay:fleet --run-dir ./runs/job --json
+```
+
+Remote readback uses strict executor-qualified references:
+
+```bash
+mere.run run inspect ssh://gpu-box/<job-id> --json
+mere.run run watch relay://fleet/<job-id> --json-stream
+mere.run run fetch relay://fleet/<job-id> --into ./runs/job --json
+mere.run run cancel relay://fleet/<job-id> --json
+mere.run run retry relay://fleet/<job-id> --json
+```
+
+The public schemas live under `/schemas/`. See [Portable Workflows](../workflows.md)
+for the complete graph, bundle, executor, worker, and run-directory contract.
 
 ## JSON envelope
 
@@ -795,7 +852,83 @@ High-value commands:
 
 Lower-value commands can wait.
 
-### Phase 8: optional viewers
+### Phase 8: workflow graphs
+
+Once single-command run plans are stable, introduce workflow graphs as the
+composition layer.
+
+Start with graph authoring and validation:
+
+- `graph validate ./workflow.json --json`
+- `graph preflight ./workflow.json --json`
+- `graph materialize ./workflow.json --run-dir ./runs/name --json`
+
+Then add local execution:
+
+- execute nodes in dependency order
+- map node outputs into downstream node inputs
+- write one parent run directory with per-node child run directories
+- preserve every child command's structured report
+- emit parent `events.ndjson` with node start, progress, completion, and failure
+
+Acceptance:
+
+- invalid graph shape blocks before any node runs
+- missing model/input/capability diagnostics include the node ID
+- a graph containing one `image.generate` node produces the same command plan as
+  `image generate --preflight --json`
+- a two-node graph can pass an image output into a video input without a caller
+  inventing temp paths
+- `run inspect` can summarize the parent graph run and each child run
+
+### Phase 9: remote graph jobs
+
+After graph preflight and local graph execution exist, add exportable remote job
+payloads.
+
+The local CLI should not own authentication, fleet policy, hosted queues, or
+remote asset storage. It should prepare a portable job description that an
+external relay can submit to a GPU node.
+
+Candidate command:
+
+```bash
+mere.run graph export-job ./workflow.json \
+  --target relay \
+  --asset-root ./assets \
+  --json
+```
+
+The result should include:
+
+- graph payload
+- content-addressed local asset manifest
+- capability requirements
+- expected output descriptors
+- suggested upload/submission actions
+- local run metadata for later readback import
+
+Relay integration can then live in the relay repo:
+
+- client API accepts graph job payloads
+- scheduler matches graph requirements to online node capabilities
+- node downloads or receives graph assets
+- node runs `mere.run graph run` or equivalent public CLI operations
+- relay uploads graph outputs and final run report
+- clients poll, stream, cancel, and read final artifacts through existing relay
+  job status patterns
+
+Acceptance:
+
+- a graph job can be exported without network access
+- a remote executor can run the exported graph using only public `mere.run`
+  commands and declared assets
+- relay results can be imported or inspected using the same run-report shape as
+  local execution
+- no relay secrets, tokens, account URLs, or private scheduling code land in
+  this public repo
+
+### Phase 10: optional viewers
 
 Only after JSON and run directories are stable, add viewers as thin clients.
 The headless readback layer is `mere.run run list --root <path> --json` plus
@@ -850,6 +983,10 @@ This is intentionally not part of the first implementation milestone.
 | `model pull` | implemented | implemented | implemented | not needed | not needed |
 | `run list` | implemented | not needed | implemented | discovers existing | not needed |
 | `run inspect` | implemented | not needed | implemented | reads existing | not needed |
+| `graph validate` | phase 8 | not needed | phase 8 | not needed | not needed |
+| `graph preflight` | phase 8 | phase 8 | phase 8 | not needed | later |
+| `graph run` | phase 8 | phase 8 | phase 8 | phase 8 | later |
+| `graph export-job` | phase 9 | phase 9 | phase 9 | not needed | not needed |
 | `model benchmark` | phase 7 | phase 7 | phase 7 | phase 7 | later |
 
 ## Error handling
@@ -908,6 +1045,17 @@ The first PR should not require users to change existing commands.
 5. Should the run directory contract live in `MereRunCLI` or `MereRunCore`?
    Recommended: start in `MereRunCLI/Support`; move shared artifact/event types
    lower only if runtimes need to write them directly.
+6. Should graph jobs enter relay as a new first-class work kind or as a
+   tool-style request carrying a `mere.run/workflow-graph` payload? Recommended:
+   first-class long-term, tool-style only as a compatibility bridge.
+7. Should `mere.run` submit directly to relay? Recommended: no for the public
+   CLI. Export a relay-ready job payload and action first; keep authenticated
+   submission in the relay/client layer unless a generic remote-executor plugin
+   boundary exists.
+8. Should graph nodes be limited to public commands or allowed to call plugin
+   tools? Recommended: start with public `mere.run` command nodes, then allow
+   plugin nodes only when their manifests declare typed inputs, outputs, and
+   artifact behavior.
 
 ## PR sequencing
 
@@ -966,13 +1114,50 @@ Scope:
 - `start-sfx-video-generation`, `pull-model`, `pull-synchformer`, input reveal, and output actions
 - benchmark commands where useful
 
-### PR 5: run inspection and optional viewer refresh
+### PR 5: run inspection
 
 Scope:
 
 - generic `run list --json` discovery under workspace roots
 - generic `run inspect --json` readback for run directories, report files, and
   plan files
+
+### PR 6: workflow graph contract
+
+Scope:
+
+- graph schema and typed Swift decoding
+- `graph validate`
+- `graph preflight`
+- graph actions and diagnostics
+- one-node graph fixtures for `image.generate`
+- two-node fixture that passes image output into video input
+
+Avoid:
+
+- remote submission
+- visual graph editor
+- private relay assumptions
+
+### PR 7: local graph run and relay job export
+
+Scope:
+
+- `graph run`
+- graph parent run directory with child node reports
+- `graph export-job --target relay`
+- asset manifest and capability requirement payload
+- docs describing how an external relay should consume the payload
+
+Avoid:
+
+- embedding relay auth or hosted scheduling in this repo
+- requiring a GPU node for local tests
+
+### PR 8: optional viewer refresh
+
+Scope:
+
 - render actions in the LoRA viewer
 - optionally introduce a generic `run view`
 - keep viewer loopback-only

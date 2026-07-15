@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/workflow-graph",
+  "name": "generate-e2e-image",
+  "inputs": {
+    "prompt": { "type": "string" }
+  },
+  "nodes": [
+    {
+      "id": "generate-image",
+      "kind": "image.generate",
+      "arguments": {
+        "prompt": { "$ref": "inputs.prompt" },
+        "model": "image-zimage-nano",
+        "width": 256,
+        "height": 256,
+        "steps": 1,
+        "seed": 20260715
+      }
+    }
+  ],
+  "outputs": {
+    "image": { "$ref": "nodes.generate-image.outputs.image" }
+  }
+}

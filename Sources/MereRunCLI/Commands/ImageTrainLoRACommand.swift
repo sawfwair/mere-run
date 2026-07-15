@@ -391,6 +391,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             recipe: recipe,
             excludePreviewImages: excludePreviewImages,
             syntheticSamples: syntheticSamples,
+            requiresKleinModel: options.checkpointInterval != nil || hasKleinOnlyTrainingOptions(options: options),
             options: options,
             trainingArgv: trainingActionArguments(),
             runPlan: makeRunPlan(options: options, fileManager: fileManager, now: now),

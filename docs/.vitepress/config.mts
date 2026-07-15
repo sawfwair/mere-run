@@ -49,6 +49,7 @@ export default defineConfig({
           { text: 'Getting Started', link: '/getting-started' },
           { text: 'CLI Reference', link: '/cli' },
           { text: 'Cookbooks', link: '/cookbooks' },
+          { text: 'Portable Workflows', link: '/workflows' },
           { text: 'Configuration', link: '/configuration' },
           { text: 'Quality Gate', link: '/gate' },
           { text: 'Model Sources', link: '/model-sources' }

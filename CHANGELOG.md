@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added Workflow Graph V1 with typed LoRA, image, and video nodes; immutable
+  content-addressed job bundles; local and resumable graph execution; the
+  public graph worker protocol; SSH and direct relay executors; and unified
+  inspect, watch, fetch, cancel, retry, and remote-list commands.
+- added durable mere.world relay sign-in with automatic refresh-token rotation,
+  relay fleet inspection and node inventory refresh, typed no-eligible-node
+  diagnostics, resumable artifact transfers, and per-job execution telemetry.
 - added a checksum-pinned public adapter catalog and `mere.run adapter list`
   / `mere.run adapter pull` commands, beginning with the promoted Mere Platform
   Assistant v22 release for Gemma 4 12B 4-bit. Text chat and API serving now

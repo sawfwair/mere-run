@@ -437,6 +437,20 @@ done
 payload_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
 if [[ -f "$payload_dir/.mererun-linux-cuda" ]]; then
   export MERERUN_LINUX_ACCEL="${MERERUN_LINUX_ACCEL:-cuda}"
+  if [[ -z "${CUDA_HOME:-}" && -z "${CUDA_PATH:-}" ]]; then
+    for cuda_runtime_root in /usr/local/cuda /usr/local/cuda-* /usr; do
+      if [[ -f "$cuda_runtime_root/include/cuda.h" ]]; then
+        export CUDA_HOME="$cuda_runtime_root"
+        break
+      fi
+    done
+  fi
+  if [[ -z "${CUDA_HOME:-}" && -n "${CUDA_PATH:-}" ]]; then
+    export CUDA_HOME="$CUDA_PATH"
+  fi
+  if [[ -z "${CUDA_PATH:-}" && -n "${CUDA_HOME:-}" ]]; then
+    export CUDA_PATH="$CUDA_HOME"
+  fi
 fi
 if [[ -x "$payload_dir/llama-cli" && -z "${MERERUN_LLAMA_CLI:-}" ]]; then
   export MERERUN_LLAMA_CLI="$payload_dir/llama-cli"

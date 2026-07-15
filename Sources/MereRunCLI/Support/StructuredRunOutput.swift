@@ -13,9 +13,13 @@ enum StructuredRunStatus: String, Codable, Equatable, Sendable {
     case ok
     case warning
     case blocked
+    case planned
+    case queued
+    case assigned
     case running
     case finished
     case failed
+    case cancelled
 }
 
 struct StructuredRunEnvelope<Request: Codable & Equatable, Result: Codable & Equatable>: Codable, Equatable {

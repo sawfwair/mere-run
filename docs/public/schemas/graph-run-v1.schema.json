@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mere.run/schemas/graph-run-v1.schema.json",
+  "title": "mere.run Graph Run V1",
+  "type": "object",
+  "required": ["contract_version", "job_id", "graph_name", "graph_fingerprint", "state", "created_at", "updated_at", "attempt", "executor", "nodes", "outputs"],
+  "properties": {
+    "contract_version": { "const": "mere.run/graph-run.v1" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "graph_name": { "type": "string" },
+    "graph_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "state": { "$ref": "#/$defs/state" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "executor": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["local", "worker", "ssh", "relay"] },
+        "profile": { "type": ["string", "null"] },
+        "job_reference": { "type": ["string", "null"] }
+      }
+    },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "outputs": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+    "error": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "state": { "enum": ["planned", "preflighting", "queued", "assigned", "running", "finished", "failed", "cancelled"] },
+    "artifact": {
+      "type": "object",
+      "required": ["name", "kind", "path", "content_type", "size_bytes", "sha256"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "content_type": { "type": "string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "kind", "state", "fingerprint", "artifacts"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "state": { "$ref": "#/$defs/state" },
+        "started_at": { "type": ["string", "null"], "format": "date-time" },
+        "completed_at": { "type": ["string", "null"], "format": "date-time" },
+        "exit_status": { "type": ["integer", "null"] },
+        "fingerprint": { "type": "string" },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "error": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

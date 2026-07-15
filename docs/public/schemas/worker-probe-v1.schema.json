@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mere.run/schemas/worker-probe-v1.schema.json",
+  "title": "mere.run Graph Worker Probe V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "worker_version", "contract_versions", "platform", "architecture", "accelerator_backend", "memory_bytes", "node_kinds", "installed_model_ids"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "worker_version": { "type": "string" },
+    "contract_versions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "platform": { "type": "string" },
+    "architecture": { "type": "string" },
+    "accelerator_backend": { "enum": ["metal", "cuda", "rocm", "cpu", "unknown", "mixed"] },
+    "memory_bytes": { "type": "integer", "minimum": 0 },
+    "available_disk_bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "node_kinds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "installed_model_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  }
+}
