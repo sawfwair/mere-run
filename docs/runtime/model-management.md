@@ -11,6 +11,8 @@ the model-management commands.
 - `mere.run model pull`
 - `mere.run model remove`
 - `mere.run model repair-manifests`
+- `mere.run adapter list`
+- `mere.run adapter pull`
 - `mere.run status`
 - `mere.run setup`
 
@@ -84,6 +86,32 @@ Downloads a managed model from its cataloged Hugging Face source. Pulls are
 checked against the managed capability catalog before download so low-memory
 machines do not fetch models they cannot run. Pass `--allow-unsupported` only
 when you intentionally accept that risk or are using external hardware.
+
+### `mere.run adapter list` and `mere.run adapter pull`
+
+Adapters use a separate checksum-pinned catalog and install under:
+
+```text
+~/Library/Application Support/MereRun/adapters/<adapter-id>/<version>/
+```
+
+The first public entry is the promoted Mere Platform Assistant v22 for the
+`text-chat-gemma4-12b-4bit` base model:
+
+```bash
+mere.run model pull text-chat-gemma4-12b-4bit
+mere.run adapter list
+mere.run adapter pull mere-platform-assistant
+mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --lora mere-platform-assistant \
+  --prompt "What can you help me with in Mere?"
+```
+
+`adapter pull` downloads the immutable public release, verifies its exact byte
+count and SHA-256, and prints the installed adapter path on stdout. Catalog ids
+are accepted by `text chat --lora` and `api serve --lora`; local paths remain
+supported.
 
 ### `mere.run setup`
 

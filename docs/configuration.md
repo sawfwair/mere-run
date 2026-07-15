@@ -33,6 +33,18 @@ swift run mere.run model pull image-zimage-nano
 Managed pulls use cataloged Hugging Face repos only. Private archive hosts and
 R2 credential flows are not part of the public distribution.
 
+## Adapter store
+
+Checksum-pinned public adapter releases install under:
+
+```text
+~/Library/Application Support/MereRun/adapters
+```
+
+`mere.run adapter pull` uses public HTTPS release URLs and never requires or
+accepts R2 credentials. Catalog ids resolve from this verified local store when
+passed to `text chat --lora` or `api serve --lora`.
+
 ## Specialized model roots
 
 ### `MERERUN_VIDEO_LTX_MODEL_ROOT`

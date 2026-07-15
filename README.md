@@ -25,7 +25,8 @@ The public OSS repo currently supports:
 - local speech synthesis, transcription, and voice-profile management
 - local vision captioning, inspection, grounding, segmentation, tracking, live camera tracking, and OCR
 - native ACEStep music generation, Woosh sound-effect generation, and LTX video generation
-- Hugging Face-backed model pulls that resolve into a shared local model store
+- Hugging Face-backed model pulls plus checksum-pinned public adapter pulls
+  that resolve into shared local model and adapter stores
 - offline command cookbooks through `mere.run guide`
 - a local OpenAI-compatible API surface for chat, embeddings, image generation,
   TTS, and STT
@@ -212,6 +213,14 @@ swift run mere.run model pull text-chat-lfm25-a1b-8bit
 swift run mere.run model pull text-code-north-mini
 swift run mere.run model pull text-agent-ornith-35b
 # text-agent-ornith-35b-mlx is local-only until a converted MLX snapshot is published
+
+# Pull and apply the promoted Mere Platform Assistant adapter
+swift run mere.run model pull text-chat-gemma4-12b-4bit
+swift run mere.run adapter pull mere-platform-assistant
+swift run mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --lora mere-platform-assistant \
+  --prompt "What can you help me with in Mere?"
 
 # Generate an image
 swift run mere.run image generate \
@@ -679,7 +688,9 @@ The public OSS build keeps local-first behavior by default and requires explicit
   model
 - `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
 - the OpenAI-compatible chat and embedding routes require `Content-Type: application/json`, support `--rate-limit-per-minute` for basic abuse control, decode the common OpenAI request shapes, and reject unsupported high-impact fields before generation
-- API LoRA adapters are operator-controlled with `--lora`; per-request LoRA paths are rejected
+- API LoRA adapters are operator-controlled with `--lora`; it accepts a
+  verified installed adapter catalog id or a local path, while per-request LoRA
+  paths are rejected
 - tool-loop execution in `mere.run text chat` requires interactive approval unless `--auto-approve-tools` is passed for non-shell tools
 - `shell_exec` is disabled unless `--allow-shell-exec` is set, and still requires interactive approval when enabled
 - `write_file` stays inside the sandbox unless `--allow-absolute-tool-paths` is set

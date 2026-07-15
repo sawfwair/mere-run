@@ -73,6 +73,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
             "world",
             "run",
             "model",
+            "adapter",
             "status",
             "gate",
             "api",

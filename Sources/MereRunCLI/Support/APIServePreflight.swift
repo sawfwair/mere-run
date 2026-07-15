@@ -222,7 +222,11 @@ struct APIServePreflightAnalyzer {
         let resolvedModelPath = resolvedModelPath(diagnostics: &diagnostics)
         let kvQuantization = kvQuantization(diagnostics: &diagnostics)
         let memoryPolicy = memoryPolicy(diagnostics: &diagnostics)
-        appendStaticDiagnostics(apiKey: apiKey, diagnostics: &diagnostics)
+        appendStaticDiagnostics(
+            apiKey: apiKey,
+            resolvedModelPath: resolvedModelPath,
+            diagnostics: &diagnostics
+        )
 
         let server = serverSummary(apiKey: apiKey)
         let model = modelSummary(
@@ -540,6 +544,7 @@ struct APIServePreflightAnalyzer {
 
     private func appendStaticDiagnostics(
         apiKey: APIKeyPresence,
+        resolvedModelPath: String?,
         diagnostics: inout [PreflightDiagnostic]
     ) {
         if command.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -634,9 +639,15 @@ struct APIServePreflightAnalyzer {
                 )
             )
         }
-        if let lora = command.lora {
-            let url = URL(fileURLWithPath: lora).standardizedFileURL
-            if !fileManager.fileExists(atPath: url.path) {
+        if command.lora != nil {
+            do {
+                let resolved = try command.resolveLoraPath(
+                    modelPath: resolvedModelPath,
+                    fileManager: fileManager
+                )
+                guard let resolved else { return }
+                let url = URL(fileURLWithPath: resolved).standardizedFileURL
+                if fileManager.fileExists(atPath: url.path) { return }
                 diagnostics.append(
                     PreflightDiagnostic(
                         id: "lora_missing",
@@ -644,6 +655,15 @@ struct APIServePreflightAnalyzer {
                         title: "LoRA file missing",
                         message: "LoRA file not found: \(url.path).",
                         locations: [.init(kind: "file", path: url.path)]
+                    )
+                )
+            } catch {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "lora_missing",
+                        severity: .blocker,
+                        title: "LoRA adapter unavailable",
+                        message: error.localizedDescription
                     )
                 )
             }

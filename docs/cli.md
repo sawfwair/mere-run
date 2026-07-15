@@ -220,6 +220,17 @@ swift run mere.run plugin doctor mere-runpod
 
 Model installation in the OSS repo is explicit. `mere.run model pull` uses cataloged Hugging Face snapshots only; local-path-only models must be supplied with command-specific `--model` or `--model-root` options. See [`configuration.md`](./configuration.md) and [`model-sources.md`](./model-sources.md).
 
+Public LoRA releases use the separate checksum-pinned adapter catalog:
+
+```bash
+mere.run adapter list
+mere.run adapter pull mere-platform-assistant
+mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --lora mere-platform-assistant \
+  --prompt "Summarize the current Mere workspace."
+```
+
 ### `mere.run plugin`
 
 Discover and install official companion plugins from the live plugin catalog.
@@ -1597,6 +1608,21 @@ download starts. The report includes `pull-model` or `pull-models` actions and
 exits nonzero after printing JSON when hard blockers are present.
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
+
+### `mere.run adapter list` and `mere.run adapter pull`
+
+List the built-in public adapter catalog or install one immutable release:
+
+```bash
+mere.run adapter list
+mere.run adapter list --json
+mere.run adapter pull mere-platform-assistant
+```
+
+The pull verifies the cataloged byte count and SHA-256 before atomically
+installing the adapter. Stdout contains only the installed path; progress and
+verification diagnostics go to stderr. Use the adapter id directly with
+`text chat --lora` or `api serve --lora`.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.
