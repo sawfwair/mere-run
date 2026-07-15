@@ -2,8 +2,8 @@
 
 `mere.run` is the public command-line interface for the OSS `mere.run`
 package. It exposes a modality-first command tree for image, text, speech,
-vision, music, SFX, video, model management, local status snapshots, and local API
-serving.
+vision, geometry, 3D, music, SFX, video, persistent worlds, model and adapter
+management, local status snapshots, and local API serving.
 
 If you are looking for the broader docs set, start at [mere.run Documentation](/).
 
@@ -16,36 +16,21 @@ swift run mere.run --help
 Public tree:
 
 - `mere.run guide`
-- `mere.run image generate`
-- `mere.run image train-lora`
-- `mere.run image visualize-run`
-- `mere.run image validate`
-- `mere.run text chat`
-- `mere.run text code`
-- `mere.run text embed`
-- `mere.run text anonymize`
-- `mere.run speech synthesize`
-- `mere.run speech transcribe`
+- `mere.run image { dataset, generate, reconstruct-3d, reconstruct-3d-trellis2, reconstruct-3d-multiview, run-plan, train-lora, visualize-run, validate }`
+- `mere.run text { chat, code, embed, anonymize, train-lora }`
+- `mere.run speech { synthesize, transcribe }`
 - `mere.run speech profile { list, create, delete }`
-- `mere.run vision caption`
-- `mere.run vision inspect`
-- `mere.run vision ground`
-- `mere.run vision segment`
-- `mere.run vision track`
-- `mere.run vision track-live`
-- `mere.run vision pose`
-- `mere.run vision flow`
-- `mere.run vision ocr`
-- `mere.run music analyze`
-- `mere.run music generate`
-- `mere.run music realtime`
-- `mere.run music transcribe`
-- `mere.run sfx generate`
-- `mere.run video generate`
-- `mere.run video export-latents`
+- `mere.run vision { caption, inspect, ground, segment, track, track-live, pose, flow, depth-video, geometry, geometry-multiview, image-to-3d, image-to-3d-trellis2, image-to-3d-multiview, ocr }`
+- `mere.run music { analyze, generate, realtime, transcribe }`
+- `mere.run sfx { ae, clap, condition, generate, video }`
+- `mere.run video { generate, export-latents }`
+- `mere.run world serve`
 - `mere.run run { list, inspect }`
-- `mere.run model { list, capabilities, info, pull, remove, runtime, benchmark, repair-manifests }`
+- `mere.run model { list, pull, remove, info, capabilities, runtime, benchmark, repair-manifests }`
+- `mere.run adapter { list, pull }`
 - `mere.run status`
+- `mere.run gate`
+- `mere.run config { set, get, unset, list, path }`
 - `mere.run api serve`
 - `mere.run open-webui quickstart`
 - `mere.run plugin { list, info, install, doctor }`
@@ -205,7 +190,7 @@ swift run mere.run api serve --engine text-chat-gemma4
 ### Install a companion plugin
 
 Official companion plugins are distributed outside the Swift package. The CLI
-reads the live catalog from `sawfwair/mere-plugins`, prints the exact install
+reads the live catalog from `sawfwair/mere-run-plugins`, prints the exact install
 command by default, and only executes it when `--yes` is present.
 
 ```bash

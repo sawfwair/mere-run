@@ -15,6 +15,13 @@ final class PluginCommandTests: XCTestCase {
         XCTAssertEqual(commandNames, Set(["list", "info", "install", "doctor"]))
     }
 
+    func testDefaultCatalogTargetsPublicPluginRepository() {
+        XCTAssertEqual(
+            PluginCatalogClient.defaultCatalogURL,
+            "https://raw.githubusercontent.com/sawfwair/mere-run-plugins/main/catalog/plugins.v1.json"
+        )
+    }
+
     func testCatalogLoadsFromLocalPath() throws {
         let catalogURL = try writeCatalog()
 
@@ -30,7 +37,7 @@ final class PluginCommandTests: XCTestCase {
         XCTAssertEqual(install.manager, "pipx")
         XCTAssertEqual(
             install.spec,
-            "git+https://github.com/sawfwair/mere-plugins.git@main#subdirectory=packages/mere-runpod"
+            "git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-runpod"
         )
     }
 
@@ -64,7 +71,7 @@ final class PluginCommandTests: XCTestCase {
     func testPluginInstallCommandRendersPipxForceCommand() {
         let install = PluginCatalogInstall(
             manager: "pipx",
-            spec: "git+https://github.com/sawfwair/mere-plugins.git@main#subdirectory=packages/mere-runpod",
+            spec: "git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-runpod",
             ref: "main"
         )
 
@@ -72,7 +79,7 @@ final class PluginCommandTests: XCTestCase {
 
         XCTAssertEqual(
             command,
-            "pipx install --force git+https://github.com/sawfwair/mere-plugins.git@main#subdirectory=packages/mere-runpod"
+            "pipx install --force git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-runpod"
         )
     }
 
@@ -110,7 +117,7 @@ private let catalogJSON = """
       "id": "mere-runpod",
       "name": "RunPod Runner",
       "description": "Run canonical mere.run recipes on user-owned ephemeral RunPod pods.",
-      "repo": "https://github.com/sawfwair/mere-plugins",
+      "repo": "https://github.com/sawfwair/mere-run-plugins",
       "package": "mere-runpod",
       "subdirectory": "packages/mere-runpod",
       "entrypoint": "mere-runpod",
@@ -119,7 +126,7 @@ private let catalogJSON = """
         "main": {
           "manager": "pipx",
           "ref": "main",
-          "spec": "git+https://github.com/sawfwair/mere-plugins.git@main#subdirectory=packages/mere-runpod"
+          "spec": "git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-runpod"
         }
       }
     }

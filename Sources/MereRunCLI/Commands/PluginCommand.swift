@@ -225,7 +225,7 @@ struct PluginManifest: Decodable {
 }
 
 enum PluginCatalogClient {
-    static let defaultCatalogURL = "https://raw.githubusercontent.com/sawfwair/mere-plugins/main/catalog/plugins.v1.json"
+    static let defaultCatalogURL = "https://raw.githubusercontent.com/sawfwair/mere-run-plugins/main/catalog/plugins.v1.json"
 
     static func load(catalogURL: String?) throws -> PluginCatalog {
         let source = catalogURL?.trimmingCharacters(in: .whitespacesAndNewlines)
