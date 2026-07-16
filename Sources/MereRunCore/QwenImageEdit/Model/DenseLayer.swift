@@ -174,7 +174,6 @@ public final class PreQuantizedEmbedding: Embedding, Quantized {
     public override func callAsFunction(_ x: MLXArray) -> MLXArray {
         let originalShape = x.shape
         let flat = x.flattened()
-
         let out = dequantized(
             weight[flat],
             scales: scales[flat],
@@ -188,7 +187,7 @@ public final class PreQuantizedEmbedding: Embedding, Quantized {
     }
 
     public override func asLinear(_ x: MLXArray) -> MLXArray {
-        quantizedMatmul(
+        quantizedMM(
             x,
             weight,
             scales: scales,

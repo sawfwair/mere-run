@@ -25,6 +25,8 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
 
 public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendable {
     case `default`
+    /// Affine 4-bit resident K/V for long-context native attention models.
+    case affine4
     /// Affine 8-bit resident K/V. This is an explicit quality/memory tradeoff;
     /// it reduces BF16 caches but can be larger than a model-specific 4-bit
     /// default such as Gemma4 TurboQuant.
@@ -41,6 +43,13 @@ public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendabl
         switch self {
         case .default:
             return fallback
+        case .affine4:
+            return Gemma4KVCacheQuantization(
+                bits: 4,
+                scheme: .uniform,
+                groupSize: fallback.groupSize,
+                quantizedStart: 0
+            )
         case .affine8:
             return Gemma4KVCacheQuantization(
                 bits: 8,
@@ -71,6 +80,8 @@ public enum RuntimeKVCacheMode: String, Codable, CaseIterable, Hashable, Sendabl
 
     var genericCacheLabel: String {
         switch self {
+        case .affine4:
+            return "resident-affine-4bit"
         case .affine8:
             return "resident-affine-8bit"
         case .default, .polar2, .auto:
@@ -155,8 +166,8 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         try container.encodeIfPresent(temperature, forKey: .temperature)
         try container.encodeIfPresent(topP, forKey: .topP)
         try container.encodeIfPresent(engineOverride, forKey: .engineOverride)
-        if kvCacheMode == .affine8 {
-            try container.encode(RuntimeKVCacheMode.affine8.rawValue, forKey: .extendedKVCacheMode)
+        if let kvCacheMode, kvCacheMode == .affine4 || kvCacheMode == .affine8 {
+            try container.encode(kvCacheMode.rawValue, forKey: .extendedKVCacheMode)
         } else {
             try container.encodeIfPresent(kvCacheMode, forKey: .kvCacheMode)
         }
@@ -221,7 +232,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         if let kvCacheMode = settings.kvCacheMode, kvCacheMode != .default {
             let engine = spec.defaultRuntimeServingEngine?.canonical
             switch kvCacheMode {
-            case .affine8:
+            case .affine4, .affine8:
                 let supportedEngines: [RuntimeServingEngine] = [
                     .textChatGemma4,
                     .textChatQ36,

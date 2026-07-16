@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added managed `text-chat-bonsai-27b-1bit` and
+  `text-chat-bonsai-27b-2bit` support for Prism ML's packed binary and ternary
+  dense Qwen3.6 27B vision/reasoning checkpoints, including exact revision
+  pinning, native packed linear and embedding execution, the published 262K
+  context and sampling defaults, OpenAI-compatible image inputs, and opt-in
+  affine 4-bit or 8-bit KV caches for long-context memory control.
+
 - added managed Buffalo-L face analysis through `vision face detect`, `embed`,
   `compare`, and warm-session `batch`, including RetinaFace-style boxes and five-point landmarks,
   normalized 512-dimensional ArcFace embeddings, CPU/CoreML execution-provider

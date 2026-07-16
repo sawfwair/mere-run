@@ -336,9 +336,15 @@ public actor LFM2Generator: ChatGenerator {
             repetitionContextSize: 64
         )
 
-        let effectiveKVCacheMode: RuntimeKVCacheMode = request.kvCacheMode == .affine8
-            ? .affine8
-            : .default
+        let effectiveKVCacheMode: RuntimeKVCacheMode
+        switch request.kvCacheMode {
+        case .affine4:
+            effectiveKVCacheMode = .affine4
+        case .affine8:
+            effectiveKVCacheMode = .affine8
+        default:
+            effectiveKVCacheMode = .default
+        }
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
         var prefillStartIndex = 0
         var prefillExistingLogits: MLXArray?
@@ -947,9 +953,10 @@ public actor LFM2Generator: ChatGenerator {
         let attentionLayers = config.fullAttentionLayerIndexes
         return (0..<config.numHiddenLayers).map { layerIndex in
             if attentionLayers.contains(layerIndex) {
-                if kvCacheMode == .affine8 {
+                if kvCacheMode == .affine4 || kvCacheMode == .affine8 {
                     return .attention(AffineQuantizedKVCache(
                         groupSize: Self.affineKVGroupSize(headDimension: config.headDim),
+                        bits: kvCacheMode == .affine4 ? 4 : 8,
                         step: 256
                     ))
                 }
@@ -961,6 +968,10 @@ public actor LFM2Generator: ChatGenerator {
 
     private func cacheMode(for caches: [LFM2LayerCache?]) -> RuntimeKVCacheMode {
         caches.contains { entry in
+            guard case .attention(let cache)? = entry else { return false }
+            guard let affine = cache as? AffineQuantizedKVCache else { return false }
+            return affine.bitWidth == 4
+        } ? .affine4 : caches.contains { entry in
             guard case .attention(let cache)? = entry else { return false }
             return cache is AffineQuantizedKVCache
         } ? .affine8 : .default

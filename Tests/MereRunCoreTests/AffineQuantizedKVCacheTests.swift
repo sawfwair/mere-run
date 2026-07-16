@@ -4,6 +4,21 @@ import XCTest
 @testable import MereRunCore
 
 final class AffineQuantizedKVCacheTests: MereRunCoreTestCase {
+    func testFourBitCacheShrinksResidentStateAndReportsItsWidth() {
+        MLXRandom.seed(7000)
+        let cache = AffineQuantizedKVCache(groupSize: 64, bits: 4, step: 4)
+        let keys = MLXRandom.uniform(low: -1, high: 1, [1, 2, 4, 64]).asType(.bfloat16)
+        let values = MLXRandom.uniform(low: -1, high: 1, [1, 2, 4, 64]).asType(.bfloat16)
+        let returned = cache.update(keys: keys, values: values)
+        MLX.eval(returned.0, returned.1)
+
+        let denseBytes = (keys.size * keys.itemSize) + (values.size * values.itemSize)
+        XCTAssertEqual(cache.bitWidth, 4)
+        XCTAssertEqual(Double(cache.storageBytes) / Double(denseBytes), 0.281_25, accuracy: 0.001)
+        XCTAssertLessThan(meanSquaredError(returned.0, keys), 0.01)
+        XCTAssertLessThan(meanSquaredError(returned.1, values), 0.01)
+    }
+
     func testEightBitCacheRoundTripsIncrementalStateWithinTolerance() throws {
         MLXRandom.seed(7001)
         let cache = AffineQuantizedKVCache(groupSize: 64, bits: 8, step: 4)

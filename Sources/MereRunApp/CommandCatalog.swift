@@ -138,6 +138,8 @@ enum StudioChatDefaults {
         var replaceable: Set<String> = [
             fallbackModelID,
             "text-chat-q36-nano",
+            "text-chat-bonsai-27b-1bit",
+            "text-chat-bonsai-27b-2bit",
             "text-chat-gemma4",
             "text-chat-gemma4-12b",
             "text-chat-gemma4-12b-4bit"

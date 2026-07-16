@@ -2277,8 +2277,12 @@ enum APIServerContract {
         return ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
-            temperature: temperature,
-            topP: topP,
+            temperature: openaiRequest.temperature == nil
+                ? recommendedSampling?.temperature ?? temperature
+                : temperature,
+            topP: openaiRequest.top_p == nil
+                ? recommendedSampling?.topP ?? topP
+                : topP,
             topK: usesExplicitSampling ? nil : recommendedSampling?.topK,
             showThinking: requiresJSON ? false : Q35Resources.thinkingDefault(forModelId: laneModelID),
             lora: lora,

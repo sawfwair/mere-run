@@ -92,8 +92,8 @@ final class Gemma4FusedQuantizedProjection {
     }
 
     /// Only these exact classes carry plain `quantizedMM` semantics on Metal.
-    /// Subclasses with extra math (ResidualQuantizedLinear's correction term,
-    /// PrismBinaryQuantizedLinear's scheme) or wrapped behavior (LoRA layers)
+    /// Subclasses with extra math (ResidualQuantizedLinear's correction term)
+    /// or wrapped behavior (LoRA layers)
     /// must never fuse — the fused matmul would silently drop their deltas.
     private static func isFusableClass(_ module: Linear) -> Bool {
         type(of: module) == QuantizedLinear.self

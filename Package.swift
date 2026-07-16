@@ -461,7 +461,10 @@ if !isLinuxPackage {
 }
 
 var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
-  .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0")
+  .package(
+    url: "https://github.com/sawfwair/mlx-swift",
+    revision: "787cce50116629bc240db99450b400e4ecb1012b"
+  )
 ]) + [
   .package(
     url: "https://github.com/huggingface/swift-transformers",

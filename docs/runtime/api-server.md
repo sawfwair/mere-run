@@ -354,6 +354,13 @@ Engine compatibility:
   support with strict mode disabled. JSON-object mode forces thinking off and
   uses token-level constrained serial decoding; it does not implement
   `json_schema`.
+- `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit`: use the same
+  native Qwen-family serving engine for Prism ML's dense packed binary and
+  ternary 27B checkpoints. They accept function tools and one local/base64
+  image content part per message, default to thinking, and use the published
+  0.7/0.95/20 sampling when omitted. Start the server with
+  `--context-size 262144` to expose their full advertised context; the
+  server-wide default remains the conservative 32K limit.
 - `text-agent-ornith-9b`: uses the same Qwen-family serving engine for the
   Ornith 1.0 9B OptiQ coding-agent experiment; start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.

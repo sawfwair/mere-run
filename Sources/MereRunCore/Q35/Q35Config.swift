@@ -10,6 +10,26 @@ public struct Q35QuantizationConfig: Codable, Sendable, Hashable {
         case bits
         case mode
     }
+
+    public init(groupSize: Int, bits: Int, mode: String = "affine") {
+        self.groupSize = groupSize
+        self.bits = bits
+        self.mode = mode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        groupSize = try container.decode(Int.self, forKey: .groupSize)
+        bits = try container.decode(Int.self, forKey: .bits)
+        mode = try container.decodeIfPresent(String.self, forKey: .mode) ?? "affine"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(groupSize, forKey: .groupSize)
+        try container.encode(bits, forKey: .bits)
+        try container.encode(mode, forKey: .mode)
+    }
 }
 
 public struct Q35RopeParameters: Codable, Sendable, Hashable {

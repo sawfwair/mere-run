@@ -6,11 +6,17 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
 Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
 `text-chat-q36-nano` is the managed Qwen3.6 35B-A3B OptiQ 4-bit MLX snapshot; its upstream repo includes an MTP head that is used only by the adaptive long-context speculative decode path.
+`text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` are Prism ML's
+pinned packed binary (5.13 GB) and ternary (8.52 GB) dense Qwen3.6 27B
+vision/reasoning snapshots. Both use the native Qwen-family runtime, default to
+thinking and the published 0.7/0.95/20 sampling, and advertise a 262,144-token
+context. Choose 1-bit for lower residency and faster decode, or 2-bit when the
+ternary checkpoint's additional weight capacity is worth the memory cost.
 `text-agent-ornith-9b` is the managed Ornith 1.0 9B OptiQ MLX coding-agent experiment; it uses the native Qwen-family runtime rather than the GGUF `text code` command.
 `text-agent-ornith-35b-mlx` is the local converted Ornith 1.0 35B Q4 MLX coding-agent target; it also uses the native Qwen-family runtime.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
@@ -68,9 +74,10 @@ mere.run text train-lora \
 - `--prompt`, `-p`: user prompt.
 - `--system`, `-s`: system prompt.
 - `--max-tokens`: maximum generated tokens.
+- `--context-size`: maximum prompt plus generation context. Bonsai 27B defaults to 262,144.
 - `--temperature`: randomness. Lower for factual work, higher for brainstorming.
 - `--top-p`: nucleus sampling cutoff.
-- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: Gemma4 KV cache quantization controls. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
+- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: KV cache quantization controls. Qwen-family models accept affine `--kv-bits 4` or `8`; the runtime chooses group size and start. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
 - `--model-root`, `-m`: explicit local model root.
 - `--model`: canonical model id.
 - `--response-format`: `text` (default) or `json_object`. JSON-object mode is
@@ -97,6 +104,14 @@ mere.run text train-lora \
 - For tool use, keep `--sandbox-dir` narrow and ask for a plan before enabling auto-approval.
 
 ## Examples
+
+```bash
+mere.run text chat \
+  --model text-chat-bonsai-27b-2bit \
+  --context-size 262144 \
+  --kv-bits 4 \
+  --prompt "Summarize the architecture decisions in this repository."
+```
 
 ```bash
 mere.run text chat \
@@ -165,6 +180,8 @@ mere.run text chat \
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/TextChatCommand.swift
 - https://ai.google.dev/gemma/docs/core/prompt-structure
 - https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit
+- https://huggingface.co/prism-ml/Bonsai-27B-mlx-1bit
+- https://huggingface.co/prism-ml/Ternary-Bonsai-27B-mlx-2bit
 - https://huggingface.co/sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx
 - https://huggingface.co/LiquidAI/LFM2.5-8B-A1B-MLX-8bit
 - https://huggingface.co/google/gemma-4-31B

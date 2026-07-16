@@ -52,6 +52,8 @@ from the runtime catalog used by `mere.run model list`,
 | `text-chat` | `text-chat-gemma4-nano` |
 | `text-chat` | `text-chat-gemma4-max` |
 | `text-chat` | `text-chat-q36-nano` |
+| `text-chat` | `text-chat-bonsai-27b-1bit` |
+| `text-chat` | `text-chat-bonsai-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
 | `text-code` | `text-agent-ornith-35b-mlx` |
 | `text-code` | `text-agent-qwen35-9b` |
@@ -195,10 +197,18 @@ alternatives, not upgrades from DeepSeek V4 Flash.
 snapshot. That Hugging Face repo includes an MTP head (`mtp.safetensors`) for
 OptiQ serving; mere.run loads that draft head when present, but only uses it for
 adaptive speculative decode when the effective prompt and context window are
-long enough. Short-context requests decode with the main chat weights. The dense
-`mlx-community/Qwen3.6-27B-OptiQ-4bit` MTP quant also exists on Hugging Face,
-but is not a managed native target until the dense Qwen3.6 layer path is
-implemented.
+long enough. Short-context requests decode with the main chat weights.
+
+`text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install Prism ML's
+public `prism-ml/Bonsai-27B-mlx-1bit` and
+`prism-ml/Ternary-Bonsai-27B-mlx-2bit` snapshots at exact catalog revisions.
+They are dense Qwen3.6 27B vision/reasoning models with packed affine 1-bit or
+2-bit language weights and dense vision weights. The snapshots are
+approximately 5.13 GB and 8.52 GB respectively and advertise a 262,144-token
+context. mere.run uses the native Qwen-family text and vision runtime, native
+low-bit linear and embedding kernels, and the published thinking and sampling
+defaults. Both models are Apache-2.0 licensed; managed pulls retain upstream
+license and notice files.
 
 `text-chat-q36-nano-gguf` installs the Unsloth
 `Qwen3.6-35B-A3B-UD-Q4_K_M.gguf` quant. It is the llama.cpp/GGUF companion to

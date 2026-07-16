@@ -81,6 +81,39 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testBonsai27BIsSupportedOnSixteenGB() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B1BitModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 16 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(report.meetsRecommendedMemory)
+        XCTAssertEqual(report.descriptor.minimumUnifiedMemoryGB, 12)
+        XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 16)
+    }
+
+    func testTernaryBonsai27BIsSupportedOnTwentyFourGB() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B2BitModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 24 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(report.meetsRecommendedMemory)
+        XCTAssertEqual(report.descriptor.minimumUnifiedMemoryGB, 16)
+        XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 24)
+    }
+
+
     func testNorthMiniCodeIsSupportedOnThirtyTwoGBAndStartable() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: NorthMiniCodeResources.modelId))
         let machine = MereRunMachineProfile(

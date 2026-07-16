@@ -5,6 +5,65 @@ import MLXRandom
 @testable import MereRunCore
 
 final class Q35ConfigDecodingTests: MereRunCoreTestCase {
+    func testBonsaiMLXVisionPatchKernelKeepsPublishedLayout() throws {
+        let weight = MLXArray.zeros([1_152, 2, 16, 16, 3])
+
+        let mapped = try XCTUnwrap(
+            Q35VisionTower.mapVisionWeight("vision_tower.patch_embed.proj.weight", weight).first
+        )
+
+        XCTAssertEqual(mapped.0, "visionTower.patch_embed.proj.weight")
+        XCTAssertEqual(mapped.1.shape, [1_152, 2, 16, 16, 3])
+    }
+
+    func testPyTorchVisionPatchKernelConvertsToMLXLayout() throws {
+        let weight = MLXArray.zeros([1_152, 3, 2, 16, 16])
+
+        let mapped = try XCTUnwrap(
+            Q35VisionTower.mapVisionWeight("vision_tower.patch_embed.proj.weight", weight).first
+        )
+
+        XCTAssertEqual(mapped.1.shape, [1_152, 2, 16, 16, 3])
+    }
+
+    func testBonsai27BDenseOneBitConfigDecodesPublishedShape() throws {
+        var object = makeBaseConfig()
+        var text = object["text_config"] as? [String: Any] ?? [:]
+        text["model_type"] = "qwen3_5_text"
+        text["hidden_size"] = 5_120
+        text["num_hidden_layers"] = 64
+        text["intermediate_size"] = 17_408
+        text["num_attention_heads"] = 24
+        text["num_key_value_heads"] = 4
+        text["head_dim"] = 256
+        text["layer_types"] = (0..<64).map { ($0 + 1).isMultiple(of: 4) ? "full_attention" : "linear_attention" }
+        text["linear_num_value_heads"] = 48
+        text["linear_num_key_heads"] = 16
+        text["linear_key_head_dim"] = 128
+        text["linear_value_head_dim"] = 128
+        text["max_position_embeddings"] = 262_144
+        text["vocab_size"] = 248_320
+        text.removeValue(forKey: "num_experts")
+        text.removeValue(forKey: "num_experts_per_tok")
+        text.removeValue(forKey: "shared_expert_intermediate_size")
+        text.removeValue(forKey: "moe_intermediate_size")
+        object["model_type"] = "qwen3_5"
+        object["architectures"] = ["Qwen3_5ForConditionalGeneration"]
+        object["eos_token_id"] = 248_046
+        object["quantization"] = ["group_size": 128, "bits": 1]
+        object["text_config"] = text
+
+        let config = try decodeConfig(object)
+
+        XCTAssertEqual(config.quantization, Q35QuantizationConfig(groupSize: 128, bits: 1, mode: "affine"))
+        XCTAssertFalse(config.textConfig.usesMoE)
+        XCTAssertEqual(config.textConfig.numHiddenLayers, 64)
+        XCTAssertEqual(config.textConfig.hiddenSize, 5_120)
+        XCTAssertEqual(config.textConfig.intermediateSize, 17_408)
+        XCTAssertEqual(config.textConfig.maxPositionEmbeddings, Q35Resources.bonsai27B1BitContextLength)
+        XCTAssertEqual(config.eosTokenIds, [248_046])
+    }
+
     func testQ35TemplatePrefillsClosedThinkBlockWhenThinkingIsHidden() {
         let rendered = Q35TokenizerAndTemplate.renderPrompt(
             messages: [ChatMessage(role: .user, content: "Reply with READY only.")],

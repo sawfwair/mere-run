@@ -580,7 +580,7 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Gemma 4, Qwen3.6, LFM2, or Psi family.
+Run local text chat with the Gemma 4, Qwen3.6/Bonsai, LFM2, or Psi family.
 
 ```bash
 swift run mere.run text chat --prompt "<text>" [options]
@@ -593,16 +593,21 @@ Key options:
 - `--model`: canonical model id
 - `--model-root`: explicit local model root
 - `--max-tokens`
+- `--context-size`: maximum prompt plus generation context. Bonsai 27B uses
+  its published 262,144-token limit by default.
 - `--temperature`: defaults to 0.7, or the model's published value where one
-  exists (Ornith lanes: 1.0)
-- `--top-p`: defaults to 0.9, or the model's published value (Ornith: 0.95)
-- `--top-k`: defaults to no cutoff, or the model's published value (Ornith: 20)
+  exists (Bonsai: 0.7; Ornith lanes: 1.0)
+- `--top-p`: defaults to 0.9, or the model's published value (Bonsai/Ornith: 0.95)
+- `--top-k`: defaults to no cutoff, or the model's published value (Bonsai/Ornith: 20)
+- `--kv-bits`: native Qwen-family models accept affine 4-bit or 8-bit resident
+  KV caches. Gemma4 also supports its model-specific cache schemes.
 - `--response-format text|json_object`: require a complete JSON object from a
   native MLX Gemma or Qwen-family model. JSON mode forces thinking off and
   validates each token before streaming.
 - `--thinking` / `--no-thinking`: show reasoning output / disable reasoning
   generation. R1-style lanes (`text-agent-ornith-*`) generate with thinking
-  enabled by default even though the reasoning stays hidden.
+  enabled by default even though the reasoning stays hidden. Bonsai 27B also
+  defaults to thinking-enabled generation.
 - `--stream`
 - `--stats`: includes Gemma4 MTP state and accept/draft counts when a Gemma4 model is used
 - `--quiet`
@@ -615,6 +620,8 @@ Examples:
 
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
+swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
+swift run mere.run text chat --model text-chat-bonsai-27b-2bit --context-size 262144 --kv-bits 4 --prompt "Compare two repository migration plans."
 swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
 swift run mere.run text chat --model text-chat-q36-nano --response-format json_object --prompt 'Return an object with a name and an array of tags.'
 swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a compact Swift slugify helper."

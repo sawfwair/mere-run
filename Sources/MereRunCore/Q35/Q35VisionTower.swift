@@ -107,7 +107,7 @@ public final class Q35VisionTower: Module {
         return embeds
     }
 
-    private static func mapVisionWeight(_ rawKey: String, _ value: MLXArray) -> [(String, MLXArray)] {
+    static func mapVisionWeight(_ rawKey: String, _ value: MLXArray) -> [(String, MLXArray)] {
         var key = rawKey
         if key.hasPrefix("model.vision_tower.") {
             key = "visionTower." + String(key.dropFirst("model.vision_tower.".count))
@@ -131,6 +131,12 @@ public final class Q35VisionTower: Module {
         key = key.replacingOccurrences(of: ".norm.", with: ".ln_q.")
 
         if key == "visionTower.patch_embed.proj.weight", value.ndim == 5 {
+            // Converted MLX checkpoints such as Bonsai already store Conv3d
+            // kernels as [out, temporal, height, width, channels]. PyTorch
+            // checkpoints use [out, channels, temporal, height, width].
+            if value.dim(4) == 3 {
+                return [(key, value)]
+            }
             return [(key, value.transposed(0, 2, 3, 4, 1))]
         }
 
