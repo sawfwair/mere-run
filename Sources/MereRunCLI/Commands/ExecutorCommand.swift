@@ -150,6 +150,7 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
     let availableDiskBytes: Int64?
     let nodeKinds: [String]
     let installedModelIDs: [String]
+    let providers: [WorkflowGraphProviderRequirement]
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -162,6 +163,51 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
         case availableDiskBytes = "available_disk_bytes"
         case nodeKinds = "node_kinds"
         case installedModelIDs = "installed_model_ids"
+        case providers
+    }
+
+    init(
+        schemaVersion: Int,
+        workerVersion: String,
+        contractVersions: [String],
+        platform: String,
+        architecture: String,
+        acceleratorBackend: String,
+        memoryBytes: UInt64,
+        availableDiskBytes: Int64?,
+        nodeKinds: [String],
+        installedModelIDs: [String],
+        providers: [WorkflowGraphProviderRequirement] = []
+    ) {
+        self.schemaVersion = schemaVersion
+        self.workerVersion = workerVersion
+        self.contractVersions = contractVersions
+        self.platform = platform
+        self.architecture = architecture
+        self.acceleratorBackend = acceleratorBackend
+        self.memoryBytes = memoryBytes
+        self.availableDiskBytes = availableDiskBytes
+        self.nodeKinds = nodeKinds
+        self.installedModelIDs = installedModelIDs
+        self.providers = providers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        workerVersion = try container.decode(String.self, forKey: .workerVersion)
+        contractVersions = try container.decode([String].self, forKey: .contractVersions)
+        platform = try container.decode(String.self, forKey: .platform)
+        architecture = try container.decode(String.self, forKey: .architecture)
+        acceleratorBackend = try container.decode(String.self, forKey: .acceleratorBackend)
+        memoryBytes = try container.decode(UInt64.self, forKey: .memoryBytes)
+        availableDiskBytes = try container.decodeIfPresent(Int64.self, forKey: .availableDiskBytes)
+        nodeKinds = try container.decode([String].self, forKey: .nodeKinds)
+        installedModelIDs = try container.decode([String].self, forKey: .installedModelIDs)
+        providers = try container.decodeIfPresent(
+            [WorkflowGraphProviderRequirement].self,
+            forKey: .providers
+        ) ?? []
     }
 
     var summary: String {
@@ -191,6 +237,7 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
             forPath: MereRunModelPaths.applicationSupportBase.path
         )
         let disk = (fileSystemAttributes?[.systemFreeSize] as? NSNumber)?.int64Value
+        let graphProviders = WorkflowGraphProviderRegistry.discoveredCatalog().providers
         return WorkflowExecutorProbe(
             schemaVersion: 1,
             workerVersion: MereRunCLIVersion.current,
@@ -200,8 +247,11 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
             acceleratorBackend: backend,
             memoryBytes: memoryBytes,
             availableDiskBytes: disk ?? nil,
-            nodeKinds: WorkflowNodeRegistry.entries.map(\.kind).sorted(),
-            installedModelIDs: ModelInventory.rows(fileManager: fileManager).filter(\.isInstalled).map(\.id).sorted()
+            nodeKinds: Array(Set(
+                WorkflowNodeRegistry.entries.map(\.kind) + graphProviders.flatMap { $0.nodes.map(\.kind) }
+            )).sorted(),
+            installedModelIDs: ModelInventory.rows(fileManager: fileManager).filter(\.isInstalled).map(\.id).sorted(),
+            providers: graphProviders.map(\.requirement)
         )
     }
 

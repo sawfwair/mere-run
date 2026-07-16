@@ -1,15 +1,22 @@
 import ArgumentParser
 import Foundation
 
-enum WorkflowInputType: String, Codable, Equatable, Sendable {
+enum WorkflowPortType: String, Codable, Equatable, Sendable {
     case string
     case integer
     case number
     case boolean
     case enumeration = "enum"
+    case json
     case asset
     case assetDirectory = "asset_directory"
+    case assetCollection = "asset_collection"
+    // Decodes catalogs produced before asset_collection became the portable name.
+    case assetArray = "asset_array"
 }
+
+typealias WorkflowInputType = WorkflowPortType
+typealias WorkflowFieldType = WorkflowPortType
 
 indirect enum WorkflowValue: Codable, Equatable, Sendable {
     case null
@@ -123,14 +130,34 @@ struct WorkflowInputDefinition: Codable, Equatable, Sendable {
 struct WorkflowNode: Codable, Equatable, Sendable {
     let id: String
     let kind: String
+    let provider: String?
     let arguments: [String: WorkflowValue]
     let dependsOn: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id
         case kind
+        case provider
         case arguments
         case dependsOn = "depends_on"
+    }
+
+    init(
+        id: String,
+        kind: String,
+        provider: String? = nil,
+        arguments: [String: WorkflowValue],
+        dependsOn: [String]?
+    ) {
+        self.id = id
+        self.kind = kind
+        self.provider = provider
+        self.arguments = arguments
+        self.dependsOn = dependsOn
+    }
+
+    var resolvedProviderID: String {
+        provider ?? WorkflowNodeProviderIdentity.builtInID
     }
 }
 
@@ -184,60 +211,206 @@ struct WorkflowInputsDocument: Codable, Equatable, Sendable {
     }
 }
 
-enum WorkflowFieldType: String, Codable, Equatable, Sendable {
-    case string
-    case integer
-    case number
-    case boolean
-    case asset
-    case assetDirectory = "asset_directory"
-    case assetArray = "asset_array"
-}
-
 struct WorkflowNodeField: Codable, Equatable, Sendable {
     let name: String
     let type: WorkflowFieldType
     let required: Bool
+    let description: String?
+    let defaultValue: WorkflowValue?
+    let values: [String]?
     let acceptedContentTypes: [String]?
+    let minimum: Double?
+    let maximum: Double?
+    let step: Double?
+    let multiline: Bool?
+    let secret: Bool?
+    let advanced: Bool?
 
     enum CodingKeys: String, CodingKey {
         case name
         case type
         case required
-        case acceptedContentTypes = "accepted_content_types"
+        case description
+        case defaultValue = "default"
+        case values
+        case acceptedContentTypes = "content_types"
+        case minimum
+        case maximum
+        case step
+        case multiline
+        case secret
+        case advanced
     }
 
     init(
         name: String,
         type: WorkflowFieldType,
         required: Bool,
-        acceptedContentTypes: [String]? = nil
+        description: String? = nil,
+        defaultValue: WorkflowValue? = nil,
+        values: [String]? = nil,
+        acceptedContentTypes: [String]? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil,
+        step: Double? = nil,
+        multiline: Bool? = nil,
+        secret: Bool? = nil,
+        advanced: Bool? = nil
     ) {
         self.name = name
         self.type = type
         self.required = required
+        self.description = description
+        self.defaultValue = defaultValue
+        self.values = values
         self.acceptedContentTypes = acceptedContentTypes
+        self.minimum = minimum
+        self.maximum = maximum
+        self.step = step
+        self.multiline = multiline
+        self.secret = secret
+        self.advanced = advanced
     }
 }
 
 struct WorkflowNodeOutput: Codable, Equatable, Sendable {
     let name: String
     let type: WorkflowFieldType
+    let optional: Bool
+    let description: String?
     let contentTypes: [String]
 
     enum CodingKeys: String, CodingKey {
         case name
         case type
+        case optional
+        case description
         case contentTypes = "content_types"
+    }
+
+    init(
+        name: String,
+        type: WorkflowFieldType,
+        optional: Bool = false,
+        description: String? = nil,
+        contentTypes: [String] = []
+    ) {
+        self.name = name
+        self.type = type
+        self.optional = optional
+        self.description = description
+        self.contentTypes = contentTypes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        type = try container.decode(WorkflowFieldType.self, forKey: .type)
+        optional = try container.decode(Bool.self, forKey: .optional)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        contentTypes = try container.decodeIfPresent([String].self, forKey: .contentTypes) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(type, forKey: .type)
+        try container.encode(optional, forKey: .optional)
+        try container.encodeIfPresent(description, forKey: .description)
+        if !contentTypes.isEmpty {
+            try container.encode(contentTypes, forKey: .contentTypes)
+        }
+    }
+}
+
+struct WorkflowNodeRequirements: Codable, Equatable, Sendable {
+    let modelIDs: [String]
+    let acceleratorBackends: [String]
+    let minimumAcceleratorMemoryBytes: Int64?
+
+    enum CodingKeys: String, CodingKey {
+        case modelIDs = "model_ids"
+        case acceleratorBackends = "accelerator_backends"
+        case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+    }
+
+    static let none = WorkflowNodeRequirements(
+        modelIDs: [],
+        acceleratorBackends: [],
+        minimumAcceleratorMemoryBytes: nil
+    )
+}
+
+struct WorkflowNodeTraits: Codable, Equatable, Sendable {
+    let deterministic: Bool
+    let cacheable: Bool
+    let sideEffects: String
+    let supportsProgress: Bool
+    let supportsPreviews: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case deterministic
+        case cacheable
+        case sideEffects = "side_effects"
+        case supportsProgress = "supports_progress"
+        case supportsPreviews = "supports_previews"
+    }
+
+    static let core = WorkflowNodeTraits(
+        deterministic: false,
+        cacheable: true,
+        sideEffects: "local",
+        supportsProgress: false,
+        supportsPreviews: false
+    )
+}
+
+struct WorkflowNodeProviderIdentity: Codable, Equatable, Hashable, Sendable {
+    static let builtInID = "mere.run"
+
+    let id: String
+    let version: String
+    let catalogSHA256: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case version
+        case catalogSHA256 = "catalog_sha256"
     }
 }
 
 struct WorkflowNodeCatalogEntry: Codable, Equatable, Sendable {
     let kind: String
     let title: String
+    let description: String
     let category: String
     let inputs: [WorkflowNodeField]
     let outputs: [WorkflowNodeOutput]
+    let requirements: WorkflowNodeRequirements
+    let traits: WorkflowNodeTraits
+    let provider: WorkflowNodeProviderIdentity?
+
+    init(
+        kind: String,
+        title: String,
+        description: String = "",
+        category: String,
+        inputs: [WorkflowNodeField],
+        outputs: [WorkflowNodeOutput],
+        requirements: WorkflowNodeRequirements = .none,
+        traits: WorkflowNodeTraits = .core,
+        provider: WorkflowNodeProviderIdentity? = nil
+    ) {
+        self.kind = kind
+        self.title = title
+        self.description = description
+        self.category = category
+        self.inputs = inputs
+        self.outputs = outputs
+        self.requirements = requirements
+        self.traits = traits
+        self.provider = provider
+    }
 }
 
 enum WorkflowNodeRegistry {
@@ -260,7 +433,12 @@ enum WorkflowNodeRegistry {
                 .init(name: "base_quantization_bits", type: .integer, required: false),
                 .init(name: "sample_prompt", type: .string, required: false),
             ],
-            outputs: [.init(name: "adapter", type: .asset, contentTypes: ["application/x-safetensors"])]
+            outputs: [.init(name: "adapter", type: .asset, contentTypes: ["application/x-safetensors"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
         ),
         WorkflowNodeCatalogEntry(
             kind: "image.generate",
@@ -282,7 +460,12 @@ enum WorkflowNodeRegistry {
                 .init(name: "strength", type: .number, required: false),
                 .init(name: "krea_base_quantization_bits", type: .integer, required: false),
             ],
-            outputs: [.init(name: "image", type: .asset, contentTypes: ["image/png"])]
+            outputs: [.init(name: "image", type: .asset, contentTypes: ["image/png"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
         ),
         WorkflowNodeCatalogEntry(
             kind: "video.generate",
@@ -301,7 +484,12 @@ enum WorkflowNodeRegistry {
                 .init(name: "image", type: .asset, required: false, acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]),
                 .init(name: "end_image", type: .asset, required: false, acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]),
             ],
-            outputs: [.init(name: "video", type: .asset, contentTypes: ["video/mp4"])]
+            outputs: [.init(name: "video", type: .asset, contentTypes: ["video/mp4"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
         ),
     ]
 
@@ -309,8 +497,55 @@ enum WorkflowNodeRegistry {
         entries.first { $0.kind == kind }
     }
 
-    static func output(nodeKind: String, name: String) -> WorkflowNodeOutput? {
-        entry(for: nodeKind)?.outputs.first { $0.name == name }
+    static var builtInProvider: WorkflowNodeProviderIdentity {
+        WorkflowNodeProviderIdentity(
+            id: WorkflowNodeProviderIdentity.builtInID,
+            version: MereRunCLIVersion.current,
+            catalogSHA256: (try? WorkflowBundleCodec.hash(entries)) ?? ""
+        )
+    }
+
+    static var catalogEntries: [WorkflowNodeCatalogEntry] {
+        catalogEntries(pluginNodes: WorkflowGraphProviderRegistry.discoveredCatalog().nodes)
+    }
+
+    static func catalogEntries(pluginNodes: [WorkflowNodeCatalogEntry]) -> [WorkflowNodeCatalogEntry] {
+        let builtIn = entries.map { entry in
+            WorkflowNodeCatalogEntry(
+                kind: entry.kind,
+                title: entry.title,
+                description: entry.description,
+                category: entry.category,
+                inputs: entry.inputs,
+                outputs: entry.outputs,
+                requirements: entry.requirements,
+                traits: entry.traits,
+                provider: builtInProvider
+            )
+        }
+        return (builtIn + pluginNodes).sorted {
+            ($0.provider?.id ?? "", $0.kind) < ($1.provider?.id ?? "", $1.kind)
+        }
+    }
+
+    static func entry(for node: WorkflowNode) -> WorkflowNodeCatalogEntry? {
+        if node.resolvedProviderID == WorkflowNodeProviderIdentity.builtInID {
+            return entry(for: node.kind)
+        }
+        return WorkflowGraphProviderRegistry.discoveredCatalog().nodes.first {
+            $0.kind == node.kind && $0.provider?.id == node.resolvedProviderID
+        }
+    }
+
+    static func output(node: WorkflowNode, name: String) -> WorkflowNodeOutput? {
+        entry(for: node)?.outputs.first { $0.name == name }
+    }
+
+    static func provider(for node: WorkflowNode) -> WorkflowNodeProviderIdentity? {
+        if node.resolvedProviderID == WorkflowNodeProviderIdentity.builtInID {
+            return builtInProvider
+        }
+        return WorkflowGraphProviderRegistry.discoveredCatalog().provider(id: node.resolvedProviderID)?.identity
     }
 }
 
@@ -495,12 +730,12 @@ enum WorkflowGraphValidator {
         nodesByID: [String: WorkflowNode],
         diagnostics: inout [PreflightDiagnostic]
     ) {
-        guard let entry = WorkflowNodeRegistry.entry(for: node.kind) else {
+        guard let entry = WorkflowNodeRegistry.entry(for: node) else {
             diagnostics.append(.init(
                 id: "workflow_node_kind_unsupported_\(node.id)",
                 severity: .blocker,
                 title: "Unsupported workflow node",
-                message: "Node '\(node.id)' uses unregistered kind '\(node.kind)'."
+                message: "Node '\(node.id)' uses unregistered kind '\(node.kind)' from provider '\(node.resolvedProviderID)'."
             ))
             return
         }
@@ -527,6 +762,7 @@ enum WorkflowGraphValidator {
             validateValue(
                 value,
                 expected: field.type,
+                enumValues: field.values,
                 acceptedContentTypes: field.acceptedContentTypes,
                 nodeID: node.id,
                 field: field.name,
@@ -548,6 +784,7 @@ enum WorkflowGraphValidator {
     private static func validateValue(
         _ value: WorkflowValue,
         expected: WorkflowFieldType,
+        enumValues: [String]?,
         acceptedContentTypes: [String]?,
         nodeID: String,
         field: String,
@@ -576,7 +813,7 @@ enum WorkflowGraphValidator {
                 }
             case .nodeOutput(let sourceNodeID, let outputName):
                 guard let sourceNode = nodesByID[sourceNodeID],
-                      let output = WorkflowNodeRegistry.output(nodeKind: sourceNode.kind, name: outputName) else {
+                      let output = WorkflowNodeRegistry.output(node: sourceNode, name: outputName) else {
                     diagnostics.append(invalidReference(rawReference, nodeID: nodeID))
                     return
                 }
@@ -591,11 +828,12 @@ enum WorkflowGraphValidator {
             }
             return
         }
-        if expected == .assetArray, case .array(let values) = value {
+        if expected == .assetArray || expected == .assetCollection, case .array(let values) = value {
             for nested in values {
                 validateValue(
                     nested,
                     expected: .asset,
+                    enumValues: nil,
                     acceptedContentTypes: acceptedContentTypes,
                     nodeID: nodeID,
                     field: field,
@@ -606,7 +844,42 @@ enum WorkflowGraphValidator {
             }
             return
         }
-        if !matches(value, fieldType: expected) {
+        if expected == .json {
+            switch value {
+            case .array(let values):
+                for nested in values {
+                    validateValue(
+                        nested,
+                        expected: .json,
+                        enumValues: nil,
+                        acceptedContentTypes: nil,
+                        nodeID: nodeID,
+                        field: field,
+                        graph: graph,
+                        nodesByID: nodesByID,
+                        diagnostics: &diagnostics
+                    )
+                }
+            case .object(let values):
+                for nested in values.values {
+                    validateValue(
+                        nested,
+                        expected: .json,
+                        enumValues: nil,
+                        acceptedContentTypes: nil,
+                        nodeID: nodeID,
+                        field: field,
+                        graph: graph,
+                        nodesByID: nodesByID,
+                        diagnostics: &diagnostics
+                    )
+                }
+            default:
+                break
+            }
+            return
+        }
+        if !matches(value, fieldType: expected, enumValues: enumValues) {
             diagnostics.append(.init(
                 id: "workflow_node_argument_type_\(nodeID)_\(field)",
                 severity: .blocker,
@@ -626,7 +899,7 @@ enum WorkflowGraphValidator {
                   let reference = try? WorkflowReference(rawReference),
                   case .nodeOutput(let nodeID, let outputName) = reference.source,
                   let node = nodesByID[nodeID],
-                  WorkflowNodeRegistry.output(nodeKind: node.kind, name: outputName) != nil else {
+                  WorkflowNodeRegistry.output(node: node, name: outputName) != nil else {
                 diagnostics.append(.init(
                     id: "workflow_output_invalid_\(name)",
                     severity: .blocker,
@@ -678,20 +951,37 @@ enum WorkflowGraphValidator {
         case .enumeration:
             guard let string = value.stringValue else { return false }
             return enumValues?.contains(string) ?? true
+        case .json:
+            return true
+        case .assetCollection, .assetArray:
+            if case .array = value { return true }
+            return false
         }
     }
 
-    private static func matches(_ value: WorkflowValue, fieldType: WorkflowFieldType) -> Bool {
-        switch fieldType {
+    private static func matches(
+        _ value: WorkflowValue,
+        fieldType: WorkflowFieldType,
+        enumValues: [String]?
+    ) -> Bool {
+        return switch fieldType {
         case .string, .asset, .assetDirectory:
             value.stringValue != nil
+        case .enumeration:
+            if let string = value.stringValue {
+                enumValues?.contains(string) ?? true
+            } else {
+                false
+            }
         case .integer:
             value.integerValue != nil
         case .number:
             value.numberValue != nil
         case .boolean:
             value.booleanValue != nil
-        case .assetArray:
+        case .json:
+            true
+        case .assetCollection, .assetArray:
             if case .array = value { true } else { false }
         }
     }
@@ -699,8 +989,13 @@ enum WorkflowGraphValidator {
     private static func compatible(inputType: WorkflowInputType, fieldType: WorkflowFieldType) -> Bool {
         switch (inputType, fieldType) {
         case (.string, .string), (.integer, .integer), (.number, .number), (.integer, .number),
-             (.boolean, .boolean), (.enumeration, .string), (.asset, .asset),
-             (.assetDirectory, .assetDirectory):
+             (.boolean, .boolean), (.enumeration, .string), (.enumeration, .enumeration),
+             (.json, .json), (.asset, .asset), (.assetDirectory, .assetDirectory),
+             (.assetCollection, .assetCollection), (.assetArray, .assetArray),
+             (.assetCollection, .assetArray), (.assetArray, .assetCollection):
+            true
+        case (.string, .json), (.integer, .json), (.number, .json), (.boolean, .json),
+             (.enumeration, .json):
             true
         default:
             false
@@ -708,7 +1003,9 @@ enum WorkflowGraphValidator {
     }
 
     private static func compatible(outputType: WorkflowFieldType, fieldType: WorkflowFieldType) -> Bool {
-        outputType == fieldType || (outputType == .integer && fieldType == .number)
+        outputType == fieldType
+            || (outputType == .integer && fieldType == .number)
+            || (fieldType == .json && [.string, .integer, .number, .boolean, .enumeration, .json].contains(outputType))
     }
 
     private static func contentTypesAreCompatible(produced: [String]?, accepted: [String]?) -> Bool {

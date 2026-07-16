@@ -420,7 +420,8 @@ struct RelayWorkflowExecutor {
                 path: "/api/graph-jobs/\(created.jobID)/assets/\(digest)",
                 method: "PUT",
                 contentType: "application/octet-stream",
-                body: data
+                body: data,
+                transientRetryAttempts: 3
             )
         }
         let commitData = try await request(
@@ -529,28 +530,33 @@ struct RelayWorkflowExecutor {
         method: String,
         contentType: String = "application/json",
         body: Data? = nil,
-        authorize: Bool = true
+        authorize: Bool = true,
+        transientRetryAttempts: Int = 1
     ) async throws -> Data {
         guard let baseURL = profile.url, let url = URL(string: "\(baseURL)\(path)") else {
             throw ValidationError("Relay executor profile has an invalid URL.")
         }
         let credential = authorize ? try await RelayAuthentication.resolveCredential(profile: profile) : nil
-        var result = try await performRequest(
-            url: url,
-            method: method,
-            contentType: contentType,
-            body: body,
-            credential: credential
-        )
-        if result.response.statusCode == 401, credential?.refreshable == true {
-            let refreshed = try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: true)
-            result = try await performRequest(
+        var result = try await Self.performWithTransientRetries(maximumAttempts: transientRetryAttempts) {
+            try await performRequest(
                 url: url,
                 method: method,
                 contentType: contentType,
                 body: body,
-                credential: refreshed
+                credential: credential
             )
+        }
+        if result.response.statusCode == 401, credential?.refreshable == true {
+            let refreshed = try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: true)
+            result = try await Self.performWithTransientRetries(maximumAttempts: transientRetryAttempts) {
+                try await performRequest(
+                    url: url,
+                    method: method,
+                    contentType: contentType,
+                    body: body,
+                    credential: refreshed
+                )
+            }
         }
         guard (200..<300).contains(result.response.statusCode) else {
             let status = result.response.statusCode
@@ -559,6 +565,30 @@ struct RelayWorkflowExecutor {
             throw ValidationError("Relay request failed with HTTP \(status): \(detail)")
         }
         return result.data
+    }
+
+    static func performWithTransientRetries(
+        maximumAttempts: Int,
+        delayNanoseconds: UInt64 = 250_000_000,
+        operation: () async throws -> (data: Data, response: HTTPURLResponse)
+    ) async throws -> (data: Data, response: HTTPURLResponse) {
+        precondition(maximumAttempts > 0)
+        for attempt in 1...maximumAttempts {
+            do {
+                let result = try await operation()
+                guard isTransientHTTPStatus(result.response.statusCode), attempt < maximumAttempts else {
+                    return result
+                }
+            } catch let error as URLError {
+                guard attempt < maximumAttempts else { throw error }
+            }
+            try await Task.sleep(nanoseconds: UInt64(attempt) * delayNanoseconds)
+        }
+        preconditionFailure("Transient request retry loop exhausted without returning.")
+    }
+
+    private static func isTransientHTTPStatus(_ statusCode: Int) -> Bool {
+        statusCode == 408 || statusCode == 429 || (500...599).contains(statusCode)
     }
 
     private func performRequest(
@@ -758,6 +788,13 @@ func validateWorker(
     let missingKinds = job.requirements.nodeKinds.filter { !worker.nodeKinds.contains($0) }
     guard missingKinds.isEmpty else {
         throw ValidationError("Executor '\(executor)' is missing node kinds: \(missingKinds.joined(separator: ", ")).")
+    }
+    let missingProviders = job.requirements.providers.filter { !worker.providers.contains($0) }
+    guard missingProviders.isEmpty else {
+        let descriptions = missingProviders.map { "\($0.id)@\($0.version) [\($0.catalogSHA256)]" }
+        throw ValidationError(
+            "Executor '\(executor)' is missing exact graph providers: \(descriptions.joined(separator: ", "))."
+        )
     }
     let missingModels = job.requirements.modelIDs.filter { !worker.installedModelIDs.contains($0) }
     guard missingModels.isEmpty else {

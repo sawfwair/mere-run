@@ -29,6 +29,35 @@ The V1 node catalog contains:
 - `image.generate`
 - `video.generate`
 
+Companion plugins may add typed nodes without adding arbitrary command or
+Python execution to the graph ABI. Plugin nodes name their provider explicitly:
+
+```json
+{
+  "id": "prepare",
+  "kind": "dataset.prepare",
+  "provider": "mere-dataset-tools",
+  "arguments": {
+    "data": {"$ref": "inputs.data"}
+  }
+}
+```
+
+Providers use one fixed machine protocol:
+
+```bash
+PLUGIN graph catalog --json
+PLUGIN graph preflight --request invocation.json --run-dir PATH --json
+PLUGIN graph execute --request invocation.json --run-dir PATH --json-stream
+```
+
+The catalog describes `string`, `integer`, `number`, `boolean`, `enum`,
+`json`, `asset`, `asset_directory`, and `asset_collection` ports, including
+defaults, ranges, content types, model and accelerator requirements, progress,
+preview, determinism, caching, and side-effect traits. `mere.run` validates the
+catalog and invokes only these fixed verbs. A plugin manifest cannot inject a
+command template.
+
 Inspect the exact typed fields and output descriptors with:
 
 ```bash
@@ -56,8 +85,9 @@ mere.run graph preflight workflow.json --inputs-json inputs.json --executor rela
 
 Validation is executor-independent. Preflight combines graph diagnostics with a
 worker capability probe, including contract version, node kinds, installed
-models, accelerator backend, memory, and available disk. Missing models produce
-declarative pull actions; V1 never pulls models automatically on a worker.
+models, exact provider versions and catalog digests, accelerator backend,
+memory, and available disk. Missing models produce declarative pull actions; V1
+never pulls models automatically on a worker.
 
 ## Portable job bundles
 
@@ -86,6 +116,12 @@ assets.json
 assets/sha256/<digest>
 ```
 
+The job pins each companion provider by ID, semantic version, catalog SHA-256,
+and node kinds. It also records managed model repository, revision, and catalog
+identity. At execution time the run record adds the installed model manifest
+digest when one is available. Adapter and other asset inputs retain their full
+content digests.
+
 The bundle contains relative paths only. Directory entries are ordered and
 content-addressed. Symlinks, device files, path traversal, and files escaping a
 declared directory root are rejected. Executor profiles, tokens, URLs, and
@@ -112,8 +148,11 @@ adapted to deterministic public CLI arguments and launched as an isolated
 diagnostic stderr, records exit status, verifies every declared artifact, and
 honors a cooperative cancellation marker.
 
-`--resume` reuses a finished node only when its fingerprint and every artifact
-size and SHA-256 still match.
+`--resume` reuses a finished node only when its provider pin, normalized
+arguments, exact model provenance, directly referenced upstream outputs, and
+every output digest still match. Unrelated branches do not invalidate each
+other. File, directory, collection, scalar, and JSON outputs retain their typed
+identity in the node run record.
 
 ## Run directories
 
@@ -151,8 +190,10 @@ mere.run graph worker inspect --run-dir PATH --json
 mere.run graph worker cancel --run-dir PATH --json
 ```
 
-`execute --json-stream` emits the run event model as NDJSON on stdout. Progress
-and diagnostics stay on stderr.
+`execute --json-stream` emits the run event model as NDJSON on stdout. It
+preserves node progress, preview, artifact, diagnostic, metric, heartbeat, and
+lifecycle events. Diagnostics produced outside the machine protocol stay on
+stderr.
 
 The versioned contracts are published under `docs/public/schemas`, including the
 [Graph Event V1 schema](./public/schemas/graph-event-v1.schema.json), workflow
@@ -266,3 +307,7 @@ node kind or model, accelerator backend or memory, and available disk.
 - [Job Bundle V1](/schemas/job-bundle-v1.schema.json)
 - [Graph Run V1](/schemas/graph-run-v1.schema.json)
 - [Worker Probe V1](/schemas/worker-probe-v1.schema.json)
+- [Plugin Graph Provider V1](/schemas/graph-node-provider.v1.schema.json)
+- [Plugin Graph Invocation V1](/schemas/graph-node-invocation.v1.schema.json)
+- [Plugin Graph Preflight V1](/schemas/graph-node-preflight.v1.schema.json)
+- [Plugin Graph Event V1](/schemas/graph-node-event.v1.schema.json)

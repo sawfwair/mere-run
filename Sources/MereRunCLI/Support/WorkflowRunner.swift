@@ -30,26 +30,43 @@ protocol WorkflowProcessRunning {
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult
 }
 
-struct WorkflowProcessRunner: WorkflowProcessRunning {
+protocol WorkflowStreamingProcessRunning {
+    func run(
+        executable: URL,
+        arguments: [String],
+        currentDirectory: URL,
+        stdoutLineHandler: ((String) throws -> Void)?
+    ) throws -> WorkflowProcessResult
+}
+
+struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRunning {
     static func stdoutCaptureURL(in directory: URL) -> URL {
         directory.appendingPathComponent(".workflow-stdout-\(UUID().uuidString)")
     }
 
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
+        try run(
+            executable: CurrentExecutable.url(),
+            arguments: arguments,
+            currentDirectory: currentDirectory,
+            stdoutLineHandler: nil
+        )
+    }
+
+    func run(
+        executable: URL,
+        arguments: [String],
+        currentDirectory: URL,
+        stdoutLineHandler: ((String) throws -> Void)?
+    ) throws -> WorkflowProcessResult {
         let process = Process()
-        process.executableURL = CurrentExecutable.url()
+        process.executableURL = executable
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
-        let stdoutURL = Self.stdoutCaptureURL(in: currentDirectory)
-        guard FileManager.default.createFile(atPath: stdoutURL.path, contents: nil) else {
-            throw ValidationError("Could not create workflow child stdout capture.")
-        }
-        let stdout = try FileHandle(forWritingTo: stdoutURL)
+        let stdout = Pipe()
         let runDirectory = currentDirectory.deletingLastPathComponent().deletingLastPathComponent()
         let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
         defer {
-            try? stdout.close()
-            try? FileManager.default.removeItem(at: stdoutURL)
             try? FileManager.default.removeItem(at: processIDURL)
         }
         process.standardInput = FileHandle.nullDevice
@@ -57,15 +74,34 @@ struct WorkflowProcessRunner: WorkflowProcessRunning {
         process.standardError = FileHandle.standardError
         try process.run()
         try Data(String(process.processIdentifier).utf8).write(to: processIDURL, options: .atomic)
+        var captured = Data()
+        var pending = Data()
+        while true {
+            let data = stdout.fileHandleForReading.availableData
+            if data.isEmpty { break }
+            captured.append(data)
+            guard stdoutLineHandler != nil else { continue }
+            pending.append(data)
+            while let newline = pending.firstIndex(of: 0x0A) {
+                let lineData = pending.prefix(upTo: newline)
+                pending.removeSubrange(...newline)
+                let line = String(decoding: lineData, as: UTF8.self)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !line.isEmpty { try stdoutLineHandler?(line) }
+            }
+        }
         process.waitUntilExit()
-        try stdout.close()
-        let data = try Data(contentsOf: stdoutURL)
+        if !pending.isEmpty {
+            let line = String(decoding: pending, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !line.isEmpty { try stdoutLineHandler?(line) }
+        }
         if FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("cancel.request").path) {
             throw WorkflowCancellationError()
         }
         return WorkflowProcessResult(
             status: process.terminationStatus,
-            stdout: String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            stdout: String(decoding: captured, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 }
@@ -128,6 +164,13 @@ struct WorkflowRunner {
                 "Workflow requires mere.run \(job.requirements.minimumMereRunVersion) or newer; this worker is \(MereRunCLIVersion.current)."
             )
         }
+        let availableProviders = WorkflowGraphProviderRegistry.discoveredCatalog().providers.map(\.requirement)
+        let missingProviders = job.requirements.providers.filter { !availableProviders.contains($0) }
+        guard missingProviders.isEmpty else {
+            throw ValidationError(
+                "Worker is missing exact graph providers: \(missingProviders.map { "\($0.id)@\($0.version)" }.joined(separator: ", "))."
+            )
+        }
 
         let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
         guard validation.status != .blocked else {
@@ -174,12 +217,26 @@ struct WorkflowRunner {
                     inputs: localizedInputs.values,
                     nodeOutputs: nodeOutputs
                 )
+                let referencedNodeIDs = Set(node.arguments.values.flatMap(\.references).compactMap { reference -> String? in
+                    guard let parsed = try? WorkflowReference(reference),
+                          case .nodeOutput(let sourceNodeID, _) = parsed.source else { return nil }
+                    return sourceNodeID
+                })
+                let upstreamOutputs = manifest.nodes
+                    .filter { referencedNodeIDs.contains($0.id) }
+                    .flatMap(\.outputs)
+                    .map(WorkflowNodeOutputFingerprint.init)
+                    .sorted { ($0.sourceName, $0.sha256 ?? "") < ($1.sourceName, $1.sha256 ?? "") }
+                guard let providerIdentity = WorkflowNodeRegistry.provider(for: node) else {
+                    throw ValidationError("Workflow provider '\(node.resolvedProviderID)' is unavailable.")
+                }
+                let nodeModels = modelProvenance(for: node, arguments: resolvedArguments, job: job)
                 let fingerprint = try WorkflowBundleCodec.hash(WorkflowNodeFingerprint(
-                    nodeID: node.id,
                     kind: node.kind,
+                    provider: providerIdentity,
                     arguments: resolvedArguments,
-                    inputFingerprint: job.inputFingerprint,
-                    upstreamArtifacts: manifest.nodes.prefix(nodeIndex).flatMap(\.artifacts)
+                    models: nodeModels,
+                    upstreamOutputs: upstreamOutputs
                 ))
                 if try shouldResume(
                     manifest.nodes[nodeIndex],
@@ -200,9 +257,12 @@ struct WorkflowRunner {
                 let invocation = try WorkflowNodeCommandBuilder.invocation(
                     node: node,
                     arguments: resolvedArguments,
-                    nodeDirectory: nodeDirectory
+                    nodeDirectory: nodeDirectory,
+                    jobID: job.jobID
                 )
                 manifest.nodes[nodeIndex].fingerprint = fingerprint
+                manifest.nodes[nodeIndex].provider = providerIdentity
+                manifest.nodes[nodeIndex].models = nodeModels
                 manifest.nodes[nodeIndex].state = .preflighting
                 manifest.nodes[nodeIndex].startedAt = now()
                 manifest.updatedAt = now()
@@ -217,9 +277,11 @@ struct WorkflowRunner {
                 ))
                 sequence += 1
 
-                let preflight = try processRunner.run(
+                let preflight = try runProcess(
+                    executable: invocation.executable,
                     arguments: invocation.preflightArguments,
-                    currentDirectory: nodeDirectory
+                    currentDirectory: nodeDirectory,
+                    stdoutLineHandler: nil
                 )
                 try throwIfCancellationRequested()
                 try Data(preflight.stdout.utf8).write(
@@ -228,6 +290,18 @@ struct WorkflowRunner {
                 )
                 guard preflight.status == 0 else {
                     throw ValidationError("Node '\(nodeID)' preflight failed with status \(preflight.status).")
+                }
+                if invocation.streamsEvents {
+                    let report = try WorkflowBundleCodec.decoder().decode(
+                        WorkflowPluginNodePreflight.self,
+                        from: Data(preflight.stdout.utf8)
+                    )
+                    guard report.contractVersion == WorkflowPluginNodePreflight.contractVersion,
+                          report.status != "blocked" else {
+                        throw ValidationError(
+                            report.diagnostics.map(\.message).joined(separator: " ")
+                        )
+                    }
                 }
 
                 manifest.nodes[nodeIndex].state = .running
@@ -243,9 +317,47 @@ struct WorkflowRunner {
                 ))
                 sequence += 1
 
-                let result = try processRunner.run(
+                var providerOutputs: [String: WorkflowValue]?
+                var providerSequence = -1
+                let result = try runProcess(
+                    executable: invocation.executable,
                     arguments: invocation.runArguments,
-                    currentDirectory: nodeDirectory
+                    currentDirectory: nodeDirectory,
+                    stdoutLineHandler: invocation.streamsEvents ? { line in
+                        let event = try WorkflowBundleCodec.decoder().decode(
+                            WorkflowPluginNodeEvent.self,
+                            from: Data(line.utf8)
+                        )
+                        guard event.contractVersion == WorkflowPluginNodeEvent.contractVersion,
+                              event.sequence == providerSequence + 1 else {
+                            throw ValidationError("Graph provider emitted an invalid event sequence for node '\(nodeID)'.")
+                        }
+                        providerSequence = event.sequence
+                        if event.type == "node_result" {
+                            providerOutputs = event.outputs
+                        } else {
+                            let runArtifact: GraphRunEventArtifact?
+                            if let eventArtifact = event.artifact {
+                                let artifactURL = try invocationOutputURL(
+                                    eventArtifact.path,
+                                    nodeDirectory: nodeDirectory
+                                )
+                                runArtifact = GraphRunEventArtifact(
+                                    name: eventArtifact.name,
+                                    path: try portableArtifactPath(for: artifactURL),
+                                    contentType: eventArtifact.contentType
+                                )
+                            } else {
+                                runArtifact = nil
+                            }
+                            try record(event.runEvent(
+                                sequence: sequence,
+                                nodeID: nodeID,
+                                artifact: runArtifact
+                            ))
+                            sequence += 1
+                        }
+                    } : nil
                 )
                 try throwIfCancellationRequested()
                 try Data(result.stdout.utf8).write(
@@ -257,18 +369,15 @@ struct WorkflowRunner {
                     throw ValidationError("Node '\(nodeID)' failed with status \(result.status).")
                 }
 
-                var artifacts: [GraphRunArtifact] = []
-                var outputs: [String: WorkflowValue] = [:]
-                for name in invocation.outputs.keys.sorted() {
-                    guard let url = invocation.outputs[name], fileManager.fileExists(atPath: url.path) else {
-                        throw ValidationError("Node '\(nodeID)' did not produce declared output '\(name)'.")
-                    }
-                    let artifact = try artifact(name: name, nodeKind: node.kind, url: url)
-                    artifacts.append(artifact)
-                    outputs[name] = .string(url.path)
-                }
-                nodeOutputs[nodeID] = outputs
-                manifest.nodes[nodeIndex].artifacts = artifacts
+                let verified = try verifyOutputs(
+                    invocation.outputs,
+                    providerValues: providerOutputs,
+                    node: node,
+                    nodeDirectory: nodeDirectory
+                )
+                nodeOutputs[nodeID] = verified.values
+                manifest.nodes[nodeIndex].artifacts = verified.artifacts
+                manifest.nodes[nodeIndex].outputs = verified.outputs
                 manifest.nodes[nodeIndex].state = .finished
                 manifest.nodes[nodeIndex].completedAt = now()
                 manifest.updatedAt = now()
@@ -336,6 +445,223 @@ struct WorkflowRunner {
             state: manifest.state,
             outputs: manifest.outputs
         )
+    }
+
+    private func runProcess(
+        executable: URL,
+        arguments: [String],
+        currentDirectory: URL,
+        stdoutLineHandler: ((String) throws -> Void)?
+    ) throws -> WorkflowProcessResult {
+        if let streamingRunner = processRunner as? any WorkflowStreamingProcessRunning {
+            return try streamingRunner.run(
+                executable: executable,
+                arguments: arguments,
+                currentDirectory: currentDirectory,
+                stdoutLineHandler: stdoutLineHandler
+            )
+        }
+        guard executable.standardizedFileURL == CurrentExecutable.url().standardizedFileURL else {
+            throw ValidationError("Injected workflow process runner cannot execute companion providers.")
+        }
+        let result = try processRunner.run(arguments: arguments, currentDirectory: currentDirectory)
+        if let stdoutLineHandler {
+            for line in result.stdout.split(whereSeparator: \Character.isNewline) {
+                try stdoutLineHandler(String(line))
+            }
+        }
+        return result
+    }
+
+    private func verifyOutputs(
+        _ descriptors: [String: WorkflowInvocationOutput],
+        providerValues: [String: WorkflowValue]?,
+        node: WorkflowNode,
+        nodeDirectory: URL
+    ) throws -> WorkflowVerifiedNodeOutputs {
+        var artifacts: [GraphRunArtifact] = []
+        var records: [GraphRunNodeOutput] = []
+        var values: [String: WorkflowValue] = [:]
+        for name in descriptors.keys.sorted() {
+            guard let descriptor = descriptors[name] else { continue }
+            let providerValue = providerValues?[name]
+            switch descriptor.type {
+            case .asset, .assetCollection, .assetArray:
+                guard let path = descriptor.path else {
+                    throw ValidationError("Node '\(node.id)' output '\(name)' has no declared path.")
+                }
+                let url = try invocationOutputURL(path, nodeDirectory: nodeDirectory)
+                if providerValue == .null || !fileManager.fileExists(atPath: url.path) {
+                    if descriptor.optional { continue }
+                    throw ValidationError("Node '\(node.id)' did not produce declared output '\(name)'.")
+                }
+                if let providerPath = providerValue?.stringValue {
+                    let reported = try invocationOutputURL(providerPath, nodeDirectory: nodeDirectory)
+                    guard reported.standardizedFileURL == url.standardizedFileURL else {
+                        throw ValidationError("Node '\(node.id)' reported an unexpected path for output '\(name)'.")
+                    }
+                }
+                let outputArtifact = try artifact(
+                    name: name,
+                    nodeKind: node.kind,
+                    url: url,
+                    contentType: descriptor.contentTypes.first
+                )
+                artifacts.append(outputArtifact)
+                records.append(.init(
+                    name: name,
+                    type: descriptor.type,
+                    value: nil,
+                    path: outputArtifact.path,
+                    contentType: outputArtifact.contentType,
+                    sizeBytes: outputArtifact.sizeBytes,
+                    sha256: outputArtifact.sha256
+                ))
+                values[name] = .string(url.path)
+            case .assetDirectory:
+                guard let path = descriptor.path else {
+                    throw ValidationError("Node '\(node.id)' directory output '\(name)' has no declared path.")
+                }
+                let url = try invocationOutputURL(path, nodeDirectory: nodeDirectory)
+                var isDirectory: ObjCBool = false
+                if providerValue == .null || !fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+                    if descriptor.optional { continue }
+                    throw ValidationError("Node '\(node.id)' did not produce declared directory output '\(name)'.")
+                }
+                guard isDirectory.boolValue else {
+                    throw ValidationError("Node '\(node.id)' output '\(name)' is not a directory.")
+                }
+                if let providerPath = providerValue?.stringValue {
+                    let reported = try invocationOutputURL(providerPath, nodeDirectory: nodeDirectory)
+                    guard reported.standardizedFileURL == url.standardizedFileURL else {
+                        throw ValidationError("Node '\(node.id)' reported an unexpected path for output '\(name)'.")
+                    }
+                }
+                let directory = try directoryIdentity(url)
+                let manifestURL = nodeDirectory
+                    .appendingPathComponent("artifacts", isDirectory: true)
+                    .appendingPathComponent("\(name).manifest.json")
+                try WorkflowBundleCodec.write(directory.manifest, to: manifestURL)
+                let manifestArtifact = try artifact(
+                    name: "\(name)_manifest",
+                    nodeKind: node.kind,
+                    url: manifestURL,
+                    contentType: "application/json"
+                )
+                artifacts.append(manifestArtifact)
+                records.append(.init(
+                    name: name,
+                    type: .assetDirectory,
+                    value: nil,
+                    path: try portableArtifactPath(for: url),
+                    contentType: descriptor.contentTypes.first,
+                    sizeBytes: directory.sizeBytes,
+                    sha256: directory.sha256
+                ))
+                values[name] = .string(url.path)
+            case .string, .integer, .number, .boolean, .enumeration, .json:
+                guard let providerValue, providerValue != .null else {
+                    if descriptor.optional { continue }
+                    throw ValidationError("Node '\(node.id)' did not report declared value output '\(name)'.")
+                }
+                guard workflowValue(providerValue, matches: descriptor.type) else {
+                    throw ValidationError("Node '\(node.id)' output '\(name)' has the wrong value type.")
+                }
+                records.append(.init(
+                    name: name,
+                    type: descriptor.type,
+                    value: providerValue,
+                    path: nil,
+                    contentType: nil,
+                    sizeBytes: nil,
+                    sha256: try WorkflowBundleCodec.hash(providerValue)
+                ))
+                values[name] = providerValue
+            }
+        }
+        if let providerValues {
+            let undeclared = Set(providerValues.keys).subtracting(descriptors.keys)
+            guard undeclared.isEmpty else {
+                throw ValidationError(
+                    "Node '\(node.id)' reported undeclared outputs: \(undeclared.sorted().joined(separator: ", "))."
+                )
+            }
+        }
+        return WorkflowVerifiedNodeOutputs(artifacts: artifacts, outputs: records, values: values)
+    }
+
+    private func invocationOutputURL(_ path: String, nodeDirectory: URL) throws -> URL {
+        let candidate: URL
+        if path.hasPrefix("/") {
+            candidate = URL(fileURLWithPath: path).standardizedFileURL
+        } else {
+            guard isConfinedRelativeWorkflowPath(path) else {
+                throw ValidationError("Workflow provider output path is not confined: \(path)")
+            }
+            candidate = nodeDirectory.appendingPathComponent(path).standardizedFileURL
+        }
+        let root = nodeDirectory.standardizedFileURL.path
+        guard candidate.path.hasPrefix(root + "/") else {
+            throw ValidationError("Workflow provider output path escapes the node directory: \(path)")
+        }
+        return candidate
+    }
+
+    private func directoryIdentity(_ directory: URL) throws -> WorkflowDirectoryIdentity {
+        let root = directory.resolvingSymlinksInPath()
+        var entries: [WorkflowAssetEntry] = []
+        for path in try fileManager.subpathsOfDirectory(atPath: root.path).sorted() {
+            let url = root.appendingPathComponent(path)
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            if values.isSymbolicLink == true {
+                throw ValidationError("Workflow output directories cannot contain symbolic links: \(url.path)")
+            }
+            guard values.isRegularFile == true else { continue }
+            entries.append(WorkflowAssetEntry(
+                path: path,
+                digest: try ModelArtifactPin.fileSHA256(url),
+                sizeBytes: try ModelArtifactPin.fileByteCount(url),
+                contentType: contentType(for: url)
+            ))
+        }
+        let manifest = WorkflowOutputDirectoryManifest(contractVersion: "mere.run/output-directory.v1", entries: entries)
+        return WorkflowDirectoryIdentity(
+            manifest: manifest,
+            sizeBytes: entries.reduce(0) { $0 + $1.sizeBytes },
+            sha256: try WorkflowBundleCodec.hash(manifest)
+        )
+    }
+
+    private func modelProvenance(
+        for node: WorkflowNode,
+        arguments: [String: WorkflowValue],
+        job: WorkflowJobManifest
+    ) -> [WorkflowModelProvenance] {
+        var modelIDs = Set(WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [])
+        if let modelID = arguments["model"]?.stringValue {
+            modelIDs.insert(modelID)
+        } else {
+            switch node.kind {
+            case "image.train-lora": modelIDs.insert(ImageTrainLoRA.defaultManagedModelID.rawValue)
+            case "image.generate": modelIDs.insert(ImageGenerate.defaultManagedModelID.rawValue)
+            case "video.generate": modelIDs.insert(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
+            default: break
+            }
+        }
+        return job.requirements.models.filter { modelIDs.contains($0.id) }.map { provenance in
+            let manifestURL = MereRunModelPaths.modelDir(provenance.id)
+                .appendingPathComponent(MereRunModelManifest.filename)
+            let manifestDigest = fileManager.fileExists(atPath: manifestURL.path)
+                ? try? ModelArtifactPin.fileSHA256(manifestURL)
+                : nil
+            return WorkflowModelProvenance(
+                id: provenance.id,
+                repository: provenance.repository,
+                revision: provenance.revision,
+                catalogSHA256: provenance.catalogSHA256,
+                installManifestSHA256: manifestDigest
+            )
+        }.sorted { $0.id < $1.id }
     }
 
     private func prepareRunDirectory() throws {
@@ -545,16 +871,39 @@ struct WorkflowRunner {
         guard resume,
               node.state == .finished,
               node.fingerprint == expectedFingerprint,
-              !node.artifacts.isEmpty else { return false }
+              !node.outputs.isEmpty || !node.artifacts.isEmpty else { return false }
         var outputs: [String: WorkflowValue] = [:]
-        for artifact in node.artifacts {
-            let url = try artifactURL(for: artifact.path)
-            guard fileManager.fileExists(atPath: url.path),
-                  try ModelArtifactPin.fileByteCount(url) == artifact.sizeBytes,
-                  try ModelArtifactPin.fileSHA256(url) == artifact.sha256 else {
-                return false
+        if !node.outputs.isEmpty {
+            for output in node.outputs {
+                if let value = output.value {
+                    guard try WorkflowBundleCodec.hash(value) == output.sha256 else { return false }
+                    outputs[output.name] = value
+                    continue
+                }
+                guard let path = output.path else { return false }
+                let url = try artifactURL(for: path)
+                if output.type == .assetDirectory {
+                    var isDirectory: ObjCBool = false
+                    guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                          isDirectory.boolValue,
+                          try directoryIdentity(url).sha256 == output.sha256 else { return false }
+                } else {
+                    guard fileManager.fileExists(atPath: url.path),
+                          try ModelArtifactPin.fileByteCount(url) == output.sizeBytes,
+                          try ModelArtifactPin.fileSHA256(url) == output.sha256 else { return false }
+                }
+                outputs[output.name] = .string(url.path)
             }
-            outputs[artifact.name] = .string(url.path)
+        } else {
+            for artifact in node.artifacts {
+                let url = try artifactURL(for: artifact.path)
+                guard fileManager.fileExists(atPath: url.path),
+                      try ModelArtifactPin.fileByteCount(url) == artifact.sizeBytes,
+                      try ModelArtifactPin.fileSHA256(url) == artifact.sha256 else {
+                    return false
+                }
+                outputs[artifact.name] = .string(url.path)
+            }
         }
         nodeOutputs[node.id] = outputs
         return true
@@ -570,11 +919,28 @@ struct WorkflowRunner {
             guard case .reference(let rawReference)? = graph.outputs[name] else { continue }
             let reference = try WorkflowReference(rawReference)
             guard case .nodeOutput(let nodeID, let output) = reference.source,
-                  let sourcePath = nodeOutputs[nodeID]?[output]?.stringValue else {
+                  let sourceValue = nodeOutputs[nodeID]?[output],
+                  let node = graph.nodes.first(where: { $0.id == nodeID }),
+                  let outputContract = WorkflowNodeRegistry.output(node: node, name: output) else {
                 throw ValidationError("Workflow output '\(name)' was not produced.")
             }
+            if outputContract.type != .asset && outputContract.type != .assetCollection && outputContract.type != .assetArray {
+                let destination = outputsRoot.appendingPathComponent("\(name).json")
+                try WorkflowBundleCodec.encoder().encode(sourceValue).write(to: destination, options: .atomic)
+                artifacts.append(try artifact(
+                    name: name,
+                    nodeKind: "graph.output",
+                    url: destination,
+                    contentType: "application/json"
+                ))
+                continue
+            }
+            guard let sourcePath = sourceValue.stringValue else {
+                throw ValidationError("Workflow output '\(name)' did not resolve to an artifact path.")
+            }
             let source = URL(fileURLWithPath: sourcePath)
-            let destination = outputsRoot.appendingPathComponent("\(name).\(source.pathExtension)")
+            let suffix = source.pathExtension.isEmpty ? "" : ".\(source.pathExtension)"
+            let destination = outputsRoot.appendingPathComponent("\(name)\(suffix)")
             if fileManager.fileExists(atPath: destination.path) {
                 try fileManager.removeItem(at: destination)
             }
@@ -588,12 +954,17 @@ struct WorkflowRunner {
         return artifacts
     }
 
-    private func artifact(name: String, nodeKind: String, url: URL) throws -> GraphRunArtifact {
+    private func artifact(
+        name: String,
+        nodeKind: String,
+        url: URL,
+        contentType explicitContentType: String? = nil
+    ) throws -> GraphRunArtifact {
         GraphRunArtifact(
             name: name,
             kind: nodeKind,
             path: try portableArtifactPath(for: url),
-            contentType: contentType(for: url),
+            contentType: explicitContentType ?? contentType(for: url),
             sizeBytes: try ModelArtifactPin.fileByteCount(url),
             sha256: try ModelArtifactPin.fileSHA256(url)
         )
@@ -628,7 +999,12 @@ struct WorkflowRunner {
     private func contentType(for url: URL) -> String {
         switch url.pathExtension.lowercased() {
         case "png": "image/png"
+        case "jpg", "jpeg": "image/jpeg"
+        case "webp": "image/webp"
         case "mp4": "video/mp4"
+        case "wav": "audio/wav"
+        case "json": "application/json"
+        case "txt": "text/plain"
         case "safetensors": "application/x-safetensors"
         default: "application/octet-stream"
         }
@@ -660,18 +1036,149 @@ struct WorkflowRunner {
 }
 
 private struct WorkflowNodeFingerprint: Codable {
-    let nodeID: String
     let kind: String
+    let provider: WorkflowNodeProviderIdentity
     let arguments: [String: WorkflowValue]
-    let inputFingerprint: String
-    let upstreamArtifacts: [GraphRunArtifact]
+    let models: [WorkflowModelProvenance]
+    let upstreamOutputs: [WorkflowNodeOutputFingerprint]
 
     enum CodingKeys: String, CodingKey {
-        case nodeID = "node_id"
         case kind
+        case provider
         case arguments
-        case inputFingerprint = "input_fingerprint"
-        case upstreamArtifacts = "upstream_artifacts"
+        case models
+        case upstreamOutputs = "upstream_outputs"
+    }
+}
+
+private struct WorkflowNodeOutputFingerprint: Codable {
+    let sourceName: String
+    let type: WorkflowPortType
+    let value: WorkflowValue?
+    let sha256: String?
+
+    init(_ output: GraphRunNodeOutput) {
+        sourceName = output.name
+        type = output.type
+        value = output.value
+        sha256 = output.sha256
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case sourceName = "source_name"
+        case type
+        case value
+        case sha256
+    }
+}
+
+private struct WorkflowVerifiedNodeOutputs {
+    let artifacts: [GraphRunArtifact]
+    let outputs: [GraphRunNodeOutput]
+    let values: [String: WorkflowValue]
+}
+
+private struct WorkflowOutputDirectoryManifest: Codable {
+    let contractVersion: String
+    let entries: [WorkflowAssetEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case contractVersion = "contract_version"
+        case entries
+    }
+}
+
+private struct WorkflowDirectoryIdentity {
+    let manifest: WorkflowOutputDirectoryManifest
+    let sizeBytes: Int64
+    let sha256: String
+}
+
+private struct WorkflowPluginNodePreflight: Codable {
+    static let contractVersion = "mere.run/plugin-graph-preflight.v1"
+
+    let contractVersion: String
+    let status: String
+    let diagnostics: [GraphRunEventDiagnostic]
+
+    enum CodingKeys: String, CodingKey {
+        case contractVersion = "contract_version"
+        case status
+        case diagnostics
+    }
+}
+
+private struct WorkflowPluginNodeEvent: Codable {
+    static let contractVersion = "mere.run/plugin-graph-event.v1"
+
+    let contractVersion: String
+    let sequence: Int
+    let createdAt: String
+    let type: String
+    let message: String?
+    let progress: GraphRunProgress?
+    let artifact: GraphRunEventArtifact?
+    let diagnostic: GraphRunEventDiagnostic?
+    let metric: GraphRunMetric?
+    let outputs: [String: WorkflowValue]?
+
+    enum CodingKeys: String, CodingKey {
+        case contractVersion = "contract_version"
+        case sequence
+        case createdAt = "created_at"
+        case type
+        case message
+        case progress
+        case artifact
+        case diagnostic
+        case metric
+        case outputs
+    }
+
+    func runEvent(
+        sequence runSequence: Int,
+        nodeID: String,
+        artifact runArtifact: GraphRunEventArtifact?
+    ) -> GraphRunEvent {
+        GraphRunEvent(
+            sequence: runSequence,
+            createdAt: Date(),
+            type: runEventType,
+            state: .running,
+            nodeID: nodeID,
+            message: message,
+            progress: progress,
+            artifact: runArtifact,
+            diagnostic: diagnostic,
+            metric: metric
+        )
+    }
+
+    private var runEventType: String {
+        switch type {
+        case "progress": "node_progress"
+        case "diagnostic": "node_diagnostic"
+        case "metric": "node_metric"
+        case "heartbeat": "node_heartbeat"
+        default: type
+        }
+    }
+}
+
+private func workflowValue(_ value: WorkflowValue, matches type: WorkflowPortType) -> Bool {
+    switch type {
+    case .string, .enumeration, .asset, .assetDirectory:
+        value.stringValue != nil
+    case .integer:
+        value.integerValue != nil
+    case .number:
+        value.numberValue != nil
+    case .boolean:
+        value.booleanValue != nil
+    case .json:
+        true
+    case .assetCollection, .assetArray:
+        if case .array = value { true } else { false }
     }
 }
 

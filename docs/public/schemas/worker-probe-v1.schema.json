@@ -4,7 +4,7 @@
   "title": "mere.run Graph Worker Probe V1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "worker_version", "contract_versions", "platform", "architecture", "accelerator_backend", "memory_bytes", "node_kinds", "installed_model_ids"],
+  "required": ["schema_version", "worker_version", "contract_versions", "platform", "architecture", "accelerator_backend", "memory_bytes", "node_kinds", "installed_model_ids", "providers"],
   "properties": {
     "schema_version": { "const": 1 },
     "worker_version": { "type": "string" },
@@ -15,6 +15,20 @@
     "memory_bytes": { "type": "integer", "minimum": 0 },
     "available_disk_bytes": { "type": ["integer", "null"], "minimum": 0 },
     "node_kinds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-    "installed_model_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+    "installed_model_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "providers": { "type": "array", "items": { "$ref": "#/$defs/provider" } }
+  },
+  "$defs": {
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "catalog_sha256", "node_kinds"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^mere-[a-z0-9-]+$" },
+        "version": { "type": "string", "minLength": 1 },
+        "catalog_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "node_kinds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    }
   }
 }

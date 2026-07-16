@@ -100,7 +100,7 @@ artifacts. Build package artifacts locally on the Linux host class you intend to
 validate:
 
 ```bash
-scripts/package-linux.sh --version 0.21.0
+scripts/package-linux.sh --version 0.22.0
 ls dist/linux/
 ```
 
@@ -113,7 +113,7 @@ CUDA variants use a suffix so they can ship beside the CPU artifacts:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.21.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.22.0 --artifact-suffix cuda
 ```
 
 That writes artifacts such as

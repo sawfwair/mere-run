@@ -151,7 +151,7 @@ during NVRTC JIT compilation:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.21.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.22.0 --artifact-suffix cuda
 ```
 
 Current CUDA validation should be treated as limited to the exact hosts that
@@ -196,7 +196,7 @@ swift run mere.run --help
 To build Linux release packages from a Linux x86_64 Swift toolchain host:
 
 ```bash
-scripts/package-linux.sh --version 0.21.0
+scripts/package-linux.sh --version 0.22.0
 ls dist/linux/
 ```
 
@@ -205,14 +205,14 @@ builder with CUDA development packages:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.21.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.22.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 
 On Linux arm64, use a CUDA-provisioned host:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.21.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.22.0
 ```
 
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio
