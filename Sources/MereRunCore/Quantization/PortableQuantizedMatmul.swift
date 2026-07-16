@@ -3,9 +3,9 @@ import MLX
 import MLXNN
 
 /// Selects Linux/CUDA quantized matrix multiplication. Automatic mode probes
-/// each native MLX operation once, promotes it when evaluation succeeds, and
-/// permanently falls back to dense compatibility when that operation is not
-/// present in the linked CUDA runtime.
+/// each native MLX operation and packed layout once, promotes it when
+/// evaluation succeeds, and permanently falls back to dense compatibility
+/// when that combination is not present in the linked CUDA runtime.
 public enum MLXCUDAQuant {
     public enum Mode: String, Sendable {
         case automatic
@@ -24,6 +24,25 @@ public enum MLXCUDAQuant {
         case dense
     }
 
+    struct CapabilityKey: Hashable {
+        let operation: Operation
+        let bits: Int
+        let groupSize: Int
+        let quantizationMode: String
+
+        init(
+            operation: Operation,
+            bits: Int,
+            groupSize: Int,
+            quantizationMode: QuantizationMode
+        ) {
+            self.operation = operation
+            self.bits = bits
+            self.groupSize = groupSize
+            self.quantizationMode = quantizationMode.rawValue
+        }
+    }
+
     private enum Capability {
         case unknown
         case probing
@@ -32,7 +51,7 @@ public enum MLXCUDAQuant {
     }
 
     private static let stateLock = NSLock()
-    private nonisolated(unsafe) static var capabilities: [Operation: Capability] = [:]
+    private nonisolated(unsafe) static var capabilities: [CapabilityKey: Capability] = [:]
     private nonisolated(unsafe) static var loggedSelections: Set<String> = []
 
     public static let mode = parseMode(
@@ -58,19 +77,30 @@ public enum MLXCUDAQuant {
         }
     }
 
-    static func nativeDecision(for operation: Operation) -> NativeDecision {
+    static func nativeDecision(
+        for operation: Operation,
+        bits: Int,
+        groupSize: Int,
+        quantizationMode: QuantizationMode
+    ) -> NativeDecision {
+        let key = CapabilityKey(
+            operation: operation,
+            bits: bits,
+            groupSize: groupSize,
+            quantizationMode: quantizationMode
+        )
         switch mode {
         case .native:
-            logSelection(operation: operation, mode: .native, backend: "native")
+            logSelection(key: key, mode: .native, backend: "native")
             return .native
         case .dense:
-            logSelection(operation: operation, mode: .dense, backend: "dense")
+            logSelection(key: key, mode: .dense, backend: "dense")
             return .dense
         case .automatic:
             return stateLock.withLock {
-                switch capabilities[operation] ?? .unknown {
+                switch capabilities[key] ?? .unknown {
                 case .unknown:
-                    capabilities[operation] = .probing
+                    capabilities[key] = .probing
                     return .probe
                 case .probing:
                     return .dense
@@ -83,22 +113,45 @@ public enum MLXCUDAQuant {
         }
     }
 
-    static func completeProbe(operation: Operation, supported: Bool) {
+    static func completeProbe(
+        operation: Operation,
+        bits: Int,
+        groupSize: Int,
+        quantizationMode: QuantizationMode,
+        supported: Bool
+    ) {
+        let key = CapabilityKey(
+            operation: operation,
+            bits: bits,
+            groupSize: groupSize,
+            quantizationMode: quantizationMode
+        )
         stateLock.withLock {
-            capabilities[operation] = supported ? .supported : .unsupported
+            capabilities[key] = supported ? .supported : .unsupported
         }
         logSelection(
-            operation: operation,
+            key: key,
             mode: .automatic,
             backend: supported ? "native" : "dense"
         )
     }
 
-    private static func logSelection(operation: Operation, mode: Mode, backend: String) {
-        let key = "\(operation.rawValue):\(mode.rawValue):\(backend)"
-        let shouldLog = stateLock.withLock { loggedSelections.insert(key).inserted }
+    private static func logSelection(key: CapabilityKey, mode: Mode, backend: String) {
+        let selectionKey = [
+            key.operation.rawValue,
+            String(key.bits),
+            String(key.groupSize),
+            key.quantizationMode,
+            mode.rawValue,
+            backend,
+        ].joined(separator: ":")
+        let shouldLog = stateLock.withLock { loggedSelections.insert(selectionKey).inserted }
         guard shouldLog else { return }
-        let message = "[mere.run] mlx_cuda_quant operation=\(operation.rawValue) mode=\(mode.rawValue) backend=\(backend)\n"
+        let message = """
+        [mere.run] mlx_cuda_quant operation=\(key.operation.rawValue) \
+        mode=\(mode.rawValue) backend=\(backend) bits=\(key.bits) \
+        group_size=\(key.groupSize) quantization_mode=\(key.quantizationMode)\n
+        """
         FileHandle.standardError.write(Data(message.utf8))
     }
 }
@@ -117,7 +170,12 @@ public final class PortableQuantizedLinear: QuantizedLinear {
             if useUncachedDenseFallback {
                 return denseOutput(x, cacheWeight: false)
             }
-            switch MLXCUDAQuant.nativeDecision(for: .quantizedMM) {
+            switch MLXCUDAQuant.nativeDecision(
+                for: .quantizedMM,
+                bits: bits,
+                groupSize: groupSize,
+                quantizationMode: mode
+            ) {
             case .native:
                 return super.callAsFunction(x)
             case .dense:
@@ -126,10 +184,22 @@ public final class PortableQuantizedLinear: QuantizedLinear {
                 let output = super.callAsFunction(x)
                 do {
                     try MLX.checkedEval(output)
-                    MLXCUDAQuant.completeProbe(operation: .quantizedMM, supported: true)
+                    MLXCUDAQuant.completeProbe(
+                        operation: .quantizedMM,
+                        bits: bits,
+                        groupSize: groupSize,
+                        quantizationMode: mode,
+                        supported: true
+                    )
                     return output
                 } catch {
-                    MLXCUDAQuant.completeProbe(operation: .quantizedMM, supported: false)
+                    MLXCUDAQuant.completeProbe(
+                        operation: .quantizedMM,
+                        bits: bits,
+                        groupSize: groupSize,
+                        quantizationMode: mode,
+                        supported: false
+                    )
                     return denseOutput(x, cacheWeight: true)
                 }
             }
@@ -208,7 +278,12 @@ func portableGatherQuantizedMM(
 
     #if os(Linux)
     if Device.defaultDevice().deviceType == .gpu {
-        switch MLXCUDAQuant.nativeDecision(for: .gatherQMM) {
+        switch MLXCUDAQuant.nativeDecision(
+            for: .gatherQMM,
+            bits: bits,
+            groupSize: groupSize,
+            quantizationMode: mode
+        ) {
         case .native:
             break
         case .dense:
@@ -238,10 +313,22 @@ func portableGatherQuantizedMM(
             )
             do {
                 try MLX.checkedEval(output)
-                MLXCUDAQuant.completeProbe(operation: .gatherQMM, supported: true)
+                MLXCUDAQuant.completeProbe(
+                    operation: .gatherQMM,
+                    bits: bits,
+                    groupSize: groupSize,
+                    quantizationMode: mode,
+                    supported: true
+                )
                 return output
             } catch {
-                MLXCUDAQuant.completeProbe(operation: .gatherQMM, supported: false)
+                MLXCUDAQuant.completeProbe(
+                    operation: .gatherQMM,
+                    bits: bits,
+                    groupSize: groupSize,
+                    quantizationMode: mode,
+                    supported: false
+                )
                 return dequantizedGatherQuantizedMM(
                     x,
                     weight,
