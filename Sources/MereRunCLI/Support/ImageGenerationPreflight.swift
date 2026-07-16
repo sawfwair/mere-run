@@ -610,7 +610,10 @@ struct ImageGenerationPreflightAnalyzer {
         return ImageGenerationStructuredPromptPreflightSummary(
             enabled: input.structuredPrompt,
             model: input.structuredPromptModel,
-            backend: StructuredImagePromptAdapter.backendDescription(for: input.structuredPromptModel),
+            backend: StructuredImagePromptAdapter.backendDescription(
+                for: input.structuredPromptModel,
+                includeDefaultDevice: false
+            ),
             modelRoot: modelRoot,
             maxTokens: input.structuredPromptMaxTokens,
             output: output,

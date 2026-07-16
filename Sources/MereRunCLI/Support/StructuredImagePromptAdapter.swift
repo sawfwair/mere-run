@@ -23,7 +23,7 @@ enum StructuredImagePromptAdapter {
     static let defaultMaxTokens = 2_048
     static let recommendedImagePromptTokens = 2_048
 
-    static func backendDescription(for modelID: String) -> String {
+    static func backendDescription(for modelID: String, includeDefaultDevice: Bool = true) -> String {
         let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalizedModelID == "text-agent-deepseek-v4-flash" {
             return "external DeepSeek V4 Flash bridge"
@@ -31,7 +31,9 @@ enum StructuredImagePromptAdapter {
         if ManagedModelCatalog.spec(for: normalizedModelID)?.validationKind == .codegenGGUF {
             return "llama.cpp/GGUF"
         }
-        return NativeMLXRuntime.backendDescription
+        return includeDefaultDevice
+            ? NativeMLXRuntime.backendDescription
+            : NativeMLXRuntime.backendFamilyDescription
     }
 
     static func expand(
