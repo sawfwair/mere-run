@@ -4,7 +4,7 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.22.0 - 2026-07-15
 
 ### Added
 
@@ -19,6 +19,13 @@ The format is based on Keep a Changelog.
   content-addressed job bundles; local and resumable graph execution; the
   public graph worker protocol; SSH and direct relay executors; and unified
   inspect, watch, fetch, cancel, retry, and remote-list commands.
+- added provider-qualified graph nodes backed by a versioned plugin process
+  contract, exact provider catalog pinning, typed scalar/JSON/directory/
+  collection ports, structured NDJSON node events, and provider capability
+  reporting through local, SSH, and relay workers.
+- added dependency-scoped node fingerprints, exact model/adapter/provider
+  provenance, verified resume admission, typed artifact manifests, and stable
+  canonical hashes for portable execution and reproducible retries.
 - added durable mere.world relay sign-in with automatic refresh-token rotation,
   relay fleet inspection and node inventory refresh, typed no-eligible-node
   diagnostics, resumable artifact transfers, and per-job execution telemetry.
