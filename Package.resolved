@@ -1,5 +1,5 @@
 {
-  "originHash" : "733d36da47174bd4d6075608a2611d1f7b8231e07fb2228196af4818630e4ac5",
+  "originHash" : "458df550234f64128f5147184d86f25052d209fe9cca55ec46ea6f7d2e400205",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ml-explore/mlx-swift",
       "state" : {
-        "revision" : "eb889e01b7267bc6d9c01fde91bc517b09506c2d",
-        "version" : "0.31.5"
+        "revision" : "0bb916c67f4b9e5c682cbe02a42c701c93ab5021",
+        "version" : "0.31.6"
       }
     },
     {
@@ -233,15 +233,6 @@
       "state" : {
         "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
         "version" : "1.1.1"
-      }
-    },
-    {
-      "identity" : "swift-onnxruntime",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/readdle/swift-onnxruntime.git",
-      "state" : {
-        "revision" : "f5c95540cc857b797c0d61cc62e398ad8688e5de",
-        "version" : "1.20.1"
       }
     },
     {
