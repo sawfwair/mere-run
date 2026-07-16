@@ -8,7 +8,7 @@ import MLXFast
 /// for the attention operation. This materially reduces persistent KV and
 /// prefix-cache storage, but the dequantization work can reduce decode
 /// throughput. It is therefore never selected implicitly by this type; the
-/// caller must opt into `RuntimeKVCacheMode.affine8`.
+/// caller must opt into `RuntimeKVCacheMode.affine4` or `RuntimeKVCacheMode.affine8`.
 public final class AffineQuantizedKVCache: KVCache {
     public static let defaultGroupSize = 64
     public static let defaultBits = 8
@@ -191,6 +191,8 @@ public final class AffineQuantizedKVCache: KVCache {
     private var values: PackedStorage?
 
     public private(set) var offset = 0
+
+    public var bitWidth: Int { bits }
 
     public init(
         groupSize: Int = AffineQuantizedKVCache.defaultGroupSize,

@@ -26,6 +26,8 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static let q36NanoModelId = "text-chat-q36-nano"
+    public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
+    public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
     public static let ornith35BMLXModelId = "text-agent-ornith-35b-mlx"
     public static let infinityParser2FlashModelId = "vision-ocr-infinity-flash"
@@ -38,7 +40,13 @@ public struct Q35Resources: Sendable, Hashable {
     /// (HumanEval no-think scored 1/164 on Ornith 35B vs a ~90% thinking-mode
     /// model card), so these lanes default to thinking-enabled generation.
     public static func thinkingDefault(forModelId modelId: String) -> Bool {
-        modelId == ornith9BModelId || modelId == ornith35BMLXModelId
+        isBonsai27BModelId(modelId)
+            || modelId == ornith9BModelId
+            || modelId == ornith35BMLXModelId
+    }
+
+    public static func isBonsai27BModelId(_ modelId: String) -> Bool {
+        modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId
     }
 
     public struct RecommendedSampling: Sendable, Hashable {
@@ -57,6 +65,8 @@ public struct Q35Resources: Sendable, Hashable {
     /// one; callers use it when the user did not set explicit sampling.
     public static func recommendedSampling(forModelId modelId: String) -> RecommendedSampling? {
         switch modelId {
+        case bonsai27B1BitModelId, bonsai27B2BitModelId:
+            return RecommendedSampling(temperature: 0.7, topP: 0.95, topK: 20)
         case ornith9BModelId, ornith35BMLXModelId:
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         default:
@@ -66,6 +76,14 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static let q36NanoUpstreamRepoId = "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"
     public static let q36NanoUpstreamRevision = "63d520640ca7461f31ba66104612135770090340"
+    public static let bonsai27B1BitUpstreamRepoId = "prism-ml/Bonsai-27B-mlx-1bit"
+    public static let bonsai27B1BitUpstreamRevision = "ef22f239c670078e1507f9769bcaa66657332b96"
+    public static let bonsai27B1BitEstimatedDownloadBytes: Int64 = 5_128_837_600
+    public static let bonsai27B1BitContextLength = 262_144
+    public static let bonsai27B2BitUpstreamRepoId = "prism-ml/Ternary-Bonsai-27B-mlx-2bit"
+    public static let bonsai27B2BitUpstreamRevision = "70f75f3ad081ab840a42f3304c02c27e7f89bfb7"
+    public static let bonsai27B2BitEstimatedDownloadBytes: Int64 = 8_521_085_419
+    public static let bonsai27B2BitContextLength = 262_144
     public static let ornith9BUpstreamRepoId = "sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx"
     public static let ornith9BUpstreamRevision = "4f9f4fc2c10ec17cbeb9dae086a7f1272c904e86"
     public static let ornith9BEstimatedDownloadBytes: Int64 = 7 * 1_073_741_824
@@ -84,6 +102,16 @@ public struct Q35Resources: Sendable, Hashable {
             modelId: q36NanoModelId,
             upstreamRepoId: q36NanoUpstreamRepoId,
             upstreamRevision: q36NanoUpstreamRevision
+        ),
+        bonsai27B1BitModelId: Profile(
+            modelId: bonsai27B1BitModelId,
+            upstreamRepoId: bonsai27B1BitUpstreamRepoId,
+            upstreamRevision: bonsai27B1BitUpstreamRevision
+        ),
+        bonsai27B2BitModelId: Profile(
+            modelId: bonsai27B2BitModelId,
+            upstreamRepoId: bonsai27B2BitUpstreamRepoId,
+            upstreamRevision: bonsai27B2BitUpstreamRevision
         ),
         ornith9BModelId: Profile(
             modelId: ornith9BModelId,
@@ -122,7 +150,21 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static let defaultContextLength = 16_384
+
+    public static func defaultContextLength(forModelId modelId: String) -> Int {
+        switch modelId {
+        case bonsai27B1BitModelId:
+            bonsai27B1BitContextLength
+        case bonsai27B2BitModelId:
+            bonsai27B2BitContextLength
+        default:
+            defaultContextLength
+        }
+    }
+
     public static let snapshotPatterns = [
+        "LICENSE*",
+        "NOTICE*",
         "config.json",
         "processor_config.json",
         "tokenizer.json",

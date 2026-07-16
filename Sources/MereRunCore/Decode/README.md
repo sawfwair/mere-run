@@ -7,7 +7,7 @@ model families.
   device-side sampling and repetition history, EOS confirmation, and optional
   streamed token emission. Model-specific prompt construction, cache creation,
   and logits transforms remain with each model runtime.
-- `AffineQuantizedKVCache.swift` provides the explicitly selected `affine8`
+- `AffineQuantizedKVCache.swift` provides the explicitly selected `affine4` and `affine8`
   cache implementation. It keeps keys and values quantized while resident,
   materializes them for attention, and preserves fork, batch, and row-split
   semantics used by serving schedulers.

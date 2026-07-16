@@ -25,6 +25,8 @@ struct TextChat: AsyncParsableCommand {
         Known model IDs:
           - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit, default on Apple Silicon)
           - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
+          - text-chat-bonsai-27b-1bit (Bonsai 27B packed 1-bit Qwen3.6 vision/reasoning model)
+          - text-chat-bonsai-27b-2bit (Ternary Bonsai 27B packed 2-bit Qwen3.6 vision/reasoning model)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-agent-ornith-9b (Ornith 1.0 9B OptiQ, experimental coding-agent target)
           - text-agent-ornith-35b-mlx (Ornith 1.0 35B MLX Q4, local converted coding-agent target)
@@ -38,7 +40,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
-        R1-style lanes (text-agent-ornith-*) generate with thinking enabled even
+        Bonsai 27B and R1-style lanes (text-agent-ornith-*) generate with thinking enabled even
         when it is hidden; pass --no-thinking to disable reasoning generation.
         Use --models-root or MERERUN_MODELS_DIR to override the model store path.
         """
@@ -47,7 +49,7 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("p"), .long], help: "User prompt.")
     var prompt: String
 
-    @Option(name: [.long], help: "Optional image path for vision-capable chat models such as vision-chat-gemma4-12b.")
+    @Option(name: [.long], help: "Optional image path for vision-capable chat models such as Bonsai 27B or vision-chat-gemma4-12b.")
     var image: String?
 
     @Option(name: [.customShort("s"), .customLong("system")], help: "System prompt.")
@@ -56,16 +58,19 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Max new tokens.")
     var maxTokens: Int = 2048
 
-    @Option(name: [.long], help: "Temperature. Default: 0.7, or the model's published value where one exists (Ornith: 1.0).")
+    @Option(name: [.customLong("context-size")], help: "Maximum prompt plus generation context. Bonsai 27B supports up to 262144 tokens.")
+    var contextSize: Int?
+
+    @Option(name: [.long], help: "Temperature. Default: 0.7, or the model's published value where one exists (Bonsai: 0.7; Ornith: 1.0).")
     var temperature: Double?
 
-    @Option(name: [.long], help: "Top-p. Default: 0.9, or the model's published value where one exists (Ornith: 0.95).")
+    @Option(name: [.long], help: "Top-p. Default: 0.9, or the model's published value where one exists (Bonsai/Ornith: 0.95).")
     var topP: Double?
 
-    @Option(name: [.customLong("top-k")], help: "Top-k sampling cutoff. Default: no cutoff, or the model's published value where one exists (Ornith: 20).")
+    @Option(name: [.customLong("top-k")], help: "Top-k sampling cutoff. Default: no cutoff, or the model's published value where one exists (Bonsai/Ornith: 20).")
     var topK: Int?
 
-    @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform/polar and integer/.5 widths for turboquant.")
+    @Option(name: [.long], help: "Quantize the KV cache to this many bits. Qwen-family supports affine 4 or 8; Gemma4 also supports its model-specific schemes.")
     var kvBits: Double?
 
     @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform, polar, or turboquant.")
@@ -120,7 +125,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -138,7 +143,7 @@ struct TextChat: AsyncParsableCommand {
     @Flag(
         name: [.customLong("thinking"), .customLong("show-thinking")],
         inversion: .prefixedNo,
-        help: "Show model reasoning output. R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation."
+        help: "Show model reasoning output. Bonsai 27B and R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation."
     )
     var thinking: Bool?
 
@@ -216,6 +221,10 @@ struct TextChat: AsyncParsableCommand {
         }
 
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
+        let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
+        if let contextSize, contextSize <= 0 {
+            throw ValidationError("--context-size must be greater than zero.")
+        }
         let requiresJSON = responseFormat == .jsonObject
         let request = ChatRequest(
             messages: messages,
@@ -226,7 +235,9 @@ struct TextChat: AsyncParsableCommand {
             showThinking: requiresJSON ? false : (thinking ?? Q35Resources.thinkingDefault(forModelId: model)),
             lora: lora,
             requiresJSON: requiresJSON,
-            tools: toolDefs
+            tools: toolDefs,
+            kvCacheMode: q35KVCacheMode,
+            maxContextTokens: contextSize
         )
 
         let streamingOutput = StreamingChatOutput(enabled: stream)
@@ -443,6 +454,29 @@ struct TextChat: AsyncParsableCommand {
                 ? Gemma4Resources.defaultTurboQuantizedKVStart
                 : Gemma4Resources.defaultQuantizedKVStart)
         )
+    }
+
+    func resolveQ35KVCacheMode(for modelId: String) throws -> RuntimeKVCacheMode? {
+        guard Q35Resources.supportedModelIds.contains(modelId) else { return nil }
+
+        guard let kvBits else {
+            if kvQuantScheme != nil || kvGroupSize != nil || quantizedKVStart != nil {
+                throw ValidationError("Qwen-family KV cache options require --kv-bits 4 or --kv-bits 8.")
+            }
+            return nil
+        }
+
+        guard kvBits == 4 || kvBits == 8 else {
+            throw ValidationError("Qwen-family --kv-bits must be 4 or 8.")
+        }
+        if let kvQuantScheme,
+           kvQuantScheme.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "uniform" {
+            throw ValidationError("Qwen-family KV cache quantization uses the affine uniform scheme.")
+        }
+        if kvGroupSize != nil || quantizedKVStart != nil {
+            throw ValidationError("Qwen-family KV cache group size and start offset are selected by the runtime.")
+        }
+        return kvBits == 4 ? .affine4 : .affine8
     }
 
     private func parseGemma4KVQuantizationScheme(_ raw: String) throws -> Gemma4KVQuantizationScheme {

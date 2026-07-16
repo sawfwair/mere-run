@@ -989,6 +989,28 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["chat", "api serve"]
         ),
         ManagedModelSpec(
+            id: Q35Resources.bonsai27B1BitModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.bonsai27B1BitModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.bonsai27B1BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.bonsai27B1BitUpstreamRevision,
+            validationKind: .q35,
+            estimatedDownloadBytes: Q35Resources.bonsai27B1BitEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.bonsai27B2BitModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.bonsai27B2BitModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.bonsai27B2BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.bonsai27B2BitUpstreamRevision,
+            validationKind: .q35,
+            estimatedDownloadBytes: Q35Resources.bonsai27B2BitEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
+        ),
+        ManagedModelSpec(
             id: Q35Resources.ornith9BModelId,
             category: .textCode,
             installShape: .directoryRoot,

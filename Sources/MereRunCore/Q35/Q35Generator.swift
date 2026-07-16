@@ -235,7 +235,7 @@ public actor Q35Generator: ChatGenerator {
         var response = try await generate(
             request,
             progressHandler: progressHandler,
-            maxContextLength: request.maxContextTokens ?? Q35Resources.defaultContextLength
+            maxContextLength: request.maxContextTokens ?? Q35Resources.defaultContextLength(forModelId: modelId)
         )
         if var timing = response.timing {
             timing.loadSeconds = loadSeconds
@@ -259,7 +259,7 @@ public actor Q35Generator: ChatGenerator {
         var response = try await generate(
             request,
             progressHandler: progressHandler,
-            maxContextLength: request.maxContextTokens ?? Q35Resources.defaultContextLength
+            maxContextLength: request.maxContextTokens ?? Q35Resources.defaultContextLength(forModelId: modelId)
         )
         if var timing = response.timing {
             timing.loadSeconds = loadSeconds
@@ -335,7 +335,7 @@ public actor Q35Generator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family tokenizer"))
         let tokenizer = try Q35TokenizerAndTemplate.load(
             from: normalizedRoot,
-            maxLengthOverride: min(Q35Resources.defaultContextLength, config.textConfig.maxPositionEmbeddings)
+            maxLengthOverride: config.textConfig.maxPositionEmbeddings
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family weights"))
@@ -466,9 +466,15 @@ public actor Q35Generator: ChatGenerator {
             || (!jsonConstrained
                 && Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
                 && mtpModel != nil)
-        let effectiveKVCacheMode: RuntimeKVCacheMode = request.kvCacheMode == .affine8
-            ? .affine8
-            : .default
+        let effectiveKVCacheMode: RuntimeKVCacheMode
+        switch request.kvCacheMode {
+        case .affine4:
+            effectiveKVCacheMode = .affine4
+        case .affine8:
+            effectiveKVCacheMode = .affine8
+        default:
+            effectiveKVCacheMode = .default
+        }
 
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
         let promptInput = MLXArray(promptTokens.map { Int32($0) }).reshaped(1, promptTokens.count)
@@ -1943,9 +1949,10 @@ public actor Q35Generator: ChatGenerator {
             }
             let layerType = layerIndex < text.layerTypes.count ? text.layerTypes[layerIndex] : "linear_attention"
             if layerType == "full_attention" {
-                if kvCacheMode == .affine8 {
+                if kvCacheMode == .affine4 || kvCacheMode == .affine8 {
                     return .full(AffineQuantizedKVCache(
                         groupSize: Self.affineKVGroupSize(headDimension: text.headDim),
+                        bits: kvCacheMode == .affine4 ? 4 : 8,
                         step: 256
                     ))
                 }
@@ -1957,6 +1964,10 @@ public actor Q35Generator: ChatGenerator {
 
     private func cacheMode(for caches: [Q35LayerCache?]) -> RuntimeKVCacheMode {
         caches.contains { entry in
+            guard case .full(let cache)? = entry else { return false }
+            guard let affine = cache as? AffineQuantizedKVCache else { return false }
+            return affine.bitWidth == 4
+        } ? .affine4 : caches.contains { entry in
             guard case .full(let cache)? = entry else { return false }
             return cache is AffineQuantizedKVCache
         } ? .affine8 : .default

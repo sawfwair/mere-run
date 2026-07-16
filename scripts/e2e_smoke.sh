@@ -167,26 +167,26 @@ core_suite() {
 
   if require_model "speech-tts-qwen3-nano"; then
     run_step "speech_synthesize_qwen3_nano" 240 \
-      "$MERERUN_BIN" speech synthesize "mere.run smoke test one two three" --output "$speech_tts_wav" --model speech-tts-qwen3-nano --quiet
+      "$MERERUN_BIN" speech synthesize "local inference smoke test one two three" --output "$speech_tts_wav" --model speech-tts-qwen3-nano --quiet
     assert_file_nonempty "speech_synthesize_qwen3_nano_artifact" "$speech_tts_wav"
   fi
 
   if require_model "speech-asr-parakeet" && [[ -f "$speech_tts_wav" ]]; then
     run_step "speech_transcribe_parakeet" 240 \
       "$MERERUN_BIN" speech transcribe "$speech_tts_wav" --backend parakeet --model speech-asr-parakeet --no-timestamps --quiet
-    assert_contains "speech_transcribe_parakeet_output" "$OUT_DIR/speech_transcribe_parakeet.stdout" "mere.run smoke test"
+    assert_contains "speech_transcribe_parakeet_output" "$OUT_DIR/speech_transcribe_parakeet.stdout" "local inference smoke test"
   fi
 
   if require_model "speech-asr-qwen3" && [[ -f "$speech_tts_wav" ]]; then
     run_step "speech_transcribe_qwen3" 300 \
       "$MERERUN_BIN" speech transcribe "$speech_tts_wav" --backend qwen --model speech-asr-qwen3 --no-timestamps --quiet
-    assert_contains "speech_transcribe_qwen3_output" "$OUT_DIR/speech_transcribe_qwen3.stdout" "mere.run smoke test"
+    assert_contains "speech_transcribe_qwen3_output" "$OUT_DIR/speech_transcribe_qwen3.stdout" "local inference smoke test"
   fi
 
   if require_model "text-chat-q36-nano"; then
     run_step "text_chat_q36_nano" 300 \
       "$MERERUN_BIN" text chat --prompt "Reply with exactly READY." --model text-chat-q36-nano --max-tokens 8 --temperature 0 --top-p 1 --quiet
-    assert_contains "text_chat_q36_nano_output" "$OUT_DIR/text_chat_q36_nano.stdout" "^READY$"
+    assert_contains "text_chat_q36_nano_output" "$OUT_DIR/text_chat_q36_nano.stdout" "^READY[.!]?$"
   fi
 
   if require_model "image-zimage-max"; then

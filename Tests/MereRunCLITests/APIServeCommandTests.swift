@@ -2541,6 +2541,26 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertNil(chatRequest.topK)
     }
 
+    func testChatRequestUsesPublishedBonsaiReasoningAndSamplingDefaults() throws {
+        let request = OpenAIChatRequest(
+            model: Q35Resources.bonsai27B1BitModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: Q35Resources.bonsai27B1BitContextLength,
+            servedModelID: Q35Resources.bonsai27B1BitModelId
+        )
+
+        XCTAssertTrue(chatRequest.showThinking)
+        XCTAssertEqual(chatRequest.temperature, 0.7)
+        XCTAssertEqual(chatRequest.topP, 0.95)
+        XCTAssertEqual(chatRequest.topK, 20)
+        XCTAssertEqual(chatRequest.maxContextTokens, 262_144)
+    }
+
     private func preprocessingPlan(index: Int) -> DepthAnything3PreprocessingPlan {
         DepthAnything3PreprocessingPlan(
             sourceWidth: 2,

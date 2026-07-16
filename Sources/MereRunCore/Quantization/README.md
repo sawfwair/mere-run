@@ -5,7 +5,6 @@ Runtime helpers for loading, writing, and executing quantized MLX weights.
 - `QuantizationIO.swift`: typed quantization metadata shared by loaders and manifests.
 - `QuantizedModelManifestWriter.swift`: model manifest emission for quantized checkpoints.
 - `ResidualQuantizedLinear.swift`: residual-aware quantized projection support.
-- `PrismBinaryQuantizedLinear.swift`: Bonsai-compatible packed 1-bit affine projection support.
 - `PortableQuantizedMatmul.swift`: CUDA-native quantized matmul/GatherQMM probing
   with a per-operation dense compatibility fallback.
 

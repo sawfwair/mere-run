@@ -226,4 +226,34 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(sampling?.topK, 20)
         XCTAssertNil(Q35Resources.recommendedSampling(forModelId: Q35Resources.q36NanoModelId))
     }
+
+    func testBonsaiParsesLongContextAndFourBitKVCache() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "Summarize this repository",
+            "--model", Q35Resources.bonsai27B1BitModelId,
+            "--context-size", "262144",
+            "--kv-bits", "4",
+        ])
+
+        XCTAssertEqual(cmd.model, Q35Resources.bonsai27B1BitModelId)
+        XCTAssertEqual(cmd.contextSize, Q35Resources.bonsai27B1BitContextLength)
+        XCTAssertEqual(try cmd.resolveQ35KVCacheMode(for: cmd.model), .affine4)
+        XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: cmd.model))
+        XCTAssertEqual(Q35Resources.recommendedSampling(forModelId: cmd.model)?.temperature, 0.7)
+        XCTAssertEqual(Q35Resources.recommendedSampling(forModelId: cmd.model)?.topP, 0.95)
+        XCTAssertEqual(Q35Resources.recommendedSampling(forModelId: cmd.model)?.topK, 20)
+        XCTAssertEqual(Q35Resources.defaultContextLength(forModelId: cmd.model), 262_144)
+    }
+
+    func testQ35RejectsUnsupportedKVCacheWidth() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "hello",
+            "--model", Q35Resources.bonsai27B1BitModelId,
+            "--kv-bits", "3",
+        ])
+
+        XCTAssertThrowsError(try cmd.resolveQ35KVCacheMode(for: cmd.model)) { error in
+            XCTAssertTrue(String(describing: error).contains("must be 4 or 8"))
+        }
+    }
 }

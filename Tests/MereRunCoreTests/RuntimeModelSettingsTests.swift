@@ -154,6 +154,35 @@ final class RuntimeModelSettingsTests: XCTestCase {
         }
     }
 
+    func testAffineFourKVModeIsAcceptedByNativeAttentionEngines() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        for modelID in [
+            Gemma4Resources.defaultModelId,
+            Q35Resources.bonsai27B1BitModelId,
+            Q35Resources.bonsai27B2BitModelId,
+            LFM2Resources.defaultModelId,
+        ] {
+            try store.writeSettings(RuntimeModelSettings(kvCacheMode: .affine4), for: modelID)
+            XCTAssertEqual(try store.settings(for: modelID).kvCacheMode, .affine4)
+        }
+    }
+
+    func testAffineFourMapsToUniformGemmaQuantization() {
+        let fallback = Gemma4KVCacheQuantization(bits: nil, scheme: .uniform, groupSize: 64, quantizedStart: 128)
+        let resolved = RuntimeKVCacheMode.affine4.gemma4Quantization(
+            fallback: fallback,
+            promptTokenCount: 10
+        )
+        XCTAssertEqual(resolved.scheme, .uniform)
+        XCTAssertEqual(resolved.bits, 4)
+        XCTAssertEqual(resolved.groupSize, 64)
+        XCTAssertEqual(resolved.quantizedStart, 0)
+    }
+
+
     func testGemmaAffineEightMapsToUniformQuantization() {
         let fallback = Gemma4KVCacheQuantization(bits: nil, scheme: .uniform, groupSize: 64, quantizedStart: 128)
         let resolved = RuntimeKVCacheMode.affine8.gemma4Quantization(

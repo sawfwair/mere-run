@@ -558,6 +558,39 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
     }
 
+    func testBonsai27BUsesPinnedPackedOneBitQ35Source() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B1BitModelId))
+
+        XCTAssertEqual(ModelResolver.ModelID.bonsai27B1Bit.rawValue, spec.id)
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.bonsai27B1BitUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.bonsai27B1BitUpstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.bonsai27B1BitUpstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Q35Resources.bonsai27B1BitUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 5_128_837_600)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("LICENSE*"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("NOTICE*"), true)
+    }
+
+    func testTernaryBonsai27BUsesPinnedPackedTwoBitQ35Source() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B2BitModelId))
+
+        XCTAssertEqual(ModelResolver.ModelID.bonsai27B2Bit.rawValue, spec.id)
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.bonsai27B2BitUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.bonsai27B2BitUpstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.bonsai27B2BitUpstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Q35Resources.bonsai27B2BitUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 8_521_085_419)
+    }
+
+
     func testOrnith9BUsesNativeQ35OptiQHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith9BModelId))
 

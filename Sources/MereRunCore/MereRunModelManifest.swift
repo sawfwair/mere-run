@@ -903,6 +903,38 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .bonsai27B1Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int1,
+                quantization: Quantization(bits: 1, groupSize: 128, scheme: "prism-packed-affine-binary"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.bonsai27B1BitUpstreamRepoId)"
+                    + "@\(Q35Resources.bonsai27B1BitUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .bonsai27B2Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: Quantization(bits: 2, groupSize: 128, scheme: "prism-packed-affine-ternary"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.bonsai27B2BitUpstreamRepoId)"
+                    + "@\(Q35Resources.bonsai27B2BitUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .lfm25A1B8Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue,

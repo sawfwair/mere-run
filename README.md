@@ -48,7 +48,7 @@ current flags.
 | Area | Public commands | Current surface |
 | --- | --- | --- |
 | Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
-| Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
+| Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Bonsai 27B binary/ternary vision chat; code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Video and worlds | `video generate`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, Wan 2.2 TI2V, and a warm DreamX causal world session with camera-conditioned transitions |
@@ -265,9 +265,17 @@ swift run mere.run setup
 swift run mere.run model pull image-zimage-nano --accept-model-license
 swift run mere.run model pull image-zimage-nano --accept-model-license --preflight --json
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
+swift run mere.run model pull text-chat-bonsai-27b-1bit
+swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini
 swift run mere.run model pull text-agent-ornith-35b
 # text-agent-ornith-35b-mlx is local-only until a converted MLX snapshot is published
+
+# Run Prism ML's binary model for lower residency/faster decode, or substitute
+# text-chat-bonsai-27b-2bit for the larger ternary checkpoint.
+swift run mere.run text chat \
+  --model text-chat-bonsai-27b-1bit \
+  --prompt "Explain unified memory for local inference."
 
 # Pull and apply the promoted Mere Platform Assistant adapter
 swift run mere.run model pull text-chat-gemma4-12b-4bit

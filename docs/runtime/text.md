@@ -20,6 +20,8 @@ embeddings, PII anonymization, and native text LoRA preparation.
 - `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-q36-nano`
+- `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
+- `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
@@ -84,13 +86,34 @@ overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
 
 Gemma4, Qwen-family, and LFM2 API-serving settings can select explicit
-`--kv-cache-mode affine8` as a long-context memory control relative to
-full-precision K/V. Qwen-family and LFM2 dequantize the generic cache for
-attention, so the mode is not assumed faster. Gemma uses its model-specific
-quantized KV path; `text-chat-gemma4-turbo` already defaults to a smaller 4-bit
-TurboQuant cache, so forcing affine 8-bit can increase that model's KV
-residency. `default` restores the engine/model/server default rather than
-promising full precision.
+`--kv-cache-mode affine4` or `--kv-cache-mode affine8` as long-context memory
+controls relative to full-precision K/V. Qwen-family and LFM2 dequantize the
+generic cache for attention, so these modes are not assumed faster. Gemma uses
+its model-specific quantized KV path; `text-chat-gemma4-turbo` already defaults
+to a smaller 4-bit TurboQuant cache, so forcing affine 8-bit can increase that
+model's KV residency. `default` restores the engine/model/server default rather
+than promising full precision.
+
+`text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install the pinned
+5.13 GB binary and 8.52 GB ternary Prism ML snapshots. They run packed low-bit
+language weights plus a dense vision tower through the native Qwen-family
+runtime. Both default to thinking-enabled generation and the published
+temperature 0.7, top-p 0.95, and top-k 20 when those values are not set
+explicitly. The models advertise 262,144 tokens; `text chat` selects that limit
+automatically, and `--context-size` can set a smaller operational bound. Choose
+1-bit for lower residency and faster decode or 2-bit for the larger ternary
+checkpoint. For memory-constrained long-context work, opt into the generic
+affine cache:
+
+```bash
+swift run mere.run model pull text-chat-bonsai-27b-1bit
+swift run mere.run model pull text-chat-bonsai-27b-2bit
+swift run mere.run text chat \
+  --model text-chat-bonsai-27b-2bit \
+  --context-size 262144 \
+  --kv-bits 4 \
+  --prompt "Summarize the key decisions in this context."
+```
 
 The local-path-only `text-chat-psi-agent` runtime has guarded compressed-MLA
 and fused sparse-MoE controls. They remain opt-in until a repeatable public

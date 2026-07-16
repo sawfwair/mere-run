@@ -15,8 +15,9 @@ Supported engines:
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
-  and also serves Qwen-family agent experiments such as `text-agent-ornith-9b`
-  and `text-agent-ornith-35b-mlx`.
+  and also serves `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`,
+  plus Qwen-family agent experiments such as `text-agent-ornith-9b` and
+  `text-agent-ornith-35b-mlx`.
 - `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
@@ -67,7 +68,7 @@ mere.run status
   packed PolarKV path for memory-pressure and long-context synthetic decode
   testing. Per-model runtime settings can also set `kvCacheMode` to `default`,
   `polar2`, or conservative `auto`; Gemma4, Qwen-family, and LFM2 also accept
-  explicit `affine8` as a memory control relative to full-precision KV. Gemma
+  explicit `affine4` or `affine8` as memory controls relative to full-precision KV. Gemma
   Turbo already defaults to a smaller 4-bit TurboQuant cache, so forcing affine
   8-bit can increase its KV residency; `default` restores the selected
   engine/model/server default, not necessarily full precision.

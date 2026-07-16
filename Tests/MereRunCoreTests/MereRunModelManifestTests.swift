@@ -95,6 +95,26 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "prism-ml/bonsai-image-binary-4B-mlx-1bit@main")
     }
 
+    func testTernaryBonsai27BTemplateHasExpectedNativeLayout() throws {
+        let manifest = MereRunModelManifest.template(
+            for: .bonsai27B2Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.bonsai27B2BitModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .qwen)
+        XCTAssertEqual(manifest.precision, .int2)
+        XCTAssertEqual(manifest.quantization?.bits, 2)
+        XCTAssertEqual(manifest.quantization?.groupSize, 128)
+        XCTAssertEqual(manifest.quantization?.scheme, "prism-packed-affine-ternary")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.bonsai27B2BitUpstreamRepoId)@\(Q35Resources.bonsai27B2BitUpstreamRevision)"
+        )
+    }
+
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
 
