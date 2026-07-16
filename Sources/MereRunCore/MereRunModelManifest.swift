@@ -34,6 +34,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case samSegmentation = "sam-segmentation"
         /// Falcon Perception grounded detection and segmentation family.
         case falconPerception = "falcon-perception"
+        /// InsightFace Buffalo-L face detection and identity-embedding family.
+        case insightFace = "insightface"
         /// MoGe-2 metric monocular geometry family.
         case moge2 = "moge-2"
         /// Video Depth Anything temporal depth family.
@@ -93,6 +95,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen
         case sam
         case falcon
+        case face
         case geometry
         case depth
         case threeD = "3d"
@@ -160,6 +163,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case visionTracking = "vision_tracking"
         case visionGrounding = "vision_grounding"
         case visionDetection = "vision_detection"
+        case faceDetection = "face_detection"
+        case faceLandmarks = "face_landmarks"
+        case faceEmbedding = "face_embedding"
+        case faceVerification = "face_verification"
         case soundEffectGeneration = "sound_effect_generation"
         case soundEffectEmbedding = "sound_effect_embedding"
         case videoToAudioGeneration = "video_to_audio_generation"
@@ -1143,6 +1150,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.visionGrounding, .visionDetection, .visionSegmentation],
                 components: falconPerceptionComponents,
                 upstreamRepoId: "tiiuae/Falcon-Perception",
+                createdAt: createdAt
+            )
+        case .visionFaceBuffaloL:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .insightFace,
+                family: .face,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.faceDetection, .faceLandmarks, .faceEmbedding, .faceVerification],
+                components: nil,
+                upstreamRepoId: "deepghs/insightface@4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
                 createdAt: createdAt
             )
         case .visionGeometryMoGe2Small:

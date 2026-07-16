@@ -12,6 +12,21 @@ code; those source-derived implementations are noted below as well.
 When any vendored artifact changes, update this file in the same pull request
 with the new upstream source, version or commit when known, and license data.
 
+## Binary package runtime dependencies
+
+### ONNX Runtime for macOS face analysis
+
+- purpose: executes the managed Buffalo-L detector and ArcFace recognizer
+- Swift package: [`readdle/swift-onnxruntime`](https://github.com/readdle/swift-onnxruntime),
+  version `1.20.1`, revision `f5c95540cc857b797c0d61cc62e398ad8688e5de`; MIT
+- binary runtime: [Microsoft ONNX Runtime](https://github.com/microsoft/onnxruntime),
+  version `1.20.1`; MIT
+- package artifact checksum:
+  `31017531ebb064f1903a73ca5d55597ac49b6ae32360eb2482fb2f435342fdad`
+
+Face model weights are downloaded separately by `mere.run model pull` and are
+not vendored in this repository.
+
 ## Evaluation fixtures
 
 ### HumanEval slice

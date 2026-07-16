@@ -149,6 +149,18 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
+if !isLinuxPackage {
+  mereRunCoreDependencies.append(
+    .product(
+      name: "CONNXRuntime",
+      package: "swift-onnxruntime",
+      condition: .when(platforms: [.macOS])
+    )
+  )
+  mereRunCoreDependencies.append(
+    .target(name: "COnnxRuntimeCoreML", condition: .when(platforms: [.macOS]))
+  )
+}
 
 if hasMediaIOTarget {
   products.append(.library(name: "MediaIO", targets: ["MediaIO"]))
@@ -206,6 +218,22 @@ if hasMagentaRT2Binary {
     )
   )
   mereRunCoreDependencies.append(.target(name: "magentart"))
+}
+if !isLinuxPackage {
+  targets.append(
+    .target(
+      name: "COnnxRuntimeCoreML",
+      dependencies: [
+        .product(
+          name: "CONNXRuntime",
+          package: "swift-onnxruntime",
+          condition: .when(platforms: [.macOS])
+        )
+      ],
+      path: "Sources/COnnxRuntimeCoreML",
+      publicHeadersPath: "include"
+    )
+  )
 }
 
 let linuxNativeLlamaLibraryPath = packagePath(".build/native/linux-\(hostArch)/llama/lib").path
@@ -282,6 +310,7 @@ targets.append(contentsOf: [
       "Decode/README.md",
       "DeepseekV4Flash/README.md",
       "DepthAnything3/README.md",
+      "FaceAnalysis/README.md",
       "FalconPerception/README.md",
       "Flux2Klein/README.md",
       "Flux2Klein/Model/Transformer/README.md",
@@ -431,7 +460,7 @@ if !isLinuxPackage {
   )
 }
 
-let packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
+var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0")
 ]) + [
   .package(
@@ -442,6 +471,11 @@ let packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
   .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0")
 ]
+if !isLinuxPackage {
+  packageDependencies.append(
+    .package(url: "https://github.com/readdle/swift-onnxruntime.git", exact: "1.20.1")
+  )
+}
 
 let package = Package(
   name: "MereRun",

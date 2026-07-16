@@ -49,7 +49,7 @@ current flags.
 | --- | --- | --- |
 | Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
 | Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
-| Vision understanding | `vision caption`, `inspect`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
+| Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Video and worlds | `video generate`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, Wan 2.2 TI2V, and a warm DreamX causal world session with camera-conditioned transitions |
 | Music and sound | `music analyze`, `generate`, `realtime`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
@@ -494,6 +494,11 @@ swift run mere.run vision inspect ./image.png "Describe this image."
 # Ground objects in an image
 swift run mere.run model pull vision-ground-falcon-perception
 swift run mere.run vision ground ./image.png --query "a person"
+
+# Detect and compare faces locally
+swift run mere.run model pull vision-face-buffalo-l
+swift run mere.run vision face detect ./group.jpg --json
+swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
 
 # Segment an image
 swift run mere.run model pull vision-segment-sam31

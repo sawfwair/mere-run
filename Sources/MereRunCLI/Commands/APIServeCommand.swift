@@ -4473,7 +4473,7 @@ actor CodeGenServer {
                 modelPath: resolved.rootURL.path,
                 request: request
             )
-        case .gemma, .liquid, .qwen, .sam, .falcon, .geometry, .depth, .threeD,
+        case .gemma, .liquid, .qwen, .sam, .falcon, .face, .geometry, .depth, .threeD,
              .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",

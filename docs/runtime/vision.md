@@ -1,12 +1,15 @@
 # Vision Runtime
 
-This page covers captioning, inspection, grounding, segmentation, tracking,
+This page covers captioning, inspection, face analysis, grounding, segmentation, tracking,
 pose extraction, optical flow, image-to-3D reconstruction, and OCR.
 
 ## Public surface
 
 - `mere.run vision caption`
 - `mere.run vision inspect`
+- `mere.run vision face detect`
+- `mere.run vision face embed`
+- `mere.run vision face compare`
 - `mere.run vision ground`
 - `mere.run vision segment`
 - `mere.run vision track`
@@ -22,6 +25,7 @@ pose extraction, optical flow, image-to-3D reconstruction, and OCR.
 
 - `vision-ocr-lighton`
 - `vision-ground-falcon-perception`
+- `vision-face-buffalo-l`
 - `vision-segment-sam31`
 - `image-3d-triposr`
 - `image-3d-trellis2-4b`
@@ -35,6 +39,19 @@ Grounding runs natively through the Swift/MLX Falcon Perception stack in
 
 Segmentation and tracking run natively through the Swift/MLX SAM 3.1 stack in
 `MereRunCore`.
+
+Face analysis runs the Buffalo-L detector and ArcFace R50 recognizer locally
+through ONNX Runtime. The default `auto` provider uses CPU for this model based
+on the repository's Apple Silicon parity run; `--execution-provider coreml`
+and `--execution-provider cpu` remain explicit controls.
+
+The detector is useful beyond identity search: it provides face boxes and
+five-point landmarks for alignment, crops, counts, redaction, face-aware
+reframing, thumbnail selection, and dataset quality gates. The embedding model
+also supports verification, unnamed-person clustering, similarity search,
+representative prototype selection, and identity-outlier review. Neither model
+claims emotion, demographic attributes, liveness, deepfake detection, or
+general image understanding.
 
 ## Current SAM 3.1 scope
 
@@ -91,6 +108,21 @@ swift run mere.run vision caption ./cards/*.jpg \
 ```bash
 swift run mere.run vision inspect ./image.png "What objects are visible?"
 ```
+
+### Detect, embed, and compare faces
+
+```bash
+swift run mere.run model pull vision-face-buffalo-l
+swift run mere.run vision face detect ./group.jpg --json
+swift run mere.run vision face embed ./reference.jpg --json
+swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
+```
+
+`detect --include-embeddings` emits one normalized 512-dimensional embedding
+per detected face. `embed` selects the largest face by default or accepts
+`--face-index`; `compare` returns cosine similarity. Use the companion
+`mere-face-tools` plugin for resumable folder indexing, SQLite search, and
+review/export workflows.
 
 ### Segment an image with SAM 3.1
 
@@ -174,6 +206,17 @@ The JSON includes:
 - model and input/output paths
 - query list
 - detections with `query`, normalized `xy`, normalized `hw`, derived `box`, optional `score`, and optional `maskPath`
+
+### `vision face`
+
+- `detect` emits image dimensions, elapsed inference time, face scores, pixel
+  boxes, and five landmarks; `--include-embeddings` adds identity vectors
+- `embed` emits one selected face and its normalized 512-value embedding
+- `compare` emits the selected face indexes and cosine similarity
+- `batch` keeps the sessions warm and emits one durable JSONL result per image;
+  `--include-embeddings` enables recognition/search vectors
+- `--json` keeps stdout machine-readable; `--json-output` writes the same
+  sorted payload atomically
 
 ### `vision segment`
 

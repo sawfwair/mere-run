@@ -12,6 +12,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case visionChat = "vision-chat"
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
+    case visionFace = "vision-face"
     case visionGeometry = "vision-geometry"
     case visionDepth = "vision-depth"
     case image3D = "image-3d"
@@ -48,6 +49,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case lightOnOCR
     case sam31
     case falconPerception
+    case insightFaceBuffaloL
     case moge2
     case videoDepthAnything
     case depthAnything3
@@ -1099,6 +1101,30 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["vision ground"]
         ),
         ManagedModelSpec(
+            id: FaceAnalysisResources.modelID,
+            category: .visionFace,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "deepghs/insightface",
+                revision: "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
+                patterns: [
+                    FaceAnalysisResources.detectorRelativePath,
+                    FaceAnalysisResources.recognizerRelativePath,
+                ]
+            ),
+            upstreamRepoId: "deepghs/insightface",
+            upstreamRevision: "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
+            validationKind: .insightFaceBuffaloL,
+            estimatedDownloadBytes: FaceAnalysisResources.detectorByteCount
+                + FaceAnalysisResources.recognizerByteCount,
+            defaultCLICommands: [
+                "vision face detect",
+                "vision face embed",
+                "vision face compare",
+                "vision face batch",
+            ]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
             category: .visionGeometry,
             installShape: .directoryRoot,
@@ -1794,6 +1820,8 @@ public extension ManagedModelSpec {
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
             return FalconPerceptionResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .insightFaceBuffaloL:
+            return FaceAnalysisResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
             guard let pin = GeometryModelPins.pin(for: id) else { return [rootURL] }
             return Self.invalidPinnedArtifacts(pin.runtimeArtifacts, in: rootURL, fileManager: fileManager)

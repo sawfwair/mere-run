@@ -534,6 +534,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                FaceAnalysisResources.modelID,
+                "Face analysis",
+                "Detects faces and landmarks, creates identity embeddings, and compares people locally.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
                 "Metric image geometry",
                 "Predicts metric depth, point maps, normals, masks, and camera intrinsics with MoGe-2 Small.",

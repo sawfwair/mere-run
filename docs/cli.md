@@ -72,6 +72,7 @@ are:
   `vision-ocr-infinity-pro-int8`, `vision-ocr-infinity-pro`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
+- Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
 - Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-wan22-ti2v-5b-mlx`
@@ -948,6 +949,26 @@ Notes:
 - live tracking searches a short warm-up window after the init frame so startup exposure or motion blur does not silently produce an unsegmented output
 - live mode accepts text prompts only in the current implementation
 - `--output` is required; `--json-output` is optional
+
+### `mere.run vision face`
+
+Run local Buffalo-L face detection and ArcFace identity embeddings.
+
+```bash
+swift run mere.run model pull vision-face-buffalo-l
+swift run mere.run vision face detect ./group.jpg --json
+swift run mere.run vision face detect ./group.jpg --include-embeddings --json-output ./faces.json
+swift run mere.run vision face embed ./reference.jpg --face-index 0 --json
+swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
+swift run mere.run vision face batch --input-list ./photos.txt --include-embeddings --jsonl-output ./faces.jsonl
+```
+
+Common options include `--model`, `--score-threshold`, and
+`--execution-provider auto|cpu|coreml`. `embed` and `compare` select the largest
+face unless an explicit zero-based face index is supplied.
+`batch` keeps one detector/recognizer session warm across a path list and writes
+one success-or-error record per image, making it the high-throughput library
+indexing surface.
 
 ### `mere.run vision pose`
 

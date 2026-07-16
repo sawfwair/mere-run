@@ -108,6 +108,7 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .wooshClap
                     && spec.validationKind != .wooshSynchformer
                     && spec.validationKind != .mmaudio
+                    && spec.validationKind != .insightFaceBuffaloL
                     && spec.validationKind != .moge2
                     && spec.validationKind != .videoDepthAnything
                     && spec.validationKind != .depthAnything3
@@ -150,6 +151,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .mmaudio
             || spec?.validationKind == .ltxVideo
             || spec?.validationKind == .ltxVideo23MLX
+            || spec?.validationKind == .insightFaceBuffaloL
             || spec?.validationKind == .moge2
             || spec?.validationKind == .videoDepthAnything
             || spec?.validationKind == .depthAnything3
@@ -375,6 +377,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
             case .falcon where engine != .falconPerception:
                 warnings.append("Manifest engine mismatch: family=falcon expects falcon-perception.")
+            case .face where engine != .insightFace:
+                warnings.append("Manifest engine mismatch: family=face expects insightface.")
             case .tts where engine != .qwen3TTS:
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts.")
             case .asr where engine != .qwen3ASR && engine != .parakeetASR:
@@ -466,7 +470,8 @@ public enum MereRunModelValidator {
             }
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .mmaudio?, .ltxVideo?,
-                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?:
+                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
+                 .insightFace?:
                 return true
             default:
                 return false
@@ -515,6 +520,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
+        if modelId.hasPrefix("vision-face-") { return .face }
         if modelId.hasPrefix("vision-geometry-") { return .geometry }
         if modelId.hasPrefix("vision-depth-") { return .depth }
         if modelId.hasPrefix("image-3d-") { return .threeD }
