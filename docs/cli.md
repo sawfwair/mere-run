@@ -955,7 +955,7 @@ Notes:
 Run local Buffalo-L face detection and ArcFace identity embeddings.
 
 ```bash
-swift run mere.run model pull vision-face-buffalo-l
+swift run mere.run model pull vision-face-buffalo-l --accept-model-license
 swift run mere.run vision face detect ./group.jpg --json
 swift run mere.run vision face detect ./group.jpg --include-embeddings --json-output ./faces.json
 swift run mere.run vision face embed ./reference.jpg --face-index 0 --json
@@ -969,6 +969,10 @@ face unless an explicit zero-based face index is supplied.
 `batch` keeps one detector/recognizer session warm across a path list and writes
 one success-or-error record per image, making it the high-throughput library
 indexing surface.
+
+Buffalo-L weights are restricted to non-commercial research use by their
+upstream provider. `model pull` requires `--accept-model-license`, prints the
+license URL before download, and stores the weights outside the application.
 
 ### `mere.run vision pose`
 

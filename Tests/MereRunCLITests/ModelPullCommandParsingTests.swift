@@ -13,6 +13,31 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.allowUnsupported)
     }
 
+    func testBuffaloLPullRequiresExplicitLicenseAcceptance() throws {
+        let restricted = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: FaceAnalysisResources.modelID)
+        )
+        let blocked = try ModelPull.parse([FaceAnalysisResources.modelID])
+        let accepted = try ModelPull.parse([
+            FaceAnalysisResources.modelID,
+            "--accept-model-license",
+        ])
+
+        XCTAssertNotNil(restricted.usageRestriction)
+        XCTAssertNotNil(blocked.licenseAcceptanceMessage(for: restricted))
+        XCTAssertNil(accepted.licenseAcceptanceMessage(for: restricted))
+    }
+
+    func testModelListReportsBuffaloLUsageRestriction() {
+        let lines = ModelList.usageRestrictionLines()
+
+        XCTAssertTrue(lines.contains { line in
+            line.contains(FaceAnalysisResources.modelID)
+                && line.contains("non-commercial research use")
+                && line.contains("deepinsight/insightface#license")
+        })
+    }
+
     func testModelPullParsesPreflightJSONOptions() throws {
         let cmd = try ModelPull.parse([
             "image-zimage-nano",

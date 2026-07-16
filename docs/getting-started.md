@@ -258,7 +258,7 @@ swift run mere.run vision ground ./image.png --query "a person"
 ### Face analysis
 
 ```bash
-swift run mere.run model pull vision-face-buffalo-l
+swift run mere.run model pull vision-face-buffalo-l --accept-model-license
 swift run mere.run vision face detect ./group.jpg --json
 swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
 ```

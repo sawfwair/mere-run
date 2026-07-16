@@ -524,6 +524,7 @@ final class StudioTypesTests: XCTestCase {
         image-zimage-nano          image           installed  4.2 GB
         text-chat-gemma4           text-chat       missing    —
         vision-segment-sam31       vision-segment  installed  950 MB
+        Usage restriction: vision-face-buffalo-l - non-commercial research use only
         """
 
         let rows = StudioModelInventoryParser.rows(from: output)

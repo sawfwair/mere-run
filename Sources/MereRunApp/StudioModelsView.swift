@@ -63,7 +63,8 @@ enum StudioModelInventoryParser {
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty,
                       !trimmed.hasPrefix("-"),
-                      !trimmed.hasPrefix("ID ") else {
+                      !trimmed.hasPrefix("ID "),
+                      !trimmed.hasPrefix("Usage restriction:") else {
                     return nil
                 }
 

@@ -82,6 +82,16 @@ public enum ManagedModelAliasKind: String, Hashable, Sendable {
     case codegenGGUF
 }
 
+public struct ManagedModelUsageRestriction: Hashable, Sendable {
+    public let summary: String
+    public let licenseURL: String
+
+    public init(summary: String, licenseURL: String) {
+        self.summary = summary
+        self.licenseURL = licenseURL
+    }
+}
+
 public struct ManagedModelSpec: Hashable, Sendable {
     public let id: String
     public let category: ManagedModelCategory
@@ -90,6 +100,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let mountedHubFallbacks: [MountedHubFallbackConfig]
     public let upstreamRepoId: String?
     public let upstreamRevision: String?
+    public let usageRestriction: ManagedModelUsageRestriction?
     public let validationKind: ManagedModelValidationKind
     public let normalizationKind: ManagedModelNormalizationKind
     public let aliasKind: ManagedModelAliasKind
@@ -107,6 +118,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
         mountedHubFallbacks: [MountedHubFallbackConfig] = [],
         upstreamRepoId: String? = nil,
         upstreamRevision: String? = nil,
+        usageRestriction: ManagedModelUsageRestriction? = nil,
         validationKind: ManagedModelValidationKind,
         normalizationKind: ManagedModelNormalizationKind = .none,
         aliasKind: ManagedModelAliasKind = .none,
@@ -123,6 +135,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
         self.mountedHubFallbacks = mountedHubFallbacks
         self.upstreamRepoId = upstreamRepoId
         self.upstreamRevision = upstreamRevision
+        self.usageRestriction = usageRestriction
         self.validationKind = validationKind
         self.normalizationKind = normalizationKind
         self.aliasKind = aliasKind
@@ -1114,6 +1127,10 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: "deepghs/insightface",
             upstreamRevision: "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "InsightFace Buffalo-L pretrained weights are limited to non-commercial research use.",
+                licenseURL: "https://github.com/deepinsight/insightface#license"
+            ),
             validationKind: .insightFaceBuffaloL,
             estimatedDownloadBytes: FaceAnalysisResources.detectorByteCount
                 + FaceAnalysisResources.recognizerByteCount,

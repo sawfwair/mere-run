@@ -23,6 +23,12 @@ struct ModelPull: AsyncParsableCommand {
     @Flag(name: [.long], help: "Bypass the Apple Silicon and unified-memory support check.")
     var allowUnsupported: Bool = false
 
+    @Flag(
+        name: [.customLong("accept-model-license")],
+        help: "Acknowledge the upstream usage restriction before downloading a restricted model."
+    )
+    var acceptModelLicense: Bool = false
+
     @Flag(name: [.customLong("preflight")], help: "Inspect support, source, disk, and install state without downloading.")
     var preflight: Bool = false
 
@@ -59,6 +65,12 @@ struct ModelPull: AsyncParsableCommand {
                 if !spec.hasAnyManagedDownloadSource() {
                     if !quiet {
                         stderr("[\(spec.id)] skipping (no Hugging Face source in this public build)")
+                    }
+                    continue
+                }
+                if spec.usageRestriction != nil, !acceptModelLicense {
+                    if !quiet {
+                        stderr("[\(spec.id)] skipping (pass --accept-model-license to acknowledge its upstream usage restriction)")
                     }
                     continue
                 }
@@ -121,6 +133,13 @@ struct ModelPull: AsyncParsableCommand {
                 }
             }
             return
+        }
+        if let message = licenseAcceptanceMessage(for: spec) {
+            throw ValidationError(message)
+        }
+        if let restriction = spec.usageRestriction, !quiet {
+            stderr("[\(spec.id)] usage restriction: \(restriction.summary)")
+            stderr("  license: \(restriction.licenseURL)")
         }
         try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir) { warning in
             guard !quiet else { return }
@@ -197,6 +216,17 @@ struct ModelPull: AsyncParsableCommand {
         CLIStderr.write(message)
     }
 
+    func licenseAcceptanceMessage(for spec: ManagedModelSpec) -> String? {
+        guard let restriction = spec.usageRestriction, !acceptModelLicense else {
+            return nil
+        }
+        return """
+        Model \(spec.id) has an upstream usage restriction: \(restriction.summary)
+        Review: \(restriction.licenseURL)
+        Re-run with --accept-model-license to acknowledge the restriction before download.
+        """
+    }
+
     func makePreflightEnvelope(
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
@@ -252,6 +282,9 @@ struct ModelPull: AsyncParsableCommand {
         }
         if allowUnsupported {
             args.append("--allow-unsupported")
+        }
+        if acceptModelLicense {
+            args.append("--accept-model-license")
         }
         return args
     }

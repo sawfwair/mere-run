@@ -102,6 +102,14 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
 
+### Restricted model downloads
+
+`vision-face-buffalo-l` uses InsightFace pretrained weights. InsightFace limits
+those weights to non-commercial research use and directs commercial users to
+obtain separate licensing. mere.run does not bundle the weights. An explicit
+`--accept-model-license` acknowledgment is required before `model pull`
+downloads them, and `model list` reports the restriction and upstream URL.
+
 Most catalog IDs have managed Hugging Face sources and can be installed with
 `mere.run model pull`. A small number of legacy/local catalog IDs remain so
 existing installs and explicit local paths keep working:

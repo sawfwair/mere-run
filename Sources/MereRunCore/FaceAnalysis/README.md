@@ -32,3 +32,11 @@ guessing.
 These models provide face boxes, five-point landmarks, alignment, and identity
 similarity. They do not infer emotion, demographics, liveness, deepfakes, or
 general visual semantics.
+
+## Model license
+
+The ONNX Runtime dependency is MIT-licensed and is bundled with its complete
+notice. Buffalo-L model weights are downloaded separately and remain limited
+by InsightFace to non-commercial research use. `model pull` requires an
+explicit `--accept-model-license` acknowledgment and prints the upstream
+license URL before downloading them.

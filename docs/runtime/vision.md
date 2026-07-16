@@ -112,7 +112,7 @@ swift run mere.run vision inspect ./image.png "What objects are visible?"
 ### Detect, embed, and compare faces
 
 ```bash
-swift run mere.run model pull vision-face-buffalo-l
+swift run mere.run model pull vision-face-buffalo-l --accept-model-license
 swift run mere.run vision face detect ./group.jpg --json
 swift run mere.run vision face embed ./reference.jpg --json
 swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
@@ -123,6 +123,11 @@ per detected face. `embed` selects the largest face by default or accepts
 `--face-index`; `compare` returns cosine similarity. Use the companion
 `mere-face-tools` plugin for resumable folder indexing, SQLite search, and
 review/export workflows.
+
+Buffalo-L pretrained weights are provided by InsightFace for non-commercial
+research use. The pull command requires `--accept-model-license` to acknowledge
+the upstream restriction and prints the authoritative license URL before the
+download starts. The weights are not bundled with mere.run.
 
 ### Segment an image with SAM 3.1
 

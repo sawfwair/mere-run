@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MereRunCore
 
 struct ModelList: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -16,6 +17,9 @@ struct ModelList: ParsableCommand {
         for row in rows {
             printRow(row.id, row.category, row.status, row.size, widths: widths)
         }
+        for line in Self.usageRestrictionLines() {
+            print("\n\(line)")
+        }
     }
 
     private func printRow(_ id: String, _ category: String, _ status: String, _ size: String, widths: ModelListColumnWidths) {
@@ -26,6 +30,15 @@ struct ModelList: ParsableCommand {
             size
         ].joined(separator: "  ")
         print(row)
+    }
+
+    static func usageRestrictionLines(
+        specs: [ManagedModelSpec] = ManagedModelCatalog.allSpecs
+    ) -> [String] {
+        specs.compactMap { spec in
+            guard let restriction = spec.usageRestriction else { return nil }
+            return "Usage restriction: \(spec.id) - \(restriction.summary) \(restriction.licenseURL)"
+        }
     }
 
 }
