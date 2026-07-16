@@ -76,7 +76,8 @@ The format is based on Keep a Changelog.
   app bundle.
 - preserved Swift 6.0 Linux CLI compatibility for the pinned MLX Swift fork
   through a CPU-compatible base manifest while retaining the Swift 6.3
-  CUDA/CGen package graph.
+  CUDA/CGen package graph, and corrected literal quant-mode reporting in the
+  DGX Spark e2e sweep.
 
 ## 0.21.0 - 2026-07-14
 
