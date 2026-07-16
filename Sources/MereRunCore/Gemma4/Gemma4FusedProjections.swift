@@ -62,12 +62,7 @@ struct Gemma4CompiledSegment {
 /// source-module identity so any module replacement (e.g. LoRA wrapping) makes
 /// the caller drop the fusion and fall back to the unfused path.
 final class Gemma4FusedQuantizedProjection {
-    private let weight: MLXArray
-    private let scales: MLXArray
-    private let biases: MLXArray?
-    private let groupSize: Int
-    private let bits: Int
-    private let mode: QuantizationMode
+    private let projection: PortableQuantizedLinear
     private let splitIndices: [Int]
     private let sourceIDs: [ObjectIdentifier]
 
@@ -81,12 +76,15 @@ final class Gemma4FusedQuantizedProjection {
         splitIndices: [Int],
         sourceIDs: [ObjectIdentifier]
     ) {
-        self.weight = weight
-        self.scales = scales
-        self.biases = biases
-        self.groupSize = groupSize
-        self.bits = bits
-        self.mode = mode
+        self.projection = PortableQuantizedLinear(
+            weight: weight,
+            bias: nil,
+            scales: scales,
+            biases: biases,
+            groupSize: groupSize,
+            bits: bits,
+            mode: mode
+        )
         self.splitIndices = splitIndices
         self.sourceIDs = sourceIDs
     }
@@ -182,16 +180,7 @@ final class Gemma4FusedQuantizedProjection {
     /// The fused quantized matmul without the split — for consumers (fused
     /// decode kernels) that index the concatenated row directly.
     func callFused(_ x: MLXArray) -> MLXArray {
-        quantizedMM(
-            x,
-            weight,
-            scales: scales,
-            biases: biases,
-            transpose: true,
-            groupSize: groupSize,
-            bits: bits,
-            mode: mode
-        )
+        projection(x)
     }
 }
 

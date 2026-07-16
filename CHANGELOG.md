@@ -78,9 +78,10 @@ The format is based on Keep a Changelog.
   through a CPU-compatible base manifest while retaining the Swift 6.3
   CUDA/CGen package graph, and corrected literal quant-mode reporting in the
   DGX Spark e2e sweep.
-- keeps CUDA quant-kernel capability decisions isolated by bit width, group
-  size, and quantization mode, and dequantizes tied 1-bit/2-bit output
-  embeddings when the native CUDA matrix kernel cannot execute them.
+- kept CUDA quant-kernel capability decisions isolated by bit width, group
+  size, and quantization mode, and routed fused projections plus tied 1-bit/
+  2-bit output embeddings through the dense fallback when the native CUDA
+  matrix kernel cannot execute them.
 
 ## 0.21.0 - 2026-07-14
 
