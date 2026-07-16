@@ -596,6 +596,9 @@ Key options:
   exists (Ornith lanes: 1.0)
 - `--top-p`: defaults to 0.9, or the model's published value (Ornith: 0.95)
 - `--top-k`: defaults to no cutoff, or the model's published value (Ornith: 20)
+- `--response-format text|json_object`: require a complete JSON object from a
+  native MLX Gemma or Qwen-family model. JSON mode forces thinking off and
+  validates each token before streaming.
 - `--thinking` / `--no-thinking`: show reasoning output / disable reasoning
   generation. R1-style lanes (`text-agent-ornith-*`) generate with thinking
   enabled by default even though the reasoning stays hidden.
@@ -612,11 +615,18 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
+swift run mere.run text chat --model text-chat-q36-nano --response-format json_object --prompt 'Return an object with a name and an array of tags.'
 swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a compact Swift slugify helper."
 swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
 ```
+
+`json_object` supports nested objects and arrays, Unicode and escaped strings,
+numbers, booleans, and null. It is not JSON Schema or strict structured output.
+The llama.cpp/GGUF Q36 lane used by Linux packages does not yet have a JSON
+grammar and rejects `--response-format json_object`; use native MLX Q36 on
+Apple Silicon for this release.
 
 ### `mere.run text code`
 

@@ -11,6 +11,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertFalse(cmd.stream)
         XCTAssertEqual(cmd.prompt, "Say hello")
         XCTAssertEqual(cmd.model, TextChat.defaultChatModelId)
+        XCTAssertEqual(cmd.responseFormat, .text)
     }
 
     func testTextChatDefaultModelSelectionForMemoryBands() {
@@ -42,6 +43,41 @@ final class TextChatCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertTrue(cmd.stream)
+    }
+
+    func testTextChatParsesJSONObjectResponseFormatForQ36() throws {
+        let cmd = try TextChat.parse([
+            "--model", Q35Resources.q36NanoModelId,
+            "--response-format", "json_object",
+            "--prompt", "Return an object",
+        ])
+
+        XCTAssertEqual(cmd.responseFormat, .jsonObject)
+        XCTAssertNoThrow(
+            try TextChat.validate(
+                responseFormat: cmd.responseFormat,
+                modelID: cmd.model
+            )
+        )
+    }
+
+    func testTextChatRejectsJSONObjectResponseFormatForGGUF() throws {
+        let cmd = try TextChat.parse([
+            "--model", ModelResolver.ModelID.q36NanoGGUF.rawValue,
+            "--response-format", "json_object",
+            "--prompt", "Return an object",
+        ])
+
+        XCTAssertThrowsError(
+            try TextChat.validate(
+                responseFormat: cmd.responseFormat,
+                modelID: cmd.model
+            )
+        ) { error in
+            let message = String(describing: error)
+            XCTAssertTrue(message.contains("llama.cpp/GGUF"))
+            XCTAssertTrue(message.contains(Q35Resources.q36NanoModelId))
+        }
     }
 
     func testTextChatParsesLoRAAdapterOptions() throws {

@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added constrained `json_object` generation for native MLX Gemma and
+  Qwen-family chat models through OpenAI `response_format` and the new
+  `text chat --response-format json_object` option. The runtime now enforces a
+  complete root-object JSON grammar token by token, disables thinking and
+  speculative/batched/pipelined Qwen decoding for JSON requests, advertises
+  structured JSON without strict JSON Schema support, and rejects the still
+  unsupported llama.cpp/GGUF Q36 lane explicitly.
 - added Workflow Graph V1 with typed LoRA, image, and video nodes; immutable
   content-addressed job bundles; local and resumable graph execution; the
   public graph worker protocol; SSH and direct relay executors; and unified

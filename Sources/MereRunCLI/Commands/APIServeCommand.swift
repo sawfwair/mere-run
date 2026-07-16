@@ -501,6 +501,14 @@ struct APIEngineCapabilities: Equatable, Sendable {
         supportsVisionContentParts: true
     )
 
+    static let localTextWithToolsVisionAndStructuredJSON = APIEngineCapabilities(
+        supportsTools: true,
+        supportsToolChoice: true,
+        supportsStructuredOutputs: true,
+        supportsVisionContentParts: true,
+        supportsStrictMode: false
+    )
+
     static let rawProxy = APIEngineCapabilities(
         supportsRawProxy: true,
         supportsTools: true,
@@ -2272,7 +2280,7 @@ enum APIServerContract {
             temperature: temperature,
             topP: topP,
             topK: usesExplicitSampling ? nil : recommendedSampling?.topK,
-            showThinking: Q35Resources.thinkingDefault(forModelId: laneModelID),
+            showThinking: requiresJSON ? false : Q35Resources.thinkingDefault(forModelId: laneModelID),
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,
@@ -4359,7 +4367,7 @@ actor CodeGenServer {
                         reasoning_content: result.reasoningContent,
                         tool_calls: openAIToolCalls(from: result.toolCalls)
                     ),
-                    finish_reason: openAIFinishReason(for: result)
+                    finish_reason: Self.openAIFinishReason(for: result)
                 )
             ],
             usage: Self.openAIUsage(for: result)
@@ -4990,7 +4998,7 @@ actor CodeGenServer {
                         OpenAIChatChoice(
                             index: 0,
                             delta: OpenAIChatDelta(),
-                            finish_reason: openAIFinishReason(for: result)
+                            finish_reason: Self.openAIFinishReason(for: result)
                         )
                     ]
                 )
@@ -5057,7 +5065,7 @@ actor CodeGenServer {
         }
     }
 
-    private nonisolated func openAIFinishReason(for result: ChatResponse) -> String {
+    nonisolated static func openAIFinishReason(for result: ChatResponse) -> String {
         if result.toolCalls?.isEmpty == false {
             return "tool_calls"
         }

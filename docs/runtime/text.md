@@ -116,6 +116,22 @@ are not set explicitly, these lanes also use the model's published
 instead of the generic chat defaults. Other Qwen-family lanes such as
 `text-chat-q36-nano` keep the existing no-think default.
 
+Native MLX Gemma and Qwen-family chat models support
+`--response-format json_object`. The output must be one complete root object;
+the prefix grammar checks nested objects and arrays, strings and escapes,
+Unicode, numbers, booleans, null, commas, and colons before each token is
+streamed. Qwen-family JSON mode forces thinking off and bypasses MTP,
+continuous batching, and pipelined decoding. The GGUF Q36 model used by Linux
+packages remains on llama.cpp and rejects JSON-object mode until a llama.cpp
+grammar is wired.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-q36-nano \
+  --response-format json_object \
+  --prompt 'Return an object with a name and an array of tags.'
+```
+
 ### Local code generation
 
 ```bash
@@ -253,7 +269,8 @@ so CUDA GGUF loads stay isolated from the MLX runtime in the Swift process.
 
 Use this for local assistant-style generation. It supports prompt/system
 control, token limits, token streaming with `--stream`, and the chat-oriented
-model families.
+model families. Native MLX Gemma and Qwen-family models also support constrained
+JSON objects with `--response-format json_object`.
 
 ### `mere.run text code`
 

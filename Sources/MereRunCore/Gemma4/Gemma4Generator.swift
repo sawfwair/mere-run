@@ -873,7 +873,7 @@ public actor Gemma4Generator: ChatGenerator {
         var mtpStats = mtpStatsTemplate
         var firstTokenSeconds: Double?
         var pendingSampledToken: Int?
-        var jsonScanner = JSONPrefixScanner()
+        var jsonGrammar = JSONObjectPrefixGrammar()
         let decodeStart = Date()
         let traceEnabled = Gemma4DecodeTrace.enabled
         var traceSampleSeconds = 0.0
@@ -901,9 +901,8 @@ public actor Gemma4Generator: ChatGenerator {
                     initial: next,
                     logits: logits[0, -1, 0...],
                     config: generationConfig,
-                    previousTokens: repetitionHistory,
                     eosSet: eosSet,
-                    scanner: &jsonScanner,
+                    grammar: &jsonGrammar,
                     decode: { tokenizerAndTemplate.decode(token: $0) }
                 ) else {
                     break
@@ -927,7 +926,7 @@ public actor Gemma4Generator: ChatGenerator {
                 }
             }
 
-            if jsonConstrained, jsonScanner.isComplete {
+            if jsonConstrained, jsonGrammar.isComplete {
                 break
             }
 
