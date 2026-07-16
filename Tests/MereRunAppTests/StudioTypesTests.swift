@@ -524,6 +524,7 @@ final class StudioTypesTests: XCTestCase {
         image-zimage-nano          image           installed  4.2 GB
         text-chat-gemma4           text-chat       missing    —
         vision-segment-sam31       vision-segment  installed  950 MB
+        Usage restriction: vision-face-buffalo-l - non-commercial research use only
         """
 
         let rows = StudioModelInventoryParser.rows(from: output)
@@ -534,6 +535,37 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(rows[0].size, "4.2 GB")
         XCTAssertTrue(rows[2].isInstalled)
         XCTAssertFalse(rows[1].isInstalled)
+    }
+
+    func testModelPullTemplatePropagatesUsageTermsAcceptance() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .modelPull))
+        var draft = template.defaultDraft()
+        draft.model = "vision-face-buffalo-l"
+        draft.acceptModelLicense = true
+
+        XCTAssertTrue(template.arguments(from: draft).contains("--accept-model-license"))
+    }
+
+    func testAgentOnboardTemplatePropagatesUsageTermsAcceptance() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .agentOnboard))
+        var draft = template.defaultDraft()
+        draft.force = true
+        draft.acceptModelLicense = true
+
+        let arguments = template.arguments(from: draft)
+        XCTAssertTrue(arguments.contains("--pull-recommended"))
+        XCTAssertTrue(arguments.contains("--accept-model-license"))
+    }
+
+    func testStudioModelInventoryMarksRestrictedModels() {
+        let output = """
+        vision-face-buffalo-l vision-face missing 287 MB
+        Usage terms: vision-face-buffalo-l - InsightFace weights are non-commercial. [model: research terms https://github.com/deepinsight/insightface#license]
+        """
+        let row = StudioModelInventoryParser.rows(from: output).first
+
+        XCTAssertNotNil(row?.usageTerms)
+        XCTAssertTrue(row?.usageTerms?.summary.contains("deepinsight/insightface#license") == true)
     }
 
     func testStudioModelInventoryParserFindsModelRoot() throws {

@@ -55,6 +55,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
             case .falconPerception: return .falcon
+            case .insightFace: return .face
             case .moge2, .depthAnything3: return .geometry
             case .videoDepthAnything: return .depth
             case .tripoSR, .instantMesh, .trellis2: return .threeD
@@ -115,6 +116,8 @@ public enum QuantizedModelManifestWriter {
                     return [.visionSegmentation, .visionTracking]
                 case .falconPerception:
                     return [.visionGrounding, .visionDetection, .visionSegmentation]
+                case .insightFace:
+                    return [.faceDetection, .faceLandmarks, .faceEmbedding, .faceVerification]
                 case .moge2:
                     return [.metricDepth, .surfaceNormals, .pointMap, .cameraIntrinsics, .pointCloud]
                 case .videoDepthAnything:
@@ -217,7 +220,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .qwen35HybridMoE:
                 break
-            case .samSegmentation, .falconPerception, .moge2, .videoDepthAnything, .depthAnything3,
+            case .samSegmentation, .falconPerception, .insightFace, .moge2, .videoDepthAnything, .depthAnything3,
                  .tripoSR, .instantMesh, .trellis2:
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter,

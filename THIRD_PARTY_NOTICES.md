@@ -12,6 +12,83 @@ code; those source-derived implementations are noted below as well.
 When any vendored artifact changes, update this file in the same pull request
 with the new upstream source, version or commit when known, and license data.
 
+## Binary package runtime dependencies
+
+### ONNX Runtime for macOS face analysis
+
+- purpose: executes the managed Buffalo-L detector and ArcFace recognizer
+- Swift package: [`readdle/swift-onnxruntime`](https://github.com/readdle/swift-onnxruntime),
+  version `1.20.1`, revision `f5c95540cc857b797c0d61cc62e398ad8688e5de`; MIT
+- binary runtime: [Microsoft ONNX Runtime](https://github.com/microsoft/onnxruntime),
+  version `1.20.1`; MIT
+- package artifact checksum:
+  `31017531ebb064f1903a73ca5d55597ac49b6ae32360eb2482fb2f435342fdad`
+
+Face model weights are downloaded separately by `mere.run model pull` and are
+not vendored in this repository.
+
+The same separation applies to every managed model: mere.run ships model
+runtime code and source-level notices, not model weights. Managed models with
+non-commercial, research-only, gated, revenue-limited, or custom acceptable-
+use terms require explicit user acknowledgement before a new download. Their
+exact source revisions and component-level license URLs are preserved in the
+installed `mererun_model.json`; the authoritative inventory is in
+[`docs/model-sources.md`](./docs/model-sources.md#restricted-model-downloads).
+These third-party terms are separate from mere.run's source license, and the
+user is responsible for determining whether an intended use complies.
+
+#### Microsoft ONNX Runtime license
+
+```text
+MIT License
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+#### Readdle swift-onnxruntime license
+
+```text
+MIT License
+
+Copyright (c) 2024 Readdle Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Evaluation fixtures
 
 ### HumanEval slice

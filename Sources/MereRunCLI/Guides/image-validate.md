@@ -14,7 +14,7 @@ Use an installed image family:
 ## Install And Check
 
 ```bash
-mere.run model pull image-zimage-nano
+mere.run model pull image-zimage-nano --accept-model-license
 mere.run image validate --family zimage --test all
 mere.run image validate --help
 ```

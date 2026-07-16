@@ -182,7 +182,7 @@ struct ImageGenerate: AsyncParsableCommand {
                     resolvedModel = try resolver.resolve(id).rootURL.path
                 } catch {
                     throw ValidationError(
-                        "Model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or point --model at a local path."
+                        "Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point --model at a local path."
                     )
                 }
             } else {
@@ -196,7 +196,7 @@ struct ImageGenerate: AsyncParsableCommand {
             } catch {
                 let modelID = Self.defaultManagedModelID.rawValue
                 throw ValidationError(
-                    "Image model \(modelID) not found. Pull it with `mere.run model pull \(modelID)` or point --model at a local path."
+                    "Image model \(modelID) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: modelID))` or point --model at a local path."
                 )
             }
         }
@@ -343,7 +343,7 @@ struct ImageGenerate: AsyncParsableCommand {
                 let generator = Ideogram4Generator()
                 defer { generator.unload() }
                 result = try await generator.generate(request, progressHandler: progressHandler)
-            case .gemma, .liquid, .qwen, .sam, .falcon, .geometry, .depth, .threeD,
+            case .gemma, .liquid, .qwen, .sam, .falcon, .face, .geometry, .depth, .threeD,
                  .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
                 throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
             }

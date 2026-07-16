@@ -827,7 +827,7 @@ enum RuntimeModelPoolError: LocalizedError, Equatable {
         case .unsupportedModel(let id):
             return "Model '\(id)' is not supported by `mere.run api serve`."
         case .modelNotInstalled(let id):
-            return "Model '\(id)' is not installed. Run `mere.run model pull \(id)` first."
+            return "Model '\(id)' is not installed. Run `\(CLICommandDisplay.modelPullCommand(for: id))` first."
         case .incompatibleEngine(let detail):
             return detail
         case .unloadConflict(let id, let activeRequests):

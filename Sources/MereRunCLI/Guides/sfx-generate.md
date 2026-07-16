@@ -24,9 +24,9 @@ checkpoint stack.
 ## Commands
 
 ```bash
-mere.run model pull sfx-woosh-dflow
-mere.run model pull sfx-woosh-flow
-mere.run model pull sfx-woosh-synchformer
+mere.run model pull sfx-woosh-dflow --accept-model-license
+mere.run model pull sfx-woosh-flow --accept-model-license
+mere.run model pull sfx-woosh-synchformer --accept-model-license
 mere.run sfx generate --help
 mere.run sfx clap score --help
 mere.run sfx video generate --help

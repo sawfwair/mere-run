@@ -248,7 +248,7 @@ MERERUN_RUN_E2E=core ./scripts/check.sh
 If you touched the SAM runtime, also run at least one real local smoke like:
 
 ```bash
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision segment ./image.png --prompt "a person"
 swift run mere.run vision track ./clip.mp4 --prompt "a person"
 ```

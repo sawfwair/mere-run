@@ -6,6 +6,7 @@ struct ModelPullPreflightInput {
     let all: Bool
     let force: Bool
     let allowUnsupported: Bool
+    let acceptUsageTerms: Bool
     let pullArgv: [String]
     let cwd: String
 }
@@ -15,12 +16,14 @@ struct ModelPullPreflightRequest: Codable, Equatable {
     let all: Bool
     let force: Bool
     let allowUnsupported: Bool
+    let acceptUsageTerms: Bool
 
     enum CodingKeys: String, CodingKey {
         case target
         case all
         case force
         case allowUnsupported = "allow_unsupported"
+        case acceptUsageTerms = "accept_usage_terms"
     }
 }
 
@@ -81,6 +84,8 @@ struct ModelPullModelPreflightSummary: Codable, Equatable {
     let estimatedDownloadBytes: Int64?
     let estimatedRequiredBytes: Int64?
     let companionModelIDs: [String]
+    let usageTerms: [ManagedModelUsageTerm]
+    let usageTermsAcknowledged: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -103,6 +108,8 @@ struct ModelPullModelPreflightSummary: Codable, Equatable {
         case estimatedDownloadBytes = "estimated_download_bytes"
         case estimatedRequiredBytes = "estimated_required_bytes"
         case companionModelIDs = "companion_model_ids"
+        case usageTerms = "usage_terms"
+        case usageTermsAcknowledged = "usage_terms_acknowledged"
     }
 }
 
@@ -165,7 +172,8 @@ struct ModelPullPreflightAnalyzer {
                 target: input.target,
                 all: input.all,
                 force: input.force,
-                allowUnsupported: input.allowUnsupported
+                allowUnsupported: input.allowUnsupported,
+                acceptUsageTerms: input.acceptUsageTerms
             ),
             result: result,
             diagnostics: diagnostics,
@@ -236,7 +244,13 @@ struct ModelPullPreflightAnalyzer {
         let selected = input.all || spec.id == input.target
         let blockedBySupport = !input.allowUnsupported && !support.isSupported
         let blockedBySource = !hasSource
-        let willDownload = selected && hasSource && !blockedBySupport && (input.force || !installed)
+        let requiresUsageTermsAcknowledgement = spec.usageRestriction != nil && (input.force || !installed)
+        let blockedByUsageTerms = requiresUsageTermsAcknowledgement && !input.acceptUsageTerms
+        let installedUsageTermsAcknowledged = (try? MereRunModelManifest.loadIfPresent(
+            from: installPath,
+            fileManager: fileManager
+        ))?.usageTermsAcknowledged == true
+        let willDownload = selected && hasSource && !blockedBySupport && !blockedByUsageTerms && (input.force || !installed)
         let status = Self.modelStatus(
             selected: selected,
             installed: installed,
@@ -244,7 +258,8 @@ struct ModelPullPreflightAnalyzer {
             willDownload: willDownload,
             blockedBySupport: blockedBySupport,
             blockedBySource: blockedBySource,
-            all: input.all
+            all: input.all,
+            blockedByUsageTerms: blockedByUsageTerms
         )
 
         if !input.all, blockedBySupport {
@@ -265,6 +280,16 @@ struct ModelPullPreflightAnalyzer {
                     severity: .blocker,
                     title: "Model has no public download source",
                     message: ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
+                )
+            )
+        }
+        if !input.all, blockedByUsageTerms, let restriction = spec.usageRestriction {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "model_usage_terms_unacknowledged",
+                    severity: .blocker,
+                    title: "Third-party model terms require acknowledgement",
+                    message: "\(restriction.summary) Review the listed terms and pass --accept-model-license to acknowledge them before download."
                 )
             )
         }
@@ -301,7 +326,10 @@ struct ModelPullPreflightAnalyzer {
             hubRepoIDs: hubRepoIDs(for: spec),
             estimatedDownloadBytes: spec.estimatedDownloadBytes,
             estimatedRequiredBytes: ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: spec.estimatedDownloadBytes),
-            companionModelIDs: spec.companionModelIDs
+            companionModelIDs: spec.companionModelIDs,
+            usageTerms: spec.usageRestriction?.terms ?? [],
+            usageTermsAcknowledged: spec.usageRestriction != nil
+                && (input.acceptUsageTerms || installedUsageTermsAcknowledged)
         )
     }
 
@@ -312,11 +340,13 @@ struct ModelPullPreflightAnalyzer {
         willDownload: Bool,
         blockedBySupport: Bool,
         blockedBySource: Bool,
-        all: Bool
+        all: Bool,
+        blockedByUsageTerms: Bool = false
     ) -> String {
         if !selected { return "not_selected" }
         if blockedBySupport { return all ? "skipped_unsupported" : "blocked_unsupported" }
         if blockedBySource { return all ? "skipped_no_source" : "blocked_no_source" }
+        if blockedByUsageTerms { return all ? "skipped_usage_terms" : "blocked_usage_terms" }
         if willDownload { return "will_download" }
         if conversionRequired { return "conversion_required" }
         if installed { return "installed" }

@@ -98,8 +98,8 @@ comparison that trains every transformer Linear/QuantizedLinear layer instead
 of the default suffix allowlist.
 
 ```bash
-swift run mere.run model pull image-klein-base-9b
-swift run mere.run model pull image-klein-9b
+swift run mere.run model pull image-klein-base-9b --accept-model-license
+swift run mere.run model pull image-klein-9b --accept-model-license
 swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
@@ -282,8 +282,8 @@ transformer files.
 Train adapters on Raw, then preview or run them on Turbo:
 
 ```bash
-swift run mere.run model pull image-krea2-raw
-swift run mere.run model pull image-krea2-turbo
+swift run mere.run model pull image-krea2-raw --accept-model-license
+swift run mere.run model pull image-krea2-turbo --accept-model-license
 swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \

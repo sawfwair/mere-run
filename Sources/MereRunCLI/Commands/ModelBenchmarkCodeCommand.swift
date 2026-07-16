@@ -177,7 +177,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         guard let installedURL = ManagedModelResolver.resolveInstalledModel(id: modelID) else {
             return CodeBenchmarkModelResult.missing(
                 model: modelID,
-                reason: "Model is not installed. Run `mere.run model pull \(modelID)` first."
+                reason: "Model is not installed. Run `\(CLICommandDisplay.modelPullCommand(for: modelID))` first."
             )
         }
 

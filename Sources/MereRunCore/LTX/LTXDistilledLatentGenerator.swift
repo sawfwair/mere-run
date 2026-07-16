@@ -2920,7 +2920,7 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
         case .ltx23TextEncoderMissing(let id):
             return """
             LTX 2.3 requires the companion Gemma 3 text encoder `\(id)`. Install it with \
-            `mere.run model pull video-ltx23-av-mlx`, or set MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT to a local \
+            `mere.run model pull video-ltx23-av-mlx --accept-model-license`, or set MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT to a local \
             mlx-community/gemma-3-12b-it-4bit checkout.
             """
         case .generatorNotLoaded:

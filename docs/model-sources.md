@@ -73,6 +73,7 @@ from the runtime catalog used by `mere.run model list`,
 | `vision-ocr` | `vision-ocr-lighton` |
 | `vision-segment` | `vision-segment-sam31` |
 | `vision-ground` | `vision-ground-falcon-perception` |
+| `vision-face` | `vision-face-buffalo-l` |
 | `vision-geometry` | `vision-geometry-moge2-small` |
 | `vision-depth` | `vision-depth-vda-small` |
 | `vision-depth` | `vision-depth-vda-small-metric` |
@@ -100,6 +101,51 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
+
+### Restricted model downloads
+
+mere.run is free and open source, but model and component licenses remain the
+terms of their respective owners. mere.run does not bundle these weights,
+decide whether a user's intended use qualifies, or police use after install.
+For every new download with non-commercial, research-only, gated, revenue-
+limited, or custom acceptable-use terms, the user must review the listed terms
+and pass `--accept-model-license`:
+
+```bash
+mere.run model pull vision-face-buffalo-l --accept-model-license
+mere.run model pull --all --accept-model-license
+```
+
+Without that flag, a single-model pull and its preflight are blocked; `--all`
+skips restricted models. Restricted models never auto-download from an
+inference command. The macOS app presents the same acknowledgement before a
+download and exposes the term links in its Models and Advanced views.
+Batch downloads through `agent onboard --pull-recommended` skip restricted
+entries without acknowledgement, while `open-webui quickstart --pull`
+validates all configured models before downloading any; both accept the same
+`--accept-model-license` flag.
+
+| Models | Upstream terms that require acknowledgement |
+| --- | --- |
+| `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
+| `image-zimage-nano` | the quantized mirror declares the Tongyi Qianwen License; the official Z-Image-Turbo base is Apache 2.0 |
+| `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
+| `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
+| `text-chat-lfm25-a1b-8bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
+| `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
+| `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
+| `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
+| `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
+| `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
+| `video-ltx-av`, `video-ltx23-av-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX path also installs a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
+
+The catalog pins every restricted download source to an immutable commit. New
+managed installs write those repository revisions, every applicable
+model/component license and URL, and the acknowledgement result into schema 3
+of `mererun_model.json`. `mere.run model info MODEL` displays the same record.
+Pre-existing installs remain usable and are not retroactively treated as an
+acknowledgement.
 
 Most catalog IDs have managed Hugging Face sources and can be installed with
 `mere.run model pull`. A small number of legacy/local catalog IDs remain so
@@ -350,7 +396,7 @@ when you want large models on an external disk:
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --accept-model-license
 ```
 
 Model pulls are resumable at the file level through the Hugging Face snapshot
@@ -386,11 +432,11 @@ Examples:
 
 ```bash
 # Pull into the default model store
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --accept-model-license
 
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-nano
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 
 # Inspect what is currently installed
 swift run mere.run status

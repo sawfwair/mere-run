@@ -2,6 +2,29 @@ import XCTest
 @testable import MereRunCore
 
 final class ManagedModelResolverTests: XCTestCase {
+    func testRestrictedInstallRequiresCoreAcknowledgementBeforeDownload() async throws {
+        let modelsRoot = try makeTemporaryDirectory()
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        do {
+            _ = try await ManagedModelResolver.installManagedModel(id: FaceAnalysisResources.modelID)
+            XCTFail("Restricted install should fail before contacting its download source.")
+        } catch let error as ManagedModelResolver.ResolverError {
+            guard case .usageTermsNotAcknowledged(let modelID) = error else {
+                return XCTFail("Unexpected resolver error: \(error)")
+            }
+            XCTAssertEqual(modelID, FaceAnalysisResources.modelID)
+        }
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: modelsRoot.appendingPathComponent(FaceAnalysisResources.modelID).path
+        ))
+    }
+
     func testMaterializedGeometryInstallsExactBundledLicenseEvidence() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -187,10 +210,12 @@ final class ManagedModelResolverTests: XCTestCase {
             snapshotURL: baseSnapshot,
             mountedSnapshots: mountedSnapshots,
             modelDir: install,
+            usageTermsAcknowledged: true,
             fileManager: .default
         )
 
         XCTAssertEqual(manifest?.id, "image-klein-base-9b")
+        XCTAssertEqual(manifest?.usageTermsAcknowledged, true)
         let mountedTextConfig = install.appendingPathComponent("text_encoder/config.json")
         XCTAssertEqual(
             URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(atPath: mountedTextConfig.path))

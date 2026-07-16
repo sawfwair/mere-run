@@ -57,7 +57,7 @@ For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma
 3 companion:
 
 ```bash
-swift run mere.run model pull video-ltx23-av-mlx
+swift run mere.run model pull video-ltx23-av-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music" \
   --variant unified-av \

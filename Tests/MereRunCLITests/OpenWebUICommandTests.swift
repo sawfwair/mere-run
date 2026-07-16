@@ -31,6 +31,7 @@ final class OpenWebUICommandTests: XCTestCase {
         XCTAssertEqual(command.sttModel, ParakeetResources.defaultModelId)
         XCTAssertEqual(command.ttsFormat, "wav")
         XCTAssertFalse(command.pull)
+        XCTAssertFalse(command.acceptModelLicense)
         XCTAssertFalse(command.skipServer)
         XCTAssertFalse(command.skipDocker)
         XCTAssertFalse(command.skipConfigure)
@@ -60,6 +61,7 @@ final class OpenWebUICommandTests: XCTestCase {
             "--admin-password", "password",
             "--wait-seconds", "30",
             "--pull",
+            "--accept-model-license",
             "--skip-server",
             "--skip-docker",
             "--skip-configure",
@@ -86,12 +88,31 @@ final class OpenWebUICommandTests: XCTestCase {
         XCTAssertEqual(command.adminPassword, "password")
         XCTAssertEqual(command.waitSeconds, 30)
         XCTAssertTrue(command.pull)
+        XCTAssertTrue(command.acceptModelLicense)
         XCTAssertTrue(command.skipServer)
         XCTAssertTrue(command.skipDocker)
         XCTAssertTrue(command.skipConfigure)
         XCTAssertTrue(command.reset)
         XCTAssertTrue(command.dryRun)
         XCTAssertTrue(command.quiet)
+    }
+
+    func testQuickstartRequiresTermsAcknowledgementBeforeItsDefaultRestrictedImagePull() throws {
+        let modelsRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-open-webui-terms-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let blocked = try OpenWebUIQuickstart.parse(["--pull"])
+        let message = try XCTUnwrap(blocked.unacknowledgedUsageTermsMessage())
+        XCTAssertTrue(message.contains("image-zimage-nano"))
+        XCTAssertTrue(message.contains("--accept-model-license"))
+
+        let accepted = try OpenWebUIQuickstart.parse(["--pull", "--accept-model-license"])
+        XCTAssertNil(accepted.unacknowledgedUsageTermsMessage())
     }
 
     func testQuickstartDryRunPlanUsesDockerBridgeAndChatFilter() throws {

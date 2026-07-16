@@ -49,6 +49,7 @@ public enum ManagedModelResolver {
         case invalidModelPath(String)
         case modelNotInstalled(String)
         case autoDownloadDisabled(String)
+        case usageTermsNotAcknowledged(String)
         case unsupportedInstallShape(String)
         case downloadFailed(String)
         case invalidInstalledModel(String)
@@ -63,6 +64,8 @@ public enum ManagedModelResolver {
                 return "Model \(id) is not installed."
             case .autoDownloadDisabled(let id):
                 return "Model \(id) is not installed and does not support auto-download in this command."
+            case .usageTermsNotAcknowledged(let id):
+                return "Model \(id) has third-party usage terms that must be acknowledged before download."
             case .unsupportedInstallShape(let id):
                 return "Managed install shape is not supported for \(id)."
             case .downloadFailed(let message):
@@ -215,6 +218,7 @@ public enum ManagedModelResolver {
     public static func installManagedModel(
         id: String,
         force: Bool = false,
+        usageTermsAcknowledged: Bool = false,
         fileManager: FileManager = .default,
         progress: (@Sendable (InstallProgress) -> Void)? = nil
     ) async throws -> InstallResult {
@@ -224,6 +228,10 @@ public enum ManagedModelResolver {
         if !force, isManagedInstallComplete(spec: spec, at: modelDir, fileManager: fileManager) {
             let manifest = try? MereRunModelManifest.loadIfPresent(from: modelDir, fileManager: fileManager)
             return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: true)
+        }
+
+        if spec.usageRestriction != nil, !usageTermsAcknowledged {
+            throw ResolverError.usageTermsNotAcknowledged(spec.id)
         }
 
         if fileManager.fileExists(atPath: modelDir.path) {
@@ -251,6 +259,7 @@ public enum ManagedModelResolver {
             snapshotURL: snapshotURL,
             mountedSnapshots: mountedSnapshots,
             modelDir: modelDir,
+            usageTermsAcknowledged: usageTermsAcknowledged,
             fileManager: fileManager
         )
         try installManagedAliasesIfNeeded(for: spec, rootURL: modelDir, fileManager: fileManager)
@@ -407,6 +416,7 @@ public enum ManagedModelResolver {
         snapshotURL: URL,
         mountedSnapshots: [(MountedHubFallbackConfig, URL)] = [],
         modelDir: URL,
+        usageTermsAcknowledged: Bool = false,
         fileManager: FileManager
     ) throws -> MereRunModelManifest? {
         try fileManager.createDirectory(at: modelDir, withIntermediateDirectories: true)
@@ -437,7 +447,11 @@ public enum ManagedModelResolver {
             fileManager: fileManager
         )
 
-        return try MereRunModelManifest.writeTemplateIfKnown(modelId: spec.id, to: modelDir)
+        return try MereRunModelManifest.writeTemplateIfKnown(
+            modelId: spec.id,
+            to: modelDir,
+            usageTermsAcknowledged: usageTermsAcknowledged
+        )
     }
 
     private static func mountedSnapshotSourceURL(

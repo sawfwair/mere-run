@@ -12,7 +12,7 @@ First accept the DINOv3 license on Hugging Face and authenticate the local Hub
 client. Then install the pinned model graph and run reconstruction:
 
 ```bash
-mere.run model pull image-3d-trellis2-4b
+mere.run model pull image-3d-trellis2-4b --accept-model-license
 mere.run vision image-to-3d-trellis2 ./chair.png \
   --output ./chair-trellis2 \
   --seed 42 \

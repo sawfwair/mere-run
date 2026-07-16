@@ -8,6 +8,11 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added managed Buffalo-L face analysis through `vision face detect`, `embed`,
+  `compare`, and warm-session `batch`, including RetinaFace-style boxes and five-point landmarks,
+  normalized 512-dimensional ArcFace embeddings, CPU/CoreML execution-provider
+  controls, machine-readable JSON, and exact checkpoint validation.
+
 - added constrained `json_object` generation for native MLX Gemma and
   Qwen-family chat models through OpenAI `response_format` and the new
   `text chat --response-format json_object` option. The runtime now enforces a

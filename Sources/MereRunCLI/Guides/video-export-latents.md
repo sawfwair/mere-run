@@ -11,7 +11,7 @@ Managed id: `video-ltx-av`, or a local distilled LTX model root with the expecte
 ## Install And Check
 
 ```bash
-mere.run model pull video-ltx-av
+mere.run model pull video-ltx-av --accept-model-license
 mere.run video export-latents --help
 ```
 

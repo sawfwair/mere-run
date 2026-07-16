@@ -10,7 +10,7 @@ import Foundation
 /// As of Phase 11 (strict mode), the manifest is required for all local model roots used by mere.run's
 /// image pipelines. This eliminates silent guessing (variant/precision/quantization/components).
 public struct MereRunModelManifest: Codable, Hashable, Sendable {
-    public static let currentSchemaVersion: Int = 2
+    public static let currentSchemaVersion: Int = 3
     public static let filename: String = "mererun_model.json"
 
     public enum Engine: String, Codable, CaseIterable, Hashable, Sendable {
@@ -34,6 +34,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case samSegmentation = "sam-segmentation"
         /// Falcon Perception grounded detection and segmentation family.
         case falconPerception = "falcon-perception"
+        /// InsightFace Buffalo-L face detection and identity-embedding family.
+        case insightFace = "insightface"
         /// MoGe-2 metric monocular geometry family.
         case moge2 = "moge-2"
         /// Video Depth Anything temporal depth family.
@@ -93,6 +95,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen
         case sam
         case falcon
+        case face
         case geometry
         case depth
         case threeD = "3d"
@@ -160,6 +163,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case visionTracking = "vision_tracking"
         case visionGrounding = "vision_grounding"
         case visionDetection = "vision_detection"
+        case faceDetection = "face_detection"
+        case faceLandmarks = "face_landmarks"
+        case faceEmbedding = "face_embedding"
+        case faceVerification = "face_verification"
         case soundEffectGeneration = "sound_effect_generation"
         case soundEffectEmbedding = "sound_effect_embedding"
         case videoToAudioGeneration = "video_to_audio_generation"
@@ -326,6 +333,32 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         }
     }
 
+    public struct SourceProvenance: Codable, Hashable, Sendable {
+        public var role: String
+        public var repository: String
+        public var revision: String
+        public var destinationPath: String?
+
+        public init(
+            role: String,
+            repository: String,
+            revision: String,
+            destinationPath: String? = nil
+        ) {
+            self.role = role
+            self.repository = repository
+            self.revision = revision
+            self.destinationPath = destinationPath
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case role
+            case repository
+            case revision
+            case destinationPath = "destination_path"
+        }
+    }
+
     public var schemaVersion: Int
     public var id: String
 
@@ -345,6 +378,15 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     /// Upstream identifier for the source repository or registry record.
     public var upstreamRepoId: String?
 
+    /// Exact repositories and requested revisions materialized into this managed install.
+    public var sources: [SourceProvenance]?
+
+    /// Third-party model/component terms that required explicit acknowledgement before download.
+    public var usageTerms: [ManagedModelUsageTerm]?
+
+    /// True only when the managed installer was invoked with explicit acknowledgement.
+    public var usageTermsAcknowledged: Bool?
+
     /// ISO8601 timestamp; informational only.
     public var createdAt: Date?
 
@@ -361,6 +403,9 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         supports: [Capability]? = nil,
         components: Components? = nil,
         upstreamRepoId: String? = nil,
+        sources: [SourceProvenance]? = nil,
+        usageTerms: [ManagedModelUsageTerm]? = nil,
+        usageTermsAcknowledged: Bool? = nil,
         createdAt: Date? = nil
     ) {
         self.schemaVersion = schemaVersion
@@ -375,6 +420,9 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         self.supports = supports
         self.components = components
         self.upstreamRepoId = upstreamRepoId
+        self.sources = sources
+        self.usageTerms = usageTerms
+        self.usageTermsAcknowledged = usageTermsAcknowledged
         self.createdAt = createdAt
     }
 
@@ -432,6 +480,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public static func writeTemplateIfKnown(
         modelId: String,
         to modelRoot: URL,
+        usageTermsAcknowledged: Bool = false,
         createdAt: Date = Date()
     ) throws -> MereRunModelManifest? {
         guard let known = ModelResolver.ModelID(rawValue: modelId) else {
@@ -445,7 +494,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             // Ignore decode errors and overwrite with a fresh template below.
         }
 
-        let manifest = template(for: known, createdAt: createdAt)
+        var manifest = template(for: known, createdAt: createdAt)
+        if manifest.usageTerms?.isEmpty == false {
+            manifest.usageTermsAcknowledged = usageTermsAcknowledged
+        }
         try manifest.write(to: modelRoot)
         return manifest
     }
@@ -454,6 +506,48 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     ///
     /// This is used by the app to write manifests after managed downloads, and by the CLI for validation.
     public static func template(for modelID: ModelResolver.ModelID, createdAt: Date = Date()) -> MereRunModelManifest {
+        var manifest = baseTemplate(for: modelID, createdAt: createdAt)
+        guard let spec = ManagedModelCatalog.spec(for: modelID.rawValue) else {
+            return manifest
+        }
+        manifest.sources = sourceProvenance(for: spec)
+        manifest.usageTerms = spec.usageRestriction?.terms
+        return manifest
+    }
+
+    private static func sourceProvenance(for spec: ManagedModelSpec) -> [SourceProvenance]? {
+        var sources: [SourceProvenance] = []
+        if let primary = spec.hubFallback {
+            sources.append(
+                SourceProvenance(
+                    role: "primary",
+                    repository: primary.repoId,
+                    revision: primary.revision
+                )
+            )
+        }
+        sources.append(contentsOf: spec.mountedHubFallbacks.map { mounted in
+            SourceProvenance(
+                role: "component",
+                repository: mounted.hubFallback.repoId,
+                revision: mounted.hubFallback.revision,
+                destinationPath: mounted.destinationPath
+            )
+        })
+        if let upstreamRepoId = spec.upstreamRepoId,
+           !sources.contains(where: { $0.repository == upstreamRepoId }) {
+            sources.append(
+                SourceProvenance(
+                    role: "upstream_reference",
+                    repository: upstreamRepoId,
+                    revision: spec.upstreamRevision ?? "unspecified"
+                )
+            )
+        }
+        return sources.isEmpty ? nil : sources
+    }
+
+    private static func baseTemplate(for modelID: ModelResolver.ModelID, createdAt: Date) -> MereRunModelManifest {
         let defaultComponents = Components(
             tokenizer: .local(path: "tokenizer"),
             textEncoder: .local(path: "text_encoder"),
@@ -980,7 +1074,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: Defaults(steps: 4, cfg: 1.0),
                 supports: [.txt2img, .img2img, .loraInference],
                 components: defaultComponents,
-                upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@main",
+                upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b",
                 createdAt: createdAt
             )
         case .zetaMax:
@@ -1143,6 +1237,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.visionGrounding, .visionDetection, .visionSegmentation],
                 components: falconPerceptionComponents,
                 upstreamRepoId: "tiiuae/Falcon-Perception",
+                createdAt: createdAt
+            )
+        case .visionFaceBuffaloL:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .insightFace,
+                family: .face,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.faceDetection, .faceLandmarks, .faceEmbedding, .faceVerification],
+                components: nil,
+                upstreamRepoId: "deepghs/insightface@4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
                 createdAt: createdAt
             )
         case .visionGeometryMoGe2Small:

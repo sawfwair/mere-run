@@ -77,7 +77,7 @@ struct ModelCapabilities: ParsableCommand {
 
         if let recommendedCodeReport {
             print("\nRecommended code model")
-            print("  \(CLICommandDisplay.command("model pull \(recommendedCodeReport.spec.id)"))")
+            print("  \(CLICommandDisplay.modelPullCommand(for: recommendedCodeReport.spec.id))")
             print("  \(recommendedCodeReport.descriptor.title): \(recommendedCodeReport.descriptor.summary)")
         }
 
@@ -94,7 +94,7 @@ struct ModelCapabilities: ParsableCommand {
             print("\nRecommended setup coverage (downloadable from Hugging Face)")
             print("  note: cross-modality starter set; lower-memory agent alternatives are not ranked upgrades.")
             for report in recommendedReports {
-                print("  mere.run model pull \(report.spec.id)")
+                print("  \(CLICommandDisplay.modelPullCommand(for: report.spec.id))")
             }
         }
         if !unavailableRecommended.isEmpty {

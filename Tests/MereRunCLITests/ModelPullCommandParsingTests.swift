@@ -13,6 +13,69 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.allowUnsupported)
     }
 
+    func testBuffaloLPullRequiresExplicitLicenseAcceptance() throws {
+        let restricted = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: FaceAnalysisResources.modelID)
+        )
+        let blocked = try ModelPull.parse([FaceAnalysisResources.modelID])
+        let accepted = try ModelPull.parse([
+            FaceAnalysisResources.modelID,
+            "--accept-model-license",
+        ])
+
+        XCTAssertNotNil(restricted.usageRestriction)
+        XCTAssertNotNil(blocked.licenseAcceptanceMessage(for: restricted))
+        XCTAssertNil(accepted.licenseAcceptanceMessage(for: restricted))
+    }
+
+    func testModelListReportsBuffaloLUsageTerms() {
+        let lines = ModelList.usageRestrictionLines()
+
+        XCTAssertTrue(lines.contains { line in
+            line.contains(FaceAnalysisResources.modelID)
+                && line.contains("non-commercial research use")
+                && line.contains("Usage terms:")
+                && line.contains("deepinsight/insightface#license")
+        })
+    }
+
+    func testRestrictedModelPreflightRequiresAndPropagatesAcceptance() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let modelStore = temp.appendingPathComponent("models", isDirectory: true)
+        let hubCache = temp.appendingPathComponent("hub", isDirectory: true)
+
+        let blocked = try ModelPull.parse([
+            FaceAnalysisResources.modelID,
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+        XCTAssertEqual(blocked.status, .blocked)
+        XCTAssertEqual(blocked.result.models.first?.status, "blocked_usage_terms")
+        XCTAssertEqual(blocked.result.models.first?.usageTermsAcknowledged, false)
+
+        let accepted = try ModelPull.parse([
+            FaceAnalysisResources.modelID,
+            "--allow-unsupported",
+            "--accept-model-license",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+        XCTAssertNotEqual(accepted.status, .blocked)
+        XCTAssertEqual(accepted.result.models.first?.status, "will_download")
+        XCTAssertEqual(accepted.result.models.first?.usageTermsAcknowledged, true)
+        XCTAssertTrue(accepted.actions.first { $0.id == "pull-model" }?.command?.argv.contains("--accept-model-license") == true)
+    }
+
     func testModelPullParsesPreflightJSONOptions() throws {
         let cmd = try ModelPull.parse([
             "image-zimage-nano",
@@ -25,6 +88,21 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
+    func testDisplayedPullGuidanceAddsAcknowledgementOnlyForRestrictedModels() {
+        XCTAssertTrue(
+            CLICommandDisplay.modelPullCommand(for: FaceAnalysisResources.modelID)
+                .hasSuffix("model pull vision-face-buffalo-l --accept-model-license")
+        )
+        XCTAssertTrue(
+            CLICommandDisplay.modelPullCommand(for: "image-klein-nano")
+                .hasSuffix("model pull image-klein-nano")
+        )
+        XCTAssertFalse(
+            CLICommandDisplay.modelPullCommand(for: "image-klein-nano")
+                .contains("--accept-model-license")
+        )
+    }
+
     func testModelPullPreflightReportsPullableModel() throws {
         let temp = try makeTemporaryDirectory()
         defer {
@@ -34,7 +112,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         let hubCache = temp.appendingPathComponent("hub", isDirectory: true)
 
         let cmd = try ModelPull.parse([
-            "image-zimage-nano",
+            "image-klein-nano",
             "--allow-unsupported",
             "--preflight",
             "--json",
@@ -50,7 +128,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(envelope.command, ["model", "pull"])
         XCTAssertEqual(envelope.result.mode, "single")
         XCTAssertEqual(envelope.result.models.count, 1)
-        XCTAssertEqual(envelope.result.models.first?.id, "image-zimage-nano")
+        XCTAssertEqual(envelope.result.models.first?.id, "image-klein-nano")
         XCTAssertEqual(envelope.result.models.first?.status, "will_download")
         XCTAssertEqual(envelope.result.models.first?.hasDownloadSource, true)
         XCTAssertEqual(envelope.result.models.first?.installed, false)
@@ -66,7 +144,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
             "mere.run",
             "model",
             "pull",
-            "image-zimage-nano",
+            "image-klein-nano",
             "--allow-unsupported",
         ])
 
@@ -74,7 +152,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ModelPullPreflightEnvelope.self, from: Data(encoded.utf8))
-        XCTAssertEqual(decoded.result.models.first?.id, "image-zimage-nano")
+        XCTAssertEqual(decoded.result.models.first?.id, "image-klein-nano")
         XCTAssertEqual(decoded.result.models.first?.runtimeReady, false)
         XCTAssertEqual(decoded.result.models.first?.conversionRequired, false)
     }
@@ -108,7 +186,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(missingModelStore)
 
         let cmd = try ModelPull.parse([
-            "image-zimage-nano",
+            "image-klein-nano",
             "--allow-unsupported",
             "--preflight",
             "--json",
@@ -124,7 +202,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(
             envelope.result.models.first?.installPath,
             missingModelStore
-                .appendingPathComponent("image-zimage-nano", isDirectory: true)
+                .appendingPathComponent("image-klein-nano", isDirectory: true)
                 .standardizedFileURL
                 .path
         )

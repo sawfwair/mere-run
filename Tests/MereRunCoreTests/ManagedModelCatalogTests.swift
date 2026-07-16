@@ -51,6 +51,86 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
     }
 
+    func testRestrictedModelInventoryIsCompleteAndCannotAutoDownload() throws {
+        let expected = Set([
+            "image-klein-9b",
+            "image-klein-base-9b",
+            "image-zimage-nano",
+            "image-krea2-raw",
+            "image-krea2-turbo",
+            "image-ideogram4-sdnq-uint4",
+            "text-chat-lfm25-a1b-8bit",
+            "vision-segment-sam31",
+            "vision-face-buffalo-l",
+            "image-3d-trellis2-4b",
+            "music-muscriptor-small",
+            "music-muscriptor-medium",
+            "music-muscriptor-large",
+            "sfx-woosh-dflow",
+            "sfx-woosh-flow",
+            "sfx-woosh-clap",
+            "sfx-woosh-synchformer",
+            "sfx-woosh-vflow-8s",
+            "sfx-woosh-dvflow-8s",
+            "sfx-mmaudio-large-44k-v2",
+            "video-ltx-av",
+            "video-ltx23-av-mlx",
+        ])
+        let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
+            + ManagedModelCatalog.allSpecs
+                .flatMap(\.companionModelIDs)
+                .compactMap { ManagedModelCatalog.spec(for: $0) }
+        let restricted = Set(
+            visibleAndCompanionSpecs
+                .filter { $0.usageRestriction != nil }
+                .map(\.id)
+        )
+        let expectedWithCompanions = expected.union([
+            ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
+        ])
+
+        XCTAssertEqual(restricted, expectedWithCompanions)
+        for spec in visibleAndCompanionSpecs where spec.usageRestriction != nil {
+            XCTAssertFalse(spec.runtimeAutoDownloadAllowed, "Restricted model \(spec.id) must never auto-download.")
+            let terms = try XCTUnwrap(spec.usageRestriction?.terms)
+            XCTAssertFalse(terms.isEmpty)
+            for term in terms {
+                XCTAssertFalse(term.component.isEmpty)
+                XCTAssertFalse(term.license.isEmpty)
+                XCTAssertFalse(term.sourceRepoId.isEmpty)
+                XCTAssertTrue(
+                    term.sourceRevision.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil,
+                    "Restricted source \(term.sourceRepoId) must use an immutable revision, not \(term.sourceRevision)."
+                )
+                XCTAssertNotNil(URL(string: term.licenseURL))
+            }
+
+            let downloadSources = [spec.hubFallback].compactMap { $0 }
+                + spec.mountedHubFallbacks.map(\.hubFallback)
+                + spec.companionModelIDs.compactMap { ManagedModelCatalog.spec(for: $0)?.hubFallback }
+            for source in downloadSources {
+                XCTAssertTrue(
+                    source.revision.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil,
+                    "Restricted download source \(source.repoId) must use an immutable revision, not \(source.revision)."
+                )
+            }
+        }
+    }
+
+    func testRestrictedManifestCarriesSourceTermsWithoutClaimingAcceptance() throws {
+        let modelID = try XCTUnwrap(ModelResolver.ModelID(rawValue: FaceAnalysisResources.modelID))
+        let manifest = MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(manifest.schemaVersion, 3)
+        XCTAssertEqual(manifest.sources?.first?.repository, "deepghs/insightface")
+        XCTAssertEqual(
+            manifest.sources?.first?.revision,
+            "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb"
+        )
+        XCTAssertEqual(manifest.usageTerms?.first?.license, "InsightFace pretrained model non-commercial research terms")
+        XCTAssertNil(manifest.usageTermsAcknowledged)
+    }
+
     func testManagedDownloadSourcesAreHuggingFaceOnly() {
         for spec in ManagedModelCatalog.allSpecs where spec.hasAnyManagedDownloadSource() {
             XCTAssertNotNil(spec.hubFallback, "Managed model \(spec.id) should download from Hugging Face.")
@@ -110,8 +190,9 @@ final class ManagedModelCatalogTests: XCTestCase {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
 
         XCTAssertEqual(spec.hubFallback?.repoId, "filipstrand/Z-Image-Turbo-mflux-4bit")
+        XCTAssertEqual(spec.hubFallback?.revision, "b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b")
         XCTAssertEqual(spec.upstreamRepoId, "filipstrand/Z-Image-Turbo-mflux-4bit")
-        XCTAssertEqual(spec.upstreamRevision, "main")
+        XCTAssertEqual(spec.upstreamRevision, "b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b")
         XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/added_tokens.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer/model.safetensors.index.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/*"), false)
@@ -286,6 +367,9 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns, ["model_index.json", "transformer/*"])
         XCTAssertEqual(spec.upstreamRepoId, "black-forest-labs/FLUX.2-klein-base-9B")
         XCTAssertEqual(spec.defaultCLICommands, ["image generate", "image train-lora"])
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+        XCTAssertTrue(spec.usageRestriction?.terms.contains { $0.component == "Base 9B transformer" } == true)
+        XCTAssertTrue(spec.usageRestriction?.terms.contains { $0.component.hasPrefix("shared 9B") } == true)
 
         let mounted = Dictionary(uniqueKeysWithValues: spec.mountedHubFallbacks.map {
             ($0.destinationPath, $0.hubFallback.repoId)
@@ -337,9 +421,9 @@ final class ManagedModelCatalogTests: XCTestCase {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ideogram4Resources.modelId))
 
         XCTAssertEqual(spec.hubFallback?.repoId, "WaveCut/ideogram-4-sdnq-uint4")
-        XCTAssertEqual(spec.hubFallback?.revision, "main")
+        XCTAssertEqual(spec.hubFallback?.revision, "ea2e67436478a97ad6c414c5f947d6d76aa8457d")
         XCTAssertEqual(spec.upstreamRepoId, "WaveCut/ideogram-4-sdnq-uint4")
-        XCTAssertEqual(spec.upstreamRevision, "main")
+        XCTAssertEqual(spec.upstreamRevision, "ea2e67436478a97ad6c414c5f947d6d76aa8457d")
         XCTAssertEqual(spec.validationKind, .ideogram4SDNQ)
         XCTAssertEqual(spec.estimatedDownloadBytes, 16 * 1_073_741_824)
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
@@ -647,7 +731,10 @@ final class ManagedModelCatalogTests: XCTestCase {
     func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        try writeMinimalMFluxZImageNano(at: root, upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@main")
+        try writeMinimalMFluxZImageNano(
+            at: root,
+            upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b"
+        )
 
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
         XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
@@ -868,7 +955,10 @@ final class ManagedModelCatalogTests: XCTestCase {
             XCTAssertEqual(spec.category, .music)
             XCTAssertEqual(spec.hubFallback?.repoId, repoID)
             XCTAssertEqual(spec.hubFallback?.revision, revision)
-            XCTAssertEqual(spec.hubFallback?.patterns, ["config.json", "model.safetensors"])
+            XCTAssertEqual(spec.hubFallback?.patterns.contains("config.json"), true)
+            XCTAssertEqual(spec.hubFallback?.patterns.contains("model.safetensors"), true)
+            XCTAssertEqual(spec.hubFallback?.patterns.contains("LICENSE*"), true)
+            XCTAssertEqual(spec.hubFallback?.patterns.contains("README.md"), true)
             XCTAssertEqual(spec.validationKind, .muScriptor)
             XCTAssertEqual(spec.defaultCLICommands, ["music transcribe"])
         }
@@ -895,6 +985,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.hubFallback?.patterns.contains("checkpoints/Woosh-VFlow-8s/*") == false)
         XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, "checkpoints/TextConditionerA/tokenizer")
         XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.repoId, WooshResources.robertaTokenizerRepoId)
+        XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.revision, WooshResources.robertaTokenizerRevision)
     }
 
     func testWooshFlowSpecUsesOriginalFlowCheckpointLayout() throws {
@@ -1039,11 +1130,14 @@ final class ManagedModelCatalogTests: XCTestCase {
 
         XCTAssertEqual(spec.category, .video)
         XCTAssertEqual(spec.hubFallback?.repoId, "dgrauet/ltx-2.3-mlx")
-        XCTAssertEqual(spec.hubFallback?.revision, "main")
+        XCTAssertEqual(spec.hubFallback?.revision, "baa5f235ea04fd9c95899d751295c4fd825ee4e2")
         XCTAssertEqual(spec.upstreamRepoId, "dgrauet/ltx-2.3-mlx")
+        XCTAssertEqual(spec.upstreamRevision, "baa5f235ea04fd9c95899d751295c4fd825ee4e2")
         XCTAssertEqual(spec.validationKind, .ltxVideo23MLX)
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
         XCTAssertEqual(spec.companionModelIDs, [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue])
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+        XCTAssertTrue(spec.usageRestriction?.terms.contains { $0.license == "Gemma Terms of Use" } == true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("embedded_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("vocoder.safetensors"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-dev.safetensors"), false)
@@ -1060,6 +1154,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRevision, "14d891e009084901c434304fe93a86fd9013e84c")
         XCTAssertEqual(spec.validationKind, .hfTextChat)
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.usageRestriction?.terms.first?.license, "Gemma Terms of Use")
     }
 
     func testHFTextRootValidationRequiresShardsNamedByIndex() throws {

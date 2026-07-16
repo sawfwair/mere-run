@@ -58,6 +58,7 @@ public struct ModelResolver {
         case infinityParser2ProInt8 = "vision-ocr-infinity-pro-int8"
         case visionSegmentSAM31 = "vision-segment-sam31"
         case visionGroundFalconPerception = "vision-ground-falcon-perception"
+        case visionFaceBuffaloL = "vision-face-buffalo-l"
         case visionGeometryMoGe2Small = "vision-geometry-moge2-small"
         case visionDepthVDASmall = "vision-depth-vda-small"
         case visionDepthVDASmallMetric = "vision-depth-vda-small-metric"

@@ -32,6 +32,8 @@ jobs:
           bundle="$(swift build --show-bin-path)/MereRun.app"
           test -x "${bundle}/Contents/MacOS/mere.run.app"
           test -x "${bundle}/Contents/Helpers/mere.run"
+          find "${bundle}/Contents/Helpers" -maxdepth 1 -name 'libonnxruntime*.dylib' -print -quit | grep -q .
+          test -f "${bundle}/Contents/Resources/ThirdPartyLicenses/THIRD_PARTY_NOTICES.md"
           "${bundle}/Contents/Helpers/mere.run" --version
           # Executable code must not live under Contents/Resources (notarization rule).
           if find "${bundle}/Contents/Resources" -type f -perm -111 \

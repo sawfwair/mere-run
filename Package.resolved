@@ -1,5 +1,5 @@
 {
-  "originHash" : "eb31f3ceacb915ec386e829e26d2390d5eb31b6c1ffbf48e1a6d8370d59c02e0",
+  "originHash" : "733d36da47174bd4d6075608a2611d1f7b8231e07fb2228196af4818630e4ac5",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -233,6 +233,15 @@
       "state" : {
         "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-onnxruntime",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/readdle/swift-onnxruntime.git",
+      "state" : {
+        "revision" : "f5c95540cc857b797c0d61cc62e398ad8688e5de",
+        "version" : "1.20.1"
       }
     },
     {

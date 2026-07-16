@@ -23,6 +23,12 @@ struct ModelPull: AsyncParsableCommand {
     @Flag(name: [.long], help: "Bypass the Apple Silicon and unified-memory support check.")
     var allowUnsupported: Bool = false
 
+    @Flag(
+        name: [.customLong("accept-model-license")],
+        help: "Acknowledge all listed third-party model/component terms before downloading a restricted model."
+    )
+    var acceptModelLicense: Bool = false
+
     @Flag(name: [.customLong("preflight")], help: "Inspect support, source, disk, and install state without downloading.")
     var preflight: Bool = false
 
@@ -59,6 +65,17 @@ struct ModelPull: AsyncParsableCommand {
                 if !spec.hasAnyManagedDownloadSource() {
                     if !quiet {
                         stderr("[\(spec.id)] skipping (no Hugging Face source in this public build)")
+                    }
+                    continue
+                }
+                let requiresUsageTermsAcknowledgement = spec.usageRestriction != nil
+                    && (force || !ManagedModelResolver.isManagedInstallComplete(
+                        spec: spec,
+                        at: spec.managedInstallRootURL()
+                    ))
+                if requiresUsageTermsAcknowledgement, !acceptModelLicense {
+                    if !quiet {
+                        stderr("[\(spec.id)] skipping (pass --accept-model-license to acknowledge its third-party model/component terms)")
                     }
                     continue
                 }
@@ -122,6 +139,18 @@ struct ModelPull: AsyncParsableCommand {
             }
             return
         }
+        if let message = licenseAcceptanceMessage(for: spec) {
+            throw ValidationError(message)
+        }
+        if let restriction = spec.usageRestriction, !quiet {
+            stderr("[\(spec.id)] third-party usage terms: \(restriction.summary)")
+            for term in restriction.terms {
+                stderr("  \(term.component): \(term.license)")
+                stderr("    source: \(term.sourceRepoId)@\(term.sourceRevision)")
+                stderr("    terms: \(term.licenseURL)")
+            }
+            stderr("  You are responsible for determining whether your use complies with these terms.")
+        }
         try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir) { warning in
             guard !quiet else { return }
             stderr("  warning: \(warning)")
@@ -133,6 +162,7 @@ struct ModelPull: AsyncParsableCommand {
             result = try await ManagedModelResolver.installManagedModel(
                 id: spec.id,
                 force: force,
+                usageTermsAcknowledged: acceptModelLicense,
                 progress: { progress in
                     guard !quiet else { return }
                     stderrRaw("\r\(progressPrinter.render(progress))          ")
@@ -197,6 +227,18 @@ struct ModelPull: AsyncParsableCommand {
         CLIStderr.write(message)
     }
 
+    func licenseAcceptanceMessage(for spec: ManagedModelSpec) -> String? {
+        guard let restriction = spec.usageRestriction, !acceptModelLicense else {
+            return nil
+        }
+        return """
+        Model \(spec.id) has third-party usage terms: \(restriction.summary)
+        \(restriction.terms.map { "- \($0.component): \($0.license)\n  \($0.licenseURL)" }.joined(separator: "\n"))
+        Mere does not decide whether your intended use is permitted. You are responsible for compliance.
+        Re-run with --accept-model-license to acknowledge these terms before download.
+        """
+    }
+
     func makePreflightEnvelope(
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
@@ -209,6 +251,7 @@ struct ModelPull: AsyncParsableCommand {
             all: all,
             force: force,
             allowUnsupported: allowUnsupported,
+            acceptUsageTerms: acceptModelLicense,
             pullArgv: pullActionArguments(),
             cwd: fileManager.currentDirectoryPath
         )
@@ -253,6 +296,9 @@ struct ModelPull: AsyncParsableCommand {
         if allowUnsupported {
             args.append("--allow-unsupported")
         }
+        if acceptModelLicense {
+            args.append("--accept-model-license")
+        }
         return args
     }
 }
@@ -269,7 +315,7 @@ struct ModelPullInstallError: LocalizedError, Sendable {
         lines.append(contentsOf: details.map { "- \($0)" })
         lines.append("")
         lines.append("Model store: \(modelDir.path)")
-        lines.append("Retry with: mere.run model pull \(modelID)")
+        lines.append("Retry with: \(CLICommandDisplay.modelPullCommand(for: modelID))")
         lines.append("Use --force only if you intentionally want to replace a complete install.")
         if let hubRepoID,
            let hubCache = try? HubSnapshot.resolvedDownloadBase() {

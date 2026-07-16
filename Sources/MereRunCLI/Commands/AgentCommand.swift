@@ -24,6 +24,12 @@ struct AgentOnboard: AsyncParsableCommand {
     @Flag(name: [.long], help: "Pull the supported first-setup model package.")
     var pullRecommended: Bool = false
 
+    @Flag(
+        name: [.customLong("accept-model-license")],
+        help: "Acknowledge listed third-party model/component terms before downloading restricted recommended models."
+    )
+    var acceptModelLicense: Bool = false
+
     @Flag(name: [.long], help: "Install the latest Pi coding-agent release from GitHub.")
     var installPi: Bool = false
 
@@ -88,7 +94,7 @@ struct AgentOnboard: AsyncParsableCommand {
         if let codeReport = reports.first(where: { $0.spec.id == CodeGenResources.defaultModelId }) {
             if codeReport.isSupported {
                 print("  Qwen3-Coder Next is also supported for comparison or coding-specific sessions.")
-                print("  Pull it with: \(CLICommandDisplay.command("model pull \(CodeGenResources.defaultModelId)"))")
+                print("  Pull it with: \(CLICommandDisplay.modelPullCommand(for: CodeGenResources.defaultModelId))")
             } else {
                 print("  Qwen3-Coder Next is not supported here: \(codeReport.reasons.joined(separator: " "))")
             }
@@ -130,12 +136,33 @@ struct AgentOnboard: AsyncParsableCommand {
     private func pullRecommendedModels(_ reports: [ManagedModelSupportReport]) async throws {
         for report in reports {
             guard report.spec.hasAnyManagedDownloadSource() else { continue }
+            let isInstalled = ManagedModelResolver.isManagedInstallComplete(
+                spec: report.spec,
+                at: report.spec.managedInstallRootURL()
+            )
+            if let restriction = report.spec.usageRestriction,
+               !isInstalled,
+               !acceptModelLicense {
+                CLIStderr.write(
+                    "[\(report.spec.id)] skipping restricted model: \(restriction.summary) "
+                    + "Review \(restriction.terms.map(\.licenseURL).joined(separator: ", ")) and pass --accept-model-license.\n"
+                )
+                continue
+            }
+            if let restriction = report.spec.usageRestriction, !isInstalled, !quiet {
+                CLIStderr.write("[\(report.spec.id)] third-party usage terms: \(restriction.summary)\n")
+                for term in restriction.terms {
+                    CLIStderr.write("  \(term.component): \(term.license) \(term.licenseURL)\n")
+                }
+                CLIStderr.write("  You are responsible for determining whether your use complies.\n")
+            }
             if !quiet {
                 CLIStderr.write("[\(report.spec.id)] installing recommended model\n")
             }
             _ = try await ManagedModelResolver.installManagedModel(
                 id: report.spec.id,
                 force: false,
+                usageTermsAcknowledged: acceptModelLicense,
                 progress: { progress in
                     guard !quiet else { return }
                     switch progress {
@@ -247,7 +274,7 @@ struct AgentStart: AsyncParsableCommand {
             modelURL = existing
         } else if noBootstrap {
             throw ValidationError(
-                "Model \(spec.id) is not installed. Run `mere.run model pull \(spec.id)` "
+                "Model \(spec.id) is not installed. Run `\(CLICommandDisplay.modelPullCommand(for: spec.id))` "
                 + "or drop --no-bootstrap to auto-pull."
             )
         } else {

@@ -8,6 +8,8 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let defaultContextLength = 32_768
 
     public static let snapshotPatterns = [
+        "LICENSE*",
+        "README.md",
         "config.json",
         "generation_config.json",
         "tokenizer.json",

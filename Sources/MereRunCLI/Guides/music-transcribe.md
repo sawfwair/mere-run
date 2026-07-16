@@ -12,7 +12,7 @@ the terms for the chosen repository, then configure your token and pull it:
 
 ```bash
 mere.run config set hf-token "$HF_TOKEN"
-mere.run model pull music-muscriptor-medium
+mere.run model pull music-muscriptor-medium --accept-model-license
 ```
 
 `small` is the lightest checkpoint, `medium` is the default quality/speed

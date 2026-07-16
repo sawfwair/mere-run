@@ -90,12 +90,19 @@ fi
 for asset in \
   "${build_dir}/llama.framework" \
   "${build_dir}/magentart.framework" \
-  "${build_dir}/Resources"
+  "${build_dir}/Resources" \
+  "${build_dir}"/*.dylib
 do
   if [[ -e "$asset" ]]; then
     cp -R "$asset" "$cli_payload/"
   fi
 done
+
+# Ship the complete third-party notices with the app so licenses for loose
+# runtime libraries remain available after the source checkout is gone.
+third_party_licenses="${resources}/ThirdPartyLicenses"
+mkdir -p "$third_party_licenses"
+cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${third_party_licenses}/THIRD_PARTY_NOTICES.md"
 
 # Bundle the vendored DeepSeek V4 Flash inference binaries + Metal shaders.
 # The premier agent tier spawns vendor/ds4/ds4-server as a subprocess.
@@ -163,6 +170,14 @@ while IFS= read -r -d '' asset; do
   fi
   sign "" "$asset"
 done < <(find "$helpers" \( -name '*.framework' -o -name '*.bundle' \) -prune -print0)
+
+# Loose SwiftPM runtime libraries also need their own signatures before the
+# enclosing app is sealed. ONNX Runtime is one such co-located dylib.
+while IFS= read -r -d '' asset; do
+  if file -b "$asset" | grep -q 'Mach-O'; then
+    sign "" "$asset"
+  fi
+done < <(find "$helpers" -maxdepth 1 -type f -name '*.dylib' -print0)
 
 # 2. The bundled CLI and every vendored Mach-O under Helpers — CLI entitlements. (The .metal
 #    shader sources sit beside the ds4 executables; the file-type test skips them.)

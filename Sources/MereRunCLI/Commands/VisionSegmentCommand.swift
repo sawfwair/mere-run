@@ -150,7 +150,7 @@ struct VisionSegment: AsyncParsableCommand {
                     )
                 } catch {
                     throw ValidationError(
-                        "Model \(modelID.rawValue) not found. Pull it with `mere.run model pull \(modelID.rawValue)` or point --model at a local path."
+                        "Model \(modelID.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: modelID.rawValue))` or point --model at a local path."
                     )
                 }
             }
@@ -167,7 +167,7 @@ struct VisionSegment: AsyncParsableCommand {
             )
         } catch {
             throw ValidationError(
-                "Model \(defaultManagedModelID.rawValue) not found. Pull it with `mere.run model pull \(defaultManagedModelID.rawValue)` or point --model at a local path."
+                "Model \(defaultManagedModelID.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: defaultManagedModelID.rawValue))` or point --model at a local path."
             )
         }
     }

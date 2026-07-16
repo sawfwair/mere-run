@@ -18,7 +18,7 @@ You can also pass a local LTX model root with `--model-root`.
 ## Install And Check
 
 ```bash
-mere.run model pull video-ltx23-av-mlx
+mere.run model pull video-ltx23-av-mlx --accept-model-license
 mere.run video generate --help
 ```
 
