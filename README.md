@@ -32,7 +32,7 @@ mere.run guide --list
 For a small first image workflow:
 
 ```bash
-mere.run model pull image-zimage-nano
+mere.run model pull image-zimage-nano --accept-model-license
 mere.run image generate \
   --model image-zimage-nano \
   --prompt "a ceramic mug in soft morning light" \
@@ -262,9 +262,9 @@ swift run mere.run model capabilities --recommended
 swift run mere.run setup
 
 # Pull a Hugging Face-backed model into the local model store
-swift run mere.run model pull image-zimage-nano
-swift run mere.run model pull image-zimage-nano --preflight --json
-swift run mere.run model pull text-chat-lfm25-a1b-8bit
+swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano --accept-model-license --preflight --json
+swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run model pull text-code-north-mini
 swift run mere.run model pull text-agent-ornith-35b
 # text-agent-ornith-35b-mlx is local-only until a converted MLX snapshot is published
@@ -394,7 +394,7 @@ curl http://127.0.0.1:8080/v1/audio/transcriptions \
 
 # Optional Open WebUI companion smoke
 swift run mere.run open-webui quickstart --dry-run
-swift run mere.run open-webui quickstart --pull
+swift run mere.run open-webui quickstart --pull --accept-model-license
 swift run mere.run guide open-webui
 scripts/smoke-open-webui.sh print-env
 scripts/smoke-open-webui.sh live-smoke
@@ -501,7 +501,7 @@ swift run mere.run vision face detect ./group.jpg --json
 swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
 
 # Segment an image
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision segment ./image.png --prompt "a person"
 
 # Track prompted objects through a video
@@ -541,7 +541,7 @@ swift run mere.run music analyze ./song.mp3 \
   > ./song-analysis.json
 
 # Transcribe a full mix into instrument-separated MIDI with MuScriptor
-swift run mere.run model pull music-muscriptor-medium
+swift run mere.run model pull music-muscriptor-medium --accept-model-license
 swift run mere.run music transcribe ./song.mp3 \
   --output ./song.mid \
   --context-output ./song-context.json
@@ -582,8 +582,8 @@ swift run mere.run music realtime \
   --midi-cc 2=drums:0:2
 
 # Generate a Foley / sound-effect WAV with Woosh or MMAudio
-swift run mere.run model pull sfx-woosh-dflow
-swift run mere.run model pull sfx-woosh-flow
+swift run mere.run model pull sfx-woosh-dflow --accept-model-license
+swift run mere.run model pull sfx-woosh-flow --accept-model-license
 swift run mere.run sfx generate \
   "metal wrench dropping onto concrete, bright clang and brief ring" \
   --model sfx-woosh-dflow \
@@ -594,8 +594,8 @@ swift run mere.run sfx ae decode ./wrench-clang-latents.npy -o ./wrench-clang-ro
 swift run mere.run sfx clap score \
   "metal wrench dropping onto concrete" \
   ./wrench-clang.wav
-swift run mere.run model pull sfx-woosh-dvflow-8s
-swift run mere.run model pull sfx-woosh-synchformer
+swift run mere.run model pull sfx-woosh-dvflow-8s --accept-model-license
+swift run mere.run model pull sfx-woosh-synchformer --accept-model-license
 swift run mere.run sfx video generate \
   "footsteps echoing in a hallway" \
   ./silent-hallway.mp4 \
@@ -608,7 +608,7 @@ swift run mere.run sfx video generate \
   --output ./hallway-footsteps.wav \
   --preflight \
   --json
-swift run mere.run model pull sfx-mmaudio-large-44k-v2
+swift run mere.run model pull sfx-mmaudio-large-44k-v2 --accept-model-license
 swift run mere.run sfx generate \
   "ocean waves striking a stone breakwater" \
   --negative-prompt "speech, music" \
@@ -649,7 +649,7 @@ swift run mere.run video generate \
   --output ./clip-directed.mp4
 
 # Generate synchronized LTX 2.3 audio/video
-swift run mere.run model pull video-ltx23-av-mlx
+swift run mere.run model pull video-ltx23-av-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music and subtle city ambience" \
   --variant unified-av \

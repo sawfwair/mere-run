@@ -184,7 +184,7 @@ Example:
 
 ```bash
 swift run mere.run model capabilities
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --accept-model-license
 # Optional compact FLUX.2 Klein path:
 swift run mere.run model pull image-bonsai-binary
 ```
@@ -266,7 +266,7 @@ swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
 ### Vision segment
 
 ```bash
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision segment ./image.png --prompt "a person"
 swift run mere.run vision track ./clip.mp4 --prompt "a person"
 swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"

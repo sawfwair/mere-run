@@ -96,7 +96,7 @@ swift run mere.run model list
 swift run mere.run status
 swift run mere.run model capabilities
 swift run mere.run model runtime get text-chat-gemma4
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --accept-model-license
 swift run mere.run model info image-zimage-nano
 ```
 
@@ -164,7 +164,7 @@ swift run mere.run music realtime \
 ### Generate sound effects
 
 ```bash
-swift run mere.run model pull sfx-woosh-dflow
+swift run mere.run model pull sfx-woosh-dflow --accept-model-license
 swift run mere.run sfx generate \
   "metal wrench dropping onto concrete, bright clang and brief ring" \
   --model sfx-woosh-dflow \
@@ -328,8 +328,8 @@ FLUX.2 Klein LoRAs are trained on a Klein base model selected with `--model`
 and can be used with Klein generation via `image generate --lora`.
 
 ```bash
-swift run mere.run model pull image-krea2-raw
-swift run mere.run model pull image-krea2-turbo
+swift run mere.run model pull image-krea2-raw --accept-model-license
+swift run mere.run model pull image-krea2-turbo --accept-model-license
 swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-krea2.safetensors \
@@ -356,8 +356,8 @@ max side `512`, the fast Klein target surface, disk-backed latent caching,
 compiled-step disablement, and 250-step checkpoints:
 
 ```bash
-swift run mere.run model pull image-klein-base-9b
-swift run mere.run model pull image-klein-9b
+swift run mere.run model pull image-klein-base-9b --accept-model-license
+swift run mere.run model pull image-klein-9b --accept-model-license
 swift run mere.run image train-lora \
   --data ./style-dataset \
   --output ./style-klein.safetensors \
@@ -833,7 +833,7 @@ swift run mere.run vision inspect ./diagram.png "What does this diagram show?"
 Segment prompted objects in an image using the native SAM 3.1 runtime.
 
 ```bash
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision segment ./photo.jpg --prompt "a cat"
 ```
 
@@ -877,7 +877,7 @@ swift run mere.run vision segment ./photo.jpg --prompt "a dog" --output ./photo-
 Track prompted objects through a video with the native SAM 3.1 runtime.
 
 ```bash
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision track ./clip.mp4 --prompt "a dog"
 ```
 
@@ -1192,7 +1192,7 @@ The model repositories are gated and the weights are CC BY-NC 4.0. Accept the
 upstream Hugging Face terms before pulling.
 
 ```bash
-swift run mere.run model pull music-muscriptor-medium
+swift run mere.run model pull music-muscriptor-medium --accept-model-license
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 swift run mere.run music transcribe ./song.mp3 \
   --output ./song.mid --context-output ./song-context.json
@@ -1379,7 +1379,7 @@ Synchformer video features. `.npy` feature inputs must have shape
 video so it can compute both CLIP and Synchformer conditioning.
 
 ```bash
-swift run mere.run model pull sfx-woosh-synchformer
+swift run mere.run model pull sfx-woosh-synchformer --accept-model-license
 swift run mere.run sfx video generate \
   "footsteps echoing in a hallway" \
   ./silent-hallway.mp4 \
@@ -1620,8 +1620,8 @@ the model capability catalog and available disk space before downloading so unsu
 machines do not pull models they cannot run and tight disks fail with a useful cache path.
 
 ```bash
-swift run mere.run model pull image-zimage-nano
-swift run mere.run model pull image-zimage-nano --preflight --json
+swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano --accept-model-license --preflight --json
 swift run mere.run model pull --all
 ```
 
@@ -1631,6 +1631,15 @@ download starts. The report includes `pull-model` or `pull-models` actions and
 exits nonzero after printing JSON when hard blockers are present.
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
+
+Models with non-commercial, research-only, gated, revenue-limited, or custom
+acceptable-use terms require `--accept-model-license` before a new download.
+The preflight reports the exact component terms and blocks without
+acknowledgement; `--all` skips restricted entries unless the flag is present.
+mere.run records the immutable source revisions and acknowledged term URLs in
+the installed `mererun_model.json`, but the user remains responsible for
+deciding whether their intended use complies. See
+[`model-sources.md`](./model-sources.md#restricted-model-downloads).
 
 ### `mere.run adapter list` and `mere.run adapter pull`
 
@@ -2169,7 +2178,7 @@ extension that points at `mere.run api serve`.
 
 ```bash
 swift run mere.run agent onboard
-swift run mere.run agent onboard --pull-recommended
+swift run mere.run agent onboard --pull-recommended --accept-model-license
 swift run mere.run agent onboard --install-pi --configure-pi
 swift run mere.run agent onboard --configure-pi --model text-agent-deepseek-v4-flash
 swift run mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080

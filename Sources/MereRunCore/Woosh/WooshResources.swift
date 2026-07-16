@@ -16,6 +16,7 @@ public enum WooshResources {
     public static let synchformerRepoId = "Kijai/MMAudio_safetensors"
     public static let synchformerFilename = "mmaudio_synchformer_fp16.safetensors"
     public static let robertaTokenizerRepoId = "FacebookAI/roberta-large"
+    public static let robertaTokenizerRevision = "722cf37b1afa9454edce342e7895e588b6ff1d59"
     public static let sampleRate = 48_000
     public static let latentChannels = 128
     public static let latentFrames5s = 501

@@ -37,7 +37,10 @@ struct ModelList: ParsableCommand {
     ) -> [String] {
         specs.compactMap { spec in
             guard let restriction = spec.usageRestriction else { return nil }
-            return "Usage restriction: \(spec.id) - \(restriction.summary) \(restriction.licenseURL)"
+            let terms = restriction.terms
+                .map { "\($0.component): \($0.license) \($0.licenseURL)" }
+                .joined(separator: "; ")
+            return "Usage terms: \(spec.id) - \(restriction.summary) [\(terms)]"
         }
     }
 

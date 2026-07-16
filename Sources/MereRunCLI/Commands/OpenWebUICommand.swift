@@ -84,6 +84,12 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
     @Flag(name: [.long], help: "Pull the configured managed models before starting.")
     var pull: Bool = false
 
+    @Flag(
+        name: [.customLong("accept-model-license")],
+        help: "Acknowledge listed third-party model/component terms before downloading restricted configured models."
+    )
+    var acceptModelLicense: Bool = false
+
     @Flag(name: [.long], help: "Use an already-running mere.run API server.")
     var skipServer: Bool = false
 
@@ -244,6 +250,9 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
     }
 
     private func pullConfiguredModels() async throws {
+        if let message = unacknowledgedUsageTermsMessage() {
+            throw ValidationError(message)
+        }
         for modelID in uniqueModelIDs([textModel, visionModel, embeddingModel, imageModel, ttsModel, sttModel]) {
             guard let spec = ManagedModelCatalog.spec(for: modelID) else {
                 CLIStderr.write("[open-webui] Skipping pull for custom model \(modelID)\n")
@@ -259,6 +268,7 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
             _ = try await ManagedModelResolver.installManagedModel(
                 id: modelID,
                 force: false,
+                usageTermsAcknowledged: acceptModelLicense,
                 progress: { progress in
                     guard !quiet else { return }
                     switch progress {
@@ -289,6 +299,36 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
                 CLIStderr.write("\n")
             }
         }
+    }
+
+    func unacknowledgedUsageTermsMessage(fileManager: FileManager = .default) -> String? {
+        guard !acceptModelLicense else { return nil }
+        let restricted = uniqueModelIDs([textModel, visionModel, embeddingModel, imageModel, ttsModel, sttModel])
+            .compactMap(ManagedModelCatalog.spec(for:))
+            .filter { spec in
+                spec.usageRestriction != nil
+                    && spec.hasAnyManagedDownloadSource()
+                    && !ManagedModelResolver.isManagedInstallComplete(
+                        spec: spec,
+                        at: spec.managedInstallRootURL(),
+                        fileManager: fileManager
+                    )
+            }
+        guard !restricted.isEmpty else { return nil }
+
+        let details = restricted.map { spec in
+            let restriction = spec.usageRestriction!
+            let terms = restriction.terms
+                .map { "  - \($0.component): \($0.license) \($0.licenseURL)" }
+                .joined(separator: "\n")
+            return "- \(spec.id): \(restriction.summary)\n\(terms)"
+        }.joined(separator: "\n")
+        return """
+        Open WebUI --pull includes configured models with third-party usage terms:
+        \(details)
+        Mere does not determine whether your intended use is permitted. You are responsible for compliance.
+        Review the terms and re-run with --accept-model-license, or pre-install a different model.
+        """
     }
 
     private func startAPIServer(apiKey: String) throws -> (process: Process, logURL: URL) {

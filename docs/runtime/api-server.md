@@ -60,7 +60,7 @@ swift run mere.run api serve \
 For the LiquidAI LFM2.5 MLX 8-bit model:
 
 ```bash
-swift run mere.run model pull text-chat-lfm25-a1b-8bit
+swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run api serve --engine text-chat-lfm2
 ```
 
@@ -86,7 +86,7 @@ curl http://127.0.0.1:8080/v1/embeddings \
 Image generation and editing return base64 PNG JSON by default:
 
 ```bash
-swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --accept-model-license
 curl http://127.0.0.1:8080/v1/images/generations \
   -H "Content-Type: application/json" \
   --data '{
@@ -474,7 +474,7 @@ pip install, then configure Open WebUI with the mere.run `/v1` base URL.
 One-command Docker quickstart:
 
 ```bash
-mere.run open-webui quickstart --pull
+mere.run open-webui quickstart --pull --accept-model-license
 ```
 
 That starts `api serve`, runs the official Open WebUI container, configures the

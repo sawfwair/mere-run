@@ -27,6 +27,16 @@ with the new upstream source, version or commit when known, and license data.
 Face model weights are downloaded separately by `mere.run model pull` and are
 not vendored in this repository.
 
+The same separation applies to every managed model: mere.run ships model
+runtime code and source-level notices, not model weights. Managed models with
+non-commercial, research-only, gated, revenue-limited, or custom acceptable-
+use terms require explicit user acknowledgement before a new download. Their
+exact source revisions and component-level license URLs are preserved in the
+installed `mererun_model.json`; the authoritative inventory is in
+[`docs/model-sources.md`](./docs/model-sources.md#restricted-model-downloads).
+These third-party terms are separate from mere.run's source license, and the
+user is responsible for determining whether an intended use complies.
+
 #### Microsoft ONNX Runtime license
 
 ```text

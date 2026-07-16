@@ -132,7 +132,7 @@ download starts. The weights are not bundled with mere.run.
 ### Segment an image with SAM 3.1
 
 ```bash
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision segment ./image.png --prompt "a person"
 ```
 
@@ -146,7 +146,7 @@ swift run mere.run vision ground ./image.png --query "a person"
 ### Track objects through a video
 
 ```bash
-swift run mere.run model pull vision-segment-sam31
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
 swift run mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12
 ```
 
@@ -186,7 +186,7 @@ Accept the DINOv3 checkpoint license on Hugging Face before the first pull,
 then run the native 512-resolution pipeline:
 
 ```bash
-swift run mere.run model pull image-3d-trellis2-4b
+swift run mere.run model pull image-3d-trellis2-4b --accept-model-license
 swift run mere.run vision image-to-3d-trellis2 ./object.png \
   --output ./object-trellis2 \
   --seed 42

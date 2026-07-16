@@ -3,7 +3,7 @@ import Foundation
 public struct Krea2Resources: Sendable, Hashable {
     public static let modelId = "image-krea2-turbo"
     public static let upstreamRepoId = "krea/Krea-2-Turbo"
-    public static let upstreamRevision = "main"
+    public static let upstreamRevision = "1161245028ef398cd0a951101b2bbf486464f841"
     public static let estimatedDownloadBytes: Int64 = 36 * 1_073_741_824
 
     /// Krea publishes both split Diffusers component weights and a root-level

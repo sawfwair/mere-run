@@ -1146,6 +1146,8 @@ private struct AgentOptions: View {
                     Toggle("Install Pi", isOn: $controller.draft.all)
                     Toggle("Configure Pi", isOn: $controller.draft.stream)
                 }
+                Toggle("Acknowledge third-party model terms", isOn: $controller.draft.acceptModelLicense)
+                    .toggleStyle(.checkbox)
                 AdaptiveControlRow {
                     TextField("Host", text: $controller.draft.host)
                         .textFieldStyle(.plain)
@@ -1163,11 +1165,18 @@ private struct ModelPullOptions: View {
 
     var body: some View {
         EditorSection("Download") {
-            AdaptiveControlRow {
-                Toggle("All", isOn: $controller.draft.all)
-                Toggle("Force", isOn: $controller.draft.force)
-                Toggle("Allow unsupported", isOn: $controller.draft.stream)
-                Toggle("Quiet", isOn: $controller.draft.quiet)
+            VStack(alignment: .leading, spacing: 10) {
+                AdaptiveControlRow {
+                    Toggle("All", isOn: $controller.draft.all)
+                    Toggle("Force", isOn: $controller.draft.force)
+                    Toggle("Allow unsupported", isOn: $controller.draft.stream)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+                Toggle("Acknowledge third-party model terms", isOn: $controller.draft.acceptModelLicense)
+                    .toggleStyle(.checkbox)
+                Text("Required for new downloads whose owners publish non-commercial, research-only, gated, revenue-limited, or custom acceptable-use terms. The command output lists the exact model/component terms. Mere does not determine whether your intended use is permitted; you are responsible for compliance.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
             }
         }
     }

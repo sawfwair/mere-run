@@ -3,10 +3,12 @@ import Foundation
 public struct Ideogram4Resources: Sendable, Hashable {
     public static let modelId = "image-ideogram4-sdnq-uint4"
     public static let upstreamRepoId = "WaveCut/ideogram-4-sdnq-uint4"
-    public static let upstreamRevision = "main"
+    public static let upstreamRevision = "ea2e67436478a97ad6c414c5f947d6d76aa8457d"
     public static let estimatedDownloadBytes: Int64 = 16 * 1_073_741_824
 
     public static let snapshotPatterns = [
+        "LICENSE*",
+        "README.md",
         "ideogram4_sdnq_pipeline.py",
         "model_index.json",
         "quantization_manifest.json",

@@ -161,7 +161,7 @@ struct Setup: AsyncParsableCommand {
             printNumberedCommand(
                 index: 1,
                 title: "Pull the model",
-                command: CLICommandDisplay.command("model pull \(recommendation.id)"),
+                command: CLICommandDisplay.modelPullCommand(for: recommendation.id),
                 trailingBlankLine: true
             )
             printNumberedCommand(
@@ -376,7 +376,7 @@ struct Setup: AsyncParsableCommand {
             printNumberedCommand(
                 index: 2,
                 title: "Pull the setup agent model",
-                command: CLICommandDisplay.command("model pull \(recommendation.id)"),
+                command: CLICommandDisplay.modelPullCommand(for: recommendation.id),
                 trailingBlankLine: true
             )
             printNumberedCommand(

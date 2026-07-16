@@ -82,13 +82,51 @@ public enum ManagedModelAliasKind: String, Hashable, Sendable {
     case codegenGGUF
 }
 
-public struct ManagedModelUsageRestriction: Hashable, Sendable {
+public struct ManagedModelUsageTerm: Codable, Hashable, Sendable {
+    public let component: String
+    public let license: String
     public let summary: String
+    public let sourceRepoId: String
+    public let sourceRevision: String
     public let licenseURL: String
 
-    public init(summary: String, licenseURL: String) {
+    public init(
+        component: String,
+        license: String,
+        summary: String,
+        sourceRepoId: String,
+        sourceRevision: String,
+        licenseURL: String
+    ) {
+        self.component = component
+        self.license = license
         self.summary = summary
+        self.sourceRepoId = sourceRepoId
+        self.sourceRevision = sourceRevision
         self.licenseURL = licenseURL
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case component
+        case license
+        case summary
+        case sourceRepoId = "source_repo_id"
+        case sourceRevision = "source_revision"
+        case licenseURL = "license_url"
+    }
+}
+
+public struct ManagedModelUsageRestriction: Hashable, Sendable {
+    public let summary: String
+    public let terms: [ManagedModelUsageTerm]
+
+    public var licenseURL: String {
+        terms.first?.licenseURL ?? ""
+    }
+
+    public init(summary: String, terms: [ManagedModelUsageTerm]) {
+        self.summary = summary
+        self.terms = terms
     }
 }
 
@@ -149,6 +187,8 @@ public struct ManagedModelSpec: Hashable, Sendable {
 
 public enum ManagedModelCatalog {
     private static let diffusersImageSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
         "model_index.json",
         "tokenizer/*",
         "text_encoder/*",
@@ -178,6 +218,8 @@ public enum ManagedModelCatalog {
         "vae/diffusion_pytorch_model.safetensors",
     ]
     private static let zImageNanoSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
         "text_encoder/0.safetensors",
         "text_encoder/1.safetensors",
         "text_encoder/model.safetensors.index.json",
@@ -196,6 +238,14 @@ public enum ManagedModelCatalog {
     ]
 
     private static let zImageNanoUpstreamRepoId = "filipstrand/Z-Image-Turbo-mflux-4bit"
+    private static let zImageNanoUpstreamRevision = "b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b"
+    private static let klein9BUpstreamRevision = "b0f0826a36667ec7c58253e50557ba76f8c0255e"
+    private static let kleinBase9BUpstreamRevision = "32773329fbe7e81a90ef971740e8ba4b0364ecf3"
+    private static let sam31MLXRevision = "a992e302ea9b0f03f41dfd93414a4fd0e818f65b"
+    private static let sam31TokenizerRevision = "694239a1479aab8fd1317c87c433c58acd7c6eab"
+    private static let wooshWeightsRevision = "f7b524db359f95b2b0bdc4afce12120b72e68bff"
+    private static let ltx2DistilledRevision = "c38acc2729229140f083c3a834041e8735ee5260"
+    private static let ltx23MLXRevision = "baa5f235ea04fd9c95899d751295c4fd825ee4e2"
     private static let kleinNanoUpstreamRepoId = "stereovoid/flux2-klein-4b-4bit"
     private static let bonsaiBinaryUpstreamRepoId = "prism-ml/bonsai-image-binary-4B-mlx-1bit"
     private static let bonsaiTernaryUpstreamRepoId = "prism-ml/bonsai-image-ternary-4B-mlx-2bit"
@@ -275,6 +325,8 @@ public enum ManagedModelCatalog {
     ]
     private static let ltx23MLXUpstreamRepoId = "dgrauet/ltx-2.3-mlx"
     private static let ltx23MLXSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
         "config.json",
         "embedded_config.json",
         "split_model.json",
@@ -302,6 +354,150 @@ public enum ManagedModelCatalog {
         "special_tokens_map.json",
         "generation_config.json",
     ]
+
+    private static func usageRestriction(
+        summary: String,
+        component: String = "model",
+        license: String,
+        termSummary: String? = nil,
+        sourceRepoId: String,
+        sourceRevision: String,
+        licenseURL: String
+    ) -> ManagedModelUsageRestriction {
+        ManagedModelUsageRestriction(
+            summary: summary,
+            terms: [
+                ManagedModelUsageTerm(
+                    component: component,
+                    license: license,
+                    summary: termSummary ?? summary,
+                    sourceRepoId: sourceRepoId,
+                    sourceRevision: sourceRevision,
+                    licenseURL: licenseURL
+                ),
+            ]
+        )
+    }
+
+    private static func flux9BUsageRestriction(
+        sourceRepoId: String,
+        sourceRevision: String,
+        component: String = "model",
+        additionalTerms: [ManagedModelUsageTerm] = []
+    ) -> ManagedModelUsageRestriction {
+        let summary = "FLUX.2 Klein 9B weights are licensed only for non-commercial, non-production use."
+        let term = ManagedModelUsageTerm(
+            component: component,
+            license: "FLUX Non-Commercial License v2.1",
+            summary: summary,
+            sourceRepoId: sourceRepoId,
+            sourceRevision: sourceRevision,
+            licenseURL: "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B/blob/main/LICENSE.md"
+        )
+        return ManagedModelUsageRestriction(
+            summary: summary,
+            terms: [term] + additionalTerms
+        )
+    }
+
+    private static func krea2UsageRestriction(
+        sourceRepoId: String,
+        sourceRevision: String
+    ) -> ManagedModelUsageRestriction {
+        usageRestriction(
+            summary: "Krea 2 uses a custom community license; commercial use is limited to entities below USD 1M in trailing annual revenue and remains subject to its use and distribution conditions.",
+            license: "Krea 2 Community License Agreement",
+            sourceRepoId: sourceRepoId,
+            sourceRevision: sourceRevision,
+            licenseURL: "https://huggingface.co/\(sourceRepoId)/blob/\(sourceRevision)/LICENSE.pdf"
+        )
+    }
+
+    private static func muScriptorUsageRestriction(
+        sourceRepoId: String,
+        sourceRevision: String
+    ) -> ManagedModelUsageRestriction {
+        usageRestriction(
+            summary: "MuScriptor weights are licensed CC BY-NC 4.0 for non-commercial use.",
+            license: "CC BY-NC 4.0",
+            sourceRepoId: sourceRepoId,
+            sourceRevision: sourceRevision,
+            licenseURL: "https://creativecommons.org/licenses/by-nc/4.0/legalcode.en"
+        )
+    }
+
+    private static let wooshUsageRestriction = usageRestriction(
+        summary: "Woosh model weights are licensed CC BY-NC 4.0 for non-commercial use.",
+        license: "CC BY-NC 4.0",
+        sourceRepoId: WooshResources.huggingFaceMirrorRepoId,
+        sourceRevision: wooshWeightsRevision,
+        licenseURL: "https://github.com/SonyResearch/Woosh/blob/v1.0.0/LICENSE"
+    )
+
+    private static let wooshSynchformerUsageRestriction = usageRestriction(
+        summary: "The MMAudio Synchformer checkpoint used by Woosh is licensed CC BY-NC 4.0 for non-commercial use.",
+        component: "synchformer",
+        license: "CC BY-NC 4.0",
+        sourceRepoId: WooshResources.synchformerRepoId,
+        sourceRevision: MMAudioResources.convertedWeightsRevision,
+        licenseURL: "https://github.com/hkchengrex/MMAudio#pre-trained-weights"
+    )
+
+    private static let mmaudioUsageRestriction = ManagedModelUsageRestriction(
+        summary: "MMAudio combines non-commercial checkpoint terms with an Apple research-only visual encoder; each component's terms apply independently.",
+        terms: [
+            ManagedModelUsageTerm(
+                component: "MMAudio checkpoints",
+                license: "CC BY-NC 4.0",
+                summary: "Published MMAudio checkpoints are limited to non-commercial use.",
+                sourceRepoId: MMAudioResources.convertedWeightsRepoID,
+                sourceRevision: MMAudioResources.convertedWeightsRevision,
+                licenseURL: "https://github.com/hkchengrex/MMAudio#pre-trained-weights"
+            ),
+            ManagedModelUsageTerm(
+                component: "Apple DFN5B CLIP visual encoder",
+                license: "Apple Machine Learning Research Model License Agreement",
+                summary: "Apple licenses this component exclusively for non-commercial scientific research and academic development.",
+                sourceRepoId: MMAudioResources.clipRepoID,
+                sourceRevision: MMAudioResources.clipRevision,
+                licenseURL: "https://huggingface.co/apple/DFN5B-CLIP-ViT-H-14-378/blob/main/LICENSE"
+            ),
+        ]
+    )
+
+    private static func ltxUsageRestriction(
+        sourceRepoId: String,
+        sourceRevision: String,
+        additionalTerms: [ManagedModelUsageTerm] = []
+    ) -> ManagedModelUsageRestriction {
+        let summary = "LTX-2 uses a custom community license; entities with at least USD 10M annual revenue need a paid commercial license, and acceptable-use conditions apply."
+        let ltxTerm = ManagedModelUsageTerm(
+            component: "model",
+            license: "LTX-2 Community License Agreement",
+            summary: summary,
+            sourceRepoId: sourceRepoId,
+            sourceRevision: sourceRevision,
+            licenseURL: "https://github.com/Lightricks/LTX-2/blob/main/LICENSE"
+        )
+        return ManagedModelUsageRestriction(
+            summary: summary,
+            terms: [ltxTerm] + additionalTerms
+        )
+    }
+
+    private static let ltxGemmaTextEncoderUsageTerm = ManagedModelUsageTerm(
+        component: "Gemma 3 text encoder",
+        license: "Gemma Terms of Use",
+        summary: "The LTX 2.3 text-encoder companion is distributed under the Gemma Terms of Use and Gemma Prohibited Use Policy.",
+        sourceRepoId: ltxGemma3TextEncoderRepoId,
+        sourceRevision: ltxGemma3TextEncoderRevision,
+        licenseURL: "https://ai.google.dev/gemma/terms"
+    )
+
+    private static let ltxGemmaTextEncoderUsageRestriction = ManagedModelUsageRestriction(
+        summary: "The LTX 2.3 Gemma text-encoder companion uses Google's custom Gemma Terms of Use and Prohibited Use Policy.",
+        terms: [ltxGemmaTextEncoderUsageTerm]
+    )
 
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
@@ -343,9 +539,15 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "mlx-community/FLUX.2-klein-9B",
+                revision: klein9BUpstreamRevision,
                 patterns: diffusersImageSnapshotPatterns
             ),
             upstreamRepoId: "mlx-community/FLUX.2-klein-9B",
+            upstreamRevision: klein9BUpstreamRevision,
+            usageRestriction: flux9BUsageRestriction(
+                sourceRepoId: "mlx-community/FLUX.2-klein-9B",
+                sourceRevision: klein9BUpstreamRevision
+            ),
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 34_722_771_551,
@@ -376,6 +578,7 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "black-forest-labs/FLUX.2-klein-base-9B",
+                revision: kleinBase9BUpstreamRevision,
                 patterns: kleinBase9BTransformerSnapshotPatterns
             ),
             mountedHubFallbacks: [
@@ -383,6 +586,7 @@ public enum ManagedModelCatalog {
                     destinationPath: "text_encoder",
                     hubFallback: HubFallbackConfig(
                         repoId: "mlx-community/FLUX.2-klein-9B",
+                        revision: klein9BUpstreamRevision,
                         patterns: ["text_encoder/*"]
                     )
                 ),
@@ -390,6 +594,7 @@ public enum ManagedModelCatalog {
                     destinationPath: "tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: "mlx-community/FLUX.2-klein-9B",
+                        revision: klein9BUpstreamRevision,
                         patterns: ["tokenizer/*"]
                     )
                 ),
@@ -397,6 +602,7 @@ public enum ManagedModelCatalog {
                     destinationPath: "vae",
                     hubFallback: HubFallbackConfig(
                         repoId: "mlx-community/FLUX.2-klein-9B",
+                        revision: klein9BUpstreamRevision,
                         patterns: ["vae/*"]
                     )
                 ),
@@ -404,11 +610,28 @@ public enum ManagedModelCatalog {
                     destinationPath: "scheduler",
                     hubFallback: HubFallbackConfig(
                         repoId: "mlx-community/FLUX.2-klein-9B",
+                        revision: klein9BUpstreamRevision,
                         patterns: ["scheduler/*"]
                     )
                 ),
             ],
             upstreamRepoId: "black-forest-labs/FLUX.2-klein-base-9B",
+            upstreamRevision: kleinBase9BUpstreamRevision,
+            usageRestriction: flux9BUsageRestriction(
+                sourceRepoId: "black-forest-labs/FLUX.2-klein-base-9B",
+                sourceRevision: kleinBase9BUpstreamRevision,
+                component: "Base 9B transformer",
+                additionalTerms: [
+                    ManagedModelUsageTerm(
+                        component: "shared 9B text encoder, tokenizer, VAE, and scheduler",
+                        license: "FLUX Non-Commercial License v2.1",
+                        summary: "The shared FLUX.2 Klein 9B components are licensed only for non-commercial, non-production use.",
+                        sourceRepoId: "mlx-community/FLUX.2-klein-9B",
+                        sourceRevision: klein9BUpstreamRevision,
+                        licenseURL: "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B/blob/main/LICENSE.md"
+                    ),
+                ]
+            ),
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 48 * 1_073_741_824,
@@ -473,11 +696,18 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: zImageNanoUpstreamRepoId,
-                revision: "main",
+                revision: zImageNanoUpstreamRevision,
                 patterns: zImageNanoSnapshotPatterns
             ),
             upstreamRepoId: zImageNanoUpstreamRepoId,
-            upstreamRevision: "main",
+            upstreamRevision: zImageNanoUpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "This quantized mirror declares the Tongyi Qianwen license even though its Z-Image-Turbo base model is Apache 2.0; review the mirror's declared terms before use.",
+                license: "Tongyi Qianwen License (mirror declaration)",
+                sourceRepoId: zImageNanoUpstreamRepoId,
+                sourceRevision: zImageNanoUpstreamRevision,
+                licenseURL: "https://huggingface.co/filipstrand/Z-Image-Turbo-mflux-4bit#license"
+            ),
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 20_538_488_559,
@@ -584,6 +814,10 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Krea2RawResources.upstreamRepoId,
             upstreamRevision: Krea2RawResources.upstreamRevision,
+            usageRestriction: krea2UsageRestriction(
+                sourceRepoId: Krea2RawResources.upstreamRepoId,
+                sourceRevision: Krea2RawResources.upstreamRevision
+            ),
             validationKind: .krea2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Krea2RawResources.estimatedDownloadBytes,
@@ -600,6 +834,10 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Krea2Resources.upstreamRepoId,
             upstreamRevision: Krea2Resources.upstreamRevision,
+            usageRestriction: krea2UsageRestriction(
+                sourceRepoId: Krea2Resources.upstreamRepoId,
+                sourceRevision: Krea2Resources.upstreamRevision
+            ),
             validationKind: .krea2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Krea2Resources.estimatedDownloadBytes,
@@ -616,6 +854,13 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Ideogram4Resources.upstreamRepoId,
             upstreamRevision: Ideogram4Resources.upstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "Ideogram 4 weights are licensed only for non-commercial purposes.",
+                license: "Ideogram Non-Commercial Model Agreement",
+                sourceRepoId: Ideogram4Resources.upstreamRepoId,
+                sourceRevision: Ideogram4Resources.upstreamRevision,
+                licenseURL: "https://huggingface.co/ideogram-ai/ideogram-4-fp8/blob/main/LICENSE.md"
+            ),
             validationKind: .ideogram4SDNQ,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Ideogram4Resources.estimatedDownloadBytes,
@@ -840,7 +1085,15 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: LFM2Resources.upstreamRepoId,
             upstreamRevision: LFM2Resources.upstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.upstreamRepoId,
+                sourceRevision: LFM2Resources.upstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-8B-A1B-MLX-8bit/blob/\(LFM2Resources.upstreamRevision)/LICENSE"
+            ),
             validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 10 * 1_073_741_824,
             defaultCLICommands: ["text chat", "api serve"]
         ),
@@ -852,6 +1105,8 @@ public enum ManagedModelCatalog {
                 repoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 revision: "main",
                 patterns: [
+                    "LICENSE*",
+                    "README.md",
                     "config.json",
                     "generation_config.json",
                     "merges.txt",
@@ -1057,8 +1312,10 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "mlx-community/sam3.1-bf16",
-                revision: "main",
+                revision: sam31MLXRevision,
                 patterns: [
+                    "LICENSE*",
+                    "README.md",
                     "config.json",
                     "model.safetensors",
                     "model.safetensors.index.json",
@@ -1070,8 +1327,10 @@ public enum ManagedModelCatalog {
                     destinationPath: "tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: "AEmotionStudio/sam3.1",
-                        revision: "main",
+                        revision: sam31TokenizerRevision,
                         patterns: [
+                            "LICENSE*",
+                            "README.md",
                             "tokenizer.json",
                             "tokenizer_config.json",
                             "vocab.json",
@@ -1082,7 +1341,14 @@ public enum ManagedModelCatalog {
                 ),
             ],
             upstreamRepoId: "mlx-community/sam3.1-bf16",
-            upstreamRevision: "main",
+            upstreamRevision: sam31MLXRevision,
+            usageRestriction: usageRestriction(
+                summary: "SAM 3.1 uses Meta's custom SAM License, including trade-control, prohibited-use, redistribution, and research-attribution conditions.",
+                license: "SAM License",
+                sourceRepoId: "mlx-community/sam3.1-bf16",
+                sourceRevision: sam31MLXRevision,
+                licenseURL: "https://huggingface.co/facebook/sam3.1/blob/main/LICENSE"
+            ),
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 3_498_072_777,
@@ -1121,17 +1387,23 @@ public enum ManagedModelCatalog {
                 repoId: "deepghs/insightface",
                 revision: "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
                 patterns: [
+                    "LICENSE*",
+                    "README.md",
                     FaceAnalysisResources.detectorRelativePath,
                     FaceAnalysisResources.recognizerRelativePath,
                 ]
             ),
             upstreamRepoId: "deepghs/insightface",
             upstreamRevision: "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
-            usageRestriction: ManagedModelUsageRestriction(
+            usageRestriction: usageRestriction(
                 summary: "InsightFace Buffalo-L pretrained weights are limited to non-commercial research use.",
+                license: "InsightFace pretrained model non-commercial research terms",
+                sourceRepoId: "deepghs/insightface",
+                sourceRevision: "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb",
                 licenseURL: "https://github.com/deepinsight/insightface#license"
             ),
             validationKind: .insightFaceBuffaloL,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: FaceAnalysisResources.detectorByteCount
                 + FaceAnalysisResources.recognizerByteCount,
             defaultCLICommands: [
@@ -1246,6 +1518,14 @@ public enum ManagedModelCatalog {
             mountedHubFallbacks: Trellis2Resources.mountedHubFallbacks,
             upstreamRepoId: Trellis2Resources.repository,
             upstreamRevision: Trellis2Resources.revision,
+            usageRestriction: usageRestriction(
+                summary: "TRELLIS.2 downloads a manually gated DINOv3 component governed by Meta's custom DINOv3 License.",
+                component: "DINOv3 image encoder",
+                license: "DINOv3 License",
+                sourceRepoId: Trellis2Resources.dinoV3Repository,
+                sourceRevision: Trellis2Resources.dinoV3Revision,
+                licenseURL: "https://ai.meta.com/resources/models-and-libraries/dinov3-license/"
+            ),
             validationKind: .trellis2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 11_010_775_158,
@@ -1405,11 +1685,16 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "MuScriptor/muscriptor-small",
                 revision: "8c127f603b807520fa465c838e9bfee8a91ada4e",
-                patterns: ["config.json", "model.safetensors"]
+                patterns: ["LICENSE*", "README.md", "config.json", "model.safetensors"]
             ),
             upstreamRepoId: "MuScriptor/muscriptor-small",
             upstreamRevision: "8c127f603b807520fa465c838e9bfee8a91ada4e",
+            usageRestriction: muScriptorUsageRestriction(
+                sourceRepoId: "MuScriptor/muscriptor-small",
+                sourceRevision: "8c127f603b807520fa465c838e9bfee8a91ada4e"
+            ),
             validationKind: .muScriptor,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 412_000_000,
             defaultCLICommands: ["music transcribe"]
         ),
@@ -1420,11 +1705,16 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "MuScriptor/muscriptor-medium",
                 revision: "f32236969308476e01fd3aae67357de5feb05a2d",
-                patterns: ["config.json", "model.safetensors"]
+                patterns: ["LICENSE*", "README.md", "config.json", "model.safetensors"]
             ),
             upstreamRepoId: "MuScriptor/muscriptor-medium",
             upstreamRevision: "f32236969308476e01fd3aae67357de5feb05a2d",
+            usageRestriction: muScriptorUsageRestriction(
+                sourceRepoId: "MuScriptor/muscriptor-medium",
+                sourceRevision: "f32236969308476e01fd3aae67357de5feb05a2d"
+            ),
             validationKind: .muScriptor,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_230_000_000,
             defaultCLICommands: ["music transcribe"]
         ),
@@ -1435,11 +1725,16 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: "MuScriptor/muscriptor-large",
                 revision: "8809fdfbed2affa7ade94a7059e746e3880720e7",
-                patterns: ["config.json", "model.safetensors"]
+                patterns: ["LICENSE*", "README.md", "config.json", "model.safetensors"]
             ),
             upstreamRepoId: "MuScriptor/muscriptor-large",
             upstreamRevision: "8809fdfbed2affa7ade94a7059e746e3880720e7",
+            usageRestriction: muScriptorUsageRestriction(
+                sourceRepoId: "MuScriptor/muscriptor-large",
+                sourceRevision: "8809fdfbed2affa7ade94a7059e746e3880720e7"
+            ),
             validationKind: .muScriptor,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5_620_000_000,
             defaultCLICommands: ["music transcribe"]
         ),
@@ -1449,7 +1744,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: WooshResources.huggingFaceMirrorRepoId,
-                revision: "main",
+                revision: wooshWeightsRevision,
                 patterns: wooshDFlowSnapshotPatterns
             ),
             mountedHubFallbacks: [
@@ -1457,14 +1752,16 @@ public enum ManagedModelCatalog {
                     destinationPath: "checkpoints/TextConditionerA/tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: WooshResources.robertaTokenizerRepoId,
-                        revision: "main",
+                        revision: WooshResources.robertaTokenizerRevision,
                         patterns: wooshRobertaTokenizerPatterns
                     )
                 ),
             ],
             upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
             upstreamRevision: WooshResources.upstreamRelease,
+            usageRestriction: wooshUsageRestriction,
             validationKind: .woosh,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5 * 1_073_741_824,
             defaultCLICommands: ["sfx generate"]
         ),
@@ -1474,7 +1771,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: WooshResources.huggingFaceMirrorRepoId,
-                revision: "main",
+                revision: wooshWeightsRevision,
                 patterns: wooshFlowSnapshotPatterns
             ),
             mountedHubFallbacks: [
@@ -1482,14 +1779,16 @@ public enum ManagedModelCatalog {
                     destinationPath: "checkpoints/TextConditionerA/tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: WooshResources.robertaTokenizerRepoId,
-                        revision: "main",
+                        revision: WooshResources.robertaTokenizerRevision,
                         patterns: wooshRobertaTokenizerPatterns
                     )
                 ),
             ],
             upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
             upstreamRevision: WooshResources.upstreamRelease,
+            usageRestriction: wooshUsageRestriction,
             validationKind: .woosh,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5 * 1_073_741_824,
             defaultCLICommands: ["sfx generate"]
         ),
@@ -1499,7 +1798,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: WooshResources.huggingFaceMirrorRepoId,
-                revision: "main",
+                revision: wooshWeightsRevision,
                 patterns: wooshCLAPSnapshotPatterns
             ),
             mountedHubFallbacks: [
@@ -1507,14 +1806,16 @@ public enum ManagedModelCatalog {
                     destinationPath: "checkpoints/Woosh-CLAP/tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: WooshResources.robertaTokenizerRepoId,
-                        revision: "main",
+                        revision: WooshResources.robertaTokenizerRevision,
                         patterns: wooshRobertaTokenizerPatterns
                     )
                 ),
             ],
             upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
             upstreamRevision: WooshResources.upstreamRelease,
+            usageRestriction: wooshUsageRestriction,
             validationKind: .wooshClap,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 2 * 1_073_741_824,
             defaultCLICommands: ["sfx clap"]
         ),
@@ -1524,12 +1825,14 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: WooshResources.synchformerRepoId,
-                revision: "main",
+                revision: MMAudioResources.convertedWeightsRevision,
                 patterns: wooshSynchformerSnapshotPatterns
             ),
             upstreamRepoId: WooshResources.synchformerRepoId,
-            upstreamRevision: "main",
+            upstreamRevision: MMAudioResources.convertedWeightsRevision,
+            usageRestriction: wooshSynchformerUsageRestriction,
             validationKind: .wooshSynchformer,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 475 * 1_048_576,
             defaultCLICommands: ["sfx video generate"]
         ),
@@ -1539,7 +1842,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: WooshResources.huggingFaceMirrorRepoId,
-                revision: "main",
+                revision: wooshWeightsRevision,
                 patterns: wooshVFlow8sSnapshotPatterns
             ),
             mountedHubFallbacks: [
@@ -1547,14 +1850,16 @@ public enum ManagedModelCatalog {
                     destinationPath: "checkpoints/TextConditionerV/tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: WooshResources.robertaTokenizerRepoId,
-                        revision: "main",
+                        revision: WooshResources.robertaTokenizerRevision,
                         patterns: wooshRobertaTokenizerPatterns
                     )
                 ),
             ],
             upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
             upstreamRevision: WooshResources.upstreamRelease,
+            usageRestriction: wooshUsageRestriction,
             validationKind: .woosh,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 6 * 1_073_741_824,
             defaultCLICommands: ["sfx video generate"]
         ),
@@ -1564,7 +1869,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: WooshResources.huggingFaceMirrorRepoId,
-                revision: "main",
+                revision: wooshWeightsRevision,
                 patterns: wooshDVFlow8sSnapshotPatterns
             ),
             mountedHubFallbacks: [
@@ -1572,14 +1877,16 @@ public enum ManagedModelCatalog {
                     destinationPath: "checkpoints/TextConditionerV/tokenizer",
                     hubFallback: HubFallbackConfig(
                         repoId: WooshResources.robertaTokenizerRepoId,
-                        revision: "main",
+                        revision: WooshResources.robertaTokenizerRevision,
                         patterns: wooshRobertaTokenizerPatterns
                     )
                 ),
             ],
             upstreamRepoId: "\(WooshResources.upstreamRepoId)@\(WooshResources.upstreamRelease)",
             upstreamRevision: WooshResources.upstreamRelease,
+            usageRestriction: wooshUsageRestriction,
             validationKind: .woosh,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 6 * 1_073_741_824,
             defaultCLICommands: ["sfx video generate"]
         ),
@@ -1612,7 +1919,9 @@ public enum ManagedModelCatalog {
             ],
             upstreamRepoId: "\(MMAudioResources.upstreamRepoID)@\(MMAudioResources.upstreamRevision)",
             upstreamRevision: MMAudioResources.upstreamRevision,
+            usageRestriction: mmaudioUsageRestriction,
             validationKind: .mmaudio,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5_700_000_000,
             defaultCLICommands: ["sfx generate", "sfx video generate"]
         ),
@@ -1622,8 +1931,10 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "mlx-community/LTX-2-distilled-bf16",
-                revision: "main",
+                revision: ltx2DistilledRevision,
                 patterns: [
+                    "LICENSE*",
+                    "README.md",
                     "ltx-2-19b-distilled.safetensors",
                     "ltx-2-spatial-upscaler-x2-1.0.safetensors",
                     "text_encoder/*",
@@ -1631,8 +1942,13 @@ public enum ManagedModelCatalog {
                 ]
             ),
             upstreamRepoId: "mlx-community/LTX-2-distilled-bf16",
-            upstreamRevision: "main",
+            upstreamRevision: ltx2DistilledRevision,
+            usageRestriction: ltxUsageRestriction(
+                sourceRepoId: "mlx-community/LTX-2-distilled-bf16",
+                sourceRevision: ltx2DistilledRevision
+            ),
             validationKind: .ltxVideo,
+            runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 93_069_609_104,
             defaultCLICommands: ["video generate"]
         ),
@@ -1642,11 +1958,16 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: ltx23MLXUpstreamRepoId,
-                revision: "main",
+                revision: ltx23MLXRevision,
                 patterns: ltx23MLXSnapshotPatterns
             ),
             upstreamRepoId: ltx23MLXUpstreamRepoId,
-            upstreamRevision: "main",
+            upstreamRevision: ltx23MLXRevision,
+            usageRestriction: ltxUsageRestriction(
+                sourceRepoId: ltx23MLXUpstreamRepoId,
+                sourceRevision: ltx23MLXRevision,
+                additionalTerms: [ltxGemmaTextEncoderUsageTerm]
+            ),
             validationKind: .ltxVideo23MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 120 * 1_073_741_824,
@@ -1730,6 +2051,7 @@ private extension ManagedModelCatalog {
                 ),
                 upstreamRepoId: ltxGemma3TextEncoderRepoId,
                 upstreamRevision: ltxGemma3TextEncoderRevision,
+                usageRestriction: ltxGemmaTextEncoderUsageRestriction,
                 validationKind: .hfTextChat,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: 8 * 1_073_741_824

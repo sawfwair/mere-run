@@ -224,6 +224,7 @@ struct CommandDraft: Equatable {
     var quiet = false
     var force = false
     var all = false
+    var acceptModelLicense = false
     var json = false
     var stream = false
     var extraArguments = ""
@@ -391,6 +392,7 @@ struct CommandTemplate: Identifiable, Equatable {
         case .agentOnboard:
             args = ["agent", "onboard"]
             if draft.force { args.append("--pull-recommended") }
+            if draft.acceptModelLicense { args.append("--accept-model-license") }
             if draft.all { args.append("--install-pi") }
             if draft.stream { args.append("--configure-pi") }
             if !draft.model.isBlank { args += ["--model", draft.model] }
@@ -427,6 +429,7 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.force { args.append("--force") }
             if draft.stream { args.append("--allow-unsupported") }
             if draft.quiet { args.append("--quiet") }
+            if draft.acceptModelLicense { args.append("--accept-model-license") }
 
         case .modelInfo:
             args = ["model", "info", draft.model]

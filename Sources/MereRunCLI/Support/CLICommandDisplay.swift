@@ -1,4 +1,5 @@
 import Foundation
+import MereRunCore
 
 enum CLICommandDisplay {
     static var executable: String {
@@ -13,5 +14,12 @@ enum CLICommandDisplay {
 
     static func command(_ arguments: String) -> String {
         "\(executable) \(arguments)"
+    }
+
+    static func modelPullCommand(for modelID: String) -> String {
+        let acknowledgement = ManagedModelCatalog.spec(for: modelID)?.usageRestriction == nil
+            ? ""
+            : " --accept-model-license"
+        return command("model pull \(modelID)\(acknowledgement)")
     }
 }

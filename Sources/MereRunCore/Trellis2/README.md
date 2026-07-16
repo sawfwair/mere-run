@@ -39,7 +39,7 @@ checkpoints and two sparse decoders are not resident together.
 ## Public boundary
 
 ```bash
-mere.run model pull image-3d-trellis2-4b
+mere.run model pull image-3d-trellis2-4b --accept-model-license
 mere.run vision image-to-3d-trellis2 ./object.png --output ./object-3d
 # Equivalent catalog-oriented spelling:
 mere.run image reconstruct-3d-trellis2 ./object.png --output ./object-3d

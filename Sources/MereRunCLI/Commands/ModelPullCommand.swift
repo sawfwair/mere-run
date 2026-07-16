@@ -25,7 +25,7 @@ struct ModelPull: AsyncParsableCommand {
 
     @Flag(
         name: [.customLong("accept-model-license")],
-        help: "Acknowledge the upstream usage restriction before downloading a restricted model."
+        help: "Acknowledge all listed third-party model/component terms before downloading a restricted model."
     )
     var acceptModelLicense: Bool = false
 
@@ -68,9 +68,14 @@ struct ModelPull: AsyncParsableCommand {
                     }
                     continue
                 }
-                if spec.usageRestriction != nil, !acceptModelLicense {
+                let requiresUsageTermsAcknowledgement = spec.usageRestriction != nil
+                    && (force || !ManagedModelResolver.isManagedInstallComplete(
+                        spec: spec,
+                        at: spec.managedInstallRootURL()
+                    ))
+                if requiresUsageTermsAcknowledgement, !acceptModelLicense {
                     if !quiet {
-                        stderr("[\(spec.id)] skipping (pass --accept-model-license to acknowledge its upstream usage restriction)")
+                        stderr("[\(spec.id)] skipping (pass --accept-model-license to acknowledge its third-party model/component terms)")
                     }
                     continue
                 }
@@ -138,8 +143,13 @@ struct ModelPull: AsyncParsableCommand {
             throw ValidationError(message)
         }
         if let restriction = spec.usageRestriction, !quiet {
-            stderr("[\(spec.id)] usage restriction: \(restriction.summary)")
-            stderr("  license: \(restriction.licenseURL)")
+            stderr("[\(spec.id)] third-party usage terms: \(restriction.summary)")
+            for term in restriction.terms {
+                stderr("  \(term.component): \(term.license)")
+                stderr("    source: \(term.sourceRepoId)@\(term.sourceRevision)")
+                stderr("    terms: \(term.licenseURL)")
+            }
+            stderr("  You are responsible for determining whether your use complies with these terms.")
         }
         try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir) { warning in
             guard !quiet else { return }
@@ -152,6 +162,7 @@ struct ModelPull: AsyncParsableCommand {
             result = try await ManagedModelResolver.installManagedModel(
                 id: spec.id,
                 force: force,
+                usageTermsAcknowledged: acceptModelLicense,
                 progress: { progress in
                     guard !quiet else { return }
                     stderrRaw("\r\(progressPrinter.render(progress))          ")
@@ -221,9 +232,10 @@ struct ModelPull: AsyncParsableCommand {
             return nil
         }
         return """
-        Model \(spec.id) has an upstream usage restriction: \(restriction.summary)
-        Review: \(restriction.licenseURL)
-        Re-run with --accept-model-license to acknowledge the restriction before download.
+        Model \(spec.id) has third-party usage terms: \(restriction.summary)
+        \(restriction.terms.map { "- \($0.component): \($0.license)\n  \($0.licenseURL)" }.joined(separator: "\n"))
+        Mere does not decide whether your intended use is permitted. You are responsible for compliance.
+        Re-run with --accept-model-license to acknowledge these terms before download.
         """
     }
 
@@ -239,6 +251,7 @@ struct ModelPull: AsyncParsableCommand {
             all: all,
             force: force,
             allowUnsupported: allowUnsupported,
+            acceptUsageTerms: acceptModelLicense,
             pullArgv: pullActionArguments(),
             cwd: fileManager.currentDirectoryPath
         )
@@ -302,7 +315,7 @@ struct ModelPullInstallError: LocalizedError, Sendable {
         lines.append(contentsOf: details.map { "- \($0)" })
         lines.append("")
         lines.append("Model store: \(modelDir.path)")
-        lines.append("Retry with: mere.run model pull \(modelID)")
+        lines.append("Retry with: \(CLICommandDisplay.modelPullCommand(for: modelID))")
         lines.append("Use --force only if you intentionally want to replace a complete install.")
         if let hubRepoID,
            let hubCache = try? HubSnapshot.resolvedDownloadBase() {

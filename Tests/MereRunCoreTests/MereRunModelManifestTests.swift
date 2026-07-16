@@ -53,7 +53,10 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.engine, .zimageTurbo)
         XCTAssertEqual(manifest.precision, .int4)
         XCTAssertEqual(manifest.quantization?.bits, 4)
-        XCTAssertEqual(manifest.upstreamRepoId, "filipstrand/Z-Image-Turbo-mflux-4bit@main")
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "filipstrand/Z-Image-Turbo-mflux-4bit@b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b"
+        )
     }
 
     func testBonsaiTernaryTemplateHasExpectedNativeLayout() throws {
@@ -308,7 +311,10 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(Set(manifest.supports ?? []), Set([.txt2img]))
         XCTAssertEqual(manifest.components?.transformer, .local(path: "transformer"))
         XCTAssertEqual(manifest.components?.unconditionalTransformer, .local(path: "unconditional_transformer"))
-        XCTAssertEqual(manifest.upstreamRepoId, "WaveCut/ideogram-4-sdnq-uint4@main")
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "WaveCut/ideogram-4-sdnq-uint4@\(Ideogram4Resources.upstreamRevision)"
+        )
     }
 
     func testPrivacyFilterTemplateHasExpectedMetadata() throws {

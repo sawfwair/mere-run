@@ -19,7 +19,7 @@ struct MusicTranscribe: ParsableCommand {
         and licensed CC BY-NC 4.0; accept the terms on Hugging Face before pulling.
 
         Examples:
-          mere.run model pull music-muscriptor-medium
+          mere.run model pull music-muscriptor-medium --accept-model-license
           mere.run music transcribe ./song.mp3 --output ./song.mid
           mere.run music transcribe ./song.wav --instruments voice,drums,bass
           mere.run music transcribe ./song.wav --format jsonl --output -

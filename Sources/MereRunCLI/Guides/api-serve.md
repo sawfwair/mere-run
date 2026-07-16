@@ -33,7 +33,7 @@ Supported engines:
 ```bash
 mere.run model capabilities
 mere.run model pull text-agent-deepseek-v4-flash
-mere.run model pull image-zimage-nano
+mere.run model pull image-zimage-nano --accept-model-license
 mere.run model pull speech-tts-qwen3-nano
 mere.run model pull speech-asr-parakeet
 mere.run model runtime get text-chat-gemma4
@@ -267,7 +267,7 @@ mere.run api serve --engine text-chat-gemma4 --model vision-chat-gemma4-12b --po
 ```
 
 ```bash
-mere.run model pull text-chat-lfm25-a1b-8bit
+mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 mere.run api serve --engine text-chat-lfm2 --port 11434
 ```
 

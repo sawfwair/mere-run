@@ -30,7 +30,7 @@ mere.run guide sfx generate --model sfx-woosh-dflow
 ## Typical workflow
 
 ```bash
-swift run mere.run model pull sfx-woosh-dflow
+swift run mere.run model pull sfx-woosh-dflow --accept-model-license
 swift run mere.run sfx generate \
   "metal wrench dropping onto concrete, bright clang and brief ring" \
   --model sfx-woosh-dflow \
@@ -41,7 +41,7 @@ swift run mere.run sfx generate \
 ```
 
 ```bash
-swift run mere.run model pull sfx-woosh-flow
+swift run mere.run model pull sfx-woosh-flow --accept-model-license
 swift run mere.run sfx generate \
   "dry branch snapping under a boot" \
   --model sfx-woosh-flow \
@@ -70,15 +70,15 @@ swift run mere.run sfx condition text \
 ```
 
 ```bash
-swift run mere.run model pull sfx-woosh-clap
+swift run mere.run model pull sfx-woosh-clap --accept-model-license
 swift run mere.run sfx clap score \
   "ceramic mug shattering on a tile floor" \
   ./ceramic-shatter.wav
 ```
 
 ```bash
-swift run mere.run model pull sfx-woosh-dvflow-8s
-swift run mere.run model pull sfx-woosh-synchformer
+swift run mere.run model pull sfx-woosh-dvflow-8s --accept-model-license
+swift run mere.run model pull sfx-woosh-synchformer --accept-model-license
 swift run mere.run sfx video generate \
   "footsteps echoing down a concrete hallway" \
   ./silent-hallway.mp4 \
@@ -91,7 +91,7 @@ MMAudio provides a second, native 44.1 kHz path for both text-to-audio and
 video-to-audio generation:
 
 ```bash
-swift run mere.run model pull sfx-mmaudio-large-44k-v2
+swift run mere.run model pull sfx-mmaudio-large-44k-v2 --accept-model-license
 swift run mere.run sfx generate \
   "ocean waves striking a stone breakwater, close and detailed" \
   --negative-prompt "speech, music" \

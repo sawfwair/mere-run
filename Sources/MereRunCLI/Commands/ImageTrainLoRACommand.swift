@@ -1179,7 +1179,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                 return try ModelResolver().resolve(id).rootURL.path
             } catch {
                 throw ValidationError(
-                    "Sample model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or pass --sample-model."
+                    "Sample model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or pass --sample-model."
                 )
             }
         }
@@ -1221,7 +1221,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             } catch {
                 let modelID = Self.defaultManagedModelID.rawValue
                 throw ValidationError(
-                    "Krea 2 Raw model \(modelID) not found. Pull it with `mere.run model pull \(modelID)` or point --model at a local Raw model path."
+                    "Krea 2 Raw model \(modelID) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: modelID))` or point --model at a local Raw model path."
                 )
             }
         }
@@ -1235,7 +1235,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
                 return try resolver.resolve(id).rootURL
             } catch {
                 throw ValidationError(
-                    "Model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or point --model at a local path."
+                    "Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point --model at a local path."
                 )
             }
         }

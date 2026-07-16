@@ -1,11 +1,17 @@
 import AppKit
 import SwiftUI
 
+struct StudioModelUsageTerms: Equatable {
+    let summary: String
+    let links: [URL]
+}
+
 struct StudioModelInventoryRow: Identifiable, Equatable {
     let id: String
     let category: String
     let status: String
     let size: String
+    let usageTerms: StudioModelUsageTerms?
 
     var isInstalled: Bool {
         status.lowercased() == "installed"
@@ -57,14 +63,16 @@ struct StudioRuntimeSettings: Codable, Equatable {
 
 enum StudioModelInventoryParser {
     static func rows(from output: String) -> [StudioModelInventoryRow] {
-        output
+        let usageTerms = usageTermsByID(from: output)
+        return output
             .components(separatedBy: .newlines)
             .compactMap { line -> StudioModelInventoryRow? in
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty,
                       !trimmed.hasPrefix("-"),
                       !trimmed.hasPrefix("ID "),
-                      !trimmed.hasPrefix("Usage restriction:") else {
+                      !trimmed.hasPrefix("Usage restriction:"),
+                      !trimmed.hasPrefix("Usage terms:") else {
                     return nil
                 }
 
@@ -74,9 +82,32 @@ enum StudioModelInventoryParser {
                     id: fields[0],
                     category: fields[1],
                     status: fields[2],
-                    size: fields.dropFirst(3).joined(separator: " ")
+                    size: fields.dropFirst(3).joined(separator: " "),
+                    usageTerms: usageTerms[fields[0]]
                 )
             }
+    }
+
+    static func usageTermsByID(from output: String) -> [String: StudioModelUsageTerms] {
+        var result: [String: StudioModelUsageTerms] = [:]
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let marker = "Usage terms: "
+            guard trimmed.hasPrefix(marker) else { continue }
+            let payload = String(trimmed.dropFirst(marker.count))
+            guard let separator = payload.range(of: " - ") else { continue }
+            let id = String(payload[..<separator.lowerBound])
+            let summary = String(payload[separator.upperBound...])
+            let links = summary
+                .split(whereSeparator: \.isWhitespace)
+                .compactMap { token -> URL? in
+                    let candidate = token.trimmingCharacters(in: CharacterSet(charactersIn: "[];"))
+                    guard candidate.hasPrefix("https://") else { return nil }
+                    return URL(string: candidate)
+                }
+            result[id] = StudioModelUsageTerms(summary: summary, links: links)
+        }
+        return result
     }
 
     static func modelRoot(from output: String) -> URL? {
@@ -353,6 +384,20 @@ struct StudioModelsSheet: View {
                     Text("\(row.category) · \(row.status) · \(row.size)")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
+                    if let usageTerms = row.usageTerms {
+                        Text("Third-party usage terms · acknowledgement required for new downloads")
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.yellow)
+                        Text(usageTerms.summary)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                        HStack(spacing: 8) {
+                            ForEach(Array(usageTerms.links.enumerated()), id: \.offset) { index, url in
+                                Link("Review terms \(index + 1)", destination: url)
+                                    .font(MereRunTheme.captionFont)
+                            }
+                        }
+                    }
                 }
 
                 Spacer()
@@ -754,6 +799,10 @@ private struct StudioModelListRow: View {
                         .truncationMode(.middle)
                     HStack(spacing: 6) {
                         Text(row.category)
+                        if row.usageTerms != nil {
+                            Label("terms", systemImage: "doc.text")
+                                .labelStyle(.titleAndIcon)
+                        }
                         if !row.isInstalled {
                             Text("·")
                             Text(row.status)

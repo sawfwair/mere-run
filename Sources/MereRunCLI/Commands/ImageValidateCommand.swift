@@ -97,7 +97,7 @@ struct ImageValidate: AsyncParsableCommand {
         do {
             resolved = try ModelResolver().resolve(modelId)
         } catch {
-            throw ValidationError("Model \(modelId.rawValue) not found. Pull it with `mere.run model pull \(modelId.rawValue)` before running validation.")
+            throw ValidationError("Model \(modelId.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: modelId.rawValue))` before running validation.")
         }
 
         let report = MereRunModelValidator.validate(modelRoot: resolved.rootURL, expectedModelID: modelId.rawValue)
@@ -127,7 +127,7 @@ struct ImageValidate: AsyncParsableCommand {
                 print("    - \(error)")
             }
             throw ImageValidateRuntimeError(
-                "Model directory is incomplete. Repair the manifest or pull the model again with `mere.run model pull \(modelId.rawValue)`."
+                "Model directory is incomplete. Repair the manifest or pull the model again with `\(CLICommandDisplay.modelPullCommand(for: modelId.rawValue))`."
             )
         }
 

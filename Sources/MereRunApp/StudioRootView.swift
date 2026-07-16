@@ -24,9 +24,11 @@ struct StudioRootView: View {
     /// not-yet-sent conversation (so the library has no empty row until the first message).
     @State private var activeConversationID: UUID?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
+    @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
     /// Locally installed models feeding the composer's quick-picker.
     @State private var installedModels: [StudioModelInventoryRow] = []
+    @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @State private var showWelcome = false
     @FocusState private var promptFocused: Bool
@@ -449,6 +451,27 @@ struct StudioRootView: View {
                 }
                 .frame(width: 1_260, height: 780)
                 .environmentObject(controller)
+            }
+            .alert(
+                "Acknowledge third-party model terms",
+                isPresented: Binding(
+                    get: { pendingRestrictedPull != nil },
+                    set: { if !$0 { pendingRestrictedPull = nil } }
+                ),
+                presenting: pendingRestrictedPull
+            ) { request in
+                Button("Cancel", role: .cancel) {
+                    pendingRestrictedPull = nil
+                }
+                Button("Acknowledge & Download") {
+                    pendingRestrictedPull = nil
+                    startPull(request, acknowledgingUsageTerms: true)
+                }
+            } message: { request in
+                let usageTerms = modelUsageTermsByID[request.draft.model]
+                Text(
+                    "\(usageTerms?.summary ?? "This model has third-party usage terms.")\n\nMere does not determine whether your intended use is permitted. You are responsible for compliance."
+                )
             }
             .focusedSceneValue(\.showLibrary, visibleLibraryBinding)
             .focusedSceneValue(\.showAdvanced, $showAdvanced)
@@ -952,16 +975,38 @@ struct StudioRootView: View {
                 studioError = "This mode does not need a managed model."
                 return
             }
-            pendingPullRefresh = StudioReadinessRefresh(mode: mode, draft: draft)
-            controller.readinessByMode[mode] = .checking
-            // The canvas running overlay shows pull progress (bytes, speed, cancel) in place,
-            // so the Advanced console no longer needs to open for a pull.
-            if !controller.run(studio: request) {
-                pendingPullRefresh = nil
-                refreshReadiness()
+            if modelUsageTermsByID[request.draft.model] != nil {
+                pendingRestrictedPull = request
+            } else {
+                startPull(request)
             }
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    private func startPull(
+        _ request: StudioRunRequest,
+        acknowledgingUsageTerms: Bool = false
+    ) {
+        var commandDraft = request.draft
+        commandDraft.acceptModelLicense = acknowledgingUsageTerms
+        let effectiveRequest = StudioRunRequest(
+            id: request.id,
+            mode: request.mode,
+            templateID: request.templateID,
+            template: request.template,
+            draft: commandDraft,
+            createdAt: request.createdAt,
+            conversationID: request.conversationID
+        )
+        pendingPullRefresh = StudioReadinessRefresh(mode: request.mode, draft: draft)
+        controller.readinessByMode[request.mode] = .checking
+        // The canvas running overlay shows pull progress (bytes, speed, cancel) in place,
+        // so the Advanced console no longer needs to open for a pull.
+        if !controller.run(studio: effectiveRequest) {
+            pendingPullRefresh = nil
+            refreshReadiness()
         }
     }
 
@@ -974,7 +1019,13 @@ struct StudioRootView: View {
         Task {
             let result = await controller.utilityCommandResult(args: ["model", "list"])
             guard result.exitCode == 0 else { return }
-            installedModels = StudioModelInventoryParser.rows(from: result.stdout).filter(\.isInstalled)
+            let rows = StudioModelInventoryParser.rows(from: result.stdout)
+            installedModels = rows.filter(\.isInstalled)
+            modelUsageTermsByID = Dictionary(
+                uniqueKeysWithValues: rows.compactMap { row in
+                    row.usageTerms.map { (row.id, $0) }
+                }
+            )
         }
     }
 

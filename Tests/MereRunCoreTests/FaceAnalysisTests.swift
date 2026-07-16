@@ -12,7 +12,12 @@ final class FaceAnalysisTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.revision, "4e1f33d3fe0e50a0945f3a53ab94ae8977ae7ddb")
         XCTAssertEqual(
             Set(spec.hubFallback?.patterns ?? []),
-            [FaceAnalysisResources.detectorRelativePath, FaceAnalysisResources.recognizerRelativePath]
+            [
+                FaceAnalysisResources.detectorRelativePath,
+                FaceAnalysisResources.recognizerRelativePath,
+                "LICENSE*",
+                "README.md",
+            ]
         )
         XCTAssertEqual(
             spec.estimatedDownloadBytes,

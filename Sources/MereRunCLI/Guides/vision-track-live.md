@@ -11,7 +11,7 @@ Managed id: `vision-segment-sam31`, or a local SAM 3.1 model root.
 ## Install And Check
 
 ```bash
-mere.run model pull vision-segment-sam31
+mere.run model pull vision-segment-sam31 --accept-model-license
 mere.run vision track-live --help
 ```
 

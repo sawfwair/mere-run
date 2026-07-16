@@ -39,7 +39,7 @@ struct ModelInfo: ParsableCommand {
                 if id == .gemma4 {
                     throw ValidationError("Model \(id.rawValue) is not installed in the local model store. Gemma4 resolves through the native Hugging Face snapshot path on first use, or you can point info at a local model path.")
                 }
-                throw ValidationError("Model \(id.rawValue) not found. Pull it with `mere.run model pull \(id.rawValue)` or point info at a local model path.")
+                throw ValidationError("Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point info at a local model path.")
             }
         } else {
             throw ValidationError("Not a path and not a known model id: \(target)")
@@ -129,6 +129,25 @@ struct ModelInfo: ParsableCommand {
 
             if let upstream = manifest.upstreamRepoId {
                 print("  upstreamRepoId: \(upstream)")
+            }
+
+            if let sources = manifest.sources, !sources.isEmpty {
+                print("  sources:")
+                for source in sources {
+                    let destination = source.destinationPath.map { " -> \($0)" } ?? ""
+                    print("    - \(source.role): \(source.repository)@\(source.revision)\(destination)")
+                }
+            }
+
+            if let terms = manifest.usageTerms, !terms.isEmpty {
+                print("  usageTermsAcknowledged: \(manifest.usageTermsAcknowledged == true)")
+                print("  usageTerms:")
+                for term in terms {
+                    print("    - \(term.component): \(term.license)")
+                    print("      source: \(term.sourceRepoId)@\(term.sourceRevision)")
+                    print("      summary: \(term.summary)")
+                    print("      url: \(term.licenseURL)")
+                }
             }
 
             if let createdAt = manifest.createdAt {

@@ -88,7 +88,7 @@ swift run mere.run music realtime \
   --output ./live.wav \
   --no-play
 
-swift run mere.run model pull music-muscriptor-medium
+swift run mere.run model pull music-muscriptor-medium --accept-model-license
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 ```
 

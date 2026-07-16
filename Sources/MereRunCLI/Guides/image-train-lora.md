@@ -19,9 +19,9 @@ and caption dataset and want an adapter that can be loaded with
 ## Install And Check
 
 ```bash
-mere.run model pull image-krea2-raw
-mere.run model pull image-krea2-turbo
-mere.run model pull image-klein-base-9b
+mere.run model pull image-krea2-raw --accept-model-license
+mere.run model pull image-krea2-turbo --accept-model-license
+mere.run model pull image-klein-base-9b --accept-model-license
 mere.run image train-lora --help
 ```
 
@@ -289,7 +289,7 @@ mere.run image generate \
 
 ## Troubleshooting
 
-- Missing Raw model: run `mere.run model pull image-krea2-raw`.
+- Missing Raw model: run `mere.run model pull image-krea2-raw --accept-model-license`.
 - LoRA has no visible effect: confirm you are generating with the exact `--lora`
   path and that the prompt includes the trained trigger token. For Klein LoRAs,
   train on `image-klein-base-9b` and run on distilled `image-klein-9b`, but

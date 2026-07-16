@@ -87,6 +87,14 @@ checked against the managed capability catalog before download so low-memory
 machines do not fetch models they cannot run. Pass `--allow-unsupported` only
 when you intentionally accept that risk or are using external hardware.
 
+Restricted or custom-terms models require `--accept-model-license` for new
+downloads and never auto-download at runtime. The CLI and macOS app show the
+applicable model/component terms before acceptance; schema 3 of the installed
+`mererun_model.json` records the immutable source revisions, term URLs, and
+acknowledgement. mere.run does not determine whether a user's intended use is
+permitted. The complete inventory is in
+[`model-sources.md`](../model-sources.md#restricted-model-downloads).
+
 ### `mere.run adapter list` and `mere.run adapter pull`
 
 Adapters use a separate checksum-pinned catalog and install under:

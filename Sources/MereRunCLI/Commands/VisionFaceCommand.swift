@@ -388,7 +388,7 @@ private enum FaceCLI {
             return try ModelResolver().resolve(.visionFaceBuffaloL).rootURL
         } catch {
             throw ValidationError(
-                "Model \(FaceAnalysisResources.modelID) not found. Pull it with `mere.run model pull \(FaceAnalysisResources.modelID)` or pass --model PATH."
+                "Model \(FaceAnalysisResources.modelID) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: FaceAnalysisResources.modelID))` or pass --model PATH."
             )
         }
     }
