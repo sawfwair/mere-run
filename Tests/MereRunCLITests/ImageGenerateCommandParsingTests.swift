@@ -276,6 +276,7 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         let decoded = try decoder.decode(ImageGenerationPreflightEnvelope.self, from: Data(encoded.utf8))
         XCTAssertEqual(decoded.status, .ok)
         XCTAssertEqual(decoded.result.model.family, "zimage")
+        XCTAssertFalse(decoded.result.structuredPrompt.backend.contains("default device"))
 
         let encodedPlan = try StructuredRunOutput.encode(envelope.result.runPlan)
         let planURL = temp.appendingPathComponent("generate.plan.json")

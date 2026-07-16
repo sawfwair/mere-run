@@ -24,6 +24,74 @@ struct WorkflowRunOutcome: Codable, Equatable {
 struct WorkflowProcessResult: Equatable {
     let status: Int32
     let stdout: String
+    let stderr: String
+    let terminationReason: WorkflowProcessTerminationReason
+
+    init(
+        status: Int32,
+        stdout: String,
+        stderr: String = "",
+        terminationReason: WorkflowProcessTerminationReason = .exit
+    ) {
+        self.status = status
+        self.stdout = stdout
+        self.stderr = stderr
+        self.terminationReason = terminationReason
+    }
+
+    var failureSummary: String {
+        var summary = terminationReason == .uncaughtSignal
+            ? "terminated by signal \(status)"
+            : "exited with status \(status)"
+        if !stderr.isEmpty {
+            summary += ". stderr: \(stderr)"
+        } else if !stdout.isEmpty {
+            summary += ". stdout: \(stdout.suffix(16 * 1_024))"
+        }
+        return summary
+    }
+}
+
+enum WorkflowProcessTerminationReason: String, Equatable {
+    case exit
+    case uncaughtSignal = "uncaught_signal"
+
+    init(_ reason: Process.TerminationReason) {
+        switch reason {
+        case .exit:
+            self = .exit
+        case .uncaughtSignal:
+            self = .uncaughtSignal
+        @unknown default:
+            self = .exit
+        }
+    }
+}
+
+private final class WorkflowProcessStderrTail: @unchecked Sendable {
+    private static let maximumBytes = 16 * 1_024
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ newData: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        if newData.count >= Self.maximumBytes {
+            data = Data(newData.suffix(Self.maximumBytes))
+            return
+        }
+        data.append(newData)
+        if data.count > Self.maximumBytes {
+            data.removeFirst(data.count - Self.maximumBytes)
+        }
+    }
+
+    var string: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 protocol WorkflowProcessRunning {
@@ -64,6 +132,8 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
         let stdout = Pipe()
+        let stderr = Pipe()
+        let stderrTail = WorkflowProcessStderrTail()
         let runDirectory = currentDirectory.deletingLastPathComponent().deletingLastPathComponent()
         let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
         defer {
@@ -71,7 +141,13 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = stdout
-        process.standardError = FileHandle.standardError
+        process.standardError = stderr
+        stderr.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            stderrTail.append(data)
+            try? FileHandle.standardError.write(contentsOf: data)
+        }
         try process.run()
         try Data(String(process.processIdentifier).utf8).write(to: processIDURL, options: .atomic)
         var captured = Data()
@@ -91,6 +167,12 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
             }
         }
         process.waitUntilExit()
+        stderr.fileHandleForReading.readabilityHandler = nil
+        let remainingStderr = stderr.fileHandleForReading.readDataToEndOfFile()
+        if !remainingStderr.isEmpty {
+            stderrTail.append(remainingStderr)
+            try? FileHandle.standardError.write(contentsOf: remainingStderr)
+        }
         if !pending.isEmpty {
             let line = String(decoding: pending, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,7 +183,9 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         }
         return WorkflowProcessResult(
             status: process.terminationStatus,
-            stdout: String(decoding: captured, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            stdout: String(decoding: captured, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines),
+            stderr: stderrTail.string,
+            terminationReason: WorkflowProcessTerminationReason(process.terminationReason)
         )
     }
 }
@@ -289,7 +373,7 @@ struct WorkflowRunner {
                     options: .atomic
                 )
                 guard preflight.status == 0 else {
-                    throw ValidationError("Node '\(nodeID)' preflight failed with status \(preflight.status).")
+                    throw ValidationError("Node '\(nodeID)' preflight \(preflight.failureSummary).")
                 }
                 if invocation.streamsEvents {
                     let report = try WorkflowBundleCodec.decoder().decode(

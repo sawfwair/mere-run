@@ -254,6 +254,25 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertFalse(first.lastPathComponent.contains("UUID()"))
     }
 
+    func testWorkflowChildCapturesStderrAndTerminationReason() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nodeDirectory = root.appendingPathComponent("run/nodes/000-fixture", isDirectory: true)
+        try FileManager.default.createDirectory(at: nodeDirectory, withIntermediateDirectories: true)
+
+        let result = try WorkflowProcessRunner().run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf 'fixture failure' >&2; exit 7"],
+            currentDirectory: nodeDirectory,
+            stdoutLineHandler: nil
+        )
+
+        XCTAssertEqual(result.status, 7)
+        XCTAssertEqual(result.stderr, "fixture failure")
+        XCTAssertEqual(result.terminationReason, .exit)
+        XCTAssertEqual(result.failureSummary, "exited with status 7. stderr: fixture failure")
+    }
+
     func testMaterializationFreezesSeedAndCanonicalFingerprints() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -448,6 +467,34 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertTrue(process.arguments[1].contains("--quiet"))
         XCTAssertEqual(outcome.outputs.count, 1)
         XCTAssertEqual(outcome.outputs[0].contentType, "image/png")
+    }
+
+    func testRunnerPersistsPreflightOutputInFailureDiagnostic() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("a lighthouse")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 99 }
+        ).materialize()
+        let runDirectory = root.appendingPathComponent("run")
+
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: runDirectory,
+            processRunner: FailingPreflightWorkflowProcessRunner()
+        ).execute()
+        let manifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: runDirectory.appendingPathComponent(GraphRunManifest.filename))
+        )
+
+        XCTAssertEqual(outcome.state, .failed)
+        XCTAssertEqual(
+            manifest.error,
+            "Node 'generate' preflight exited with status 255. stdout: fixture model failure."
+        )
     }
 
     func testResumeRequiresMatchingNodeFingerprintAndArtifactDigests() throws {
@@ -729,5 +776,11 @@ private final class FixtureWorkflowProcessRunner: WorkflowProcessRunning {
         try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data([0x89, 0x50, 0x4e, 0x47]).write(to: output)
         return WorkflowProcessResult(status: 0, stdout: "ok")
+    }
+}
+
+private struct FailingPreflightWorkflowProcessRunner: WorkflowProcessRunning {
+    func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
+        WorkflowProcessResult(status: 255, stdout: "fixture model failure")
     }
 }

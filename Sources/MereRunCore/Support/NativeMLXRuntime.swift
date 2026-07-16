@@ -2,6 +2,14 @@ import Foundation
 import MLX
 
 public enum NativeMLXRuntime {
+    public static var backendFamilyDescription: String {
+        #if os(macOS) || os(iOS)
+        return "native MLX/Metal"
+        #else
+        return "native MLX"
+        #endif
+    }
+
     public static var defaultDeviceType: String {
         Device.defaultDevice().deviceType?.rawValue ?? "unknown"
     }
