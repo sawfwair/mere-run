@@ -116,8 +116,55 @@ public struct LTXAudioToVideoGuidance: Sendable, Hashable {
     }
 }
 
+/// Guidance for one stream of the full LTX 2.3 joint audio/video denoiser.
+public struct LTXMultiModalGuidance: Sendable, Hashable {
+    public let classifierFreeScale: Float
+    public let spatioTemporalScale: Float
+    public let rescale: Float
+    public let modalityScale: Float
+    public let spatioTemporalBlocks: Set<Int>
+
+    public init(
+        classifierFreeScale: Float,
+        spatioTemporalScale: Float = 1,
+        rescale: Float = 0.7,
+        modalityScale: Float = 3,
+        spatioTemporalBlocks: Set<Int> = [28]
+    ) {
+        self.classifierFreeScale = classifierFreeScale
+        self.spatioTemporalScale = spatioTemporalScale
+        self.rescale = rescale
+        self.modalityScale = modalityScale
+        self.spatioTemporalBlocks = spatioTemporalBlocks
+    }
+
+    func combine(
+        conditioned: MLXArray,
+        negativeText: MLXArray,
+        perturbed: MLXArray,
+        isolatedModality: MLXArray
+    ) -> MLXArray {
+        let originalDType = conditioned.dtype
+        let conditioned32 = conditioned.asType(.float32)
+        let negative32 = negativeText.asType(.float32)
+        let perturbed32 = perturbed.asType(.float32)
+        let isolated32 = isolatedModality.asType(.float32)
+        var prediction = conditioned32
+            + MLXArray(classifierFreeScale - 1) * (conditioned32 - negative32)
+            + MLXArray(spatioTemporalScale) * (conditioned32 - perturbed32)
+            + MLXArray(modalityScale - 1) * (conditioned32 - isolated32)
+
+        if rescale != 0 {
+            let factor = sampleStandardDeviation(conditioned32) / sampleStandardDeviation(prediction)
+            prediction = prediction * (MLXArray(rescale) * factor + MLXArray(1 - rescale))
+        }
+        return prediction.asType(originalDType)
+    }
+}
+
 struct LTXAudioToVideoPerturbation: Sendable, Hashable {
     var skippedVideoSelfAttentionBlocks: Set<Int> = []
+    var skippedAudioSelfAttentionBlocks: Set<Int> = []
     var skipsAudioToVideoCrossAttention = false
     var skipsVideoToAudioCrossAttention = false
 
@@ -125,6 +172,13 @@ struct LTXAudioToVideoPerturbation: Sendable, Hashable {
 
     static func spatioTemporal(blocks: Set<Int>) -> Self {
         Self(skippedVideoSelfAttentionBlocks: blocks)
+    }
+
+    static func spatioTemporal(videoBlocks: Set<Int>, audioBlocks: Set<Int>) -> Self {
+        Self(
+            skippedVideoSelfAttentionBlocks: videoBlocks,
+            skippedAudioSelfAttentionBlocks: audioBlocks
+        )
     }
 
     static let isolatedModalities = LTXAudioToVideoPerturbation(

@@ -91,6 +91,7 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.variant, .unifiedAV)
         XCTAssertEqual(cmd.duration, 15)
         XCTAssertEqual(cmd.fps, 24)
+        XCTAssertEqual(cmd.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
     }
 
     func testVideoGenerateAudioSelectsNativeA2VidDefaults() throws {
@@ -100,6 +101,8 @@ final class VideoCommandTests: XCTestCase {
             "--audio-start-time", "42",
             "--a2v-guidance-scale", "2.5",
             "--video-cfg-guidance-scale", "3.5",
+            "--audio-cfg-guidance-scale", "6.5",
+            "--v2a-guidance-scale", "2.75",
             "--a2v-steps", "28",
         ])
 
@@ -107,8 +110,10 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.audioStartTime, 42)
         XCTAssertEqual(cmd.a2vGuidanceScale, 2.5, accuracy: 0.0001)
         XCTAssertEqual(cmd.videoCFGGuidanceScale, 3.5, accuracy: 0.0001)
+        XCTAssertEqual(cmd.audioCFGGuidanceScale, 6.5, accuracy: 0.0001)
+        XCTAssertEqual(cmd.v2aGuidanceScale, 2.75, accuracy: 0.0001)
         XCTAssertEqual(cmd.a2vSteps, 28)
-        XCTAssertEqual(cmd.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)
+        XCTAssertEqual(cmd.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
     }
 
     func testVideoGenerateA2VidPreflightReportsSourceAudioContract() throws {
@@ -146,6 +151,30 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(envelope.result.plan.preservesSourceAudio)
         XCTAssertTrue(envelope.result.plan.writesAudio)
         XCTAssertTrue(envelope.actions.contains { $0.id == "reveal-source-audio" && $0.enabled })
+    }
+
+    func testVideoGenerateFullModelPreflightReportsUnifiedBundle() throws {
+        let modelRoot = try makeValidFullModelRoot()
+        let output = makeTempOutput(name: "clip.mp4")
+        let cmd = try VideoGenerate.parse([
+            "dialogue with synchronized ambience",
+            "--variant", "unified-av",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.layout, "ltx23_full_split")
+        XCTAssertEqual(envelope.result.plan.variant, "unified-av")
+        XCTAssertTrue(envelope.result.plan.writesAudio)
     }
 
     func testVideoGenerateA2VidPreflightBlocksIncompatibleManagedModel() throws {
@@ -343,6 +372,10 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNoThrow(try validateNativeModelRoot(rootURL))
     }
 
+    func testValidateNativeModelRootAcceptsFullLTX23Layout() throws {
+        XCTAssertNoThrow(try validateNativeModelRoot(makeValidFullModelRoot()))
+    }
+
     func testWanPreflightUsesNativeSpatialAndTemporalGeometry() throws {
         let modelRoot = try makeValidWanModelRoot()
         let sourceImage = try makeTempFile(name: "start.png")
@@ -419,6 +452,12 @@ final class VideoCommandTests: XCTestCase {
         ] {
             try createFile(rootURL.appendingPathComponent(name))
         }
+        return rootURL
+    }
+
+    private func makeValidFullModelRoot() throws -> URL {
+        let rootURL = try makeValidA2VidModelRoot()
+        try createFile(rootURL.appendingPathComponent("vocoder.safetensors"))
         return rootURL
     }
 

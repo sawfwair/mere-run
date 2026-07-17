@@ -85,6 +85,7 @@ public struct ModelResolver {
         case mmaudioLarge44kV2 = "sfx-mmaudio-large-44k-v2"
         case ltxVideoAV = "video-ltx-av"
         case ltxVideo23AVMLX = "video-ltx23-av-mlx"
+        case ltxVideo23FullMLX = "video-ltx23-full-mlx"
         case ltxVideo23A2VMLX = "video-ltx23-a2vid-mlx"
         case wan22TI2V5BMLX = "video-wan22-ti2v-5b-mlx"
         case dreamXWorld5BARMLX = "video-dreamx-world-5b-ar-mlx"

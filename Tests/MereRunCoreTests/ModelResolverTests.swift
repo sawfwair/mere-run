@@ -84,6 +84,33 @@ final class ModelResolverTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors"), contents: Data())
     }
 
+    private func writeMinimalLTX23DevModel(
+        at root: URL,
+        id: ModelResolver.ModelID,
+        includeVocoder: Bool
+    ) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        for file in [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-dev.safetensors",
+            "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
+        ] {
+            try TestFileSystem.writeFile(root.appendingPathComponent(file), contents: Data())
+        }
+        if includeVocoder {
+            try TestFileSystem.writeFile(root.appendingPathComponent("vocoder.safetensors"), contents: Data())
+        }
+    }
+
     func testResolvesFromProcessModelStoreOverride() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -117,6 +144,44 @@ final class ModelResolverTests: MereRunCoreTestCase {
 
         let resolver = ModelResolver()
         XCTAssertThrowsError(try resolver.resolve(.mebot))
+    }
+
+    func testLTX23FullAndLegacyA2VidIDsResolveCompatibleInstalledRoots() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+        let legacyRoot = modelsRoot.appendingPathComponent(
+            ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
+            isDirectory: true
+        )
+        try writeMinimalLTX23DevModel(
+            at: legacyRoot,
+            id: .ltxVideo23A2VMLX,
+            includeVocoder: false
+        )
+
+        XCTAssertEqual(
+            try ModelResolver().resolve(.ltxVideo23FullMLX).rootURL.standardizedFileURL,
+            legacyRoot.standardizedFileURL
+        )
+
+        try FileManager.default.removeItem(at: legacyRoot)
+        let fullRoot = modelsRoot.appendingPathComponent(
+            ModelResolver.ModelID.ltxVideo23FullMLX.rawValue,
+            isDirectory: true
+        )
+        try writeMinimalLTX23DevModel(
+            at: fullRoot,
+            id: .ltxVideo23FullMLX,
+            includeVocoder: true
+        )
+        XCTAssertEqual(
+            try ModelResolver().resolve(.ltxVideo23A2VMLX).rootURL.standardizedFileURL,
+            fullRoot.standardizedFileURL
+        )
     }
 
     func testResolvesStandaloneMebotModel() throws {

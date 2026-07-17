@@ -1,4 +1,5 @@
 import Foundation
+import ArgumentParser
 import MereRunCore
 
 struct VideoGenerationPreflightInput {
@@ -18,6 +19,8 @@ struct VideoGenerationPreflightInput {
     let audioStartTime: Double
     let a2vGuidanceScale: Float
     let videoCFGGuidanceScale: Float
+    let audioCFGGuidanceScale: Float
+    let v2aGuidanceScale: Float
     let a2vSteps: Int
     let image: String?
     let imageStrength: Float
@@ -44,6 +47,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let audioStartTime: Double
     let a2vGuidanceScale: Float
     let videoCFGGuidanceScale: Float
+    let audioCFGGuidanceScale: Float
+    let v2aGuidanceScale: Float
     let a2vSteps: Int
     let image: String?
     let imageStrength: Float
@@ -67,6 +72,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case audioStartTime = "audio_start_time"
         case a2vGuidanceScale = "a2v_guidance_scale"
         case videoCFGGuidanceScale = "video_cfg_guidance_scale"
+        case audioCFGGuidanceScale = "audio_cfg_guidance_scale"
+        case v2aGuidanceScale = "v2a_guidance_scale"
         case a2vSteps = "a2v_steps"
         case image
         case imageStrength = "image_strength"
@@ -277,6 +284,8 @@ struct VideoGenerationPreflightAnalyzer {
             audioStartTime: input.audioStartTime,
             a2vGuidanceScale: input.a2vGuidanceScale,
             videoCFGGuidanceScale: input.videoCFGGuidanceScale,
+            audioCFGGuidanceScale: input.audioCFGGuidanceScale,
+            v2aGuidanceScale: input.v2aGuidanceScale,
             a2vSteps: input.a2vSteps,
             image: input.image,
             imageStrength: input.imageStrength,
@@ -326,13 +335,16 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        if input.a2vGuidanceScale < 0 || input.videoCFGGuidanceScale < 0 {
+        if input.a2vGuidanceScale < 0
+            || input.videoCFGGuidanceScale < 0
+            || input.audioCFGGuidanceScale < 0
+            || input.v2aGuidanceScale < 0 {
             diagnostics.append(
                 PreflightDiagnostic(
-                    id: "a2v_guidance_invalid",
+                    id: "ltx_guidance_invalid",
                     severity: .blocker,
-                    title: "A2Vid guidance is invalid",
-                    message: "A2Vid guidance scales must be >= 0."
+                    title: "LTX guidance is invalid",
+                    message: "LTX full/A2Vid guidance scales must be >= 0."
                 )
             )
         }
@@ -349,13 +361,14 @@ struct VideoGenerationPreflightAnalyzer {
         if usesAudioConditioning,
            input.modelRoot == nil,
            ModelResolver.ModelID(rawValue: input.model) != nil,
+           input.model != ModelResolver.ModelID.ltxVideo23FullMLX.rawValue,
            input.model != ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "audio_model_incompatible",
                     severity: .blocker,
                     title: "Model does not support audio conditioning",
-                    message: "--audio requires \(ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)."
+                    message: "--audio requires \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
                 )
             )
         }
@@ -630,15 +643,26 @@ struct VideoGenerationPreflightAnalyzer {
         if resources.validate().isEmpty, (try? resources.loadConfiguration()) != nil {
             return "wan22_ti2v_mlx"
         }
+        if isLTX23FullModelRoot(url, fileManager: fileManager) {
+            return "ltx23_full_split"
+        }
         if isLTX23AudioToVideoModelRoot(url, fileManager: fileManager) {
             return "ltx23_a2vid_split"
         }
-        return isLTX23SplitModelRoot(url, fileManager: fileManager) ? "ltx23_split" : "ltx_merged"
+        return isLTX23SplitModelRoot(url, fileManager: fileManager)
+            ? "ltx23_distilled_split"
+            : "ltx_merged"
     }
 
     private func validateSelectedModelRoot(_ url: URL) throws {
         if usesAudioConditioning {
             try validateNativeAudioToVideoModelRoot(url, fileManager: fileManager)
+        } else if input.variant == .unifiedAV,
+                  isLTX23AudioToVideoModelRoot(url, fileManager: fileManager),
+                  !isLTX23FullModelRoot(url, fileManager: fileManager) {
+            throw ValidationError(
+                "This legacy A2Vid root has no vocoder for unified AV. Pull \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
+            )
         } else {
             try validateNativeModelRoot(url)
         }

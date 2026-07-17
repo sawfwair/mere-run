@@ -11,8 +11,9 @@ The format is based on Keep a Changelog.
 - added fully native LTX 2.3 source-audio-to-video generation through
   `video generate --audio`, including exact 16 kHz stereo mel conditioning,
   the audio VAE encoder, frozen-audio multimodal guidance, full/dev stage one,
-  streaming distilled-LoRA stage two, the separate managed
-  `video-ltx23-a2vid-mlx` capability model, structured preflight reporting, and
+  streaming distilled-LoRA stage two, the shared managed
+  `video-ltx23-full-mlx` bundle for both unified AV and A2Vid, compatibility
+  resolution for the former `video-ltx23-a2vid-mlx` ID, structured preflight reporting, and
   original source-segment MP4 muxing without a soundtrack-only fallback.
 
 - added managed `text-chat-bonsai-27b-1bit` and

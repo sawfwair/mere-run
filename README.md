@@ -657,17 +657,17 @@ swift run mere.run video generate \
   --output ./clip-directed.mp4
 
 # Generate synchronized LTX 2.3 audio/video
-swift run mere.run model pull video-ltx23-av-mlx --accept-model-license
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music and subtle city ambience" \
   --variant unified-av \
-  --model video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
   --duration 15 \
   --fps 24 \
   --output ./clip-av.mp4
 
 # Condition video on a selected source-audio segment and preserve that soundtrack
-swift run mere.run model pull video-ltx23-a2vid-mlx --accept-model-license
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \
   "a kinetic live performance, camera orbiting the vocalist" \
   --audio ./song.wav \

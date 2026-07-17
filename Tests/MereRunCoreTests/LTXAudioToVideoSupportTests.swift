@@ -250,6 +250,36 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
         XCTAssertEqual(output.asArray(Float.self), [7.5, 8.5])
     }
 
+    func testMultiModalGuidanceCombinesFullAudioGuidance() {
+        let guidance = LTXMultiModalGuidance(
+            classifierFreeScale: 7,
+            spatioTemporalScale: 1,
+            rescale: 0,
+            modalityScale: 3
+        )
+        let output = guidance.combine(
+            conditioned: MLXArray([Float(1), 2]),
+            negativeText: MLXArray([Float(0), 1]),
+            perturbed: MLXArray([Float(0.5), 1.5]),
+            isolatedModality: MLXArray([Float(-1), 0])
+        )
+        MLX.eval(output)
+
+        XCTAssertEqual(output.asArray(Float.self), [11.5, 12.5])
+    }
+
+    func testJointSpatioTemporalPerturbationTargetsBothStreams() {
+        let perturbation = LTXAudioToVideoPerturbation.spatioTemporal(
+            videoBlocks: [28],
+            audioBlocks: [12, 28]
+        )
+
+        XCTAssertEqual(perturbation.skippedVideoSelfAttentionBlocks, [28])
+        XCTAssertEqual(perturbation.skippedAudioSelfAttentionBlocks, [12, 28])
+        XCTAssertFalse(perturbation.skipsAudioToVideoCrossAttention)
+        XCTAssertFalse(perturbation.skipsVideoToAudioCrossAttention)
+    }
+
     func testLTXAudioMelProcessorMatchesZeroSignalContract() {
         let processor = LTXAudioMelProcessor()
         let output = processor.extract(channels: [
@@ -314,7 +344,7 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
             .appendingPathComponent("audio_vae.safetensors", isDirectory: false)
         guard FileManager.default.fileExists(atPath: weightsURL.path) else {
             throw XCTSkip(
-                "Install video-ltx23-av-mlx or set MERERUN_TEST_LTX23_ROOT to exercise audio VAE weights."
+                "Install video-ltx23-full-mlx or set MERERUN_TEST_LTX23_ROOT to exercise audio VAE weights."
             )
         }
         let metadata = try SafetensorsStreamingLoader.metadata(url: weightsURL)
@@ -383,7 +413,7 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
         guard FileManager.default.fileExists(atPath: loraURL.path),
               FileManager.default.fileExists(atPath: transformerURL.path) else {
             throw XCTSkip(
-                "Install video-ltx23-a2vid-mlx or set MERERUN_TEST_LTX23_ROOT to exercise pinned LoRA parity."
+                "Install video-ltx23-full-mlx or set MERERUN_TEST_LTX23_ROOT to exercise pinned LoRA parity."
             )
         }
 

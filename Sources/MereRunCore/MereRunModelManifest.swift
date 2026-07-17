@@ -1648,7 +1648,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: isLTX23 ? "dgrauet/ltx-2.3-mlx@main" : "mlx-community/LTX-2-distilled-bf16",
                 createdAt: createdAt
             )
-        case .ltxVideo23A2VMLX:
+        case .ltxVideo23FullMLX, .ltxVideo23A2VMLX:
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .ltxVideo,

@@ -8,10 +8,12 @@ Generate an MP4 video from text, optionally anchored by a source image, with nat
 
 Managed ids:
 
-- `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split root — the recommended model
-  for both the distilled and the high-quality synchronized `--variant unified-av` lanes.
-- `video-ltx23-a2vid-mlx`: full/dev plus official distilled LoRA for native
-  source-audio-conditioned video.
+- `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX root for fast
+  video-only drafts.
+- `video-ltx23-full-mlx`: dev checkpoint, official distilled LoRA, vocoder,
+  VAEs, and x2 upscaler for both high-quality synchronized `--variant unified-av`
+  and native source-audio-conditioned video.
+- `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs.
 - `video-ltx-av`: legacy merged LTX root. Superseded by LTX 2.3; only still required by
   `video export-latents`. Not recommended for `video generate`.
 
@@ -21,7 +23,7 @@ You can also pass a local LTX model root with `--model-root`.
 
 ```bash
 mere.run model pull video-ltx23-av-mlx --accept-model-license
-mere.run model pull video-ltx23-a2vid-mlx --accept-model-license
+mere.run model pull video-ltx23-full-mlx --accept-model-license
 mere.run video generate --help
 ```
 
@@ -41,6 +43,9 @@ mere.run video generate --help
 - `--audio-start-time`: source segment offset in seconds.
 - `--a2v-guidance-scale`: source-audio modality guidance, default `3`.
 - `--video-cfg-guidance-scale`: A2Vid text CFG, default `3`.
+- `--audio-cfg-guidance-scale`: full unified-AV audio CFG, default `7`.
+- `--v2a-guidance-scale`: full unified-AV video-to-audio modality guidance,
+  default `3`.
 - `--a2v-steps`: guided full/dev stage-one steps, default `30`.
 - `--negative-prompt`: advanced A2Vid or Wan negative prompt override.
 - `--image`: source image for image-to-video.
@@ -60,7 +65,7 @@ mere.run video generate --help
 - For directed image-to-video, pass `--image` and `--end-image` so the first
   and last latent frames are both anchored.
 - Keep early drafts short: `--num-frames 65` at `24` fps is a fast test.
-- Use `video-ltx23-av-mlx --variant unified-av --fps 24` for representative
+- Use `video-ltx23-full-mlx --variant unified-av --fps 24` for representative
   LTX 2.3 dialogue, score, and SFX checks.
 - Use standard aspect ratios before custom sizes.
 - With `--audio`, the source latent stays frozen through the guided full/dev
@@ -107,7 +112,7 @@ mere.run video generate \
 ```bash
 mere.run video generate \
   "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \
-  --model video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
   --variant unified-av \
   --duration 15 \
   --fps 24 \

@@ -175,7 +175,18 @@ struct ModelInfo: ParsableCommand {
 
         if components {
             print("\nComponents")
-            if Self.usesLTX23A2VidLayout(manifest: manifest, expectedModelID: expectedModelID) {
+            if Self.usesLTX23FullLayout(manifest: manifest, expectedModelID: expectedModelID) {
+                let companionRoot = ModelResolver()
+                    .resolveIfPresent(.ltxGemma3TwelveB4Bit)?
+                    .rootURL
+                for line in Self.ltx23FullComponentLines(
+                    rootURL: rootURL,
+                    companionRootURL: companionRoot,
+                    fileManager: fm
+                ) {
+                    print(line)
+                }
+            } else if Self.usesLTX23A2VidLayout(manifest: manifest, expectedModelID: expectedModelID) {
                 let companionRoot = ModelResolver()
                     .resolveIfPresent(.ltxGemma3TwelveB4Bit)?
                     .rootURL
@@ -238,6 +249,12 @@ struct ModelInfo: ParsableCommand {
         return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23A2VMLX
     }
 
+    static func usesLTX23FullLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
+        let id = manifest?.id ?? expectedModelID
+        guard let id else { return false }
+        return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23FullMLX
+    }
+
     static func usesLTXMergedLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
         let id = manifest?.id ?? expectedModelID
         guard let id else { return false }
@@ -283,7 +300,7 @@ struct ModelInfo: ParsableCommand {
         companionRootURL: URL?,
         fileManager: FileManager = .default
     ) -> [String] {
-        var lines = ["  layout: LTX 2.3 split MLX files"]
+        var lines = ["  layout: LTX 2.3 distilled split MLX files"]
         if let companionRootURL {
             lines.append(
                 "  text_encoder: \(companionRootURL.standardizedFileURL.path)  "
@@ -322,6 +339,31 @@ struct ModelInfo: ParsableCommand {
             )
         }
         for file in ltx23A2VidComponentFiles {
+            let url = rootURL.appendingPathComponent(file.relativePath, isDirectory: false).standardizedFileURL
+            let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
+            lines.append("  \(file.label): \(url.path)\(suffix)")
+        }
+        return lines
+    }
+
+    static func ltx23FullComponentLines(
+        rootURL: URL,
+        companionRootURL: URL?,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        var lines = ["  layout: LTX 2.3 full split MLX files (unified AV + A2Vid)"]
+        if let companionRootURL {
+            lines.append(
+                "  text_encoder: \(companionRootURL.standardizedFileURL.path)  "
+                    + "(companion \(ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue))"
+            )
+        } else {
+            lines.append(
+                "  text_encoder: \(ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue)  "
+                    + "(companion model)"
+            )
+        }
+        for file in ltx23FullComponentFiles {
             let url = rootURL.appendingPathComponent(file.relativePath, isDirectory: false).standardizedFileURL
             let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
             lines.append("  \(file.label): \(url.path)\(suffix)")
@@ -389,5 +431,9 @@ struct ModelInfo: ParsableCommand {
         ("audio_vae", "audio_vae.safetensors"),
         ("spatial_upscaler_x2", "spatial_upscaler_x2_v1_1.safetensors"),
         ("spatial_upscaler_x2_config", "spatial_upscaler_x2_v1_1_config.json"),
+    ]
+
+    private static let ltx23FullComponentFiles = ltx23A2VidComponentFiles + [
+        (label: "vocoder_bwe", relativePath: "vocoder.safetensors"),
     ]
 }
