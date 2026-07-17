@@ -752,6 +752,8 @@ private func initializeRemoteRunRecord(
                     startedAt: nil,
                     completedAt: nil,
                     exitStatus: nil,
+                    attempt: 0,
+                    maxAttempts: $0.execution?.resolvedMaxAttempts ?? 1,
                     fingerprint: "",
                     artifacts: [],
                     error: nil

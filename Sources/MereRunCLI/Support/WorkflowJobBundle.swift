@@ -170,6 +170,13 @@ enum WorkflowBundleCodec {
         return decoder
     }
 
+    static func lineEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
     static func write<T: Encodable>(_ value: T, to url: URL) throws {
         try encoder().encode(value).write(to: url, options: .atomic)
     }
@@ -314,7 +321,8 @@ struct WorkflowBundleMaterializer {
                 kind: node.kind,
                 provider: node.provider,
                 arguments: arguments,
-                dependsOn: node.dependsOn
+                dependsOn: node.dependsOn,
+                execution: node.execution
             )
         }
         return WorkflowGraphDocument(
@@ -412,7 +420,8 @@ struct WorkflowBundleMaterializer {
                 kind: node.kind,
                 provider: node.provider,
                 arguments: arguments,
-                dependsOn: node.dependsOn
+                dependsOn: node.dependsOn,
+                execution: node.execution
             )
         }
         return WorkflowGraphDocument(
@@ -650,6 +659,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
     var startedAt: Date?
     var completedAt: Date?
     var exitStatus: Int32?
+    var attempt: Int
+    var maxAttempts: Int
     var fingerprint: String
     var provider: WorkflowNodeProviderIdentity?
     var models: [WorkflowModelProvenance]
@@ -664,6 +675,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         case startedAt = "started_at"
         case completedAt = "completed_at"
         case exitStatus = "exit_status"
+        case attempt
+        case maxAttempts = "max_attempts"
         case fingerprint
         case provider
         case models
@@ -679,6 +692,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         startedAt: Date?,
         completedAt: Date?,
         exitStatus: Int32?,
+        attempt: Int = 0,
+        maxAttempts: Int = 1,
         fingerprint: String,
         provider: WorkflowNodeProviderIdentity? = nil,
         models: [WorkflowModelProvenance] = [],
@@ -692,6 +707,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         self.startedAt = startedAt
         self.completedAt = completedAt
         self.exitStatus = exitStatus
+        self.attempt = attempt
+        self.maxAttempts = maxAttempts
         self.fingerprint = fingerprint
         self.provider = provider
         self.models = models
@@ -708,6 +725,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         exitStatus = try container.decodeIfPresent(Int32.self, forKey: .exitStatus)
+        attempt = try container.decodeIfPresent(Int.self, forKey: .attempt) ?? 0
+        maxAttempts = try container.decodeIfPresent(Int.self, forKey: .maxAttempts) ?? 1
         fingerprint = try container.decode(String.self, forKey: .fingerprint)
         provider = try container.decodeIfPresent(WorkflowNodeProviderIdentity.self, forKey: .provider)
         models = try container.decodeIfPresent([WorkflowModelProvenance].self, forKey: .models) ?? []

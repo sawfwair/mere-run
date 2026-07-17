@@ -855,9 +855,9 @@ private func emitDiagnostics(_ diagnostics: [PreflightDiagnostic]) {
 }
 
 func emitGraphStreamEvent(_ event: GraphRunEvent, to handle: FileHandle = .standardOutput) {
-    guard let encoded = try? StructuredRunOutput.encode(event) else { return }
-    let line = encoded.replacingOccurrences(of: "\n", with: "") + "\n"
-    handle.write(Data(line.utf8))
+    guard let encoded = try? WorkflowBundleCodec.lineEncoder().encode(event) else { return }
+    handle.write(encoded)
+    handle.write(Data("\n".utf8))
 }
 
 private func structuredStatus(_ state: GraphRunState) -> StructuredRunStatus {

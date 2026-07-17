@@ -75,7 +75,17 @@
         "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}(\\.[a-z][a-z0-9-]{0,63})+$" },
         "provider": { "type": "string", "pattern": "^(mere\\.run|mere-[a-z0-9-]+)$" },
         "arguments": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } },
-        "depends_on": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true }
+        "depends_on": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+        "execution": { "$ref": "#/$defs/execution" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 604800 },
+        "cache": { "enum": ["auto", "never", "refresh"] }
       }
     },
     "port_type": {

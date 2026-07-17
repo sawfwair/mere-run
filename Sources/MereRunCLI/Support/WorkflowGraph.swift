@@ -127,12 +127,37 @@ struct WorkflowInputDefinition: Codable, Equatable, Sendable {
     }
 }
 
+enum WorkflowNodeCachePolicy: String, Codable, Equatable, Sendable {
+    case automatic = "auto"
+    case never
+    case refresh
+}
+
+struct WorkflowNodeExecutionPolicy: Codable, Equatable, Sendable {
+    static let maximumAttempts = 10
+    static let maximumTimeoutSeconds = 7 * 24 * 60 * 60
+
+    let maxAttempts: Int?
+    let timeoutSeconds: Int?
+    let cache: WorkflowNodeCachePolicy?
+
+    enum CodingKeys: String, CodingKey {
+        case maxAttempts = "max_attempts"
+        case timeoutSeconds = "timeout_seconds"
+        case cache
+    }
+
+    var resolvedMaxAttempts: Int { maxAttempts ?? 1 }
+    var resolvedCache: WorkflowNodeCachePolicy { cache ?? .automatic }
+}
+
 struct WorkflowNode: Codable, Equatable, Sendable {
     let id: String
     let kind: String
     let provider: String?
     let arguments: [String: WorkflowValue]
     let dependsOn: [String]?
+    let execution: WorkflowNodeExecutionPolicy?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -140,6 +165,7 @@ struct WorkflowNode: Codable, Equatable, Sendable {
         case provider
         case arguments
         case dependsOn = "depends_on"
+        case execution
     }
 
     init(
@@ -147,13 +173,15 @@ struct WorkflowNode: Codable, Equatable, Sendable {
         kind: String,
         provider: String? = nil,
         arguments: [String: WorkflowValue],
-        dependsOn: [String]?
+        dependsOn: [String]?,
+        execution: WorkflowNodeExecutionPolicy? = nil
     ) {
         self.id = id
         self.kind = kind
         self.provider = provider
         self.arguments = arguments
         self.dependsOn = dependsOn
+        self.execution = execution
     }
 
     var resolvedProviderID: String {
@@ -739,6 +767,7 @@ enum WorkflowGraphValidator {
             ))
             return
         }
+        validateExecutionPolicy(node, entry: entry, diagnostics: &diagnostics)
         for name in node.arguments.keys where !entry.inputs.contains(where: { $0.name == name }) {
             diagnostics.append(.init(
                 id: "workflow_node_argument_unknown_\(node.id)_\(name)",
@@ -777,6 +806,40 @@ enum WorkflowGraphValidator {
                 severity: .blocker,
                 title: "Workflow dependency is missing",
                 message: "Node '\(node.id)' depends on unknown node '\(dependency)'."
+            ))
+        }
+    }
+
+    private static func validateExecutionPolicy(
+        _ node: WorkflowNode,
+        entry: WorkflowNodeCatalogEntry,
+        diagnostics: inout [PreflightDiagnostic]
+    ) {
+        guard let policy = node.execution else { return }
+        if let attempts = policy.maxAttempts,
+           !(1...WorkflowNodeExecutionPolicy.maximumAttempts).contains(attempts) {
+            diagnostics.append(.init(
+                id: "workflow_node_attempts_invalid_\(node.id)",
+                severity: .blocker,
+                title: "Invalid node retry policy",
+                message: "Node '\(node.id)' max_attempts must be between 1 and \(WorkflowNodeExecutionPolicy.maximumAttempts)."
+            ))
+        }
+        if let timeout = policy.timeoutSeconds,
+           !(1...WorkflowNodeExecutionPolicy.maximumTimeoutSeconds).contains(timeout) {
+            diagnostics.append(.init(
+                id: "workflow_node_timeout_invalid_\(node.id)",
+                severity: .blocker,
+                title: "Invalid node timeout",
+                message: "Node '\(node.id)' timeout_seconds must be between 1 and \(WorkflowNodeExecutionPolicy.maximumTimeoutSeconds)."
+            ))
+        }
+        if policy.resolvedCache != .never, !entry.traits.cacheable {
+            diagnostics.append(.init(
+                id: "workflow_node_cache_unsupported_\(node.id)",
+                severity: .blocker,
+                title: "Node output cannot be cached",
+                message: "Node '\(node.id)' must set execution.cache to 'never' because its provider marks it non-cacheable."
             ))
         }
     }

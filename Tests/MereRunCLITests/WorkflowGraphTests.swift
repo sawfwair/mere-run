@@ -96,6 +96,72 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(validation.dependencies["make-video"], ["make-image"])
     }
 
+    func testNodeExecutionPolicySurvivesPortableMaterialization() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = try singleImageGraph()
+        let sourceNode = try XCTUnwrap(source.nodes.first)
+        let graph = WorkflowGraphDocument(
+            schemaVersion: source.schemaVersion,
+            kind: source.kind,
+            name: source.name,
+            inputs: source.inputs,
+            nodes: [WorkflowNode(
+                id: sourceNode.id,
+                kind: sourceNode.kind,
+                provider: sourceNode.provider,
+                arguments: sourceNode.arguments,
+                dependsOn: sourceNode.dependsOn,
+                execution: .init(maxAttempts: 3, timeoutSeconds: 120, cache: .refresh)
+            )],
+            outputs: source.outputs,
+            metadata: source.metadata
+        )
+
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 77 }
+        ).materialize()
+
+        XCTAssertEqual(bundle.graph.nodes.first?.execution?.resolvedMaxAttempts, 3)
+        XCTAssertEqual(bundle.graph.nodes.first?.execution?.timeoutSeconds, 120)
+        XCTAssertEqual(bundle.graph.nodes.first?.execution?.resolvedCache, .refresh)
+        let roundTrip = try WorkflowGraphDocument.load(from: bundle.directory.appendingPathComponent("graph.json"))
+        XCTAssertEqual(roundTrip, bundle.graph)
+    }
+
+    func testInvalidNodeExecutionPolicyBlocksValidation() throws {
+        let source = try singleImageGraph()
+        let sourceNode = try XCTUnwrap(source.nodes.first)
+        let graph = WorkflowGraphDocument(
+            schemaVersion: source.schemaVersion,
+            kind: source.kind,
+            name: source.name,
+            inputs: source.inputs,
+            nodes: [WorkflowNode(
+                id: sourceNode.id,
+                kind: sourceNode.kind,
+                provider: sourceNode.provider,
+                arguments: sourceNode.arguments,
+                dependsOn: sourceNode.dependsOn,
+                execution: .init(maxAttempts: 0, timeoutSeconds: 0, cache: .automatic)
+            )],
+            outputs: source.outputs,
+            metadata: source.metadata
+        )
+
+        let validation = WorkflowGraphValidator.validate(
+            graph: graph,
+            inputs: .init(values: ["prompt": .string("fixture")])
+        )
+
+        XCTAssertEqual(validation.status, .blocked)
+        XCTAssertTrue(validation.diagnostics.contains { $0.id == "workflow_node_attempts_invalid_generate" })
+        XCTAssertTrue(validation.diagnostics.contains { $0.id == "workflow_node_timeout_invalid_generate" })
+    }
+
     func testDuplicateNodeIDsProduceDiagnosticsWithoutTrapping() throws {
         let graph = try decodeGraph("""
         {
@@ -264,6 +330,7 @@ final class WorkflowGraphTests: XCTestCase {
             executable: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", "printf 'fixture failure' >&2; exit 7"],
             currentDirectory: nodeDirectory,
+            timeoutSeconds: nil,
             stdoutLineHandler: nil
         )
 
@@ -271,6 +338,31 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(result.stderr, "fixture failure")
         XCTAssertEqual(result.terminationReason, .exit)
         XCTAssertEqual(result.failureSummary, "exited with status 7. stderr: fixture failure")
+    }
+
+    func testWorkflowChildEnforcesTimeout() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nodeDirectory = root.appendingPathComponent("run/nodes/000-fixture", isDirectory: true)
+        try FileManager.default.createDirectory(at: nodeDirectory, withIntermediateDirectories: true)
+        let startedAt = Date()
+
+        XCTAssertThrowsError(try WorkflowProcessRunner().run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "sleep 30"],
+            currentDirectory: nodeDirectory,
+            timeoutSeconds: 1,
+            stdoutLineHandler: nil
+        )) { error in
+            XCTAssertEqual(error.localizedDescription, "Process timed out after 1 seconds.")
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("run/worker-child.pid").path
+            )
+        )
     }
 
     func testMaterializationFreezesSeedAndCanonicalFingerprints() throws {
@@ -495,6 +587,141 @@ final class WorkflowGraphTests: XCTestCase {
             manifest.error,
             "Node 'generate' preflight exited with status 255. stdout: fixture model failure."
         )
+    }
+
+    func testRunnerRetriesFailedNodeAndRecordsAttempt() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = try singleImageGraph()
+        let sourceNode = try XCTUnwrap(source.nodes.first)
+        let graph = WorkflowGraphDocument(
+            schemaVersion: source.schemaVersion,
+            kind: source.kind,
+            name: source.name,
+            inputs: source.inputs,
+            nodes: [WorkflowNode(
+                id: sourceNode.id,
+                kind: sourceNode.kind,
+                provider: sourceNode.provider,
+                arguments: sourceNode.arguments,
+                dependsOn: sourceNode.dependsOn,
+                execution: .init(maxAttempts: 2, timeoutSeconds: nil, cache: nil)
+            )],
+            outputs: source.outputs,
+            metadata: source.metadata
+        )
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: .init(values: ["prompt": .string("a lighthouse")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 99 }
+        ).materialize()
+        let runDirectory = root.appendingPathComponent("run")
+        let process = RetryingWorkflowProcessRunner()
+
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: runDirectory,
+            processRunner: process
+        ).execute()
+        let manifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: runDirectory.appendingPathComponent(GraphRunManifest.filename))
+        )
+        let events = try String(
+            contentsOf: runDirectory.appendingPathComponent("events.jsonl"),
+            encoding: .utf8
+        )
+        let eventRecords = try events.split(separator: "\n").map {
+            try WorkflowBundleCodec.decoder().decode(GraphRunEvent.self, from: Data($0.utf8))
+        }
+
+        XCTAssertEqual(outcome.state, .finished)
+        XCTAssertEqual(process.runCount, 2)
+        XCTAssertEqual(manifest.nodes.first?.attempt, 2)
+        XCTAssertEqual(manifest.nodes.first?.maxAttempts, 2)
+        XCTAssertEqual(manifest.nodes.first?.exitStatus, 0)
+        XCTAssertNil(manifest.nodes.first?.error)
+        XCTAssertTrue(eventRecords.contains { $0.type == "node_retrying" })
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: runDirectory
+                    .appendingPathComponent("nodes/000-generate/artifacts/partial.txt")
+                    .path
+            )
+        )
+    }
+
+    func testRunnerReusesVerifiedCrossRunCacheAndRepairsCorruption() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("a lighthouse")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 99 }
+        ).materialize()
+        let cacheDirectory = root.appendingPathComponent("cache", isDirectory: true)
+        let firstRun = root.appendingPathComponent("run-one", isDirectory: true)
+        let firstProcess = FixtureWorkflowProcessRunner()
+
+        XCTAssertEqual(try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: firstRun,
+            processRunner: firstProcess,
+            cacheDirectory: cacheDirectory
+        ).execute().state, .finished)
+        XCTAssertEqual(firstProcess.arguments.count, 2)
+        let firstManifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: firstRun.appendingPathComponent(GraphRunManifest.filename))
+        )
+        let fingerprint = try XCTUnwrap(firstManifest.nodes.first?.fingerprint)
+
+        let secondRun = root.appendingPathComponent("run-two", isDirectory: true)
+        let secondProcess = FixtureWorkflowProcessRunner()
+        XCTAssertEqual(try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: secondRun,
+            processRunner: secondProcess,
+            cacheDirectory: cacheDirectory
+        ).execute().state, .finished)
+        let secondManifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: secondRun.appendingPathComponent(GraphRunManifest.filename))
+        )
+        let secondEvents = try String(
+            contentsOf: secondRun.appendingPathComponent("events.jsonl"),
+            encoding: .utf8
+        ).split(separator: "\n").map {
+            try WorkflowBundleCodec.decoder().decode(GraphRunEvent.self, from: Data($0.utf8))
+        }
+
+        XCTAssertTrue(secondProcess.arguments.isEmpty)
+        XCTAssertEqual(secondManifest.nodes.first?.attempt, 0)
+        XCTAssertTrue(secondEvents.contains { $0.type == "node_cache_hit" })
+        XCTAssertEqual(secondManifest.outputs.first?.sha256, firstManifest.outputs.first?.sha256)
+
+        let cacheFiles = cacheDirectory
+            .appendingPathComponent(fingerprint, isDirectory: true)
+            .appendingPathComponent("files", isDirectory: true)
+        let cachedRelativePath = try XCTUnwrap(
+            FileManager.default.subpathsOfDirectory(atPath: cacheFiles.path).first { path in
+                (try? cacheFiles.appendingPathComponent(path).resourceValues(
+                    forKeys: [.isRegularFileKey]
+                ).isRegularFile) == true
+            }
+        )
+        try Data("corrupt".utf8).write(to: cacheFiles.appendingPathComponent(cachedRelativePath))
+
+        let repairedProcess = FixtureWorkflowProcessRunner()
+        XCTAssertEqual(try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: root.appendingPathComponent("run-three"),
+            processRunner: repairedProcess,
+            cacheDirectory: cacheDirectory
+        ).execute().state, .finished)
+        XCTAssertEqual(repairedProcess.arguments.count, 2)
     }
 
     func testResumeRequiresMatchingNodeFingerprintAndArtifactDigests() throws {
@@ -782,5 +1009,30 @@ private final class FixtureWorkflowProcessRunner: WorkflowProcessRunning {
 private struct FailingPreflightWorkflowProcessRunner: WorkflowProcessRunning {
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
         WorkflowProcessResult(status: 255, stdout: "fixture model failure")
+    }
+}
+
+private final class RetryingWorkflowProcessRunner: WorkflowProcessRunning {
+    private(set) var runCount = 0
+
+    func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
+        if arguments.contains("--preflight") {
+            return WorkflowProcessResult(status: 0, stdout: "{}")
+        }
+        runCount += 1
+        guard let outputIndex = arguments.firstIndex(of: "--output"), outputIndex + 1 < arguments.count else {
+            return WorkflowProcessResult(status: 2, stdout: "")
+        }
+        let output = URL(fileURLWithPath: arguments[outputIndex + 1])
+        try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if runCount == 1 {
+            let artifacts = currentDirectory.appendingPathComponent("artifacts", isDirectory: true)
+            try FileManager.default.createDirectory(at: artifacts, withIntermediateDirectories: true)
+            try Data("partial".utf8).write(to: artifacts.appendingPathComponent("partial.txt"))
+            try Data("incomplete".utf8).write(to: output)
+            return WorkflowProcessResult(status: 75, stdout: "temporary failure")
+        }
+        try Data([0x89, 0x50, 0x4e, 0x47]).write(to: output)
+        return WorkflowProcessResult(status: 0, stdout: "ok")
     }
 }
