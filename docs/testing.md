@@ -89,9 +89,12 @@ CPU-oriented Linux manifest path. The preparation script checks out the exact
 `mlx-swift` revision selected by SwiftPM under the active Linux Swift toolchain,
 keeping the CMake bridge and Swift package graph aligned even when that
 toolchain resolves a compatibility revision different from a Mac checkout.
-`MLX_SWIFT_CUDA_COMMIT` is a deliberate diagnostic override for maintainers,
-not part of normal setup. This pin removes source drift; it does not count as
-CUDA validation on a host that has not run the path.
+`MLX_SWIFT_CUDA_COMMIT` and `MLX_SWIFT_CUDA_URL` are deliberate diagnostic
+overrides for maintainers, not part of normal setup. Normal builds use the
+exact `sawfwair/mlx-swift` revision selected by SwiftPM and initialize its
+pinned MLX and mlx-c submodules before CMake configuration. This pin removes
+source drift; it does not count as CUDA validation on a host that has not run
+the path.
 
 Linux release packaging has its own artifact check:
 

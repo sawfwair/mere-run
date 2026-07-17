@@ -269,10 +269,9 @@ The binary manifest records the transformer as 1-bit g128 Prism packed affine
 weights; the ternary manifest records 2-bit g128 MLX packed affine ternary
 weights. Both keep the text encoder in the upstream 4-bit MLX layout and run
 generation through the native Swift FLUX.2 Klein pipeline with four steps, CFG
-1.0, and sigma shift 3.0 by default. The binary runtime path uses a native
-Swift/Metal packed 1-bit affine matmul kernel, with a dequantized MLX fallback
-for non-GPU or unsupported shapes while upstream `mlx-swift` lacks `bits=1`
-quantized matmul.
+1.0, and sigma shift 3.0 by default. The binary runtime path uses native packed
+1-bit affine matmul kernels on Metal and Linux CUDA, with a dequantized MLX
+fallback for non-GPU or unsupported shapes.
 
 `vision-segment-sam31` packages the native SAM 3.1 segmentation and tracking runtime used by `mere.run vision segment`, `mere.run vision track`, and `mere.run vision track-live`. Managed or local SAM roots are expected to contain:
 

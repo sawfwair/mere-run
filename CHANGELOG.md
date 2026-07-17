@@ -66,6 +66,14 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- added native affine 1-bit CUDA quantize, dequantize, and matrix-vector
+  execution to the pinned MLX fork. Linux CUDA now keeps Prism Bonsai binary
+  text and image projections packed during inference instead of materializing
+  dense weights; 2-bit and wider models retain their existing dispatch paths.
+  On an NVIDIA GB10, matched 32-token Bonsai 27B runs measured 16.74 decode
+  tokens/s for native 1-bit versus 4.15 for the dense fallback and 14.71 for
+  native 2-bit. One-step 512x512 binary and ternary image runs also completed
+  through their respective native 1-bit and 2-bit transformer paths.
 - updated the official plugin catalog default and bundled plugin guide to use
   the live `sawfwair/mere-run-plugins` repository after the old catalog path
   was retired.
