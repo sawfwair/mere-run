@@ -117,10 +117,9 @@ tar -tzf dist/linux/mere-run-*-linux-x86_64-cuda.tar.gz | grep '/.mererun-linux-
 dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
 ```
 
-The `.deb` check requires the built binary to link one unambiguous CUDA 13
-`libcudart` SONAME; packaging fails instead of writing CUDA 13 dependencies for
-a CUDA 12 or unknown binary. Use `--skip-deb` when validating a tarball against
-another toolkit major.
+The `.deb` check requires the built binary to link one unambiguous CUDA 12 or
+CUDA 13 `libcudart` SONAME. Packaging selects the matching dependency family
+and fails instead of writing dependencies for an unknown toolkit major.
 An explicit `MERERUN_PACKAGE_LINUX_DEPS` fixture separately verifies the
 maintainer override; its value is written verbatim and bypasses the default
 major gate.
