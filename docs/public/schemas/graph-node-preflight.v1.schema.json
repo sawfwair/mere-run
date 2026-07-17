@@ -31,7 +31,11 @@
       "properties": {
         "model_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "accelerator_backends": {"type": "array", "uniqueItems": true, "items": {"enum": ["metal", "cuda", "rocm", "cpu"]}},
-        "minimum_accelerator_memory_bytes": {"type": ["integer", "null"], "minimum": 0}
+        "minimum_accelerator_memory_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "minimum_system_memory_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "minimum_disk_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "minimum_cpu_cores": {"type": ["integer", "null"], "minimum": 1},
+        "network_access": {"type": ["boolean", "null"]}
       }
     }
   }

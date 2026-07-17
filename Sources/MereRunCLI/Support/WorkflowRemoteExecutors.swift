@@ -787,6 +787,11 @@ func validateWorker(
     guard worker.contractVersions.contains(job.contractVersion) else {
         throw ValidationError("Executor '\(executor)' does not support \(job.contractVersion).")
     }
+    guard workflowVersion(worker.workerVersion, satisfiesMinimum: job.requirements.minimumMereRunVersion) else {
+        throw ValidationError(
+            "Executor '\(executor)' reports mere.run \(worker.workerVersion); job requires \(job.requirements.minimumMereRunVersion) or newer."
+        )
+    }
     let missingKinds = job.requirements.nodeKinds.filter { !worker.nodeKinds.contains($0) }
     guard missingKinds.isEmpty else {
         throw ValidationError("Executor '\(executor)' is missing node kinds: \(missingKinds.joined(separator: ", ")).")
@@ -802,6 +807,12 @@ func validateWorker(
     guard missingModels.isEmpty else {
         throw ValidationError("Executor '\(executor)' is missing models: \(missingModels.joined(separator: ", ")).")
     }
+    let missingSecrets = job.requirements.secretNames.filter { !worker.availableSecretNames.contains($0) }
+    guard missingSecrets.isEmpty else {
+        throw ValidationError(
+            "Executor '\(executor)' is missing configured secrets: \(missingSecrets.joined(separator: ", "))."
+        )
+    }
     let backendAccepted = job.requirements.acceleratorBackends.contains(worker.acceleratorBackend)
         || (allowMixedBackend && worker.acceleratorBackend == "mixed")
     guard backendAccepted else {
@@ -812,6 +823,21 @@ func validateWorker(
     if let minimum = job.requirements.minimumAcceleratorMemoryBytes,
        worker.memoryBytes < UInt64(minimum) {
         throw ValidationError("Executor '\(executor)' does not have the required accelerator memory.")
+    }
+    if let minimum = job.requirements.minimumSystemMemoryBytes,
+       worker.systemMemoryBytes < UInt64(minimum) {
+        throw ValidationError("Executor '\(executor)' does not have the required system memory.")
+    }
+    if let minimum = job.requirements.minimumCPUCores,
+       worker.logicalCPUCores < minimum {
+        throw ValidationError("Executor '\(executor)' does not have the required CPU cores.")
+    }
+    if let minimum = job.requirements.minimumDiskBytes,
+       worker.availableDiskBytes.map({ $0 < minimum }) != false {
+        throw ValidationError("Executor '\(executor)' does not report the required free disk space.")
+    }
+    if job.requirements.networkAccess, !worker.networkAccess {
+        throw ValidationError("Executor '\(executor)' does not allow required network access.")
     }
 }
 

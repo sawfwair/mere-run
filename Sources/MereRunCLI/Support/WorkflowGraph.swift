@@ -27,6 +27,7 @@ indirect enum WorkflowValue: Codable, Equatable, Sendable {
     case array([WorkflowValue])
     case object([String: WorkflowValue])
     case reference(String)
+    case secretReference(String)
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -46,6 +47,8 @@ indirect enum WorkflowValue: Codable, Equatable, Sendable {
             let value = try container.decode([String: WorkflowValue].self)
             if value.count == 1, case .string(let reference)? = value["$ref"] {
                 self = .reference(reference)
+            } else if value.count == 1, case .string(let name)? = value["$secret"] {
+                self = .secretReference(name)
             } else {
                 self = .object(value)
             }
@@ -71,6 +74,8 @@ indirect enum WorkflowValue: Codable, Equatable, Sendable {
             try container.encode(value)
         case .reference(let value):
             try container.encode(["$ref": WorkflowValue.string(value)])
+        case .secretReference(let value):
+            try container.encode(["$secret": WorkflowValue.string(value)])
         }
     }
 
@@ -82,6 +87,19 @@ indirect enum WorkflowValue: Codable, Equatable, Sendable {
             values.flatMap(\.references)
         case .object(let values):
             values.keys.sorted().flatMap { values[$0]?.references ?? [] }
+        default:
+            []
+        }
+    }
+
+    var secretNames: [String] {
+        switch self {
+        case .secretReference(let value):
+            [value]
+        case .array(let values):
+            values.flatMap(\.secretNames)
+        case .object(let values):
+            values.keys.sorted().flatMap { values[$0]?.secretNames ?? [] }
         default:
             []
         }
@@ -151,6 +169,18 @@ struct WorkflowNodeExecutionPolicy: Codable, Equatable, Sendable {
     var resolvedCache: WorkflowNodeCachePolicy { cache ?? .automatic }
 }
 
+struct WorkflowGraphExecutionPolicy: Codable, Equatable, Sendable {
+    static let maximumParallelNodes = 32
+
+    let maxParallelNodes: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case maxParallelNodes = "max_parallel_nodes"
+    }
+
+    var resolvedMaxParallelNodes: Int { maxParallelNodes ?? 1 }
+}
+
 struct WorkflowNode: Codable, Equatable, Sendable {
     let id: String
     let kind: String
@@ -199,6 +229,7 @@ struct WorkflowGraphDocument: Codable, Equatable, Sendable {
     let inputs: [String: WorkflowInputDefinition]
     let nodes: [WorkflowNode]
     let outputs: [String: WorkflowValue]
+    let execution: WorkflowGraphExecutionPolicy?
     let metadata: [String: WorkflowValue]?
 
     enum CodingKeys: String, CodingKey {
@@ -208,7 +239,28 @@ struct WorkflowGraphDocument: Codable, Equatable, Sendable {
         case inputs
         case nodes
         case outputs
+        case execution
         case metadata
+    }
+
+    init(
+        schemaVersion: Int,
+        kind: String,
+        name: String,
+        inputs: [String: WorkflowInputDefinition],
+        nodes: [WorkflowNode],
+        outputs: [String: WorkflowValue],
+        execution: WorkflowGraphExecutionPolicy? = nil,
+        metadata: [String: WorkflowValue]?
+    ) {
+        self.schemaVersion = schemaVersion
+        self.kind = kind
+        self.name = name
+        self.inputs = inputs
+        self.nodes = nodes
+        self.outputs = outputs
+        self.execution = execution
+        self.metadata = metadata
     }
 
     static func load(from url: URL) throws -> WorkflowGraphDocument {
@@ -355,17 +407,61 @@ struct WorkflowNodeRequirements: Codable, Equatable, Sendable {
     let modelIDs: [String]
     let acceleratorBackends: [String]
     let minimumAcceleratorMemoryBytes: Int64?
+    let minimumSystemMemoryBytes: Int64?
+    let minimumDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let networkAccess: Bool?
 
     enum CodingKeys: String, CodingKey {
         case modelIDs = "model_ids"
         case acceleratorBackends = "accelerator_backends"
         case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+        case minimumSystemMemoryBytes = "minimum_system_memory_bytes"
+        case minimumDiskBytes = "minimum_disk_bytes"
+        case minimumCPUCores = "minimum_cpu_cores"
+        case networkAccess = "network_access"
+    }
+
+    init(
+        modelIDs: [String],
+        acceleratorBackends: [String],
+        minimumAcceleratorMemoryBytes: Int64?,
+        minimumSystemMemoryBytes: Int64? = nil,
+        minimumDiskBytes: Int64? = nil,
+        minimumCPUCores: Int? = nil,
+        networkAccess: Bool? = nil
+    ) {
+        self.modelIDs = modelIDs
+        self.acceleratorBackends = acceleratorBackends
+        self.minimumAcceleratorMemoryBytes = minimumAcceleratorMemoryBytes
+        self.minimumSystemMemoryBytes = minimumSystemMemoryBytes
+        self.minimumDiskBytes = minimumDiskBytes
+        self.minimumCPUCores = minimumCPUCores
+        self.networkAccess = networkAccess
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        modelIDs = try container.decode([String].self, forKey: .modelIDs)
+        acceleratorBackends = try container.decode([String].self, forKey: .acceleratorBackends)
+        minimumAcceleratorMemoryBytes = try container.decodeIfPresent(
+            Int64.self,
+            forKey: .minimumAcceleratorMemoryBytes
+        )
+        minimumSystemMemoryBytes = try container.decodeIfPresent(Int64.self, forKey: .minimumSystemMemoryBytes)
+        minimumDiskBytes = try container.decodeIfPresent(Int64.self, forKey: .minimumDiskBytes)
+        minimumCPUCores = try container.decodeIfPresent(Int.self, forKey: .minimumCPUCores)
+        networkAccess = try container.decodeIfPresent(Bool.self, forKey: .networkAccess)
     }
 
     static let none = WorkflowNodeRequirements(
         modelIDs: [],
         acceleratorBackends: [],
-        minimumAcceleratorMemoryBytes: nil
+        minimumAcceleratorMemoryBytes: nil,
+        minimumSystemMemoryBytes: nil,
+        minimumDiskBytes: nil,
+        minimumCPUCores: nil,
+        networkAccess: nil
     )
 }
 
@@ -601,6 +697,10 @@ struct WorkflowReference: Equatable, Sendable {
     }
 }
 
+func workflowSecretEnvironmentKey(_ name: String) -> String {
+    "MERERUN_SECRET_\(name.uppercased().replacingOccurrences(of: "-", with: "_"))"
+}
+
 struct WorkflowGraphValidation: Equatable {
     let diagnostics: [PreflightDiagnostic]
     let order: [String]
@@ -690,6 +790,24 @@ enum WorkflowGraphValidator {
                 message: "Add at least one registered workflow node."
             ))
         }
+        if let maximum = graph.execution?.maxParallelNodes,
+           !(1...WorkflowGraphExecutionPolicy.maximumParallelNodes).contains(maximum) {
+            diagnostics.append(.init(
+                id: "workflow_parallelism_invalid",
+                severity: .blocker,
+                title: "Invalid graph parallelism",
+                message: "execution.max_parallel_nodes must be between 1 and \(WorkflowGraphExecutionPolicy.maximumParallelNodes)."
+            ))
+        }
+        if graph.outputs.values.contains(where: { !$0.secretNames.isEmpty })
+            || graph.metadata?.values.contains(where: { !$0.secretNames.isEmpty }) == true {
+            diagnostics.append(.init(
+                id: "workflow_secret_exposed",
+                severity: .blocker,
+                title: "Secret reference is exposed",
+                message: "Secret references may appear only in secret node arguments."
+            ))
+        }
     }
 
     private static func validateIDs(
@@ -727,6 +845,15 @@ enum WorkflowGraphValidator {
                 severity: .blocker,
                 title: "Unknown workflow input",
                 message: "Input '\(name)' is not declared by the workflow."
+            ))
+        }
+        for name in supplied.values.keys.sorted()
+        where !(supplied.values[name]?.secretNames.isEmpty ?? true) {
+            diagnostics.append(.init(
+                id: "workflow_input_secret_\(name)",
+                severity: .blocker,
+                title: "Secret supplied as graph input",
+                message: "Input '\(name)' cannot contain a secret reference; bind secrets on secret node fields."
             ))
         }
         for (name, definition) in graph.inputs {
@@ -768,6 +895,15 @@ enum WorkflowGraphValidator {
             return
         }
         validateExecutionPolicy(node, entry: entry, diagnostics: &diagnostics)
+        if node.arguments.values.contains(where: { !$0.secretNames.isEmpty }),
+           node.execution?.resolvedCache != .never {
+            diagnostics.append(.init(
+                id: "workflow_node_secret_cache_\(node.id)",
+                severity: .blocker,
+                title: "Secret-bound node cannot be cached",
+                message: "Node '\(node.id)' must set execution.cache to 'never' because its output depends on a secret."
+            ))
+        }
         for name in node.arguments.keys where !entry.inputs.contains(where: { $0.name == name }) {
             diagnostics.append(.init(
                 id: "workflow_node_argument_unknown_\(node.id)_\(name)",
@@ -786,6 +922,28 @@ enum WorkflowGraphValidator {
                         message: "Node '\(node.id)' requires argument '\(field.name)'."
                     ))
                 }
+                continue
+            }
+            if field.secret == true {
+                guard case .secretReference(let name) = value,
+                      isValidSecretName(name) else {
+                    diagnostics.append(.init(
+                        id: "workflow_node_secret_invalid_\(node.id)_\(field.name)",
+                        severity: .blocker,
+                        title: "Invalid secret binding",
+                        message: "Node '\(node.id)' argument '\(field.name)' must be a named {\"$secret\":\"name\"} reference."
+                    ))
+                    continue
+                }
+                continue
+            }
+            if !value.secretNames.isEmpty {
+                diagnostics.append(.init(
+                    id: "workflow_node_secret_unexpected_\(node.id)_\(field.name)",
+                    severity: .blocker,
+                    title: "Unexpected secret binding",
+                    message: "Node '\(node.id)' argument '\(field.name)' is not declared secret by its provider."
+                ))
                 continue
             }
             validateValue(
@@ -842,6 +1000,10 @@ enum WorkflowGraphValidator {
                 message: "Node '\(node.id)' must set execution.cache to 'never' because its provider marks it non-cacheable."
             ))
         }
+    }
+
+    private static func isValidSecretName(_ value: String) -> Bool {
+        value.range(of: "^[a-z][a-z0-9-]{0,63}$", options: .regularExpression) != nil
     }
 
     private static func validateValue(

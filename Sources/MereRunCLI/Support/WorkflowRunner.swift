@@ -119,6 +119,49 @@ private final class WorkflowProcessStderrTail: @unchecked Sendable {
     }
 }
 
+private struct WorkflowPreparedParallelNode: @unchecked Sendable {
+    let node: WorkflowNode
+    let index: Int
+    let directory: URL
+    let invocation: WorkflowNodeInvocation
+    let fingerprint: String
+    let provider: WorkflowNodeProviderIdentity
+    let models: [WorkflowModelProvenance]
+    let maxAttempts: Int
+}
+
+private enum WorkflowParallelBufferedEvent {
+    case provider(WorkflowPluginNodeEvent)
+    case retrying(attempt: Int, message: String)
+    case started(attempt: Int)
+}
+
+private struct WorkflowParallelNodeOutcome {
+    let verified: WorkflowVerifiedNodeOutputs?
+    let attempt: Int
+    let exitStatus: Int32?
+    let events: [WorkflowParallelBufferedEvent]
+    let error: String?
+    let cancelled: Bool
+}
+
+private final class WorkflowParallelOutcomeBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: WorkflowParallelNodeOutcome?
+
+    func store(_ outcome: WorkflowParallelNodeOutcome) {
+        lock.lock()
+        stored = outcome
+        lock.unlock()
+    }
+
+    func load() -> WorkflowParallelNodeOutcome? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+}
+
 protocol WorkflowProcessRunning {
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult
 }
@@ -242,7 +285,7 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
     }
 }
 
-struct WorkflowRunner {
+struct WorkflowRunner: @unchecked Sendable {
     let bundleDirectory: URL
     let runDirectory: URL
     let resume: Bool
@@ -314,6 +357,15 @@ struct WorkflowRunner {
                 "Worker is missing exact graph providers: \(missingProviders.map { "\($0.id)@\($0.version)" }.joined(separator: ", "))."
             )
         }
+        let environment = ProcessInfo.processInfo.environment
+        let missingSecrets = job.requirements.secretNames.filter {
+            environment[workflowSecretEnvironmentKey($0)]?.isEmpty != false
+        }
+        guard missingSecrets.isEmpty else {
+            throw ValidationError(
+                "Worker is missing configured secrets: \(missingSecrets.joined(separator: ", "))."
+            )
+        }
 
         let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
         guard validation.status != .blocked else {
@@ -342,6 +394,17 @@ struct WorkflowRunner {
 
         var nodeOutputs: [String: [String: WorkflowValue]] = [:]
         do {
+            if graph.execution?.resolvedMaxParallelNodes ?? 1 > 1 {
+                try executeParallelNodes(
+                    graph: graph,
+                    job: job,
+                    validation: validation,
+                    localizedInputs: localizedInputs,
+                    manifest: &manifest,
+                    sequence: &sequence,
+                    nodeOutputs: &nodeOutputs
+                )
+            } else {
             for nodeID in validation.order {
                 guard let node = graph.nodes.first(where: { $0.id == nodeID }),
                       let nodeIndex = manifest.nodes.firstIndex(where: { $0.id == nodeID }) else {
@@ -629,6 +692,7 @@ struct WorkflowRunner {
                 ))
                 sequence += 1
             }
+            }
 
             manifest.outputs = try materializeGraphOutputs(graph: graph, nodeOutputs: nodeOutputs)
             manifest.state = .finished
@@ -681,6 +745,429 @@ struct WorkflowRunner {
             jobID: manifest.jobID,
             state: manifest.state,
             outputs: manifest.outputs
+        )
+    }
+
+    private func executeParallelNodes(
+        graph: WorkflowGraphDocument,
+        job: WorkflowJobManifest,
+        validation: WorkflowGraphValidation,
+        localizedInputs: WorkflowInputsDocument,
+        manifest: inout GraphRunManifest,
+        sequence: inout Int,
+        nodeOutputs: inout [String: [String: WorkflowValue]]
+    ) throws {
+        let maximumParallelNodes = graph.execution?.resolvedMaxParallelNodes ?? 1
+        var pending = validation.order
+        var completed = Set<String>()
+
+        while !pending.isEmpty {
+            try throwIfCancellationRequested()
+            let ready = pending.filter { nodeID in
+                validation.dependencies[nodeID, default: []].isSubset(of: completed)
+            }
+            guard !ready.isEmpty else {
+                throw ValidationError("Workflow scheduler could not find a ready node.")
+            }
+
+            var prepared: [WorkflowPreparedParallelNode] = []
+            for nodeID in ready.prefix(maximumParallelNodes) {
+                guard let node = graph.nodes.first(where: { $0.id == nodeID }),
+                      let nodeIndex = manifest.nodes.firstIndex(where: { $0.id == nodeID }) else {
+                    throw ValidationError("Workflow execution order referenced missing node '\(nodeID)'.")
+                }
+                let nodeDirectory = runDirectory
+                    .appendingPathComponent("nodes", isDirectory: true)
+                    .appendingPathComponent(String(format: "%03d-%@", nodeIndex, node.id), isDirectory: true)
+                try fileManager.createDirectory(at: nodeDirectory, withIntermediateDirectories: true)
+                let resolvedArguments = try resolve(
+                    node.arguments,
+                    inputs: localizedInputs.values,
+                    nodeOutputs: nodeOutputs
+                )
+                let referencedNodeIDs = Set(
+                    node.arguments.values.flatMap(\.references).compactMap { reference -> String? in
+                        guard let parsed = try? WorkflowReference(reference),
+                              case .nodeOutput(let sourceNodeID, _) = parsed.source else { return nil }
+                        return sourceNodeID
+                    }
+                )
+                let upstreamOutputs = manifest.nodes
+                    .filter { referencedNodeIDs.contains($0.id) }
+                    .flatMap(\.outputs)
+                    .map(WorkflowNodeOutputFingerprint.init)
+                    .sorted { ($0.sourceName, $0.sha256 ?? "") < ($1.sourceName, $1.sha256 ?? "") }
+                guard let provider = WorkflowNodeRegistry.provider(for: node) else {
+                    throw ValidationError("Workflow provider '\(node.resolvedProviderID)' is unavailable.")
+                }
+                let models = modelProvenance(for: node, arguments: resolvedArguments, job: job)
+                let fingerprint = try WorkflowBundleCodec.hash(WorkflowNodeFingerprint(
+                    kind: node.kind,
+                    provider: provider,
+                    arguments: resolvedArguments,
+                    models: models,
+                    upstreamOutputs: upstreamOutputs
+                ))
+                if try shouldResume(
+                    manifest.nodes[nodeIndex],
+                    expectedFingerprint: fingerprint,
+                    nodeOutputs: &nodeOutputs
+                ) {
+                    try record(.init(
+                        sequence: sequence,
+                        createdAt: now(),
+                        type: "node_resumed",
+                        state: .finished,
+                        nodeID: nodeID,
+                        message: "Reused verified node outputs."
+                    ))
+                    sequence += 1
+                    completed.insert(nodeID)
+                    pending.removeAll { $0 == nodeID }
+                    continue
+                }
+
+                let invocation = try WorkflowNodeCommandBuilder.invocation(
+                    node: node,
+                    arguments: resolvedArguments,
+                    nodeDirectory: nodeDirectory,
+                    jobID: job.jobID
+                )
+                manifest.nodes[nodeIndex].fingerprint = fingerprint
+                manifest.nodes[nodeIndex].provider = provider
+                manifest.nodes[nodeIndex].models = models
+                manifest.nodes[nodeIndex].maxAttempts = node.execution?.resolvedMaxAttempts ?? 1
+                if (node.execution?.resolvedCache ?? .automatic) == .automatic,
+                   let cached = try restoreCachedOutputs(
+                    fingerprint: fingerprint,
+                    invocation: invocation,
+                    node: node,
+                    nodeDirectory: nodeDirectory
+                   ) {
+                    nodeOutputs[nodeID] = cached.values
+                    manifest.nodes[nodeIndex].attempt = 0
+                    manifest.nodes[nodeIndex].artifacts = cached.artifacts
+                    manifest.nodes[nodeIndex].outputs = cached.outputs
+                    manifest.nodes[nodeIndex].state = .finished
+                    manifest.nodes[nodeIndex].startedAt = now()
+                    manifest.nodes[nodeIndex].completedAt = now()
+                    manifest.updatedAt = now()
+                    try persist(manifest)
+                    try record(.init(
+                        sequence: sequence,
+                        createdAt: now(),
+                        type: "node_cache_hit",
+                        state: .finished,
+                        nodeID: nodeID,
+                        message: "Restored verified outputs for node fingerprint \(fingerprint)."
+                    ))
+                    sequence += 1
+                    completed.insert(nodeID)
+                    pending.removeAll { $0 == nodeID }
+                    continue
+                }
+
+                manifest.nodes[nodeIndex].state = .preflighting
+                manifest.nodes[nodeIndex].startedAt = now()
+                manifest.updatedAt = now()
+                try persist(manifest)
+                try record(.init(
+                    sequence: sequence,
+                    createdAt: now(),
+                    type: "node_preflight_started",
+                    state: .preflighting,
+                    nodeID: nodeID,
+                    message: nil
+                ))
+                sequence += 1
+                let preflight = try runProcess(
+                    executable: invocation.executable,
+                    arguments: invocation.preflightArguments,
+                    currentDirectory: nodeDirectory,
+                    timeoutSeconds: nil,
+                    stdoutLineHandler: nil
+                )
+                try throwIfCancellationRequested()
+                try Data(preflight.stdout.utf8).write(
+                    to: nodeDirectory.appendingPathComponent("preflight.json"),
+                    options: .atomic
+                )
+                guard preflight.status == 0 else {
+                    throw ValidationError("Node '\(nodeID)' preflight \(preflight.failureSummary).")
+                }
+                if invocation.streamsEvents {
+                    let report = try WorkflowBundleCodec.decoder().decode(
+                        WorkflowPluginNodePreflight.self,
+                        from: Data(preflight.stdout.utf8)
+                    )
+                    guard report.contractVersion == WorkflowPluginNodePreflight.contractVersion,
+                          report.status != "blocked" else {
+                        throw ValidationError(report.diagnostics.map(\.message).joined(separator: " "))
+                    }
+                }
+                let maxAttempts = node.execution?.resolvedMaxAttempts ?? 1
+                manifest.nodes[nodeIndex].attempt = 1
+                manifest.nodes[nodeIndex].maxAttempts = maxAttempts
+                manifest.nodes[nodeIndex].state = .running
+                manifest.nodes[nodeIndex].error = nil
+                manifest.nodes[nodeIndex].exitStatus = nil
+                manifest.updatedAt = now()
+                try persist(manifest)
+                try record(.init(
+                    sequence: sequence,
+                    createdAt: now(),
+                    type: "node_started",
+                    state: .running,
+                    nodeID: nodeID,
+                    message: "\(invocation.command.joined(separator: " ")) (attempt 1/\(maxAttempts))"
+                ))
+                sequence += 1
+                prepared.append(.init(
+                    node: node,
+                    index: nodeIndex,
+                    directory: nodeDirectory,
+                    invocation: invocation,
+                    fingerprint: fingerprint,
+                    provider: provider,
+                    models: models,
+                    maxAttempts: maxAttempts
+                ))
+            }
+
+            guard !prepared.isEmpty else { continue }
+            let queue = OperationQueue()
+            queue.maxConcurrentOperationCount = maximumParallelNodes
+            let boxes = prepared.map { item -> WorkflowParallelOutcomeBox in
+                let box = WorkflowParallelOutcomeBox()
+                queue.addOperation {
+                    box.store(runParallelNode(item))
+                }
+                return box
+            }
+            queue.waitUntilAllOperationsAreFinished()
+
+            var firstFailure: String?
+            var wasCancelled = false
+            for (item, box) in zip(prepared, boxes) {
+                guard let outcome = box.load() else {
+                    throw ValidationError("Parallel node '\(item.node.id)' did not return an outcome.")
+                }
+                manifest.nodes[item.index].attempt = outcome.attempt
+                manifest.nodes[item.index].exitStatus = outcome.exitStatus
+                for event in outcome.events {
+                    switch event {
+                    case .provider(let providerEvent):
+                        let artifact: GraphRunEventArtifact?
+                        if let eventArtifact = providerEvent.artifact {
+                            let artifactURL = try invocationOutputURL(
+                                eventArtifact.path,
+                                nodeDirectory: item.directory
+                            )
+                            artifact = GraphRunEventArtifact(
+                                name: eventArtifact.name,
+                                path: try portableArtifactPath(for: artifactURL),
+                                contentType: eventArtifact.contentType
+                            )
+                        } else {
+                            artifact = nil
+                        }
+                        try record(providerEvent.runEvent(
+                            sequence: sequence,
+                            nodeID: item.node.id,
+                            artifact: artifact
+                        ))
+                    case .retrying(let attempt, let message):
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_retrying",
+                            state: .running,
+                            nodeID: item.node.id,
+                            message: "Attempt \(attempt) failed: \(message)"
+                        ))
+                    case .started(let attempt):
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_started",
+                            state: .running,
+                            nodeID: item.node.id,
+                            message: "\(item.invocation.command.joined(separator: " ")) (attempt \(attempt)/\(item.maxAttempts))"
+                        ))
+                    }
+                    sequence += 1
+                }
+
+                guard let verified = outcome.verified else {
+                    let message = outcome.error ?? "Node '\(item.node.id)' failed without a diagnostic."
+                    manifest.nodes[item.index].state = outcome.cancelled ? .cancelled : .failed
+                    manifest.nodes[item.index].error = message
+                    manifest.nodes[item.index].completedAt = now()
+                    firstFailure = firstFailure ?? message
+                    wasCancelled = wasCancelled || outcome.cancelled
+                    continue
+                }
+                nodeOutputs[item.node.id] = verified.values
+                manifest.nodes[item.index].artifacts = verified.artifacts
+                manifest.nodes[item.index].outputs = verified.outputs
+                if item.node.execution?.resolvedCache != .never {
+                    do {
+                        try storeCachedOutputs(
+                            verified,
+                            fingerprint: item.fingerprint,
+                            policy: item.node.execution?.resolvedCache ?? .automatic,
+                            nodeDirectory: item.directory
+                        )
+                        if cacheDirectory != nil {
+                            try record(.init(
+                                sequence: sequence,
+                                createdAt: now(),
+                                type: "node_cache_stored",
+                                state: .running,
+                                nodeID: item.node.id,
+                                message: "Stored verified outputs for node fingerprint \(item.fingerprint)."
+                            ))
+                            sequence += 1
+                        }
+                    } catch {
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_cache_store_failed",
+                            state: .running,
+                            nodeID: item.node.id,
+                            message: error.localizedDescription
+                        ))
+                        sequence += 1
+                    }
+                }
+                manifest.nodes[item.index].state = .finished
+                manifest.nodes[item.index].completedAt = now()
+                manifest.nodes[item.index].error = nil
+                completed.insert(item.node.id)
+                pending.removeAll { $0 == item.node.id }
+                try record(.init(
+                    sequence: sequence,
+                    createdAt: now(),
+                    type: "node_finished",
+                    state: .finished,
+                    nodeID: item.node.id,
+                    message: nil
+                ))
+                sequence += 1
+            }
+            manifest.updatedAt = now()
+            try persist(manifest)
+            if wasCancelled { throw WorkflowCancellationError() }
+            if let firstFailure { throw ValidationError(firstFailure) }
+        }
+    }
+
+    private func runParallelNode(
+        _ prepared: WorkflowPreparedParallelNode
+    ) -> WorkflowParallelNodeOutcome {
+        var attempt = 0
+        var exitStatus: Int32?
+        var events: [WorkflowParallelBufferedEvent] = []
+        while attempt < prepared.maxAttempts {
+            attempt += 1
+            do {
+                var providerOutputs: [String: WorkflowValue]?
+                var providerSequence = -1
+                let result = try runProcess(
+                    executable: prepared.invocation.executable,
+                    arguments: prepared.invocation.runArguments,
+                    currentDirectory: prepared.directory,
+                    timeoutSeconds: prepared.node.execution?.timeoutSeconds,
+                    stdoutLineHandler: prepared.invocation.streamsEvents ? { line in
+                        let event = try WorkflowBundleCodec.decoder().decode(
+                            WorkflowPluginNodeEvent.self,
+                            from: Data(line.utf8)
+                        )
+                        guard event.contractVersion == WorkflowPluginNodeEvent.contractVersion,
+                              event.sequence == providerSequence + 1 else {
+                            throw ValidationError(
+                                "Graph provider emitted an invalid event sequence for node '\(prepared.node.id)'."
+                            )
+                        }
+                        providerSequence = event.sequence
+                        if event.type == "node_result" {
+                            providerOutputs = event.outputs
+                        } else {
+                            events.append(.provider(event))
+                        }
+                    } : nil
+                )
+                try throwIfCancellationRequested()
+                try Data(result.stdout.utf8).write(
+                    to: prepared.directory.appendingPathComponent("stdout.txt"),
+                    options: .atomic
+                )
+                exitStatus = result.status
+                guard result.status == 0 else {
+                    throw ValidationError("Node '\(prepared.node.id)' \(result.failureSummary).")
+                }
+                let verified = try verifyOutputs(
+                    prepared.invocation.outputs,
+                    providerValues: providerOutputs,
+                    node: prepared.node,
+                    nodeDirectory: prepared.directory
+                )
+                return .init(
+                    verified: verified,
+                    attempt: attempt,
+                    exitStatus: exitStatus,
+                    events: events,
+                    error: nil,
+                    cancelled: false
+                )
+            } catch is WorkflowCancellationError {
+                return .init(
+                    verified: nil,
+                    attempt: attempt,
+                    exitStatus: exitStatus,
+                    events: events,
+                    error: "Workflow cancellation requested.",
+                    cancelled: true
+                )
+            } catch {
+                let message = (error as? ValidationError)?.message ?? error.localizedDescription
+                guard attempt < prepared.maxAttempts else {
+                    return .init(
+                        verified: nil,
+                        attempt: attempt,
+                        exitStatus: exitStatus,
+                        events: events,
+                        error: message,
+                        cancelled: false
+                    )
+                }
+                events.append(.retrying(attempt: attempt, message: message))
+                events.append(.started(attempt: attempt + 1))
+                do {
+                    try clearAttemptOutputs(
+                        prepared.invocation.outputs,
+                        nodeDirectory: prepared.directory
+                    )
+                } catch {
+                    return .init(
+                        verified: nil,
+                        attempt: attempt,
+                        exitStatus: exitStatus,
+                        events: events,
+                        error: error.localizedDescription,
+                        cancelled: false
+                    )
+                }
+            }
+        }
+        return .init(
+            verified: nil,
+            attempt: attempt,
+            exitStatus: exitStatus,
+            events: events,
+            error: "Node '\(prepared.node.id)' exhausted its retry policy.",
+            cancelled: false
         )
     }
 
@@ -1646,7 +2133,7 @@ private func isConfinedRelativeWorkflowPath(_ path: String) -> Bool {
         }
 }
 
-private func workflowVersion(_ current: String, satisfiesMinimum minimum: String) -> Bool {
+func workflowVersion(_ current: String, satisfiesMinimum minimum: String) -> Bool {
     func components(_ value: String) -> [Int] {
         value
             .split(separator: ".")

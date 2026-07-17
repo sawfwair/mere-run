@@ -205,12 +205,26 @@ enum WorkflowGraphProviderRegistry {
                       input.step.map({ $0 > 0 }) ?? true else {
                     throw ValidationError("Graph provider '\(document.providerID)' has an invalid input on '\(node.kind)'.")
                 }
+                if input.secret == true, input.type != .string {
+                    throw ValidationError(
+                        "Graph provider '\(document.providerID)' secret input '\(input.name)' must use type string."
+                    )
+                }
             }
             for output in node.outputs where output.name.range(
                 of: "^[a-z][a-z0-9_]{0,63}$",
                 options: .regularExpression
             ) == nil {
                 throw ValidationError("Graph provider '\(document.providerID)' has an invalid output on '\(node.kind)'.")
+            }
+            let requirements = node.requirements
+            guard requirements.minimumAcceleratorMemoryBytes.map({ $0 > 0 }) ?? true,
+                  requirements.minimumSystemMemoryBytes.map({ $0 > 0 }) ?? true,
+                  requirements.minimumDiskBytes.map({ $0 > 0 }) ?? true,
+                  requirements.minimumCPUCores.map({ $0 > 0 }) ?? true else {
+                throw ValidationError(
+                    "Graph provider '\(document.providerID)' has invalid resource requirements on '\(node.kind)'."
+                )
             }
         }
         return WorkflowDiscoveredGraphProvider(identity: identity, executable: entrypoint, nodes: nodes)

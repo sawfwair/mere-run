@@ -11,6 +11,89 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertNil(WorkflowExecutorProbe.parseNVIDIAMemoryBytes("not available\n"))
     }
 
+    func testLegacyWorkerProbeConservativelyDefaultsNewCapabilities() throws {
+        let probe = try WorkflowBundleCodec.decoder().decode(
+            WorkflowExecutorProbe.self,
+            from: Data("""
+            {
+              "schema_version": 1,
+              "worker_version": "0.22.0",
+              "contract_versions": ["mere.run/job-bundle.v1"],
+              "platform": "linux",
+              "architecture": "arm64",
+              "accelerator_backend": "cuda",
+              "memory_bytes": 1024,
+              "available_disk_bytes": null,
+              "node_kinds": [],
+              "installed_model_ids": [],
+              "providers": []
+            }
+            """.utf8)
+        )
+
+        XCTAssertEqual(probe.systemMemoryBytes, 0)
+        XCTAssertEqual(probe.logicalCPUCores, 0)
+        XCTAssertFalse(probe.networkAccess)
+        XCTAssertEqual(probe.availableSecretNames, [])
+    }
+
+    func testWorkerVersionCompatibilityBlocksBeforeSubmission() {
+        let probe = WorkflowExecutorProbe(
+            schemaVersion: 1,
+            workerVersion: "0.22.0",
+            contractVersions: [WorkflowJobManifest.contractVersion],
+            platform: "linux",
+            architecture: "x86_64",
+            acceleratorBackend: "cuda",
+            memoryBytes: 16_000,
+            availableDiskBytes: 100_000,
+            nodeKinds: ["image.generate"],
+            installedModelIDs: []
+        )
+        let requirements = WorkflowJobRequirements(
+            minimumMereRunVersion: "0.23.0",
+            nodeKinds: ["image.generate"],
+            modelIDs: [],
+            acceleratorBackends: ["cuda"],
+            minimumAcceleratorMemoryBytes: nil
+        )
+        let job = WorkflowJobManifest(
+            contractVersion: WorkflowJobManifest.contractVersion,
+            jobID: UUID().uuidString,
+            createdAt: Date(),
+            graphFingerprint: String(repeating: "a", count: 64),
+            inputFingerprint: String(repeating: "b", count: 64),
+            requirements: requirements,
+            outputs: []
+        )
+
+        XCTAssertFalse(workflowVersion(probe.workerVersion, satisfiesMinimum: requirements.minimumMereRunVersion))
+        XCTAssertThrowsError(try validateWorker(probe, for: job, executor: "ssh:legacy")) { error in
+            XCTAssertTrue(String(describing: error).contains("requires 0.23.0 or newer"))
+        }
+    }
+
+    func testJobRequirementsRoundTripNamedSecretsAndResourcesWithoutValues() throws {
+        let requirements = WorkflowJobRequirements(
+            minimumMereRunVersion: "0.23.0",
+            nodeKinds: ["private.publish"],
+            modelIDs: [],
+            secretNames: ["api-token"],
+            acceleratorBackends: ["cpu"],
+            minimumAcceleratorMemoryBytes: 1_024,
+            minimumSystemMemoryBytes: 2_048,
+            minimumDiskBytes: 4_096,
+            minimumCPUCores: 4,
+            networkAccess: true
+        )
+
+        let data = try WorkflowBundleCodec.encoder().encode(requirements)
+        let encoded = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(encoded.contains("api-token"))
+        XCTAssertFalse(encoded.contains("MERERUN_SECRET_API_TOKEN"))
+        XCTAssertEqual(try WorkflowBundleCodec.decoder().decode(WorkflowJobRequirements.self, from: data), requirements)
+    }
+
     func testDatasetDiscoveryRanksCompleteImageCaptionDirectories() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -38,7 +121,11 @@ final class WorkflowGraphTests: XCTestCase {
     func testCanonicalWorkflowFixturesDecodeAndValidate() throws {
         let fixtures = try XCTUnwrap(Bundle.module.resourceURL)
             .appendingPathComponent("Fixtures/WorkflowGraphV1", isDirectory: true)
-        for name in ["lora-sample.workflow.json", "image-video.workflow.json"] {
+        for name in [
+            "lora-sample.workflow.json",
+            "image-video.workflow.json",
+            "parallel-image-video.workflow.json",
+        ] {
             let graph = try WorkflowGraphDocument.load(from: fixtures.appendingPathComponent(name))
             let inputs = WorkflowInputsDocument(values: graph.inputs.reduce(into: [:]) { values, input in
                 switch input.value.type {
@@ -94,6 +181,79 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(validation.status, .ok)
         XCTAssertEqual(validation.order, ["make-image", "make-video"])
         XCTAssertEqual(validation.dependencies["make-video"], ["make-image"])
+    }
+
+    func testParallelSchedulerOverlapsReadyNodesAndWaitsForDependencies() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let graph = try decodeGraph("""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "parallel-images",
+          "inputs": {},
+          "execution": {"max_parallel_nodes": 2},
+          "nodes": [
+            {"id": "image-a", "kind": "image.generate", "arguments": {"prompt": "first", "seed": 1}},
+            {"id": "image-b", "kind": "image.generate", "arguments": {"prompt": "second", "seed": 2}},
+            {
+              "id": "video",
+              "kind": "video.generate",
+              "depends_on": ["image-a", "image-b"],
+              "arguments": {"prompt": "finish", "image": {"$ref": "nodes.image-a.outputs.image"}, "seed": 3}
+            }
+          ],
+          "outputs": {"video": {"$ref": "nodes.video.outputs.video"}}
+        }
+        """)
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: .init(values: [:]),
+            destination: root.appendingPathComponent("bundle")
+        ).materialize()
+        let process = OverlapWorkflowProcessRunner()
+
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: root.appendingPathComponent("run"),
+            processRunner: process
+        ).execute()
+
+        XCTAssertEqual(outcome.state, .finished)
+        XCTAssertEqual(process.maximumActiveRuns, 2)
+        let firstWaveEnd = try XCTUnwrap([
+            process.interval(for: "image-a")?.end,
+            process.interval(for: "image-b")?.end,
+        ].compactMap { $0 }.max())
+        let dependentStart = try XCTUnwrap(process.interval(for: "video")?.start)
+        XCTAssertGreaterThanOrEqual(dependentStart, firstWaveEnd)
+    }
+
+    func testGraphParallelismAndSecretReferencesAreValidated() throws {
+        let invalid = try decodeGraph("""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "invalid-parallelism",
+          "inputs": {},
+          "execution": {"max_parallel_nodes": 0},
+          "nodes": [{"id": "image", "kind": "image.generate", "arguments": {"prompt": "fixture"}}],
+          "outputs": {"image": {"$ref": "nodes.image.outputs.image"}}
+        }
+        """)
+        let validation = WorkflowGraphValidator.validate(graph: invalid, inputs: .init(values: [:]))
+        XCTAssertTrue(validation.diagnostics.contains { $0.id == "workflow_parallelism_invalid" })
+
+        let value = try JSONDecoder().decode(
+            WorkflowValue.self,
+            from: Data(#"{"$secret":"hugging-face-token"}"#.utf8)
+        )
+        XCTAssertEqual(value, .secretReference("hugging-face-token"))
+        XCTAssertEqual(value.secretNames, ["hugging-face-token"])
+        XCTAssertEqual(
+            workflowSecretEnvironmentKey("hugging-face-token"),
+            "MERERUN_SECRET_HUGGING_FACE_TOKEN"
+        )
     }
 
     func testReferenceAcceptsProviderOutputPortNamesWithUnderscores() throws {
@@ -1011,6 +1171,58 @@ private final class FixtureWorkflowProcessRunner: WorkflowProcessRunning {
         let output = URL(fileURLWithPath: arguments[outputIndex + 1])
         try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data([0x89, 0x50, 0x4e, 0x47]).write(to: output)
+        return WorkflowProcessResult(status: 0, stdout: "ok")
+    }
+}
+
+private final class OverlapWorkflowProcessRunner: WorkflowProcessRunning, @unchecked Sendable {
+    struct Interval {
+        let start: Date
+        let end: Date
+    }
+
+    private let lock = NSLock()
+    private var activeRuns = 0
+    private var maximumRuns = 0
+    private var intervals: [String: Interval] = [:]
+
+    var maximumActiveRuns: Int {
+        lock.withLock { maximumRuns }
+    }
+
+    func interval(for nodeID: String) -> Interval? {
+        lock.withLock { intervals[nodeID] }
+    }
+
+    func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
+        if arguments.contains("--preflight") {
+            return WorkflowProcessResult(status: 0, stdout: "{}")
+        }
+        let nodeID = currentDirectory.lastPathComponent
+            .split(separator: "-", maxSplits: 1)
+            .last
+            .map(String.init) ?? currentDirectory.lastPathComponent
+        let start = Date()
+        lock.withLock {
+            activeRuns += 1
+            maximumRuns = max(maximumRuns, activeRuns)
+        }
+        Thread.sleep(forTimeInterval: 0.12)
+        guard let outputIndex = arguments.firstIndex(of: "--output"),
+              outputIndex + 1 < arguments.count else {
+            return WorkflowProcessResult(status: 2, stdout: "")
+        }
+        let output = URL(fileURLWithPath: arguments[outputIndex + 1])
+        try FileManager.default.createDirectory(
+            at: output.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data([0x01, 0x02, 0x03, 0x04]).write(to: output)
+        let end = Date()
+        lock.withLock {
+            activeRuns -= 1
+            intervals[nodeID] = Interval(start: start, end: end)
+        }
         return WorkflowProcessResult(status: 0, stdout: "ok")
     }
 }

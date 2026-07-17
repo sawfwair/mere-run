@@ -168,6 +168,18 @@ struct GraphPreflightResult: Codable, Equatable {
     let installedModelIDs: [String]
     let requiredProviders: [WorkflowGraphProviderRequirement]
     let availableProviders: [WorkflowGraphProviderRequirement]
+    let requiredSecretNames: [String]
+    let availableSecretNames: [String]
+    let minimumAcceleratorMemoryBytes: Int64?
+    let acceleratorMemoryBytes: UInt64
+    let minimumSystemMemoryBytes: Int64?
+    let systemMemoryBytes: UInt64
+    let minimumDiskBytes: Int64?
+    let availableDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let logicalCPUCores: Int
+    let networkAccessRequired: Bool
+    let networkAccessAvailable: Bool
     let executor: String
 
     enum CodingKeys: String, CodingKey {
@@ -178,6 +190,18 @@ struct GraphPreflightResult: Codable, Equatable {
         case installedModelIDs = "installed_model_ids"
         case requiredProviders = "required_providers"
         case availableProviders = "available_providers"
+        case requiredSecretNames = "required_secret_names"
+        case availableSecretNames = "available_secret_names"
+        case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+        case acceleratorMemoryBytes = "accelerator_memory_bytes"
+        case minimumSystemMemoryBytes = "minimum_system_memory_bytes"
+        case systemMemoryBytes = "system_memory_bytes"
+        case minimumDiskBytes = "minimum_disk_bytes"
+        case availableDiskBytes = "available_disk_bytes"
+        case minimumCPUCores = "minimum_cpu_cores"
+        case logicalCPUCores = "logical_cpu_cores"
+        case networkAccessRequired = "network_access_required"
+        case networkAccessAvailable = "network_access_available"
         case executor
     }
 }
@@ -227,6 +251,14 @@ struct GraphPreflight: AsyncParsableCommand {
                 message: "Executor '\(executor)' does not support \(WorkflowJobManifest.contractVersion)."
             ))
         }
+        if !workflowVersion(probe.workerVersion, satisfiesMinimum: MereRunCLIVersion.current) {
+            diagnostics.append(.init(
+                id: "executor_worker_version_too_old",
+                severity: .blocker,
+                title: "Executor worker is too old",
+                message: "Executor '\(executor)' reports mere.run \(probe.workerVersion); this graph requires \(MereRunCLIVersion.current) or newer."
+            ))
+        }
         if !requirements.acceleratorBackends.contains(probe.acceleratorBackend), probe.acceleratorBackend != "mixed" {
             diagnostics.append(.init(
                 id: "executor_accelerator_unsupported",
@@ -261,6 +293,58 @@ struct GraphPreflight: AsyncParsableCommand {
                 title: "Executor model is missing",
                 message: "Executor '\(executor)' does not have model '\(modelID)' installed.",
                 suggestedActionIDs: ["pull-model-\(modelID)"]
+            ))
+        }
+        for secretName in requirements.secretNames where !probe.availableSecretNames.contains(secretName) {
+            diagnostics.append(.init(
+                id: "executor_secret_missing_\(secretName)",
+                severity: .blocker,
+                title: "Executor secret is missing",
+                message: "Executor '\(executor)' does not expose configured secret '\(secretName)'. Configure \(workflowSecretEnvironmentKey(secretName)) on that worker."
+            ))
+        }
+        if let minimum = requirements.minimumAcceleratorMemoryBytes,
+           probe.memoryBytes < UInt64(minimum) {
+            diagnostics.append(.init(
+                id: "executor_accelerator_memory_insufficient",
+                severity: .blocker,
+                title: "Executor accelerator memory is insufficient",
+                message: "Executor '\(executor)' reports \(probe.memoryBytes) accelerator-memory bytes; this graph requires at least \(minimum)."
+            ))
+        }
+        if let minimum = requirements.minimumSystemMemoryBytes,
+           probe.systemMemoryBytes < UInt64(minimum) {
+            diagnostics.append(.init(
+                id: "executor_system_memory_insufficient",
+                severity: .blocker,
+                title: "Executor system memory is insufficient",
+                message: "Executor '\(executor)' reports \(probe.systemMemoryBytes) system-memory bytes; this graph requires at least \(minimum)."
+            ))
+        }
+        if let minimum = requirements.minimumDiskBytes,
+           probe.availableDiskBytes.map({ $0 < minimum }) != false {
+            diagnostics.append(.init(
+                id: "executor_disk_insufficient",
+                severity: .blocker,
+                title: "Executor disk space is insufficient",
+                message: "Executor '\(executor)' does not report at least \(minimum) free disk bytes."
+            ))
+        }
+        if let minimum = requirements.minimumCPUCores,
+           probe.logicalCPUCores < minimum {
+            diagnostics.append(.init(
+                id: "executor_cpu_insufficient",
+                severity: .blocker,
+                title: "Executor CPU capacity is insufficient",
+                message: "Executor '\(executor)' reports \(probe.logicalCPUCores) logical CPU cores; this graph requires at least \(minimum)."
+            ))
+        }
+        if requirements.networkAccess, !probe.networkAccess {
+            diagnostics.append(.init(
+                id: "executor_network_unavailable",
+                severity: .blocker,
+                title: "Executor network access is unavailable",
+                message: "Executor '\(executor)' does not allow network access required by this graph."
             ))
         }
         diagnostics.append(contentsOf: assetDiagnostics(graph: loaded.graph, inputs: loaded.inputs))
@@ -300,6 +384,18 @@ struct GraphPreflight: AsyncParsableCommand {
                 installedModelIDs: probe.installedModelIDs,
                 requiredProviders: requirements.providers,
                 availableProviders: probe.providers,
+                requiredSecretNames: requirements.secretNames,
+                availableSecretNames: probe.availableSecretNames,
+                minimumAcceleratorMemoryBytes: requirements.minimumAcceleratorMemoryBytes,
+                acceleratorMemoryBytes: probe.memoryBytes,
+                minimumSystemMemoryBytes: requirements.minimumSystemMemoryBytes,
+                systemMemoryBytes: probe.systemMemoryBytes,
+                minimumDiskBytes: requirements.minimumDiskBytes,
+                availableDiskBytes: probe.availableDiskBytes,
+                minimumCPUCores: requirements.minimumCPUCores,
+                logicalCPUCores: probe.logicalCPUCores,
+                networkAccessRequired: requirements.networkAccess,
+                networkAccessAvailable: probe.networkAccess,
                 executor: executor
             ),
             diagnostics: diagnostics,
@@ -674,7 +770,13 @@ struct WorkflowGraphRequirements: Equatable {
     let nodeKinds: [String]
     let modelIDs: [String]
     let providers: [WorkflowGraphProviderRequirement]
+    let secretNames: [String]
     let acceleratorBackends: [String]
+    let minimumAcceleratorMemoryBytes: Int64?
+    let minimumSystemMemoryBytes: Int64?
+    let minimumDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let networkAccess: Bool
 
     static func resolve(graph: WorkflowGraphDocument, inputs: WorkflowInputsDocument) -> WorkflowGraphRequirements {
         var modelIDs = graph.nodes.compactMap { node -> String? in
@@ -697,9 +799,28 @@ struct WorkflowGraphRequirements: Equatable {
             modelIDs.append(contentsOf: WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [])
         }
         var acceleratorBackends = Set(["cpu", "metal", "cuda", "rocm"])
+        var minimumAcceleratorMemoryBytes: Int64?
+        var minimumSystemMemoryBytes: Int64?
+        var minimumDiskBytes: Int64?
+        var minimumCPUCores: Int?
+        var networkAccess = false
         for node in graph.nodes {
-            let accepted = WorkflowNodeRegistry.entry(for: node)?.requirements.acceleratorBackends ?? []
+            guard let nodeRequirements = WorkflowNodeRegistry.entry(for: node)?.requirements else { continue }
+            let accepted = nodeRequirements.acceleratorBackends
             if !accepted.isEmpty { acceleratorBackends.formIntersection(accepted) }
+            if let minimum = nodeRequirements.minimumAcceleratorMemoryBytes {
+                minimumAcceleratorMemoryBytes = max(minimumAcceleratorMemoryBytes ?? 0, minimum)
+            }
+            if let minimum = nodeRequirements.minimumSystemMemoryBytes {
+                minimumSystemMemoryBytes = max(minimumSystemMemoryBytes ?? 0, minimum)
+            }
+            if let minimum = nodeRequirements.minimumDiskBytes {
+                minimumDiskBytes = max(minimumDiskBytes ?? 0, minimum)
+            }
+            if let minimum = nodeRequirements.minimumCPUCores {
+                minimumCPUCores = max(minimumCPUCores ?? 0, minimum)
+            }
+            networkAccess = networkAccess || nodeRequirements.networkAccess == true
         }
         return .init(
             nodeKinds: Array(Set(graph.nodes.map(\.kind))).sorted(),
@@ -708,7 +829,15 @@ struct WorkflowGraphRequirements: Equatable {
                 guard node.resolvedProviderID != WorkflowNodeProviderIdentity.builtInID else { return nil }
                 return WorkflowGraphProviderRegistry.discoveredCatalog().provider(id: node.resolvedProviderID)?.requirement
             })).sorted { $0.id < $1.id },
-            acceleratorBackends: acceleratorBackends.sorted()
+            secretNames: Array(Set(graph.nodes.flatMap { node in
+                node.arguments.values.flatMap(\.secretNames)
+            })).sorted(),
+            acceleratorBackends: acceleratorBackends.sorted(),
+            minimumAcceleratorMemoryBytes: minimumAcceleratorMemoryBytes,
+            minimumSystemMemoryBytes: minimumSystemMemoryBytes,
+            minimumDiskBytes: minimumDiskBytes,
+            minimumCPUCores: minimumCPUCores,
+            networkAccess: networkAccess
         )
     }
 }

@@ -147,9 +147,13 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
     let architecture: String
     let acceleratorBackend: String
     let memoryBytes: UInt64
+    let systemMemoryBytes: UInt64
+    let logicalCPUCores: Int
     let availableDiskBytes: Int64?
+    let networkAccess: Bool
     let nodeKinds: [String]
     let installedModelIDs: [String]
+    let availableSecretNames: [String]
     let providers: [WorkflowGraphProviderRequirement]
 
     enum CodingKeys: String, CodingKey {
@@ -160,9 +164,13 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
         case architecture
         case acceleratorBackend = "accelerator_backend"
         case memoryBytes = "memory_bytes"
+        case systemMemoryBytes = "system_memory_bytes"
+        case logicalCPUCores = "logical_cpu_cores"
         case availableDiskBytes = "available_disk_bytes"
+        case networkAccess = "network_access"
         case nodeKinds = "node_kinds"
         case installedModelIDs = "installed_model_ids"
+        case availableSecretNames = "available_secret_names"
         case providers
     }
 
@@ -174,9 +182,13 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
         architecture: String,
         acceleratorBackend: String,
         memoryBytes: UInt64,
+        systemMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory,
+        logicalCPUCores: Int = ProcessInfo.processInfo.processorCount,
         availableDiskBytes: Int64?,
+        networkAccess: Bool = true,
         nodeKinds: [String],
         installedModelIDs: [String],
+        availableSecretNames: [String] = [],
         providers: [WorkflowGraphProviderRequirement] = []
     ) {
         self.schemaVersion = schemaVersion
@@ -186,9 +198,13 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
         self.architecture = architecture
         self.acceleratorBackend = acceleratorBackend
         self.memoryBytes = memoryBytes
+        self.systemMemoryBytes = systemMemoryBytes
+        self.logicalCPUCores = logicalCPUCores
         self.availableDiskBytes = availableDiskBytes
+        self.networkAccess = networkAccess
         self.nodeKinds = nodeKinds
         self.installedModelIDs = installedModelIDs
+        self.availableSecretNames = availableSecretNames
         self.providers = providers
     }
 
@@ -201,9 +217,15 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
         architecture = try container.decode(String.self, forKey: .architecture)
         acceleratorBackend = try container.decode(String.self, forKey: .acceleratorBackend)
         memoryBytes = try container.decode(UInt64.self, forKey: .memoryBytes)
+        systemMemoryBytes = try container.decodeIfPresent(UInt64.self, forKey: .systemMemoryBytes)
+            ?? 0
+        logicalCPUCores = try container.decodeIfPresent(Int.self, forKey: .logicalCPUCores)
+            ?? 0
         availableDiskBytes = try container.decodeIfPresent(Int64.self, forKey: .availableDiskBytes)
+        networkAccess = try container.decodeIfPresent(Bool.self, forKey: .networkAccess) ?? false
         nodeKinds = try container.decode([String].self, forKey: .nodeKinds)
         installedModelIDs = try container.decode([String].self, forKey: .installedModelIDs)
+        availableSecretNames = try container.decodeIfPresent([String].self, forKey: .availableSecretNames) ?? []
         providers = try container.decodeIfPresent(
             [WorkflowGraphProviderRequirement].self,
             forKey: .providers
@@ -246,13 +268,27 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
             architecture: architecture,
             acceleratorBackend: backend,
             memoryBytes: memoryBytes,
+            systemMemoryBytes: ProcessInfo.processInfo.physicalMemory,
+            logicalCPUCores: ProcessInfo.processInfo.processorCount,
             availableDiskBytes: disk ?? nil,
+            networkAccess: true,
             nodeKinds: Array(Set(
                 WorkflowNodeRegistry.entries.map(\.kind) + graphProviders.flatMap { $0.nodes.map(\.kind) }
             )).sorted(),
             installedModelIDs: ModelInventory.rows(fileManager: fileManager).filter(\.isInstalled).map(\.id).sorted(),
+            availableSecretNames: availableWorkflowSecretNames(),
             providers: graphProviders.map(\.requirement)
         )
+    }
+
+    private static func availableWorkflowSecretNames(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String] {
+        let prefix = "MERERUN_SECRET_"
+        return environment.keys.compactMap { key -> String? in
+            guard key.hasPrefix(prefix), environment[key]?.isEmpty == false else { return nil }
+            return key.dropFirst(prefix.count).lowercased().replacingOccurrences(of: "_", with: "-")
+        }.sorted()
     }
 
     #if os(Linux)

@@ -24,6 +24,7 @@
       "propertyNames": { "$ref": "#/$defs/id" },
       "additionalProperties": { "$ref": "#/$defs/reference" }
     },
+    "execution": { "$ref": "#/$defs/graph_execution" },
     "metadata": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/value" }
@@ -42,6 +43,14 @@
         }
       }
     },
+    "secret_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["$secret"],
+      "properties": {
+        "$secret": { "$ref": "#/$defs/id" }
+      }
+    },
     "value": {
       "anyOf": [
         { "type": "null" },
@@ -51,6 +60,7 @@
         { "type": "boolean" },
         { "type": "array", "items": { "$ref": "#/$defs/value" } },
         { "$ref": "#/$defs/reference" },
+        { "$ref": "#/$defs/secret_reference" },
         { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
       ]
     },
@@ -86,6 +96,13 @@
         "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
         "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 604800 },
         "cache": { "enum": ["auto", "never", "refresh"] }
+      }
+    },
+    "graph_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_parallel_nodes": { "type": "integer", "minimum": 1, "maximum": 32 }
       }
     },
     "port_type": {

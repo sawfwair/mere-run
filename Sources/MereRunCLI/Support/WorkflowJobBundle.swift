@@ -46,8 +46,13 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
     let modelIDs: [String]
     let models: [WorkflowModelProvenance]
     let providers: [WorkflowGraphProviderRequirement]
+    let secretNames: [String]
     let acceleratorBackends: [String]
     let minimumAcceleratorMemoryBytes: Int64?
+    let minimumSystemMemoryBytes: Int64?
+    let minimumDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let networkAccess: Bool
 
     enum CodingKeys: String, CodingKey {
         case minimumMereRunVersion = "minimum_mere_run_version"
@@ -55,8 +60,13 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
         case modelIDs = "model_ids"
         case models
         case providers
+        case secretNames = "secret_names"
         case acceleratorBackends = "accelerator_backends"
         case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+        case minimumSystemMemoryBytes = "minimum_system_memory_bytes"
+        case minimumDiskBytes = "minimum_disk_bytes"
+        case minimumCPUCores = "minimum_cpu_cores"
+        case networkAccess = "network_access"
     }
 
     init(
@@ -65,16 +75,26 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
         modelIDs: [String],
         models: [WorkflowModelProvenance] = [],
         providers: [WorkflowGraphProviderRequirement] = [],
+        secretNames: [String] = [],
         acceleratorBackends: [String],
-        minimumAcceleratorMemoryBytes: Int64?
+        minimumAcceleratorMemoryBytes: Int64?,
+        minimumSystemMemoryBytes: Int64? = nil,
+        minimumDiskBytes: Int64? = nil,
+        minimumCPUCores: Int? = nil,
+        networkAccess: Bool = false
     ) {
         self.minimumMereRunVersion = minimumMereRunVersion
         self.nodeKinds = nodeKinds
         self.modelIDs = modelIDs
         self.models = models
         self.providers = providers
+        self.secretNames = secretNames
         self.acceleratorBackends = acceleratorBackends
         self.minimumAcceleratorMemoryBytes = minimumAcceleratorMemoryBytes
+        self.minimumSystemMemoryBytes = minimumSystemMemoryBytes
+        self.minimumDiskBytes = minimumDiskBytes
+        self.minimumCPUCores = minimumCPUCores
+        self.networkAccess = networkAccess
     }
 
     init(from decoder: Decoder) throws {
@@ -87,11 +107,16 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
             [WorkflowGraphProviderRequirement].self,
             forKey: .providers
         ) ?? []
+        secretNames = try container.decodeIfPresent([String].self, forKey: .secretNames) ?? []
         acceleratorBackends = try container.decode([String].self, forKey: .acceleratorBackends)
         minimumAcceleratorMemoryBytes = try container.decodeIfPresent(
             Int64.self,
             forKey: .minimumAcceleratorMemoryBytes
         )
+        minimumSystemMemoryBytes = try container.decodeIfPresent(Int64.self, forKey: .minimumSystemMemoryBytes)
+        minimumDiskBytes = try container.decodeIfPresent(Int64.self, forKey: .minimumDiskBytes)
+        minimumCPUCores = try container.decodeIfPresent(Int.self, forKey: .minimumCPUCores)
+        networkAccess = try container.decodeIfPresent(Bool.self, forKey: .networkAccess) ?? false
     }
 }
 
@@ -332,6 +357,7 @@ struct WorkflowBundleMaterializer {
             inputs: graph.inputs,
             nodes: nodes,
             outputs: graph.outputs,
+            execution: graph.execution,
             metadata: graph.metadata
         )
     }
@@ -431,6 +457,7 @@ struct WorkflowBundleMaterializer {
             inputs: graph.inputs,
             nodes: nodes,
             outputs: graph.outputs,
+            execution: graph.execution,
             metadata: graph.metadata
         )
     }
@@ -548,6 +575,10 @@ struct WorkflowBundleMaterializer {
         })).sorted { $0.id < $1.id }
         var acceptedBackends = Set(["cpu", "metal", "cuda", "rocm"])
         var minimumMemory: Int64?
+        var minimumSystemMemory: Int64?
+        var minimumDisk: Int64?
+        var minimumCPUCores: Int?
+        var networkAccess = false
         for node in graph.nodes {
             guard let requirements = WorkflowNodeRegistry.entry(for: node)?.requirements else { continue }
             if !requirements.acceleratorBackends.isEmpty {
@@ -556,15 +587,33 @@ struct WorkflowBundleMaterializer {
             if let nodeMinimum = requirements.minimumAcceleratorMemoryBytes {
                 minimumMemory = max(minimumMemory ?? 0, nodeMinimum)
             }
+            if let nodeMinimum = requirements.minimumSystemMemoryBytes {
+                minimumSystemMemory = max(minimumSystemMemory ?? 0, nodeMinimum)
+            }
+            if let nodeMinimum = requirements.minimumDiskBytes {
+                minimumDisk = max(minimumDisk ?? 0, nodeMinimum)
+            }
+            if let nodeMinimum = requirements.minimumCPUCores {
+                minimumCPUCores = max(minimumCPUCores ?? 0, nodeMinimum)
+            }
+            networkAccess = networkAccess || requirements.networkAccess == true
         }
+        let secretNames = Array(Set(
+            graph.nodes.flatMap { $0.arguments.values.flatMap(\.secretNames) }
+        )).sorted()
         return WorkflowJobRequirements(
             minimumMereRunVersion: MereRunCLIVersion.current,
             nodeKinds: Array(Set(graph.nodes.map(\.kind))).sorted(),
             modelIDs: modelIDs.sorted(),
             models: modelProvenance,
             providers: providers,
+            secretNames: secretNames,
             acceleratorBackends: acceptedBackends.sorted(),
-            minimumAcceleratorMemoryBytes: minimumMemory
+            minimumAcceleratorMemoryBytes: minimumMemory,
+            minimumSystemMemoryBytes: minimumSystemMemory,
+            minimumDiskBytes: minimumDisk,
+            minimumCPUCores: minimumCPUCores,
+            networkAccess: networkAccess
         )
     }
 

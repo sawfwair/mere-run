@@ -4,6 +4,16 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Added
+
+- expanded portable workflow graphs with deterministic parallel scheduling,
+  bounded retries and timeouts, verified cross-run caching, resource and named
+  secret contracts, reusable plugin-side composition, and stricter executor
+  compatibility checks. These additions establish `0.23.0` as the minimum
+  worker version for newly materialized graph jobs.
+
 ## 0.22.0 - 2026-07-17
 
 ### Added

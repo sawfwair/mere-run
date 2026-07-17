@@ -23,6 +23,11 @@ References add dependency edges automatically. `depends_on` adds ordering-only
 edges. Validation blocks cycles, duplicate IDs, missing references, unknown node
 kinds, type mismatches, and incompatible artifact content types.
 
+Independent ready nodes may run concurrently when the graph declares
+`execution.max_parallel_nodes` from 1 through 32. The default remains one, and
+all scheduling, event commits, and final outputs retain stable topological order.
+Each node may independently set retry, timeout, and cache policy.
+
 The V1 node catalog contains:
 
 - `image.train-lora`
@@ -58,6 +63,13 @@ preview, determinism, caching, and side-effect traits. `mere.run` validates the
 catalog and invokes only these fixed verbs. A plugin manifest cannot inject a
 command template.
 
+Providers may also declare minimum accelerator memory, system memory, free disk,
+CPU cores, and network access. Secret fields accept only a named binding such as
+`{"$secret":"hugging-face-token"}`. Values are resolved from
+`MERERUN_SECRET_HUGGING_FACE_TOKEN` only inside the executing worker process;
+secret values never enter graphs, bundles, fingerprints, reports, events, or
+Relay payloads. Secret-bound nodes must disable caching.
+
 Inspect the exact typed fields and output descriptors with:
 
 ```bash
@@ -86,7 +98,8 @@ mere.run graph preflight workflow.json --inputs-json inputs.json --executor rela
 Validation is executor-independent. Preflight combines graph diagnostics with a
 worker capability probe, including contract version, node kinds, installed
 models, exact provider versions and catalog digests, accelerator backend,
-memory, and available disk. Missing models produce declarative pull actions; V1
+accelerator and system memory, CPU capacity, available disk, network access, and
+named secret availability. Missing models produce declarative pull actions; V1
 never pulls models automatically on a worker.
 
 ## Portable job bundles
@@ -127,6 +140,12 @@ content-addressed. Symlinks, device files, path traversal, and files escaping a
 declared directory root are rejected. Executor profiles, tokens, URLs, and
 machine paths never enter the bundle.
 
+Bundles pin their minimum compatible `mere.run` worker version. Preflight and
+submission reject older SSH or Relay workers before transfer or queueing; the
+worker repeats the check before execution. Graphs materialized by this release
+require `mere.run` 0.23.0 or newer because older workers do not preserve the new
+execution, resource, and secret fields during canonical fingerprint checks.
+
 ## Local execution
 
 ```bash
@@ -142,11 +161,18 @@ mere.run graph run workflow.json \
   --json
 ```
 
-Nodes run sequentially in stable topological order and fail fast. Every node is
+Nodes run in stable topological order and fail fast. Graphs are sequential by
+default; an explicit graph parallelism limit allows independent ready nodes to
+overlap without changing dependency semantics. Every node is
 adapted to deterministic public CLI arguments and launched as an isolated
 `mere.run` child process. The runner captures structured stdout, preserves
 diagnostic stderr, records exit status, verifies every declared artifact, and
 honors a cooperative cancellation marker.
+
+Node execution policy supports bounded retries, hard subprocess timeouts, and a
+cross-run content-addressed cache. Cache keys include normalized arguments,
+provider identity, model provenance, and directly referenced artifact digests.
+`cache: refresh` recomputes and replaces an entry; `cache: never` bypasses it.
 
 `--resume` reuses a finished node only when its provider pin, normalized
 arguments, exact model provenance, directly referenced upstream outputs, and
