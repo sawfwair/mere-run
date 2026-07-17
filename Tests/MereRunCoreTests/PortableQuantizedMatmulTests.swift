@@ -24,6 +24,31 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         )
     }
 
+    func testCUDAQuantCapabilitiesAreScopedByPackedLayout() {
+        let binary = MLXCUDAQuant.CapabilityKey(
+            operation: .quantizedMM,
+            bits: 1,
+            groupSize: 32,
+            quantizationMode: .affine
+        )
+        let ternary = MLXCUDAQuant.CapabilityKey(
+            operation: .quantizedMM,
+            bits: 2,
+            groupSize: 32,
+            quantizationMode: .affine
+        )
+        let fourBit = MLXCUDAQuant.CapabilityKey(
+            operation: .quantizedMM,
+            bits: 4,
+            groupSize: 64,
+            quantizationMode: .affine
+        )
+
+        XCTAssertNotEqual(binary, ternary)
+        XCTAssertNotEqual(binary, fourBit)
+        XCTAssertNotEqual(ternary, fourBit)
+    }
+
     func testQ35SwitchLinearDenseExpertPathTransposesWeights() throws {
         let weight = MLXArray([
             1.0, 2.0, 3.0,

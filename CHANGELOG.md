@@ -4,7 +4,7 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## 0.22.0 - 2026-07-15
+## 0.22.0 - 2026-07-16
 
 ### Added
 
@@ -47,11 +47,41 @@ The format is based on Keep a Changelog.
   accept the catalog id `mere-platform-assistant` anywhere `--lora` accepts a
   local adapter path.
 
+### Changed
+
+- upgraded the shared Prism packed binary and ternary kernel stack used by the
+  new Bonsai 27B text models and the existing `image-bonsai-binary` and
+  `image-bonsai-ternary` generators. Matched M4 Max release runs measured 67.80
+  and 45.04 decode tokens/s for the 1-bit and 2-bit text models, plus 9.91 and
+  14.04 seconds for four-step 512x512 binary and ternary image generation.
+- enabled Krea 2 LoRA-training and adapter-backed image graph stages on
+  constrained CUDA workers through 4-bit bases, shape-scoped quantized
+  fallbacks, sequential model phases, and Linux-package CUDA discovery.
+- standardized restricted-model usage terms and explicit acceptance across
+  model listing, information, pull, preflight, setup, Studio, and related
+  command guidance while retaining upstream license and notice artifacts.
+- refreshed the README capability map and CLI documentation around the current
+  modality-first command surface, Relay/Nodes, portable workflows, adapters,
+  and the official plugin ecosystem.
+
 ### Fixed
 
 - updated the official plugin catalog default and bundled plugin guide to use
   the live `sawfwair/mere-run-plugins` repository after the old catalog path
   was retired.
+- kept image-generation graph preflight declarative so it no longer initializes
+  Metal merely to describe the selected backend, and included bounded stderr,
+  stdout, and termination details when a child preflight fails.
+- packaged the ONNX/CoreML face-analysis runtime correctly in the signed macOS
+  app bundle.
+- preserved Swift 6.0 Linux CLI compatibility for the pinned MLX Swift fork
+  through a CPU-compatible base manifest while retaining the Swift 6.3
+  CUDA/CGen package graph, and corrected literal quant-mode reporting in the
+  DGX Spark e2e sweep.
+- kept CUDA quant-kernel capability decisions isolated by bit width, group
+  size, and quantization mode, and routed fused projections plus tied 1-bit/
+  2-bit output embeddings through the dense fallback when the native CUDA
+  matrix kernel cannot execute them.
 
 ## 0.21.0 - 2026-07-14
 

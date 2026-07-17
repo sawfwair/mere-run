@@ -20,6 +20,24 @@ final class PrismLowBitQuantizationTests: XCTestCase {
         XCTAssertEqual(output[1, 0].item(Float.self), -1, accuracy: 0.001)
     }
 
+    func testOneBitPreQuantizedEmbeddingDenseLinearUnpacksFullWeight() {
+        let embedding = PreQuantizedEmbedding(
+            weight: MLXArray([UInt32.max, UInt32(0)], [2, 1]),
+            scales: MLXArray([Float(2), Float(2)], [2, 1]),
+            biases: MLXArray([Float(-1), Float(-1)], [2, 1]),
+            groupSize: 32,
+            bits: 1
+        )
+        let input = MLXArray(Array(repeating: Float(1), count: 32), [1, 32])
+
+        let output = embedding.denseLinear(input)
+        eval(output)
+
+        XCTAssertEqual(output.shape, [1, 2])
+        XCTAssertEqual(output[0, 0].item(Float.self), 32, accuracy: 0.001)
+        XCTAssertEqual(output[0, 1].item(Float.self), -32, accuracy: 0.001)
+    }
+
     func testNativeBinaryAffineLinearUnpacksOneBitWeights() {
         let layer = PortableQuantizedLinear(
             weight: MLXArray([UInt32.max, UInt32(0)], [2, 1]),

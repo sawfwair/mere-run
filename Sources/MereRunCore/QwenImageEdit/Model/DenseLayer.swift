@@ -153,6 +153,8 @@ public final class PreQuantizedEmbedding: Embedding, Quantized {
 
     public let scales: MLXArray
     public let biases: MLXArray?
+    private var cachedLinearWeight: MLXArray?
+    private var cachedLinearWeightDType: DType?
 
     public init(
         weight: MLXArray,
@@ -187,6 +189,48 @@ public final class PreQuantizedEmbedding: Embedding, Quantized {
     }
 
     public override func asLinear(_ x: MLXArray) -> MLXArray {
+        #if os(Linux)
+        if Device.defaultDevice().deviceType == .gpu, mode == .affine {
+            switch MLXCUDAQuant.nativeDecision(
+                for: .quantizedMM,
+                bits: bits,
+                groupSize: groupSize,
+                quantizationMode: mode
+            ) {
+            case .native:
+                return nativeLinear(x)
+            case .dense:
+                return denseLinear(x)
+            case .probe:
+                let output = nativeLinear(x)
+                do {
+                    try MLX.checkedEval(output)
+                    MLXCUDAQuant.completeProbe(
+                        operation: .quantizedMM,
+                        bits: bits,
+                        groupSize: groupSize,
+                        quantizationMode: mode,
+                        supported: true
+                    )
+                    return output
+                } catch {
+                    MLXCUDAQuant.completeProbe(
+                        operation: .quantizedMM,
+                        bits: bits,
+                        groupSize: groupSize,
+                        quantizationMode: mode,
+                        supported: false
+                    )
+                    return denseLinear(x)
+                }
+            }
+        }
+        #endif
+
+        return nativeLinear(x)
+    }
+
+    private func nativeLinear(_ x: MLXArray) -> MLXArray {
         quantizedMM(
             x,
             weight,
@@ -197,6 +241,27 @@ public final class PreQuantizedEmbedding: Embedding, Quantized {
             bits: bits,
             mode: mode
         )
+    }
+
+    func denseLinear(_ x: MLXArray) -> MLXArray {
+        let fullWeight: MLXArray
+        if let cachedLinearWeight, cachedLinearWeightDType == x.dtype {
+            fullWeight = cachedLinearWeight
+        } else {
+            fullWeight = dequantized(
+                weight,
+                scales: scales,
+                biases: biases,
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode,
+                dtype: x.dtype
+            )
+            eval(fullWeight)
+            cachedLinearWeight = fullWeight
+            cachedLinearWeightDType = x.dtype
+        }
+        return matmul(x, fullWeight.T)
     }
 }
 

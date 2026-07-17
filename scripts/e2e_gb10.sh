@@ -249,7 +249,7 @@ want video && run_case video video-ltx-av file "$ASSETS/video.mp4" 1200 \
   echo
   echo "Binary: \`$BIN\` — $("$BIN" --version 2>/dev/null | head -1)"
   echo "Host: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1), $(uname -m), $(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-unknown}")"
-  echo "CUDA quant mode: `$QUANT_MODE`"
+  echo "CUDA quant mode: \`$QUANT_MODE\`"
   echo
   echo "| Category | Model | Status | Seconds | decode_tps | GPU peak | Detail |"
   echo "| --- | --- | --- | --- | --- | --- | --- |"
