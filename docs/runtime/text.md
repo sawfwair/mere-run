@@ -102,8 +102,11 @@ temperature 0.7, top-p 0.95, and top-k 20 when those values are not set
 explicitly. The models advertise 262,144 tokens; `text chat` selects that limit
 automatically, and `--context-size` can set a smaller operational bound. Choose
 1-bit for lower residency and faster decode or 2-bit for the larger ternary
-checkpoint. For memory-constrained long-context work, opt into the generic
-affine cache:
+checkpoint. On Linux CUDA, the pinned MLX fork executes supported 1-bit affine
+projections directly from packed weights; the runtime retains its operation-
+scoped dense fallback for unsupported shapes and keeps 2-bit and wider model
+dispatch independent. For memory-constrained long-context work, opt into the
+generic affine cache:
 
 ```bash
 swift run mere.run model pull text-chat-bonsai-27b-1bit

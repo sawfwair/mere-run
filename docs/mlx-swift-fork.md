@@ -1,9 +1,15 @@
-# mlx-swift compiled-call overhead: analysis and parked fix
+# mlx-swift fork policy and compiled-call overhead
 
-mere-run currently depends on **stock upstream mlx-swift** (`from: "0.30.0"`,
-resolved 0.31.4). A measured one-line optimization to mlx-swift exists on a
-fork but is **deliberately not pinned** — this document records why, and what
-a safe version of the fix requires.
+mere-run pins the public `sawfwair/mlx-swift` fork based on upstream 0.31.6.
+That fork carries the Linux package bridge and Prism low-bit compatibility
+needed by this repository. Its embedded `sawfwair/mlx` revision also provides
+native affine 1-bit CUDA quantize, dequantize, and QMV execution. Changes stay
+scoped to their bit width, group size, quantization mode, and backend so stock
+2-bit and wider models keep their existing paths.
+
+A separate measured one-line compiled-call optimization exists on staging
+branches but is **deliberately not included in the pin**. The rest of this
+document records why, and what a safe version of that fix requires.
 
 ## The finding
 
@@ -75,6 +81,7 @@ Do **not** upstream or re-pin the lock removal alone.
 - Shipped performance in this repo does not depend on the patch: the
   compiled-segments decode path defaults off, and every benchmark number in
   the perf PR matches stock-dependency runs.
-- The Linux/CUDA prebuilt path does not consume this SPM dependency.
+- The Linux/CUDA prebuilt path builds the exact embedded MLX revision selected
+  by this pin; do not replace it with a floating checkout.
 - Never edit `.build/checkouts/` to change dependency behavior — checkout
   edits silently vanish on the next `swift package resolve/update`.

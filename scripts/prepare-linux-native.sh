@@ -36,6 +36,8 @@ Environment:
   MLX_SWIFT_CUDA_COMMIT       Override the mlx-swift revision used by the CMake
                               CUDA bridge. Defaults to the exact revision
                               resolved by the active Linux Swift toolchain.
+  MLX_SWIFT_CUDA_URL          Override the mlx-swift repository used by the
+                              CMake CUDA bridge. Defaults to the pinned fork.
   MERERUN_LLAMA_GPU_LAYERS    Override llama.cpp GPU offload layers on Linux.
                               Defaults to all layers when MERERUN_LINUX_ACCEL=cuda
                               and 0 otherwise.
@@ -651,6 +653,7 @@ smoke_mlx_swift_cuda() {
   local mlx_cmake_src="$repo_root/.build/native/src/mlx-swift"
   local mlx_cmake_build="$native_root/build/mlx-swift-cuda-smoke"
   local mlx_swift_cuda_commit="${MLX_SWIFT_CUDA_COMMIT:-}"
+  local mlx_swift_cuda_url="${MLX_SWIFT_CUDA_URL:-https://github.com/sawfwair/mlx-swift.git}"
   if [[ -z "$mlx_swift_cuda_commit" && -d "$mlx_swift_checkout/.git" ]]; then
     mlx_swift_cuda_commit="$(git -C "$mlx_swift_checkout" rev-parse HEAD)"
   fi
@@ -664,12 +667,16 @@ smoke_mlx_swift_cuda() {
 
   if [[ ! -d "$mlx_cmake_src/.git" ]]; then
     echo "[prepare-linux-native] cloning mlx-swift for CMake CUDA smoke"
-    git clone --filter=blob:none https://github.com/ml-explore/mlx-swift.git "$mlx_cmake_src"
+    git clone --filter=blob:none "$mlx_swift_cuda_url" "$mlx_cmake_src"
   fi
 
   echo "[prepare-linux-native] checking out mlx-swift $mlx_swift_cuda_commit for the CMake CUDA bridge"
+  git -C "$mlx_cmake_src" remote set-url origin "$mlx_swift_cuda_url"
   git -C "$mlx_cmake_src" fetch --depth 1 origin "$mlx_swift_cuda_commit"
   git -C "$mlx_cmake_src" checkout --detach "$mlx_swift_cuda_commit"
+  git -C "$mlx_cmake_src" submodule sync --recursive
+  git -C "$mlx_cmake_src" submodule update --init --depth 1 \
+    Source/Cmlx/mlx Source/Cmlx/mlx-c
 
   patch_mlx_cuda_jit_include_path "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
