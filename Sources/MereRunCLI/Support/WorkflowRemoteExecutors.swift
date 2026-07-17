@@ -235,7 +235,7 @@ struct SSHWorkflowExecutor {
 
     private func createArchive(bundleDirectory: URL, destination: URL) throws {
         let result = try executableRunner([
-            "tar", "-czf", destination.path,
+            "tar", "--no-xattrs", "-czf", destination.path,
             "-C", bundleDirectory.path,
             "graph.json", "inputs.json", WorkflowAssetManifest.filename, WorkflowJobManifest.filename,
         ], nil)

@@ -974,7 +974,8 @@ final class WorkflowGraphTests: XCTestCase {
             invocations.append(arguments)
             switch arguments.first {
             case "tar":
-                try Data("archive".utf8).write(to: URL(fileURLWithPath: arguments[2]))
+                let archiveFlag = try XCTUnwrap(arguments.firstIndex(of: "-czf"))
+                try Data("archive".utf8).write(to: URL(fileURLWithPath: arguments[archiveFlag + 1]))
                 return .init(status: 0, stdout: "")
             case "scp":
                 return .init(status: 0, stdout: "")
@@ -1027,6 +1028,8 @@ final class WorkflowGraphTests: XCTestCase {
             $0.contains("BatchMode=yes") && $0.contains("-O") && $0.contains("-P")
         })
         XCTAssertTrue(scpCalls.contains { $0.contains(where: { $0.hasSuffix(asset.digest) }) })
+        let tarCall = try XCTUnwrap(invocations.first(where: { $0.first == "tar" }))
+        XCTAssertTrue(tarCall.contains("--no-xattrs"))
         XCTAssertEqual(shellQuote("a'b;$(touch nope)"), "'a'\\''b;$(touch nope)'")
     }
 
