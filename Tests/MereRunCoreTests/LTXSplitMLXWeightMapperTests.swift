@@ -58,6 +58,29 @@ final class LTXSplitMLXWeightMapperTests: XCTestCase {
         XCTAssertEqual(std[0].1.shape, [128])
     }
 
+    func testAudioVAEEncoderPreservesSplitMLXConvLayout() {
+        let mapped = mapAudioVaeEncoderWeight(
+            key: "audio_vae.encoder.down.1.block.0.conv1.conv.weight",
+            value: MLXArray.zeros([256, 3, 3, 128]),
+            dtype: .float32,
+            sourceLayout: .mlx
+        )
+
+        XCTAssertEqual(mapped.map(\.0), ["down.1.block.0.conv1.conv.weight"])
+        XCTAssertEqual(mapped[0].1.shape, [256, 3, 3, 128])
+    }
+
+    func testAudioVAEEncoderTransposesPyTorchConvLayout() {
+        let mapped = mapAudioVaeEncoderWeight(
+            key: "audio_vae.encoder.conv_in.conv.weight",
+            value: MLXArray.zeros([128, 2, 3, 3]),
+            dtype: .float32
+        )
+
+        XCTAssertEqual(mapped.map(\.0), ["conv_in.conv.weight"])
+        XCTAssertEqual(mapped[0].1.shape, [128, 3, 3, 2])
+    }
+
     func testUpsamplerStripsSplitPrefixAndPreservesMLXConvLayout() {
         let mapped = mapLTXUpsamplerWeight(
             key: "spatial_upscaler_x2_v1_1.initial_conv.weight",

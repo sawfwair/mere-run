@@ -1,3 +1,4 @@
+import AudioCodecs
 import Foundation
 import MediaIO
 import MLX
@@ -136,6 +137,27 @@ public func isLTX23SplitModelRoot(_ rootURL: URL, fileManager: FileManager = .de
         return true
     }
     return text.contains(#""model_version""#) && text.contains("2.3")
+}
+
+public func isLTX23AudioToVideoModelRoot(
+    _ rootURL: URL,
+    fileManager: FileManager = .default
+) -> Bool {
+    let root = rootURL.standardizedFileURL
+    let required = [
+        "split_model.json",
+        "config.json",
+        "connector.safetensors",
+        "transformer-dev.safetensors",
+        "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+        "vae_decoder.safetensors",
+        "vae_encoder.safetensors",
+        "audio_vae.safetensors",
+        "spatial_upscaler_x2_v1_1.safetensors",
+    ]
+    return required.allSatisfy {
+        fileManager.fileExists(atPath: root.appendingPathComponent($0).path)
+    }
 }
 
 public actor LTXDistilledLatentGenerator {
@@ -637,7 +659,7 @@ private func advanceRandomStreamForPythonParityAfterStage1(
 private let STAGE1Sigmas: [Float] = [1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0]
 private let STAGE2Sigmas: [Float] = [0.909375, 0.725, 0.421875, 0.0]
 
-private struct LTXLatentConditioningState {
+struct LTXLatentConditioningState {
     var latent: MLXArray
     var cleanLatent: MLXArray
     var denoiseMask: MLXArray
@@ -1057,7 +1079,7 @@ private func upsampleLatents(
     return x
 }
 
-private func applyLatentConditioning(
+func applyLatentConditioning(
     baseLatent: MLXArray,
     conditionedLatent: MLXArray,
     frameIndex: Int,
@@ -1178,21 +1200,20 @@ private func applySplitRoPEHeads(
     sinFreq: MLXArray
 ) -> MLXArray {
     let dtype = x.dtype
-    let x32 = x.asType(.float32)
-    let cos32 = cosFreq.asType(.float32)
-    let sin32 = sinFreq.asType(.float32)
+    let cos = cosFreq.asType(dtype)
+    let sin = sinFreq.asType(dtype)
 
-    let halfDim = x32.dim(3) / 2
-    let x1 = x32[0..., 0..., 0..., 0..<halfDim]
-    let x2 = x32[0..., 0..., 0..., halfDim...]
+    let halfDim = x.dim(3) / 2
+    let x1 = x[0..., 0..., 0..., 0..<halfDim]
+    let x2 = x[0..., 0..., 0..., halfDim...]
 
-    let out1 = x1 * cos32 - sin32 * x2
-    let out2 = x2 * cos32 + sin32 * x1
+    let out1 = x1 * cos - sin * x2
+    let out2 = x1 * sin + x2 * cos
 
-    return MLX.concatenated([out1, out2], axis: 3).asType(dtype)
+    return MLX.concatenated([out1, out2], axis: 3)
 }
 
-private func precomputeSplitRope(
+func precomputeSplitRope(
     positions: MLXArray,
     dim: Int,
     theta: Float,
@@ -1204,80 +1225,38 @@ private func precomputeSplitRope(
     let tokenCount = positions.dim(2)
 
     let nElem = 2 * positionDims
-    var indexCount = dim / nElem
-    if indexCount == 0 {
-        indexCount = 1
-    }
-
-    var indices = [Double](repeating: 0.0, count: indexCount)
-    if indexCount == 1 {
-        indices[0] = Double.pi / 2.0
-    } else {
-        for i in 0..<indexCount {
-            let fraction = Double(i) / Double(indexCount - 1)
-            indices[i] = pow(Double(theta), fraction) * (Double.pi / 2.0)
-        }
-    }
-
-    let rawPositions = positions.asType(.float32).asArray(Float.self)
-
+    let indexCount = max(1, dim / nElem)
     let expectedFreqs = dim / 2
     let currentFreqs = positionDims * indexCount
     let padSize = max(0, expectedFreqs - currentFreqs)
+    let halfHead = expectedFreqs / numHeads
 
-    let perHeadFreq = expectedFreqs / numHeads
-    let halfHead = perHeadFreq
+    let grid = indexCount == 1
+        ? MLXArray([Float(1)])
+        : linspace(Float(0), Float(1), count: indexCount).asType(.float32)
+    let indices = MLX.pow(MLXArray(theta), grid) * MLXArray(Float.pi / 2)
 
-    var cosValues = [Float](repeating: 1.0, count: batch * numHeads * tokenCount * halfHead)
-    var sinValues = [Float](repeating: 0.0, count: batch * numHeads * tokenCount * halfHead)
-
-    for b in 0..<batch {
-        for t in 0..<tokenCount {
-            var scaledPositions = [Float](repeating: 0.0, count: positionDims)
-            for p in 0..<positionDims {
-                let startIndex = ((b * positionDims + p) * tokenCount + t) * 2
-                let startValue = rawPositions[startIndex]
-                let endValue = rawPositions[startIndex + 1]
-                let middle = (startValue + endValue) * 0.5
-                scaledPositions[p] = (middle / Float(maxPos[p])) * 2.0 - 1.0
-            }
-
-            var freqVector = [Float](repeating: 0.0, count: currentFreqs)
-            var cursor = 0
-            // Match Python ordering after swapaxes(freqs, -1, -2): for each index, iterate position dims.
-            for i in 0..<indexCount {
-                let indexValue = indices[i]
-                for p in 0..<positionDims {
-                    freqVector[cursor] = Float(Double(scaledPositions[p]) * indexValue)
-                    cursor += 1
-                }
-            }
-
-            var paddedFreq = [Float](repeating: 0.0, count: expectedFreqs)
-            if padSize > 0 {
-                for i in 0..<min(currentFreqs, expectedFreqs - padSize) {
-                    paddedFreq[padSize + i] = freqVector[i]
-                }
-            } else {
-                for i in 0..<min(currentFreqs, expectedFreqs) {
-                    paddedFreq[i] = freqVector[i]
-                }
-            }
-
-            for h in 0..<numHeads {
-                for d in 0..<halfHead {
-                    let src = h * halfHead + d
-                    let phase = src < paddedFreq.count ? paddedFreq[src] : 0
-                    let dst = ((b * numHeads + h) * tokenCount + t) * halfHead + d
-                    cosValues[dst] = Foundation.cos(phase)
-                    sinValues[dst] = Foundation.sin(phase)
-                }
-            }
-        }
+    let position32 = positions.asType(.float32)
+    let middle = (
+        position32[0..., 0..., 0..., 0]
+            + position32[0..., 0..., 0..., 1]
+    ) * MLXArray(Float(0.5))
+    let tokenMajor = middle.transposed(0, 2, 1)
+    let maxima = MLXArray(maxPos.map(Float.init)).reshaped(1, 1, positionDims)
+    let fractional = tokenMajor / maxima
+    var freqs = (
+        indices.reshaped(1, 1, 1, indexCount)
+            * (fractional.expandedDimensions(axis: 3) * MLXArray(Float(2)) - MLXArray(Float(1)))
+    ).transposed(0, 1, 3, 2).reshaped(batch, tokenCount, currentFreqs)
+    if padSize > 0 {
+        freqs = MLX.concatenated([
+            MLX.zeros([batch, tokenCount, padSize], dtype: .float32),
+            freqs,
+        ], axis: 2)
     }
 
-    let cos = MLXArray(cosValues).reshaped(batch, numHeads, tokenCount, halfHead)
-    let sin = MLXArray(sinValues).reshaped(batch, numHeads, tokenCount, halfHead)
+    let cos = MLX.cos(freqs).reshaped(batch, tokenCount, numHeads, halfHead).transposed(0, 2, 1, 3)
+    let sin = MLX.sin(freqs).reshaped(batch, tokenCount, numHeads, halfHead).transposed(0, 2, 1, 3)
     return (cos, sin)
 }
 
@@ -2884,6 +2863,97 @@ public struct LTXUnifiedAVGenerationResult: @unchecked Sendable {
     }
 }
 
+public struct LTXAudioToVideoGenerationOptions: Sendable {
+    public static let defaultNegativePrompt = """
+    blurry, out of focus, overexposed, underexposed, low contrast, washed out colors, excessive noise, \
+    grainy texture, poor lighting, flickering, motion blur, distorted proportions, unnatural skin tones, \
+    deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, \
+    wrong hand count, artifacts around text, inconsistent perspective, camera shake, incorrect depth of \
+    field, background too sharp, background clutter, distracting reflections, harsh shadows, inconsistent \
+    lighting direction, color banding, cartoonish rendering, 3D CGI look, unrealistic materials, uncanny \
+    valley effect, incorrect ethnicity, wrong gender, exaggerated expressions, wrong gaze direction, \
+    mismatched lip sync, silent or muted audio, distorted voice, robotic voice, echo, background noise, \
+    off-sync audio, incorrect dialogue, added dialogue, repetitive speech, jittery movement, awkward \
+    pauses, incorrect timing, unnatural transitions, inconsistent framing, tilted camera, flat lighting, \
+    inconsistent tone, cinematic oversaturation, stylized filters, or AI artifacts.
+    """
+
+    public let prompt: String
+    public let negativePrompt: String
+    public let audioURL: URL
+    public let audioStartTime: Double
+    public let width: Int
+    public let height: Int
+    public let numFrames: Int
+    public let fps: Int
+    public let seed: Int
+    public let inferenceSteps: Int
+    public let maxTextLength: Int
+    public let guidance: LTXAudioToVideoGuidance
+    public let sourceImageURL: URL?
+    public let imageStrength: Float
+    public let imageFrameIndex: Int
+    public let endImageURL: URL?
+    public let endImageStrength: Float
+
+    public init(
+        prompt: String,
+        negativePrompt: String = Self.defaultNegativePrompt,
+        audioURL: URL,
+        audioStartTime: Double = 0,
+        width: Int,
+        height: Int,
+        numFrames: Int,
+        fps: Int = 24,
+        seed: Int,
+        inferenceSteps: Int = 30,
+        maxTextLength: Int = 1_024,
+        guidance: LTXAudioToVideoGuidance = LTXAudioToVideoGuidance(),
+        sourceImageURL: URL? = nil,
+        imageStrength: Float = 1,
+        imageFrameIndex: Int = 0,
+        endImageURL: URL? = nil,
+        endImageStrength: Float = 1
+    ) {
+        self.prompt = prompt
+        self.negativePrompt = negativePrompt
+        self.audioURL = audioURL
+        self.audioStartTime = audioStartTime
+        self.width = width
+        self.height = height
+        self.numFrames = numFrames
+        self.fps = fps
+        self.seed = seed
+        self.inferenceSteps = inferenceSteps
+        self.maxTextLength = maxTextLength
+        self.guidance = guidance
+        self.sourceImageURL = sourceImageURL
+        self.imageStrength = imageStrength
+        self.imageFrameIndex = imageFrameIndex
+        self.endImageURL = endImageURL
+        self.endImageStrength = endImageStrength
+    }
+}
+
+public struct LTXAudioToVideoGenerationResult: @unchecked Sendable {
+    public let frames: MLXArray
+    public let videoLatents: MLXArray
+    public let audioLatents: MLXArray
+    public let sourceAudio: MediaAudioBuffer
+
+    public init(
+        frames: MLXArray,
+        videoLatents: MLXArray,
+        audioLatents: MLXArray,
+        sourceAudio: MediaAudioBuffer
+    ) {
+        self.frames = frames
+        self.videoLatents = videoLatents
+        self.audioLatents = audioLatents
+        self.sourceAudio = sourceAudio
+    }
+}
+
 public enum LTXUnifiedAVGeneratorError: LocalizedError {
     case transformerWeightsMissing(URL)
     case upsamplerWeightsMissing(URL)
@@ -2904,6 +2974,19 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
     case audioDecoderNotLoaded
     case vocoderNotLoaded
     case bweVocoderConfigMissing(URL)
+    case audioToVideoRequiresLTX23(URL)
+    case distilledLoRAMissing(URL)
+    case audioVAEWeightsMissing(URL)
+    case audioSourceNotFound(URL)
+    case unsupportedAudioChannels(Int)
+    case audioSegmentTooShort(required: Double, available: Double)
+    case invalidAudioStartTime(Double)
+    case invalidInferenceSteps(Int)
+    case invalidFrameRate(Int)
+    case audioDecodeReturnedTooFewSamples(required: Int, actual: Int)
+    case audioLatentTooShort(required: Int, actual: Int)
+    case audioToVideoGeneratorNotLoaded
+    case audioToVideoRequiresReload
 
     public var errorDescription: String? {
         switch self {
@@ -2920,8 +3003,9 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
         case .ltx23TextEncoderMissing(let id):
             return """
             LTX 2.3 requires the companion Gemma 3 text encoder `\(id)`. Install it with \
-            `mere.run model pull video-ltx23-av-mlx --accept-model-license`, or set MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT to a local \
-            mlx-community/gemma-3-12b-it-4bit checkout.
+            `mere.run model pull video-ltx23-a2vid-mlx --accept-model-license` for A2Vid or \
+            `mere.run model pull video-ltx23-av-mlx --accept-model-license` for unified AV, or set \
+            MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT to a local mlx-community/gemma-3-12b-it-4bit checkout.
             """
         case .generatorNotLoaded:
             return "LTX unified AV generator is not loaded."
@@ -2953,8 +3037,99 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
             return "Audio vocoder is not loaded."
         case .bweVocoderConfigMissing(let url):
             return "LTX BWE vocoder weights require a vocoder BWE config under \(url.path)."
+        case .audioToVideoRequiresLTX23(let url):
+            return "Native LTX audio-to-video requires an LTX 2.3 split MLX model at \(url.path)."
+        case .distilledLoRAMissing(let url):
+            return "Missing the official LTX 2.3 distilled LoRA at \(url.path)."
+        case .audioVAEWeightsMissing(let url):
+            return "Missing LTX audio VAE weights at \(url.path)."
+        case .audioSourceNotFound(let url):
+            return "Audio source not found: \(url.path)"
+        case .unsupportedAudioChannels(let channels):
+            return "LTX audio-to-video supports mono or stereo source audio, not \(channels) channels."
+        case .audioSegmentTooShort(let required, let available):
+            return "The selected audio segment is too short: generation requires \(required) seconds, but only \(available) seconds remain."
+        case .invalidAudioStartTime(let value):
+            return "audioStartTime must be finite and nonnegative (got \(value))."
+        case .invalidInferenceSteps(let value):
+            return "inferenceSteps must be positive (got \(value))."
+        case .invalidFrameRate(let value):
+            return "fps must be positive (got \(value))."
+        case .audioDecodeReturnedTooFewSamples(let required, let actual):
+            return "Audio decoding returned \(actual) samples; the requested segment requires \(required) without padding."
+        case .audioLatentTooShort(let required, let actual):
+            return "The encoded audio contains \(actual) latent frames; generation requires \(required)."
+        case .audioToVideoGeneratorNotLoaded:
+            return "LTX audio-to-video generator is not loaded."
+        case .audioToVideoRequiresReload:
+            return "Reload the LTX audio-to-video generator before starting another generation."
         }
     }
+}
+
+private func loadLTX23VideoDecoder(modelRoot: URL, dtype: DType) throws -> LTXVideoDecoder {
+    let weightsURL = modelRoot.appendingPathComponent("vae_decoder.safetensors", isDirectory: false)
+    let decoder = LTXVideoDecoder(timestepConditioning: false, architecture: .ltx23Split)
+    let stats = try SafetensorsStreamingLoader.loadArrays(
+        url: weightsURL,
+        where: { key in
+            key == "latents_mean"
+                || key == "latents_std"
+                || key == "vae.per_channel_statistics.mean-of-means"
+                || key == "vae.per_channel_statistics.std-of-means"
+                || key == "vae_decoder.per_channel_statistics.mean-of-means"
+                || key == "vae_decoder.per_channel_statistics.std-of-means"
+                || key == "vae_decoder.per_channel_statistics.mean"
+                || key == "vae_decoder.per_channel_statistics.std"
+        },
+        dtype: .float32
+    )
+
+    if let mean = stats["latents_mean"]
+        ?? stats["vae.per_channel_statistics.mean-of-means"]
+        ?? stats["vae_decoder.per_channel_statistics.mean-of-means"]
+        ?? stats["vae_decoder.per_channel_statistics.mean"] {
+        decoder.latentsMean = mean.asType(.float32)
+    }
+    if let std = stats["latents_std"]
+        ?? stats["vae.per_channel_statistics.std-of-means"]
+        ?? stats["vae_decoder.per_channel_statistics.std-of-means"]
+        ?? stats["vae_decoder.per_channel_statistics.std"] {
+        decoder.latentsStd = std.asType(.float32)
+    }
+
+    try SafetensorsStreamingLoader.applyWeightsStreaming(
+        url: weightsURL,
+        to: decoder,
+        dtype: dtype,
+        verify: .none,
+        include: { key in
+            key.hasPrefix("decoder.")
+                || key.hasPrefix("vae.decoder.")
+                || key.hasPrefix("vae_decoder.")
+        },
+        mapper: { key, value in
+            mapLTXDecoderWeight(key: key, value: value, dtype: dtype, sourceLayout: .mlx)
+        },
+        batchSize: 24
+    )
+    return decoder
+}
+
+private func loadLTX23VideoUpsampler(weightsURL: URL, dtype: DType) throws -> LTXLatentUpsampler {
+    let upsampler = LTXLatentUpsampler(inChannels: 128, midChannels: 1_024, numBlocksPerStage: 4)
+    try SafetensorsStreamingLoader.applyWeightsStreaming(
+        url: weightsURL,
+        to: upsampler,
+        dtype: dtype,
+        verify: .none,
+        include: { _ in true },
+        mapper: { key, value in
+            mapLTXUpsamplerWeight(key: key, value: value, dtype: dtype, sourceLayout: .mlx)
+        },
+        batchSize: 24
+    )
+    return upsampler
 }
 
 public actor LTXUnifiedAVGenerator {
@@ -2970,8 +3145,86 @@ public actor LTXUnifiedAVGenerator {
     private var videoVAEWeightLayout: LTXTensorWeightLayout = .pytorch
     private var loadedDType: DType = .bfloat16
     private var loadedRoot: URL?
+    private var audioVAEWeightsURL: URL?
+    private var distilledLoRAURL: URL?
+    private var loadedForAudioToVideo = false
+    private var audioToVideoGenerationConsumed = false
 
     public init() {}
+
+    public func loadAudioToVideo(
+        modelRoot: URL,
+        dtype: DType = .bfloat16
+    ) async throws {
+        await unload()
+        let root = modelRoot.standardizedFileURL
+        guard isLTX23AudioToVideoModelRoot(root) else {
+            throw LTXUnifiedAVGeneratorError.audioToVideoRequiresLTX23(root)
+        }
+        let transformerURL = root.appendingPathComponent("transformer-dev.safetensors", isDirectory: false)
+        let upsamplerURL = root.appendingPathComponent("spatial_upscaler_x2_v1_1.safetensors", isDirectory: false)
+        let audioVAEURL = root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
+        let loraURL = root.appendingPathComponent(
+            "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            isDirectory: false
+        )
+        for requiredURL in [transformerURL, upsamplerURL] where !FileManager.default.fileExists(atPath: requiredURL.path) {
+            if requiredURL == transformerURL {
+                throw LTXUnifiedAVGeneratorError.transformerWeightsMissing(requiredURL)
+            }
+            throw LTXUnifiedAVGeneratorError.upsamplerWeightsMissing(requiredURL)
+        }
+        guard FileManager.default.fileExists(atPath: audioVAEURL.path) else {
+            throw LTXUnifiedAVGeneratorError.audioVAEWeightsMissing(audioVAEURL)
+        }
+        guard FileManager.default.fileExists(atPath: loraURL.path) else {
+            throw LTXUnifiedAVGeneratorError.distilledLoRAMissing(loraURL)
+        }
+
+        let text = LTXGemmaTextEncoder()
+        try await text.load(
+            modelRoot: root,
+            textEncoderRoot: try resolveLTX23TextEncoderRoot(modelRoot: root),
+            dtype: dtype,
+            loadConnectorWeights: true
+        )
+
+        let model = LTXUnifiedAVTransformerV2()
+        try SafetensorsStreamingLoader.applyWeightsStreaming(
+            url: transformerURL,
+            to: model,
+            dtype: dtype,
+            verify: .none,
+            include: { $0.hasPrefix("transformer.") },
+            mapper: { key, value in
+                mapLTX23UnifiedTransformerWeight(key: key, value: value, dtype: dtype)
+            },
+            batchSize: 24
+        )
+
+        let vaeDecoder = try loadLTX23VideoDecoder(modelRoot: root, dtype: dtype)
+        let latentUpsampler = try loadLTX23VideoUpsampler(
+            weightsURL: upsamplerURL,
+            dtype: dtype
+        )
+
+        textEncoder = text
+        transformer = model
+        decoder = vaeDecoder
+        upsampler = latentUpsampler
+        audioDecoder = nil
+        vocoder = nil
+        encoder = nil
+        modelWeightsURL = transformerURL
+        videoEncoderWeightsURL = root.appendingPathComponent("vae_encoder.safetensors", isDirectory: false)
+        videoVAEWeightLayout = .mlx
+        loadedDType = dtype
+        loadedRoot = root
+        audioVAEWeightsURL = audioVAEURL
+        distilledLoRAURL = loraURL
+        loadedForAudioToVideo = true
+        audioToVideoGenerationConsumed = false
+    }
 
     public func load(
         modelRoot: URL,
@@ -3186,6 +3439,10 @@ public actor LTXUnifiedAVGenerator {
         videoEncoderWeightsURL = nil
         videoVAEWeightLayout = .pytorch
         loadedRoot = nil
+        audioVAEWeightsURL = nil
+        distilledLoRAURL = nil
+        loadedForAudioToVideo = false
+        audioToVideoGenerationConsumed = false
         Memory.clearCache()
     }
 
@@ -3255,6 +3512,362 @@ public actor LTXUnifiedAVGenerator {
         )
 
         encoder = vaeEncoder
+    }
+
+    public func generateAudioToVideo(
+        options: LTXAudioToVideoGenerationOptions
+    ) async throws -> LTXAudioToVideoGenerationResult {
+        let prompt = options.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let negativePrompt = options.negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty, !negativePrompt.isEmpty else {
+            throw LTXUnifiedAVGeneratorError.emptyPrompt
+        }
+        guard options.width > 0, options.height > 0,
+              options.width % 64 == 0, options.height % 64 == 0 else {
+            throw LTXUnifiedAVGeneratorError.invalidResolution(width: options.width, height: options.height)
+        }
+        guard options.numFrames >= 9, options.numFrames % 8 == 1 else {
+            throw LTXUnifiedAVGeneratorError.invalidFrameCount(options.numFrames)
+        }
+        guard options.fps > 0 else {
+            throw LTXUnifiedAVGeneratorError.invalidFrameRate(options.fps)
+        }
+        guard options.inferenceSteps > 0 else {
+            throw LTXUnifiedAVGeneratorError.invalidInferenceSteps(options.inferenceSteps)
+        }
+        guard options.audioStartTime.isFinite, options.audioStartTime >= 0 else {
+            throw LTXUnifiedAVGeneratorError.invalidAudioStartTime(options.audioStartTime)
+        }
+        guard options.imageFrameIndex >= 0 else {
+            throw LTXUnifiedAVGeneratorError.invalidImageFrameIndex(options.imageFrameIndex)
+        }
+        guard options.imageStrength >= 0, options.imageStrength <= 1 else {
+            throw LTXUnifiedAVGeneratorError.invalidImageStrength(options.imageStrength)
+        }
+        guard options.endImageStrength >= 0, options.endImageStrength <= 1 else {
+            throw LTXUnifiedAVGeneratorError.invalidImageStrength(options.endImageStrength)
+        }
+        guard FileManager.default.fileExists(atPath: options.audioURL.path) else {
+            throw LTXUnifiedAVGeneratorError.audioSourceNotFound(options.audioURL)
+        }
+        guard loadedForAudioToVideo,
+              let textEncoder,
+              let transformer,
+              let decoder,
+              let upsampler,
+              let audioVAEWeightsURL,
+              let distilledLoRAURL else {
+            throw LTXUnifiedAVGeneratorError.audioToVideoGeneratorNotLoaded
+        }
+        guard !audioToVideoGenerationConsumed else {
+            throw LTXUnifiedAVGeneratorError.audioToVideoRequiresReload
+        }
+        let parityIO = LTXAudioToVideoParityIO()
+
+        let duration = Double(options.numFrames) / Double(options.fps)
+        let audioMetadata = try MediaAudioIO.probe(options.audioURL)
+        try validateLTXAudioSegment(
+            metadata: audioMetadata,
+            startTime: options.audioStartTime,
+            duration: duration
+        )
+
+        let sourceAudio = try decodeExactStereoAudioSegment(
+            url: options.audioURL,
+            startTime: options.audioStartTime,
+            duration: duration,
+            sampleRate: audioMetadata.sampleRate
+        )
+        let conditioningAudio = try decodeExactStereoAudioSegment(
+            url: options.audioURL,
+            startTime: options.audioStartTime,
+            duration: duration,
+            sampleRate: LTXAudioMelProcessor.sampleRate
+        )
+
+        audioToVideoGenerationConsumed = true
+        let positiveEncoding = try await textEncoder.encode(
+            prompt: prompt,
+            maxLength: options.maxTextLength
+        )
+        let negativeEncoding = try await textEncoder.encode(
+            prompt: negativePrompt,
+            maxLength: options.maxTextLength
+        )
+        let positiveVideoContext = positiveEncoding.videoEmbeddings
+        let negativeVideoContext = negativeEncoding.videoEmbeddings
+        guard let positiveAudioContext = positiveEncoding.audioEmbeddings else {
+            throw LTXUnifiedAVGeneratorError.audioEmbeddingsMissing
+        }
+        MLX.eval(positiveVideoContext, negativeVideoContext, positiveAudioContext)
+        try parityIO.save(positiveVideoContext, suffix: "a2vid_positive_video_context")
+        try parityIO.save(negativeVideoContext, suffix: "a2vid_negative_video_context")
+        try parityIO.save(positiveAudioContext, suffix: "a2vid_positive_audio_context")
+        await textEncoder.unload()
+        self.textEncoder = nil
+        Memory.clearCache()
+
+        let audioFrameCount = computeAudioLatentFrameCount(
+            videoFrames: options.numFrames,
+            fps: options.fps
+        )
+        let spectrogram = LTXAudioMelProcessor().extract(
+            channels: planarAudioChannels(conditioningAudio)
+        )
+        try parityIO.save(spectrogram, suffix: "a2vid_audio_mel")
+        var audioLatents = try encodeLTX23AudioLatents(
+            spectrogram: spectrogram,
+            requiredFrameCount: audioFrameCount,
+            weightsURL: audioVAEWeightsURL,
+            dtype: loadedDType
+        )
+        audioLatents = audioLatents.asType(positiveVideoContext.dtype)
+        MLX.eval(audioLatents)
+        Memory.clearCache()
+
+        let latentFrames = 1 + ((options.numFrames - 1) / 8)
+        let stage1Height = options.height / 2 / 32
+        let stage1Width = options.width / 2 / 32
+        let stage2Height = options.height / 32
+        let stage2Width = options.width / 32
+        let modelDType = positiveVideoContext.dtype
+        try parityIO.save(audioLatents, suffix: "a2vid_audio_latents")
+
+        MLXRandom.seed(UInt64(bitPattern: Int64(options.seed)))
+        var stage1ConditioningState: LTXLatentConditioningState?
+        var stage2ConditioningState: LTXLatentConditioningState?
+        var stage2ConditioningLatent: MLXArray?
+        var stage2EndConditioningLatent: MLXArray?
+        var videoLatents: MLXArray
+
+        if let sourceImageURL = options.sourceImageURL {
+            guard FileManager.default.fileExists(atPath: sourceImageURL.path) else {
+                throw LTXUnifiedAVGeneratorError.imageNotFound(sourceImageURL)
+            }
+            if let endImageURL = options.endImageURL,
+               !FileManager.default.fileExists(atPath: endImageURL.path) {
+                throw LTXUnifiedAVGeneratorError.imageNotFound(endImageURL)
+            }
+            guard options.imageFrameIndex < latentFrames else {
+                throw LTXUnifiedAVGeneratorError.invalidImageFrameIndex(options.imageFrameIndex)
+            }
+
+            try loadEncoderIfNeeded()
+            do {
+                guard let imageEncoder = encoder else {
+                    throw LTXUnifiedAVGeneratorError.encoderNotLoaded
+                }
+                let stage1Image = try loadImageForEncoding(
+                    url: sourceImageURL,
+                    width: options.width / 2,
+                    height: options.height / 2,
+                    dtype: modelDType
+                )
+                let stage1ImageLatent = imageEncoder.encode(image: stage1Image)
+                let stage2Image = try loadImageForEncoding(
+                    url: sourceImageURL,
+                    width: options.width,
+                    height: options.height,
+                    dtype: modelDType
+                )
+                let stage2ImageLatent = imageEncoder.encode(image: stage2Image)
+                stage2ConditioningLatent = stage2ImageLatent
+
+                var stage1EndImageLatent: MLXArray?
+                if let endImageURL = options.endImageURL {
+                    let stage1EndImage = try loadImageForEncoding(
+                        url: endImageURL,
+                        width: options.width / 2,
+                        height: options.height / 2,
+                        dtype: modelDType
+                    )
+                    stage1EndImageLatent = imageEncoder.encode(image: stage1EndImage)
+                    let stage2EndImage = try loadImageForEncoding(
+                        url: endImageURL,
+                        width: options.width,
+                        height: options.height,
+                        dtype: modelDType
+                    )
+                    stage2EndConditioningLatent = imageEncoder.encode(image: stage2EndImage)
+                }
+
+                var state = applyLatentConditioning(
+                    baseLatent: MLX.zeros(
+                        [1, 128, latentFrames, stage1Height, stage1Width],
+                        dtype: modelDType
+                    ),
+                    conditionedLatent: stage1ImageLatent,
+                    frameIndex: options.imageFrameIndex,
+                    strength: options.imageStrength,
+                    endConditionedLatent: stage1EndImageLatent,
+                    endFrameIndex: -1,
+                    endStrength: options.endImageStrength
+                )
+                let noise = try parityIO.resolveNoise(
+                    stage: .stage1,
+                    generated: MLXRandom.normal(state.latent.shape).asType(modelDType)
+                )
+                try parityIO.save(noise, suffix: "a2vid_stage1_noise")
+                let sigma = MLXArray(1).asType(modelDType)
+                let scaledMask = state.denoiseMask * sigma
+                state.latent = noise * scaledMask + state.latent * (MLXArray(1).asType(modelDType) - scaledMask)
+                videoLatents = state.latent
+                stage1ConditioningState = state
+                MLX.eval(videoLatents, stage2ImageLatent)
+                if let stage2EndConditioningLatent {
+                    MLX.eval(stage2EndConditioningLatent)
+                }
+            }
+            encoder = nil
+            Memory.clearCache()
+        } else {
+            videoLatents = try parityIO.resolveNoise(
+                stage: .stage1,
+                generated: MLXRandom.normal(
+                    [1, 128, latentFrames, stage1Height, stage1Width]
+                ).asType(modelDType)
+            )
+            try parityIO.save(videoLatents, suffix: "a2vid_stage1_noise")
+            MLX.eval(videoLatents)
+        }
+
+        let audioPositions = createAudioPositionGrid(
+            batchSize: 1,
+            audioFrames: audioFrameCount
+        )
+        let audioRope = precomputeSplitRope(
+            positions: audioPositions,
+            dim: 2_048,
+            theta: 10_000,
+            maxPos: [20],
+            numHeads: 32
+        )
+        let stage1Ropes = makeLTXAudioToVideoVideoRopes(
+            latentFrames: latentFrames,
+            height: stage1Height,
+            width: stage1Width,
+            fps: options.fps
+        )
+        let stage1Sigmas = LTX2DiffusionScheduler.sigmas(steps: options.inferenceSteps)
+        videoLatents = try denoiseFrozenAudioVideoLoop(
+            videoLatents: videoLatents,
+            audioLatents: audioLatents,
+            videoRope: stage1Ropes.selfAttention,
+            audioRope: audioRope,
+            videoCrossRope: stage1Ropes.crossAttention,
+            audioCrossRope: audioRope,
+            positiveVideoContext: positiveVideoContext,
+            negativeVideoContext: negativeVideoContext,
+            audioContext: positiveAudioContext,
+            transformer: transformer,
+            sigmas: stage1Sigmas,
+            videoConditioning: stage1ConditioningState,
+            guidance: options.guidance,
+            debugLabel: "a2vid_stage1"
+        ).video
+        MLX.eval(videoLatents)
+        try parityIO.save(videoLatents, suffix: "a2vid_stage1_output")
+
+        videoLatents = upsampleLatents(
+            videoLatents,
+            upsampler: upsampler,
+            latentMean: decoder.latentsMean,
+            latentStd: decoder.latentsStd
+        )
+        MLX.eval(videoLatents)
+        try parityIO.save(videoLatents, suffix: "a2vid_upsampled_latents")
+
+        let stage2Sigma = STAGE2Sigmas[0]
+        if let conditionedLatent = stage2ConditioningLatent {
+            var state = applyLatentConditioning(
+                baseLatent: videoLatents,
+                conditionedLatent: conditionedLatent,
+                frameIndex: options.imageFrameIndex,
+                strength: options.imageStrength,
+                endConditionedLatent: stage2EndConditioningLatent,
+                endFrameIndex: -1,
+                endStrength: options.endImageStrength
+            )
+            let noise = try parityIO.resolveNoise(
+                stage: .stage2,
+                generated: MLXRandom.normal(videoLatents.shape).asType(modelDType)
+            )
+            try parityIO.save(noise, suffix: "a2vid_stage2_noise")
+            let scaledMask = state.denoiseMask * MLXArray(stage2Sigma).asType(modelDType)
+            state.latent = noise * scaledMask + state.latent * (MLXArray(1).asType(modelDType) - scaledMask)
+            videoLatents = state.latent
+            stage2ConditioningState = state
+        } else {
+            let noise = try parityIO.resolveNoise(
+                stage: .stage2,
+                generated: MLXRandom.normal(videoLatents.shape).asType(modelDType)
+            )
+            try parityIO.save(noise, suffix: "a2vid_stage2_noise")
+            videoLatents = MLXArray(stage2Sigma).asType(modelDType) * noise
+                + MLXArray(1 - stage2Sigma).asType(modelDType) * videoLatents
+        }
+        MLX.eval(videoLatents)
+        try parityIO.save(videoLatents, suffix: "a2vid_stage2_input")
+
+        try LTXStreamingLoRAFuser.fuse(
+            url: distilledLoRAURL,
+            into: transformer,
+            debugOutputPrefix: parityIO.outputPrefix
+        )
+
+        let stage2Ropes = makeLTXAudioToVideoVideoRopes(
+            latentFrames: latentFrames,
+            height: stage2Height,
+            width: stage2Width,
+            fps: options.fps
+        )
+        videoLatents = try denoiseFrozenAudioVideoLoop(
+            videoLatents: videoLatents,
+            audioLatents: audioLatents,
+            videoRope: stage2Ropes.selfAttention,
+            audioRope: audioRope,
+            videoCrossRope: stage2Ropes.crossAttention,
+            audioCrossRope: audioRope,
+            positiveVideoContext: positiveVideoContext,
+            negativeVideoContext: nil,
+            audioContext: positiveAudioContext,
+            transformer: transformer,
+            sigmas: STAGE2Sigmas,
+            videoConditioning: stage2ConditioningState,
+            guidance: nil,
+            debugLabel: "a2vid_stage2"
+        ).video
+        MLX.eval(videoLatents)
+        try parityIO.save(videoLatents, suffix: "a2vid_stage2_output")
+
+        let frames: MLXArray
+        if let tiling = selectDecodeTilingConfig(
+            width: options.width,
+            height: options.height,
+            numFrames: options.numFrames,
+            fps: options.fps
+        ) {
+            frames = decodeWithTiling(
+                decoder: decoder,
+                latents: videoLatents,
+                spatialTileSizeInPixels: tiling.spatialTileSizeInPixels,
+                spatialOverlapInPixels: tiling.spatialTileOverlapInPixels,
+                temporalTileSizeInFrames: tiling.temporalTileSizeInFrames,
+                temporalOverlapInFrames: tiling.temporalTileOverlapInFrames,
+                spatialScale: 32,
+                temporalScale: 8
+            )
+        } else {
+            frames = postprocessDecodedVideo(decoder.decode(sample: videoLatents, timestep: nil))
+        }
+        MLX.eval(frames)
+
+        return LTXAudioToVideoGenerationResult(
+            frames: frames,
+            videoLatents: videoLatents,
+            audioLatents: audioLatents,
+            sourceAudio: sourceAudio
+        )
     }
 
     public func generate(
@@ -3585,6 +4198,394 @@ public actor LTXUnifiedAVGenerator {
     }
 }
 
+func validateLTXAudioSegment(
+    metadata: MediaAudioMetadata,
+    startTime: Double,
+    duration: Double
+) throws {
+    guard metadata.channelCount == 1 || metadata.channelCount == 2 else {
+        throw LTXUnifiedAVGeneratorError.unsupportedAudioChannels(metadata.channelCount)
+    }
+    let availableDuration = max(0, metadata.durationSeconds - startTime)
+    guard availableDuration + 1e-6 >= duration else {
+        throw LTXUnifiedAVGeneratorError.audioSegmentTooShort(
+            required: duration,
+            available: availableDuration
+        )
+    }
+}
+
+private func decodeExactStereoAudioSegment(
+    url: URL,
+    startTime: Double,
+    duration: Double,
+    sampleRate: Int
+) throws -> MediaAudioBuffer {
+    let decoded = try MediaAudioIO.decodeSegment(
+        url,
+        startTime: startTime,
+        duration: duration,
+        targetSampleRate: sampleRate,
+        channels: 2
+    )
+    let frameCount = Int((duration * Double(sampleRate)).rounded(.toNearestOrEven))
+    let requiredSampleCount = frameCount * 2
+    guard decoded.samples.count >= requiredSampleCount else {
+        throw LTXUnifiedAVGeneratorError.audioDecodeReturnedTooFewSamples(
+            required: requiredSampleCount,
+            actual: decoded.samples.count
+        )
+    }
+    return MediaAudioBuffer(
+        samples: Array(decoded.samples.prefix(requiredSampleCount)),
+        sampleRate: sampleRate,
+        channelCount: 2,
+        isInterleaved: true
+    )
+}
+
+private func planarAudioChannels(_ audio: MediaAudioBuffer) -> [[Float]] {
+    let frameCount = audio.samples.count / audio.channelCount
+    var channels = [[Float]](
+        repeating: [Float](repeating: 0, count: frameCount),
+        count: audio.channelCount
+    )
+    if audio.isInterleaved {
+        for frame in 0..<frameCount {
+            for channel in 0..<audio.channelCount {
+                channels[channel][frame] = audio.samples[frame * audio.channelCount + channel]
+            }
+        }
+    } else {
+        for channel in 0..<audio.channelCount {
+            let start = channel * frameCount
+            channels[channel] = Array(audio.samples[start..<(start + frameCount)])
+        }
+    }
+    return channels
+}
+
+func encodeLTX23AudioLatents(
+    spectrogram: MLXArray,
+    requiredFrameCount: Int,
+    weightsURL: URL,
+    dtype: DType
+) throws -> MLXArray {
+    let encoder = LTXAudioEncoder()
+    try SafetensorsStreamingLoader.applyWeightsStreaming(
+        url: weightsURL,
+        to: encoder,
+        dtype: dtype,
+        verify: .none,
+        include: { key in
+            key.hasPrefix("audio_vae.encoder.")
+                || key.hasPrefix("audio_vae.per_channel_statistics.")
+        },
+        mapper: { key, value in
+            mapAudioVaeEncoderWeight(
+                key: key,
+                value: value,
+                dtype: dtype,
+                sourceLayout: .mlx
+            )
+        },
+        batchSize: 24
+    )
+    let encoded = encoder.encode(spectrogram: spectrogram.asType(dtype))
+    guard encoded.dim(2) >= requiredFrameCount else {
+        throw LTXUnifiedAVGeneratorError.audioLatentTooShort(
+            required: requiredFrameCount,
+            actual: encoded.dim(2)
+        )
+    }
+    let cropped = encoded[0..., 0..., 0..<requiredFrameCount, 0...]
+    MLX.eval(cropped)
+    return cropped
+}
+
+typealias LTXRope = (cos: MLXArray, sin: MLXArray)
+
+private func makeLTXAudioToVideoVideoRopes(
+    latentFrames: Int,
+    height: Int,
+    width: Int,
+    fps: Int
+) -> (selfAttention: LTXRope, crossAttention: LTXRope) {
+    let positions = createPositionGrid(
+        batchSize: 1,
+        numFrames: latentFrames,
+        height: height,
+        width: width,
+        temporalScale: 8,
+        spatialScale: 32,
+        fps: Float(fps),
+        causalFix: true
+    )
+    let selfAttention = precomputeSplitRope(
+        positions: positions,
+        dim: 4_096,
+        theta: 10_000,
+        maxPos: [20, 2_048, 2_048],
+        numHeads: 32
+    )
+    let crossPositions = positions[0..., 0..<1, 0..., 0...]
+    let crossAttention = precomputeSplitRope(
+        positions: crossPositions,
+        dim: 2_048,
+        theta: 10_000,
+        maxPos: [20],
+        numHeads: 32
+    )
+    return (selfAttention, crossAttention)
+}
+
+private func predictFrozenAudioVideoDenoised(
+    flatVideo: MLXArray,
+    flatAudio: MLXArray,
+    videoTimesteps: MLXArray,
+    audioTimesteps: MLXArray,
+    videoSigma: MLXArray,
+    audioSigma: MLXArray,
+    videoContext: MLXArray,
+    audioContext: MLXArray,
+    videoRope: LTXRope,
+    audioRope: LTXRope,
+    videoCrossRope: LTXRope,
+    audioCrossRope: LTXRope,
+    transformer: any LTXUnifiedAVTransformerRuntime,
+    perturbation: LTXAudioToVideoPerturbation,
+    outputShape: (batch: Int, channels: Int, frames: Int, height: Int, width: Int)
+) -> MLXArray {
+    let output = transformer.forward(
+        videoLatent: flatVideo,
+        audioLatent: flatAudio,
+        timestep: videoSigma,
+        videoTimesteps: videoTimesteps,
+        audioTimesteps: audioTimesteps,
+        videoContext: videoContext,
+        audioContext: audioContext,
+        videoRope: videoRope,
+        audioRope: audioRope,
+        videoCrossRope: videoCrossRope,
+        audioCrossRope: audioCrossRope,
+        audioSigma: audioSigma,
+        perturbation: perturbation
+    )
+    let denoisedFlat = (
+        flatVideo.asType(.float32)
+            - videoTimesteps.expandedDimensions(axis: 2).asType(.float32)
+                * output.videoVelocity.asType(.float32)
+    ).asType(flatVideo.dtype)
+    let denoised = denoisedFlat
+        .reshaped(
+            outputShape.batch,
+            outputShape.frames,
+            outputShape.height,
+            outputShape.width,
+            outputShape.channels
+        )
+        .transposed(0, 4, 1, 2, 3)
+    MLX.eval(denoised)
+    return denoised
+}
+
+func denoiseFrozenAudioVideoLoop(
+    videoLatents: MLXArray,
+    audioLatents: MLXArray,
+    videoRope: LTXRope,
+    audioRope: LTXRope,
+    videoCrossRope: LTXRope,
+    audioCrossRope: LTXRope,
+    positiveVideoContext: MLXArray,
+    negativeVideoContext: MLXArray?,
+    audioContext: MLXArray,
+    transformer: any LTXUnifiedAVTransformerRuntime,
+    sigmas: [Float],
+    videoConditioning: LTXLatentConditioningState?,
+    guidance: LTXAudioToVideoGuidance?,
+    debugLabel: String? = nil
+) throws -> (video: MLXArray, audio: MLXArray) {
+    var currentVideo = videoLatents
+    let dtype = videoLatents.dtype
+    let audioBatch = audioLatents.dim(0)
+    let audioChannels = audioLatents.dim(1)
+    let audioFrames = audioLatents.dim(2)
+    let audioMelBins = audioLatents.dim(3)
+    let flatAudio = audioLatents
+        .transposed(0, 2, 1, 3)
+        .reshaped(audioBatch, audioFrames, audioChannels * audioMelBins)
+    let audioTimesteps = MLX.zeros([audioBatch, audioFrames], dtype: dtype)
+    let audioSigma = MLX.zeros([audioBatch], dtype: dtype)
+
+    for index in 0..<(max(0, sigmas.count - 1)) {
+        let sigma = sigmas[index]
+        let nextSigma = sigmas[index + 1]
+        let batch = currentVideo.dim(0)
+        let channels = currentVideo.dim(1)
+        let frames = currentVideo.dim(2)
+        let height = currentVideo.dim(3)
+        let width = currentVideo.dim(4)
+        let tokenCount = frames * height * width
+        let flatVideo = currentVideo
+            .transposed(0, 2, 3, 4, 1)
+            .reshaped(batch, tokenCount, channels)
+
+        let videoTimesteps: MLXArray
+        if let videoConditioning {
+            let mask = videoConditioning.denoiseMask.reshaped(batch, 1, frames, 1, 1)
+            let flattenedMask = broadcast(
+                mask,
+                to: [batch, 1, frames, height, width]
+            ).reshaped(batch, tokenCount)
+            videoTimesteps = MLXArray(sigma).asType(dtype) * flattenedMask
+        } else {
+            videoTimesteps = MLX.full(
+                [batch, tokenCount],
+                values: MLXArray(sigma).asType(dtype)
+            )
+        }
+        let videoSigma = MLX.full(
+            [batch],
+            values: MLXArray(sigma).asType(dtype)
+        )
+        let outputShape = (batch, channels, frames, height, width)
+        if index == 0, let debugLabel {
+            let parityIO = LTXAudioToVideoParityIO()
+            try parityIO.save(flatVideo, suffix: "\(debugLabel)_step0_video_input")
+            try parityIO.save(flatAudio, suffix: "\(debugLabel)_step0_audio_input")
+            try parityIO.save(videoTimesteps, suffix: "\(debugLabel)_step0_video_timesteps")
+            try parityIO.save(videoRope.cos, suffix: "\(debugLabel)_video_rope_cos")
+            try parityIO.save(videoRope.sin, suffix: "\(debugLabel)_video_rope_sin")
+            try parityIO.save(audioRope.cos, suffix: "\(debugLabel)_audio_rope_cos")
+            try parityIO.save(audioRope.sin, suffix: "\(debugLabel)_audio_rope_sin")
+        }
+
+        let conditioned = predictFrozenAudioVideoDenoised(
+            flatVideo: flatVideo,
+            flatAudio: flatAudio,
+            videoTimesteps: videoTimesteps,
+            audioTimesteps: audioTimesteps,
+            videoSigma: videoSigma,
+            audioSigma: audioSigma,
+            videoContext: positiveVideoContext,
+            audioContext: audioContext,
+            videoRope: videoRope,
+            audioRope: audioRope,
+            videoCrossRope: videoCrossRope,
+            audioCrossRope: audioCrossRope,
+            transformer: transformer,
+            perturbation: .none,
+            outputShape: outputShape
+        )
+        if index == 0, let debugLabel {
+            let conditionedTokens = conditioned
+                .transposed(0, 2, 3, 4, 1)
+                .reshaped(batch, tokenCount, channels)
+            try LTXAudioToVideoParityIO().save(
+                conditionedTokens,
+                suffix: "\(debugLabel)_step0_conditioned_x0"
+            )
+        }
+
+        var denoised = conditioned
+        if let guidance {
+            let negativeText: MLXArray
+            if guidance.classifierFreeScale == 1 {
+                negativeText = conditioned
+            } else if let negativeVideoContext {
+                negativeText = predictFrozenAudioVideoDenoised(
+                    flatVideo: flatVideo,
+                    flatAudio: flatAudio,
+                    videoTimesteps: videoTimesteps,
+                    audioTimesteps: audioTimesteps,
+                    videoSigma: videoSigma,
+                    audioSigma: audioSigma,
+                    videoContext: negativeVideoContext,
+                    audioContext: audioContext,
+                    videoRope: videoRope,
+                    audioRope: audioRope,
+                    videoCrossRope: videoCrossRope,
+                    audioCrossRope: audioCrossRope,
+                    transformer: transformer,
+                    perturbation: .none,
+                    outputShape: outputShape
+                )
+            } else {
+                preconditionFailure("A negative video context is required for classifier-free guidance.")
+            }
+
+            let perturbed = guidance.spatioTemporalScale == 0 ? conditioned : predictFrozenAudioVideoDenoised(
+                flatVideo: flatVideo,
+                flatAudio: flatAudio,
+                videoTimesteps: videoTimesteps,
+                audioTimesteps: audioTimesteps,
+                videoSigma: videoSigma,
+                audioSigma: audioSigma,
+                videoContext: positiveVideoContext,
+                audioContext: audioContext,
+                videoRope: videoRope,
+                audioRope: audioRope,
+                videoCrossRope: videoCrossRope,
+                audioCrossRope: audioCrossRope,
+                transformer: transformer,
+                perturbation: .spatioTemporal(blocks: guidance.spatioTemporalBlocks),
+                outputShape: outputShape
+            )
+            let isolated = guidance.audioToVideoScale == 1 ? conditioned : predictFrozenAudioVideoDenoised(
+                flatVideo: flatVideo,
+                flatAudio: flatAudio,
+                videoTimesteps: videoTimesteps,
+                audioTimesteps: audioTimesteps,
+                videoSigma: videoSigma,
+                audioSigma: audioSigma,
+                videoContext: positiveVideoContext,
+                audioContext: audioContext,
+                videoRope: videoRope,
+                audioRope: audioRope,
+                videoCrossRope: videoCrossRope,
+                audioCrossRope: audioCrossRope,
+                transformer: transformer,
+                perturbation: .isolatedModalities,
+                outputShape: outputShape
+            )
+            denoised = guidance.combine(
+                conditioned: conditioned,
+                negativeText: negativeText,
+                perturbed: perturbed,
+                isolatedAudio: isolated
+            )
+            MLX.eval(denoised)
+            if index == 0, let debugLabel {
+                let parityIO = LTXAudioToVideoParityIO()
+                let variants = [
+                    ("negative_x0", negativeText),
+                    ("perturbed_x0", perturbed),
+                    ("isolated_x0", isolated),
+                    ("guided_x0", denoised),
+                ]
+                for (suffix, array) in variants {
+                    let tokens = array
+                        .transposed(0, 2, 3, 4, 1)
+                        .reshaped(batch, tokenCount, channels)
+                    try parityIO.save(tokens, suffix: "\(debugLabel)_step0_\(suffix)")
+                }
+            }
+        }
+
+        if let videoConditioning {
+            let one = MLXArray(1).asType(denoised.dtype)
+            denoised = denoised * videoConditioning.denoiseMask
+                + videoConditioning.cleanLatent * (one - videoConditioning.denoiseMask)
+        }
+        let sigma32 = MLXArray(sigma)
+        let delta32 = MLXArray(nextSigma - sigma)
+        let velocity32 = (currentVideo.asType(.float32) - denoised.asType(.float32)) / sigma32
+        currentVideo = (currentVideo.asType(.float32) + velocity32 * delta32).asType(dtype)
+        MLX.eval(currentVideo)
+    }
+    return (currentVideo, audioLatents)
+}
+
 func matchLTXAudioWaveformDuration(
     _ waveform: MLXArray,
     videoFrames: Int,
@@ -3722,7 +4723,9 @@ private func denoiseAVLoop(
             videoRope: videoRope,
             audioRope: audioRope,
             videoCrossRope: videoCrossRope,
-            audioCrossRope: audioCrossRope
+            audioCrossRope: audioCrossRope,
+            audioSigma: globalTimestep,
+            perturbation: .none
         )
 
         let videoVelocity = velocity.videoVelocity
@@ -3759,7 +4762,7 @@ private func denoiseAVLoop(
 private func computeAudioLatentFrameCount(videoFrames: Int, fps: Int) -> Int {
     let duration = Double(videoFrames) / Double(max(1, fps))
     let latentsPerSecond = Double(LTXAudioLatentSampleRate) / Double(LTXAudioHopLength) / Double(LTXAudioLatentDownsampleFactor)
-    return max(1, Int((duration * latentsPerSecond).rounded()))
+    return max(1, Int((duration * latentsPerSecond).rounded(.toNearestOrEven)))
 }
 
 private func createAudioPositionGrid(
@@ -3791,7 +4794,7 @@ private func createAudioPositionGrid(
     return MLXArray(values).reshaped(batchSize, 1, audioFrames, 2).asType(.float32)
 }
 
-private protocol LTXUnifiedAVTransformerRuntime: Module {
+protocol LTXUnifiedAVTransformerRuntime: Module {
     func forward(
         videoLatent: MLXArray,
         audioLatent: MLXArray,
@@ -3803,7 +4806,9 @@ private protocol LTXUnifiedAVTransformerRuntime: Module {
         videoRope: (cos: MLXArray, sin: MLXArray),
         audioRope: (cos: MLXArray, sin: MLXArray),
         videoCrossRope: (cos: MLXArray, sin: MLXArray),
-        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+        audioCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioSigma: MLXArray,
+        perturbation: LTXAudioToVideoPerturbation
     ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray)
 }
 
@@ -3872,7 +4877,9 @@ private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRunt
         videoRope: (cos: MLXArray, sin: MLXArray),
         audioRope: (cos: MLXArray, sin: MLXArray),
         videoCrossRope: (cos: MLXArray, sin: MLXArray),
-        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+        audioCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioSigma _: MLXArray,
+        perturbation _: LTXAudioToVideoPerturbation
     ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray) {
         let videoSteps = videoTimesteps ?? MLX.zeros([videoLatent.dim(0), videoLatent.dim(1)], dtype: videoLatent.dtype)
         let audioSteps = audioTimesteps ?? MLX.zeros([audioLatent.dim(0), audioLatent.dim(1)], dtype: audioLatent.dtype)
@@ -4149,6 +5156,7 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
     let avCrossHeadDim = 64
     let timestepScaleMultiplier: Float = 1000.0
     let avCaTimestepScaleMultiplier: Float = 1000.0
+    private var parityForwardCount = 0
 
     @ModuleInfo(key: "patchify_proj") var patchifyProj: Linear
     @ModuleInfo(key: "audio_patchify_proj") var audioPatchifyProj: Linear
@@ -4218,8 +5226,17 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
         videoRope: (cos: MLXArray, sin: MLXArray),
         audioRope: (cos: MLXArray, sin: MLXArray),
         videoCrossRope: (cos: MLXArray, sin: MLXArray),
-        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+        audioCrossRope: (cos: MLXArray, sin: MLXArray),
+        audioSigma: MLXArray,
+        perturbation: LTXAudioToVideoPerturbation
     ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray) {
+        let parityIO = LTXAudioToVideoParityIO()
+        let parityForwardIndex = parityForwardCount
+        parityForwardCount += 1
+        func paritySave(_ array: MLXArray, _ name: String) {
+            try? parityIO.save(array, suffix: "forward\(parityForwardIndex)_\(name)")
+        }
+
         let videoBatch = videoLatent.dim(0)
         let videoTokens = videoLatent.dim(1)
         let audioBatch = audioLatent.dim(0)
@@ -4227,9 +5244,14 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
 
         var videoX = patchifyProj(videoLatent.asType(.bfloat16))
         var audioX = audioPatchifyProj(audioLatent.asType(.bfloat16))
-        let globalTimestep = timestep.asType(videoX.dtype).reshaped(-1)
-        let scaledGlobal = globalTimestep * MLXArray(timestepScaleMultiplier).asType(globalTimestep.dtype)
-        let scaledAVGate = globalTimestep * MLXArray(avCaTimestepScaleMultiplier).asType(globalTimestep.dtype)
+        paritySave(videoX, "patchified_video")
+        paritySave(audioX, "patchified_audio")
+        let videoSigma = timestep.asType(videoX.dtype).reshaped(-1)
+        let audioSigma = audioSigma.asType(audioX.dtype).reshaped(-1)
+        let scaledVideoSigma = videoSigma * MLXArray(timestepScaleMultiplier).asType(videoSigma.dtype)
+        let scaledAudioSigma = audioSigma * MLXArray(timestepScaleMultiplier).asType(audioSigma.dtype)
+        let scaledA2VGate = audioSigma * MLXArray(avCaTimestepScaleMultiplier).asType(audioSigma.dtype)
+        let scaledV2AGate = videoSigma * MLXArray(avCaTimestepScaleMultiplier).asType(videoSigma.dtype)
 
         let (videoAdalnParams, videoEmbedded): (MLXArray, MLXArray)
         let (avCaVideoParams, _): (MLXArray, MLXArray)
@@ -4242,8 +5264,8 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
             let avCa = avCaVideoScaleShiftAdalnSingle(timestep: videoFlat, hiddenDType: videoX.dtype)
             avCaVideoParams = avCa.0.reshaped(videoBatch, videoTokens, -1)
         } else {
-            (videoAdalnParams, videoEmbedded) = adalnSingle(timestep: scaledGlobal, hiddenDType: videoX.dtype)
-            (avCaVideoParams, _) = avCaVideoScaleShiftAdalnSingle(timestep: scaledGlobal, hiddenDType: videoX.dtype)
+            (videoAdalnParams, videoEmbedded) = adalnSingle(timestep: scaledVideoSigma, hiddenDType: videoX.dtype)
+            (avCaVideoParams, _) = avCaVideoScaleShiftAdalnSingle(timestep: scaledVideoSigma, hiddenDType: videoX.dtype)
         }
 
         let (audioAdalnParams, audioEmbedded): (MLXArray, MLXArray)
@@ -4257,14 +5279,30 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
             let avCa = avCaAudioScaleShiftAdalnSingle(timestep: audioFlat, hiddenDType: audioX.dtype)
             avCaAudioParams = avCa.0.reshaped(audioBatch, audioTokens, -1)
         } else {
-            (audioAdalnParams, audioEmbedded) = audioAdalnSingle(timestep: scaledGlobal, hiddenDType: audioX.dtype)
-            (avCaAudioParams, _) = avCaAudioScaleShiftAdalnSingle(timestep: scaledGlobal, hiddenDType: audioX.dtype)
+            (audioAdalnParams, audioEmbedded) = audioAdalnSingle(timestep: scaledAudioSigma, hiddenDType: audioX.dtype)
+            (avCaAudioParams, _) = avCaAudioScaleShiftAdalnSingle(timestep: scaledAudioSigma, hiddenDType: audioX.dtype)
         }
 
-        let (avCaA2VGateParams, _) = avCaA2VGateAdalnSingle(timestep: scaledAVGate, hiddenDType: videoX.dtype)
-        let (avCaV2AGateParams, _) = avCaV2AGateAdalnSingle(timestep: scaledAVGate, hiddenDType: audioX.dtype)
-        let (videoPromptParams, _) = promptAdalnSingle(timestep: scaledGlobal, hiddenDType: videoX.dtype)
-        let (audioPromptParams, _) = audioPromptAdalnSingle(timestep: scaledGlobal, hiddenDType: audioX.dtype)
+        let (avCaA2VGateParams, _) = avCaA2VGateAdalnSingle(timestep: scaledA2VGate, hiddenDType: videoX.dtype)
+        let (avCaV2AGateParams, _) = avCaV2AGateAdalnSingle(timestep: scaledV2AGate, hiddenDType: audioX.dtype)
+        let (videoPromptParams, _) = promptAdalnSingle(timestep: scaledVideoSigma, hiddenDType: videoX.dtype)
+        let (audioPromptParams, _) = audioPromptAdalnSingle(timestep: scaledAudioSigma, hiddenDType: audioX.dtype)
+        paritySave(videoAdalnParams, "video_adaln")
+        paritySave(audioAdalnParams, "audio_adaln")
+        paritySave(avCaVideoParams, "av_video_adaln")
+        paritySave(avCaAudioParams, "av_audio_adaln")
+        paritySave(avCaA2VGateParams, "a2v_gate_adaln")
+        paritySave(avCaV2AGateParams, "v2a_gate_adaln")
+        paritySave(videoPromptParams, "video_prompt_adaln")
+        paritySave(audioPromptParams, "audio_prompt_adaln")
+        paritySave(videoRope.cos, "video_rope_cos")
+        paritySave(videoRope.sin, "video_rope_sin")
+        paritySave(audioRope.cos, "audio_rope_cos")
+        paritySave(audioRope.sin, "audio_rope_sin")
+        paritySave(videoCrossRope.cos, "video_cross_rope_cos")
+        paritySave(videoCrossRope.sin, "video_cross_rope_sin")
+        paritySave(audioCrossRope.cos, "audio_cross_rope_cos")
+        paritySave(audioCrossRope.sin, "audio_cross_rope_sin")
 
         let evalEvery = Int(ProcessInfo.processInfo.environment["LTX2_DIT_EVAL_EVERY"] ?? "8") ?? 8
         for (index, block) in transformerBlocks.enumerated() {
@@ -4284,10 +5322,20 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
                 videoRope: videoRope,
                 audioRope: audioRope,
                 videoCrossRope: videoCrossRope,
-                audioCrossRope: audioCrossRope
+                audioCrossRope: audioCrossRope,
+                skipVideoSelfAttention: perturbation.skippedVideoSelfAttentionBlocks.contains(index),
+                skipAudioToVideoCrossAttention: perturbation.skipsAudioToVideoCrossAttention,
+                skipVideoToAudioCrossAttention: perturbation.skipsVideoToAudioCrossAttention,
+                debugSave: index == 0 ? { array, name in
+                    paritySave(array, "block0_\(name)")
+                } : nil
             )
             videoX = out.video
             audioX = out.audio
+            if index == 0 || index == transformerBlocks.count - 1 {
+                paritySave(videoX, "block\(index)_video")
+                paritySave(audioX, "block\(index)_audio")
+            }
             if evalEvery > 0 && (index + 1).isMultiple(of: evalEvery) {
                 MLX.eval(videoX, audioX)
             }
@@ -4309,6 +5357,8 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
             projection: audioProjOut,
             dim: audioDim
         )
+        paritySave(videoVelocity, "video_velocity")
+        paritySave(audioVelocity, "audio_velocity")
         return (videoVelocity, audioVelocity)
     }
 
@@ -4427,7 +5477,11 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
         videoRope: (cos: MLXArray, sin: MLXArray),
         audioRope: (cos: MLXArray, sin: MLXArray),
         videoCrossRope: (cos: MLXArray, sin: MLXArray),
-        audioCrossRope: (cos: MLXArray, sin: MLXArray)
+        audioCrossRope: (cos: MLXArray, sin: MLXArray),
+        skipVideoSelfAttention: Bool,
+        skipAudioToVideoCrossAttention: Bool,
+        skipVideoToAudioCrossAttention: Bool,
+        debugSave: ((MLXArray, String) -> Void)? = nil
     ) -> (video: MLXArray, audio: MLXArray) {
         var video = videoHidden
         var audio = audioHidden
@@ -4435,19 +5489,24 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
         let vAda = unpackAdaln(videoAdalnParams, table: scaleShiftTable, count: 9, dim: videoDim)
         let aAda = unpackAdaln(audioAdalnParams, table: audioScaleShiftTable, count: 9, dim: audioDim)
 
-        var videoNorm = rmsNormNoWeight(video)
-        videoNorm = videoNorm * (MLXArray(1.0).asType(videoNorm.dtype) + vAda[1]) + vAda[0]
-        video = video + attn1(videoNorm, context: nil, mask: nil, rope: videoRope) * vAda[2]
+        if !skipVideoSelfAttention {
+            var videoNorm = rmsNormNoWeight(video)
+            videoNorm = videoNorm * (MLXArray(1.0).asType(videoNorm.dtype) + vAda[1]) + vAda[0]
+            video = video + attn1(videoNorm, context: nil, mask: nil, rope: videoRope) * vAda[2]
+        }
+        debugSave?(video, "video_after_self_attention")
 
         var audioNorm = rmsNormNoWeight(audio)
         audioNorm = audioNorm * (MLXArray(1.0).asType(audioNorm.dtype) + aAda[1]) + aAda[0]
         audio = audio + audioAttn1(audioNorm, context: nil, mask: nil, rope: audioRope) * aAda[2]
+        debugSave?(audio, "audio_after_self_attention")
 
         let vPromptAda = unpackAdaln(videoPromptAdalnParams, table: promptScaleShiftTable, count: 2, dim: videoDim)
         let videoText = videoTextEmbeds * (MLXArray(1.0).asType(videoTextEmbeds.dtype) + vPromptAda[1]) + vPromptAda[0]
         var videoCrossNorm = rmsNormNoWeight(video)
         videoCrossNorm = videoCrossNorm * (MLXArray(1.0).asType(videoCrossNorm.dtype) + vAda[7]) + vAda[6]
         video = video + attn2(videoCrossNorm, context: videoText, mask: nil, rope: nil) * vAda[8]
+        debugSave?(video, "video_after_text_attention")
 
         let aPromptAda = unpackAdaln(
             audioPromptAdalnParams,
@@ -4459,6 +5518,7 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
         var audioCrossNorm = rmsNormNoWeight(audio)
         audioCrossNorm = audioCrossNorm * (MLXArray(1.0).asType(audioCrossNorm.dtype) + aAda[7]) + aAda[6]
         audio = audio + audioAttn2(audioCrossNorm, context: audioText, mask: nil, rope: nil) * aAda[8]
+        debugSave?(audio, "audio_after_text_attention")
 
         let videoNorm3 = rmsNormNoWeight(video)
         let audioNorm3 = rmsNormNoWeight(audio)
@@ -4467,33 +5527,41 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
         let a2vGate = unpackAVGate(avCaA2VGateParams, table: scaleShiftTableA2VCAVideo, dim: videoDim)
         let v2aGate = unpackAVGate(avCaV2AGateParams, table: scaleShiftTableA2VCAAudio, dim: audioDim)
 
-        let videoQA2V = videoNorm3 * (MLXArray(1.0).asType(videoNorm3.dtype) + vAV[0]) + vAV[1]
-        let audioKVA2V = audioNorm3 * (MLXArray(1.0).asType(audioNorm3.dtype) + aAV[0]) + aAV[1]
-        video = video + audioToVideoAttn(
-            videoQA2V,
-            context: audioKVA2V,
-            mask: nil,
-            rope: videoCrossRope,
-            keyRope: audioCrossRope
-        ) * a2vGate
+        if !skipAudioToVideoCrossAttention {
+            let videoQA2V = videoNorm3 * (MLXArray(1.0).asType(videoNorm3.dtype) + vAV[0]) + vAV[1]
+            let audioKVA2V = audioNorm3 * (MLXArray(1.0).asType(audioNorm3.dtype) + aAV[0]) + aAV[1]
+            video = video + audioToVideoAttn(
+                videoQA2V,
+                context: audioKVA2V,
+                mask: nil,
+                rope: videoCrossRope,
+                keyRope: audioCrossRope
+            ) * a2vGate
+        }
+        debugSave?(video, "video_after_audio_cross_attention")
 
-        let audioQV2A = audioNorm3 * (MLXArray(1.0).asType(audioNorm3.dtype) + aAV[2]) + aAV[3]
-        let videoKVV2A = videoNorm3 * (MLXArray(1.0).asType(videoNorm3.dtype) + vAV[2]) + vAV[3]
-        audio = audio + videoToAudioAttn(
-            audioQV2A,
-            context: videoKVV2A,
-            mask: nil,
-            rope: audioCrossRope,
-            keyRope: videoCrossRope
-        ) * v2aGate
+        if !skipVideoToAudioCrossAttention {
+            let audioQV2A = audioNorm3 * (MLXArray(1.0).asType(audioNorm3.dtype) + aAV[2]) + aAV[3]
+            let videoKVV2A = videoNorm3 * (MLXArray(1.0).asType(videoNorm3.dtype) + vAV[2]) + vAV[3]
+            audio = audio + videoToAudioAttn(
+                audioQV2A,
+                context: videoKVV2A,
+                mask: nil,
+                rope: audioCrossRope,
+                keyRope: videoCrossRope
+            ) * v2aGate
+        }
+        debugSave?(audio, "audio_after_video_cross_attention")
 
         var videoFFNorm = rmsNormNoWeight(video)
         videoFFNorm = videoFFNorm * (MLXArray(1.0).asType(videoFFNorm.dtype) + vAda[4]) + vAda[3]
         video = video + ff(videoFFNorm) * vAda[5]
+        debugSave?(video, "video_after_feed_forward")
 
         var audioFFNorm = rmsNormNoWeight(audio)
         audioFFNorm = audioFFNorm * (MLXArray(1.0).asType(audioFFNorm.dtype) + aAda[4]) + aAda[3]
         audio = audio + audioFF(audioFFNorm) * aAda[5]
+        debugSave?(audio, "audio_after_feed_forward")
 
         return (video, audio)
     }
@@ -4556,11 +5624,27 @@ func mapLTX23UnifiedTransformerWeight(
     value: MLXArray,
     dtype: DType
 ) -> [(String, MLXArray)] {
-    guard key.hasPrefix("transformer.") else {
+    guard key.hasPrefix("transformer."),
+          let mapped = mapLTX23UnifiedTransformerKey(key) else {
         return []
     }
 
-    var mapped = String(key.dropFirst("transformer.".count))
+    var casted = value
+    if casted.dtype.isFloatingPoint && casted.dtype != dtype {
+        casted = casted.asType(dtype)
+    }
+    return [(mapped, casted)]
+}
+
+func mapLTX23UnifiedTransformerKey(_ key: String) -> String? {
+    var mapped: String
+    if key.hasPrefix("transformer.") {
+        mapped = String(key.dropFirst("transformer.".count))
+    } else if key.hasPrefix("diffusion_model.") {
+        mapped = String(key.dropFirst("diffusion_model.".count))
+    } else {
+        return nil
+    }
     mapped = mapped.replacingOccurrences(of: ".to_out.0.", with: ".to_out.")
     mapped = mapped.replacingOccurrences(of: ".ff.net.0.proj.", with: ".ff.proj_in.")
     mapped = mapped.replacingOccurrences(of: ".ff.net.2.", with: ".ff.proj_out.")
@@ -4577,14 +5661,9 @@ func mapLTX23UnifiedTransformerWeight(
         "audio_caption_projection",
     ]
     if ignoredPrefixes.contains(where: { mapped.hasPrefix($0) }) {
-        return []
+        return nil
     }
-
-    var casted = value
-    if casted.dtype.isFloatingPoint && casted.dtype != dtype {
-        casted = casted.asType(dtype)
-    }
-    return [(mapped, casted)]
+    return mapped
 }
 
 private enum LTXAudioCausalityAxis {
@@ -4735,6 +5814,49 @@ private final class LTXAudioUpsample2d: Module {
     }
 }
 
+private final class LTXAudioDownsample2d: Module {
+    @ModuleInfo(key: "conv") var conv: Conv2d
+
+    init(channels: Int) {
+        self._conv.wrappedValue = Conv2d(
+            inputChannels: channels,
+            outputChannels: channels,
+            kernelSize: .init([3, 3]),
+            stride: .init([2, 2]),
+            padding: .init(0),
+            bias: true
+        )
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        // Upstream HEIGHT causality pads (left: 0, right: 1, top: 2, bottom: 0)
+        // before its stride-2 convolution.
+        conv(padded(x, widths: [[0, 0], [2, 0], [0, 1], [0, 0]]))
+    }
+}
+
+private final class LTXAudioEncoderStage: Module {
+    @ModuleInfo(key: "block") var blocks: [LTXAudioResnetBlock2D]
+    @ModuleInfo(key: "downsample") var downsample: LTXAudioDownsample2d?
+
+    init(blocks: [LTXAudioResnetBlock2D], downsampleChannels: Int?) {
+        self._blocks.wrappedValue = blocks
+        if let downsampleChannels {
+            self._downsample.wrappedValue = LTXAudioDownsample2d(channels: downsampleChannels)
+        } else {
+            self._downsample.wrappedValue = nil
+        }
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        var h = x
+        for block in blocks {
+            h = block(h)
+        }
+        return downsample?(h) ?? h
+    }
+}
+
 private final class LTXAudioDecoderStage: Module {
     @ModuleInfo(key: "block") var blocks: [LTXAudioResnetBlock2D]
     @ModuleInfo(key: "upsample") var upsample: LTXAudioUpsample2d?
@@ -4788,6 +5910,12 @@ private final class LTXAudioPerChannelStatistics: Module {
         let mean = meanOfMeans.asType(x.dtype)
         return x * std + mean
     }
+
+    func normalize(_ x: MLXArray) -> MLXArray {
+        let std = stdOfMeans.asType(x.dtype)
+        let mean = meanOfMeans.asType(x.dtype)
+        return (x - mean) / std
+    }
 }
 
 private struct LTXAudioPatchifier {
@@ -4803,6 +5931,77 @@ private struct LTXAudioPatchifier {
         let b = x.dim(0)
         let t = x.dim(1)
         return x.reshaped(b, t, channels, melBins).transposed(0, 1, 3, 2)
+    }
+}
+
+private final class LTXAudioEncoder: Module {
+    @ModuleInfo(key: "per_channel_statistics") var perChannelStatistics: LTXAudioPerChannelStatistics
+    @ModuleInfo(key: "conv_in") var convIn: LTXAudioCausalConv2d
+    @ModuleInfo(key: "down") var down: [LTXAudioEncoderStage]
+    @ModuleInfo(key: "mid") var mid: LTXAudioMidBlock
+    @ModuleInfo(key: "norm_out") var normOut: LTXAudioPixelNorm
+    @ModuleInfo(key: "conv_out") var convOut: LTXAudioCausalConv2d
+
+    let patchifier = LTXAudioPatchifier()
+
+    override init() {
+        self._perChannelStatistics.wrappedValue = LTXAudioPerChannelStatistics(latentChannels: 128)
+        self._convIn.wrappedValue = LTXAudioCausalConv2d(inChannels: 2, outChannels: 128)
+        self._down.wrappedValue = [
+            LTXAudioEncoderStage(
+                blocks: [
+                    LTXAudioResnetBlock2D(inChannels: 128, outChannels: 128),
+                    LTXAudioResnetBlock2D(inChannels: 128, outChannels: 128),
+                ],
+                downsampleChannels: 128
+            ),
+            LTXAudioEncoderStage(
+                blocks: [
+                    LTXAudioResnetBlock2D(inChannels: 128, outChannels: 256),
+                    LTXAudioResnetBlock2D(inChannels: 256, outChannels: 256),
+                ],
+                downsampleChannels: 256
+            ),
+            LTXAudioEncoderStage(
+                blocks: [
+                    LTXAudioResnetBlock2D(inChannels: 256, outChannels: 512),
+                    LTXAudioResnetBlock2D(inChannels: 512, outChannels: 512),
+                ],
+                downsampleChannels: nil
+            ),
+        ]
+        self._mid.wrappedValue = LTXAudioMidBlock(channels: 512)
+        self._normOut.wrappedValue = LTXAudioPixelNorm()
+        self._convOut.wrappedValue = LTXAudioCausalConv2d(inChannels: 512, outChannels: 16)
+        super.init()
+    }
+
+    /// Encodes `[batch, channels, time, mel]` and returns transformer latents
+    /// in `[batch, 8, latent time, 16]` layout.
+    func encode(spectrogram: MLXArray) -> MLXArray {
+        precondition(
+            spectrogram.ndim == 4 && spectrogram.dim(1) == 2 && spectrogram.dim(3) == 64,
+            "LTX audio VAE expects [batch, 2, time, 64] log-mels."
+        )
+        var h = spectrogram.transposed(0, 2, 3, 1)
+        h = convIn(h)
+        for stage in down {
+            h = stage(h)
+        }
+        h = mid(h)
+        h = normOut(h)
+        h = silu(h)
+        h = convOut(h)
+
+        let means = h[0..., 0..., 0..., 0..<LTXAudioLatentChannels]
+        var patched = patchifier.patchify(means)
+        patched = perChannelStatistics.normalize(patched)
+        let normalized = patchifier.unpatchify(
+            patched,
+            channels: LTXAudioLatentChannels,
+            melBins: means.dim(2)
+        )
+        return normalized.transposed(0, 3, 1, 2)
     }
 }
 
@@ -4932,6 +6131,38 @@ func mapAudioVaeDecoderWeight(
     var mapped: String
     if key.hasPrefix("audio_vae.decoder.") {
         mapped = String(key.dropFirst("audio_vae.decoder.".count))
+    } else if key == "audio_vae.per_channel_statistics.mean-of-means"
+        || key == "audio_vae.per_channel_statistics._mean_of_means" {
+        mapped = "per_channel_statistics._mean_of_means"
+    } else if key == "audio_vae.per_channel_statistics.std-of-means"
+        || key == "audio_vae.per_channel_statistics._std_of_means" {
+        mapped = "per_channel_statistics._std_of_means"
+    } else {
+        return []
+    }
+
+    var casted = value
+    if sourceLayout == .pytorch,
+       mapped.lowercased().contains("conv"),
+       mapped.hasSuffix("weight"),
+       casted.ndim == 4 {
+        casted = casted.transposed(0, 2, 3, 1)
+    }
+    if casted.dtype.isFloatingPoint && casted.dtype != dtype {
+        casted = casted.asType(dtype)
+    }
+    return [(mapped, casted)]
+}
+
+func mapAudioVaeEncoderWeight(
+    key: String,
+    value: MLXArray,
+    dtype: DType,
+    sourceLayout: LTXTensorWeightLayout = .pytorch
+) -> [(String, MLXArray)] {
+    var mapped: String
+    if key.hasPrefix("audio_vae.encoder.") {
+        mapped = String(key.dropFirst("audio_vae.encoder.".count))
     } else if key == "audio_vae.per_channel_statistics.mean-of-means"
         || key == "audio_vae.per_channel_statistics._mean_of_means" {
         mapped = "per_channel_statistics._mean_of_means"

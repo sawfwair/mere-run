@@ -10,6 +10,8 @@ Managed ids:
 
 - `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split root — the recommended model
   for both the distilled and the high-quality synchronized `--variant unified-av` lanes.
+- `video-ltx23-a2vid-mlx`: full/dev plus official distilled LoRA for native
+  source-audio-conditioned video.
 - `video-ltx-av`: legacy merged LTX root. Superseded by LTX 2.3; only still required by
   `video export-latents`. Not recommended for `video generate`.
 
@@ -19,6 +21,7 @@ You can also pass a local LTX model root with `--model-root`.
 
 ```bash
 mere.run model pull video-ltx23-av-mlx --accept-model-license
+mere.run model pull video-ltx23-a2vid-mlx --accept-model-license
 mere.run video generate --help
 ```
 
@@ -34,6 +37,12 @@ mere.run video generate --help
 - `--num-frames`: frame count; adjusted to `8n+1`.
 - `--fps`: frames per second.
 - `--seed`: deterministic generation.
+- `--audio`: source audio; automatically selects native LTX 2.3 A2Vid.
+- `--audio-start-time`: source segment offset in seconds.
+- `--a2v-guidance-scale`: source-audio modality guidance, default `3`.
+- `--video-cfg-guidance-scale`: A2Vid text CFG, default `3`.
+- `--a2v-steps`: guided full/dev stage-one steps, default `30`.
+- `--negative-prompt`: advanced A2Vid or Wan negative prompt override.
 - `--image`: source image for image-to-video.
 - `--image-strength`: image conditioning strength from `0` to `1`.
 - `--end-image`: optional ending keyframe; requires `--image`.
@@ -54,11 +63,25 @@ mere.run video generate --help
 - Use `video-ltx23-av-mlx --variant unified-av --fps 24` for representative
   LTX 2.3 dialogue, score, and SFX checks.
 - Use standard aspect ratios before custom sizes.
+- With `--audio`, the source latent stays frozen through the guided full/dev
+  stage and distilled-LoRA refinement; the selected source segment is muxed as
+  the soundtrack. Short audio and incompatible models fail without fallback.
 - Use `--preflight --json` before long renders to confirm model availability,
   keyframe paths, output overwrite risk, resolved dimensions, and resolved
   frame count/duration.
 
 ## Examples
+
+```bash
+mere.run video generate \
+  "the singer performs beneath sweeping blue spotlights" \
+  --audio ./song.wav \
+  --audio-start-time 42 \
+  --duration 6 \
+  --image ./artist.png \
+  --image-strength 0.9 \
+  --output ./shot.mp4
+```
 
 ```bash
 mere.run video generate \

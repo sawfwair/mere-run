@@ -11,6 +11,8 @@ This page covers the native video-generation path exposed through `mere.run vide
 
 - `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split checkpoint — recommended for
   both the distilled draft lane and the high-quality `--variant unified-av` lane.
+- `video-ltx23-a2vid-mlx`: LTX 2.3 full/dev checkpoint plus the official
+  distilled LoRA for native source-audio-conditioned video.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
 
@@ -75,6 +77,35 @@ satisfy `8n+1`.
 `video-ltx23-av-mlx --variant unified-av` is the default and the current quality path
 when dialogue, score, and SFX matter. The older `video-ltx-av` merged root is legacy
 (retained only for `video export-latents`).
+
+### Native source-audio-to-video
+
+Supplying `--audio` selects A2Vid automatically; no LTX variant flag is needed.
+The requested segment directly conditions video motion, while that same decoded
+source segment becomes the output soundtrack.
+
+```bash
+swift run mere.run model pull video-ltx23-a2vid-mlx --accept-model-license
+swift run mere.run video generate \
+  "the singer performs beneath sweeping blue spotlights" \
+  --audio ./song.wav \
+  --audio-start-time 42 \
+  --duration 6 \
+  --image ./artist.png \
+  --image-strength 0.9 \
+  --output ./shot.mp4
+```
+
+The resolved clip duration is the legal `8n+1` frame count divided by `--fps`.
+The input must contain at least that much audio after `--audio-start-time`; the
+runtime fails rather than padding or silently falling back to text-to-video plus
+soundtrack layback. Mono input is duplicated to stereo without auto-gain.
+
+Stage one runs 30 guided full/dev steps by default with frozen audio latents.
+Stage two upsamples the video, fuses the official distilled LoRA one tensor pair
+at a time, and runs the four upstream distilled sigmas. `--a2v-guidance-scale`,
+`--video-cfg-guidance-scale`, `--a2v-steps`, and `--negative-prompt` expose the
+advanced controls.
 
 ### Export latents
 

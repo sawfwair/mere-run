@@ -23,6 +23,7 @@ public enum SafetensorsStreamingLoader {
         case invalidHeader(URL)
         case malformedTensorMetadata(URL, String)
         case invalidTensorDataRange(URL, String)
+        case missingTensorPair(URL, String)
 
         public var errorDescription: String? {
             switch self {
@@ -36,6 +37,8 @@ public enum SafetensorsStreamingLoader {
                 return "Malformed tensor metadata for key '\(key)' in \(url.path)"
             case .invalidTensorDataRange(let url, let key):
                 return "Invalid tensor data range for key '\(key)' in \(url.path)"
+            case .missingTensorPair(let url, let key):
+                return "Missing safetensors pair for key '\(key)' in \(url.path)"
             }
         }
     }
@@ -120,6 +123,63 @@ public enum SafetensorsStreamingLoader {
         if !updates.isEmpty {
             try model.update(parameters: ModuleParameters.unflattened(updates), verify: verify)
         }
+    }
+
+    /// Maps the file once and yields one named tensor pair at a time. This is
+    /// intended for very large LoRA checkpoints where loading all adapters at
+    /// once would double resident memory before fusion even begins.
+    @discardableResult
+    public static func forEachTensorPair(
+        url: URL,
+        firstSuffix: String,
+        secondSuffix: String,
+        dtype: DType? = nil,
+        body: (_ baseKey: String, _ first: MLXArray, _ second: MLXArray) throws -> Void
+    ) throws -> Int {
+        let fileData = try Data(contentsOf: url, options: .mappedIfSafe)
+        let parsed = try parseHeader(fileData: fileData, fileURL: url)
+        let tensorMetadata = try parseTensorMetadata(
+            header: parsed.header,
+            dataOffset: parsed.dataOffset,
+            fileDataCount: fileData.count,
+            fileURL: url
+        )
+        let firstKeys = tensorMetadata.keys
+            .filter { $0.hasSuffix(firstSuffix) }
+            .sorted()
+        var pairCount = 0
+
+        for firstKey in firstKeys {
+            let baseKey = String(firstKey.dropLast(firstSuffix.count))
+            let secondKey = baseKey + secondSuffix
+            guard let firstMetadata = tensorMetadata[firstKey],
+                  let secondMetadata = tensorMetadata[secondKey] else {
+                throw LoaderError.missingTensorPair(url, firstKey)
+            }
+            let first = makeArray(
+                metadata: firstMetadata,
+                fileData: fileData,
+                dtype: dtype
+            )
+            let second = makeArray(
+                metadata: secondMetadata,
+                fileData: fileData,
+                dtype: dtype
+            )
+            try body(baseKey, first, second)
+            pairCount += 1
+        }
+        return pairCount
+    }
+
+    private static func makeArray(
+        metadata: TensorMetadata,
+        fileData: Data,
+        dtype: DType?
+    ) -> MLXArray {
+        let tensorData = fileData.subdata(in: metadata.startOffset..<metadata.endOffset)
+        let rawArray = MLXArray(tensorData, metadata.shape, dtype: metadata.dtype)
+        return HFSafetensorsWeightsLoader.castIfNeeded(rawArray, dtype: dtype)
     }
 
     private static func parseHeader(

@@ -15,6 +15,45 @@ public enum MediaAudioIO {
         #endif
     }
 
+    public static func probe(_ url: URL) throws -> MediaAudioMetadata {
+        #if canImport(AVFoundation)
+        try AppleMediaAudioIO.probe(url)
+        #else
+        try FFmpegMediaIO.probeAudio(url)
+        #endif
+    }
+
+    /// Decodes only the requested source interval, then converts it to the
+    /// requested sample rate and interleaved channel layout.
+    public static func decodeSegment(
+        _ url: URL,
+        startTime: Double,
+        duration: Double,
+        targetSampleRate: Int,
+        channels: Int
+    ) throws -> MediaAudioBuffer {
+        guard startTime.isFinite, duration.isFinite, startTime >= 0, duration > 0 else {
+            throw MediaIOError.invalidAudioRange(startTime: startTime, duration: duration)
+        }
+        #if canImport(AVFoundation)
+        return try AppleMediaAudioIO.decodeSegment(
+            url,
+            startTime: startTime,
+            duration: duration,
+            targetSampleRate: targetSampleRate,
+            channels: channels
+        )
+        #else
+        return try FFmpegMediaIO.decodeAudioSegment(
+            url,
+            startTime: startTime,
+            duration: duration,
+            targetSampleRate: targetSampleRate,
+            channels: channels
+        )
+        #endif
+    }
+
     public static func writeFloatWAV(
         samples: [Float],
         sampleRate: Int,

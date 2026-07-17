@@ -87,6 +87,49 @@ final class LTXVideoMP4WriterTests: MereRunCoreTestCase {
         XCTAssertGreaterThan(bitRate, 120_000)
     }
 
+    func testWriteMP4SourceAudioTrackCorrelatesWithSelectedSegment() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are not available")
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ltx-source-audio-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fps = 24
+        let frames = MLXArray([UInt8](repeating: 32, count: fps * 16 * 16 * 3))
+            .reshaped(fps, 16, 16, 3)
+        let sampleRate = 16_000
+        var left = [Float](repeating: 0, count: sampleRate)
+        var interleaved = [Float](repeating: 0, count: sampleRate * 2)
+        for sample in 0..<sampleRate {
+            let time = Float(sample) / Float(sampleRate)
+            left[sample] = sin(time * 440 * 2 * .pi) * 0.2
+            interleaved[sample * 2] = left[sample]
+            interleaved[sample * 2 + 1] = sin(time * 660 * 2 * .pi) * 0.1
+        }
+
+        let outputURL = tempDir.appendingPathComponent("source-audio.mp4")
+        try LTXVideoMP4Writer.writeMP4(
+            frames: frames,
+            fps: fps,
+            to: outputURL,
+            sourceAudio: MediaAudioBuffer(
+                samples: interleaved,
+                sampleRate: sampleRate,
+                channelCount: 2,
+                isInterleaved: true
+            )
+        )
+
+        XCTAssertTrue(MediaVideoIO.hasAudioTrack(outputURL))
+        let decoded = try MediaAudioIO.decode(outputURL, targetSampleRate: sampleRate, channels: 2)
+        let decodedLeft = stride(from: 0, to: decoded.samples.count, by: 2).map { decoded.samples[$0] }
+        XCTAssertGreaterThan(maxCorrelation(left, decodedLeft, maximumLag: 2_048), 0.95)
+    }
+
     func testWriteMP4PreservesOddFrameCountWhenFFprobeIsAvailable() throws {
         guard isExecutableAvailable(MediaTool.ffprobePath) else {
             throw XCTSkip("ffprobe is not available")
@@ -192,6 +235,31 @@ final class LTXVideoMP4WriterTests: MereRunCoreTestCase {
             return 0
         }
         return bitRate
+    }
+
+    private func maxCorrelation(_ lhs: [Float], _ rhs: [Float], maximumLag: Int) -> Float {
+        var maximum: Double = -1
+        for lag in (-maximumLag)...maximumLag {
+            let lhsStart = max(0, -lag)
+            let rhsStart = max(0, lag)
+            let count = min(lhs.count - lhsStart, rhs.count - rhsStart)
+            guard count > 1_024 else { continue }
+            var dot: Double = 0
+            var lhsEnergy: Double = 0
+            var rhsEnergy: Double = 0
+            for offset in stride(from: 0, to: count, by: 8) {
+                let left = Double(lhs[lhsStart + offset])
+                let right = Double(rhs[rhsStart + offset])
+                dot += left * right
+                lhsEnergy += left * left
+                rhsEnergy += right * right
+            }
+            let denominator = sqrt(lhsEnergy * rhsEnergy)
+            if denominator > 0 {
+                maximum = max(maximum, dot / denominator)
+            }
+        }
+        return Float(maximum)
     }
 
     private func ffprobeVideoFrameCount(_ url: URL) throws -> Int {

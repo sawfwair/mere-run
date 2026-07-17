@@ -65,6 +65,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case mmaudio
     case ltxVideo
     case ltxVideo23MLX
+    case ltxVideo23A2VMLX
     case wan22TI2VMLX
     case dreamXCausalMLX
     case hfTextChat
@@ -342,6 +343,21 @@ public enum ManagedModelCatalog {
         "spatial_upscaler_x1_5_v1_0_config.json",
         "temporal_upscaler_x2_v1_0.safetensors",
         "temporal_upscaler_x2_v1_0_config.json",
+    ]
+    private static let ltx23A2VMLXSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
+        "config.json",
+        "embedded_config.json",
+        "split_model.json",
+        "connector.safetensors",
+        "transformer-dev.safetensors",
+        "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+        "vae_decoder.safetensors",
+        "vae_encoder.safetensors",
+        "audio_vae.safetensors",
+        "spatial_upscaler_x2_v1_1.safetensors",
+        "spatial_upscaler_x2_v1_1_config.json",
     ]
     private static let ltxGemma3TextEncoderRepoId = "mlx-community/gemma-3-12b-it-4bit"
     private static let ltxGemma3TextEncoderRevision = "14d891e009084901c434304fe93a86fd9013e84c"
@@ -1997,6 +2013,28 @@ public enum ManagedModelCatalog {
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: ltx23MLXUpstreamRepoId,
+                revision: ltx23MLXRevision,
+                patterns: ltx23A2VMLXSnapshotPatterns
+            ),
+            upstreamRepoId: ltx23MLXUpstreamRepoId,
+            upstreamRevision: ltx23MLXRevision,
+            usageRestriction: ltxUsageRestriction(
+                sourceRepoId: ltx23MLXUpstreamRepoId,
+                sourceRevision: ltx23MLXRevision,
+                additionalTerms: [ltxGemmaTextEncoderUsageTerm]
+            ),
+            validationKind: .ltxVideo23A2VMLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 54_000_000_000,
+            defaultCLICommands: ["video generate"],
+            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -2238,6 +2276,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideoPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23MLX:
             return Self.missingLTXVideo23MLXPaths(in: rootURL, fileManager: fileManager)
+        case .ltxVideo23A2VMLX:
+            return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .dreamXCausalMLX:
@@ -2288,6 +2328,11 @@ public extension ManagedModelSpec {
                 in: normalizedRootURL(rootURL, fileManager: fileManager),
                 fileManager: fileManager
             ).map { "Missing required LTX 2.3 MLX file: \($0.path)" }
+        case .ltxVideo23A2VMLX:
+            return Self.missingLTXVideo23A2VMLXPaths(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            ).map { "Missing required LTX 2.3 A2Vid MLX file: \($0.path)" }
         case .wan22TI2VMLX:
             let resources = Wan2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
             let missing = resources.validate(fileManager: fileManager)
@@ -2722,6 +2767,25 @@ public extension ManagedModelSpec {
             "spatial_upscaler_x1_5_v1_0_config.json",
             "temporal_upscaler_x2_v1_0.safetensors",
             "temporal_upscaler_x2_v1_0_config.json",
+        ]
+        return relativePaths
+            .map { rootURL.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private static func missingLTXVideo23A2VMLXPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
+        let relativePaths = [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-dev.safetensors",
+            "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
         ]
         return relativePaths
             .map { rootURL.appendingPathComponent($0, isDirectory: false) }

@@ -100,6 +100,7 @@ from the runtime catalog used by `mere.run model list`,
 | `sfx` | `sfx-mmaudio-large-44k-v2` |
 | `video` | `video-ltx-av` |
 | `video` | `video-ltx23-av-mlx` |
+| `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
@@ -140,7 +141,7 @@ validates all configured models before downloading any; both accept the same
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
-| `video-ltx-av`, `video-ltx23-av-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX path also installs a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
+| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-a2vid-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -645,6 +646,27 @@ VAE files, BWE vocoder, and MLX-native tensor layouts. Use this model for the
 current high-quality synchronized audio/video lane.
 The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane
 and is not loaded by the native MLX video runtime.
+
+### `video-ltx23-a2vid-mlx`
+
+The native audio-to-video root is intentionally separate:
+
+```text
+.../models/video-ltx23-a2vid-mlx
+```
+
+It pulls the full/dev transformer, the official rank-384 distilled LoRA,
+connector, audio VAE, video VAE encoder/decoder, and x2 spatial upscaler from
+the same immutable `dgrauet/ltx-2.3-mlx` revision. It does not pull the
+standalone distilled transformer, vocoder, or unrelated upscalers. Hugging
+Face cache objects are shared with `video-ltx23-av-mlx` when both models are
+installed. The hidden Gemma 3 companion is shared as well.
+
+This model exists for the native two-stage A2Vid contract: guided generation
+with the full/dev transformer at half resolution, then full-resolution
+refinement after fusing the distilled LoRA. The source audio VAE latent remains
+frozen in both stages, and the original decoded source segment—not VAE-decoded
+audio—is muxed into the MP4.
 
 ### `video-wan22-ti2v-5b-mlx`
 

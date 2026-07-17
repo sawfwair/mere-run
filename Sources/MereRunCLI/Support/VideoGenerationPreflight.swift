@@ -13,6 +13,12 @@ struct VideoGenerationPreflightInput {
     let duration: Double?
     let fps: Int
     let seed: Int?
+    let negativePrompt: String?
+    let audio: String?
+    let audioStartTime: Double
+    let a2vGuidanceScale: Float
+    let videoCFGGuidanceScale: Float
+    let a2vSteps: Int
     let image: String?
     let imageStrength: Float
     let endImage: String?
@@ -33,6 +39,12 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let duration: Double?
     let fps: Int
     let seed: Int?
+    let negativePrompt: String?
+    let audio: String?
+    let audioStartTime: Double
+    let a2vGuidanceScale: Float
+    let videoCFGGuidanceScale: Float
+    let a2vSteps: Int
     let image: String?
     let imageStrength: Float
     let endImage: String?
@@ -50,6 +62,12 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case duration
         case fps
         case seed
+        case negativePrompt = "negative_prompt"
+        case audio
+        case audioStartTime = "audio_start_time"
+        case a2vGuidanceScale = "a2v_guidance_scale"
+        case videoCFGGuidanceScale = "video_cfg_guidance_scale"
+        case a2vSteps = "a2v_steps"
         case image
         case imageStrength = "image_strength"
         case endImage = "end_image"
@@ -110,12 +128,14 @@ struct VideoGenerationOutputPreflightSummary: Codable, Equatable {
 
 struct VideoGenerationInputPreflightSummary: Codable, Equatable {
     let mode: String
+    let sourceAudio: VideoGenerationPathPreflightSummary?
     let sourceImage: VideoGenerationPathPreflightSummary?
     let endImage: VideoGenerationPathPreflightSummary?
     let missingCount: Int
 
     enum CodingKeys: String, CodingKey {
         case mode
+        case sourceAudio = "source_audio"
         case sourceImage = "source_image"
         case endImage = "end_image"
         case missingCount = "missing_count"
@@ -150,6 +170,9 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let resolvedDurationSeconds: Double?
     let seed: Int
     let writesAudio: Bool
+    let audioConditioning: Bool
+    let preservesSourceAudio: Bool
+    let resolvedAudioStartTime: Double?
 
     enum CodingKeys: String, CodingKey {
         case variant
@@ -165,6 +188,9 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
         case resolvedDurationSeconds = "resolved_duration_seconds"
         case seed
         case writesAudio = "writes_audio"
+        case audioConditioning = "audio_conditioning"
+        case preservesSourceAudio = "preserves_source_audio"
+        case resolvedAudioStartTime = "resolved_audio_start_time"
     }
 }
 
@@ -196,6 +222,11 @@ struct VideoGenerationPreflightAnalyzer {
         let url = URL(fileURLWithPath: candidate).standardizedFileURL
         let resources = Wan2Resources(rootURL: url)
         return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
+    }
+
+    private var usesAudioConditioning: Bool {
+        guard let audio = input.audio else { return false }
+        return !audio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func envelope() -> VideoGenerationPreflightEnvelope {
@@ -241,6 +272,12 @@ struct VideoGenerationPreflightAnalyzer {
             duration: input.duration,
             fps: input.fps,
             seed: input.seed,
+            negativePrompt: input.negativePrompt,
+            audio: input.audio,
+            audioStartTime: input.audioStartTime,
+            a2vGuidanceScale: input.a2vGuidanceScale,
+            videoCFGGuidanceScale: input.videoCFGGuidanceScale,
+            a2vSteps: input.a2vSteps,
             image: input.image,
             imageStrength: input.imageStrength,
             endImage: input.endImage,
@@ -276,6 +313,49 @@ struct VideoGenerationPreflightAnalyzer {
                     severity: .blocker,
                     title: "Duration is invalid",
                     message: "--duration must be > 0."
+                )
+            )
+        }
+        if !input.audioStartTime.isFinite || input.audioStartTime < 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "audio_start_time_invalid",
+                    severity: .blocker,
+                    title: "Audio start time is invalid",
+                    message: "--audio-start-time must be finite and >= 0."
+                )
+            )
+        }
+        if input.a2vGuidanceScale < 0 || input.videoCFGGuidanceScale < 0 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "a2v_guidance_invalid",
+                    severity: .blocker,
+                    title: "A2Vid guidance is invalid",
+                    message: "A2Vid guidance scales must be >= 0."
+                )
+            )
+        }
+        if input.a2vSteps < 1 {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "a2v_steps_invalid",
+                    severity: .blocker,
+                    title: "A2Vid steps are invalid",
+                    message: "--a2v-steps must be >= 1."
+                )
+            )
+        }
+        if usesAudioConditioning,
+           input.modelRoot == nil,
+           ModelResolver.ModelID(rawValue: input.model) != nil,
+           input.model != ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "audio_model_incompatible",
+                    severity: .blocker,
+                    title: "Model does not support audio conditioning",
+                    message: "--audio requires \(ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)."
                 )
             )
         }
@@ -341,13 +421,13 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        if input.variant == .unifiedAV, input.fps > 0, input.fps != 24 {
+        if (input.variant == .unifiedAV || usesAudioConditioning), input.fps > 0, input.fps != 24 {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "unified_av_fps_unusual",
                     severity: .warning,
-                    title: "Unified AV is tuned for 24 fps",
-                    message: "LTX unified AV is trained around 24 fps; --fps \(input.fps) can make motion look time-stretched relative to audio."
+                    title: "LTX audio/video is tuned for 24 fps",
+                    message: "LTX audio/video is trained around 24 fps; --fps \(input.fps) can make motion look time-stretched relative to audio."
                 )
             )
         }
@@ -450,7 +530,7 @@ struct VideoGenerationPreflightAnalyzer {
         }
 
         do {
-            try validateNativeModelRoot(url)
+            try validateSelectedModelRoot(url)
             return modelResult(
                 requested: requested,
                 kind: kind,
@@ -485,7 +565,7 @@ struct VideoGenerationPreflightAnalyzer {
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationModelPreflightSummary {
         do {
-            try validateNativeModelRoot(path)
+            try validateSelectedModelRoot(path)
             return modelResult(
                 requested: requested,
                 kind: "managed_model",
@@ -550,7 +630,18 @@ struct VideoGenerationPreflightAnalyzer {
         if resources.validate().isEmpty, (try? resources.loadConfiguration()) != nil {
             return "wan22_ti2v_mlx"
         }
+        if isLTX23AudioToVideoModelRoot(url, fileManager: fileManager) {
+            return "ltx23_a2vid_split"
+        }
         return isLTX23SplitModelRoot(url, fileManager: fileManager) ? "ltx23_split" : "ltx_merged"
+    }
+
+    private func validateSelectedModelRoot(_ url: URL) throws {
+        if usesAudioConditioning {
+            try validateNativeAudioToVideoModelRoot(url, fileManager: fileManager)
+        } else {
+            try validateNativeModelRoot(url)
+        }
     }
 
     private func outputSummary(
@@ -610,17 +701,22 @@ struct VideoGenerationPreflightAnalyzer {
     private func inputSummary(
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationInputPreflightSummary {
+        let sourceAudio = usesAudioConditioning ? input.audio.map { pathSummary(requested: $0) } : nil
         let sourceImage = input.image.map { pathSummary(requested: $0) }
         let endImage = input.endImage.map { pathSummary(requested: $0) }
-        for (summary, prefix) in [(sourceImage, "source_image"), (endImage, "end_image")] {
+        for (summary, prefix) in [
+            (sourceAudio, "source_audio"),
+            (sourceImage, "source_image"),
+            (endImage, "end_image"),
+        ] {
             guard let summary else { continue }
             if !summary.exists {
                 diagnostics.append(
                     PreflightDiagnostic(
                         id: "\(prefix)_missing",
                         severity: .blocker,
-                        title: "Input image missing",
-                        message: "Input image not found: \(summary.path)",
+                        title: "Input media missing",
+                        message: "Input media not found: \(summary.path)",
                         locations: [.init(kind: "file", path: summary.path)]
                     )
                 )
@@ -629,17 +725,32 @@ struct VideoGenerationPreflightAnalyzer {
                     PreflightDiagnostic(
                         id: "\(prefix)_is_directory",
                         severity: .blocker,
-                        title: "Input image is a directory",
-                        message: "Input image path is a directory: \(summary.path)",
+                        title: "Input media is a directory",
+                        message: "Input media path is a directory: \(summary.path)",
                         locations: [.init(kind: "directory", path: summary.path)]
                     )
                 )
             }
         }
 
-        let allInputs = [sourceImage, endImage].compactMap { $0 }
+        let mode: String
+        if sourceAudio != nil {
+            if sourceImage == nil {
+                mode = "audio_to_video"
+            } else if endImage == nil {
+                mode = "audio_and_image_to_video"
+            } else {
+                mode = "audio_and_directed_image_to_video"
+            }
+        } else {
+            mode = sourceImage == nil
+                ? "text_to_video"
+                : (endImage == nil ? "image_to_video" : "directed_image_to_video")
+        }
+        let allInputs = [sourceAudio, sourceImage, endImage].compactMap { $0 }
         return VideoGenerationInputPreflightSummary(
-            mode: sourceImage == nil ? "text_to_video" : (endImage == nil ? "image_to_video" : "directed_image_to_video"),
+            mode: mode,
+            sourceAudio: sourceAudio,
             sourceImage: sourceImage,
             endImage: endImage,
             missingCount: allInputs.filter { !$0.exists }.count
@@ -718,7 +829,9 @@ struct VideoGenerationPreflightAnalyzer {
         }
 
         return VideoGenerationPlanPreflightSummary(
-            variant: usesWanGeometry ? "wan22-ti2v" : input.variant.rawValue,
+            variant: usesWanGeometry
+                ? "wan22-ti2v"
+                : (usesAudioConditioning ? "audio-to-video" : input.variant.rawValue),
             inputMode: inputs.mode,
             requestedWidth: input.width,
             requestedHeight: input.height,
@@ -730,7 +843,10 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0 ? Double(resolvedFrames) / Double(input.fps) : nil,
             seed: input.seed ?? 42,
-            writesAudio: !usesWanGeometry && input.variant == .unifiedAV
+            writesAudio: usesAudioConditioning || (!usesWanGeometry && input.variant == .unifiedAV),
+            audioConditioning: usesAudioConditioning,
+            preservesSourceAudio: usesAudioConditioning,
+            resolvedAudioStartTime: usesAudioConditioning ? input.audioStartTime : nil
         )
     }
 
@@ -787,6 +903,18 @@ struct VideoGenerationPreflightAnalyzer {
             )
         )
 
+        if let sourceAudio = inputs.sourceAudio {
+            actions.append(
+                DeclarativeAction(
+                    id: "reveal-source-audio",
+                    label: "Reveal source audio",
+                    kind: .revealFile,
+                    style: .link,
+                    enabled: sourceAudio.exists && !sourceAudio.isDirectory,
+                    path: sourceAudio.path
+                )
+            )
+        }
         if let sourceImage = inputs.sourceImage {
             actions.append(
                 DeclarativeAction(

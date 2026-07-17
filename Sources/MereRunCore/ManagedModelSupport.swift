@@ -723,6 +723,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
+                "LTX 2.3 A2Vid MLX",
+                "Installs the full/dev transformer and distilled LoRA for native source-audio-conditioned video.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
                 "Wan2.2 TI2V 5B MLX",
                 "Generates text- and image-conditioned pixel video with the native Swift MLX Wan2.2 runtime.",
