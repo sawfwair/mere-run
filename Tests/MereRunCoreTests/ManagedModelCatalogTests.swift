@@ -75,6 +75,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "sfx-mmaudio-large-44k-v2",
             "video-ltx-av",
             "video-ltx23-av-mlx",
+            "video-ltx23-full-mlx",
+            "video-ltx23-a2vid-mlx",
         ])
         let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
             + ManagedModelCatalog.allSpecs
@@ -1176,6 +1178,59 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-dev.safetensors"), false)
     }
 
+    func testLTX23A2VidSpecUsesOnlyRequiredDevAndLoRAAssets() throws {
+        let id = ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.hubFallback?.repoId, "dgrauet/ltx-2.3-mlx")
+        XCTAssertEqual(spec.hubFallback?.revision, "baa5f235ea04fd9c95899d751295c4fd825ee4e2")
+        XCTAssertEqual(spec.validationKind, .ltxVideo23A2VMLX)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.companionModelIDs, [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue])
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-dev.safetensors"), true)
+        XCTAssertEqual(
+            spec.hubFallback?.patterns.contains("ltx-2.3-22b-distilled-lora-384-1.1.safetensors"),
+            true
+        )
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-distilled.safetensors"), false)
+
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo23A2VMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
+        XCTAssertEqual(manifest.defaults?.steps, 30)
+    }
+
+    func testLTX23FullSpecUnifiesJointAVAndA2VidAssets() throws {
+        let id = ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(spec.validationKind, .ltxVideo23FullMLX)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-dev.safetensors"), true)
+        XCTAssertEqual(
+            spec.hubFallback?.patterns.contains("ltx-2.3-22b-distilled-lora-384-1.1.safetensors"),
+            true
+        )
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("vocoder.safetensors"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer-distilled.safetensors"), false)
+        XCTAssertEqual(spec.resolutionFallbackIDs, [ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue])
+
+        let legacySpec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)
+        )
+        XCTAssertEqual(legacySpec.resolutionFallbackIDs, [id])
+
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo23FullMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.variant, .base)
+        XCTAssertTrue(manifest.supports?.contains(.videoGeneration) == true)
+        XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
+    }
+
     func testLTX23CompanionGemma3TextEncoderSpecIsKnownButHidden() throws {
         let companionID = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
@@ -1232,6 +1287,39 @@ final class ManagedModelCatalogTests: XCTestCase {
 
         try FileManager.default.removeItem(at: root.appendingPathComponent("vocoder.safetensors"))
         XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["vocoder.safetensors"]
+        )
+    }
+
+    func testLTX23A2VidRootValidationRequiresDevTransformerAndLoRA() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLTX23A2VidRoot(at: root)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        let lora = root.appendingPathComponent("ltx-2.3-22b-distilled-lora-384-1.1.safetensors")
+        try FileManager.default.removeItem(at: lora)
+        XCTAssertEqual(
+            spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
+            ["ltx-2.3-22b-distilled-lora-384-1.1.safetensors"]
+        )
+    }
+
+    func testLTX23FullRootValidationAlsoRequiresVocoder() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLTX23FullRoot(at: root)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent("vocoder.safetensors"))
         XCTAssertEqual(
             spec.missingPaths(in: root, fileManager: .default).map(\.lastPathComponent),
             ["vocoder.safetensors"]
@@ -1312,6 +1400,47 @@ final class ManagedModelCatalogTests: XCTestCase {
                 contents: contents
             ))
         }
+    }
+
+    private func writeMinimalLTX23A2VidRoot(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(
+            for: .ltxVideo23A2VMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for file in [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-dev.safetensors",
+            "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
+        ] {
+            let contents = file.hasSuffix(".json")
+                ? Data(#"{"model_version":"2.3.0"}"#.utf8)
+                : Data()
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: contents
+            ))
+        }
+    }
+
+    private func writeMinimalLTX23FullRoot(at root: URL) throws {
+        try writeMinimalLTX23A2VidRoot(at: root)
+        try MereRunModelManifest.template(
+            for: .ltxVideo23FullMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("vocoder.safetensors").path,
+            contents: Data()
+        ))
     }
 
     private func writeConfigOnlyDiffusersImageRoot(at root: URL, id: ModelResolver.ModelID) throws {

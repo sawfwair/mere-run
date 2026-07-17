@@ -41,6 +41,20 @@ public struct MediaAudioBuffer: Sendable, Hashable {
     }
 }
 
+public struct MediaAudioMetadata: Sendable, Hashable {
+    public let sampleRate: Int
+    public let channelCount: Int
+    public let frameCount: Int64
+    public let durationSeconds: Double
+
+    public init(sampleRate: Int, channelCount: Int, frameCount: Int64, durationSeconds: Double) {
+        self.sampleRate = sampleRate
+        self.channelCount = channelCount
+        self.frameCount = frameCount
+        self.durationSeconds = durationSeconds
+    }
+}
+
 public struct VideoFrameSequence: Sendable, Hashable {
     public let frameURLs: [URL]
     public let fps: Double
@@ -68,6 +82,7 @@ public enum MediaIOError: LocalizedError, Sendable, Equatable {
     case imageMetadataFailed(URL)
     case audioDecodeFailed(URL, String)
     case audioEncodeFailed(URL, String)
+    case invalidAudioRange(startTime: Double, duration: Double)
     case invalidVideoFrameRate(Double)
     case videoOperationFailed(String)
     case missingTool(String)
@@ -90,6 +105,8 @@ public enum MediaIOError: LocalizedError, Sendable, Equatable {
             return "Failed to decode audio \(url.path): \(details)"
         case .audioEncodeFailed(let url, let details):
             return "Failed to encode audio \(url.path): \(details)"
+        case .invalidAudioRange(let startTime, let duration):
+            return "Invalid audio range: start time \(startTime) and duration \(duration) must be finite, with a nonnegative start and positive duration."
         case .invalidVideoFrameRate(let fps):
             return "Invalid video frame rate \(fps). Expected a finite, positive rate whose rounded time scale fits in Int32."
         case .videoOperationFailed(let details):

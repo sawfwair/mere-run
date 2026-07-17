@@ -8,8 +8,12 @@ Generate an MP4 video from text, optionally anchored by a source image, with nat
 
 Managed ids:
 
-- `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split root — the recommended model
-  for both the distilled and the high-quality synchronized `--variant unified-av` lanes.
+- `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX root for fast
+  video-only drafts.
+- `video-ltx23-full-mlx`: dev checkpoint, official distilled LoRA, vocoder,
+  VAEs, and x2 upscaler for both high-quality synchronized `--variant unified-av`
+  and native source-audio-conditioned video.
+- `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs.
 - `video-ltx-av`: legacy merged LTX root. Superseded by LTX 2.3; only still required by
   `video export-latents`. Not recommended for `video generate`.
 
@@ -19,6 +23,7 @@ You can also pass a local LTX model root with `--model-root`.
 
 ```bash
 mere.run model pull video-ltx23-av-mlx --accept-model-license
+mere.run model pull video-ltx23-full-mlx --accept-model-license
 mere.run video generate --help
 ```
 
@@ -34,6 +39,15 @@ mere.run video generate --help
 - `--num-frames`: frame count; adjusted to `8n+1`.
 - `--fps`: frames per second.
 - `--seed`: deterministic generation.
+- `--audio`: source audio; automatically selects native LTX 2.3 A2Vid.
+- `--audio-start-time`: source segment offset in seconds.
+- `--a2v-guidance-scale`: source-audio modality guidance, default `3`.
+- `--video-cfg-guidance-scale`: A2Vid text CFG, default `3`.
+- `--audio-cfg-guidance-scale`: full unified-AV audio CFG, default `7`.
+- `--v2a-guidance-scale`: full unified-AV video-to-audio modality guidance,
+  default `3`.
+- `--a2v-steps`: guided full/dev stage-one steps, default `30`.
+- `--negative-prompt`: advanced A2Vid or Wan negative prompt override.
 - `--image`: source image for image-to-video.
 - `--image-strength`: image conditioning strength from `0` to `1`.
 - `--end-image`: optional ending keyframe; requires `--image`.
@@ -42,6 +56,9 @@ mere.run video generate --help
   writing an MP4.
 - `--json`: with `--preflight`, emit a structured report with diagnostics and
   declarative follow-up actions.
+- `--timings`: print native LTX 2.3 unified-AV/A2Vid load, generation, decode,
+  write, and end-to-end phase timings to stderr.
+- `--timings-output`: write those timings as JSON.
 - `--quiet`, `-q`: suppress diagnostics.
 
 ## Prompting Patterns
@@ -51,14 +68,28 @@ mere.run video generate --help
 - For directed image-to-video, pass `--image` and `--end-image` so the first
   and last latent frames are both anchored.
 - Keep early drafts short: `--num-frames 65` at `24` fps is a fast test.
-- Use `video-ltx23-av-mlx --variant unified-av --fps 24` for representative
+- Use `video-ltx23-full-mlx --variant unified-av --fps 24` for representative
   LTX 2.3 dialogue, score, and SFX checks.
 - Use standard aspect ratios before custom sizes.
+- With `--audio`, the source latent stays frozen through the guided full/dev
+  stage and distilled-LoRA refinement; the selected source segment is muxed as
+  the soundtrack. Short audio and incompatible models fail without fallback.
 - Use `--preflight --json` before long renders to confirm model availability,
   keyframe paths, output overwrite risk, resolved dimensions, and resolved
   frame count/duration.
 
 ## Examples
+
+```bash
+mere.run video generate \
+  "the singer performs beneath sweeping blue spotlights" \
+  --audio ./song.wav \
+  --audio-start-time 42 \
+  --duration 6 \
+  --image ./artist.png \
+  --image-strength 0.9 \
+  --output ./shot.mp4
+```
 
 ```bash
 mere.run video generate \
@@ -84,7 +115,7 @@ mere.run video generate \
 ```bash
 mere.run video generate \
   "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \
-  --model video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
   --variant unified-av \
   --duration 15 \
   --fps 24 \
@@ -110,6 +141,26 @@ mere.run video generate \
   --end-image-strength 0.85 \
   --output ./car-start-to-end.mp4
 ```
+
+## Resident Distilled Session
+
+`mere.run video session` keeps the standalone `video-ltx23-av-mlx` transformer,
+text encoder, VAEs, vocoder, and upscaler loaded while it processes serial JSONL
+requests. Each stdin line produces exactly one stdout line; diagnostics remain
+on stderr. Required request keys are `prompt` and `output`.
+
+```bash
+printf '%s\n' \
+  '{"id":"fox-1","prompt":"a red fox runs across a snowy clearing","output":"./fox-1.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  '{"id":"fox-2","prompt":"a red fox runs across a snowy clearing","output":"./fox-2.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  | mere.run video session --model video-ltx23-av-mlx
+```
+
+Successful result lines include phase timings and `resident_model_reused`; the
+second result reports zero model-load time. This session emits synchronized AV
+from the standalone distilled checkpoint. It intentionally rejects
+`video-ltx23-full-mlx`: the full quality/A2Vid lane fuses the distilled LoRA
+into the dev transformer in place and must reload before another generation.
 
 ## Iteration Tips
 

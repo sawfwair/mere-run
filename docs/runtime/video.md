@@ -5,12 +5,18 @@ This page covers the native video-generation path exposed through `mere.run vide
 ## Public surface
 
 - `mere.run video generate`
+- `mere.run video session`
 - `mere.run video export-latents`
 
 ## Model family
 
-- `video-ltx23-av-mlx`: **default.** LTX 2.3 MLX split checkpoint — recommended for
-  both the distilled draft lane and the high-quality `--variant unified-av` lane.
+- `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX checkpoint for fast
+  video-only drafts.
+- `video-ltx23-full-mlx`: LTX 2.3 dev checkpoint, official distilled LoRA,
+  vocoder, VAEs, and x2 upscaler. This is the shared quality bundle for both
+  `--variant unified-av` and source-audio A2Vid.
+- `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs. New
+  installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
 
@@ -57,11 +63,11 @@ For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma
 3 companion:
 
 ```bash
-swift run mere.run model pull video-ltx23-av-mlx --accept-model-license
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music" \
   --variant unified-av \
-  --model video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
   --duration 15 \
   --fps 24 \
   --output ./ltx23.mp4
@@ -72,9 +78,72 @@ representative unified AV tests. LTX 2.3 expects 24 fps timing; for example,
 15 seconds resolves to 361 frames at 24 fps because LTX frame counts must
 satisfy `8n+1`.
 
-`video-ltx23-av-mlx --variant unified-av` is the default and the current quality path
-when dialogue, score, and SFX matter. The older `video-ltx-av` merged root is legacy
-(retained only for `video export-latents`).
+`video-ltx23-full-mlx --variant unified-av` runs the official two-stage quality
+path: guided dev denoising for both audio and video at half resolution, followed
+by x2 latent upscaling and four-step refinement after fusing the distilled LoRA.
+The older `video-ltx-av` merged root is retained only for `video export-latents`.
+
+Add `--timings` to print phase timings for native LTX 2.3 unified-AV or A2Vid
+generation. `--timings-output <path>` writes the same typed report as JSON,
+including model-component loading, text encoding, each denoising stage, LoRA
+fusion where applicable, upsampling, video/audio decode, MP4 writing, unload,
+and total wall time.
+
+### Resident LTX 2.3 generation
+
+`video session` amortizes checkpoint loading across serial synchronized-AV
+generations on either the standalone distilled model or the full dev model. It
+reads typed snake-case JSONL requests from stdin and writes one typed JSON
+result or error to stdout for each input line.
+
+```bash
+printf '%s\n' \
+  '{"id":"draft-1","prompt":"a fox runs across snow","output":"./draft-1.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  '{"id":"draft-2","prompt":"a fox runs across snow","output":"./draft-2.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  | swift run mere.run video session --model video-ltx23-av-mlx
+```
+
+Use `--model video-ltx23-full-mlx` for the two-stage quality lane. That session
+keeps the dev transformer and official distilled LoRA resident, leaves the dev
+weights unchanged for Stage 1, and activates the adapter only during Stage 2.
+This avoids permanent BF16 weight fusion and permits repeat requests without
+checkpoint reload or accumulated weight drift.
+
+The first result includes checkpoint-load time. Later results set
+`resident_model_reused` to `true` and report zero load time. Full-model requests
+still reload the text encoder after the first request so the large transformer,
+video decoder, and text encoder do not all remain live during denoising.
+
+### Native source-audio-to-video
+
+Supplying `--audio` selects A2Vid automatically; no LTX variant flag is needed.
+The requested segment directly conditions video motion, while that same decoded
+source segment becomes the output soundtrack.
+
+```bash
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
+swift run mere.run video generate \
+  "the singer performs beneath sweeping blue spotlights" \
+  --audio ./song.wav \
+  --audio-start-time 42 \
+  --duration 6 \
+  --image ./artist.png \
+  --image-strength 0.9 \
+  --output ./shot.mp4
+```
+
+The resolved clip duration is the legal `8n+1` frame count divided by `--fps`.
+The input must contain at least that much audio after `--audio-start-time`; the
+runtime fails rather than padding or silently falling back to text-to-video plus
+soundtrack layback. Mono input is duplicated to stereo without auto-gain.
+
+Stage one runs 30 guided full/dev steps by default with frozen audio latents.
+Stage two upsamples the video, fuses the official distilled LoRA one tensor pair
+at a time, and runs the four upstream distilled sigmas. `--a2v-guidance-scale`,
+`--video-cfg-guidance-scale`, `--audio-cfg-guidance-scale`,
+`--v2a-guidance-scale`, `--a2v-steps`, and `--negative-prompt` expose the
+advanced controls. The `--a2v-guidance-scale` value is also the video stream's
+audio-to-video modality guidance in full unified AV.
 
 ### Export latents
 
@@ -106,10 +175,12 @@ zero-memory. MP4 formats and backend selection are unchanged.
 ### CLI
 
 - `Sources/MereRunCLI/Commands/VideoCommand.swift`
+- `Sources/MereRunCLI/Commands/VideoSessionCommand.swift`
 
 ### Runtime
 
 - `Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift`
+- `Sources/MereRunCore/LTX/LTXInferenceTimings.swift`
 - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
 - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 

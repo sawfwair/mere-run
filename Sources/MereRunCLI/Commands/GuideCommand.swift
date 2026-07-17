@@ -457,6 +457,8 @@ enum GuideRegistry {
             models: [
                 "video-ltx-av",
                 "video-ltx23-av-mlx",
+                "video-ltx23-full-mlx",
+                "video-ltx23-a2vid-mlx",
             ],
             resourceName: "video-generate.md"
         ),

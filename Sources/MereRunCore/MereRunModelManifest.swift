@@ -157,6 +157,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case musicGeneration = "music_generation"
         case musicTranscription = "music_transcription"
         case videoGeneration = "video_generation"
+        case audioToVideoGeneration = "audio_to_video_generation"
         case loraInference = "lora_inference"
         case loraTraining = "lora_training"
         case visionSegmentation = "vision_segmentation"
@@ -1645,6 +1646,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.videoGeneration],
                 components: nil,
                 upstreamRepoId: isLTX23 ? "dgrauet/ltx-2.3-mlx@main" : "mlx-community/LTX-2-distilled-bf16",
+                createdAt: createdAt
+            )
+        case .ltxVideo23FullMLX, .ltxVideo23A2VMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 30, cfg: 3),
+                supports: [.videoGeneration, .audioToVideoGeneration],
+                components: nil,
+                upstreamRepoId: "dgrauet/ltx-2.3-mlx@baa5f235ea04fd9c95899d751295c4fd825ee4e2",
                 createdAt: createdAt
             )
         case .wan22TI2V5BMLX:

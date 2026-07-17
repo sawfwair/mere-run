@@ -15,7 +15,8 @@ struct Video: AsyncParsableCommand {
         abstract: "Generate videos with native Swift/MLX LTX pipelines.",
         subcommands: [
             VideoExportLatents.self,
-            VideoGenerate.self
+            VideoGenerate.self,
+            VideoSession.self
         ]
     )
 }
@@ -132,14 +133,17 @@ struct VideoGenerate: AsyncParsableCommand {
         Progress and diagnostics are printed to stderr.
 
         Use the default distilled variant for faster video-only drafts. Use
-        --variant unified-av for synchronized audio/video, and prefer
-        --model video-ltx23-av-mlx for LTX 2.3 quality renders.
+        --variant unified-av for synchronized audio/video from the full LTX 2.3
+        dev + distilled-LoRA bundle. Supplying --audio uses that same full model
+        for native two-stage A2Vid and preserves the selected source segment as
+        the soundtrack.
 
         Examples:
           swift run mere.run video generate "a cinematic drone flythrough over snowy mountains" --num-frames 65
           swift run mere.run video generate "woman walking in neon rain" --image frame.png
           swift run mere.run video generate "a car drives from dawn into sunset" --image start.png --end-image end.png
-          swift run mere.run video generate "dialogue with clean background music" --variant unified-av --model video-ltx23-av-mlx --duration 15 --fps 24
+          swift run mere.run video generate "dialogue with clean background music" --variant unified-av --model video-ltx23-full-mlx --duration 15 --fps 24
+          swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
           swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
         """
     )
@@ -150,8 +154,8 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output MP4 path (default: ./mererun-video-<timestamp>.mp4).")
     var output: String?
 
-    @Option(name: [.customShort("m"), .long], help: "Managed video model id or local model root.")
-    var model: String = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
+    @Option(name: [.customShort("m"), .long], help: "Managed video model id or local model root. Defaults by operation.")
+    var model: String = ""
 
     @Option(name: [.customLong("variant")], help: "Native LTX lane: distilled for faster video-only drafts, unified-av for synchronized audio/video.")
     var variant: LTXVideoVariant = .distilled
@@ -186,8 +190,29 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.long], help: "Wan flow-schedule shift.")
     var shift: Float = 5
 
-    @Option(name: [.customLong("negative-prompt")], help: "Wan negative prompt. Defaults to the official TI2V negative prompt.")
+    @Option(name: [.customLong("negative-prompt")], help: "Negative prompt for Wan or full LTX 2.3 generation. Defaults to the selected pipeline's official prompt.")
     var negativePrompt: String?
+
+    @Option(name: [.customLong("audio")], help: "Source audio path. Automatically selects native LTX 2.3 audio-to-video.")
+    var audio: String?
+
+    @Option(name: [.customLong("audio-start-time")], help: "Start time in seconds for the source audio segment.")
+    var audioStartTime: Double = 0
+
+    @Option(name: [.customLong("a2v-guidance-scale")], help: "LTX audio-to-video modality guidance scale, including video guidance in full unified AV.")
+    var a2vGuidanceScale: Float = 3
+
+    @Option(name: [.customLong("video-cfg-guidance-scale")], help: "LTX full/A2Vid video classifier-free guidance scale.")
+    var videoCFGGuidanceScale: Float = 3
+
+    @Option(name: [.customLong("audio-cfg-guidance-scale")], help: "LTX full unified-AV audio classifier-free guidance scale.")
+    var audioCFGGuidanceScale: Float = 7
+
+    @Option(name: [.customLong("v2a-guidance-scale")], help: "LTX full unified-AV video-to-audio modality guidance scale.")
+    var v2aGuidanceScale: Float = 3
+
+    @Option(name: [.customLong("a2v-steps")], help: "LTX full/A2Vid stage-one inference steps.")
+    var a2vSteps: Int = 30
 
     @Option(name: [.long], help: "Optional source image path (enables image-to-video).")
     var image: String?
@@ -207,8 +232,26 @@ struct VideoGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
     var json: Bool = false
 
+    @Flag(name: [.customLong("timings")], help: "Print native LTX unified-AV/A2Vid phase timings to stderr.")
+    var timings: Bool = false
+
+    @Option(name: [.customLong("timings-output")], help: "Write native LTX unified-AV/A2Vid phase timings as JSON.")
+    var timingsOutput: String?
+
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
+
+    var resolvedRequestedModel: String {
+        let requested = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !requested.isEmpty {
+            return requested
+        }
+        let hasAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        if hasAudio || variant == .unifiedAV {
+            return ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+        }
+        return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
+    }
 
     func run() async throws {
         if json && !preflight {
@@ -224,6 +267,12 @@ struct VideoGenerate: AsyncParsableCommand {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
             throw ValidationError("Prompt cannot be empty.")
+        }
+        let hasSourceAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        if (timings || timingsOutput != nil), variant != .unifiedAV, !hasSourceAudio {
+            throw ValidationError(
+                "--timings and --timings-output require --variant unified-av or --audio."
+            )
         }
 
         guard fps > 0 else {
@@ -251,6 +300,24 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         guard shift > 0 else {
             throw ValidationError("--shift must be > 0")
+        }
+        guard audioStartTime.isFinite, audioStartTime >= 0 else {
+            throw ValidationError("--audio-start-time must be finite and >= 0")
+        }
+        guard a2vGuidanceScale >= 0 else {
+            throw ValidationError("--a2v-guidance-scale must be >= 0")
+        }
+        guard videoCFGGuidanceScale >= 0 else {
+            throw ValidationError("--video-cfg-guidance-scale must be >= 0")
+        }
+        guard audioCFGGuidanceScale >= 0 else {
+            throw ValidationError("--audio-cfg-guidance-scale must be >= 0")
+        }
+        guard v2aGuidanceScale >= 0 else {
+            throw ValidationError("--v2a-guidance-scale must be >= 0")
+        }
+        guard a2vSteps > 0 else {
+            throw ValidationError("--a2v-steps must be >= 1")
         }
         guard (0...1).contains(imageStrength) else {
             throw ValidationError("--image-strength must be between 0 and 1")
@@ -291,13 +358,48 @@ struct VideoGenerate: AsyncParsableCommand {
             endImageURL = nil
         }
 
+        let sourceAudioURL: URL?
+        if let audio, !audio.isEmpty {
+            let url = URL(fileURLWithPath: audio).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Audio file not found: \(url.path)")
+            }
+            sourceAudioURL = url
+        } else {
+            sourceAudioURL = nil
+        }
+
         let resolvedModelRoot = try await resolveVideoModelRoot(
             explicitModelRoot: modelRoot,
-            requestedModel: model,
+            requestedModel: resolvedRequestedModel,
             variant: variant
         ).path
 
         let resolvedRootURL = URL(fileURLWithPath: resolvedModelRoot).standardizedFileURL
+        if let sourceAudioURL {
+            try validateNativeAudioToVideoModelRoot(resolvedRootURL)
+            try await runNativeAudioToVideoGenerate(
+                prompt: trimmedPrompt,
+                negativePrompt: negativePrompt,
+                audioURL: sourceAudioURL,
+                audioStartTime: audioStartTime,
+                width: resolvedWidth,
+                height: resolvedHeight,
+                numFrames: resolvedNumFrames,
+                fps: fps,
+                seed: seed ?? 42,
+                inferenceSteps: a2vSteps,
+                a2vGuidanceScale: a2vGuidanceScale,
+                videoCFGGuidanceScale: videoCFGGuidanceScale,
+                sourceImageURL: sourceImageURL,
+                imageStrength: imageStrength,
+                endImageURL: endImageURL,
+                endImageStrength: endImageStrength,
+                modelRoot: resolvedRootURL,
+                outputURL: outputURL
+            )
+            return
+        }
         if isWan2ModelRoot(resolvedRootURL) {
             guard let sourceImageURL else {
                 throw ValidationError("Wan2.2 TI2V requires --image.")
@@ -367,6 +469,12 @@ struct VideoGenerate: AsyncParsableCommand {
             fps: fps,
             seed: seed ?? 42,
             variant: variant,
+            negativePrompt: negativePrompt,
+            inferenceSteps: a2vSteps,
+            videoCFGGuidanceScale: videoCFGGuidanceScale,
+            audioToVideoGuidanceScale: a2vGuidanceScale,
+            audioCFGGuidanceScale: audioCFGGuidanceScale,
+            videoToAudioGuidanceScale: v2aGuidanceScale,
             sourceImageURL: sourceImageURL,
             imageStrength: imageStrength,
             endImageURL: endImageURL,
@@ -441,6 +549,115 @@ struct VideoGenerate: AsyncParsableCommand {
         print(outputURL.path)
     }
 
+    private func runNativeAudioToVideoGenerate(
+        prompt: String,
+        negativePrompt: String?,
+        audioURL: URL,
+        audioStartTime: Double,
+        width: Int,
+        height: Int,
+        numFrames: Int,
+        fps: Int,
+        seed: Int,
+        inferenceSteps: Int,
+        a2vGuidanceScale: Float,
+        videoCFGGuidanceScale: Float,
+        sourceImageURL: URL?,
+        imageStrength: Float,
+        endImageURL: URL?,
+        endImageStrength: Float,
+        modelRoot: URL,
+        outputURL: URL
+    ) async throws {
+        let endToEndStart = videoMonotonicSeconds()
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        if !quiet {
+            CLIStderr.write("Engine: native LTX 2.3 A2Vid\n")
+            CLIStderr.write("Model root: \(modelRoot.path)\n")
+            CLIStderr.write(
+                "Mode: \(sourceImageURL == nil ? "audio-to-video" : "audio-and-image-to-video")\n"
+            )
+            CLIStderr.write("Source audio: \(audioURL.path) at \(audioStartTime)s\n")
+            CLIStderr.write("Loading LTX 2.3 dev + distilled-LoRA model...\n")
+        }
+
+        let generator = LTXUnifiedAVGenerator()
+        do {
+            let loadTimings: LTXLoadTimings
+            if isLTX23FullModelRoot(modelRoot) {
+                loadTimings = try await generator.loadFull(modelRoot: modelRoot)
+            } else {
+                loadTimings = try await generator.loadAudioToVideo(modelRoot: modelRoot)
+            }
+            if !quiet {
+                CLIStderr.write("Running guided stage 1 and distilled-LoRA stage 2...\n")
+            }
+            let result = try await generator.generateAudioToVideo(
+                options: LTXAudioToVideoGenerationOptions(
+                    prompt: prompt,
+                    negativePrompt: negativePrompt ?? LTXAudioToVideoGenerationOptions.defaultNegativePrompt,
+                    audioURL: audioURL,
+                    audioStartTime: audioStartTime,
+                    width: width,
+                    height: height,
+                    numFrames: numFrames,
+                    fps: fps,
+                    seed: seed,
+                    inferenceSteps: inferenceSteps,
+                    guidance: LTXAudioToVideoGuidance(
+                        classifierFreeScale: videoCFGGuidanceScale,
+                        audioToVideoScale: a2vGuidanceScale
+                    ),
+                    sourceImageURL: sourceImageURL,
+                    imageStrength: imageStrength,
+                    endImageURL: endImageURL,
+                    endImageStrength: endImageStrength
+                )
+            )
+            let unloadStart = videoMonotonicSeconds()
+            await generator.unload()
+            let unloadSeconds = videoMonotonicSeconds() - unloadStart
+
+            if !quiet {
+                CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
+                CLIStderr.write("Writing MP4 with the original source-audio segment...\n")
+            }
+            let writeStart = videoMonotonicSeconds()
+            try LTXVideoMP4Writer.writeMP4(
+                frames: result.frames,
+                fps: fps,
+                to: outputURL,
+                sourceAudio: result.sourceAudio
+            )
+            guard await mediaHasAudioTrack(at: outputURL) else {
+                throw ValidationError("A2Vid output has no audio track at \(outputURL.path)")
+            }
+            let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
+            try emitLTXVideoTimingReport(
+                LTXVideoTimingReport(
+                    mode: "audio-to-video",
+                    modelRoot: modelRoot.path,
+                    residentModelReused: false,
+                    load: loadTimings,
+                    generation: result.timings,
+                    unloadSeconds: unloadSeconds,
+                    mp4WriteSeconds: mp4WriteSeconds,
+                    totalSeconds: videoMonotonicSeconds() - endToEndStart
+                ),
+                printToStandardError: timings,
+                outputPath: timingsOutput
+            )
+        } catch {
+            await generator.unload()
+            throw error
+        }
+
+        if !quiet {
+            CLIStderr.write("Saved: \(outputURL.path)\n")
+        }
+        print(outputURL.path)
+    }
+
     private func runNativeGenerate(
         prompt: String,
         width: Int,
@@ -449,6 +666,12 @@ struct VideoGenerate: AsyncParsableCommand {
         fps: Int,
         seed: Int,
         variant: LTXVideoVariant,
+        negativePrompt: String?,
+        inferenceSteps: Int,
+        videoCFGGuidanceScale: Float,
+        audioToVideoGuidanceScale: Float,
+        audioCFGGuidanceScale: Float,
+        videoToAudioGuidanceScale: Float,
         sourceImageURL: URL?,
         imageStrength: Float,
         endImageURL: URL?,
@@ -457,6 +680,13 @@ struct VideoGenerate: AsyncParsableCommand {
         outputURL: URL
     ) async throws {
         let rootURL = URL(fileURLWithPath: modelRoot).standardizedFileURL
+        if variant == .unifiedAV,
+           isLTX23AudioToVideoModelRoot(rootURL),
+           !isLTX23FullModelRoot(rootURL) {
+            throw ValidationError(
+                "This legacy A2Vid root has no vocoder for generated audio. Pull \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
+            )
+        }
         try validateNativeModelRoot(rootURL)
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
@@ -514,36 +744,59 @@ struct VideoGenerate: AsyncParsableCommand {
             }
 
         case .unifiedAV:
+            let endToEndStart = videoMonotonicSeconds()
             if !quiet {
                 CLIStderr.write("Loading native unified AV model...\n")
             }
             let generator = LTXUnifiedAVGenerator()
             do {
-                try await generator.load(modelRoot: rootURL)
+                let loadTimings: LTXLoadTimings
+                if isLTX23FullModelRoot(rootURL) {
+                    loadTimings = try await generator.loadFull(modelRoot: rootURL)
+                } else {
+                    loadTimings = try await generator.load(modelRoot: rootURL)
+                }
                 if !quiet {
-                    CLIStderr.write("Running native unified AV denoising + decode...\n")
+                    let lane = isLTX23FullModelRoot(rootURL)
+                        ? "guided dev stage 1 + distilled-LoRA stage 2"
+                        : "standalone distilled two-stage"
+                    CLIStderr.write("Running \(lane) unified AV denoising + decode...\n")
                 }
                 let result = try await generator.generate(
                     options: LTXUnifiedAVGenerationOptions(
                         prompt: prompt,
+                        negativePrompt: negativePrompt
+                            ?? LTXUnifiedAVGenerationOptions.defaultNegativePrompt,
                         width: width,
                         height: height,
                         numFrames: numFrames,
                         fps: fps,
                         seed: seed,
+                        inferenceSteps: inferenceSteps,
+                        videoGuidance: LTXMultiModalGuidance(
+                            classifierFreeScale: videoCFGGuidanceScale,
+                            modalityScale: audioToVideoGuidanceScale
+                        ),
+                        audioGuidance: LTXMultiModalGuidance(
+                            classifierFreeScale: audioCFGGuidanceScale,
+                            modalityScale: videoToAudioGuidanceScale
+                        ),
                         sourceImageURL: sourceImageURL,
                         imageStrength: imageStrength,
                         endImageURL: endImageURL,
                         endImageStrength: endImageStrength
                     )
                 )
+                let unloadStart = videoMonotonicSeconds()
                 await generator.unload()
+                let unloadSeconds = videoMonotonicSeconds() - unloadStart
 
                 if !quiet {
                     CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
                     CLIStderr.write("Audio waveform shape: \(shapeString(result.audioWaveform.shape))\n")
                     CLIStderr.write("Writing MP4 with audio...\n")
                 }
+                let writeStart = videoMonotonicSeconds()
                 try LTXVideoMP4Writer.writeMP4(
                     frames: result.frames,
                     fps: fps,
@@ -555,6 +808,21 @@ struct VideoGenerate: AsyncParsableCommand {
                 guard await mediaHasAudioTrack(at: outputURL) else {
                     throw ValidationError("Unified AV output has no audio track at \(outputURL.path)")
                 }
+                let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
+                try emitLTXVideoTimingReport(
+                    LTXVideoTimingReport(
+                        mode: isLTX23FullModelRoot(rootURL) ? "full-unified-av" : "standalone-distilled-unified-av",
+                        modelRoot: rootURL.path,
+                        residentModelReused: false,
+                        load: loadTimings,
+                        generation: result.timings,
+                        unloadSeconds: unloadSeconds,
+                        mp4WriteSeconds: mp4WriteSeconds,
+                        totalSeconds: videoMonotonicSeconds() - endToEndStart
+                    ),
+                    printToStandardError: timings,
+                    outputPath: timingsOutput
+                )
             } catch {
                 await generator.unload()
                 throw error
@@ -579,7 +847,7 @@ struct VideoGenerate: AsyncParsableCommand {
         let input = VideoGenerationPreflightInput(
             prompt: prompt,
             outputURL: outputURL,
-            model: model,
+            model: resolvedRequestedModel,
             variant: variant,
             modelRoot: modelRoot,
             width: width,
@@ -588,6 +856,14 @@ struct VideoGenerate: AsyncParsableCommand {
             duration: duration,
             fps: fps,
             seed: seed,
+            negativePrompt: negativePrompt,
+            audio: audio,
+            audioStartTime: audioStartTime,
+            a2vGuidanceScale: a2vGuidanceScale,
+            videoCFGGuidanceScale: videoCFGGuidanceScale,
+            audioCFGGuidanceScale: audioCFGGuidanceScale,
+            v2aGuidanceScale: v2aGuidanceScale,
+            a2vSteps: a2vSteps,
             image: image,
             imageStrength: imageStrength,
             endImage: endImage,
@@ -626,7 +902,7 @@ struct VideoGenerate: AsyncParsableCommand {
             "--output",
             outputURL.path,
             "--model",
-            model,
+            resolvedRequestedModel,
             "--variant",
             variant.rawValue,
             "--width",
@@ -644,6 +920,21 @@ struct VideoGenerate: AsyncParsableCommand {
         if let seed {
             args += ["--seed", String(seed)]
         }
+        if let negativePrompt {
+            args += ["--negative-prompt", negativePrompt]
+        }
+        if audio != nil || variant == .unifiedAV {
+            args += [
+                "--a2v-guidance-scale", String(a2vGuidanceScale),
+                "--video-cfg-guidance-scale", String(videoCFGGuidanceScale),
+                "--audio-cfg-guidance-scale", String(audioCFGGuidanceScale),
+                "--v2a-guidance-scale", String(v2aGuidanceScale),
+                "--a2v-steps", String(a2vSteps),
+            ]
+        }
+        if let audio {
+            args += ["--audio", audio, "--audio-start-time", String(audioStartTime)]
+        }
         if let modelRoot {
             args += ["--model-root", modelRoot]
         }
@@ -655,6 +946,12 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if quiet {
             args.append("--quiet")
+        }
+        if timings {
+            args.append("--timings")
+        }
+        if let timingsOutput {
+            args += ["--timings-output", timingsOutput]
         }
         return args
     }
@@ -673,7 +970,7 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
         return
     }
 
-    if isLTX23SplitModelRoot(rootURL) {
+    if isLTX23FullModelRoot(rootURL) || isLTX23SplitModelRoot(rootURL) {
         return
     }
 
@@ -713,11 +1010,43 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
     }
 }
 
+func validateNativeAudioToVideoModelRoot(
+    _ rootURL: URL,
+    fileManager: FileManager = .default
+) throws {
+    let root = rootURL.resolvingSymlinksInPath()
+    var isDirectory: ObjCBool = false
+    guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory),
+          isDirectory.boolValue else {
+        throw ValidationError("A2Vid model root directory not found: \(root.path)")
+    }
+
+    let required = [
+        "split_model.json",
+        "config.json",
+        "connector.safetensors",
+        "transformer-dev.safetensors",
+        "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+        "vae_decoder.safetensors",
+        "vae_encoder.safetensors",
+        "audio_vae.safetensors",
+        "spatial_upscaler_x2_v1_1.safetensors",
+    ]
+    for relativePath in required {
+        let file = root.appendingPathComponent(relativePath, isDirectory: false)
+        guard fileManager.fileExists(atPath: file.path) else {
+            throw ValidationError(
+                "Missing required LTX 2.3 A2Vid file: \(file.path). Pull \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
+            )
+        }
+    }
+}
+
 private func shapeString(_ shape: [Int]) -> String {
     "[" + shape.map(String.init).joined(separator: ", ") + "]"
 }
 
-private func resolveVideoModelRoot(
+func resolveVideoModelRoot(
     explicitModelRoot: String?,
     requestedModel: String,
     variant: LTXVideoVariant,
@@ -733,6 +1062,10 @@ private func resolveVideoModelRoot(
         if FileManager.default.fileExists(atPath: explicitModelURL.path)
             || trimmedModel.lowercased() != ModelResolver.ModelID.ltxVideoAV.rawValue
         {
+            if let modelID = ModelResolver.ModelID(rawValue: trimmedModel.lowercased()),
+               let installed = ModelResolver().resolveIfPresent(modelID) {
+                return installed.rootURL
+            }
             do {
                 let resolved = try await ManagedModelResolver.resolveForRuntime(
                     requestedModel: trimmedModel,
@@ -782,10 +1115,14 @@ private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
             ]
         case .unifiedAV:
             return [
+                zeroModels.appendingPathComponent("video-ltx23-full-mlx", isDirectory: true).path,
+                zeroModels.appendingPathComponent("video-ltx23-a2vid-mlx", isDirectory: true).path,
                 zeroModels.appendingPathComponent("video-ltx-av", isDirectory: true).path,
                 zeroModels.appendingPathComponent("video-ltx23-av-mlx", isDirectory: true).path,
                 zeroModels.appendingPathComponent("LTX-2-mlx-av", isDirectory: true).path,
                 home.appendingPathComponent("models/video-ltx-av", isDirectory: true).path,
+                home.appendingPathComponent("models/video-ltx23-full-mlx", isDirectory: true).path,
+                home.appendingPathComponent("models/video-ltx23-a2vid-mlx", isDirectory: true).path,
                 home.appendingPathComponent("models/video-ltx23-av-mlx", isDirectory: true).path,
                 home.appendingPathComponent("models/LTX-2-mlx-av", isDirectory: true).path,
                 home.appendingPathComponent("Models/LTX-2-mlx-av", isDirectory: true).path,

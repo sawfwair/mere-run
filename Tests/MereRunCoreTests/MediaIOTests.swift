@@ -226,6 +226,44 @@ final class MediaIOTests: XCTestCase {
         XCTAssertEqual(decoded, expected)
     }
 
+    func testAudioProbeAndSegmentDecodeStayWithinRequestedRange() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-segment-\(UUID().uuidString)")
+            .appendingPathExtension("wav")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let sampleRate = 8_000
+        let samples = (0..<(sampleRate * 2)).flatMap { index -> [Float] in
+            let value = sin(Float(index) * 2 * .pi * 220 / Float(sampleRate)) * 0.25
+            return [value, -value]
+        }
+        try MediaAudioIO.writeFloatWAV(
+            samples: samples,
+            sampleRate: sampleRate,
+            channels: 2,
+            to: tempURL
+        )
+
+        let metadata = try MediaAudioIO.probe(tempURL)
+        XCTAssertEqual(metadata.sampleRate, sampleRate)
+        XCTAssertEqual(metadata.channelCount, 2)
+        XCTAssertEqual(metadata.frameCount, Int64(sampleRate * 2))
+        XCTAssertEqual(metadata.durationSeconds, 2, accuracy: 1e-6)
+
+        let segment = try MediaAudioIO.decodeSegment(
+            tempURL,
+            startTime: 0.5,
+            duration: 0.25,
+            targetSampleRate: 16_000,
+            channels: 2
+        )
+        XCTAssertEqual(segment.sampleRate, 16_000)
+        XCTAssertEqual(segment.channelCount, 2)
+        XCTAssertTrue(segment.isInterleaved)
+        XCTAssertEqual(segment.samples.count / 2, 4_000, accuracy: 2)
+        XCTAssertGreaterThan(segment.samples.map(abs).max() ?? 0, 0.1)
+    }
+
     func testAudioTranscodeWritesRequestedContainer() throws {
         guard isExecutableAvailable(MediaTool.ffmpegPath) else {
             throw XCTSkip("ffmpeg is not available")

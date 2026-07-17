@@ -178,11 +178,12 @@ is kept separate from BWE actually being present in the installed checkpoint.
 Use it to separate waveform/vocoder problems from mux or AAC encoding
 differences.
 
-`video-ltx23-av-mlx` is the managed LTX 2.3 MLX split checkpoint for the
-high-quality `unified-av` path. It is validated as a split model root, uses the
-native `unified-av` split loader, and can be scanned by the comparison script
-after generating a sample. The Unsloth LTX 2.3 GGUF checkpoints are a separate
-quantized runner shape, not a drop-in native MLX model root.
+`video-ltx23-full-mlx` is the managed LTX 2.3 dev + distilled-LoRA checkpoint
+for the high-quality two-stage `unified-av` and A2Vid paths. The standalone
+`video-ltx23-av-mlx` distilled split remains the fast draft lane. Both can be
+scanned by the comparison script after generating a sample. The Unsloth LTX 2.3
+GGUF checkpoints are a separate quantized runner shape, not a drop-in native
+MLX model root.
 
 ## End-to-end smoke tests
 

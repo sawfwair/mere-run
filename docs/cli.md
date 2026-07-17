@@ -75,7 +75,7 @@ are:
 - Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-wan22-ti2v-5b-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`
 
 For subsystem-specific implementation guides, see:
 
@@ -1431,27 +1431,46 @@ Key options:
 - `--fps`
 - `--seed`
 - `--steps`, `--guidance-scale`, `--shift`, `--negative-prompt` for Wan2.2
+- `--audio`: source audio path; automatically selects native LTX 2.3 A2Vid
+- `--audio-start-time`: source segment offset in seconds (default `0`)
+- `--a2v-guidance-scale`: audio-modality guidance (default `3`)
+- `--video-cfg-guidance-scale`: full/A2Vid video text CFG (default `3`)
+- `--audio-cfg-guidance-scale`: full unified-AV audio text CFG (default `7`)
+- `--v2a-guidance-scale`: full unified-AV video-to-audio modality guidance
+  (default `3`)
+- `--a2v-steps`: full/dev stage-one steps (default `30`)
+- `--negative-prompt`: also overrides the official A2Vid negative prompt
 - `--image`
 - `--image-strength`
 - `--end-image`
 - `--end-image-strength`
 - `--preflight`
 - `--json`: only with `--preflight`
+- `--timings`: native LTX 2.3 unified-AV/A2Vid phase timings on stderr
+- `--timings-output`: write those timings as JSON
 - `--quiet`
 
 Environment:
 
 - `MERERUN_VIDEO_LTX_MODEL_ROOT`
 - `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` for an external
-  `mlx-community/gemma-3-12b-it-4bit` checkout used by `video-ltx23-av-mlx`
+  `mlx-community/gemma-3-12b-it-4bit` checkout used by `video-ltx23-av-mlx`,
+  `video-ltx23-full-mlx`, and the legacy `video-ltx23-a2vid-mlx`
 
 For `--variant unified-av`, keep `--fps 24` unless you are deliberately making
 a retimed clip. LTX 2.3 unified AV is trained around 24 fps; using 8 fps can
 make generated motion look slow while audio remains normal. Use `--duration`
 for clip length so the CLI can choose the nearest legal `8n+1` frame count.
 Use the default `distilled` lane for faster video-only drafts. Use
-`--variant unified-av --model video-ltx23-av-mlx` for the current high-quality
+`--variant unified-av --model video-ltx23-full-mlx` for the current high-quality
 synchronized audio/video lane.
+
+With `--audio`, the command resolves `video-ltx23-full-mlx` automatically.
+The full/dev transformer performs guided half-resolution denoising with frozen
+source-audio latents; after x2 upsampling, the official distilled LoRA is fused
+for the four-step refinement. The original selected audio segment is muxed into
+the MP4. Short inputs and incompatible models fail explicitly; there is no
+soundtrack-only fallback.
 
 For native Wan2.2 image-to-video, pass
 `--model video-wan22-ti2v-5b-mlx --image <frame>`. Wan dimensions are snapped
@@ -1464,8 +1483,9 @@ Preflight mode:
 - `--preflight --json` prints a structured plan without loading MLX, loading a
   video model, creating directories, or writing an MP4.
 - the report includes model availability, output path state, source/end image
-  state, resolved dimensions, resolved frame count/duration, seed, input mode,
-  unified AV audio expectation, diagnostics, and declarative actions.
+  and audio state, resolved dimensions, resolved frame count/duration, source
+  audio offset, seed, input mode, whether audio conditions generation, whether
+  the source soundtrack is preserved, diagnostics, and declarative actions.
 - blockers such as a missing model root, missing image, invalid frame rate, or
   `--end-image` without `--image` produce JSON and a nonzero exit.
 - notes such as dimension/frame snapping remain machine-readable so a UI can
@@ -1502,10 +1522,18 @@ swift run mere.run video generate \
 swift run mere.run video generate \
   "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \
   --variant unified-av \
-  --model video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
   --duration 15 \
   --fps 24 \
   --output ./dialogue-score-sfx.mp4
+
+swift run mere.run video generate \
+  "a kinetic live performance, camera orbiting the vocalist" \
+  --audio ./song.wav \
+  --audio-start-time 30 \
+  --duration 5 \
+  --image ./performer.png \
+  --output ./performance.mp4
 
 swift run mere.run video generate \
   "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
@@ -1516,6 +1544,27 @@ swift run mere.run video generate \
   --num-frames 65 \
   --output ./car-start-to-end.mp4
 ```
+
+### `mere.run video session`
+
+Keep a standalone distilled or full dev LTX 2.3 runtime resident while
+processing serial JSONL generation requests:
+
+```bash
+printf '%s\n' \
+  '{"id":"draft-1","prompt":"a fox runs across snow","output":"./draft-1.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  '{"id":"draft-2","prompt":"a fox runs across snow","output":"./draft-2.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  | swift run mere.run video session --model video-ltx23-av-mlx
+```
+
+Each stdin line produces one typed result or error line on stdout. A request
+requires `prompt` and `output`; it can override `width`, `height`, `num_frames`,
+`fps`, `seed`, `image`, `image_strength`, `end_image`, and
+`end_image_strength`. Successful responses include phase timings and
+`resident_model_reused`. Pass `--model video-ltx23-full-mlx` for the two-stage
+quality lane. The full session preserves the dev checkpoint for Stage 1 and
+activates its resident distilled LoRA only during Stage 2, so repeat requests
+do not reload or mutate the base transformer.
 
 ### `mere.run video export-latents`
 

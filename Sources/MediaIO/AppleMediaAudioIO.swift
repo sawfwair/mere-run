@@ -4,17 +4,25 @@ import Foundation
 @preconcurrency import AVFoundation
 
 enum AppleMediaAudioIO {
+    static func probe(_ url: URL) throws -> MediaAudioMetadata {
+        let file = try open(url)
+        let format = file.processingFormat
+        let sampleRate = Int(format.sampleRate.rounded())
+        let frameCount = Int64(file.length)
+        return MediaAudioMetadata(
+            sampleRate: sampleRate,
+            channelCount: Int(format.channelCount),
+            frameCount: frameCount,
+            durationSeconds: Double(frameCount) / Double(max(1, sampleRate))
+        )
+    }
+
     static func decode(
         _ url: URL,
         targetSampleRate: Int,
         channels: Int
     ) throws -> MediaAudioBuffer {
-        let file: AVAudioFile
-        do {
-            file = try AVAudioFile(forReading: url)
-        } catch {
-            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
-        }
+        let file = try open(url)
 
         let sourceFormat = file.processingFormat
         let frameCount = AVAudioFrameCount(file.length)
@@ -30,6 +38,68 @@ enum AppleMediaAudioIO {
             throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
         }
 
+        return try convert(
+            buffer,
+            sourceFormat: sourceFormat,
+            targetSampleRate: targetSampleRate,
+            channels: channels,
+            url: url
+        )
+    }
+
+    static func decodeSegment(
+        _ url: URL,
+        startTime: Double,
+        duration: Double,
+        targetSampleRate: Int,
+        channels: Int
+    ) throws -> MediaAudioBuffer {
+        let file = try open(url)
+        let sourceFormat = file.processingFormat
+        let startFrame = AVAudioFramePosition((startTime * sourceFormat.sampleRate).rounded(.down))
+        guard startFrame < file.length else {
+            throw MediaIOError.audioDecodeFailed(url, "Start time is beyond the end of the audio stream.")
+        }
+        let requestedFrames = AVAudioFramePosition((duration * sourceFormat.sampleRate).rounded(.up))
+        let availableFrames = file.length - startFrame
+        let frameCount = AVAudioFrameCount(min(requestedFrames, availableFrames))
+        guard frameCount > 0 else {
+            throw MediaIOError.audioDecodeFailed(url, "The requested audio interval is empty.")
+        }
+
+        file.framePosition = startFrame
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
+            throw MediaIOError.audioDecodeFailed(url, "Failed to allocate audio segment buffer.")
+        }
+        do {
+            try file.read(into: buffer, frameCount: frameCount)
+        } catch {
+            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
+        }
+        return try convert(
+            buffer,
+            sourceFormat: sourceFormat,
+            targetSampleRate: targetSampleRate,
+            channels: channels,
+            url: url
+        )
+    }
+
+    private static func open(_ url: URL) throws -> AVAudioFile {
+        do {
+            return try AVAudioFile(forReading: url)
+        } catch {
+            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
+        }
+    }
+
+    private static func convert(
+        _ buffer: AVAudioPCMBuffer,
+        sourceFormat: AVAudioFormat,
+        targetSampleRate: Int,
+        channels: Int,
+        url: URL
+    ) throws -> MediaAudioBuffer {
         let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: Double(max(1, targetSampleRate)),
@@ -55,7 +125,7 @@ enum AppleMediaAudioIO {
             var conversionError: NSError?
             converter.convert(to: converted, error: &conversionError) { _, outStatus in
                 if didConvert {
-                    outStatus.pointee = .noDataNow
+                    outStatus.pointee = .endOfStream
                     return nil
                 }
                 didConvert = true

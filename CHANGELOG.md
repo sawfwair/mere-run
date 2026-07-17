@@ -8,6 +8,19 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added native LTX phase timing reports and a typed JSONL `video session`
+  worker that keeps the standalone distilled LTX 2.3 model resident across
+  serial synchronized-AV generations while explicitly rejecting the mutable
+  full dev + distilled-LoRA lifecycle.
+
+- added fully native LTX 2.3 source-audio-to-video generation through
+  `video generate --audio`, including exact 16 kHz stereo mel conditioning,
+  the audio VAE encoder, frozen-audio multimodal guidance, full/dev stage one,
+  streaming distilled-LoRA stage two, the shared managed
+  `video-ltx23-full-mlx` bundle for both unified AV and A2Vid, compatibility
+  resolution for the former `video-ltx23-a2vid-mlx` ID, structured preflight reporting, and
+  original source-segment MP4 muxing without a soundtrack-only fallback.
+
 - added managed `text-chat-bonsai-27b-1bit` and
   `text-chat-bonsai-27b-2bit` support for Prism ML's packed binary and ternary
   dense Qwen3.6 27B vision/reasoning checkpoints, including exact revision

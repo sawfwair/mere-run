@@ -100,6 +100,8 @@ from the runtime catalog used by `mere.run model list`,
 | `sfx` | `sfx-mmaudio-large-44k-v2` |
 | `video` | `video-ltx-av` |
 | `video` | `video-ltx23-av-mlx` |
+| `video` | `video-ltx23-full-mlx` |
+| `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
@@ -140,7 +142,7 @@ validates all configured models before downloading any; both accept the same
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
-| `video-ltx-av`, `video-ltx23-av-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX path also installs a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
+| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -638,12 +640,47 @@ separate video VAE/audio VAE/vocoder files, and the LTX 2.3 upscalers.
 conditioning. Set `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` only when pointing at an
 external `mlx-community/gemma-3-12b-it-4bit` checkout.
 
-The native Swift `unified-av` runtime has a split loader for this layout,
-including the LTX 2.3 V2 connector, unified AV transformer, split video/audio
-VAE files, BWE vocoder, and MLX-native tensor layouts. Use this model for the
-current high-quality synchronized audio/video lane.
+The native Swift runtime uses this standalone distilled transformer for the
+fast video-only draft lane. It can still run synchronized AV when explicitly
+selected with `--variant unified-av`, but the canonical two-stage quality path
+uses `video-ltx23-full-mlx`.
 The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane
 and is not loaded by the native MLX video runtime.
+
+### `video-ltx23-full-mlx`
+
+The full LTX 2.3 quality root is:
+
+```text
+.../models/video-ltx23-full-mlx
+```
+
+It pulls the full/dev transformer, the official rank-384 distilled LoRA,
+connector, audio VAE, BWE vocoder, video VAE encoder/decoder, and x2 spatial
+upscaler from the same immutable `dgrauet/ltx-2.3-mlx` revision. It does not
+duplicate the standalone distilled transformer or pull unrelated x1.5 and
+temporal upscalers. Hugging Face cache objects are shared with
+`video-ltx23-av-mlx` when both models are installed. The hidden Gemma 3
+companion is shared as well.
+
+The same bundle drives both official two-stage contracts. Unified AV jointly
+denoises guided video and audio latents in stage one, then refines both after
+LoRA fusion. A2Vid encodes source audio and freezes those audio latents through
+both stages; the original decoded source segment—not VAE-decoded audio—is muxed
+into the MP4.
+
+### `video-ltx23-a2vid-mlx`
+
+This deprecated compatibility ID preserves existing A2Vid installs and scripts:
+
+```text
+.../models/video-ltx23-a2vid-mlx
+```
+
+Its legacy narrow manifest omits the vocoder, so it can run source-audio A2Vid
+but not generated-audio unified AV. Requests for either the legacy ID or the
+new full ID resolve to an already-installed compatible root when possible. New
+pulls should use `video-ltx23-full-mlx`.
 
 ### `video-wan22-ti2v-5b-mlx`
 

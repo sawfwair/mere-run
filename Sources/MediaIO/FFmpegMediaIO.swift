@@ -1,6 +1,27 @@
 import Foundation
 
 enum FFmpegMediaIO {
+    private struct AudioProbe: Decodable {
+        struct Stream: Decodable {
+            let sampleRate: String
+            let channels: Int
+            let duration: String?
+
+            enum CodingKeys: String, CodingKey {
+                case sampleRate = "sample_rate"
+                case channels
+                case duration
+            }
+        }
+
+        struct Format: Decodable {
+            let duration: String?
+        }
+
+        let streams: [Stream]
+        let format: Format
+    }
+
     struct FrameAdmissionPlan: Equatable, Sendable {
         let frameCount: Int
         let maximumWidth: Int
@@ -98,6 +119,83 @@ enum FFmpegMediaIO {
             let samples = result.stdout.withUnsafeBytes { raw -> [Float] in
                 let floats = raw.bindMemory(to: Float.self)
                 return Array(floats)
+            }
+            return MediaAudioBuffer(
+                samples: samples,
+                sampleRate: sampleRate,
+                channelCount: channelCount,
+                isInterleaved: true
+            )
+        } catch let error as MediaIOError {
+            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
+        } catch {
+            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
+        }
+    }
+
+    static func probeAudio(_ url: URL) throws -> MediaAudioMetadata {
+        do {
+            let result = try FFmpegProcess.run(
+                tool: MediaTool.ffprobePath,
+                arguments: [
+                    "-v", "error",
+                    "-select_streams", "a:0",
+                    "-show_entries", "stream=sample_rate,channels,duration:format=duration",
+                    "-of", "json",
+                    url.path
+                ]
+            )
+            let probe = try JSONDecoder().decode(AudioProbe.self, from: result.stdout)
+            guard let stream = probe.streams.first,
+                  let sampleRate = Int(stream.sampleRate),
+                  sampleRate > 0,
+                  stream.channels > 0,
+                  let duration = Double(stream.duration ?? probe.format.duration ?? ""),
+                  duration.isFinite,
+                  duration > 0 else {
+                throw MediaIOError.audioDecodeFailed(url, "ffprobe returned incomplete audio metadata.")
+            }
+            return MediaAudioMetadata(
+                sampleRate: sampleRate,
+                channelCount: stream.channels,
+                frameCount: Int64((duration * Double(sampleRate)).rounded()),
+                durationSeconds: duration
+            )
+        } catch let error as MediaIOError {
+            throw error
+        } catch {
+            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
+        }
+    }
+
+    static func decodeAudioSegment(
+        _ url: URL,
+        startTime: Double,
+        duration: Double,
+        targetSampleRate: Int,
+        channels: Int
+    ) throws -> MediaAudioBuffer {
+        let sampleRate = max(1, targetSampleRate)
+        let channelCount = max(1, channels)
+        do {
+            let result = try FFmpegProcess.run(
+                tool: MediaTool.ffmpegPath,
+                arguments: [
+                    "-v", "error",
+                    "-i", url.path,
+                    "-ss", String(startTime),
+                    "-t", String(duration),
+                    "-ac", "\(channelCount)",
+                    "-ar", "\(sampleRate)",
+                    "-f", "f32le",
+                    "pipe:1"
+                ]
+            )
+            let samples = result.stdout.withUnsafeBytes { raw -> [Float] in
+                Array(raw.bindMemory(to: Float.self))
+            }
+            guard !samples.isEmpty else {
+                throw MediaIOError.audioDecodeFailed(url, "The requested audio interval is empty.")
             }
             return MediaAudioBuffer(
                 samples: samples,

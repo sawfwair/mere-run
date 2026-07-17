@@ -51,7 +51,7 @@ current flags.
 | Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Bonsai 27B binary/ternary vision chat; code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
-| Video and worlds | `video generate`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, Wan 2.2 TI2V, and a warm DreamX causal world session with camera-conditioned transitions |
+| Video and worlds | `video generate`, `video session`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, and a warm DreamX causal world session with camera-conditioned transitions |
 | Music and sound | `music analyze`, `generate`, `realtime`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
 | Speech | `speech synthesize`, `speech transcribe`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 ASR, and Parakeet transcription |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
@@ -657,14 +657,24 @@ swift run mere.run video generate \
   --output ./clip-directed.mp4
 
 # Generate synchronized LTX 2.3 audio/video
-swift run mere.run model pull video-ltx23-av-mlx --accept-model-license
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music and subtle city ambience" \
   --variant unified-av \
-  --model video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
   --duration 15 \
   --fps 24 \
   --output ./clip-av.mp4
+
+# Condition video on a selected source-audio segment and preserve that soundtrack
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
+swift run mere.run video generate \
+  "a kinetic live performance, camera orbiting the vocalist" \
+  --audio ./song.wav \
+  --audio-start-time 30 \
+  --duration 5 \
+  --image ./performer.png \
+  --output ./performance.mp4
 ```
 
 ## Command tree
@@ -679,7 +689,7 @@ The public CLI is modality-first:
 - `mere.run vision { caption, inspect, ground, segment, track, track-live, pose, flow, depth-video, geometry, geometry-multiview, image-to-3d, image-to-3d-trellis2, image-to-3d-multiview, ocr }`
 - `mere.run music { analyze, generate, realtime, transcribe }`
 - `mere.run sfx { ae, clap, condition, generate, video }`
-- `mere.run video { generate, export-latents }`
+- `mere.run video { generate, session, export-latents }`
 - `mere.run world serve`
 - `mere.run run { list, inspect }`
 - `mere.run model { list, pull, remove, info, capabilities, runtime, benchmark, repair-manifests }`

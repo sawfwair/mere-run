@@ -509,3 +509,12 @@ These are quiet by default and are intended for troubleshooting deeper runtime p
 - `MERERUN_LORA_DEBUG=1`
 - `MERERUN_VIDEO_LTX_DEBUG_DENOISE=1`
 - `MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX=/tmp/mererun-ltx`
+- `MERERUN_VIDEO_LTX_A2VID_STAGE1_NOISE_PATH=/tmp/stage1-noise.npy`
+- `MERERUN_VIDEO_LTX_A2VID_STAGE2_NOISE_PATH=/tmp/stage2-noise.npy`
+
+For native LTX 2.3 A2Vid parity work, `MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX`
+also writes the encoded audio latents, injected noise, Stage-1 output, upscaled
+latents, Stage-2 input/output, representative post-LoRA weights, and per-forward
+AdaLN/RoPE plus first-block sublayer tensors. Set both
+`MERERUN_VIDEO_LTX_A2VID_*_NOISE_PATH` variables to replay `.npy` noise tensors
+exported by the pinned upstream MLX pipeline.

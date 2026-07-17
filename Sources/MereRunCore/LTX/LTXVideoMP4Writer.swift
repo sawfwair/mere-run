@@ -102,6 +102,46 @@ public enum LTXVideoMP4Writer {
         try writeVideoOnly(frames: frames, fps: fps, to: outputURL)
     }
 
+    /// Writes generated frames with a decoded source-audio segment. This path
+    /// never routes the soundtrack through the LTX audio VAE or vocoder.
+    public static func writeMP4(
+        frames: MLXArray,
+        fps: Int,
+        to outputURL: URL,
+        sourceAudio: MediaAudioBuffer
+    ) throws {
+        let fm = FileManager.default
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let nonce = UUID().uuidString
+        let tempVideoURL = tmpDir.appendingPathComponent("mererun-video-\(nonce)-video.mp4")
+        let tempAudioURL = tmpDir.appendingPathComponent("mererun-video-\(nonce)-source.wav")
+
+        do {
+            try writeVideoOnly(frames: frames, fps: fps, to: tempVideoURL)
+            var interleaved = try interleavedSamples(sourceAudio)
+            try validateAndClamp(samples: &interleaved)
+            try MediaAudioIO.writeFloatWAV(
+                samples: interleaved,
+                sampleRate: sourceAudio.sampleRate,
+                channels: sourceAudio.channelCount,
+                to: tempAudioURL
+            )
+            try mux(
+                videoURL: tempVideoURL,
+                audioURL: tempAudioURL,
+                outputURL: outputURL,
+                audioBitRate: Self.defaultAudioBitRate
+            )
+        } catch {
+            try? fm.removeItem(at: tempVideoURL)
+            try? fm.removeItem(at: tempAudioURL)
+            throw error
+        }
+
+        try? fm.removeItem(at: tempVideoURL)
+        try? fm.removeItem(at: tempAudioURL)
+    }
+
     private static func writeVideoOnly(
         frames: MLXArray,
         fps: Int,
@@ -236,6 +276,25 @@ public enum LTXVideoMP4Writer {
             }
             samples[index] = min(1.0, max(-1.0, sample))
         }
+    }
+
+    private static func interleavedSamples(_ audio: MediaAudioBuffer) throws -> [Float] {
+        guard audio.channelCount >= 1,
+              audio.samples.count.isMultiple(of: audio.channelCount) else {
+            throw WriterError.unsupportedAudioShape([audio.samples.count, audio.channelCount])
+        }
+        guard !audio.isInterleaved else {
+            return audio.samples
+        }
+
+        let frameCount = audio.samples.count / audio.channelCount
+        var result = [Float](repeating: 0, count: audio.samples.count)
+        for channel in 0..<audio.channelCount {
+            for frame in 0..<frameCount {
+                result[frame * audio.channelCount + channel] = audio.samples[channel * frameCount + frame]
+            }
+        }
+        return result
     }
 
     private static func writeWAV(

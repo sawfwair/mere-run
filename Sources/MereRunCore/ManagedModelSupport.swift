@@ -717,8 +717,22 @@ public enum ManagedModelCapabilityCatalog {
             ),
             descriptor(
                 ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
-                "LTX 2.3 MLX",
-                "Installs the split LTX 2.3 MLX audio-video checkpoint for the V2 runtime.",
+                "LTX 2.3 Distilled MLX",
+                "Installs the standalone distilled LTX 2.3 MLX checkpoint for fast video drafts.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.ltxVideo23FullMLX.rawValue,
+                "LTX 2.3 Full MLX",
+                "Installs the dev transformer, distilled LoRA, and vocoder for unified AV and A2Vid.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
+                "LTX 2.3 A2Vid MLX (compatibility)",
+                "Preserves the legacy narrow A2Vid install ID; prefer video-ltx23-full-mlx for new installs.",
                 minimum: 96,
                 recommended: 128
             ),

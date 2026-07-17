@@ -151,6 +151,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .mmaudio
             || spec?.validationKind == .ltxVideo
             || spec?.validationKind == .ltxVideo23MLX
+            || spec?.validationKind == .ltxVideo23A2VMLX
             || spec?.validationKind == .insightFaceBuffaloL
             || spec?.validationKind == .moge2
             || spec?.validationKind == .videoDepthAnything
