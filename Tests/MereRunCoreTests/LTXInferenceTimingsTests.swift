@@ -1,0 +1,37 @@
+import Foundation
+import XCTest
+@testable import MereRunCore
+
+final class LTXInferenceTimingsTests: XCTestCase {
+    func testLoadTimingsCodableRoundTrip() throws {
+        let timings = LTXLoadTimings(
+            textEncoderSeconds: 1,
+            transformerSeconds: 2,
+            videoDecoderSeconds: 3,
+            upsamplerSeconds: 4,
+            audioDecoderSeconds: 5,
+            totalSeconds: 15
+        )
+
+        let decoded = try JSONDecoder().decode(
+            LTXLoadTimings.self,
+            from: JSONEncoder().encode(timings)
+        )
+
+        XCTAssertEqual(decoded, timings)
+    }
+
+    func testGenerationTimingsDefaultToZero() {
+        let timings = LTXGenerationTimings()
+
+        XCTAssertEqual(timings.textEncodingSeconds, 0)
+        XCTAssertEqual(timings.preparationSeconds, 0)
+        XCTAssertEqual(timings.stage1DenoiseSeconds, 0)
+        XCTAssertEqual(timings.loraFusionSeconds, 0)
+        XCTAssertEqual(timings.upsampleSeconds, 0)
+        XCTAssertEqual(timings.stage2DenoiseSeconds, 0)
+        XCTAssertEqual(timings.videoDecodeSeconds, 0)
+        XCTAssertEqual(timings.audioDecodeSeconds, 0)
+        XCTAssertEqual(timings.totalSeconds, 0)
+    }
+}

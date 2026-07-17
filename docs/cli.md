@@ -1446,6 +1446,8 @@ Key options:
 - `--end-image-strength`
 - `--preflight`
 - `--json`: only with `--preflight`
+- `--timings`: native LTX 2.3 unified-AV/A2Vid phase timings on stderr
+- `--timings-output`: write those timings as JSON
 - `--quiet`
 
 Environment:
@@ -1542,6 +1544,25 @@ swift run mere.run video generate \
   --num-frames 65 \
   --output ./car-start-to-end.mp4
 ```
+
+### `mere.run video session`
+
+Keep the standalone distilled LTX 2.3 model resident while processing serial
+JSONL generation requests:
+
+```bash
+printf '%s\n' \
+  '{"id":"draft-1","prompt":"a fox runs across snow","output":"./draft-1.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  '{"id":"draft-2","prompt":"a fox runs across snow","output":"./draft-2.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  | swift run mere.run video session --model video-ltx23-av-mlx
+```
+
+Each stdin line produces one typed result or error line on stdout. A request
+requires `prompt` and `output`; it can override `width`, `height`, `num_frames`,
+`fps`, `seed`, `image`, `image_strength`, `end_image`, and
+`end_image_strength`. Successful responses include phase timings and
+`resident_model_reused`. The worker supports only `video-ltx23-av-mlx`; the
+full dev + distilled-LoRA bundle must reload after in-place LoRA fusion.
 
 ### `mere.run video export-latents`
 

@@ -8,6 +8,11 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added native LTX phase timing reports and a typed JSONL `video session`
+  worker that keeps the standalone distilled LTX 2.3 model resident across
+  serial synchronized-AV generations while explicitly rejecting the mutable
+  full dev + distilled-LoRA lifecycle.
+
 - added fully native LTX 2.3 source-audio-to-video generation through
   `video generate --audio`, including exact 16 kHz stereo mel conditioning,
   the audio VAE encoder, frozen-audio multimodal guidance, full/dev stage one,

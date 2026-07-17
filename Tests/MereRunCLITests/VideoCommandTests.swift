@@ -14,9 +14,9 @@ final class VideoCommandTests: XCTestCase {
         super.tearDown()
     }
 
-    func testVideoCommandExposesGenerateAndExportLatents() {
+    func testVideoCommandExposesGenerateExportLatentsAndSession() {
         let commandNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(commandNames, Set(["generate", "export-latents"]))
+        XCTAssertEqual(commandNames, Set(["generate", "export-latents", "session"]))
     }
 
     func testVideoGenerateParsesDefaults() throws {
@@ -37,6 +37,73 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNil(cmd.modelRoot)
         XCTAssertFalse(cmd.preflight)
         XCTAssertFalse(cmd.json)
+        XCTAssertFalse(cmd.timings)
+        XCTAssertNil(cmd.timingsOutput)
+    }
+
+    func testVideoGenerateParsesTimingOptions() throws {
+        let cmd = try VideoGenerate.parse([
+            "a cinematic drone flythrough",
+            "--timings",
+            "--timings-output", "/tmp/ltx-timings.json",
+        ])
+
+        XCTAssertTrue(cmd.timings)
+        XCTAssertEqual(cmd.timingsOutput, "/tmp/ltx-timings.json")
+    }
+
+    func testVideoGenerateRejectsTimingOptionsForUnsupportedLane() async throws {
+        let cmd = try VideoGenerate.parse([
+            "a cinematic drone flythrough",
+            "--timings",
+        ])
+
+        do {
+            try await cmd.run()
+            XCTFail("Expected timing options without unified AV or A2Vid to fail validation.")
+        } catch {
+            XCTAssertTrue(String(describing: error).contains("require --variant unified-av or --audio"))
+        }
+    }
+
+    func testVideoSessionParsesDefaults() throws {
+        let cmd = try VideoSession.parse([])
+
+        XCTAssertEqual(cmd.model, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
+        XCTAssertNil(cmd.modelRoot)
+        XCTAssertFalse(cmd.quiet)
+    }
+
+    func testVideoSessionRequestDecodesSnakeCase() throws {
+        let data = Data(
+            """
+            {
+              "id": "fox-1",
+              "prompt": "a fox runs across snow",
+              "output": "/tmp/fox.mp4",
+              "width": 512,
+              "height": 320,
+              "num_frames": 33,
+              "fps": 24,
+              "seed": 7,
+              "image_strength": 0.8,
+              "end_image_strength": 0.7
+            }
+            """.utf8
+        )
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let request = try decoder.decode(LTXVideoSessionRequest.self, from: data)
+
+        XCTAssertEqual(request.id, "fox-1")
+        XCTAssertEqual(request.prompt, "a fox runs across snow")
+        XCTAssertEqual(request.output, "/tmp/fox.mp4")
+        XCTAssertEqual(request.width, 512)
+        XCTAssertEqual(request.height, 320)
+        XCTAssertEqual(request.numFrames, 33)
+        XCTAssertEqual(request.imageStrength ?? 0, 0.8, accuracy: 0.0001)
+        XCTAssertEqual(request.endImageStrength ?? 0, 0.7, accuracy: 0.0001)
     }
 
     func testVideoGenerateParsesPreflightJSONFlags() throws {

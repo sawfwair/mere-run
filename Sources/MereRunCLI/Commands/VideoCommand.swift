@@ -15,7 +15,8 @@ struct Video: AsyncParsableCommand {
         abstract: "Generate videos with native Swift/MLX LTX pipelines.",
         subcommands: [
             VideoExportLatents.self,
-            VideoGenerate.self
+            VideoGenerate.self,
+            VideoSession.self
         ]
     )
 }
@@ -231,6 +232,12 @@ struct VideoGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
     var json: Bool = false
 
+    @Flag(name: [.customLong("timings")], help: "Print native LTX unified-AV/A2Vid phase timings to stderr.")
+    var timings: Bool = false
+
+    @Option(name: [.customLong("timings-output")], help: "Write native LTX unified-AV/A2Vid phase timings as JSON.")
+    var timingsOutput: String?
+
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
@@ -260,6 +267,12 @@ struct VideoGenerate: AsyncParsableCommand {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
             throw ValidationError("Prompt cannot be empty.")
+        }
+        let hasSourceAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        if (timings || timingsOutput != nil), variant != .unifiedAV, !hasSourceAudio {
+            throw ValidationError(
+                "--timings and --timings-output require --variant unified-av or --audio."
+            )
         }
 
         guard fps > 0 else {
@@ -556,6 +569,7 @@ struct VideoGenerate: AsyncParsableCommand {
         modelRoot: URL,
         outputURL: URL
     ) async throws {
+        let endToEndStart = videoMonotonicSeconds()
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
         if !quiet {
             CLIStderr.write("Engine: native LTX 2.3 A2Vid\n")
@@ -569,10 +583,11 @@ struct VideoGenerate: AsyncParsableCommand {
 
         let generator = LTXUnifiedAVGenerator()
         do {
+            let loadTimings: LTXLoadTimings
             if isLTX23FullModelRoot(modelRoot) {
-                try await generator.loadFull(modelRoot: modelRoot)
+                loadTimings = try await generator.loadFull(modelRoot: modelRoot)
             } else {
-                try await generator.loadAudioToVideo(modelRoot: modelRoot)
+                loadTimings = try await generator.loadAudioToVideo(modelRoot: modelRoot)
             }
             if !quiet {
                 CLIStderr.write("Running guided stage 1 and distilled-LoRA stage 2...\n")
@@ -599,12 +614,15 @@ struct VideoGenerate: AsyncParsableCommand {
                     endImageStrength: endImageStrength
                 )
             )
+            let unloadStart = videoMonotonicSeconds()
             await generator.unload()
+            let unloadSeconds = videoMonotonicSeconds() - unloadStart
 
             if !quiet {
                 CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
                 CLIStderr.write("Writing MP4 with the original source-audio segment...\n")
             }
+            let writeStart = videoMonotonicSeconds()
             try LTXVideoMP4Writer.writeMP4(
                 frames: result.frames,
                 fps: fps,
@@ -614,6 +632,21 @@ struct VideoGenerate: AsyncParsableCommand {
             guard await mediaHasAudioTrack(at: outputURL) else {
                 throw ValidationError("A2Vid output has no audio track at \(outputURL.path)")
             }
+            let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
+            try emitLTXVideoTimingReport(
+                LTXVideoTimingReport(
+                    mode: "audio-to-video",
+                    modelRoot: modelRoot.path,
+                    residentModelReused: false,
+                    load: loadTimings,
+                    generation: result.timings,
+                    unloadSeconds: unloadSeconds,
+                    mp4WriteSeconds: mp4WriteSeconds,
+                    totalSeconds: videoMonotonicSeconds() - endToEndStart
+                ),
+                printToStandardError: timings,
+                outputPath: timingsOutput
+            )
         } catch {
             await generator.unload()
             throw error
@@ -711,15 +744,17 @@ struct VideoGenerate: AsyncParsableCommand {
             }
 
         case .unifiedAV:
+            let endToEndStart = videoMonotonicSeconds()
             if !quiet {
                 CLIStderr.write("Loading native unified AV model...\n")
             }
             let generator = LTXUnifiedAVGenerator()
             do {
+                let loadTimings: LTXLoadTimings
                 if isLTX23FullModelRoot(rootURL) {
-                    try await generator.loadFull(modelRoot: rootURL)
+                    loadTimings = try await generator.loadFull(modelRoot: rootURL)
                 } else {
-                    try await generator.load(modelRoot: rootURL)
+                    loadTimings = try await generator.load(modelRoot: rootURL)
                 }
                 if !quiet {
                     let lane = isLTX23FullModelRoot(rootURL)
@@ -752,13 +787,16 @@ struct VideoGenerate: AsyncParsableCommand {
                         endImageStrength: endImageStrength
                     )
                 )
+                let unloadStart = videoMonotonicSeconds()
                 await generator.unload()
+                let unloadSeconds = videoMonotonicSeconds() - unloadStart
 
                 if !quiet {
                     CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
                     CLIStderr.write("Audio waveform shape: \(shapeString(result.audioWaveform.shape))\n")
                     CLIStderr.write("Writing MP4 with audio...\n")
                 }
+                let writeStart = videoMonotonicSeconds()
                 try LTXVideoMP4Writer.writeMP4(
                     frames: result.frames,
                     fps: fps,
@@ -770,6 +808,21 @@ struct VideoGenerate: AsyncParsableCommand {
                 guard await mediaHasAudioTrack(at: outputURL) else {
                     throw ValidationError("Unified AV output has no audio track at \(outputURL.path)")
                 }
+                let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
+                try emitLTXVideoTimingReport(
+                    LTXVideoTimingReport(
+                        mode: isLTX23FullModelRoot(rootURL) ? "full-unified-av" : "standalone-distilled-unified-av",
+                        modelRoot: rootURL.path,
+                        residentModelReused: false,
+                        load: loadTimings,
+                        generation: result.timings,
+                        unloadSeconds: unloadSeconds,
+                        mp4WriteSeconds: mp4WriteSeconds,
+                        totalSeconds: videoMonotonicSeconds() - endToEndStart
+                    ),
+                    printToStandardError: timings,
+                    outputPath: timingsOutput
+                )
             } catch {
                 await generator.unload()
                 throw error
@@ -894,6 +947,12 @@ struct VideoGenerate: AsyncParsableCommand {
         if quiet {
             args.append("--quiet")
         }
+        if timings {
+            args.append("--timings")
+        }
+        if let timingsOutput {
+            args += ["--timings-output", timingsOutput]
+        }
         return args
     }
 }
@@ -987,7 +1046,7 @@ private func shapeString(_ shape: [Int]) -> String {
     "[" + shape.map(String.init).joined(separator: ", ") + "]"
 }
 
-private func resolveVideoModelRoot(
+func resolveVideoModelRoot(
     explicitModelRoot: String?,
     requestedModel: String,
     variant: LTXVideoVariant,

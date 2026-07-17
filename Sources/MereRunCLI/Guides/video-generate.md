@@ -56,6 +56,9 @@ mere.run video generate --help
   writing an MP4.
 - `--json`: with `--preflight`, emit a structured report with diagnostics and
   declarative follow-up actions.
+- `--timings`: print native LTX 2.3 unified-AV/A2Vid load, generation, decode,
+  write, and end-to-end phase timings to stderr.
+- `--timings-output`: write those timings as JSON.
 - `--quiet`, `-q`: suppress diagnostics.
 
 ## Prompting Patterns
@@ -138,6 +141,26 @@ mere.run video generate \
   --end-image-strength 0.85 \
   --output ./car-start-to-end.mp4
 ```
+
+## Resident Distilled Session
+
+`mere.run video session` keeps the standalone `video-ltx23-av-mlx` transformer,
+text encoder, VAEs, vocoder, and upscaler loaded while it processes serial JSONL
+requests. Each stdin line produces exactly one stdout line; diagnostics remain
+on stderr. Required request keys are `prompt` and `output`.
+
+```bash
+printf '%s\n' \
+  '{"id":"fox-1","prompt":"a red fox runs across a snowy clearing","output":"./fox-1.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  '{"id":"fox-2","prompt":"a red fox runs across a snowy clearing","output":"./fox-2.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  | mere.run video session --model video-ltx23-av-mlx
+```
+
+Successful result lines include phase timings and `resident_model_reused`; the
+second result reports zero model-load time. This session emits synchronized AV
+from the standalone distilled checkpoint. It intentionally rejects
+`video-ltx23-full-mlx`: the full quality/A2Vid lane fuses the distilled LoRA
+into the dev transformer in place and must reload before another generation.
 
 ## Iteration Tips
 

@@ -5,6 +5,7 @@ This page covers the native video-generation path exposed through `mere.run vide
 ## Public surface
 
 - `mere.run video generate`
+- `mere.run video session`
 - `mere.run video export-latents`
 
 ## Model family
@@ -82,6 +83,32 @@ path: guided dev denoising for both audio and video at half resolution, followed
 by x2 latent upscaling and four-step refinement after fusing the distilled LoRA.
 The older `video-ltx-av` merged root is retained only for `video export-latents`.
 
+Add `--timings` to print phase timings for native LTX 2.3 unified-AV or A2Vid
+generation. `--timings-output <path>` writes the same typed report as JSON,
+including model-component loading, text encoding, each denoising stage, LoRA
+fusion where applicable, upsampling, video/audio decode, MP4 writing, unload,
+and total wall time.
+
+### Resident standalone distilled generation
+
+`video session` amortizes checkpoint loading across serial synchronized-AV
+generations on the standalone distilled model. It reads typed snake-case JSONL
+requests from stdin and writes one typed JSON result or error to stdout for
+each input line.
+
+```bash
+printf '%s\n' \
+  '{"id":"draft-1","prompt":"a fox runs across snow","output":"./draft-1.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  '{"id":"draft-2","prompt":"a fox runs across snow","output":"./draft-2.mp4","width":512,"height":320,"num_frames":33,"fps":24,"seed":7}' \
+  | swift run mere.run video session --model video-ltx23-av-mlx
+```
+
+The first result includes checkpoint-load time. Later results set
+`resident_model_reused` to `true` and report zero load time. The worker rejects
+the full dev + distilled-LoRA bundle because its quality and A2Vid pipelines
+mutate the transformer during LoRA fusion and are therefore single-use until
+the runtime gains a reversible LoRA lifecycle.
+
 ### Native source-audio-to-video
 
 Supplying `--audio` selects A2Vid automatically; no LTX variant flag is needed.
@@ -143,10 +170,12 @@ zero-memory. MP4 formats and backend selection are unchanged.
 ### CLI
 
 - `Sources/MereRunCLI/Commands/VideoCommand.swift`
+- `Sources/MereRunCLI/Commands/VideoSessionCommand.swift`
 
 ### Runtime
 
 - `Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift`
+- `Sources/MereRunCore/LTX/LTXInferenceTimings.swift`
 - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
 - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 

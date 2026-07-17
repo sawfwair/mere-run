@@ -2872,19 +2872,22 @@ public struct LTXUnifiedAVGenerationResult: @unchecked Sendable {
     public let audioLatents: MLXArray
     public let audioWaveform: MLXArray
     public let audioSampleRate: Int
+    public let timings: LTXGenerationTimings
 
     public init(
         frames: MLXArray,
         videoLatents: MLXArray,
         audioLatents: MLXArray,
         audioWaveform: MLXArray,
-        audioSampleRate: Int
+        audioSampleRate: Int,
+        timings: LTXGenerationTimings = LTXGenerationTimings()
     ) {
         self.frames = frames
         self.videoLatents = videoLatents
         self.audioLatents = audioLatents
         self.audioWaveform = audioWaveform
         self.audioSampleRate = audioSampleRate
+        self.timings = timings
     }
 }
 
@@ -2965,17 +2968,20 @@ public struct LTXAudioToVideoGenerationResult: @unchecked Sendable {
     public let videoLatents: MLXArray
     public let audioLatents: MLXArray
     public let sourceAudio: MediaAudioBuffer
+    public let timings: LTXGenerationTimings
 
     public init(
         frames: MLXArray,
         videoLatents: MLXArray,
         audioLatents: MLXArray,
-        sourceAudio: MediaAudioBuffer
+        sourceAudio: MediaAudioBuffer,
+        timings: LTXGenerationTimings = LTXGenerationTimings()
     ) {
         self.frames = frames
         self.videoLatents = videoLatents
         self.audioLatents = audioLatents
         self.sourceAudio = sourceAudio
+        self.timings = timings
     }
 }
 
@@ -3238,22 +3244,26 @@ public actor LTXUnifiedAVGenerator {
 
     public init() {}
 
+    @discardableResult
     public func loadFull(
         modelRoot: URL,
         dtype: DType = .bfloat16
-    ) async throws {
+    ) async throws -> LTXLoadTimings {
         let root = modelRoot.standardizedFileURL
         guard isLTX23FullModelRoot(root) else {
             throw LTXUnifiedAVGeneratorError.fullGenerationRequiresLTX23(root)
         }
-        try await loadAudioToVideo(modelRoot: root, dtype: dtype)
+        let timings = try await loadAudioToVideo(modelRoot: root, dtype: dtype)
         loadedForFullTwoStage = true
+        return timings
     }
 
+    @discardableResult
     public func loadAudioToVideo(
         modelRoot: URL,
         dtype: DType = .bfloat16
-    ) async throws {
+    ) async throws -> LTXLoadTimings {
+        let totalStart = ltxMonotonicSeconds()
         await unload()
         let root = modelRoot.standardizedFileURL
         guard isLTX23AudioToVideoModelRoot(root) else {
@@ -3279,6 +3289,7 @@ public actor LTXUnifiedAVGenerator {
             throw LTXUnifiedAVGeneratorError.distilledLoRAMissing(loraURL)
         }
 
+        let textStart = ltxMonotonicSeconds()
         let text = LTXGemmaTextEncoder()
         try await text.load(
             modelRoot: root,
@@ -3286,7 +3297,9 @@ public actor LTXUnifiedAVGenerator {
             dtype: dtype,
             loadConnectorWeights: true
         )
+        let textEncoderSeconds = ltxMonotonicSeconds() - textStart
 
+        let transformerStart = ltxMonotonicSeconds()
         let model = LTXUnifiedAVTransformerV2()
         try SafetensorsStreamingLoader.applyWeightsStreaming(
             url: transformerURL,
@@ -3299,12 +3312,17 @@ public actor LTXUnifiedAVGenerator {
             },
             batchSize: 24
         )
+        let transformerSeconds = ltxMonotonicSeconds() - transformerStart
 
+        let videoDecoderStart = ltxMonotonicSeconds()
         let vaeDecoder = try loadLTX23VideoDecoder(modelRoot: root, dtype: dtype)
+        let videoDecoderSeconds = ltxMonotonicSeconds() - videoDecoderStart
+        let upsamplerStart = ltxMonotonicSeconds()
         let latentUpsampler = try loadLTX23VideoUpsampler(
             weightsURL: upsamplerURL,
             dtype: dtype
         )
+        let upsamplerSeconds = ltxMonotonicSeconds() - upsamplerStart
 
         textEncoder = text
         transformer = model
@@ -3323,12 +3341,21 @@ public actor LTXUnifiedAVGenerator {
         loadedForAudioToVideo = true
         loadedForFullTwoStage = false
         twoStageGenerationConsumed = false
+        return LTXLoadTimings(
+            textEncoderSeconds: textEncoderSeconds,
+            transformerSeconds: transformerSeconds,
+            videoDecoderSeconds: videoDecoderSeconds,
+            upsamplerSeconds: upsamplerSeconds,
+            totalSeconds: ltxMonotonicSeconds() - totalStart
+        )
     }
 
+    @discardableResult
     public func load(
         modelRoot: URL,
         dtype: DType = .bfloat16
-    ) async throws {
+    ) async throws -> LTXLoadTimings {
+        let totalStart = ltxMonotonicSeconds()
         await unload()
         let root = modelRoot.standardizedFileURL
         let isLTX23 = isLTX23SplitModelRoot(root)
@@ -3346,6 +3373,7 @@ public actor LTXUnifiedAVGenerator {
             throw LTXUnifiedAVGeneratorError.upsamplerWeightsMissing(upsamplerURL)
         }
 
+        let textStart = ltxMonotonicSeconds()
         let text = LTXGemmaTextEncoder()
         let textEncoderRoot = try isLTX23 ? resolveLTX23TextEncoderRoot(modelRoot: root) : nil
         try await text.load(
@@ -3354,7 +3382,9 @@ public actor LTXUnifiedAVGenerator {
             dtype: dtype,
             loadConnectorWeights: true
         )
+        let textEncoderSeconds = ltxMonotonicSeconds() - textStart
 
+        let transformerStart = ltxMonotonicSeconds()
         let model: any LTXUnifiedAVTransformerRuntime
         if isLTX23 {
             let splitModel = LTXUnifiedAVTransformerV2()
@@ -3389,7 +3419,9 @@ public actor LTXUnifiedAVGenerator {
             )
             model = mergedModel
         }
+        let transformerSeconds = ltxMonotonicSeconds() - transformerStart
 
+        let videoDecoderStart = ltxMonotonicSeconds()
         let vaeDecoder = LTXVideoDecoder(
             timestepConditioning: false,
             architecture: isLTX23 ? .ltx23Split : .legacy
@@ -3440,7 +3472,9 @@ public actor LTXUnifiedAVGenerator {
             },
             batchSize: 24
         )
+        let videoDecoderSeconds = ltxMonotonicSeconds() - videoDecoderStart
 
+        let upsamplerStart = ltxMonotonicSeconds()
         let latentUpsampler = LTXLatentUpsampler(inChannels: 128, midChannels: 1024, numBlocksPerStage: 4)
         try SafetensorsStreamingLoader.applyWeightsStreaming(
             url: upsamplerURL,
@@ -3453,7 +3487,9 @@ public actor LTXUnifiedAVGenerator {
             },
             batchSize: 24
         )
+        let upsamplerSeconds = ltxMonotonicSeconds() - upsamplerStart
 
+        let audioDecoderStart = ltxMonotonicSeconds()
         let audioDecoder = LTXAudioDecoder()
         let audioDecoderURL = isLTX23
             ? root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
@@ -3507,6 +3543,7 @@ public actor LTXUnifiedAVGenerator {
             },
             batchSize: 24
         )
+        let audioDecoderSeconds = ltxMonotonicSeconds() - audioDecoderStart
 
         self.textEncoder = text
         self.transformer = model
@@ -3522,6 +3559,14 @@ public actor LTXUnifiedAVGenerator {
         self.videoVAEWeightLayout = splitTensorLayout
         self.loadedDType = dtype
         self.loadedRoot = root
+        return LTXLoadTimings(
+            textEncoderSeconds: textEncoderSeconds,
+            transformerSeconds: transformerSeconds,
+            videoDecoderSeconds: videoDecoderSeconds,
+            upsamplerSeconds: upsamplerSeconds,
+            audioDecoderSeconds: audioDecoderSeconds,
+            totalSeconds: ltxMonotonicSeconds() - totalStart
+        )
     }
 
     public func unload() async {
@@ -3618,6 +3663,14 @@ public actor LTXUnifiedAVGenerator {
     public func generateAudioToVideo(
         options: LTXAudioToVideoGenerationOptions
     ) async throws -> LTXAudioToVideoGenerationResult {
+        let totalStart = ltxMonotonicSeconds()
+        var preparationSeconds = 0.0
+        var textEncodingSeconds = 0.0
+        var stage1DenoiseSeconds = 0.0
+        var loraFusionSeconds = 0.0
+        var upsampleSeconds = 0.0
+        var stage2DenoiseSeconds = 0.0
+        var videoDecodeSeconds = 0.0
         let prompt = options.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let negativePrompt = options.negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !negativePrompt.isEmpty else {
@@ -3665,6 +3718,7 @@ public actor LTXUnifiedAVGenerator {
         }
         let parityIO = LTXAudioToVideoParityIO()
 
+        let inputPreparationStart = ltxMonotonicSeconds()
         let duration = Double(options.numFrames) / Double(options.fps)
         let audioMetadata = try MediaAudioIO.probe(options.audioURL)
         try validateLTXAudioSegment(
@@ -3685,8 +3739,10 @@ public actor LTXUnifiedAVGenerator {
             duration: duration,
             sampleRate: LTXAudioMelProcessor.sampleRate
         )
+        preparationSeconds += ltxMonotonicSeconds() - inputPreparationStart
 
         twoStageGenerationConsumed = true
+        let textEncodingStart = ltxMonotonicSeconds()
         let positiveEncoding = try await textEncoder.encode(
             prompt: prompt,
             maxLength: options.maxTextLength
@@ -3707,7 +3763,9 @@ public actor LTXUnifiedAVGenerator {
         await textEncoder.unload()
         self.textEncoder = nil
         Memory.clearCache()
+        textEncodingSeconds = ltxMonotonicSeconds() - textEncodingStart
 
+        let latentPreparationStart = ltxMonotonicSeconds()
         let audioFrameCount = computeAudioLatentFrameCount(
             videoFrames: options.numFrames,
             fps: options.fps
@@ -3850,6 +3908,8 @@ public actor LTXUnifiedAVGenerator {
             fps: options.fps
         )
         let stage1Sigmas = LTX2DiffusionScheduler.sigmas(steps: options.inferenceSteps)
+        preparationSeconds += ltxMonotonicSeconds() - latentPreparationStart
+        let stage1DenoiseStart = ltxMonotonicSeconds()
         videoLatents = try denoiseFrozenAudioVideoLoop(
             videoLatents: videoLatents,
             audioLatents: audioLatents,
@@ -3867,8 +3927,10 @@ public actor LTXUnifiedAVGenerator {
             debugLabel: "a2vid_stage1"
         ).video
         MLX.eval(videoLatents)
+        stage1DenoiseSeconds = ltxMonotonicSeconds() - stage1DenoiseStart
         try parityIO.save(videoLatents, suffix: "a2vid_stage1_output")
 
+        let upsampleStart = ltxMonotonicSeconds()
         videoLatents = upsampleLatents(
             videoLatents,
             upsampler: upsampler,
@@ -3876,6 +3938,7 @@ public actor LTXUnifiedAVGenerator {
             latentStd: decoder.latentsStd
         )
         MLX.eval(videoLatents)
+        upsampleSeconds = ltxMonotonicSeconds() - upsampleStart
         try parityIO.save(videoLatents, suffix: "a2vid_upsampled_latents")
 
         let stage2Sigma = STAGE2Sigmas[0]
@@ -3910,11 +3973,13 @@ public actor LTXUnifiedAVGenerator {
         MLX.eval(videoLatents)
         try parityIO.save(videoLatents, suffix: "a2vid_stage2_input")
 
+        let loraFusionStart = ltxMonotonicSeconds()
         try LTXStreamingLoRAFuser.fuse(
             url: distilledLoRAURL,
             into: transformer,
             debugOutputPrefix: parityIO.outputPrefix
         )
+        loraFusionSeconds = ltxMonotonicSeconds() - loraFusionStart
 
         let stage2Ropes = makeLTXAudioToVideoVideoRopes(
             latentFrames: latentFrames,
@@ -3922,6 +3987,7 @@ public actor LTXUnifiedAVGenerator {
             width: stage2Width,
             fps: options.fps
         )
+        let stage2DenoiseStart = ltxMonotonicSeconds()
         videoLatents = try denoiseFrozenAudioVideoLoop(
             videoLatents: videoLatents,
             audioLatents: audioLatents,
@@ -3939,8 +4005,10 @@ public actor LTXUnifiedAVGenerator {
             debugLabel: "a2vid_stage2"
         ).video
         MLX.eval(videoLatents)
+        stage2DenoiseSeconds = ltxMonotonicSeconds() - stage2DenoiseStart
         try parityIO.save(videoLatents, suffix: "a2vid_stage2_output")
 
+        let videoDecodeStart = ltxMonotonicSeconds()
         let frames: MLXArray
         if let tiling = selectDecodeTilingConfig(
             width: options.width,
@@ -3962,18 +4030,38 @@ public actor LTXUnifiedAVGenerator {
             frames = postprocessDecodedVideo(decoder.decode(sample: videoLatents, timestep: nil))
         }
         MLX.eval(frames)
+        videoDecodeSeconds = ltxMonotonicSeconds() - videoDecodeStart
 
         return LTXAudioToVideoGenerationResult(
             frames: frames,
             videoLatents: videoLatents,
             audioLatents: audioLatents,
-            sourceAudio: sourceAudio
+            sourceAudio: sourceAudio,
+            timings: LTXGenerationTimings(
+                textEncodingSeconds: textEncodingSeconds,
+                preparationSeconds: preparationSeconds,
+                stage1DenoiseSeconds: stage1DenoiseSeconds,
+                loraFusionSeconds: loraFusionSeconds,
+                upsampleSeconds: upsampleSeconds,
+                stage2DenoiseSeconds: stage2DenoiseSeconds,
+                videoDecodeSeconds: videoDecodeSeconds,
+                totalSeconds: ltxMonotonicSeconds() - totalStart
+            )
         )
     }
 
     public func generate(
         options: LTXUnifiedAVGenerationOptions
     ) async throws -> LTXUnifiedAVGenerationResult {
+        let totalStart = ltxMonotonicSeconds()
+        var textEncodingSeconds = 0.0
+        var preparationSeconds = 0.0
+        var stage1DenoiseSeconds = 0.0
+        var loraFusionSeconds = 0.0
+        var upsampleSeconds = 0.0
+        var stage2DenoiseSeconds = 0.0
+        var videoDecodeSeconds = 0.0
+        var audioDecodeSeconds = 0.0
         let prompt = options.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else {
             throw LTXUnifiedAVGeneratorError.emptyPrompt
@@ -4024,6 +4112,7 @@ public actor LTXUnifiedAVGenerator {
             fullLoRAURL = nil
         }
 
+        let textEncodingStart = ltxMonotonicSeconds()
         let encoding = try await textEncoder.encode(prompt: prompt, maxLength: options.maxTextLength)
         let videoContext = encoding.videoEmbeddings
         guard let audioContext = encoding.audioEmbeddings else {
@@ -4046,6 +4135,8 @@ public actor LTXUnifiedAVGenerator {
             self.textEncoder = nil
             Memory.clearCache()
         }
+        textEncodingSeconds = ltxMonotonicSeconds() - textEncodingStart
+        let preparationStart = ltxMonotonicSeconds()
 
         let latentFrames = 1 + ((options.numFrames - 1) / 8)
         let stage1H = options.height / 2 / 32
@@ -4188,6 +4279,8 @@ public actor LTXUnifiedAVGenerator {
             numHeads: 32
         )
 
+        preparationSeconds = ltxMonotonicSeconds() - preparationStart
+        let stage1DenoiseStart = ltxMonotonicSeconds()
         if usesFullTwoStage {
             guard let negativeVideoContext, let negativeAudioContext else {
                 throw LTXUnifiedAVGeneratorError.generatorNotLoaded
@@ -4225,11 +4318,15 @@ public actor LTXUnifiedAVGenerator {
             )
         }
         MLX.eval(videoLatents, audioLatents)
+        stage1DenoiseSeconds = ltxMonotonicSeconds() - stage1DenoiseStart
 
         if let fullLoRAURL {
+            let loraFusionStart = ltxMonotonicSeconds()
             try LTXStreamingLoRAFuser.fuse(url: fullLoRAURL, into: transformer)
+            loraFusionSeconds = ltxMonotonicSeconds() - loraFusionStart
         }
 
+        let upsampleStart = ltxMonotonicSeconds()
         videoLatents = upsampleLatents(
             videoLatents,
             upsampler: upsampler,
@@ -4237,6 +4334,7 @@ public actor LTXUnifiedAVGenerator {
             latentStd: decoder.latentsStd
         )
         MLX.eval(videoLatents)
+        upsampleSeconds = ltxMonotonicSeconds() - upsampleStart
 
         if let stage2State = stage2ConditioningLatent.map({
             applyLatentConditioning(
@@ -4309,6 +4407,7 @@ public actor LTXUnifiedAVGenerator {
             numHeads: 32
         )
 
+        let stage2DenoiseStart = ltxMonotonicSeconds()
         (videoLatents, audioLatents) = denoiseAVLoop(
             videoLatents: videoLatents,
             audioLatents: audioLatents,
@@ -4323,7 +4422,9 @@ public actor LTXUnifiedAVGenerator {
             videoConditioning: stage2ConditioningState
         )
         MLX.eval(videoLatents, audioLatents)
+        stage2DenoiseSeconds = ltxMonotonicSeconds() - stage2DenoiseStart
 
+        let videoDecodeStart = ltxMonotonicSeconds()
         let decodedVideo: MLXArray?
         let frames: MLXArray
         if let tiling = selectDecodeTilingConfig(
@@ -4349,6 +4450,7 @@ public actor LTXUnifiedAVGenerator {
             frames = postprocessDecodedVideo(fullDecoded)
         }
         MLX.eval(frames)
+        videoDecodeSeconds = ltxMonotonicSeconds() - videoDecodeStart
 
         if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {
             let base = URL(fileURLWithPath: debugPrefix).standardizedFileURL
@@ -4364,6 +4466,7 @@ public actor LTXUnifiedAVGenerator {
         }
 
         _ = decodedVideo
+        let audioDecodeStart = ltxMonotonicSeconds()
         let activeAudioDecoder: LTXAudioDecoder
         let activeVocoder: LTXAudioVocoderBase
         if usesFullTwoStage {
@@ -4402,6 +4505,7 @@ public actor LTXUnifiedAVGenerator {
             sampleRate: activeVocoder.outputSamplingRate
         )
         MLX.eval(audioWaveform)
+        audioDecodeSeconds = ltxMonotonicSeconds() - audioDecodeStart
         saveLTXAVDebugAudio(
             audioWaveform,
             suffix: "audio_waveform_matched",
@@ -4413,7 +4517,18 @@ public actor LTXUnifiedAVGenerator {
             videoLatents: videoLatents,
             audioLatents: audioLatents,
             audioWaveform: audioWaveform,
-            audioSampleRate: activeVocoder.outputSamplingRate
+            audioSampleRate: activeVocoder.outputSamplingRate,
+            timings: LTXGenerationTimings(
+                textEncodingSeconds: textEncodingSeconds,
+                preparationSeconds: preparationSeconds,
+                stage1DenoiseSeconds: stage1DenoiseSeconds,
+                loraFusionSeconds: loraFusionSeconds,
+                upsampleSeconds: upsampleSeconds,
+                stage2DenoiseSeconds: stage2DenoiseSeconds,
+                videoDecodeSeconds: videoDecodeSeconds,
+                audioDecodeSeconds: audioDecodeSeconds,
+                totalSeconds: ltxMonotonicSeconds() - totalStart
+            )
         )
     }
 }
