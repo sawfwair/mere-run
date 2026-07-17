@@ -75,6 +75,11 @@ The format is based on Keep a Changelog.
 - enabled Krea 2 LoRA-training and adapter-backed image graph stages on
   constrained CUDA workers through 4-bit bases, shape-scoped quantized
   fallbacks, sequential model phases, and Linux-package CUDA discovery.
+- added CUDA 12.8-aware Debian metadata for Linux release artifacts, including
+  Lambda Stack-compatible dependency alternatives alongside the CUDA 13.0
+  dependency family. Packaging still derives the toolkit major from the linked
+  `libcudart` SONAME and fails closed for unknown majors unless a maintainer
+  supplies the complete dependency override.
 - standardized restricted-model usage terms and explicit acceptance across
   model listing, information, pull, preflight, setup, Studio, and related
   command guidance while retaining upstream license and notice artifacts.
@@ -286,11 +291,9 @@ The format is based on Keep a Changelog.
 - pinned the Linux CUDA CMake bridge to the exact `mlx-swift` checkout selected
   by SwiftPM under the active Linux Swift toolchain;
   `MLX_SWIFT_CUDA_COMMIT` remains an explicit diagnostic override.
-- gated default CUDA `.deb` metadata on the linked `libcudart` SONAME and added
-  explicit CUDA 12.8 dependencies with Lambda Stack alternatives alongside the
-  CUDA 13.0 dependency family; unknown toolkit majors still fail closed unless
-  a maintainer supplies the complete `MERERUN_PACKAGE_LINUX_DEPS` override.
-  Tar packaging is unchanged.
+- gated default CUDA `.deb` metadata on a linked CUDA 13 `libcudart` SONAME;
+  other or unknown toolkit majors now fail closed unless a maintainer supplies
+  the complete `MERERUN_PACKAGE_LINUX_DEPS` override. Tar packaging is unchanged.
 - changed the default code-benchmark model set to the models supported and
   recommended for the current machine instead of a fixed cross-machine trio.
 
