@@ -96,6 +96,15 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(validation.dependencies["make-video"], ["make-image"])
     }
 
+    func testReferenceAcceptsProviderOutputPortNamesWithUnderscores() throws {
+        let reference = try WorkflowReference("nodes.prepare-data.outputs.contact_sheet")
+
+        XCTAssertEqual(
+            reference.source,
+            .nodeOutput(nodeID: "prepare-data", output: "contact_sheet")
+        )
+    }
+
     func testNodeExecutionPolicySurvivesPortableMaterialization() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -38,7 +38,7 @@
       "properties": {
         "$ref": {
           "type": "string",
-          "pattern": "^(inputs\\.[a-z][a-z0-9-]{0,63}|nodes\\.[a-z][a-z0-9-]{0,63}\\.outputs\\.[a-z][a-z0-9-]{0,63})$"
+          "pattern": "^(inputs\\.[a-z][a-z0-9-]{0,63}|nodes\\.[a-z][a-z0-9-]{0,63}\\.outputs\\.[a-z][a-z0-9_]{0,63})$"
         }
       }
     },
