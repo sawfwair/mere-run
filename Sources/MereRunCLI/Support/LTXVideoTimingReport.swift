@@ -30,6 +30,7 @@ func emitLTXVideoTimingReport(
         CLIStderr.write("    video decoder: \(formatLTXSeconds(report.load.videoDecoderSeconds))s\n")
         CLIStderr.write("    upsampler: \(formatLTXSeconds(report.load.upsamplerSeconds))s\n")
         CLIStderr.write("    audio decoder: \(formatLTXSeconds(report.load.audioDecoderSeconds))s\n")
+        CLIStderr.write("    LoRA adapter: \(formatLTXSeconds(report.load.loraAdapterSeconds))s\n")
         CLIStderr.write("  generation total: \(formatLTXSeconds(report.generation.totalSeconds))s\n")
         CLIStderr.write("    text encoding: \(formatLTXSeconds(report.generation.textEncodingSeconds))s\n")
         CLIStderr.write("    preparation: \(formatLTXSeconds(report.generation.preparationSeconds))s\n")

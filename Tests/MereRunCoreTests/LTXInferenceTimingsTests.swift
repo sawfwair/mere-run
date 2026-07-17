@@ -10,7 +10,8 @@ final class LTXInferenceTimingsTests: XCTestCase {
             videoDecoderSeconds: 3,
             upsamplerSeconds: 4,
             audioDecoderSeconds: 5,
-            totalSeconds: 15
+            loraAdapterSeconds: 6,
+            totalSeconds: 21
         )
 
         let decoded = try JSONDecoder().decode(

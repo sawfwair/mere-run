@@ -65,15 +65,13 @@ struct LTXVideoSessionResponse: Codable, Hashable, Sendable {
 struct VideoSession: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "session",
-        abstract: "Keep standalone distilled LTX 2.3 resident for JSONL generation requests.",
+        abstract: "Keep an LTX 2.3 runtime resident for JSONL generation requests.",
         discussion: """
-        Loads the standalone video-ltx23-av-mlx bundle once, then reads one JSON
-        request per line from stdin and writes one JSON result per line to stdout.
-        Diagnostics go to stderr. Requests are processed serially.
-
-        This resident path deliberately rejects the full dev + distilled-LoRA
-        bundle: that two-stage lane fuses LoRA weights in place and must currently
-        reload before another generation.
+        Loads either the standalone video-ltx23-av-mlx bundle or the full
+        video-ltx23-full-mlx bundle once, then reads one JSON request per line
+        from stdin and writes one JSON result per line to stdout. The full lane
+        keeps dev weights unchanged and activates its distilled adapter only for
+        Stage 2. Diagnostics go to stderr. Requests are processed serially.
 
         Request keys use snake_case. Required keys are prompt and output. Optional
         keys are id, width, height, num_frames, fps, seed, image,
@@ -81,10 +79,10 @@ struct VideoSession: AsyncParsableCommand {
         """
     )
 
-    @Option(name: [.customShort("m"), .long], help: "Managed standalone distilled LTX 2.3 model id or local model root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed standalone or full LTX 2.3 model id, or local model root.")
     var model: String = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
 
-    @Option(name: [.customLong("model-root")], help: "Local standalone distilled LTX 2.3 model root. Takes precedence over --model.")
+    @Option(name: [.customLong("model-root")], help: "Local standalone or full LTX 2.3 model root. Takes precedence over --model.")
     var modelRoot: String?
 
     @Flag(name: [.short, .long], help: "Suppress session diagnostics on stderr.")
@@ -99,15 +97,18 @@ struct VideoSession: AsyncParsableCommand {
             allowAutoDownload: true
         )
         try validateNativeModelRoot(rootURL)
-        guard isLTX23SplitModelRoot(rootURL), !isLTX23FullModelRoot(rootURL) else {
+        let usesFullTwoStage = isLTX23FullModelRoot(rootURL)
+        guard usesFullTwoStage || isLTX23SplitModelRoot(rootURL) else {
             throw ValidationError(
-                "video session requires the standalone \(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue) bundle; "
-                    + "the full dev + distilled-LoRA lane must reload between generations."
+                "video session requires \(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue) "
+                    + "or \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
             )
         }
 
         let generator = LTXUnifiedAVGenerator()
-        let loadTimings = try await generator.load(modelRoot: rootURL)
+        let loadTimings = usesFullTwoStage
+            ? try await generator.loadFullReusable(modelRoot: rootURL)
+            : try await generator.load(modelRoot: rootURL)
         if !quiet {
             CLIStderr.write("LTX video session ready: \(rootURL.path)\n")
             CLIStderr.write(String(format: "Model load: %.3fs\n", loadTimings.totalSeconds))
@@ -137,6 +138,7 @@ struct VideoSession: AsyncParsableCommand {
                     request: request,
                     generator: generator,
                     modelRoot: rootURL,
+                    usesFullTwoStage: usesFullTwoStage,
                     loadTimings: completedRequestCount == 0 ? loadTimings : LTXLoadTimings(),
                     residentModelReused: completedRequestCount > 0
                 )
@@ -158,6 +160,7 @@ struct VideoSession: AsyncParsableCommand {
         request: LTXVideoSessionRequest,
         generator: LTXUnifiedAVGenerator,
         modelRoot: URL,
+        usesFullTwoStage: Bool,
         loadTimings: LTXLoadTimings,
         residentModelReused: Bool
     ) async throws -> LTXVideoSessionResponse {
@@ -227,7 +230,9 @@ struct VideoSession: AsyncParsableCommand {
         }
         let writeSeconds = videoMonotonicSeconds() - writeStart
         let timings = LTXVideoTimingReport(
-            mode: "resident-standalone-distilled-unified-av",
+            mode: usesFullTwoStage
+                ? "resident-full-dev-distilled-lora-unified-av"
+                : "resident-standalone-distilled-unified-av",
             modelRoot: modelRoot.path,
             residentModelReused: residentModelReused,
             load: loadTimings,

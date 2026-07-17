@@ -7,6 +7,7 @@ public struct LTXLoadTimings: Codable, Hashable, Sendable {
     public let videoDecoderSeconds: Double
     public let upsamplerSeconds: Double
     public let audioDecoderSeconds: Double
+    public let loraAdapterSeconds: Double
     public let totalSeconds: Double
 
     public init(
@@ -15,6 +16,7 @@ public struct LTXLoadTimings: Codable, Hashable, Sendable {
         videoDecoderSeconds: Double = 0,
         upsamplerSeconds: Double = 0,
         audioDecoderSeconds: Double = 0,
+        loraAdapterSeconds: Double = 0,
         totalSeconds: Double = 0
     ) {
         self.textEncoderSeconds = textEncoderSeconds
@@ -22,6 +24,7 @@ public struct LTXLoadTimings: Codable, Hashable, Sendable {
         self.videoDecoderSeconds = videoDecoderSeconds
         self.upsamplerSeconds = upsamplerSeconds
         self.audioDecoderSeconds = audioDecoderSeconds
+        self.loraAdapterSeconds = loraAdapterSeconds
         self.totalSeconds = totalSeconds
     }
 }

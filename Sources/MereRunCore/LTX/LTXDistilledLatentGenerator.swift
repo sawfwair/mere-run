@@ -3238,8 +3238,10 @@ public actor LTXUnifiedAVGenerator {
     private var loadedRoot: URL?
     private var audioVAEWeightsURL: URL?
     private var distilledLoRAURL: URL?
+    private var runtimeLoRAAdapter: LTXRuntimeLoRAAdapter?
     private var loadedForAudioToVideo = false
     private var loadedForFullTwoStage = false
+    private var loadedForReusableFullTwoStage = false
     private var twoStageGenerationConsumed = false
 
     public init() {}
@@ -3255,7 +3257,50 @@ public actor LTXUnifiedAVGenerator {
         }
         let timings = try await loadAudioToVideo(modelRoot: root, dtype: dtype)
         loadedForFullTwoStage = true
+        loadedForReusableFullTwoStage = false
         return timings
+    }
+
+    /// Loads the full dev transformer once and installs the distilled adapter as
+    /// a reversible runtime path. Stage 1 uses the untouched dev weights; Stage 2
+    /// enables the adapter without permanently fusing into the base checkpoint.
+    @discardableResult
+    public func loadFullReusable(
+        modelRoot: URL,
+        dtype: DType = .bfloat16
+    ) async throws -> LTXLoadTimings {
+        let totalStart = ltxMonotonicSeconds()
+        let root = modelRoot.standardizedFileURL
+        guard isLTX23FullModelRoot(root) else {
+            throw LTXUnifiedAVGeneratorError.fullGenerationRequiresLTX23(root)
+        }
+        let baseTimings = try await loadAudioToVideo(modelRoot: root, dtype: dtype)
+        guard let transformer, let distilledLoRAURL else {
+            throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+        }
+
+        let adapterStart = ltxMonotonicSeconds()
+        do {
+            runtimeLoRAAdapter = try LTXRuntimeLoRAAdapter.install(
+                url: distilledLoRAURL,
+                into: transformer
+            )
+        } catch {
+            await unload()
+            throw error
+        }
+        let loraAdapterSeconds = ltxMonotonicSeconds() - adapterStart
+        loadedForFullTwoStage = true
+        loadedForReusableFullTwoStage = true
+        return LTXLoadTimings(
+            textEncoderSeconds: baseTimings.textEncoderSeconds,
+            transformerSeconds: baseTimings.transformerSeconds,
+            videoDecoderSeconds: baseTimings.videoDecoderSeconds,
+            upsamplerSeconds: baseTimings.upsamplerSeconds,
+            audioDecoderSeconds: baseTimings.audioDecoderSeconds,
+            loraAdapterSeconds: loraAdapterSeconds,
+            totalSeconds: ltxMonotonicSeconds() - totalStart
+        )
     }
 
     @discardableResult
@@ -3338,8 +3383,10 @@ public actor LTXUnifiedAVGenerator {
         loadedRoot = root
         audioVAEWeightsURL = audioVAEURL
         distilledLoRAURL = loraURL
+        runtimeLoRAAdapter = nil
         loadedForAudioToVideo = true
         loadedForFullTwoStage = false
+        loadedForReusableFullTwoStage = false
         twoStageGenerationConsumed = false
         return LTXLoadTimings(
             textEncoderSeconds: textEncoderSeconds,
@@ -3570,6 +3617,7 @@ public actor LTXUnifiedAVGenerator {
     }
 
     public func unload() async {
+        runtimeLoRAAdapter?.setActive(false)
         if let textEncoder {
             await textEncoder.unload()
         }
@@ -3586,10 +3634,27 @@ public actor LTXUnifiedAVGenerator {
         loadedRoot = nil
         audioVAEWeightsURL = nil
         distilledLoRAURL = nil
+        runtimeLoRAAdapter = nil
         loadedForAudioToVideo = false
         loadedForFullTwoStage = false
+        loadedForReusableFullTwoStage = false
         twoStageGenerationConsumed = false
         Memory.clearCache()
+    }
+
+    private func loadFullTextEncoderIfNeeded() async throws {
+        guard textEncoder == nil else { return }
+        guard let loadedRoot else {
+            throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+        }
+        let text = LTXGemmaTextEncoder()
+        try await text.load(
+            modelRoot: loadedRoot,
+            textEncoderRoot: try resolveLTX23TextEncoderRoot(modelRoot: loadedRoot),
+            dtype: loadedDType,
+            loadConnectorWeights: true
+        )
+        textEncoder = text
     }
 
     private func loadEncoderIfNeeded() throws {
@@ -3666,6 +3731,7 @@ public actor LTXUnifiedAVGenerator {
         let totalStart = ltxMonotonicSeconds()
         var preparationSeconds = 0.0
         var textEncodingSeconds = 0.0
+        var textEncoderReloadSeconds = 0.0
         var stage1DenoiseSeconds = 0.0
         var loraFusionSeconds = 0.0
         var upsampleSeconds = 0.0
@@ -3704,6 +3770,12 @@ public actor LTXUnifiedAVGenerator {
         guard FileManager.default.fileExists(atPath: options.audioURL.path) else {
             throw LTXUnifiedAVGeneratorError.audioSourceNotFound(options.audioURL)
         }
+        let usesReusableFullTwoStage = loadedForReusableFullTwoStage
+        if usesReusableFullTwoStage {
+            let reloadStart = ltxMonotonicSeconds()
+            try await loadFullTextEncoderIfNeeded()
+            textEncoderReloadSeconds = ltxMonotonicSeconds() - reloadStart
+        }
         guard loadedForAudioToVideo,
               let textEncoder,
               let transformer,
@@ -3715,6 +3787,9 @@ public actor LTXUnifiedAVGenerator {
         }
         guard !twoStageGenerationConsumed else {
             throw LTXUnifiedAVGeneratorError.audioToVideoRequiresReload
+        }
+        if usesReusableFullTwoStage, runtimeLoRAAdapter == nil {
+            throw LTXUnifiedAVGeneratorError.audioToVideoGeneratorNotLoaded
         }
         let parityIO = LTXAudioToVideoParityIO()
 
@@ -3742,6 +3817,12 @@ public actor LTXUnifiedAVGenerator {
         preparationSeconds += ltxMonotonicSeconds() - inputPreparationStart
 
         twoStageGenerationConsumed = true
+        defer {
+            if usesReusableFullTwoStage {
+                runtimeLoRAAdapter?.setActive(false)
+                twoStageGenerationConsumed = false
+            }
+        }
         let textEncodingStart = ltxMonotonicSeconds()
         let positiveEncoding = try await textEncoder.encode(
             prompt: prompt,
@@ -3763,7 +3844,7 @@ public actor LTXUnifiedAVGenerator {
         await textEncoder.unload()
         self.textEncoder = nil
         Memory.clearCache()
-        textEncodingSeconds = ltxMonotonicSeconds() - textEncodingStart
+        textEncodingSeconds = textEncoderReloadSeconds + ltxMonotonicSeconds() - textEncodingStart
 
         let latentPreparationStart = ltxMonotonicSeconds()
         let audioFrameCount = computeAudioLatentFrameCount(
@@ -3974,11 +4055,15 @@ public actor LTXUnifiedAVGenerator {
         try parityIO.save(videoLatents, suffix: "a2vid_stage2_input")
 
         let loraFusionStart = ltxMonotonicSeconds()
-        try LTXStreamingLoRAFuser.fuse(
-            url: distilledLoRAURL,
-            into: transformer,
-            debugOutputPrefix: parityIO.outputPrefix
-        )
+        if usesReusableFullTwoStage {
+            runtimeLoRAAdapter?.setActive(true)
+        } else {
+            try LTXStreamingLoRAFuser.fuse(
+                url: distilledLoRAURL,
+                into: transformer,
+                debugOutputPrefix: parityIO.outputPrefix
+            )
+        }
         loraFusionSeconds = ltxMonotonicSeconds() - loraFusionStart
 
         let stage2Ropes = makeLTXAudioToVideoVideoRopes(
@@ -4005,6 +4090,9 @@ public actor LTXUnifiedAVGenerator {
             debugLabel: "a2vid_stage2"
         ).video
         MLX.eval(videoLatents)
+        if usesReusableFullTwoStage {
+            runtimeLoRAAdapter?.setActive(false)
+        }
         stage2DenoiseSeconds = ltxMonotonicSeconds() - stage2DenoiseStart
         try parityIO.save(videoLatents, suffix: "a2vid_stage2_output")
 
@@ -4055,6 +4143,7 @@ public actor LTXUnifiedAVGenerator {
     ) async throws -> LTXUnifiedAVGenerationResult {
         let totalStart = ltxMonotonicSeconds()
         var textEncodingSeconds = 0.0
+        var textEncoderReloadSeconds = 0.0
         var preparationSeconds = 0.0
         var stage1DenoiseSeconds = 0.0
         var loraFusionSeconds = 0.0
@@ -4089,6 +4178,12 @@ public actor LTXUnifiedAVGenerator {
         }
 
         let usesFullTwoStage = loadedForFullTwoStage
+        let usesReusableFullTwoStage = loadedForReusableFullTwoStage
+        if usesReusableFullTwoStage {
+            let reloadStart = ltxMonotonicSeconds()
+            try await loadFullTextEncoderIfNeeded()
+            textEncoderReloadSeconds = ltxMonotonicSeconds() - reloadStart
+        }
         guard let textEncoder, let transformer else {
             throw LTXUnifiedAVGeneratorError.generatorNotLoaded
         }
@@ -4103,13 +4198,26 @@ public actor LTXUnifiedAVGenerator {
             guard !twoStageGenerationConsumed else {
                 throw LTXUnifiedAVGeneratorError.fullGenerationRequiresReload
             }
-            guard let distilledLoRAURL else {
-                throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+            if usesReusableFullTwoStage {
+                guard runtimeLoRAAdapter != nil else {
+                    throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+                }
+                fullLoRAURL = nil
+            } else {
+                guard let distilledLoRAURL else {
+                    throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+                }
+                fullLoRAURL = distilledLoRAURL
             }
-            fullLoRAURL = distilledLoRAURL
             twoStageGenerationConsumed = true
         } else {
             fullLoRAURL = nil
+        }
+        defer {
+            if usesReusableFullTwoStage {
+                runtimeLoRAAdapter?.setActive(false)
+                twoStageGenerationConsumed = false
+            }
         }
 
         let textEncodingStart = ltxMonotonicSeconds()
@@ -4135,7 +4243,7 @@ public actor LTXUnifiedAVGenerator {
             self.textEncoder = nil
             Memory.clearCache()
         }
-        textEncodingSeconds = ltxMonotonicSeconds() - textEncodingStart
+        textEncodingSeconds = textEncoderReloadSeconds + ltxMonotonicSeconds() - textEncodingStart
         let preparationStart = ltxMonotonicSeconds()
 
         let latentFrames = 1 + ((options.numFrames - 1) / 8)
@@ -4320,8 +4428,11 @@ public actor LTXUnifiedAVGenerator {
         MLX.eval(videoLatents, audioLatents)
         stage1DenoiseSeconds = ltxMonotonicSeconds() - stage1DenoiseStart
 
-        if let fullLoRAURL {
-            let loraFusionStart = ltxMonotonicSeconds()
+        let loraFusionStart = ltxMonotonicSeconds()
+        if usesReusableFullTwoStage {
+            runtimeLoRAAdapter?.setActive(true)
+            loraFusionSeconds = ltxMonotonicSeconds() - loraFusionStart
+        } else if let fullLoRAURL {
             try LTXStreamingLoRAFuser.fuse(url: fullLoRAURL, into: transformer)
             loraFusionSeconds = ltxMonotonicSeconds() - loraFusionStart
         }
@@ -4422,6 +4533,9 @@ public actor LTXUnifiedAVGenerator {
             videoConditioning: stage2ConditioningState
         )
         MLX.eval(videoLatents, audioLatents)
+        if usesReusableFullTwoStage {
+            runtimeLoRAAdapter?.setActive(false)
+        }
         stage2DenoiseSeconds = ltxMonotonicSeconds() - stage2DenoiseStart
 
         let videoDecodeStart = ltxMonotonicSeconds()
@@ -4473,13 +4587,17 @@ public actor LTXUnifiedAVGenerator {
             guard let loadedRoot else {
                 throw LTXUnifiedAVGeneratorError.generatorNotLoaded
             }
-            self.transformer = nil
-            self.upsampler = nil
-            Memory.clearCache()
+            if !usesReusableFullTwoStage {
+                self.transformer = nil
+                self.upsampler = nil
+                Memory.clearCache()
+            }
             activeAudioDecoder = try loadLTX23AudioDecoder(modelRoot: loadedRoot)
             activeVocoder = try loadLTX23Vocoder(modelRoot: loadedRoot)
-            self.audioDecoder = activeAudioDecoder
-            self.vocoder = activeVocoder
+            if !usesReusableFullTwoStage {
+                self.audioDecoder = activeAudioDecoder
+                self.vocoder = activeVocoder
+            }
         } else {
             guard let audioDecoder else {
                 throw LTXUnifiedAVGeneratorError.audioDecoderNotLoaded

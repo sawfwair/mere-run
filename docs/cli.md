@@ -1547,8 +1547,8 @@ swift run mere.run video generate \
 
 ### `mere.run video session`
 
-Keep the standalone distilled LTX 2.3 model resident while processing serial
-JSONL generation requests:
+Keep a standalone distilled or full dev LTX 2.3 runtime resident while
+processing serial JSONL generation requests:
 
 ```bash
 printf '%s\n' \
@@ -1561,8 +1561,10 @@ Each stdin line produces one typed result or error line on stdout. A request
 requires `prompt` and `output`; it can override `width`, `height`, `num_frames`,
 `fps`, `seed`, `image`, `image_strength`, `end_image`, and
 `end_image_strength`. Successful responses include phase timings and
-`resident_model_reused`. The worker supports only `video-ltx23-av-mlx`; the
-full dev + distilled-LoRA bundle must reload after in-place LoRA fusion.
+`resident_model_reused`. Pass `--model video-ltx23-full-mlx` for the two-stage
+quality lane. The full session preserves the dev checkpoint for Stage 1 and
+activates its resident distilled LoRA only during Stage 2, so repeat requests
+do not reload or mutate the base transformer.
 
 ### `mere.run video export-latents`
 

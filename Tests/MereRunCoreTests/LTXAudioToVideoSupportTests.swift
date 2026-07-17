@@ -174,6 +174,10 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
             self._patchifyProjection.wrappedValue = Linear(2, 2, bias: false)
             super.init()
         }
+
+        func forward(_ input: MLXArray) -> MLXArray {
+            patchifyProjection(input)
+        }
     }
 
     func testLTX23StageOneSchedulerMatchesUpstreamFixture() {
@@ -396,6 +400,56 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
 
         XCTAssertEqual(count, 1)
         XCTAssertEqual(weight.asArray(Float.self), [11.5, 17, 15.5, 23])
+    }
+
+    func testRuntimeDistilledLoRATogglesWithoutMutatingBaseWeights() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let url = temp.appendingPathComponent("distilled.safetensors")
+        try writeTinyLTXLoRA(to: url)
+
+        let transformer = TinyTransformer()
+        try transformer.update(
+            parameters: ModuleParameters.unflattened([
+                ("patchify_proj.weight", MLX.zeros([2, 2], dtype: .float32)),
+            ]),
+            verify: .none
+        )
+        let input = MLXArray([Float(1), 1]).reshaped(1, 2)
+        let originalWeight = transformer.patchifyProjection.weight
+        let adapter = try LTXRuntimeLoRAAdapter.install(
+            url: url,
+            into: transformer,
+            strength: 0.5,
+            expectedPairCount: 1
+        )
+
+        let inactiveBefore = transformer.forward(input)
+        adapter.setActive(true)
+        let activeFirst = transformer.forward(input)
+        adapter.setActive(false)
+        let inactiveAfterFirst = transformer.forward(input)
+        adapter.setActive(true)
+        let activeSecond = transformer.forward(input)
+        adapter.setActive(false)
+        let inactiveAfterSecond = transformer.forward(input)
+        MLX.eval(
+            inactiveBefore,
+            activeFirst,
+            inactiveAfterFirst,
+            activeSecond,
+            inactiveAfterSecond,
+            transformer.patchifyProjection.weight
+        )
+
+        XCTAssertEqual(adapter.pairCount, 1)
+        XCTAssertEqual(inactiveBefore.asArray(Float.self), [0, 0])
+        XCTAssertEqual(activeFirst.asArray(Float.self), [28.5, 38.5])
+        XCTAssertEqual(activeSecond.asArray(Float.self), activeFirst.asArray(Float.self))
+        XCTAssertEqual(inactiveAfterFirst.asArray(Float.self), inactiveBefore.asArray(Float.self))
+        XCTAssertEqual(inactiveAfterSecond.asArray(Float.self), inactiveBefore.asArray(Float.self))
+        XCTAssertEqual(transformer.patchifyProjection.weight.asArray(Float.self), [0, 0, 0, 0])
+        XCTAssertTrue(transformer.patchifyProjection.weight === originalWeight)
     }
 
     func testInstalledDistilledLoRAMatchesPinnedUpstreamFusionFixtures() throws {

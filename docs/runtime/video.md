@@ -89,12 +89,12 @@ including model-component loading, text encoding, each denoising stage, LoRA
 fusion where applicable, upsampling, video/audio decode, MP4 writing, unload,
 and total wall time.
 
-### Resident standalone distilled generation
+### Resident LTX 2.3 generation
 
 `video session` amortizes checkpoint loading across serial synchronized-AV
-generations on the standalone distilled model. It reads typed snake-case JSONL
-requests from stdin and writes one typed JSON result or error to stdout for
-each input line.
+generations on either the standalone distilled model or the full dev model. It
+reads typed snake-case JSONL requests from stdin and writes one typed JSON
+result or error to stdout for each input line.
 
 ```bash
 printf '%s\n' \
@@ -103,11 +103,16 @@ printf '%s\n' \
   | swift run mere.run video session --model video-ltx23-av-mlx
 ```
 
+Use `--model video-ltx23-full-mlx` for the two-stage quality lane. That session
+keeps the dev transformer and official distilled LoRA resident, leaves the dev
+weights unchanged for Stage 1, and activates the adapter only during Stage 2.
+This avoids permanent BF16 weight fusion and permits repeat requests without
+checkpoint reload or accumulated weight drift.
+
 The first result includes checkpoint-load time. Later results set
-`resident_model_reused` to `true` and report zero load time. The worker rejects
-the full dev + distilled-LoRA bundle because its quality and A2Vid pipelines
-mutate the transformer during LoRA fusion and are therefore single-use until
-the runtime gains a reversible LoRA lifecycle.
+`resident_model_reused` to `true` and report zero load time. Full-model requests
+still reload the text encoder after the first request so the large transformer,
+video decoder, and text encoder do not all remain live during denoising.
 
 ### Native source-audio-to-video
 
