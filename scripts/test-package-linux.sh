@@ -171,30 +171,35 @@ fi
 echo "[test-package-linux] CUDA deb dependency test passed."
 
 cuda12_output_dir="$fixture_root/output-cuda12"
-set +e
-cuda12_error="$(
-  PATH="$fake_bin:$PATH" \
-    FAKE_CUDA_MAJOR=12 \
-    MERERUN_LINUX_ACCEL=cuda \
-    MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
-    bash scripts/package-linux.sh \
-      --version 0.0.0+cuda12-fixture \
-      --artifact-suffix cuda \
-      --configuration release \
-      --skip-build \
-      --skip-native \
-      --output-dir "$cuda12_output_dir" 2>&1
-)"
-cuda12_status=$?
-set -e
-if [[ "$cuda12_status" -ne 70 ]] || ! grep -q 'built binary links libcudart.so.12' <<<"$cuda12_error"; then
-  echo "[test-package-linux] expected a clean CUDA 12 .deb compatibility failure:" >&2
-  printf '%s\n' "$cuda12_error" >&2
+PATH="$fake_bin:$PATH" \
+  FAKE_CUDA_MAJOR=12 \
+  MERERUN_LINUX_ACCEL=cuda \
+  MERERUN_MLX_SWIFT_LINK_FLAGS="-lcuda" \
+  bash scripts/package-linux.sh \
+    --version 0.0.0+cuda12-fixture \
+    --artifact-suffix cuda12 \
+    --configuration release \
+    --skip-build \
+    --skip-native \
+    --output-dir "$cuda12_output_dir" >/dev/null
+cuda12_tarball="$cuda12_output_dir/mere-run-0.0.0+cuda12-fixture-linux-${platform_arch}-cuda12.tar.gz"
+cuda12_deb="$cuda12_output_dir/mere-run-cuda12_0.0.0+cuda12-fixture_${deb_arch}.deb"
+[[ -f "$cuda12_tarball" ]]
+[[ -f "$cuda12_deb" ]]
+cuda12_depends="$(dpkg-deb --field "$cuda12_deb" Depends)"
+if ! grep -q 'cuda-cudart-12-8 | libcudart12' <<<"$cuda12_depends"; then
+  echo "[test-package-linux] expected CUDA 12 .deb dependencies to support NVIDIA and Lambda Stack runtimes:" >&2
+  printf '%s\n' "$cuda12_depends" >&2
   exit 1
 fi
-[[ -f "$cuda12_output_dir/mere-run-0.0.0+cuda12-fixture-linux-${platform_arch}-cuda.tar.gz" ]]
-if compgen -G "$cuda12_output_dir/*.deb" >/dev/null; then
-  echo "[test-package-linux] CUDA 12 gate emitted a misleading .deb." >&2
+if ! grep -q 'libcudnn9-cuda-12 | python3-torch-cuda' <<<"$cuda12_depends"; then
+  echo "[test-package-linux] expected CUDA 12 .deb dependencies to support NVIDIA and Lambda Stack cuDNN packages:" >&2
+  printf '%s\n' "$cuda12_depends" >&2
+  exit 1
+fi
+if [[ "$(dpkg-deb --field "$cuda12_deb" Package)" != "mere-run-cuda12" ]]; then
+  echo "[test-package-linux] expected CUDA 12 .deb package name to be mere-run-cuda12:" >&2
+  dpkg-deb --field "$cuda12_deb" Package >&2
   exit 1
 fi
 
@@ -256,4 +261,4 @@ PATH="$fake_bin:$PATH" \
 [[ -f "$unknown_tar_output_dir/mere-run-0.0.0+cuda-unknown-tar-fixture-linux-${platform_arch}-cuda.tar.gz" ]]
 (cd "$unknown_tar_output_dir" && sha256sum -c SHA256SUMS >/dev/null)
 
-echo "[test-package-linux] CUDA toolkit-major gates and explicit override passed."
+echo "[test-package-linux] CUDA toolkit-major mappings and explicit override passed."
