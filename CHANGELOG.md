@@ -4,22 +4,27 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## 0.22.0 - 2026-07-16
+## 0.22.0 - 2026-07-17
 
 ### Added
 
 - added native LTX phase timing reports and a typed JSONL `video session`
-  worker that keeps the standalone distilled LTX 2.3 model resident across
-  serial synchronized-AV generations while explicitly rejecting the mutable
-  full dev + distilled-LoRA lifecycle.
+  worker for resident standalone-distilled and full dev + distilled-LoRA
+  inference. Full sessions keep the transformer resident and install all 1,660
+  official mixed-rank LoRA targets as reversible runtime layers, preserving
+  the base weights for dev stage one and enabling the adapter only for
+  distilled stage two. On an M4 Max, matched resident requests reduced
+  end-to-end time from 103.447 to 29.947 seconds (3.45x) for the standalone
+  lane and from 347.040 to 235.862 seconds (1.47x) for the full lane.
 
 - added fully native LTX 2.3 source-audio-to-video generation through
   `video generate --audio`, including exact 16 kHz stereo mel conditioning,
   the audio VAE encoder, frozen-audio multimodal guidance, full/dev stage one,
   streaming distilled-LoRA stage two, the shared managed
   `video-ltx23-full-mlx` bundle for both unified AV and A2Vid, compatibility
-  resolution for the former `video-ltx23-a2vid-mlx` ID, structured preflight reporting, and
-  original source-segment MP4 muxing without a soundtrack-only fallback.
+  resolution for the former `video-ltx23-a2vid-mlx` ID, structured preflight
+  reporting, and original source-segment MP4 muxing without a soundtrack-only
+  fallback.
 
 - added managed `text-chat-bonsai-27b-1bit` and
   `text-chat-bonsai-27b-2bit` support for Prism ML's packed binary and ternary
