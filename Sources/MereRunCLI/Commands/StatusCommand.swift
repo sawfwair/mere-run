@@ -85,10 +85,12 @@ struct StatusSnapshot: Codable, Equatable {
 struct StatusCapabilitiesSnapshot: Codable, Equatable {
     let asrStreamingProtocols: [Int]
     let asrStreamingInputFormats: [String]
+    let asrStreamingBackends: [String]
 
     static let current = StatusCapabilitiesSnapshot(
         asrStreamingProtocols: [1],
-        asrStreamingInputFormats: ["pcm-s16le/16000/mono"]
+        asrStreamingInputFormats: ["pcm-s16le/16000/mono"],
+        asrStreamingBackends: ["parakeet", "qwen"]
     )
 }
 

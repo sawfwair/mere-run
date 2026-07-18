@@ -64,6 +64,22 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertNoThrow(try cmd.validate())
     }
 
+    func testSpeechTranscribeAllowsParakeetRawPCMStreaming() throws {
+        let cmd = try SpeechTranscribe.parse([
+            "-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "16000",
+            "--backend", "parakeet", "--jsonl",
+        ])
+        XCTAssertEqual(cmd.backend, .parakeet)
+        XCTAssertNoThrow(try cmd.validate())
+    }
+
+    func testSpeechTranscribeRejectsParakeetStreamingTranslation() {
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "16000",
+            "--backend", "parakeet", "--task", "translate", "--jsonl",
+        ]))
+    }
+
     func testSpeechTranscribeRejectsInvalidRawPCMContracts() throws {
         XCTAssertThrowsError(try SpeechTranscribe.parse(["-"]))
         XCTAssertThrowsError(try SpeechTranscribe.parse([

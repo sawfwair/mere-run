@@ -41,6 +41,8 @@ mere.run guide status
 - Use it instead of separate `curl /health`, `curl /v1/models`, and `model list`
   checks when you only need the current local state.
 - Use `--json` in scripts, setup agents, or support tooling.
+- Inspect `capabilities.asrStreamingBackends` before routing a live ASR stream
+  to Parakeet or Qwen.
 - Use it after manual load/unload or runtime settings changes to confirm the
   server sees the same control-plane state.
 - During overlapping API traffic, check `request admission` to see how many
