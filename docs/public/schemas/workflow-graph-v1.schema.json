@@ -47,9 +47,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["$secret"],
-      "properties": {
-        "$secret": { "$ref": "#/$defs/id" }
-      }
+      "properties": { "$secret": { "$ref": "#/$defs/id" } }
     },
     "value": {
       "anyOf": [

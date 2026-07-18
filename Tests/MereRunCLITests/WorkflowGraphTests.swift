@@ -147,6 +147,38 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertTrue(result.diagnostics.contains { $0.id == "workflow_cycle" })
     }
 
+    func testCanonicalWorkflowFingerprintMatchesCrossRuntimeContract() throws {
+        let fixtures = try XCTUnwrap(Bundle.module.resourceURL)
+            .appendingPathComponent("Fixtures/WorkflowGraphV1", isDirectory: true)
+        let compatibility = try WorkflowBundleCodec.decoder().decode(
+            WorkflowCompatibilityFixture.self,
+            from: Data(contentsOf: fixtures.appendingPathComponent("graph-compatibility.v1.json"))
+        )
+        let graph = try WorkflowGraphDocument.load(
+            from: fixtures.appendingPathComponent(compatibility.canonicalFixture.graph)
+        )
+        let inputs = try WorkflowInputsDocument.load(
+            from: fixtures.appendingPathComponent(compatibility.canonicalFixture.inputs)
+        )
+        let assets = try WorkflowBundleCodec.decoder().decode(
+            WorkflowAssetManifest.self,
+            from: Data(contentsOf: fixtures.appendingPathComponent(compatibility.canonicalFixture.assets))
+        )
+        let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
+
+        XCTAssertEqual(compatibility.kind, "mere.run/graph-compatibility")
+        XCTAssertEqual(compatibility.schemaVersion, 1)
+        XCTAssertEqual(validation.order, compatibility.canonicalFixture.executionOrder)
+        XCTAssertEqual(
+            try WorkflowBundleCodec.hash(graph),
+            compatibility.canonicalFixture.graphFingerprint
+        )
+        XCTAssertEqual(
+            try WorkflowBundleCodec.hash(WorkflowPortableInputFingerprint(inputs: inputs, assets: assets)),
+            compatibility.canonicalFixture.inputFingerprint
+        )
+    }
+
     func testValidGraphInfersStableDependencyOrder() throws {
         let graph = try decodeGraph("""
         {
@@ -1157,6 +1189,36 @@ final class WorkflowGraphTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+}
+
+private struct WorkflowCompatibilityFixture: Decodable {
+    let schemaVersion: Int
+    let kind: String
+    let canonicalFixture: CanonicalFixture
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case kind
+        case canonicalFixture = "canonical_fixture"
+    }
+
+    struct CanonicalFixture: Decodable {
+        let graph: String
+        let inputs: String
+        let assets: String
+        let graphFingerprint: String
+        let inputFingerprint: String
+        let executionOrder: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case graph
+            case inputs
+            case assets
+            case graphFingerprint = "graph_fingerprint"
+            case inputFingerprint = "input_fingerprint"
+            case executionOrder = "execution_order"
+        }
     }
 }
 
