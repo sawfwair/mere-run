@@ -1089,12 +1089,17 @@ final class WorkflowGraphTests: XCTestCase {
     func testSSHFetchUsesExplicitRunDirectoryEntries() {
         let reports = SSHWorkflowExecutor.fetchRelativePaths(allArtifacts: false)
         let allArtifacts = SSHWorkflowExecutor.fetchRelativePaths(allArtifacts: true)
+        let selectedArtifactReports = SSHWorkflowExecutor.fetchRelativePaths(
+            allArtifacts: false,
+            includeOutputs: false
+        )
 
         XCTAssertTrue(reports.contains("outputs"))
         XCTAssertFalse(reports.contains("nodes"))
         XCTAssertTrue(allArtifacts.contains("nodes"))
         XCTAssertTrue(allArtifacts.contains("actions.json"))
         XCTAssertFalse(allArtifacts.contains("."))
+        XCTAssertFalse(selectedArtifactReports.contains("outputs"))
     }
 
     func testRemoteReferenceParsingIsStrict() throws {

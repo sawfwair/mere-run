@@ -309,6 +309,7 @@ and reused bytes and parts.
 mere.run run inspect relay://fleet/<job-id> --json
 mere.run run watch relay://fleet/<job-id> --json-stream
 mere.run run fetch relay://fleet/<job-id> --into ./runs/job --json
+mere.run run fetch relay://fleet/<job-id> --into ./runs/job --artifact sample --artifact adapter --json
 mere.run run fetch relay://fleet/<job-id> --into ./runs/job --all-artifacts --json
 mere.run run cancel relay://fleet/<job-id> --json
 mere.run run retry relay://fleet/<job-id> --json
@@ -318,7 +319,10 @@ mere.run run list --executor relay:fleet --limit 50 --json
 Fetch verifies artifact size and SHA-256 and materializes the same local
 run-directory shape. The default fetch includes reports, manifests, and final
 outputs; `--all-artifacts` also includes node artifacts. Explicit relay retry
-uses the same immutable bundle and resolved seeds.
+uses the same immutable bundle and resolved seeds. Repeat `--artifact` to fetch
+only named artifacts; an already-present file with the declared size and
+SHA-256 is reused, so retrying an interrupted fetch continues from verified
+local results. `--artifact` and `--all-artifacts` are mutually exclusive.
 
 Queued relay jobs include a typed placement report in `run inspect --json`.
 It identifies every connected device and reports concrete blockers such as a

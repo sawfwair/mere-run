@@ -995,7 +995,8 @@ enum WorkflowRemoteJobController {
     static func fetch(
         _ reference: WorkflowRemoteReference,
         into destination: URL,
-        allArtifacts: Bool
+        allArtifacts: Bool,
+        artifactNames: Set<String> = []
     ) async throws -> WorkflowRemoteJob {
         let profile = try WorkflowExecutorProfileStore.require(reference.executorReference)
         switch reference.kind {
@@ -1003,13 +1004,15 @@ enum WorkflowRemoteJobController {
             return try SSHWorkflowExecutor(profile: profile).fetch(
                 jobID: reference.jobID,
                 into: destination,
-                allArtifacts: allArtifacts
+                allArtifacts: allArtifacts,
+                artifactNames: artifactNames
             )
         case .relay:
             return try await RelayWorkflowExecutor(profile: profile).fetch(
                 jobID: reference.jobID,
                 into: destination,
-                allArtifacts: allArtifacts
+                allArtifacts: allArtifacts,
+                artifactNames: artifactNames
             )
         }
     }

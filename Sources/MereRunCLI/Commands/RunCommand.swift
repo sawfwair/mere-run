@@ -232,14 +232,24 @@ struct RunFetch: AsyncParsableCommand {
     @Option(name: [.customLong("into")], help: "Destination run directory.") var into: String
     @Flag(name: [.customLong("all-artifacts")], help: "Fetch intermediate artifacts as well as final outputs and reports.")
     var allArtifacts = false
+    @Option(
+        name: [.customLong("artifact")],
+        parsing: .unconditionalSingleValue,
+        help: "Fetch a named artifact. Repeat to fetch multiple artifacts."
+    )
+    var artifacts: [String] = []
     @Flag(name: [.customLong("json")], help: "Emit the fetched job as JSON.") var json = false
 
     func run() async throws {
+        if allArtifacts && !artifacts.isEmpty {
+            throw ValidationError("--artifact and --all-artifacts are mutually exclusive.")
+        }
         let destination = URL(fileURLWithPath: into).standardizedFileURL
         let job = try await WorkflowRemoteJobController.fetch(
             WorkflowRemoteReference(reference),
             into: destination,
-            allArtifacts: allArtifacts
+            allArtifacts: allArtifacts,
+            artifactNames: Set(artifacts)
         )
         if json { print(try StructuredRunOutput.encode(job)) } else { print(job.runDirectory ?? destination.path) }
     }

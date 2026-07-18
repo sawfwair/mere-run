@@ -12,6 +12,22 @@ final class RunCommandTests: XCTestCase {
         XCTAssertEqual(runNames, Set(["list", "inspect", "watch", "fetch", "cancel", "retry"]))
     }
 
+    func testRunFetchAcceptsRepeatableArtifactSelection() throws {
+        let command = try RunFetch.parse([
+            "relay://fleet/job-123",
+            "--into", "/tmp/job-123",
+            "--artifact", "sample",
+            "--artifact", "adapter",
+            "--json",
+        ])
+
+        XCTAssertEqual(command.reference, "relay://fleet/job-123")
+        XCTAssertEqual(command.into, "/tmp/job-123")
+        XCTAssertEqual(command.artifacts, ["sample", "adapter"])
+        XCTAssertFalse(command.allArtifacts)
+        XCTAssertTrue(command.json)
+    }
+
     func testRunListReportsWorkspaceArtifacts() throws {
         let temp = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

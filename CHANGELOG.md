@@ -13,6 +13,9 @@ The format is based on Keep a Changelog.
   secret contracts, reusable plugin-side composition, and stricter executor
   compatibility checks. These additions establish `0.23.0` as the minimum
   worker version for newly materialized graph jobs.
+- added repeatable `run fetch --artifact <name>` selection with verified reuse
+  of already-downloaded artifacts, allowing interrupted and partial remote
+  result retrieval without transferring the complete artifact set again.
 
 ## 0.22.0 - 2026-07-17
 
