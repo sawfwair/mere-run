@@ -17,6 +17,11 @@ The format is based on Keep a Changelog.
   checkpoint without modifying an installed managed model, published the
   audited conversion as `Sawfwair/gemma-4-12B-it-MLX-4bit@v1.0.0`, and pinned
   managed compact Gemma pulls to the exact hosted release commit.
+- added real-time Qwen speech transcription through `speech listen` and raw
+  PCM stdin streaming, with bounded ingestion, adaptive speech detection,
+  incremental mel/FFT processing, partial and silence-commit events, session
+  rollover, exactly-once terminal results, and discoverable streaming protocol
+  support in `mere.run status`.
 - expanded portable workflow graphs with deterministic stable-topological
   parallel scheduling, graph-level concurrency limits, node-level bounded
   retries and timeouts, and fail-fast cancellation of in-flight child work.
