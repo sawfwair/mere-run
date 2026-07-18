@@ -2440,6 +2440,9 @@ public extension ManagedModelSpec {
            installedRepo == expectedWithRevision {
             return true
         }
+        if installedRepo == "\(expectedRepo)@\(ZImageTurboRepository.revision)" {
+            return true
+        }
         return false
     }
 
