@@ -454,6 +454,46 @@ final class MediaIOTests: XCTestCase {
         }
     }
 
+    func testRealFFTPlanNonPowerOfTwoImpulseHasUnitPowerInEveryBin() throws {
+        let plan = try RealFFTPlan(size: 400)
+        var samples = [Float](repeating: 0, count: 400)
+        samples[0] = 1
+
+        let spectrum = plan.powerSpectrum(samples)
+
+        XCTAssertEqual(spectrum.count, 201)
+        for power in spectrum {
+            XCTAssertEqual(power, 1, accuracy: 0.000_01)
+        }
+    }
+
+    func testRealFFTPlanNonPowerOfTwoMatchesScalarReferenceBins() throws {
+        let size = 400
+        let plan = try RealFFTPlan(size: size)
+        let samples = (0..<size).map { index in
+            (sinf(Float(index) * 0.037) * 0.7) + (cosf(Float(index) * 0.091) * 0.2)
+        }
+        let spectrum = plan.powerSpectrum(samples)
+
+        for frequency in [0, 1, 7, 29, 113, 200] {
+            var real = 0.0
+            var imaginary = 0.0
+            for sampleIndex in 0..<size {
+                let angle = -2 * Double.pi * Double(frequency * sampleIndex) / Double(size)
+                let value = Double(samples[sampleIndex])
+                real += value * cos(angle)
+                imaginary += value * sin(angle)
+            }
+            let expected = Float((real * real) + (imaginary * imaginary))
+            XCTAssertEqual(
+                spectrum[frequency],
+                expected,
+                accuracy: max(0.000_1, expected * 0.000_1),
+                "frequency bin \(frequency)"
+            )
+        }
+    }
+
     private func readUInt16LE(_ data: Data, offset: Int) -> UInt16 {
         let bytes = [UInt8](data[offset..<(offset + 2)])
         return UInt16(bytes[0]) | (UInt16(bytes[1]) << 8)

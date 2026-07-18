@@ -280,6 +280,7 @@ public struct ASRStreamingRequest: Sendable, Hashable, Codable {
     public var sampleRate: Int
     public var decodeIntervalMs: Int
     public var minDecodeAudioMs: Int
+    public var maxQueuedAudioMs: Int
 
     public init(
         language: String? = nil,
@@ -287,7 +288,8 @@ public struct ASRStreamingRequest: Sendable, Hashable, Codable {
         maxTokens: Int = 448,
         sampleRate: Int = 16_000,
         decodeIntervalMs: Int = 500,
-        minDecodeAudioMs: Int = 800
+        minDecodeAudioMs: Int = 800,
+        maxQueuedAudioMs: Int = 5_000
     ) {
         self.language = language
         self.task = task
@@ -295,6 +297,7 @@ public struct ASRStreamingRequest: Sendable, Hashable, Codable {
         self.sampleRate = sampleRate
         self.decodeIntervalMs = decodeIntervalMs
         self.minDecodeAudioMs = minDecodeAudioMs
+        self.maxQueuedAudioMs = maxQueuedAudioMs
     }
 }
 
@@ -328,7 +331,16 @@ public protocol ASRStreamingSession: Sendable {
 
     func feed(samples: [Float]) async throws
     func finish() async throws
+    /// Finish once a decode covers the required prefix of the session audio.
+    /// Implementations that cannot distinguish trailing audio may use `finish()`.
+    func finish(requiredSampleCount: Int) async throws
     func cancel() async
+}
+
+public extension ASRStreamingSession {
+    func finish(requiredSampleCount _: Int) async throws {
+        try await finish()
+    }
 }
 
 public enum ASRStreamingError: Error, LocalizedError, Sendable, Hashable {

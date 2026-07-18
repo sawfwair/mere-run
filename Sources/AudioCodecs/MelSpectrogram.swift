@@ -136,6 +136,57 @@ public final class MelSpectrogram {
         return array
     }
 
+    func logMelFrame(
+        from audio: [Float],
+        sampleCount: Int,
+        frameIndex: Int
+    ) -> [Float] {
+        precondition(sampleCount >= 0 && sampleCount <= audio.count)
+        precondition(frameIndex >= 0)
+
+        let pad = winLength / 2
+        let frameStart = frameIndex * hopLength - pad
+        var paddedFrame = [Float](repeating: 0, count: nFFT)
+        if sampleCount > 0 {
+            for index in 0..<winLength {
+                let position = frameStart + index
+                let sourceIndex: Int
+                if position < 0 {
+                    sourceIndex = min(-position, sampleCount - 1)
+                } else if position >= sampleCount {
+                    sourceIndex = max((2 * sampleCount) - 2 - position, 0)
+                } else {
+                    sourceIndex = position
+                }
+                paddedFrame[index] = audio[sourceIndex] * hannWindow[index]
+            }
+        }
+
+        let magnitudes = fftPlan.powerSpectrum(paddedFrame)
+        return melFilters.map { filter in
+            var energy: Float = 0
+            for frequency in 0..<filter.count {
+                energy += filter[frequency] * magnitudes[frequency]
+            }
+            return log10(max(energy, 1e-10))
+        }
+    }
+
+    func outputFrameCount(sampleCount: Int) -> Int {
+        max(1, sampleCount / hopLength)
+    }
+
+    func stableFrameCount(sampleCount: Int) -> Int {
+        let pad = winLength / 2
+        guard sampleCount > pad else { return 0 }
+        let lastWindowOffset = winLength - pad
+        guard sampleCount >= lastWindowOffset else { return 0 }
+        return min(
+            outputFrameCount(sampleCount: sampleCount),
+            ((sampleCount - lastWindowOffset) / hopLength) + 1
+        )
+    }
+
     /// Create mel filterbank matrix
     private static func createMelFilterbank(
         nMels: Int,

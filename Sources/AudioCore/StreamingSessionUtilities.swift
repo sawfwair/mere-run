@@ -23,6 +23,9 @@ public struct StreamingDecodeCadence: Sendable, Hashable {
         guard bufferedSampleCount >= minDecodeSamples else {
             return false
         }
+        if lastDecodedSampleCount == 0 {
+            return true
+        }
         return bufferedSampleCount - lastDecodedSampleCount >= decodeIntervalSamples
     }
 

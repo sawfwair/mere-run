@@ -79,6 +79,17 @@ struct StatusSnapshot: Codable, Equatable {
     let modelStore: StatusModelStoreSnapshot
     let knownModelCount: Int
     let installedModels: [StatusInstalledModelSnapshot]
+    var capabilities: StatusCapabilitiesSnapshot = .current
+}
+
+struct StatusCapabilitiesSnapshot: Codable, Equatable {
+    let asrStreamingProtocols: [Int]
+    let asrStreamingInputFormats: [String]
+
+    static let current = StatusCapabilitiesSnapshot(
+        asrStreamingProtocols: [1],
+        asrStreamingInputFormats: ["pcm-s16le/16000/mono"]
+    )
 }
 
 struct StatusServerSnapshot: Codable, Equatable {
