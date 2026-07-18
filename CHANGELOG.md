@@ -14,7 +14,9 @@ The format is based on Keep a Changelog.
   answers after one- and two-tool chains against real checkpoints.
 - added a pinned `mlx-vlm` conversion script for reproducing the current Gemma
   4 12B affine 4-bit MLX artifact directly from Google's verified dense
-  checkpoint without modifying an installed managed model.
+  checkpoint without modifying an installed managed model, published the
+  audited conversion as `Sawfwair/gemma-4-12B-it-MLX-4bit@v1.0.0`, and pinned
+  managed compact Gemma pulls to the exact hosted release commit.
 - expanded portable workflow graphs with deterministic parallel scheduling,
   bounded retries and timeouts, verified cross-run caching, resource and named
   secret contracts, reusable plugin-side composition, and stricter executor

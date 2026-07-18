@@ -522,7 +522,11 @@ final class ManagedModelCatalogTests: XCTestCase {
 
         XCTAssertEqual(spec.category, .textChat)
         XCTAssertEqual(spec.hubFallback?.repoId, Gemma4Resources.twelveB4BitUpstreamModelId)
+        XCTAssertEqual(spec.hubFallback?.revision, Gemma4Resources.twelveB4BitUpstreamRevision)
         XCTAssertEqual(spec.upstreamRepoId, Gemma4Resources.twelveB4BitUpstreamModelId)
+        XCTAssertEqual(spec.upstreamRevision, Gemma4Resources.twelveB4BitUpstreamRevision)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 6_773_374_762)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("MERERUN_CONVERSION.json") == true)
         XCTAssertEqual(spec.validationKind, .gemma4)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
         XCTAssertEqual(spec.companionModelIDs, [Gemma4MTPResources.modelId])

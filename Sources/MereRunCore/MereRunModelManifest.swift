@@ -843,7 +843,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: nil,
                 supports: [.chat, .codeGeneration],
                 components: gemma4TextComponents,
-                upstreamRepoId: Gemma4Resources.twelveB4BitUpstreamModelId,
+                upstreamRepoId: Gemma4Resources.twelveB4BitUpstreamModelId
+                    + "@\(Gemma4Resources.twelveB4BitUpstreamRevision)",
                 createdAt: createdAt
             )
         case .ltxGemma3TwelveB4Bit:

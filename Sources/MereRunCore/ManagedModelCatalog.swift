@@ -949,11 +949,13 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: Gemma4Resources.twelveB4BitUpstreamModelId,
+                revision: Gemma4Resources.twelveB4BitUpstreamRevision,
                 patterns: Gemma4Resources.snapshotPatterns
             ),
             upstreamRepoId: Gemma4Resources.twelveB4BitUpstreamModelId,
+            upstreamRevision: Gemma4Resources.twelveB4BitUpstreamRevision,
             validationKind: .gemma4,
-            estimatedDownloadBytes: 12 * 1_073_741_824,
+            estimatedDownloadBytes: 6_773_374_762,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId]
         ),

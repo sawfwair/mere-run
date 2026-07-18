@@ -32,6 +32,12 @@ for producing an independently controlled MLX package; existing compatible
 weights can receive the checksum-gated canonical template overlay without
 being downloaded again.
 
+The verified output is published at
+[`Sawfwair/gemma-4-12B-it-MLX-4bit`](https://huggingface.co/Sawfwair/gemma-4-12B-it-MLX-4bit)
+as `v1.0.0`. Managed pulls pin Hub commit
+`0d75fd929a55a29ea3d431b43b2ab5142a6566bf`; the tag is the human-facing
+release name, while the commit pin makes resolution reproducible.
+
 The VDA-S, TripoSR, and InstantMesh converters have one frozen serialization
 environment: CPython 3.11.15 with the exact packages in
 `requirements-vfx.txt`. They fail closed on any other tool version and verify
