@@ -786,6 +786,30 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(report.warnings.isEmpty)
     }
 
+    func testZImageNanoResolvesLegacyMainManifestThroughManagedSymlink() throws {
+        let modelsRoot = try makeTemporaryDirectory()
+        let snapshotRoot = try makeTemporaryDirectory()
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+            try? FileManager.default.removeItem(at: snapshotRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+        try writeMinimalMFluxZImageNano(
+            at: snapshotRoot,
+            upstreamRepoId: "filipstrand/Z-Image-Turbo-mflux-4bit@main"
+        )
+        try FileManager.default.createSymbolicLink(
+            at: modelsRoot.appendingPathComponent("image-zimage-nano", isDirectory: true),
+            withDestinationURL: snapshotRoot
+        )
+
+        let resolved = try XCTUnwrap(ModelResolver().resolveIfPresent(.zetaNano))
+        XCTAssertEqual(resolved.modelID, .zetaNano)
+        XCTAssertEqual(resolved.source, .localModelStore)
+        XCTAssertEqual(resolved.rootURL.resolvingSymlinksInPath(), snapshotRoot.resolvingSymlinksInPath())
+    }
+
     func testBonsaiTernaryAcceptsPrismMLPackedLayout() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

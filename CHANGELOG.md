@@ -20,6 +20,11 @@ The format is based on Keep a Changelog.
   can execute unchanged through local, SSH, and Relay while mutable run state
   remains in a separate directory.
 
+### Fixed
+
+- fixed canonical `image-zimage-nano` resolution for valid managed installs
+  created from the current mflux mirror's legacy `@main` manifest.
+
 ## 0.22.0 - 2026-07-17
 
 ### Added
