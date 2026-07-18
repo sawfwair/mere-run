@@ -309,6 +309,25 @@ final class WorkflowGraphTests: XCTestCase {
         )
     }
 
+    func testSecretBoundNodeDisablesResumeReuse() {
+        let secretBound = WorkflowNode(
+            id: "publish",
+            kind: "private.publish",
+            arguments: ["token": .secretReference("api-token")],
+            dependsOn: nil,
+            execution: .init(maxAttempts: nil, timeoutSeconds: nil, cache: .never)
+        )
+        let publicNode = WorkflowNode(
+            id: "publish",
+            kind: "private.publish",
+            arguments: ["message": .string("fixture")],
+            dependsOn: nil
+        )
+
+        XCTAssertFalse(workflowNodeAllowsResumeReuse(secretBound))
+        XCTAssertTrue(workflowNodeAllowsResumeReuse(publicNode))
+    }
+
     func testReferenceAcceptsProviderOutputPortNamesWithUnderscores() throws {
         let reference = try WorkflowReference("nodes.prepare-data.outputs.contact_sheet")
 
@@ -585,6 +604,57 @@ final class WorkflowGraphTests: XCTestCase {
                 atPath: root.appendingPathComponent("run/worker-child.pid").path
             )
         )
+    }
+
+    func testWorkflowChildRegistryCancelsAllParallelProcesses() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let runDirectory = root.appendingPathComponent("run", isDirectory: true)
+        let nodeDirectories = ["000-first", "001-second"].map {
+            runDirectory.appendingPathComponent("nodes/\($0)", isDirectory: true)
+        }
+        for directory in nodeDirectories {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = nodeDirectories.count
+        let results = ParallelWorkflowProcessResults()
+        for directory in nodeDirectories {
+            queue.addOperation {
+                do {
+                    _ = try WorkflowProcessRunner().run(
+                        executable: URL(fileURLWithPath: "/bin/sleep"),
+                        arguments: ["30"],
+                        currentDirectory: directory,
+                        timeoutSeconds: 5,
+                        stdoutLineHandler: nil
+                    )
+                    results.record(failed: false)
+                } catch {
+                    results.record(failed: true)
+                }
+            }
+        }
+
+        let registrationDeadline = Date().addingTimeInterval(3)
+        while WorkflowChildProcessRegistry.processIDs(in: runDirectory).count < nodeDirectories.count,
+              Date() < registrationDeadline {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        let registered = WorkflowChildProcessRegistry.processIDs(in: runDirectory)
+        XCTAssertEqual(registered.count, nodeDirectories.count)
+
+        try Data().write(to: runDirectory.appendingPathComponent("cancel.request"), options: .atomic)
+        let terminated = WorkflowChildProcessRegistry.terminateAll(in: runDirectory)
+        queue.waitUntilAllOperationsAreFinished()
+
+        XCTAssertEqual(terminated, registered)
+        XCTAssertEqual(results.completionCount, nodeDirectories.count)
+        XCTAssertEqual(results.failureCount, nodeDirectories.count)
+        XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: runDirectory).isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: runDirectory.appendingPathComponent(WorkflowChildProcessRegistry.legacyFilename).path
+        ))
     }
 
     func testMaterializationFreezesSeedAndCanonicalFingerprints() throws {
@@ -1466,6 +1536,27 @@ private final class OverlapWorkflowProcessRunner: WorkflowProcessRunning, @unche
             intervals[nodeID] = Interval(start: start, end: end)
         }
         return WorkflowProcessResult(status: 0, stdout: "ok")
+    }
+}
+
+private final class ParallelWorkflowProcessResults: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completions = 0
+    private var failures = 0
+
+    var completionCount: Int {
+        lock.withLock { completions }
+    }
+
+    var failureCount: Int {
+        lock.withLock { failures }
+    }
+
+    func record(failed: Bool) {
+        lock.withLock {
+            completions += 1
+            if failed { failures += 1 }
+        }
     }
 }
 

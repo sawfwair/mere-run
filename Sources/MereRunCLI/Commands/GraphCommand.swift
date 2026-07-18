@@ -911,12 +911,7 @@ struct GraphWorkerCancel: ParsableCommand {
     func run() throws {
         let url = URL(fileURLWithPath: runDirectory).appendingPathComponent("cancel.request")
         try Data(Date().ISO8601Format().utf8).write(to: url, options: .atomic)
-        let processIDURL = url.deletingLastPathComponent().appendingPathComponent("worker-child.pid")
-        if let rawProcessID = try? String(contentsOf: processIDURL, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           let processID = Int32(rawProcessID), processID > 1 {
-            _ = kill(processID, SIGTERM)
-        }
+        WorkflowChildProcessRegistry.terminateAll(in: url.deletingLastPathComponent())
         let result = GraphCancellationResult(cancelled: true, runDirectory: url.deletingLastPathComponent().path)
         if json { print(try StructuredRunOutput.encode(result)) } else { print("Cancellation requested.") }
     }

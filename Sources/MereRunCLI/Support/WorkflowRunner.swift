@@ -93,6 +93,117 @@ private final class WorkflowProcessTimeoutState: @unchecked Sendable {
     }
 }
 
+enum WorkflowChildProcessRegistry {
+    static let directoryName = "worker-child-pids"
+    static let legacyFilename = "worker-child.pid"
+    private static let lock = NSLock()
+
+    static func register(
+        _ processID: Int32,
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        let entry = directory.appendingPathComponent("\(processID).pid")
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(String(processID).utf8).write(to: entry, options: .atomic)
+            try Data(String(processID).utf8).write(
+                to: runDirectory.appendingPathComponent(legacyFilename),
+                options: .atomic
+            )
+        } catch {
+            try? fileManager.removeItem(at: entry)
+            throw error
+        }
+    }
+
+    static func unregister(
+        _ processID: Int32,
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        let entry = runDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
+            .appendingPathComponent("\(processID).pid")
+        try? fileManager.removeItem(at: entry)
+        let legacy = runDirectory.appendingPathComponent(legacyFilename)
+        if readProcessID(at: legacy, fileManager: fileManager) == processID {
+            try? fileManager.removeItem(at: legacy)
+        }
+    }
+
+    static func processIDs(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) -> [Int32] {
+        let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        let entries = (try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        )) ?? []
+        var processIDs = Set(entries.compactMap { entry -> Int32? in
+            guard entry.pathExtension == "pid",
+                  let values = try? entry.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+                  values.isRegularFile == true,
+                  values.isSymbolicLink != true else {
+                return nil
+            }
+            return readProcessID(at: entry, fileManager: fileManager)
+        })
+        if let legacy = readProcessID(
+            at: runDirectory.appendingPathComponent(legacyFilename),
+            fileManager: fileManager
+        ) {
+            processIDs.insert(legacy)
+        }
+        return processIDs.sorted()
+    }
+
+    @discardableResult
+    static func terminateAll(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) -> [Int32] {
+        let processIDs = processIDs(in: runDirectory, fileManager: fileManager)
+        for processID in processIDs {
+            _ = kill(processID, SIGTERM)
+        }
+        return processIDs
+    }
+
+    static func clear(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let legacy = runDirectory.appendingPathComponent(legacyFilename)
+        if fileManager.fileExists(atPath: legacy.path) {
+            try fileManager.removeItem(at: legacy)
+        }
+        let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        if fileManager.fileExists(atPath: directory.path) {
+            try fileManager.removeItem(at: directory)
+        }
+    }
+
+    private static func readProcessID(at url: URL, fileManager: FileManager) -> Int32? {
+        guard fileManager.fileExists(atPath: url.path),
+              let raw = try? String(contentsOf: url, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              let processID = Int32(raw),
+              processID > 1 else {
+            return nil
+        }
+        return processID
+    }
+}
+
 private final class WorkflowProcessStderrTail: @unchecked Sendable {
     private static let maximumBytes = 16 * 1_024
     private let lock = NSLock()
@@ -206,10 +317,6 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         let stderr = Pipe()
         let stderrTail = WorkflowProcessStderrTail()
         let runDirectory = currentDirectory.deletingLastPathComponent().deletingLastPathComponent()
-        let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
-        defer {
-            try? FileManager.default.removeItem(at: processIDURL)
-        }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = stdout
         process.standardError = stderr
@@ -220,7 +327,19 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
             try? FileHandle.standardError.write(contentsOf: data)
         }
         try process.run()
-        try Data(String(process.processIdentifier).utf8).write(to: processIDURL, options: .atomic)
+        do {
+            try WorkflowChildProcessRegistry.register(process.processIdentifier, in: runDirectory)
+        } catch {
+            process.terminate()
+            process.waitUntilExit()
+            throw error
+        }
+        defer {
+            WorkflowChildProcessRegistry.unregister(process.processIdentifier, in: runDirectory)
+        }
+        if FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("cancel.request").path) {
+            process.terminate()
+        }
         let timeoutState = WorkflowProcessTimeoutState()
         let timeoutWorkItem: DispatchWorkItem?
         if let timeoutSeconds {
@@ -444,7 +563,7 @@ struct WorkflowRunner: @unchecked Sendable {
                     models: nodeModels,
                     upstreamOutputs: upstreamOutputs
                 ))
-                if try shouldResume(
+                if workflowNodeAllowsResumeReuse(node), try shouldResume(
                     manifest.nodes[nodeIndex],
                     expectedFingerprint: fingerprint,
                     nodeOutputs: &nodeOutputs
@@ -808,7 +927,7 @@ struct WorkflowRunner: @unchecked Sendable {
                     models: models,
                     upstreamOutputs: upstreamOutputs
                 ))
-                if try shouldResume(
+                if workflowNodeAllowsResumeReuse(node), try shouldResume(
                     manifest.nodes[nodeIndex],
                     expectedFingerprint: fingerprint,
                     nodeOutputs: &nodeOutputs
@@ -1586,10 +1705,7 @@ struct WorkflowRunner: @unchecked Sendable {
         if fileManager.fileExists(atPath: cancellationURL.path) {
             try fileManager.removeItem(at: cancellationURL)
         }
-        let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
-        if fileManager.fileExists(atPath: processIDURL.path) {
-            try fileManager.removeItem(at: processIDURL)
-        }
+        try WorkflowChildProcessRegistry.clear(in: runDirectory, fileManager: fileManager)
         try fileManager.createDirectory(
             at: runDirectory.appendingPathComponent("outputs", isDirectory: true),
             withIntermediateDirectories: true
@@ -2123,6 +2239,10 @@ private func workflowValue(_ value: WorkflowValue, matches type: WorkflowPortTyp
     case .assetCollection, .assetArray:
         if case .array = value { true } else { false }
     }
+}
+
+func workflowNodeAllowsResumeReuse(_ node: WorkflowNode) -> Bool {
+    node.arguments.values.allSatisfy { $0.secretNames.isEmpty }
 }
 
 private func isConfinedRelativeWorkflowPath(_ path: String) -> Bool {
