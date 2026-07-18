@@ -20,10 +20,12 @@ mere.run status
 
 - positional target: canonical model id.
 - `--force`: skip confirmation.
+- `--keep-cache`: remove install links but retain backing Hub payloads.
+- `--json`: emit a structured result; requires `--force`.
 
 ## Usage Patterns
 
-- Run `model list` first to confirm status and size.
+- Run `model storage` first to distinguish referenced, shared, and reclaimable bytes.
 - Use interactive confirmation for manual cleanup.
 - Use `--force` only in scripts where the target id is known.
 
@@ -41,13 +43,14 @@ mere.run model remove text-chat-gemma4-nano --force
 
 - Remove large creative models before pulling a different family.
 - Re-run `status` or `model list` after deletion to confirm status.
-- Remember that hub caches may still consume disk outside the model store.
+- The default removes unshared Hub payloads and preserves anything still referenced.
+- Use `--keep-cache` only when retaining bytes for a future reinstall is intentional.
 
 ## Troubleshooting
 
 - Unknown id: run `model list`.
 - Not installed: no deletion is needed.
-- Disk still full: inspect `MERERUN_HUB_CACHE` or the Hugging Face cache.
+- Disk still full: run the read-only `mere.run model gc` preview.
 
 ## Sources
 

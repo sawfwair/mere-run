@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added byte-exact `model storage --json` accounting and dry-run-first
+  `model gc`, including shared-payload ownership, legacy-link preservation,
+  stale partial/snapshot/blob collection, and macOS Studio cleanup previews.
+- added revision-addressed Hub snapshots, ETag-addressed hard-linked blobs,
+  paginated tree discovery, cross-process storage locking, and zero-copy
+  adoption of matching legacy payloads.
 - added checksum-gated canonical Gemma 4 chat templates, typed assistant
   tool-call and tool-response history, and a deterministic
   `model benchmark tool-continuations` lane for validating grounded final
@@ -44,6 +50,12 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- fixed `model remove` so it reports referenced versus reclaimable bytes and
+  actually deletes unshared backing payloads by default while preserving
+  shared consumers; `--keep-cache` retains the prior link-only behavior.
+- fixed model-size reporting that double-counted shared symlink targets and
+  allowed repo-flat caches, obsolete revisions, and incomplete downloads to
+  accumulate indefinitely.
 - fixed graph cancellation, retry, timeout, and resume cleanup so every owned
   child process is terminated and reusable outputs remain digest-verified.
 - suppressed harmless SSH archive metadata warnings without hiding transfer or

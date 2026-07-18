@@ -10,6 +10,8 @@ the model-management commands.
 - `mere.run model info`
 - `mere.run model pull`
 - `mere.run model remove`
+- `mere.run model storage`
+- `mere.run model gc`
 - `mere.run model repair-manifests`
 - `mere.run adapter list`
 - `mere.run adapter pull`
@@ -61,7 +63,23 @@ the canonical names shown by `mere.run model list`.
 
 ### `mere.run model list`
 
-Shows the canonical managed model table and installed status.
+Shows the canonical managed model table, installed status, and referenced size.
+Referenced sizes are not additive because multiple models can share payload files.
+
+### `mere.run model storage`
+
+Reports physical application-support, Hub, model-store, and other bytes, plus
+safe-to-collect partial/orphaned data. Per-model rows distinguish referenced,
+reclaimable-on-removal, and shared bytes. Pass `--json` for byte-exact output.
+
+### `mere.run model gc`
+
+Builds a read-only cleanup plan by default. `--force` recomputes and validates
+that plan under the cross-process storage lock before deleting unreferenced
+cache units, stale payloads, partial downloads, dead revision references, and
+unlinked blobs. Newly created unreferenced snapshots have a one-hour grace
+period. Installed model links and legacy links under MereRun application support
+keep their backing payloads live.
 
 ### `mere.run status`
 
@@ -141,7 +159,10 @@ the native `text-code`/llama.cpp path.
 
 ### `mere.run model remove`
 
-Removes a managed install from the local store.
+Removes a managed install and its unshared backing payloads, while preserving
+files referenced by another managed or legacy consumer. Confirmation and output
+show referenced versus reclaimable bytes. Pass `--keep-cache` to remove only the
+install links, or `--force --json` for structured automation.
 
 ### `mere.run model repair-manifests`
 

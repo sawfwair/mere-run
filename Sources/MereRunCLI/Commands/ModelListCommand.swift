@@ -12,7 +12,7 @@ struct ModelList: ParsableCommand {
         let rows = ModelInventory.rows()
 
         let widths = ModelListColumnWidths(rows: rows)
-        printRow("ID", "Category", "Status", "Size", widths: widths)
+        printRow("ID", "Category", "Status", "Referenced", widths: widths)
         print(String(repeating: "-", count: widths.totalWidth))
         for row in rows {
             printRow(row.id, row.category, row.status, row.size, widths: widths)
@@ -58,6 +58,6 @@ private struct ModelListColumnWidths {
     }
 
     var totalWidth: Int {
-        id + category + status + "Size".count + 6
+        id + category + status + "Referenced".count + 6
     }
 }

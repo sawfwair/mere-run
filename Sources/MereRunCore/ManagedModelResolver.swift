@@ -252,6 +252,11 @@ public enum ManagedModelResolver {
             for: spec,
             progress: progress
         )
+        let storageLock = try ModelStorageFileLock.acquire(
+            hubDirectory: HubSnapshot.resolvedDownloadBase(fileManager: fileManager),
+            fileManager: fileManager
+        )
+        defer { storageLock.unlock() }
         try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
         try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
         let manifest = try materializeManagedInstallRoot(
@@ -426,6 +431,7 @@ public enum ManagedModelResolver {
             from: snapshotURL,
             to: modelDir,
             fileManager: fileManager,
+            includedPatterns: spec.hubFallback?.patterns ?? [],
             materializedDirectoryPaths: mountedDirectories,
             excludedRelativePaths: mountedDestinationPaths
         )
@@ -438,7 +444,17 @@ public enum ManagedModelResolver {
                 fileManager: fileManager
             )
             try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true)
-            try materializeSnapshotEntries(from: sourceURL, to: destinationURL, fileManager: fileManager)
+            try materializeSnapshotEntries(
+                from: sourceURL,
+                to: destinationURL,
+                fileManager: fileManager,
+                includedPatterns: mountedPatterns(
+                    mounted.hubFallback.patterns,
+                    destinationPath: mounted.destinationPath,
+                    sourceURL: sourceURL,
+                    snapshotURL: mountedSnapshotURL
+                )
+            )
         }
 
         try installBundledGeometryLicenseIfNeeded(
@@ -472,6 +488,7 @@ public enum ManagedModelResolver {
         to destinationRoot: URL,
         fileManager: FileManager,
         relativePath: String = "",
+        includedPatterns: [String] = [],
         materializedDirectoryPaths: Set<String> = [],
         excludedRelativePaths: Set<String> = []
     ) throws {
@@ -490,6 +507,14 @@ public enum ManagedModelResolver {
 
             let linkURL = destinationRoot.appendingPathComponent(entry.lastPathComponent)
             let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            if isInternalSnapshotPath(entryRelativePath)
+                || !shouldIncludeSnapshotEntry(
+                    entryRelativePath,
+                    isDirectory: isDirectory,
+                    includedPatterns: includedPatterns
+                ) {
+                continue
+            }
             if isDirectory && shouldMaterializeDirectory(entryRelativePath, materializedDirectoryPaths: materializedDirectoryPaths) {
                 try fileManager.createDirectory(at: linkURL, withIntermediateDirectories: true)
                 try materializeSnapshotEntries(
@@ -497,6 +522,7 @@ public enum ManagedModelResolver {
                     to: linkURL,
                     fileManager: fileManager,
                     relativePath: entryRelativePath,
+                    includedPatterns: includedPatterns,
                     materializedDirectoryPaths: materializedDirectoryPaths,
                     excludedRelativePaths: excludedRelativePaths
                 )
@@ -508,6 +534,41 @@ public enum ManagedModelResolver {
             }
             try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: entry)
         }
+    }
+
+    private static func mountedPatterns(
+        _ patterns: [String],
+        destinationPath: String,
+        sourceURL: URL,
+        snapshotURL: URL
+    ) -> [String] {
+        guard sourceURL.standardizedFileURL.path != snapshotURL.standardizedFileURL.path else {
+            return patterns
+        }
+        let prefix = normalizedRelativePath(destinationPath) + "/"
+        return patterns.compactMap { pattern in
+            pattern.hasPrefix(prefix) ? String(pattern.dropFirst(prefix.count)) : nil
+        }
+    }
+
+    private static func isInternalSnapshotPath(_ relativePath: String) -> Bool {
+        let components = relativePath.split(separator: "/")
+        return components.contains(".cache")
+            || relativePath == HubSnapshotReceipt.filename
+    }
+
+    private static func shouldIncludeSnapshotEntry(
+        _ relativePath: String,
+        isDirectory: Bool,
+        includedPatterns: [String]
+    ) -> Bool {
+        guard !includedPatterns.isEmpty else { return true }
+        if HubSnapshot.matchesPath(relativePath, patterns: includedPatterns) {
+            return true
+        }
+        guard isDirectory else { return false }
+        let prefix = relativePath + "/"
+        return includedPatterns.contains { $0.hasPrefix(prefix) }
     }
 
     private static func materializedDirectories(for mountedDestinationPaths: [String]) -> Set<String> {

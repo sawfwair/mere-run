@@ -1602,11 +1602,46 @@ swift run mere.run video export-latents \
 
 ### `mere.run model list`
 
-List all managed model IDs, whether they are installed, and their resolved
-payload size. Sizes follow symlinked payload directories in the model store.
+List all managed model IDs, whether they are installed, and their referenced
+payload size. Referenced sizes follow symlinks and are not additive when models
+share payloads.
 
 ```bash
 swift run mere.run model list
+```
+
+### `mere.run model storage` and `mere.run model gc`
+
+Inspect physical storage, sharing, and per-model removal impact without
+double-counting shared files:
+
+```bash
+mere.run model storage
+mere.run model storage --json
+```
+
+Preview unreferenced payload, stale snapshot, blob, revision-reference, and
+partial-download cleanup. The default is read-only; mutation requires `--force`:
+
+```bash
+mere.run model gc
+mere.run model gc --json
+mere.run model gc --force
+```
+
+Cleanup rechecks the ownership graph under the same lock used by managed pulls.
+Existing legacy cache layouts remain readable and are adopted into the
+revision-addressed layout without copying matching payload bytes on a later pull.
+
+### `mere.run model remove`
+
+Remove an install and reclaim backing payloads that no remaining managed or
+legacy link uses:
+
+```bash
+mere.run model remove image-zimage-nano
+mere.run model remove image-zimage-nano --force --json
+mere.run model remove image-zimage-nano --keep-cache
 ```
 
 ### `mere.run status`

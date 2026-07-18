@@ -430,7 +430,7 @@ private struct CommandEditor: View {
         EditorSection("Runtime") {
             VStack(spacing: 10) {
                 PathField(path: $controller.cliPath, placeholder: "Auto-detect mere.run", mode: .openFile([.unixExecutable, .item]))
-                PathField(path: $controller.modelsRoot, placeholder: "Optional models root", mode: .openDirectory)
+                PathField(path: $controller.modelsRoot, placeholder: "Optional model links/local-files root", mode: .openDirectory)
                 PathField(path: $controller.workingDirectory, placeholder: "Working directory", mode: .openDirectory)
             }
         }
@@ -1277,8 +1277,8 @@ struct MereRunSettingsView: View {
             }
             VStack(spacing: 12) {
                 PathField(path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
-                PathField(path: $controller.modelsRoot, placeholder: "Optional models root", mode: .openDirectory)
-                PathField(path: $controller.hubCache, placeholder: "Optional Hugging Face hub cache", mode: .openDirectory)
+                PathField(path: $controller.modelsRoot, placeholder: "Optional model links/local-files root", mode: .openDirectory)
+                PathField(path: $controller.hubCache, placeholder: "Optional model payload storage", mode: .openDirectory)
                 PathField(path: $controller.workingDirectory, placeholder: "Working directory", mode: .openDirectory)
             }
             Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")

@@ -747,6 +747,20 @@ model store. It is a mere.run-local cache, not the default
 If you already pull from Hugging Face elsewhere and want to share cached weights,
 point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
 
+Inspect physical usage and sharing before deleting anything:
+
+```bash
+mere.run model storage
+mere.run model gc          # read-only plan
+mere.run model gc --force  # recompute under lock, then delete
+```
+
+`model remove <id>` reclaims backing payloads only when no other current or
+legacy model link uses them; `--keep-cache` retains those bytes intentionally.
+New pulls are revision-addressed and hard-link matching content blobs, while
+existing legacy cache directories remain compatible and can be adopted without
+copying payload bytes.
+
 ## Security defaults
 
 The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
