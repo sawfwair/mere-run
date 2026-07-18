@@ -3,6 +3,27 @@ import XCTest
 @testable import MereRunCLI
 
 final class WorkflowGraphTests: XCTestCase {
+    func testCatalogFieldRoundTripsStructuredValueSchema() throws {
+        let field = WorkflowNodeField(
+            name: "policy",
+            type: .json,
+            required: false,
+            valueSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "enabled": .object([
+                        "type": .string("boolean"),
+                        "default": .boolean(true),
+                    ]),
+                ]),
+            ])
+        )
+
+        let data = try WorkflowBundleCodec.encoder().encode(field)
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("value_schema"))
+        XCTAssertEqual(try WorkflowBundleCodec.decoder().decode(WorkflowNodeField.self, from: data), field)
+    }
+
     func testNVIDIAMemoryProbeParsesLargestGPU() {
         XCTAssertEqual(
             WorkflowExecutorProbe.parseNVIDIAMemoryBytes("8192\n16384 MiB\n"),

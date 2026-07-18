@@ -34,6 +34,25 @@
     "port_type": {
       "enum": ["string", "integer", "number", "boolean", "enum", "json", "asset", "asset_directory", "asset_collection"]
     },
+    "value_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["object", "array", "string", "integer", "number", "boolean", "enum"]},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "default": {"$ref": "#/$defs/value"},
+        "values": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "properties": {"type": "object", "additionalProperties": {"$ref": "#/$defs/value_schema"}},
+        "required": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "items": {"$ref": "#/$defs/value_schema"},
+        "minimum": {"type": "number"},
+        "maximum": {"type": "number"},
+        "step": {"type": "number", "exclusiveMinimum": 0},
+        "multiline": {"type": "boolean"}
+      }
+    },
     "input": {
       "type": "object",
       "additionalProperties": false,
@@ -51,7 +70,8 @@
         "step": {"type": "number", "exclusiveMinimum": 0},
         "multiline": {"type": "boolean"},
         "secret": {"type": "boolean"},
-        "advanced": {"type": "boolean"}
+        "advanced": {"type": "boolean"},
+        "value_schema": {"$ref": "#/$defs/value_schema"}
       }
     },
     "output": {

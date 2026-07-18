@@ -305,6 +305,7 @@ struct WorkflowNodeField: Codable, Equatable, Sendable {
     let multiline: Bool?
     let secret: Bool?
     let advanced: Bool?
+    let valueSchema: WorkflowValue?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -320,6 +321,7 @@ struct WorkflowNodeField: Codable, Equatable, Sendable {
         case multiline
         case secret
         case advanced
+        case valueSchema = "value_schema"
     }
 
     init(
@@ -335,7 +337,8 @@ struct WorkflowNodeField: Codable, Equatable, Sendable {
         step: Double? = nil,
         multiline: Bool? = nil,
         secret: Bool? = nil,
-        advanced: Bool? = nil
+        advanced: Bool? = nil,
+        valueSchema: WorkflowValue? = nil
     ) {
         self.name = name
         self.type = type
@@ -350,6 +353,7 @@ struct WorkflowNodeField: Codable, Equatable, Sendable {
         self.multiline = multiline
         self.secret = secret
         self.advanced = advanced
+        self.valueSchema = valueSchema
     }
 }
 
