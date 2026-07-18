@@ -3,12 +3,116 @@ import XCTest
 @testable import MereRunCLI
 
 final class WorkflowGraphTests: XCTestCase {
+    func testCatalogFieldRoundTripsStructuredValueSchema() throws {
+        let field = WorkflowNodeField(
+            name: "policy",
+            type: .json,
+            required: false,
+            valueSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "enabled": .object([
+                        "type": .string("boolean"),
+                        "default": .boolean(true),
+                    ]),
+                ]),
+            ])
+        )
+
+        let data = try WorkflowBundleCodec.encoder().encode(field)
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("value_schema"))
+        XCTAssertEqual(try WorkflowBundleCodec.decoder().decode(WorkflowNodeField.self, from: data), field)
+    }
+
     func testNVIDIAMemoryProbeParsesLargestGPU() {
         XCTAssertEqual(
             WorkflowExecutorProbe.parseNVIDIAMemoryBytes("8192\n16384 MiB\n"),
             16_384 * 1_024 * 1_024
         )
         XCTAssertNil(WorkflowExecutorProbe.parseNVIDIAMemoryBytes("not available\n"))
+    }
+
+    func testLegacyWorkerProbeConservativelyDefaultsNewCapabilities() throws {
+        let probe = try WorkflowBundleCodec.decoder().decode(
+            WorkflowExecutorProbe.self,
+            from: Data("""
+            {
+              "schema_version": 1,
+              "worker_version": "0.22.0",
+              "contract_versions": ["mere.run/job-bundle.v1"],
+              "platform": "linux",
+              "architecture": "arm64",
+              "accelerator_backend": "cuda",
+              "memory_bytes": 1024,
+              "available_disk_bytes": null,
+              "node_kinds": [],
+              "installed_model_ids": [],
+              "providers": []
+            }
+            """.utf8)
+        )
+
+        XCTAssertEqual(probe.systemMemoryBytes, 0)
+        XCTAssertEqual(probe.logicalCPUCores, 0)
+        XCTAssertFalse(probe.networkAccess)
+        XCTAssertEqual(probe.availableSecretNames, [])
+    }
+
+    func testWorkerVersionCompatibilityBlocksBeforeSubmission() {
+        let probe = WorkflowExecutorProbe(
+            schemaVersion: 1,
+            workerVersion: "0.22.0",
+            contractVersions: [WorkflowJobManifest.contractVersion],
+            platform: "linux",
+            architecture: "x86_64",
+            acceleratorBackend: "cuda",
+            memoryBytes: 16_000,
+            availableDiskBytes: 100_000,
+            nodeKinds: ["image.generate"],
+            installedModelIDs: []
+        )
+        let requirements = WorkflowJobRequirements(
+            minimumMereRunVersion: "0.23.0",
+            nodeKinds: ["image.generate"],
+            modelIDs: [],
+            acceleratorBackends: ["cuda"],
+            minimumAcceleratorMemoryBytes: nil
+        )
+        let job = WorkflowJobManifest(
+            contractVersion: WorkflowJobManifest.contractVersion,
+            jobID: UUID().uuidString,
+            createdAt: Date(),
+            graphFingerprint: String(repeating: "a", count: 64),
+            inputFingerprint: String(repeating: "b", count: 64),
+            requirements: requirements,
+            outputs: []
+        )
+
+        XCTAssertFalse(workflowVersion(probe.workerVersion, satisfiesMinimum: requirements.minimumMereRunVersion))
+        XCTAssertThrowsError(try validateWorker(probe, for: job, executor: "ssh:legacy")) { error in
+            XCTAssertTrue(String(describing: error).contains("requires 0.23.0 or newer"))
+        }
+    }
+
+    func testJobRequirementsRoundTripNamedSecretsAndResourcesWithoutValues() throws {
+        let requirements = WorkflowJobRequirements(
+            minimumMereRunVersion: "0.23.0",
+            nodeKinds: ["private.publish"],
+            modelIDs: [],
+            secretNames: ["api-token"],
+            acceleratorBackends: ["cpu"],
+            minimumAcceleratorMemoryBytes: 1_024,
+            minimumSystemMemoryBytes: 2_048,
+            minimumDiskBytes: 4_096,
+            minimumCPUCores: 4,
+            networkAccess: true
+        )
+
+        let data = try WorkflowBundleCodec.encoder().encode(requirements)
+        let encoded = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(encoded.contains("api-token"))
+        XCTAssertFalse(encoded.contains("MERERUN_SECRET_API_TOKEN"))
+        XCTAssertEqual(try WorkflowBundleCodec.decoder().decode(WorkflowJobRequirements.self, from: data), requirements)
     }
 
     func testDatasetDiscoveryRanksCompleteImageCaptionDirectories() throws {
@@ -38,7 +142,11 @@ final class WorkflowGraphTests: XCTestCase {
     func testCanonicalWorkflowFixturesDecodeAndValidate() throws {
         let fixtures = try XCTUnwrap(Bundle.module.resourceURL)
             .appendingPathComponent("Fixtures/WorkflowGraphV1", isDirectory: true)
-        for name in ["lora-sample.workflow.json", "image-video.workflow.json"] {
+        for name in [
+            "lora-sample.workflow.json",
+            "image-video.workflow.json",
+            "parallel-image-video.workflow.json",
+        ] {
             let graph = try WorkflowGraphDocument.load(from: fixtures.appendingPathComponent(name))
             let inputs = WorkflowInputsDocument(values: graph.inputs.reduce(into: [:]) { values, input in
                 switch input.value.type {
@@ -58,6 +166,38 @@ final class WorkflowGraphTests: XCTestCase {
             inputs: WorkflowInputsDocument(values: ["prompt": .string("fixture")])
         )
         XCTAssertTrue(result.diagnostics.contains { $0.id == "workflow_cycle" })
+    }
+
+    func testCanonicalWorkflowFingerprintMatchesCrossRuntimeContract() throws {
+        let fixtures = try XCTUnwrap(Bundle.module.resourceURL)
+            .appendingPathComponent("Fixtures/WorkflowGraphV1", isDirectory: true)
+        let compatibility = try WorkflowBundleCodec.decoder().decode(
+            WorkflowCompatibilityFixture.self,
+            from: Data(contentsOf: fixtures.appendingPathComponent("graph-compatibility.v1.json"))
+        )
+        let graph = try WorkflowGraphDocument.load(
+            from: fixtures.appendingPathComponent(compatibility.canonicalFixture.graph)
+        )
+        let inputs = try WorkflowInputsDocument.load(
+            from: fixtures.appendingPathComponent(compatibility.canonicalFixture.inputs)
+        )
+        let assets = try WorkflowBundleCodec.decoder().decode(
+            WorkflowAssetManifest.self,
+            from: Data(contentsOf: fixtures.appendingPathComponent(compatibility.canonicalFixture.assets))
+        )
+        let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
+
+        XCTAssertEqual(compatibility.kind, "mere.run/graph-compatibility")
+        XCTAssertEqual(compatibility.schemaVersion, 1)
+        XCTAssertEqual(validation.order, compatibility.canonicalFixture.executionOrder)
+        XCTAssertEqual(
+            try WorkflowBundleCodec.hash(graph),
+            compatibility.canonicalFixture.graphFingerprint
+        )
+        XCTAssertEqual(
+            try WorkflowBundleCodec.hash(WorkflowPortableInputFingerprint(inputs: inputs, assets: assets)),
+            compatibility.canonicalFixture.inputFingerprint
+        )
     }
 
     func testValidGraphInfersStableDependencyOrder() throws {
@@ -94,6 +234,173 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(validation.status, .ok)
         XCTAssertEqual(validation.order, ["make-image", "make-video"])
         XCTAssertEqual(validation.dependencies["make-video"], ["make-image"])
+    }
+
+    func testParallelSchedulerOverlapsReadyNodesAndWaitsForDependencies() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let graph = try decodeGraph("""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "parallel-images",
+          "inputs": {},
+          "execution": {"max_parallel_nodes": 2},
+          "nodes": [
+            {"id": "image-a", "kind": "image.generate", "arguments": {"prompt": "first", "seed": 1}},
+            {"id": "image-b", "kind": "image.generate", "arguments": {"prompt": "second", "seed": 2}},
+            {
+              "id": "video",
+              "kind": "video.generate",
+              "depends_on": ["image-a", "image-b"],
+              "arguments": {"prompt": "finish", "image": {"$ref": "nodes.image-a.outputs.image"}, "seed": 3}
+            }
+          ],
+          "outputs": {"video": {"$ref": "nodes.video.outputs.video"}}
+        }
+        """)
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: .init(values: [:]),
+            destination: root.appendingPathComponent("bundle")
+        ).materialize()
+        let process = OverlapWorkflowProcessRunner()
+
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: root.appendingPathComponent("run"),
+            processRunner: process
+        ).execute()
+
+        XCTAssertEqual(outcome.state, .finished)
+        XCTAssertEqual(process.maximumActiveRuns, 2)
+        let firstWaveEnd = try XCTUnwrap([
+            process.interval(for: "image-a")?.end,
+            process.interval(for: "image-b")?.end,
+        ].compactMap { $0 }.max())
+        let dependentStart = try XCTUnwrap(process.interval(for: "video")?.start)
+        XCTAssertGreaterThanOrEqual(dependentStart, firstWaveEnd)
+    }
+
+    func testGraphParallelismAndSecretReferencesAreValidated() throws {
+        let invalid = try decodeGraph("""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "invalid-parallelism",
+          "inputs": {},
+          "execution": {"max_parallel_nodes": 0},
+          "nodes": [{"id": "image", "kind": "image.generate", "arguments": {"prompt": "fixture"}}],
+          "outputs": {"image": {"$ref": "nodes.image.outputs.image"}}
+        }
+        """)
+        let validation = WorkflowGraphValidator.validate(graph: invalid, inputs: .init(values: [:]))
+        XCTAssertTrue(validation.diagnostics.contains { $0.id == "workflow_parallelism_invalid" })
+
+        let value = try JSONDecoder().decode(
+            WorkflowValue.self,
+            from: Data(#"{"$secret":"hugging-face-token"}"#.utf8)
+        )
+        XCTAssertEqual(value, .secretReference("hugging-face-token"))
+        XCTAssertEqual(value.secretNames, ["hugging-face-token"])
+        XCTAssertEqual(
+            workflowSecretEnvironmentKey("hugging-face-token"),
+            "MERERUN_SECRET_HUGGING_FACE_TOKEN"
+        )
+    }
+
+    func testSecretBoundNodeDisablesResumeReuse() {
+        let secretBound = WorkflowNode(
+            id: "publish",
+            kind: "private.publish",
+            arguments: ["token": .secretReference("api-token")],
+            dependsOn: nil,
+            execution: .init(maxAttempts: nil, timeoutSeconds: nil, cache: .never)
+        )
+        let publicNode = WorkflowNode(
+            id: "publish",
+            kind: "private.publish",
+            arguments: ["message": .string("fixture")],
+            dependsOn: nil
+        )
+
+        XCTAssertFalse(workflowNodeAllowsResumeReuse(secretBound))
+        XCTAssertTrue(workflowNodeAllowsResumeReuse(publicNode))
+    }
+
+    func testReferenceAcceptsProviderOutputPortNamesWithUnderscores() throws {
+        let reference = try WorkflowReference("nodes.prepare-data.outputs.contact_sheet")
+
+        XCTAssertEqual(
+            reference.source,
+            .nodeOutput(nodeID: "prepare-data", output: "contact_sheet")
+        )
+    }
+
+    func testNodeExecutionPolicySurvivesPortableMaterialization() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = try singleImageGraph()
+        let sourceNode = try XCTUnwrap(source.nodes.first)
+        let graph = WorkflowGraphDocument(
+            schemaVersion: source.schemaVersion,
+            kind: source.kind,
+            name: source.name,
+            inputs: source.inputs,
+            nodes: [WorkflowNode(
+                id: sourceNode.id,
+                kind: sourceNode.kind,
+                provider: sourceNode.provider,
+                arguments: sourceNode.arguments,
+                dependsOn: sourceNode.dependsOn,
+                execution: .init(maxAttempts: 3, timeoutSeconds: 120, cache: .refresh)
+            )],
+            outputs: source.outputs,
+            metadata: source.metadata
+        )
+
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 77 }
+        ).materialize()
+
+        XCTAssertEqual(bundle.graph.nodes.first?.execution?.resolvedMaxAttempts, 3)
+        XCTAssertEqual(bundle.graph.nodes.first?.execution?.timeoutSeconds, 120)
+        XCTAssertEqual(bundle.graph.nodes.first?.execution?.resolvedCache, .refresh)
+        let roundTrip = try WorkflowGraphDocument.load(from: bundle.directory.appendingPathComponent("graph.json"))
+        XCTAssertEqual(roundTrip, bundle.graph)
+    }
+
+    func testInvalidNodeExecutionPolicyBlocksValidation() throws {
+        let source = try singleImageGraph()
+        let sourceNode = try XCTUnwrap(source.nodes.first)
+        let graph = WorkflowGraphDocument(
+            schemaVersion: source.schemaVersion,
+            kind: source.kind,
+            name: source.name,
+            inputs: source.inputs,
+            nodes: [WorkflowNode(
+                id: sourceNode.id,
+                kind: sourceNode.kind,
+                provider: sourceNode.provider,
+                arguments: sourceNode.arguments,
+                dependsOn: sourceNode.dependsOn,
+                execution: .init(maxAttempts: 0, timeoutSeconds: 0, cache: .automatic)
+            )],
+            outputs: source.outputs,
+            metadata: source.metadata
+        )
+
+        let validation = WorkflowGraphValidator.validate(
+            graph: graph,
+            inputs: .init(values: ["prompt": .string("fixture")])
+        )
+
+        XCTAssertEqual(validation.status, .blocked)
+        XCTAssertTrue(validation.diagnostics.contains { $0.id == "workflow_node_attempts_invalid_generate" })
+        XCTAssertTrue(validation.diagnostics.contains { $0.id == "workflow_node_timeout_invalid_generate" })
     }
 
     func testDuplicateNodeIDsProduceDiagnosticsWithoutTrapping() throws {
@@ -264,6 +571,7 @@ final class WorkflowGraphTests: XCTestCase {
             executable: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", "printf 'fixture failure' >&2; exit 7"],
             currentDirectory: nodeDirectory,
+            timeoutSeconds: nil,
             stdoutLineHandler: nil
         )
 
@@ -271,6 +579,82 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(result.stderr, "fixture failure")
         XCTAssertEqual(result.terminationReason, .exit)
         XCTAssertEqual(result.failureSummary, "exited with status 7. stderr: fixture failure")
+    }
+
+    func testWorkflowChildEnforcesTimeout() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nodeDirectory = root.appendingPathComponent("run/nodes/000-fixture", isDirectory: true)
+        try FileManager.default.createDirectory(at: nodeDirectory, withIntermediateDirectories: true)
+        let startedAt = Date()
+
+        XCTAssertThrowsError(try WorkflowProcessRunner().run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "sleep 30"],
+            currentDirectory: nodeDirectory,
+            timeoutSeconds: 1,
+            stdoutLineHandler: nil
+        )) { error in
+            XCTAssertEqual(error.localizedDescription, "Process timed out after 1 seconds.")
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("run/worker-child.pid").path
+            )
+        )
+    }
+
+    func testWorkflowChildRegistryCancelsAllParallelProcesses() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let runDirectory = root.appendingPathComponent("run", isDirectory: true)
+        let nodeDirectories = ["000-first", "001-second"].map {
+            runDirectory.appendingPathComponent("nodes/\($0)", isDirectory: true)
+        }
+        for directory in nodeDirectories {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = nodeDirectories.count
+        let results = ParallelWorkflowProcessResults()
+        for directory in nodeDirectories {
+            queue.addOperation {
+                do {
+                    _ = try WorkflowProcessRunner().run(
+                        executable: URL(fileURLWithPath: "/bin/sleep"),
+                        arguments: ["30"],
+                        currentDirectory: directory,
+                        timeoutSeconds: 5,
+                        stdoutLineHandler: nil
+                    )
+                    results.record(failed: false)
+                } catch {
+                    results.record(failed: true)
+                }
+            }
+        }
+
+        let registrationDeadline = Date().addingTimeInterval(3)
+        while WorkflowChildProcessRegistry.processIDs(in: runDirectory).count < nodeDirectories.count,
+              Date() < registrationDeadline {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        let registered = WorkflowChildProcessRegistry.processIDs(in: runDirectory)
+        XCTAssertEqual(registered.count, nodeDirectories.count)
+
+        try Data().write(to: runDirectory.appendingPathComponent("cancel.request"), options: .atomic)
+        let terminated = WorkflowChildProcessRegistry.terminateAll(in: runDirectory)
+        queue.waitUntilAllOperationsAreFinished()
+
+        XCTAssertEqual(terminated, registered)
+        XCTAssertEqual(results.completionCount, nodeDirectories.count)
+        XCTAssertEqual(results.failureCount, nodeDirectories.count)
+        XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: runDirectory).isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: runDirectory.appendingPathComponent(WorkflowChildProcessRegistry.legacyFilename).path
+        ))
     }
 
     func testMaterializationFreezesSeedAndCanonicalFingerprints() throws {
@@ -497,6 +881,141 @@ final class WorkflowGraphTests: XCTestCase {
         )
     }
 
+    func testRunnerRetriesFailedNodeAndRecordsAttempt() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = try singleImageGraph()
+        let sourceNode = try XCTUnwrap(source.nodes.first)
+        let graph = WorkflowGraphDocument(
+            schemaVersion: source.schemaVersion,
+            kind: source.kind,
+            name: source.name,
+            inputs: source.inputs,
+            nodes: [WorkflowNode(
+                id: sourceNode.id,
+                kind: sourceNode.kind,
+                provider: sourceNode.provider,
+                arguments: sourceNode.arguments,
+                dependsOn: sourceNode.dependsOn,
+                execution: .init(maxAttempts: 2, timeoutSeconds: nil, cache: nil)
+            )],
+            outputs: source.outputs,
+            metadata: source.metadata
+        )
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: .init(values: ["prompt": .string("a lighthouse")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 99 }
+        ).materialize()
+        let runDirectory = root.appendingPathComponent("run")
+        let process = RetryingWorkflowProcessRunner()
+
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: runDirectory,
+            processRunner: process
+        ).execute()
+        let manifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: runDirectory.appendingPathComponent(GraphRunManifest.filename))
+        )
+        let events = try String(
+            contentsOf: runDirectory.appendingPathComponent("events.jsonl"),
+            encoding: .utf8
+        )
+        let eventRecords = try events.split(separator: "\n").map {
+            try WorkflowBundleCodec.decoder().decode(GraphRunEvent.self, from: Data($0.utf8))
+        }
+
+        XCTAssertEqual(outcome.state, .finished)
+        XCTAssertEqual(process.runCount, 2)
+        XCTAssertEqual(manifest.nodes.first?.attempt, 2)
+        XCTAssertEqual(manifest.nodes.first?.maxAttempts, 2)
+        XCTAssertEqual(manifest.nodes.first?.exitStatus, 0)
+        XCTAssertNil(manifest.nodes.first?.error)
+        XCTAssertTrue(eventRecords.contains { $0.type == "node_retrying" })
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: runDirectory
+                    .appendingPathComponent("nodes/000-generate/artifacts/partial.txt")
+                    .path
+            )
+        )
+    }
+
+    func testRunnerReusesVerifiedCrossRunCacheAndRepairsCorruption() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("a lighthouse")]),
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 99 }
+        ).materialize()
+        let cacheDirectory = root.appendingPathComponent("cache", isDirectory: true)
+        let firstRun = root.appendingPathComponent("run-one", isDirectory: true)
+        let firstProcess = FixtureWorkflowProcessRunner()
+
+        XCTAssertEqual(try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: firstRun,
+            processRunner: firstProcess,
+            cacheDirectory: cacheDirectory
+        ).execute().state, .finished)
+        XCTAssertEqual(firstProcess.arguments.count, 2)
+        let firstManifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: firstRun.appendingPathComponent(GraphRunManifest.filename))
+        )
+        let fingerprint = try XCTUnwrap(firstManifest.nodes.first?.fingerprint)
+
+        let secondRun = root.appendingPathComponent("run-two", isDirectory: true)
+        let secondProcess = FixtureWorkflowProcessRunner()
+        XCTAssertEqual(try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: secondRun,
+            processRunner: secondProcess,
+            cacheDirectory: cacheDirectory
+        ).execute().state, .finished)
+        let secondManifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: secondRun.appendingPathComponent(GraphRunManifest.filename))
+        )
+        let secondEvents = try String(
+            contentsOf: secondRun.appendingPathComponent("events.jsonl"),
+            encoding: .utf8
+        ).split(separator: "\n").map {
+            try WorkflowBundleCodec.decoder().decode(GraphRunEvent.self, from: Data($0.utf8))
+        }
+
+        XCTAssertTrue(secondProcess.arguments.isEmpty)
+        XCTAssertEqual(secondManifest.nodes.first?.attempt, 0)
+        XCTAssertTrue(secondEvents.contains { $0.type == "node_cache_hit" })
+        XCTAssertEqual(secondManifest.outputs.first?.sha256, firstManifest.outputs.first?.sha256)
+
+        let cacheFiles = cacheDirectory
+            .appendingPathComponent(fingerprint, isDirectory: true)
+            .appendingPathComponent("files", isDirectory: true)
+        let cachedRelativePath = try XCTUnwrap(
+            FileManager.default.subpathsOfDirectory(atPath: cacheFiles.path).first { path in
+                (try? cacheFiles.appendingPathComponent(path).resourceValues(
+                    forKeys: [.isRegularFileKey]
+                ).isRegularFile) == true
+            }
+        )
+        try Data("corrupt".utf8).write(to: cacheFiles.appendingPathComponent(cachedRelativePath))
+
+        let repairedProcess = FixtureWorkflowProcessRunner()
+        XCTAssertEqual(try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: root.appendingPathComponent("run-three"),
+            processRunner: repairedProcess,
+            cacheDirectory: cacheDirectory
+        ).execute().state, .finished)
+        XCTAssertEqual(repairedProcess.arguments.count, 2)
+    }
+
     func testResumeRequiresMatchingNodeFingerprintAndArtifactDigests() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -578,7 +1097,8 @@ final class WorkflowGraphTests: XCTestCase {
             invocations.append(arguments)
             switch arguments.first {
             case "tar":
-                try Data("archive".utf8).write(to: URL(fileURLWithPath: arguments[2]))
+                let archiveFlag = try XCTUnwrap(arguments.firstIndex(of: "-czf"))
+                try Data("archive".utf8).write(to: URL(fileURLWithPath: arguments[archiveFlag + 1]))
                 return .init(status: 0, stdout: "")
             case "scp":
                 return .init(status: 0, stdout: "")
@@ -631,18 +1151,25 @@ final class WorkflowGraphTests: XCTestCase {
             $0.contains("BatchMode=yes") && $0.contains("-O") && $0.contains("-P")
         })
         XCTAssertTrue(scpCalls.contains { $0.contains(where: { $0.hasSuffix(asset.digest) }) })
+        let tarCall = try XCTUnwrap(invocations.first(where: { $0.first == "tar" }))
+        XCTAssertTrue(tarCall.contains("--no-xattrs"))
         XCTAssertEqual(shellQuote("a'b;$(touch nope)"), "'a'\\''b;$(touch nope)'")
     }
 
     func testSSHFetchUsesExplicitRunDirectoryEntries() {
         let reports = SSHWorkflowExecutor.fetchRelativePaths(allArtifacts: false)
         let allArtifacts = SSHWorkflowExecutor.fetchRelativePaths(allArtifacts: true)
+        let selectedArtifactReports = SSHWorkflowExecutor.fetchRelativePaths(
+            allArtifacts: false,
+            includeOutputs: false
+        )
 
         XCTAssertTrue(reports.contains("outputs"))
         XCTAssertFalse(reports.contains("nodes"))
         XCTAssertTrue(allArtifacts.contains("nodes"))
         XCTAssertTrue(allArtifacts.contains("actions.json"))
         XCTAssertFalse(allArtifacts.contains("."))
+        XCTAssertFalse(selectedArtifactReports.contains("outputs"))
     }
 
     func testRemoteReferenceParsingIsStrict() throws {
@@ -716,6 +1243,134 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(job.placement?.nodes.first?.blockers.first?.code, "model_missing")
     }
 
+    func testRunJobExecutesTheVerifiedBundleWithoutMutatingIt() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: try singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle"),
+            jobID: { UUID(uuidString: "00000000-0000-0000-0000-000000000123")! }
+        ).materialize()
+        let sourceDocuments = try portableBundleDocuments(at: bundle.directory)
+        let runDirectory = root.appendingPathComponent("local-run")
+        let command = try GraphRunJob.parse([
+            "--bundle", bundle.directory.path,
+            "--run-dir", runDirectory.path,
+        ])
+
+        let envelope = try command.makeEnvelope(processRunner: FixtureWorkflowProcessRunner())
+
+        XCTAssertEqual(envelope.command, ["graph", "run-job"])
+        XCTAssertEqual(envelope.result.state, .finished)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: bundle.directory.appendingPathComponent(GraphRunManifest.filename).path
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: runDirectory.appendingPathComponent(GraphRunManifest.filename).path
+        ))
+        XCTAssertEqual(try portableBundleDocuments(at: bundle.directory), sourceDocuments)
+        XCTAssertEqual(try portableBundleDocuments(at: runDirectory), sourceDocuments)
+    }
+
+    func testSubmitJobCopiesExactVerifiedBundleBytesBeforeTransport() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dataset = root.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data([0x89, 0x50, 0x4e, 0x47]).write(to: dataset.appendingPathComponent("frame.png"))
+        try Data("caption".utf8).write(to: dataset.appendingPathComponent("frame.txt"))
+        let bundle = try WorkflowBundleMaterializer(
+            graph: try trainingGraph(),
+            suppliedInputs: .init(values: ["data": .string(dataset.path)]),
+            destination: root.appendingPathComponent("bundle"),
+            jobID: { UUID(uuidString: "00000000-0000-0000-0000-000000000456")! }
+        ).materialize()
+        let sourceDocuments = try portableBundleDocuments(at: bundle.directory)
+        let sourceAssets = try portableBundleAssets(at: bundle.directory)
+        let runDirectory = root.appendingPathComponent("remote-run")
+        let command = try GraphSubmitJob.parse([
+            "--bundle", bundle.directory.path,
+            "--executor", "relay:fixture",
+            "--run-dir", runDirectory.path,
+        ])
+        var submitted = false
+
+        let envelope = try await command.makeEnvelope(submitter: { reference, submittedBundle, submittedRun in
+            submitted = true
+            XCTAssertEqual(reference, "relay:fixture")
+            XCTAssertEqual(submittedBundle.path, runDirectory.standardizedFileURL.path)
+            XCTAssertEqual(submittedRun.path, runDirectory.standardizedFileURL.path)
+            XCTAssertEqual(try self.portableBundleDocuments(at: submittedBundle), sourceDocuments)
+            XCTAssertEqual(try self.portableBundleAssets(at: submittedBundle), sourceAssets)
+            return WorkflowRemoteJob(
+                jobID: bundle.job.jobID,
+                jobReference: "relay://fixture/\(bundle.job.jobID)",
+                state: .queued,
+                executor: reference,
+                runDirectory: submittedRun.path,
+                createdAt: bundle.job.createdAt,
+                updatedAt: bundle.job.createdAt,
+                artifacts: [],
+                error: nil,
+                placement: nil,
+                metrics: nil
+            )
+        })
+
+        XCTAssertTrue(submitted)
+        XCTAssertEqual(envelope.command, ["graph", "submit-job"])
+        XCTAssertEqual(envelope.result.jobReference, "relay://fixture/\(bundle.job.jobID)")
+        XCTAssertEqual(try portableBundleDocuments(at: bundle.directory), sourceDocuments)
+        XCTAssertEqual(try portableBundleDocuments(at: runDirectory), sourceDocuments)
+        XCTAssertEqual(try portableBundleAssets(at: bundle.directory), sourceAssets)
+        XCTAssertEqual(try portableBundleAssets(at: runDirectory), sourceAssets)
+    }
+
+    func testSubmitJobRejectsTamperedAndNestedBundlesBeforeTransport() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: try singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle")
+        ).materialize()
+        var graph = try WorkflowGraphDocument.load(
+            from: bundle.directory.appendingPathComponent("graph.json")
+        )
+        graph = WorkflowGraphDocument(
+            schemaVersion: graph.schemaVersion,
+            kind: graph.kind,
+            name: "tampered",
+            inputs: graph.inputs,
+            nodes: graph.nodes,
+            outputs: graph.outputs,
+            metadata: graph.metadata
+        )
+        try WorkflowBundleCodec.write(graph, to: bundle.directory.appendingPathComponent("graph.json"))
+        var submitted = false
+        let command = try GraphSubmitJob.parse([
+            "--bundle", bundle.directory.path,
+            "--executor", "ssh:fixture",
+            "--run-dir", root.appendingPathComponent("run").path,
+        ])
+
+        do {
+            _ = try await command.makeEnvelope(submitter: { _, _, _ in
+                submitted = true
+                throw NSError(domain: "fixture", code: 1)
+            })
+            XCTFail("Expected tampered bundle validation to fail.")
+        } catch {
+            XCTAssertTrue(String(describing: error).contains("fingerprint"))
+        }
+        XCTAssertFalse(submitted)
+        XCTAssertThrowsError(try requireSeparateWorkflowDirectories(
+            bundle: bundle.directory,
+            run: bundle.directory.appendingPathComponent("run")
+        ))
+    }
+
     private func singleImageGraph() throws -> WorkflowGraphDocument {
         try decodeGraph("""
         {
@@ -731,6 +1386,29 @@ final class WorkflowGraphTests: XCTestCase {
           "outputs": {"image": {"$ref": "nodes.generate.outputs.image"}}
         }
         """)
+    }
+
+    private func portableBundleDocuments(at directory: URL) throws -> [String: Data] {
+        try Dictionary(uniqueKeysWithValues: [
+            WorkflowJobManifest.filename,
+            "graph.json",
+            "inputs.json",
+            WorkflowAssetManifest.filename,
+        ].map { filename in
+            (filename, try Data(contentsOf: directory.appendingPathComponent(filename)))
+        })
+    }
+
+    private func portableBundleAssets(at directory: URL) throws -> [String: Data] {
+        let manifest = try WorkflowBundleCodec.decoder().decode(
+            WorkflowAssetManifest.self,
+            from: Data(contentsOf: directory.appendingPathComponent(WorkflowAssetManifest.filename))
+        )
+        return try Dictionary(uniqueKeysWithValues: Set(
+            manifest.groups.flatMap(\.entries).map(\.digest)
+        ).map { digest in
+            (digest, try Data(contentsOf: directory.appendingPathComponent("assets/sha256/\(digest)")))
+        })
     }
 
     private func trainingGraph() throws -> WorkflowGraphDocument {
@@ -761,6 +1439,36 @@ final class WorkflowGraphTests: XCTestCase {
     }
 }
 
+private struct WorkflowCompatibilityFixture: Decodable {
+    let schemaVersion: Int
+    let kind: String
+    let canonicalFixture: CanonicalFixture
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case kind
+        case canonicalFixture = "canonical_fixture"
+    }
+
+    struct CanonicalFixture: Decodable {
+        let graph: String
+        let inputs: String
+        let assets: String
+        let graphFingerprint: String
+        let inputFingerprint: String
+        let executionOrder: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case graph
+            case inputs
+            case assets
+            case graphFingerprint = "graph_fingerprint"
+            case inputFingerprint = "input_fingerprint"
+            case executionOrder = "execution_order"
+        }
+    }
+}
+
 private final class FixtureWorkflowProcessRunner: WorkflowProcessRunning {
     var arguments: [[String]] = []
 
@@ -779,8 +1487,106 @@ private final class FixtureWorkflowProcessRunner: WorkflowProcessRunning {
     }
 }
 
+private final class OverlapWorkflowProcessRunner: WorkflowProcessRunning, @unchecked Sendable {
+    struct Interval {
+        let start: Date
+        let end: Date
+    }
+
+    private let lock = NSLock()
+    private var activeRuns = 0
+    private var maximumRuns = 0
+    private var intervals: [String: Interval] = [:]
+
+    var maximumActiveRuns: Int {
+        lock.withLock { maximumRuns }
+    }
+
+    func interval(for nodeID: String) -> Interval? {
+        lock.withLock { intervals[nodeID] }
+    }
+
+    func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
+        if arguments.contains("--preflight") {
+            return WorkflowProcessResult(status: 0, stdout: "{}")
+        }
+        let nodeID = currentDirectory.lastPathComponent
+            .split(separator: "-", maxSplits: 1)
+            .last
+            .map(String.init) ?? currentDirectory.lastPathComponent
+        let start = Date()
+        lock.withLock {
+            activeRuns += 1
+            maximumRuns = max(maximumRuns, activeRuns)
+        }
+        Thread.sleep(forTimeInterval: 0.12)
+        guard let outputIndex = arguments.firstIndex(of: "--output"),
+              outputIndex + 1 < arguments.count else {
+            return WorkflowProcessResult(status: 2, stdout: "")
+        }
+        let output = URL(fileURLWithPath: arguments[outputIndex + 1])
+        try FileManager.default.createDirectory(
+            at: output.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data([0x01, 0x02, 0x03, 0x04]).write(to: output)
+        let end = Date()
+        lock.withLock {
+            activeRuns -= 1
+            intervals[nodeID] = Interval(start: start, end: end)
+        }
+        return WorkflowProcessResult(status: 0, stdout: "ok")
+    }
+}
+
+private final class ParallelWorkflowProcessResults: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completions = 0
+    private var failures = 0
+
+    var completionCount: Int {
+        lock.withLock { completions }
+    }
+
+    var failureCount: Int {
+        lock.withLock { failures }
+    }
+
+    func record(failed: Bool) {
+        lock.withLock {
+            completions += 1
+            if failed { failures += 1 }
+        }
+    }
+}
+
 private struct FailingPreflightWorkflowProcessRunner: WorkflowProcessRunning {
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
         WorkflowProcessResult(status: 255, stdout: "fixture model failure")
+    }
+}
+
+private final class RetryingWorkflowProcessRunner: WorkflowProcessRunning {
+    private(set) var runCount = 0
+
+    func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult {
+        if arguments.contains("--preflight") {
+            return WorkflowProcessResult(status: 0, stdout: "{}")
+        }
+        runCount += 1
+        guard let outputIndex = arguments.firstIndex(of: "--output"), outputIndex + 1 < arguments.count else {
+            return WorkflowProcessResult(status: 2, stdout: "")
+        }
+        let output = URL(fileURLWithPath: arguments[outputIndex + 1])
+        try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if runCount == 1 {
+            let artifacts = currentDirectory.appendingPathComponent("artifacts", isDirectory: true)
+            try FileManager.default.createDirectory(at: artifacts, withIntermediateDirectories: true)
+            try Data("partial".utf8).write(to: artifacts.appendingPathComponent("partial.txt"))
+            try Data("incomplete".utf8).write(to: output)
+            return WorkflowProcessResult(status: 75, stdout: "temporary failure")
+        }
+        try Data([0x89, 0x50, 0x4e, 0x47]).write(to: output)
+        return WorkflowProcessResult(status: 0, stdout: "ok")
     }
 }

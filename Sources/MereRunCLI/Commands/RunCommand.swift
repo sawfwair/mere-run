@@ -232,14 +232,24 @@ struct RunFetch: AsyncParsableCommand {
     @Option(name: [.customLong("into")], help: "Destination run directory.") var into: String
     @Flag(name: [.customLong("all-artifacts")], help: "Fetch intermediate artifacts as well as final outputs and reports.")
     var allArtifacts = false
+    @Option(
+        name: [.customLong("artifact")],
+        parsing: .unconditionalSingleValue,
+        help: "Fetch a named artifact. Repeat to fetch multiple artifacts."
+    )
+    var artifacts: [String] = []
     @Flag(name: [.customLong("json")], help: "Emit the fetched job as JSON.") var json = false
 
     func run() async throws {
+        if allArtifacts && !artifacts.isEmpty {
+            throw ValidationError("--artifact and --all-artifacts are mutually exclusive.")
+        }
         let destination = URL(fileURLWithPath: into).standardizedFileURL
         let job = try await WorkflowRemoteJobController.fetch(
             WorkflowRemoteReference(reference),
             into: destination,
-            allArtifacts: allArtifacts
+            allArtifacts: allArtifacts,
+            artifactNames: Set(artifacts)
         )
         if json { print(try StructuredRunOutput.encode(job)) } else { print(job.runDirectory ?? destination.path) }
     }
@@ -262,7 +272,7 @@ struct RunCancel: AsyncParsableCommand {
         }
         let marker = runDirectory.appendingPathComponent("cancel.request")
         try Data().write(to: marker, options: .atomic)
-        terminateWorkflowChild(in: runDirectory)
+        WorkflowChildProcessRegistry.terminateAll(in: runDirectory)
         let result = LocalCancellationResult(runDirectory: runDirectory.path, cancellationRequested: true)
         if json { print(try StructuredRunOutput.encode(result)) } else { print("Cancellation requested: \(runDirectory.path)") }
     }
@@ -333,14 +343,4 @@ private func localGraphManifest(at path: String) throws -> GraphRunManifest? {
     guard FileManager.default.fileExists(atPath: manifestURL.path) else { return nil }
     let data = try Data(contentsOf: manifestURL)
     return try? WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: data)
-}
-
-private func terminateWorkflowChild(in runDirectory: URL) {
-    let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
-    guard let raw = try? String(contentsOf: processIDURL, encoding: .utf8)
-        .trimmingCharacters(in: .whitespacesAndNewlines),
-          let processID = Int32(raw), processID > 1 else {
-        return
-    }
-    _ = kill(processID, SIGTERM)
 }

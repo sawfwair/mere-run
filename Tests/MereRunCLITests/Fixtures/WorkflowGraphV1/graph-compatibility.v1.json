@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/graph-compatibility",
+  "contracts": {
+    "workflow_graph_schema_versions": [1],
+    "workflow_program_schema_versions": [1],
+    "workflow_module_schema_versions": [1],
+    "workflow_editor_sidecar_schema_versions": [1],
+    "job_bundle": "mere.run/job-bundle.v1",
+    "graph_run": "mere.run/graph-run.v1",
+    "plugin_provider": "mere.run/plugin-graph-provider.v1",
+    "plugin_invocation": "mere.run/plugin-graph-invocation.v1",
+    "plugin_preflight": "mere.run/plugin-graph-preflight.v1",
+    "plugin_event": "mere.run/plugin-graph-event.v1"
+  },
+  "components": [
+    { "id": "mere.run", "minimum_version": "0.23.0" },
+    { "id": "mere-workflow-tools", "minimum_version": "0.2.0" },
+    { "id": "mere-run-graph-studio", "minimum_version": "0.1.0" },
+    { "id": "mere.run-node", "minimum_version": "0.1.9" }
+  ],
+  "canonical_fixture": {
+    "id": "parallel-image-video-v1",
+    "graph": "parallel-image-video.workflow.json",
+    "inputs": "parallel-image-video.inputs.json",
+    "assets": "parallel-image-video.assets.json",
+    "graph_fingerprint": "83327833196a00799c19507aaf2b34b36450346fb543467a2d4edfe2465316bc",
+    "input_fingerprint": "5380b7fbbed8ce21bf5fa4b3e1426fb479d9a289a2da06d531366b3f9120f30d",
+    "execution_order": ["image-a", "image-b", "video"]
+  }
+}

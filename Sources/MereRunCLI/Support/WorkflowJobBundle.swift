@@ -46,8 +46,13 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
     let modelIDs: [String]
     let models: [WorkflowModelProvenance]
     let providers: [WorkflowGraphProviderRequirement]
+    let secretNames: [String]
     let acceleratorBackends: [String]
     let minimumAcceleratorMemoryBytes: Int64?
+    let minimumSystemMemoryBytes: Int64?
+    let minimumDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let networkAccess: Bool
 
     enum CodingKeys: String, CodingKey {
         case minimumMereRunVersion = "minimum_mere_run_version"
@@ -55,8 +60,13 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
         case modelIDs = "model_ids"
         case models
         case providers
+        case secretNames = "secret_names"
         case acceleratorBackends = "accelerator_backends"
         case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+        case minimumSystemMemoryBytes = "minimum_system_memory_bytes"
+        case minimumDiskBytes = "minimum_disk_bytes"
+        case minimumCPUCores = "minimum_cpu_cores"
+        case networkAccess = "network_access"
     }
 
     init(
@@ -65,16 +75,26 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
         modelIDs: [String],
         models: [WorkflowModelProvenance] = [],
         providers: [WorkflowGraphProviderRequirement] = [],
+        secretNames: [String] = [],
         acceleratorBackends: [String],
-        minimumAcceleratorMemoryBytes: Int64?
+        minimumAcceleratorMemoryBytes: Int64?,
+        minimumSystemMemoryBytes: Int64? = nil,
+        minimumDiskBytes: Int64? = nil,
+        minimumCPUCores: Int? = nil,
+        networkAccess: Bool = false
     ) {
         self.minimumMereRunVersion = minimumMereRunVersion
         self.nodeKinds = nodeKinds
         self.modelIDs = modelIDs
         self.models = models
         self.providers = providers
+        self.secretNames = secretNames
         self.acceleratorBackends = acceleratorBackends
         self.minimumAcceleratorMemoryBytes = minimumAcceleratorMemoryBytes
+        self.minimumSystemMemoryBytes = minimumSystemMemoryBytes
+        self.minimumDiskBytes = minimumDiskBytes
+        self.minimumCPUCores = minimumCPUCores
+        self.networkAccess = networkAccess
     }
 
     init(from decoder: Decoder) throws {
@@ -87,11 +107,16 @@ struct WorkflowJobRequirements: Codable, Equatable, Sendable {
             [WorkflowGraphProviderRequirement].self,
             forKey: .providers
         ) ?? []
+        secretNames = try container.decodeIfPresent([String].self, forKey: .secretNames) ?? []
         acceleratorBackends = try container.decode([String].self, forKey: .acceleratorBackends)
         minimumAcceleratorMemoryBytes = try container.decodeIfPresent(
             Int64.self,
             forKey: .minimumAcceleratorMemoryBytes
         )
+        minimumSystemMemoryBytes = try container.decodeIfPresent(Int64.self, forKey: .minimumSystemMemoryBytes)
+        minimumDiskBytes = try container.decodeIfPresent(Int64.self, forKey: .minimumDiskBytes)
+        minimumCPUCores = try container.decodeIfPresent(Int.self, forKey: .minimumCPUCores)
+        networkAccess = try container.decodeIfPresent(Bool.self, forKey: .networkAccess) ?? false
     }
 }
 
@@ -170,6 +195,13 @@ enum WorkflowBundleCodec {
         return decoder
     }
 
+    static func lineEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
     static func write<T: Encodable>(_ value: T, to url: URL) throws {
         try encoder().encode(value).write(to: url, options: .atomic)
     }
@@ -179,6 +211,131 @@ enum WorkflowBundleCodec {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         return SHA256.hash(data: try encoder.encode(value)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+func verifiedPortableWorkflowBundle(
+    at directory: URL,
+    fileManager: FileManager = .default
+) throws -> WorkflowBundleMaterialization {
+    let directory = directory.standardizedFileURL
+    for filename in [
+        WorkflowJobManifest.filename,
+        "graph.json",
+        "inputs.json",
+        WorkflowAssetManifest.filename,
+    ] {
+        let document = directory.appendingPathComponent(filename)
+        let values = try document.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard fileManager.fileExists(atPath: document.path),
+              values.isRegularFile == true,
+              values.isSymbolicLink != true else {
+            throw ValidationError("Workflow bundle document is missing or unsafe: \(filename)")
+        }
+    }
+    let graph = try WorkflowGraphDocument.load(from: directory.appendingPathComponent("graph.json"))
+    let inputs = try WorkflowInputsDocument.load(from: directory.appendingPathComponent("inputs.json"))
+    let assets = try WorkflowBundleCodec.decoder().decode(
+        WorkflowAssetManifest.self,
+        from: Data(contentsOf: directory.appendingPathComponent(WorkflowAssetManifest.filename))
+    )
+    let job = try WorkflowBundleCodec.decoder().decode(
+        WorkflowJobManifest.self,
+        from: Data(contentsOf: directory.appendingPathComponent(WorkflowJobManifest.filename))
+    )
+    guard job.contractVersion == WorkflowJobManifest.contractVersion else {
+        throw ValidationError("Unsupported workflow job contract '\(job.contractVersion)'.")
+    }
+    guard assets.schemaVersion == 1 else {
+        throw ValidationError("Unsupported workflow asset manifest version '\(assets.schemaVersion)'.")
+    }
+    guard try WorkflowBundleCodec.hash(graph) == job.graphFingerprint else {
+        throw ValidationError("Workflow graph fingerprint does not match job.json.")
+    }
+    let inputFingerprint = try WorkflowBundleCodec.hash(WorkflowPortableInputFingerprint(inputs: inputs, assets: assets))
+    guard inputFingerprint == job.inputFingerprint else {
+        throw ValidationError("Workflow input fingerprint does not match job.json.")
+    }
+    let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
+    guard validation.status != .blocked else {
+        throw ValidationError(validation.diagnostics.map(\.message).joined(separator: " "))
+    }
+    let assetRoot = directory.appendingPathComponent("assets/sha256", isDirectory: true)
+    for entry in assets.groups.flatMap(\.entries) {
+        guard isPortableWorkflowPath(entry.path), isWorkflowSHA256(entry.digest) else {
+            throw ValidationError("Workflow asset manifest contains an invalid path or digest.")
+        }
+        let source = assetRoot.appendingPathComponent(entry.digest)
+        let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true,
+              values.isSymbolicLink != true,
+              try ModelArtifactPin.fileByteCount(source) == entry.sizeBytes,
+              try ModelArtifactPin.fileSHA256(source) == entry.digest else {
+            throw ValidationError("Workflow asset digest verification failed for '\(entry.path)'.")
+        }
+    }
+    return WorkflowBundleMaterialization(
+        directory: directory,
+        graph: graph,
+        inputs: inputs,
+        assets: assets,
+        job: job
+    )
+}
+
+func copyPortableWorkflowBundle(
+    _ bundle: WorkflowBundleMaterialization,
+    to destination: URL,
+    fileManager: FileManager = .default
+) throws {
+    let destination = destination.standardizedFileURL
+    if fileManager.fileExists(atPath: destination.path),
+       !(try fileManager.contentsOfDirectory(atPath: destination.path)).isEmpty {
+        throw ValidationError("Workflow run directory must be empty before bundle submission.")
+    }
+    try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+    for filename in [
+        WorkflowJobManifest.filename,
+        "graph.json",
+        "inputs.json",
+        WorkflowAssetManifest.filename,
+    ] {
+        try fileManager.copyItem(
+            at: bundle.directory.appendingPathComponent(filename),
+            to: destination.appendingPathComponent(filename)
+        )
+    }
+    let destinationAssets = destination.appendingPathComponent("assets/sha256", isDirectory: true)
+    try fileManager.createDirectory(at: destinationAssets, withIntermediateDirectories: true)
+    for digest in Set(bundle.assets.groups.flatMap(\.entries).map(\.digest)).sorted() {
+        try fileManager.copyItem(
+            at: bundle.directory.appendingPathComponent("assets/sha256/\(digest)"),
+            to: destinationAssets.appendingPathComponent(digest)
+        )
+    }
+}
+
+func requireSeparateWorkflowDirectories(bundle: URL, run: URL) throws {
+    let bundle = bundle.standardizedFileURL.path
+    let run = run.standardizedFileURL.path
+    guard bundle != run,
+          !run.hasPrefix(bundle + "/"),
+          !bundle.hasPrefix(run + "/") else {
+        throw ValidationError("Immutable bundle and run directories must be separate and non-nested.")
+    }
+}
+
+private func isPortableWorkflowPath(_ path: String) -> Bool {
+    !path.isEmpty
+        && !path.hasPrefix("/")
+        && path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy {
+            $0 != "." && $0 != ".." && !$0.isEmpty
+        }
+}
+
+private func isWorkflowSHA256(_ value: String) -> Bool {
+    value.count == 64 && value.utf8.allSatisfy { byte in
+        (byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)
     }
 }
 
@@ -314,7 +471,8 @@ struct WorkflowBundleMaterializer {
                 kind: node.kind,
                 provider: node.provider,
                 arguments: arguments,
-                dependsOn: node.dependsOn
+                dependsOn: node.dependsOn,
+                execution: node.execution
             )
         }
         return WorkflowGraphDocument(
@@ -324,6 +482,7 @@ struct WorkflowBundleMaterializer {
             inputs: graph.inputs,
             nodes: nodes,
             outputs: graph.outputs,
+            execution: graph.execution,
             metadata: graph.metadata
         )
     }
@@ -412,7 +571,8 @@ struct WorkflowBundleMaterializer {
                 kind: node.kind,
                 provider: node.provider,
                 arguments: arguments,
-                dependsOn: node.dependsOn
+                dependsOn: node.dependsOn,
+                execution: node.execution
             )
         }
         return WorkflowGraphDocument(
@@ -422,6 +582,7 @@ struct WorkflowBundleMaterializer {
             inputs: graph.inputs,
             nodes: nodes,
             outputs: graph.outputs,
+            execution: graph.execution,
             metadata: graph.metadata
         )
     }
@@ -539,6 +700,10 @@ struct WorkflowBundleMaterializer {
         })).sorted { $0.id < $1.id }
         var acceptedBackends = Set(["cpu", "metal", "cuda", "rocm"])
         var minimumMemory: Int64?
+        var minimumSystemMemory: Int64?
+        var minimumDisk: Int64?
+        var minimumCPUCores: Int?
+        var networkAccess = false
         for node in graph.nodes {
             guard let requirements = WorkflowNodeRegistry.entry(for: node)?.requirements else { continue }
             if !requirements.acceleratorBackends.isEmpty {
@@ -547,15 +712,33 @@ struct WorkflowBundleMaterializer {
             if let nodeMinimum = requirements.minimumAcceleratorMemoryBytes {
                 minimumMemory = max(minimumMemory ?? 0, nodeMinimum)
             }
+            if let nodeMinimum = requirements.minimumSystemMemoryBytes {
+                minimumSystemMemory = max(minimumSystemMemory ?? 0, nodeMinimum)
+            }
+            if let nodeMinimum = requirements.minimumDiskBytes {
+                minimumDisk = max(minimumDisk ?? 0, nodeMinimum)
+            }
+            if let nodeMinimum = requirements.minimumCPUCores {
+                minimumCPUCores = max(minimumCPUCores ?? 0, nodeMinimum)
+            }
+            networkAccess = networkAccess || requirements.networkAccess == true
         }
+        let secretNames = Array(Set(
+            graph.nodes.flatMap { $0.arguments.values.flatMap(\.secretNames) }
+        )).sorted()
         return WorkflowJobRequirements(
             minimumMereRunVersion: MereRunCLIVersion.current,
             nodeKinds: Array(Set(graph.nodes.map(\.kind))).sorted(),
             modelIDs: modelIDs.sorted(),
             models: modelProvenance,
             providers: providers,
+            secretNames: secretNames,
             acceleratorBackends: acceptedBackends.sorted(),
-            minimumAcceleratorMemoryBytes: minimumMemory
+            minimumAcceleratorMemoryBytes: minimumMemory,
+            minimumSystemMemoryBytes: minimumSystemMemory,
+            minimumDiskBytes: minimumDisk,
+            minimumCPUCores: minimumCPUCores,
+            networkAccess: networkAccess
         )
     }
 
@@ -650,6 +833,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
     var startedAt: Date?
     var completedAt: Date?
     var exitStatus: Int32?
+    var attempt: Int
+    var maxAttempts: Int
     var fingerprint: String
     var provider: WorkflowNodeProviderIdentity?
     var models: [WorkflowModelProvenance]
@@ -664,6 +849,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         case startedAt = "started_at"
         case completedAt = "completed_at"
         case exitStatus = "exit_status"
+        case attempt
+        case maxAttempts = "max_attempts"
         case fingerprint
         case provider
         case models
@@ -679,6 +866,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         startedAt: Date?,
         completedAt: Date?,
         exitStatus: Int32?,
+        attempt: Int = 0,
+        maxAttempts: Int = 1,
         fingerprint: String,
         provider: WorkflowNodeProviderIdentity? = nil,
         models: [WorkflowModelProvenance] = [],
@@ -692,6 +881,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         self.startedAt = startedAt
         self.completedAt = completedAt
         self.exitStatus = exitStatus
+        self.attempt = attempt
+        self.maxAttempts = maxAttempts
         self.fingerprint = fingerprint
         self.provider = provider
         self.models = models
@@ -708,6 +899,8 @@ struct GraphRunNodeRecord: Codable, Equatable, Sendable {
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         exitStatus = try container.decodeIfPresent(Int32.self, forKey: .exitStatus)
+        attempt = try container.decodeIfPresent(Int.self, forKey: .attempt) ?? 0
+        maxAttempts = try container.decodeIfPresent(Int.self, forKey: .maxAttempts) ?? 1
         fingerprint = try container.decode(String.self, forKey: .fingerprint)
         provider = try container.decodeIfPresent(WorkflowNodeProviderIdentity.self, forKey: .provider)
         models = try container.decodeIfPresent([WorkflowModelProvenance].self, forKey: .models) ?? []

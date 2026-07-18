@@ -19,7 +19,9 @@ struct Graph: AsyncParsableCommand {
             GraphMaterialize.self,
             GraphExportJob.self,
             GraphRun.self,
+            GraphRunJob.self,
             GraphSubmit.self,
+            GraphSubmitJob.self,
             GraphWorker.self,
         ]
     )
@@ -168,6 +170,18 @@ struct GraphPreflightResult: Codable, Equatable {
     let installedModelIDs: [String]
     let requiredProviders: [WorkflowGraphProviderRequirement]
     let availableProviders: [WorkflowGraphProviderRequirement]
+    let requiredSecretNames: [String]
+    let availableSecretNames: [String]
+    let minimumAcceleratorMemoryBytes: Int64?
+    let acceleratorMemoryBytes: UInt64
+    let minimumSystemMemoryBytes: Int64?
+    let systemMemoryBytes: UInt64
+    let minimumDiskBytes: Int64?
+    let availableDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let logicalCPUCores: Int
+    let networkAccessRequired: Bool
+    let networkAccessAvailable: Bool
     let executor: String
 
     enum CodingKeys: String, CodingKey {
@@ -178,6 +192,18 @@ struct GraphPreflightResult: Codable, Equatable {
         case installedModelIDs = "installed_model_ids"
         case requiredProviders = "required_providers"
         case availableProviders = "available_providers"
+        case requiredSecretNames = "required_secret_names"
+        case availableSecretNames = "available_secret_names"
+        case minimumAcceleratorMemoryBytes = "minimum_accelerator_memory_bytes"
+        case acceleratorMemoryBytes = "accelerator_memory_bytes"
+        case minimumSystemMemoryBytes = "minimum_system_memory_bytes"
+        case systemMemoryBytes = "system_memory_bytes"
+        case minimumDiskBytes = "minimum_disk_bytes"
+        case availableDiskBytes = "available_disk_bytes"
+        case minimumCPUCores = "minimum_cpu_cores"
+        case logicalCPUCores = "logical_cpu_cores"
+        case networkAccessRequired = "network_access_required"
+        case networkAccessAvailable = "network_access_available"
         case executor
     }
 }
@@ -227,6 +253,14 @@ struct GraphPreflight: AsyncParsableCommand {
                 message: "Executor '\(executor)' does not support \(WorkflowJobManifest.contractVersion)."
             ))
         }
+        if !workflowVersion(probe.workerVersion, satisfiesMinimum: MereRunCLIVersion.current) {
+            diagnostics.append(.init(
+                id: "executor_worker_version_too_old",
+                severity: .blocker,
+                title: "Executor worker is too old",
+                message: "Executor '\(executor)' reports mere.run \(probe.workerVersion); this graph requires \(MereRunCLIVersion.current) or newer."
+            ))
+        }
         if !requirements.acceleratorBackends.contains(probe.acceleratorBackend), probe.acceleratorBackend != "mixed" {
             diagnostics.append(.init(
                 id: "executor_accelerator_unsupported",
@@ -261,6 +295,58 @@ struct GraphPreflight: AsyncParsableCommand {
                 title: "Executor model is missing",
                 message: "Executor '\(executor)' does not have model '\(modelID)' installed.",
                 suggestedActionIDs: ["pull-model-\(modelID)"]
+            ))
+        }
+        for secretName in requirements.secretNames where !probe.availableSecretNames.contains(secretName) {
+            diagnostics.append(.init(
+                id: "executor_secret_missing_\(secretName)",
+                severity: .blocker,
+                title: "Executor secret is missing",
+                message: "Executor '\(executor)' does not expose configured secret '\(secretName)'. Configure \(workflowSecretEnvironmentKey(secretName)) on that worker."
+            ))
+        }
+        if let minimum = requirements.minimumAcceleratorMemoryBytes,
+           probe.memoryBytes < UInt64(minimum) {
+            diagnostics.append(.init(
+                id: "executor_accelerator_memory_insufficient",
+                severity: .blocker,
+                title: "Executor accelerator memory is insufficient",
+                message: "Executor '\(executor)' reports \(probe.memoryBytes) accelerator-memory bytes; this graph requires at least \(minimum)."
+            ))
+        }
+        if let minimum = requirements.minimumSystemMemoryBytes,
+           probe.systemMemoryBytes < UInt64(minimum) {
+            diagnostics.append(.init(
+                id: "executor_system_memory_insufficient",
+                severity: .blocker,
+                title: "Executor system memory is insufficient",
+                message: "Executor '\(executor)' reports \(probe.systemMemoryBytes) system-memory bytes; this graph requires at least \(minimum)."
+            ))
+        }
+        if let minimum = requirements.minimumDiskBytes,
+           probe.availableDiskBytes.map({ $0 < minimum }) != false {
+            diagnostics.append(.init(
+                id: "executor_disk_insufficient",
+                severity: .blocker,
+                title: "Executor disk space is insufficient",
+                message: "Executor '\(executor)' does not report at least \(minimum) free disk bytes."
+            ))
+        }
+        if let minimum = requirements.minimumCPUCores,
+           probe.logicalCPUCores < minimum {
+            diagnostics.append(.init(
+                id: "executor_cpu_insufficient",
+                severity: .blocker,
+                title: "Executor CPU capacity is insufficient",
+                message: "Executor '\(executor)' reports \(probe.logicalCPUCores) logical CPU cores; this graph requires at least \(minimum)."
+            ))
+        }
+        if requirements.networkAccess, !probe.networkAccess {
+            diagnostics.append(.init(
+                id: "executor_network_unavailable",
+                severity: .blocker,
+                title: "Executor network access is unavailable",
+                message: "Executor '\(executor)' does not allow network access required by this graph."
             ))
         }
         diagnostics.append(contentsOf: assetDiagnostics(graph: loaded.graph, inputs: loaded.inputs))
@@ -300,6 +386,18 @@ struct GraphPreflight: AsyncParsableCommand {
                 installedModelIDs: probe.installedModelIDs,
                 requiredProviders: requirements.providers,
                 availableProviders: probe.providers,
+                requiredSecretNames: requirements.secretNames,
+                availableSecretNames: probe.availableSecretNames,
+                minimumAcceleratorMemoryBytes: requirements.minimumAcceleratorMemoryBytes,
+                acceleratorMemoryBytes: probe.memoryBytes,
+                minimumSystemMemoryBytes: requirements.minimumSystemMemoryBytes,
+                systemMemoryBytes: probe.systemMemoryBytes,
+                minimumDiskBytes: requirements.minimumDiskBytes,
+                availableDiskBytes: probe.availableDiskBytes,
+                minimumCPUCores: requirements.minimumCPUCores,
+                logicalCPUCores: probe.logicalCPUCores,
+                networkAccessRequired: requirements.networkAccess,
+                networkAccessAvailable: probe.networkAccess,
                 executor: executor
             ),
             diagnostics: diagnostics,
@@ -506,6 +604,170 @@ struct GraphSubmitRequest: Codable, Equatable {
     }
 }
 
+struct GraphRunJobRequest: Codable, Equatable {
+    let bundlePath: String
+    let runDirectory: String
+    let resume: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case bundlePath = "bundle_path"
+        case runDirectory = "run_directory"
+        case resume
+    }
+}
+
+typealias GraphRunJobEnvelope = StructuredRunEnvelope<GraphRunJobRequest, WorkflowRunOutcome>
+
+struct GraphRunJob: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "run-job",
+        abstract: "Run an existing immutable workflow job bundle locally."
+    )
+
+    @Option(name: [.long], help: "Portable job bundle directory.")
+    var bundle: String
+
+    @Option(name: [.customLong("run-dir")], help: "Durable run directory, separate from the immutable bundle.")
+    var runDirectory: String
+
+    @Flag(name: [.long], help: "Reuse verified outputs from a prior interrupted run.")
+    var resume = false
+
+    @Flag(name: [.long], help: "Emit one final structured run report.")
+    var json = false
+
+    @Flag(name: [.customLong("json-stream")], help: "Emit run events as newline-delimited JSON.")
+    var jsonStream = false
+
+    func run() async throws {
+        guard !(json && jsonStream) else {
+            throw ValidationError("--json and --json-stream are mutually exclusive.")
+        }
+        let eventHandler: ((GraphRunEvent) -> Void)? = jsonStream ? { event in
+            emitGraphStreamEvent(event)
+        } : nil
+        let envelope: GraphRunJobEnvelope = try makeEnvelope(eventHandler: eventHandler)
+        if json { print(try StructuredRunOutput.encode(envelope)) }
+        if !json && !jsonStream { print(envelope.summary) }
+        if envelope.result.state == .failed || envelope.result.state == .cancelled { throw ExitCode.failure }
+    }
+
+    func makeEnvelope(
+        now: @escaping () -> Date = Date.init,
+        eventHandler: ((GraphRunEvent) -> Void)? = nil,
+        processRunner: WorkflowProcessRunning = WorkflowProcessRunner()
+    ) throws -> GraphRunJobEnvelope {
+        let bundleURL = URL(fileURLWithPath: bundle).standardizedFileURL
+        let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
+        try requireSeparateWorkflowDirectories(bundle: bundleURL, run: runURL)
+        _ = try verifiedPortableWorkflowBundle(at: bundleURL)
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundleURL,
+            runDirectory: runURL,
+            resume: resume,
+            processRunner: processRunner,
+            eventHandler: eventHandler
+        ).execute()
+        return GraphRunJobEnvelope(
+            schemaVersion: 1,
+            mereRunVersion: MereRunCLIVersion.current,
+            command: ["graph", "run-job"],
+            mode: .run,
+            status: structuredStatus(outcome.state),
+            createdAt: now(),
+            cwd: FileManager.default.currentDirectoryPath,
+            summary: "Workflow \(outcome.state.rawValue): \(outcome.jobID)",
+            request: .init(
+                bundlePath: bundleURL.path,
+                runDirectory: runURL.path,
+                resume: resume
+            ),
+            result: outcome,
+            diagnostics: outcome.state == .failed ? [.init(
+                id: "workflow_run_failed",
+                severity: .blocker,
+                title: "Workflow run failed",
+                message: "Inspect \(runURL.appendingPathComponent(GraphRunManifest.filename).path) for node details."
+            )] : [],
+            actions: []
+        )
+    }
+}
+
+struct GraphSubmitJobRequest: Codable, Equatable {
+    let bundlePath: String
+    let runDirectory: String
+    let executor: String
+
+    enum CodingKeys: String, CodingKey {
+        case bundlePath = "bundle_path"
+        case runDirectory = "run_directory"
+        case executor
+    }
+}
+
+typealias GraphSubmitJobEnvelope = StructuredRunEnvelope<GraphSubmitJobRequest, WorkflowRemoteJob>
+
+struct GraphSubmitJob: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "submit-job",
+        abstract: "Submit an existing immutable workflow job bundle to SSH or Relay."
+    )
+
+    @Option(name: [.long], help: "Portable job bundle directory.")
+    var bundle: String
+
+    @Option(name: [.long], help: "Remote executor reference: ssh:<profile> or relay:<profile>.")
+    var executor: String
+
+    @Option(name: [.customLong("run-dir")], help: "Local durable run directory, separate from the immutable bundle.")
+    var runDirectory: String
+
+    @Flag(name: [.long], help: "Emit a structured submission report.")
+    var json = false
+
+    func run() async throws {
+        let envelope = try await makeEnvelope()
+        if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.result.jobReference) }
+    }
+
+    func makeEnvelope(
+        now: @escaping () -> Date = Date.init,
+        submitter: (String, URL, URL) async throws -> WorkflowRemoteJob = { reference, bundle, run in
+            try await WorkflowExecutorController.submit(
+                reference: reference,
+                bundleDirectory: bundle,
+                localRunDirectory: run
+            )
+        }
+    ) async throws -> GraphSubmitJobEnvelope {
+        let bundleURL = URL(fileURLWithPath: bundle).standardizedFileURL
+        let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
+        try requireSeparateWorkflowDirectories(bundle: bundleURL, run: runURL)
+        let verified = try verifiedPortableWorkflowBundle(at: bundleURL)
+        try copyPortableWorkflowBundle(verified, to: runURL)
+        let remoteJob = try await submitter(executor, runURL, runURL)
+        return GraphSubmitJobEnvelope(
+            schemaVersion: 1,
+            mereRunVersion: MereRunCLIVersion.current,
+            command: ["graph", "submit-job"],
+            mode: .run,
+            status: structuredStatus(remoteJob.state),
+            createdAt: now(),
+            cwd: FileManager.default.currentDirectoryPath,
+            summary: "Submitted workflow job \(remoteJob.jobID) to \(executor).",
+            request: .init(
+                bundlePath: bundleURL.path,
+                runDirectory: runURL.path,
+                executor: executor
+            ),
+            result: remoteJob,
+            diagnostics: [],
+            actions: []
+        )
+    }
+}
+
 typealias GraphSubmitEnvelope = StructuredRunEnvelope<GraphSubmitRequest, WorkflowRemoteJob>
 
 struct GraphSubmit: AsyncParsableCommand {
@@ -649,12 +911,7 @@ struct GraphWorkerCancel: ParsableCommand {
     func run() throws {
         let url = URL(fileURLWithPath: runDirectory).appendingPathComponent("cancel.request")
         try Data(Date().ISO8601Format().utf8).write(to: url, options: .atomic)
-        let processIDURL = url.deletingLastPathComponent().appendingPathComponent("worker-child.pid")
-        if let rawProcessID = try? String(contentsOf: processIDURL, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           let processID = Int32(rawProcessID), processID > 1 {
-            _ = kill(processID, SIGTERM)
-        }
+        WorkflowChildProcessRegistry.terminateAll(in: url.deletingLastPathComponent())
         let result = GraphCancellationResult(cancelled: true, runDirectory: url.deletingLastPathComponent().path)
         if json { print(try StructuredRunOutput.encode(result)) } else { print("Cancellation requested.") }
     }
@@ -674,7 +931,13 @@ struct WorkflowGraphRequirements: Equatable {
     let nodeKinds: [String]
     let modelIDs: [String]
     let providers: [WorkflowGraphProviderRequirement]
+    let secretNames: [String]
     let acceleratorBackends: [String]
+    let minimumAcceleratorMemoryBytes: Int64?
+    let minimumSystemMemoryBytes: Int64?
+    let minimumDiskBytes: Int64?
+    let minimumCPUCores: Int?
+    let networkAccess: Bool
 
     static func resolve(graph: WorkflowGraphDocument, inputs: WorkflowInputsDocument) -> WorkflowGraphRequirements {
         var modelIDs = graph.nodes.compactMap { node -> String? in
@@ -697,9 +960,28 @@ struct WorkflowGraphRequirements: Equatable {
             modelIDs.append(contentsOf: WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [])
         }
         var acceleratorBackends = Set(["cpu", "metal", "cuda", "rocm"])
+        var minimumAcceleratorMemoryBytes: Int64?
+        var minimumSystemMemoryBytes: Int64?
+        var minimumDiskBytes: Int64?
+        var minimumCPUCores: Int?
+        var networkAccess = false
         for node in graph.nodes {
-            let accepted = WorkflowNodeRegistry.entry(for: node)?.requirements.acceleratorBackends ?? []
+            guard let nodeRequirements = WorkflowNodeRegistry.entry(for: node)?.requirements else { continue }
+            let accepted = nodeRequirements.acceleratorBackends
             if !accepted.isEmpty { acceleratorBackends.formIntersection(accepted) }
+            if let minimum = nodeRequirements.minimumAcceleratorMemoryBytes {
+                minimumAcceleratorMemoryBytes = max(minimumAcceleratorMemoryBytes ?? 0, minimum)
+            }
+            if let minimum = nodeRequirements.minimumSystemMemoryBytes {
+                minimumSystemMemoryBytes = max(minimumSystemMemoryBytes ?? 0, minimum)
+            }
+            if let minimum = nodeRequirements.minimumDiskBytes {
+                minimumDiskBytes = max(minimumDiskBytes ?? 0, minimum)
+            }
+            if let minimum = nodeRequirements.minimumCPUCores {
+                minimumCPUCores = max(minimumCPUCores ?? 0, minimum)
+            }
+            networkAccess = networkAccess || nodeRequirements.networkAccess == true
         }
         return .init(
             nodeKinds: Array(Set(graph.nodes.map(\.kind))).sorted(),
@@ -708,7 +990,15 @@ struct WorkflowGraphRequirements: Equatable {
                 guard node.resolvedProviderID != WorkflowNodeProviderIdentity.builtInID else { return nil }
                 return WorkflowGraphProviderRegistry.discoveredCatalog().provider(id: node.resolvedProviderID)?.requirement
             })).sorted { $0.id < $1.id },
-            acceleratorBackends: acceleratorBackends.sorted()
+            secretNames: Array(Set(graph.nodes.flatMap { node in
+                node.arguments.values.flatMap(\.secretNames)
+            })).sorted(),
+            acceleratorBackends: acceleratorBackends.sorted(),
+            minimumAcceleratorMemoryBytes: minimumAcceleratorMemoryBytes,
+            minimumSystemMemoryBytes: minimumSystemMemoryBytes,
+            minimumDiskBytes: minimumDiskBytes,
+            minimumCPUCores: minimumCPUCores,
+            networkAccess: networkAccess
         )
     }
 }
@@ -855,9 +1145,9 @@ private func emitDiagnostics(_ diagnostics: [PreflightDiagnostic]) {
 }
 
 func emitGraphStreamEvent(_ event: GraphRunEvent, to handle: FileHandle = .standardOutput) {
-    guard let encoded = try? StructuredRunOutput.encode(event) else { return }
-    let line = encoded.replacingOccurrences(of: "\n", with: "") + "\n"
-    handle.write(Data(line.utf8))
+    guard let encoded = try? WorkflowBundleCodec.lineEncoder().encode(event) else { return }
+    handle.write(encoded)
+    handle.write(Data("\n".utf8))
 }
 
 private func structuredStatus(_ state: GraphRunState) -> StructuredRunStatus {

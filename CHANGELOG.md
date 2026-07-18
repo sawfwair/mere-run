@@ -4,6 +4,22 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Added
+
+- expanded portable workflow graphs with deterministic parallel scheduling,
+  bounded retries and timeouts, verified cross-run caching, resource and named
+  secret contracts, reusable plugin-side composition, and stricter executor
+  compatibility checks. These additions establish `0.23.0` as the minimum
+  worker version for newly materialized graph jobs.
+- added repeatable `run fetch --artifact <name>` selection with verified reuse
+  of already-downloaded artifacts, allowing interrupted and partial remote
+  result retrieval without transferring the complete artifact set again.
+- added `graph run-job` and `graph submit-job` so one verified immutable export
+  can execute unchanged through local, SSH, and Relay while mutable run state
+  remains in a separate directory.
+
 ## 0.22.0 - 2026-07-17
 
 ### Added

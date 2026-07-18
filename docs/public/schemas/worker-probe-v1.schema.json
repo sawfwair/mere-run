@@ -13,9 +13,13 @@
     "architecture": { "type": "string" },
     "accelerator_backend": { "enum": ["metal", "cuda", "rocm", "cpu", "unknown", "mixed"] },
     "memory_bytes": { "type": "integer", "minimum": 0 },
+    "system_memory_bytes": { "type": "integer", "minimum": 0 },
+    "logical_cpu_cores": { "type": "integer", "minimum": 0 },
     "available_disk_bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "network_access": { "type": "boolean" },
     "node_kinds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "installed_model_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "available_secret_names": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" }, "uniqueItems": true },
     "providers": { "type": "array", "items": { "$ref": "#/$defs/provider" } }
   },
   "$defs": {

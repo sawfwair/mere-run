@@ -190,18 +190,49 @@ struct SSHWorkflowExecutor {
         )
     }
 
-    func fetch(jobID: String, into destination: URL, allArtifacts: Bool) throws -> WorkflowRemoteJob {
+    func fetch(
+        jobID: String,
+        into destination: URL,
+        allArtifacts: Bool,
+        artifactNames: Set<String> = []
+    ) throws -> WorkflowRemoteJob {
         try prepareFetchDestination(destination, expectedJobID: jobID)
         let remotePath = try resolvedRemoteJobPath(jobID: jobID)
+        let existing = try inspect(jobID: jobID)
+        let selected = try selectedArtifacts(
+            existing.artifacts,
+            allArtifacts: allArtifacts,
+            artifactNames: artifactNames
+        )
         var arguments = sshCommonArguments(executable: "scp")
         arguments.append("-r")
-        arguments.append(contentsOf: Self.fetchRelativePaths(allArtifacts: allArtifacts).map {
+        arguments.append(contentsOf: Self.fetchRelativePaths(
+            allArtifacts: allArtifacts && artifactNames.isEmpty,
+            includeOutputs: artifactNames.isEmpty
+        ).map {
             scpRemotePath("\(remotePath)/\($0)")
         })
         arguments.append(destination.path)
         let result = try executableRunner(arguments, nil)
         guard result.status == 0 else {
             throw ValidationError("SSH workflow fetch failed with status \(result.status).")
+        }
+        if !artifactNames.isEmpty {
+            for artifact in selected {
+                let localURL = try confinedFetchURL(root: destination, relativePath: artifact.path)
+                if try verifiedExistingArtifact(artifact, at: localURL) { continue }
+                try FileManager.default.createDirectory(
+                    at: localURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                var artifactArguments = sshCommonArguments(executable: "scp")
+                artifactArguments.append(scpRemotePath("\(remotePath)/\(artifact.path)"))
+                artifactArguments.append(localURL.path)
+                let artifactResult = try executableRunner(artifactArguments, nil)
+                guard artifactResult.status == 0 else {
+                    throw ValidationError("SSH artifact fetch failed with status \(artifactResult.status): \(artifact.name)")
+                }
+            }
         }
         var manifest = try WorkflowBundleCodec.decoder().decode(
             GraphRunManifest.self,
@@ -213,7 +244,7 @@ struct SSHWorkflowExecutor {
             jobReference: "ssh://\(profile.name)/\(jobID)"
         )
         try WorkflowBundleCodec.write(manifest, to: destination.appendingPathComponent(GraphRunManifest.filename))
-        try verifyFetchedArtifacts(manifest.outputs, root: destination)
+        try verifyFetchedArtifacts(artifactNames.isEmpty ? manifest.outputs : selected, root: destination)
         return WorkflowRemoteJob(
             jobID: jobID,
             jobReference: "ssh://\(profile.name)/\(jobID)",
@@ -222,7 +253,7 @@ struct SSHWorkflowExecutor {
             runDirectory: destination.path,
             createdAt: manifest.createdAt,
             updatedAt: manifest.updatedAt,
-            artifacts: manifest.outputs,
+            artifacts: artifactNames.isEmpty ? manifest.outputs : selected,
             error: manifest.error,
             placement: nil,
             metrics: nil
@@ -235,7 +266,7 @@ struct SSHWorkflowExecutor {
 
     private func createArchive(bundleDirectory: URL, destination: URL) throws {
         let result = try executableRunner([
-            "tar", "-czf", destination.path,
+            "tar", "--no-xattrs", "-czf", destination.path,
             "-C", bundleDirectory.path,
             "graph.json", "inputs.json", WorkflowAssetManifest.filename, WorkflowJobManifest.filename,
         ], nil)
@@ -327,7 +358,7 @@ struct SSHWorkflowExecutor {
         "\(profile.destination!):\(shellQuote(path))"
     }
 
-    static func fetchRelativePaths(allArtifacts: Bool) -> [String] {
+    static func fetchRelativePaths(allArtifacts: Bool, includeOutputs: Bool = true) -> [String] {
         var paths = [
             GraphRunManifest.filename,
             "graph.json",
@@ -335,8 +366,8 @@ struct SSHWorkflowExecutor {
             WorkflowJobManifest.filename,
             WorkflowAssetManifest.filename,
             "events.jsonl",
-            "outputs",
         ]
+        if includeOutputs { paths.append("outputs") }
         if allArtifacts {
             paths += ["actions.json", "nodes"]
         }
@@ -476,7 +507,12 @@ struct RelayWorkflowExecutor {
         return response.jobs.map { $0.remoteJob(profile: profile.name, localRunDirectory: nil) }
     }
 
-    func fetch(jobID: String, into destination: URL, allArtifacts: Bool) async throws -> WorkflowRemoteJob {
+    func fetch(
+        jobID: String,
+        into destination: URL,
+        allArtifacts: Bool,
+        artifactNames: Set<String> = []
+    ) async throws -> WorkflowRemoteJob {
         let job = try await inspect(jobID: jobID)
         guard job.state == .finished else {
             throw ValidationError("Relay job \(jobID) is not finished.")
@@ -492,8 +528,14 @@ struct RelayWorkflowExecutor {
             profile: profile.name,
             jobReference: "relay://\(profile.name)/\(jobID)"
         )
-        for artifact in job.artifacts where allArtifacts || artifact.kind == "graph.output"
-            || artifact.kind == "graph.report" || artifact.kind == "graph.manifest" {
+        let selected = try selectedArtifacts(
+            job.artifacts,
+            allArtifacts: allArtifacts,
+            artifactNames: artifactNames
+        )
+        for artifact in selected {
+            let url = try confinedFetchURL(root: destination, relativePath: artifact.path)
+            if try verifiedExistingArtifact(artifact, at: url) { continue }
             let encodedName = try encodedPathSegment(artifact.name)
             let data = try await request(
                 path: "/api/graph-jobs/\(jobID)/artifacts/\(encodedName)",
@@ -504,12 +546,14 @@ struct RelayWorkflowExecutor {
                   ModelArtifactPinDigest.sha256(data) == artifact.sha256 else {
                 throw ValidationError("Fetched relay artifact failed verification: \(artifact.name)")
             }
-            let url = try confinedFetchURL(root: destination, relativePath: artifact.path)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
         }
         try WorkflowBundleCodec.write(manifest, to: destination.appendingPathComponent(GraphRunManifest.filename))
-        try verifyFetchedArtifacts(manifest.outputs, root: destination)
+        let fetchedOutputs = manifest.outputs.filter { output in
+            selected.contains { $0.name == output.name }
+        }
+        try verifyFetchedArtifacts(fetchedOutputs, root: destination)
         return WorkflowRemoteJob(
             jobID: job.jobID,
             jobReference: job.jobReference,
@@ -518,7 +562,7 @@ struct RelayWorkflowExecutor {
             runDirectory: destination.path,
             createdAt: job.createdAt,
             updatedAt: job.updatedAt,
-            artifacts: job.artifacts,
+            artifacts: selected,
             error: job.error,
             placement: job.placement,
             metrics: job.metrics
@@ -752,6 +796,8 @@ private func initializeRemoteRunRecord(
                     startedAt: nil,
                     completedAt: nil,
                     exitStatus: nil,
+                    attempt: 0,
+                    maxAttempts: $0.execution?.resolvedMaxAttempts ?? 1,
                     fingerprint: "",
                     artifacts: [],
                     error: nil
@@ -776,6 +822,31 @@ private func verifyFetchedArtifacts(_ artifacts: [GraphRunArtifact], root: URL) 
     }
 }
 
+private func selectedArtifacts(
+    _ artifacts: [GraphRunArtifact],
+    allArtifacts: Bool,
+    artifactNames: Set<String>
+) throws -> [GraphRunArtifact] {
+    if artifactNames.isEmpty {
+        return artifacts.filter {
+            allArtifacts || $0.kind == "graph.output" || $0.kind == "graph.report" || $0.kind == "graph.manifest"
+        }
+    }
+    let selected = artifacts.filter { artifactNames.contains($0.name) }
+    let found = Set(selected.map(\.name))
+    let missing = artifactNames.subtracting(found).sorted()
+    guard missing.isEmpty else {
+        throw ValidationError("Remote run does not contain artifacts: \(missing.joined(separator: ", ")).")
+    }
+    return selected
+}
+
+private func verifiedExistingArtifact(_ artifact: GraphRunArtifact, at url: URL) throws -> Bool {
+    guard FileManager.default.fileExists(atPath: url.path) else { return false }
+    return try ModelArtifactPin.fileByteCount(url) == artifact.sizeBytes
+        && ModelArtifactPin.fileSHA256(url) == artifact.sha256
+}
+
 func validateWorker(
     _ worker: WorkflowExecutorProbe,
     for job: WorkflowJobManifest,
@@ -784,6 +855,11 @@ func validateWorker(
 ) throws {
     guard worker.contractVersions.contains(job.contractVersion) else {
         throw ValidationError("Executor '\(executor)' does not support \(job.contractVersion).")
+    }
+    guard workflowVersion(worker.workerVersion, satisfiesMinimum: job.requirements.minimumMereRunVersion) else {
+        throw ValidationError(
+            "Executor '\(executor)' reports mere.run \(worker.workerVersion); job requires \(job.requirements.minimumMereRunVersion) or newer."
+        )
     }
     let missingKinds = job.requirements.nodeKinds.filter { !worker.nodeKinds.contains($0) }
     guard missingKinds.isEmpty else {
@@ -800,6 +876,12 @@ func validateWorker(
     guard missingModels.isEmpty else {
         throw ValidationError("Executor '\(executor)' is missing models: \(missingModels.joined(separator: ", ")).")
     }
+    let missingSecrets = job.requirements.secretNames.filter { !worker.availableSecretNames.contains($0) }
+    guard missingSecrets.isEmpty else {
+        throw ValidationError(
+            "Executor '\(executor)' is missing configured secrets: \(missingSecrets.joined(separator: ", "))."
+        )
+    }
     let backendAccepted = job.requirements.acceleratorBackends.contains(worker.acceleratorBackend)
         || (allowMixedBackend && worker.acceleratorBackend == "mixed")
     guard backendAccepted else {
@@ -810,6 +892,21 @@ func validateWorker(
     if let minimum = job.requirements.minimumAcceleratorMemoryBytes,
        worker.memoryBytes < UInt64(minimum) {
         throw ValidationError("Executor '\(executor)' does not have the required accelerator memory.")
+    }
+    if let minimum = job.requirements.minimumSystemMemoryBytes,
+       worker.systemMemoryBytes < UInt64(minimum) {
+        throw ValidationError("Executor '\(executor)' does not have the required system memory.")
+    }
+    if let minimum = job.requirements.minimumCPUCores,
+       worker.logicalCPUCores < minimum {
+        throw ValidationError("Executor '\(executor)' does not have the required CPU cores.")
+    }
+    if let minimum = job.requirements.minimumDiskBytes,
+       worker.availableDiskBytes.map({ $0 < minimum }) != false {
+        throw ValidationError("Executor '\(executor)' does not report the required free disk space.")
+    }
+    if job.requirements.networkAccess, !worker.networkAccess {
+        throw ValidationError("Executor '\(executor)' does not allow required network access.")
     }
 }
 

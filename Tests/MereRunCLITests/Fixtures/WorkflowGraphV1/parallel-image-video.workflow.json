@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/workflow-graph",
+  "name": "parallel-image-video",
+  "inputs": {
+    "prompt": { "type": "string" }
+  },
+  "execution": {
+    "max_parallel_nodes": 2
+  },
+  "nodes": [
+    {
+      "id": "image-a",
+      "kind": "image.generate",
+      "arguments": {
+        "prompt": { "$ref": "inputs.prompt" },
+        "seed": 101
+      },
+      "execution": {
+        "max_attempts": 2,
+        "timeout_seconds": 300,
+        "cache": "auto"
+      }
+    },
+    {
+      "id": "image-b",
+      "kind": "image.generate",
+      "arguments": {
+        "prompt": { "$ref": "inputs.prompt" },
+        "seed": 102
+      },
+      "execution": {
+        "cache": "refresh"
+      }
+    },
+    {
+      "id": "video",
+      "kind": "video.generate",
+      "depends_on": ["image-a", "image-b"],
+      "arguments": {
+        "prompt": { "$ref": "inputs.prompt" },
+        "image": { "$ref": "nodes.image-a.outputs.image" },
+        "seed": 103
+      }
+    }
+  ],
+  "outputs": {
+    "primary-image": { "$ref": "nodes.image-a.outputs.image" },
+    "secondary-image": { "$ref": "nodes.image-b.outputs.image" },
+    "video": { "$ref": "nodes.video.outputs.video" }
+  }
+}

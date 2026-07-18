@@ -68,6 +68,142 @@ enum WorkflowProcessTerminationReason: String, Equatable {
     }
 }
 
+private struct WorkflowProcessTimeoutError: LocalizedError {
+    let seconds: Int
+
+    var errorDescription: String? {
+        "Process timed out after \(seconds) seconds."
+    }
+}
+
+private final class WorkflowProcessTimeoutState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var timedOut = false
+
+    func markTimedOut() {
+        lock.lock()
+        timedOut = true
+        lock.unlock()
+    }
+
+    var didTimeOut: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return timedOut
+    }
+}
+
+enum WorkflowChildProcessRegistry {
+    static let directoryName = "worker-child-pids"
+    static let legacyFilename = "worker-child.pid"
+    private static let lock = NSLock()
+
+    static func register(
+        _ processID: Int32,
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        let entry = directory.appendingPathComponent("\(processID).pid")
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(String(processID).utf8).write(to: entry, options: .atomic)
+            try Data(String(processID).utf8).write(
+                to: runDirectory.appendingPathComponent(legacyFilename),
+                options: .atomic
+            )
+        } catch {
+            try? fileManager.removeItem(at: entry)
+            throw error
+        }
+    }
+
+    static func unregister(
+        _ processID: Int32,
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        let entry = runDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
+            .appendingPathComponent("\(processID).pid")
+        try? fileManager.removeItem(at: entry)
+        let legacy = runDirectory.appendingPathComponent(legacyFilename)
+        if readProcessID(at: legacy, fileManager: fileManager) == processID {
+            try? fileManager.removeItem(at: legacy)
+        }
+    }
+
+    static func processIDs(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) -> [Int32] {
+        let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        let entries = (try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        )) ?? []
+        var processIDs = Set(entries.compactMap { entry -> Int32? in
+            guard entry.pathExtension == "pid",
+                  let values = try? entry.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+                  values.isRegularFile == true,
+                  values.isSymbolicLink != true else {
+                return nil
+            }
+            return readProcessID(at: entry, fileManager: fileManager)
+        })
+        if let legacy = readProcessID(
+            at: runDirectory.appendingPathComponent(legacyFilename),
+            fileManager: fileManager
+        ) {
+            processIDs.insert(legacy)
+        }
+        return processIDs.sorted()
+    }
+
+    @discardableResult
+    static func terminateAll(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) -> [Int32] {
+        let processIDs = processIDs(in: runDirectory, fileManager: fileManager)
+        for processID in processIDs {
+            _ = kill(processID, SIGTERM)
+        }
+        return processIDs
+    }
+
+    static func clear(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let legacy = runDirectory.appendingPathComponent(legacyFilename)
+        if fileManager.fileExists(atPath: legacy.path) {
+            try fileManager.removeItem(at: legacy)
+        }
+        let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        if fileManager.fileExists(atPath: directory.path) {
+            try fileManager.removeItem(at: directory)
+        }
+    }
+
+    private static func readProcessID(at url: URL, fileManager: FileManager) -> Int32? {
+        guard fileManager.fileExists(atPath: url.path),
+              let raw = try? String(contentsOf: url, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              let processID = Int32(raw),
+              processID > 1 else {
+            return nil
+        }
+        return processID
+    }
+}
+
 private final class WorkflowProcessStderrTail: @unchecked Sendable {
     private static let maximumBytes = 16 * 1_024
     private let lock = NSLock()
@@ -94,6 +230,49 @@ private final class WorkflowProcessStderrTail: @unchecked Sendable {
     }
 }
 
+private struct WorkflowPreparedParallelNode: @unchecked Sendable {
+    let node: WorkflowNode
+    let index: Int
+    let directory: URL
+    let invocation: WorkflowNodeInvocation
+    let fingerprint: String
+    let provider: WorkflowNodeProviderIdentity
+    let models: [WorkflowModelProvenance]
+    let maxAttempts: Int
+}
+
+private enum WorkflowParallelBufferedEvent {
+    case provider(WorkflowPluginNodeEvent)
+    case retrying(attempt: Int, message: String)
+    case started(attempt: Int)
+}
+
+private struct WorkflowParallelNodeOutcome {
+    let verified: WorkflowVerifiedNodeOutputs?
+    let attempt: Int
+    let exitStatus: Int32?
+    let events: [WorkflowParallelBufferedEvent]
+    let error: String?
+    let cancelled: Bool
+}
+
+private final class WorkflowParallelOutcomeBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: WorkflowParallelNodeOutcome?
+
+    func store(_ outcome: WorkflowParallelNodeOutcome) {
+        lock.lock()
+        stored = outcome
+        lock.unlock()
+    }
+
+    func load() -> WorkflowParallelNodeOutcome? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+}
+
 protocol WorkflowProcessRunning {
     func run(arguments: [String], currentDirectory: URL) throws -> WorkflowProcessResult
 }
@@ -103,6 +282,7 @@ protocol WorkflowStreamingProcessRunning {
         executable: URL,
         arguments: [String],
         currentDirectory: URL,
+        timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?
     ) throws -> WorkflowProcessResult
 }
@@ -117,6 +297,7 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
             executable: CurrentExecutable.url(),
             arguments: arguments,
             currentDirectory: currentDirectory,
+            timeoutSeconds: nil,
             stdoutLineHandler: nil
         )
     }
@@ -125,6 +306,7 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         executable: URL,
         arguments: [String],
         currentDirectory: URL,
+        timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?
     ) throws -> WorkflowProcessResult {
         let process = Process()
@@ -135,10 +317,6 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         let stderr = Pipe()
         let stderrTail = WorkflowProcessStderrTail()
         let runDirectory = currentDirectory.deletingLastPathComponent().deletingLastPathComponent()
-        let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
-        defer {
-            try? FileManager.default.removeItem(at: processIDURL)
-        }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = stdout
         process.standardError = stderr
@@ -149,7 +327,40 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
             try? FileHandle.standardError.write(contentsOf: data)
         }
         try process.run()
-        try Data(String(process.processIdentifier).utf8).write(to: processIDURL, options: .atomic)
+        do {
+            try WorkflowChildProcessRegistry.register(process.processIdentifier, in: runDirectory)
+        } catch {
+            process.terminate()
+            process.waitUntilExit()
+            throw error
+        }
+        defer {
+            WorkflowChildProcessRegistry.unregister(process.processIdentifier, in: runDirectory)
+        }
+        if FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("cancel.request").path) {
+            process.terminate()
+        }
+        let timeoutState = WorkflowProcessTimeoutState()
+        let timeoutWorkItem: DispatchWorkItem?
+        if let timeoutSeconds {
+            let workItem = DispatchWorkItem {
+                guard process.isRunning else { return }
+                timeoutState.markTimedOut()
+                process.terminate()
+                Thread.sleep(forTimeInterval: 2)
+                if process.isRunning {
+                    kill(process.processIdentifier, SIGKILL)
+                }
+            }
+            timeoutWorkItem = workItem
+            DispatchQueue.global(qos: .utility).asyncAfter(
+                deadline: .now() + .seconds(timeoutSeconds),
+                execute: workItem
+            )
+        } else {
+            timeoutWorkItem = nil
+        }
+        defer { timeoutWorkItem?.cancel() }
         var captured = Data()
         var pending = Data()
         while true {
@@ -181,6 +392,9 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         if FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("cancel.request").path) {
             throw WorkflowCancellationError()
         }
+        if timeoutState.didTimeOut, let timeoutSeconds {
+            throw WorkflowProcessTimeoutError(seconds: timeoutSeconds)
+        }
         return WorkflowProcessResult(
             status: process.terminationStatus,
             stdout: String(decoding: captured, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines),
@@ -190,13 +404,14 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
     }
 }
 
-struct WorkflowRunner {
+struct WorkflowRunner: @unchecked Sendable {
     let bundleDirectory: URL
     let runDirectory: URL
     let resume: Bool
     let executor: GraphRunExecutorRecord
     let fileManager: FileManager
     let processRunner: any WorkflowProcessRunning
+    let cacheDirectory: URL?
     let now: () -> Date
     let eventHandler: ((GraphRunEvent) -> Void)?
 
@@ -207,6 +422,7 @@ struct WorkflowRunner {
         executor: GraphRunExecutorRecord = .init(kind: "local", profile: nil, jobReference: nil),
         fileManager: FileManager = .default,
         processRunner: any WorkflowProcessRunning = WorkflowProcessRunner(),
+        cacheDirectory: URL? = nil,
         now: @escaping () -> Date = Date.init,
         eventHandler: ((GraphRunEvent) -> Void)? = nil
     ) {
@@ -216,6 +432,11 @@ struct WorkflowRunner {
         self.executor = executor
         self.fileManager = fileManager
         self.processRunner = processRunner
+        self.cacheDirectory = cacheDirectory?.standardizedFileURL
+            ?? (processRunner is WorkflowProcessRunner
+                ? MereRunModelPaths.applicationSupportBase
+                    .appendingPathComponent("graph-cache/v1/nodes", isDirectory: true)
+                : nil)
         self.now = now
         self.eventHandler = eventHandler
     }
@@ -255,6 +476,15 @@ struct WorkflowRunner {
                 "Worker is missing exact graph providers: \(missingProviders.map { "\($0.id)@\($0.version)" }.joined(separator: ", "))."
             )
         }
+        let environment = ProcessInfo.processInfo.environment
+        let missingSecrets = job.requirements.secretNames.filter {
+            environment[workflowSecretEnvironmentKey($0)]?.isEmpty != false
+        }
+        guard missingSecrets.isEmpty else {
+            throw ValidationError(
+                "Worker is missing configured secrets: \(missingSecrets.joined(separator: ", "))."
+            )
+        }
 
         let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
         guard validation.status != .blocked else {
@@ -283,6 +513,17 @@ struct WorkflowRunner {
 
         var nodeOutputs: [String: [String: WorkflowValue]] = [:]
         do {
+            if graph.execution?.resolvedMaxParallelNodes ?? 1 > 1 {
+                try executeParallelNodes(
+                    graph: graph,
+                    job: job,
+                    validation: validation,
+                    localizedInputs: localizedInputs,
+                    manifest: &manifest,
+                    sequence: &sequence,
+                    nodeOutputs: &nodeOutputs
+                )
+            } else {
             for nodeID in validation.order {
                 guard let node = graph.nodes.first(where: { $0.id == nodeID }),
                       let nodeIndex = manifest.nodes.firstIndex(where: { $0.id == nodeID }) else {
@@ -322,7 +563,7 @@ struct WorkflowRunner {
                     models: nodeModels,
                     upstreamOutputs: upstreamOutputs
                 ))
-                if try shouldResume(
+                if workflowNodeAllowsResumeReuse(node), try shouldResume(
                     manifest.nodes[nodeIndex],
                     expectedFingerprint: fingerprint,
                     nodeOutputs: &nodeOutputs
@@ -347,6 +588,34 @@ struct WorkflowRunner {
                 manifest.nodes[nodeIndex].fingerprint = fingerprint
                 manifest.nodes[nodeIndex].provider = providerIdentity
                 manifest.nodes[nodeIndex].models = nodeModels
+                manifest.nodes[nodeIndex].maxAttempts = node.execution?.resolvedMaxAttempts ?? 1
+                if (node.execution?.resolvedCache ?? .automatic) == .automatic,
+                   let cached = try restoreCachedOutputs(
+                    fingerprint: fingerprint,
+                    invocation: invocation,
+                    node: node,
+                    nodeDirectory: nodeDirectory
+                   ) {
+                    nodeOutputs[nodeID] = cached.values
+                    manifest.nodes[nodeIndex].attempt = 0
+                    manifest.nodes[nodeIndex].artifacts = cached.artifacts
+                    manifest.nodes[nodeIndex].outputs = cached.outputs
+                    manifest.nodes[nodeIndex].state = .finished
+                    manifest.nodes[nodeIndex].startedAt = now()
+                    manifest.nodes[nodeIndex].completedAt = now()
+                    manifest.updatedAt = now()
+                    try persist(manifest)
+                    try record(.init(
+                        sequence: sequence,
+                        createdAt: now(),
+                        type: "node_cache_hit",
+                        state: .finished,
+                        nodeID: nodeID,
+                        message: "Restored verified outputs for node fingerprint \(fingerprint)."
+                    ))
+                    sequence += 1
+                    continue
+                }
                 manifest.nodes[nodeIndex].state = .preflighting
                 manifest.nodes[nodeIndex].startedAt = now()
                 manifest.updatedAt = now()
@@ -365,6 +634,7 @@ struct WorkflowRunner {
                     executable: invocation.executable,
                     arguments: invocation.preflightArguments,
                     currentDirectory: nodeDirectory,
+                    timeoutSeconds: nil,
                     stdoutLineHandler: nil
                 )
                 try throwIfCancellationRequested()
@@ -388,80 +658,145 @@ struct WorkflowRunner {
                     }
                 }
 
-                manifest.nodes[nodeIndex].state = .running
-                manifest.updatedAt = now()
-                try persist(manifest)
-                try record(.init(
-                    sequence: sequence,
-                    createdAt: now(),
-                    type: "node_started",
-                    state: .running,
-                    nodeID: nodeID,
-                    message: invocation.command.joined(separator: " ")
-                ))
-                sequence += 1
+                let maxAttempts = node.execution?.resolvedMaxAttempts ?? 1
+                manifest.nodes[nodeIndex].attempt = 0
+                manifest.nodes[nodeIndex].maxAttempts = maxAttempts
+                var verifiedOutputs: WorkflowVerifiedNodeOutputs?
+                while verifiedOutputs == nil {
+                    manifest.nodes[nodeIndex].attempt += 1
+                    let attempt = manifest.nodes[nodeIndex].attempt
+                    manifest.nodes[nodeIndex].state = .running
+                    manifest.nodes[nodeIndex].exitStatus = nil
+                    manifest.nodes[nodeIndex].error = nil
+                    manifest.updatedAt = now()
+                    try persist(manifest)
+                    try record(.init(
+                        sequence: sequence,
+                        createdAt: now(),
+                        type: "node_started",
+                        state: .running,
+                        nodeID: nodeID,
+                        message: "\(invocation.command.joined(separator: " ")) (attempt \(attempt)/\(maxAttempts))"
+                    ))
+                    sequence += 1
 
-                var providerOutputs: [String: WorkflowValue]?
-                var providerSequence = -1
-                let result = try runProcess(
-                    executable: invocation.executable,
-                    arguments: invocation.runArguments,
-                    currentDirectory: nodeDirectory,
-                    stdoutLineHandler: invocation.streamsEvents ? { line in
-                        let event = try WorkflowBundleCodec.decoder().decode(
-                            WorkflowPluginNodeEvent.self,
-                            from: Data(line.utf8)
+                    do {
+                        var providerOutputs: [String: WorkflowValue]?
+                        var providerSequence = -1
+                        let result = try runProcess(
+                            executable: invocation.executable,
+                            arguments: invocation.runArguments,
+                            currentDirectory: nodeDirectory,
+                            timeoutSeconds: node.execution?.timeoutSeconds,
+                            stdoutLineHandler: invocation.streamsEvents ? { line in
+                                let event = try WorkflowBundleCodec.decoder().decode(
+                                    WorkflowPluginNodeEvent.self,
+                                    from: Data(line.utf8)
+                                )
+                                guard event.contractVersion == WorkflowPluginNodeEvent.contractVersion,
+                                      event.sequence == providerSequence + 1 else {
+                                    throw ValidationError("Graph provider emitted an invalid event sequence for node '\(nodeID)'.")
+                                }
+                                providerSequence = event.sequence
+                                if event.type == "node_result" {
+                                    providerOutputs = event.outputs
+                                } else {
+                                    let runArtifact: GraphRunEventArtifact?
+                                    if let eventArtifact = event.artifact {
+                                        let artifactURL = try invocationOutputURL(
+                                            eventArtifact.path,
+                                            nodeDirectory: nodeDirectory
+                                        )
+                                        runArtifact = GraphRunEventArtifact(
+                                            name: eventArtifact.name,
+                                            path: try portableArtifactPath(for: artifactURL),
+                                            contentType: eventArtifact.contentType
+                                        )
+                                    } else {
+                                        runArtifact = nil
+                                    }
+                                    try record(event.runEvent(
+                                        sequence: sequence,
+                                        nodeID: nodeID,
+                                        artifact: runArtifact
+                                    ))
+                                    sequence += 1
+                                }
+                            } : nil
                         )
-                        guard event.contractVersion == WorkflowPluginNodeEvent.contractVersion,
-                              event.sequence == providerSequence + 1 else {
-                            throw ValidationError("Graph provider emitted an invalid event sequence for node '\(nodeID)'.")
+                        try throwIfCancellationRequested()
+                        try Data(result.stdout.utf8).write(
+                            to: nodeDirectory.appendingPathComponent("stdout.txt"),
+                            options: .atomic
+                        )
+                        manifest.nodes[nodeIndex].exitStatus = result.status
+                        guard result.status == 0 else {
+                            throw ValidationError("Node '\(nodeID)' \(result.failureSummary).")
                         }
-                        providerSequence = event.sequence
-                        if event.type == "node_result" {
-                            providerOutputs = event.outputs
-                        } else {
-                            let runArtifact: GraphRunEventArtifact?
-                            if let eventArtifact = event.artifact {
-                                let artifactURL = try invocationOutputURL(
-                                    eventArtifact.path,
-                                    nodeDirectory: nodeDirectory
-                                )
-                                runArtifact = GraphRunEventArtifact(
-                                    name: eventArtifact.name,
-                                    path: try portableArtifactPath(for: artifactURL),
-                                    contentType: eventArtifact.contentType
-                                )
-                            } else {
-                                runArtifact = nil
-                            }
-                            try record(event.runEvent(
-                                sequence: sequence,
-                                nodeID: nodeID,
-                                artifact: runArtifact
-                            ))
-                            sequence += 1
-                        }
-                    } : nil
-                )
-                try throwIfCancellationRequested()
-                try Data(result.stdout.utf8).write(
-                    to: nodeDirectory.appendingPathComponent("stdout.txt"),
-                    options: .atomic
-                )
-                manifest.nodes[nodeIndex].exitStatus = result.status
-                guard result.status == 0 else {
-                    throw ValidationError("Node '\(nodeID)' failed with status \(result.status).")
+                        verifiedOutputs = try verifyOutputs(
+                            invocation.outputs,
+                            providerValues: providerOutputs,
+                            node: node,
+                            nodeDirectory: nodeDirectory
+                        )
+                    } catch is WorkflowCancellationError {
+                        throw WorkflowCancellationError()
+                    } catch {
+                        let message = (error as? ValidationError)?.message ?? error.localizedDescription
+                        manifest.nodes[nodeIndex].error = message
+                        manifest.updatedAt = now()
+                        try persist(manifest)
+                        guard attempt < maxAttempts else { throw error }
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_retrying",
+                            state: .running,
+                            nodeID: nodeID,
+                            message: "Attempt \(attempt) failed: \(message)"
+                        ))
+                        sequence += 1
+                        try clearAttemptOutputs(invocation.outputs, nodeDirectory: nodeDirectory)
+                    }
                 }
 
-                let verified = try verifyOutputs(
-                    invocation.outputs,
-                    providerValues: providerOutputs,
-                    node: node,
-                    nodeDirectory: nodeDirectory
-                )
+                guard let verified = verifiedOutputs else {
+                    throw ValidationError("Node '\(nodeID)' finished without verified outputs.")
+                }
                 nodeOutputs[nodeID] = verified.values
                 manifest.nodes[nodeIndex].artifacts = verified.artifacts
                 manifest.nodes[nodeIndex].outputs = verified.outputs
+                if node.execution?.resolvedCache != .never {
+                    do {
+                        try storeCachedOutputs(
+                            verified,
+                            fingerprint: fingerprint,
+                            policy: node.execution?.resolvedCache ?? .automatic,
+                            nodeDirectory: nodeDirectory
+                        )
+                        if cacheDirectory != nil {
+                            try record(.init(
+                                sequence: sequence,
+                                createdAt: now(),
+                                type: "node_cache_stored",
+                                state: .running,
+                                nodeID: nodeID,
+                                message: "Stored verified outputs for node fingerprint \(fingerprint)."
+                            ))
+                            sequence += 1
+                        }
+                    } catch {
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_cache_store_failed",
+                            state: .running,
+                            nodeID: nodeID,
+                            message: error.localizedDescription
+                        ))
+                        sequence += 1
+                    }
+                }
                 manifest.nodes[nodeIndex].state = .finished
                 manifest.nodes[nodeIndex].completedAt = now()
                 manifest.updatedAt = now()
@@ -475,6 +810,7 @@ struct WorkflowRunner {
                     message: nil
                 ))
                 sequence += 1
+            }
             }
 
             manifest.outputs = try materializeGraphOutputs(graph: graph, nodeOutputs: nodeOutputs)
@@ -531,10 +867,434 @@ struct WorkflowRunner {
         )
     }
 
+    private func executeParallelNodes(
+        graph: WorkflowGraphDocument,
+        job: WorkflowJobManifest,
+        validation: WorkflowGraphValidation,
+        localizedInputs: WorkflowInputsDocument,
+        manifest: inout GraphRunManifest,
+        sequence: inout Int,
+        nodeOutputs: inout [String: [String: WorkflowValue]]
+    ) throws {
+        let maximumParallelNodes = graph.execution?.resolvedMaxParallelNodes ?? 1
+        var pending = validation.order
+        var completed = Set<String>()
+
+        while !pending.isEmpty {
+            try throwIfCancellationRequested()
+            let ready = pending.filter { nodeID in
+                validation.dependencies[nodeID, default: []].isSubset(of: completed)
+            }
+            guard !ready.isEmpty else {
+                throw ValidationError("Workflow scheduler could not find a ready node.")
+            }
+
+            var prepared: [WorkflowPreparedParallelNode] = []
+            for nodeID in ready.prefix(maximumParallelNodes) {
+                guard let node = graph.nodes.first(where: { $0.id == nodeID }),
+                      let nodeIndex = manifest.nodes.firstIndex(where: { $0.id == nodeID }) else {
+                    throw ValidationError("Workflow execution order referenced missing node '\(nodeID)'.")
+                }
+                let nodeDirectory = runDirectory
+                    .appendingPathComponent("nodes", isDirectory: true)
+                    .appendingPathComponent(String(format: "%03d-%@", nodeIndex, node.id), isDirectory: true)
+                try fileManager.createDirectory(at: nodeDirectory, withIntermediateDirectories: true)
+                let resolvedArguments = try resolve(
+                    node.arguments,
+                    inputs: localizedInputs.values,
+                    nodeOutputs: nodeOutputs
+                )
+                let referencedNodeIDs = Set(
+                    node.arguments.values.flatMap(\.references).compactMap { reference -> String? in
+                        guard let parsed = try? WorkflowReference(reference),
+                              case .nodeOutput(let sourceNodeID, _) = parsed.source else { return nil }
+                        return sourceNodeID
+                    }
+                )
+                let upstreamOutputs = manifest.nodes
+                    .filter { referencedNodeIDs.contains($0.id) }
+                    .flatMap(\.outputs)
+                    .map(WorkflowNodeOutputFingerprint.init)
+                    .sorted { ($0.sourceName, $0.sha256 ?? "") < ($1.sourceName, $1.sha256 ?? "") }
+                guard let provider = WorkflowNodeRegistry.provider(for: node) else {
+                    throw ValidationError("Workflow provider '\(node.resolvedProviderID)' is unavailable.")
+                }
+                let models = modelProvenance(for: node, arguments: resolvedArguments, job: job)
+                let fingerprint = try WorkflowBundleCodec.hash(WorkflowNodeFingerprint(
+                    kind: node.kind,
+                    provider: provider,
+                    arguments: resolvedArguments,
+                    models: models,
+                    upstreamOutputs: upstreamOutputs
+                ))
+                if workflowNodeAllowsResumeReuse(node), try shouldResume(
+                    manifest.nodes[nodeIndex],
+                    expectedFingerprint: fingerprint,
+                    nodeOutputs: &nodeOutputs
+                ) {
+                    try record(.init(
+                        sequence: sequence,
+                        createdAt: now(),
+                        type: "node_resumed",
+                        state: .finished,
+                        nodeID: nodeID,
+                        message: "Reused verified node outputs."
+                    ))
+                    sequence += 1
+                    completed.insert(nodeID)
+                    pending.removeAll { $0 == nodeID }
+                    continue
+                }
+
+                let invocation = try WorkflowNodeCommandBuilder.invocation(
+                    node: node,
+                    arguments: resolvedArguments,
+                    nodeDirectory: nodeDirectory,
+                    jobID: job.jobID
+                )
+                manifest.nodes[nodeIndex].fingerprint = fingerprint
+                manifest.nodes[nodeIndex].provider = provider
+                manifest.nodes[nodeIndex].models = models
+                manifest.nodes[nodeIndex].maxAttempts = node.execution?.resolvedMaxAttempts ?? 1
+                if (node.execution?.resolvedCache ?? .automatic) == .automatic,
+                   let cached = try restoreCachedOutputs(
+                    fingerprint: fingerprint,
+                    invocation: invocation,
+                    node: node,
+                    nodeDirectory: nodeDirectory
+                   ) {
+                    nodeOutputs[nodeID] = cached.values
+                    manifest.nodes[nodeIndex].attempt = 0
+                    manifest.nodes[nodeIndex].artifacts = cached.artifacts
+                    manifest.nodes[nodeIndex].outputs = cached.outputs
+                    manifest.nodes[nodeIndex].state = .finished
+                    manifest.nodes[nodeIndex].startedAt = now()
+                    manifest.nodes[nodeIndex].completedAt = now()
+                    manifest.updatedAt = now()
+                    try persist(manifest)
+                    try record(.init(
+                        sequence: sequence,
+                        createdAt: now(),
+                        type: "node_cache_hit",
+                        state: .finished,
+                        nodeID: nodeID,
+                        message: "Restored verified outputs for node fingerprint \(fingerprint)."
+                    ))
+                    sequence += 1
+                    completed.insert(nodeID)
+                    pending.removeAll { $0 == nodeID }
+                    continue
+                }
+
+                manifest.nodes[nodeIndex].state = .preflighting
+                manifest.nodes[nodeIndex].startedAt = now()
+                manifest.updatedAt = now()
+                try persist(manifest)
+                try record(.init(
+                    sequence: sequence,
+                    createdAt: now(),
+                    type: "node_preflight_started",
+                    state: .preflighting,
+                    nodeID: nodeID,
+                    message: nil
+                ))
+                sequence += 1
+                let preflight = try runProcess(
+                    executable: invocation.executable,
+                    arguments: invocation.preflightArguments,
+                    currentDirectory: nodeDirectory,
+                    timeoutSeconds: nil,
+                    stdoutLineHandler: nil
+                )
+                try throwIfCancellationRequested()
+                try Data(preflight.stdout.utf8).write(
+                    to: nodeDirectory.appendingPathComponent("preflight.json"),
+                    options: .atomic
+                )
+                guard preflight.status == 0 else {
+                    throw ValidationError("Node '\(nodeID)' preflight \(preflight.failureSummary).")
+                }
+                if invocation.streamsEvents {
+                    let report = try WorkflowBundleCodec.decoder().decode(
+                        WorkflowPluginNodePreflight.self,
+                        from: Data(preflight.stdout.utf8)
+                    )
+                    guard report.contractVersion == WorkflowPluginNodePreflight.contractVersion,
+                          report.status != "blocked" else {
+                        throw ValidationError(report.diagnostics.map(\.message).joined(separator: " "))
+                    }
+                }
+                let maxAttempts = node.execution?.resolvedMaxAttempts ?? 1
+                manifest.nodes[nodeIndex].attempt = 1
+                manifest.nodes[nodeIndex].maxAttempts = maxAttempts
+                manifest.nodes[nodeIndex].state = .running
+                manifest.nodes[nodeIndex].error = nil
+                manifest.nodes[nodeIndex].exitStatus = nil
+                manifest.updatedAt = now()
+                try persist(manifest)
+                try record(.init(
+                    sequence: sequence,
+                    createdAt: now(),
+                    type: "node_started",
+                    state: .running,
+                    nodeID: nodeID,
+                    message: "\(invocation.command.joined(separator: " ")) (attempt 1/\(maxAttempts))"
+                ))
+                sequence += 1
+                prepared.append(.init(
+                    node: node,
+                    index: nodeIndex,
+                    directory: nodeDirectory,
+                    invocation: invocation,
+                    fingerprint: fingerprint,
+                    provider: provider,
+                    models: models,
+                    maxAttempts: maxAttempts
+                ))
+            }
+
+            guard !prepared.isEmpty else { continue }
+            let queue = OperationQueue()
+            queue.maxConcurrentOperationCount = maximumParallelNodes
+            let boxes = prepared.map { item -> WorkflowParallelOutcomeBox in
+                let box = WorkflowParallelOutcomeBox()
+                queue.addOperation {
+                    box.store(runParallelNode(item))
+                }
+                return box
+            }
+            queue.waitUntilAllOperationsAreFinished()
+
+            var firstFailure: String?
+            var wasCancelled = false
+            for (item, box) in zip(prepared, boxes) {
+                guard let outcome = box.load() else {
+                    throw ValidationError("Parallel node '\(item.node.id)' did not return an outcome.")
+                }
+                manifest.nodes[item.index].attempt = outcome.attempt
+                manifest.nodes[item.index].exitStatus = outcome.exitStatus
+                for event in outcome.events {
+                    switch event {
+                    case .provider(let providerEvent):
+                        let artifact: GraphRunEventArtifact?
+                        if let eventArtifact = providerEvent.artifact {
+                            let artifactURL = try invocationOutputURL(
+                                eventArtifact.path,
+                                nodeDirectory: item.directory
+                            )
+                            artifact = GraphRunEventArtifact(
+                                name: eventArtifact.name,
+                                path: try portableArtifactPath(for: artifactURL),
+                                contentType: eventArtifact.contentType
+                            )
+                        } else {
+                            artifact = nil
+                        }
+                        try record(providerEvent.runEvent(
+                            sequence: sequence,
+                            nodeID: item.node.id,
+                            artifact: artifact
+                        ))
+                    case .retrying(let attempt, let message):
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_retrying",
+                            state: .running,
+                            nodeID: item.node.id,
+                            message: "Attempt \(attempt) failed: \(message)"
+                        ))
+                    case .started(let attempt):
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_started",
+                            state: .running,
+                            nodeID: item.node.id,
+                            message: "\(item.invocation.command.joined(separator: " ")) (attempt \(attempt)/\(item.maxAttempts))"
+                        ))
+                    }
+                    sequence += 1
+                }
+
+                guard let verified = outcome.verified else {
+                    let message = outcome.error ?? "Node '\(item.node.id)' failed without a diagnostic."
+                    manifest.nodes[item.index].state = outcome.cancelled ? .cancelled : .failed
+                    manifest.nodes[item.index].error = message
+                    manifest.nodes[item.index].completedAt = now()
+                    firstFailure = firstFailure ?? message
+                    wasCancelled = wasCancelled || outcome.cancelled
+                    continue
+                }
+                nodeOutputs[item.node.id] = verified.values
+                manifest.nodes[item.index].artifacts = verified.artifacts
+                manifest.nodes[item.index].outputs = verified.outputs
+                if item.node.execution?.resolvedCache != .never {
+                    do {
+                        try storeCachedOutputs(
+                            verified,
+                            fingerprint: item.fingerprint,
+                            policy: item.node.execution?.resolvedCache ?? .automatic,
+                            nodeDirectory: item.directory
+                        )
+                        if cacheDirectory != nil {
+                            try record(.init(
+                                sequence: sequence,
+                                createdAt: now(),
+                                type: "node_cache_stored",
+                                state: .running,
+                                nodeID: item.node.id,
+                                message: "Stored verified outputs for node fingerprint \(item.fingerprint)."
+                            ))
+                            sequence += 1
+                        }
+                    } catch {
+                        try record(.init(
+                            sequence: sequence,
+                            createdAt: now(),
+                            type: "node_cache_store_failed",
+                            state: .running,
+                            nodeID: item.node.id,
+                            message: error.localizedDescription
+                        ))
+                        sequence += 1
+                    }
+                }
+                manifest.nodes[item.index].state = .finished
+                manifest.nodes[item.index].completedAt = now()
+                manifest.nodes[item.index].error = nil
+                completed.insert(item.node.id)
+                pending.removeAll { $0 == item.node.id }
+                try record(.init(
+                    sequence: sequence,
+                    createdAt: now(),
+                    type: "node_finished",
+                    state: .finished,
+                    nodeID: item.node.id,
+                    message: nil
+                ))
+                sequence += 1
+            }
+            manifest.updatedAt = now()
+            try persist(manifest)
+            if wasCancelled { throw WorkflowCancellationError() }
+            if let firstFailure { throw ValidationError(firstFailure) }
+        }
+    }
+
+    private func runParallelNode(
+        _ prepared: WorkflowPreparedParallelNode
+    ) -> WorkflowParallelNodeOutcome {
+        var attempt = 0
+        var exitStatus: Int32?
+        var events: [WorkflowParallelBufferedEvent] = []
+        while attempt < prepared.maxAttempts {
+            attempt += 1
+            do {
+                var providerOutputs: [String: WorkflowValue]?
+                var providerSequence = -1
+                let result = try runProcess(
+                    executable: prepared.invocation.executable,
+                    arguments: prepared.invocation.runArguments,
+                    currentDirectory: prepared.directory,
+                    timeoutSeconds: prepared.node.execution?.timeoutSeconds,
+                    stdoutLineHandler: prepared.invocation.streamsEvents ? { line in
+                        let event = try WorkflowBundleCodec.decoder().decode(
+                            WorkflowPluginNodeEvent.self,
+                            from: Data(line.utf8)
+                        )
+                        guard event.contractVersion == WorkflowPluginNodeEvent.contractVersion,
+                              event.sequence == providerSequence + 1 else {
+                            throw ValidationError(
+                                "Graph provider emitted an invalid event sequence for node '\(prepared.node.id)'."
+                            )
+                        }
+                        providerSequence = event.sequence
+                        if event.type == "node_result" {
+                            providerOutputs = event.outputs
+                        } else {
+                            events.append(.provider(event))
+                        }
+                    } : nil
+                )
+                try throwIfCancellationRequested()
+                try Data(result.stdout.utf8).write(
+                    to: prepared.directory.appendingPathComponent("stdout.txt"),
+                    options: .atomic
+                )
+                exitStatus = result.status
+                guard result.status == 0 else {
+                    throw ValidationError("Node '\(prepared.node.id)' \(result.failureSummary).")
+                }
+                let verified = try verifyOutputs(
+                    prepared.invocation.outputs,
+                    providerValues: providerOutputs,
+                    node: prepared.node,
+                    nodeDirectory: prepared.directory
+                )
+                return .init(
+                    verified: verified,
+                    attempt: attempt,
+                    exitStatus: exitStatus,
+                    events: events,
+                    error: nil,
+                    cancelled: false
+                )
+            } catch is WorkflowCancellationError {
+                return .init(
+                    verified: nil,
+                    attempt: attempt,
+                    exitStatus: exitStatus,
+                    events: events,
+                    error: "Workflow cancellation requested.",
+                    cancelled: true
+                )
+            } catch {
+                let message = (error as? ValidationError)?.message ?? error.localizedDescription
+                guard attempt < prepared.maxAttempts else {
+                    return .init(
+                        verified: nil,
+                        attempt: attempt,
+                        exitStatus: exitStatus,
+                        events: events,
+                        error: message,
+                        cancelled: false
+                    )
+                }
+                events.append(.retrying(attempt: attempt, message: message))
+                events.append(.started(attempt: attempt + 1))
+                do {
+                    try clearAttemptOutputs(
+                        prepared.invocation.outputs,
+                        nodeDirectory: prepared.directory
+                    )
+                } catch {
+                    return .init(
+                        verified: nil,
+                        attempt: attempt,
+                        exitStatus: exitStatus,
+                        events: events,
+                        error: error.localizedDescription,
+                        cancelled: false
+                    )
+                }
+            }
+        }
+        return .init(
+            verified: nil,
+            attempt: attempt,
+            exitStatus: exitStatus,
+            events: events,
+            error: "Node '\(prepared.node.id)' exhausted its retry policy.",
+            cancelled: false
+        )
+    }
+
     private func runProcess(
         executable: URL,
         arguments: [String],
         currentDirectory: URL,
+        timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?
     ) throws -> WorkflowProcessResult {
         if let streamingRunner = processRunner as? any WorkflowStreamingProcessRunning {
@@ -542,8 +1302,12 @@ struct WorkflowRunner {
                 executable: executable,
                 arguments: arguments,
                 currentDirectory: currentDirectory,
+                timeoutSeconds: timeoutSeconds,
                 stdoutLineHandler: stdoutLineHandler
             )
+        }
+        if timeoutSeconds != nil {
+            throw ValidationError("Injected workflow process runner does not support execution timeouts.")
         }
         guard executable.standardizedFileURL == CurrentExecutable.url().standardizedFileURL else {
             throw ValidationError("Injected workflow process runner cannot execute companion providers.")
@@ -555,6 +1319,183 @@ struct WorkflowRunner {
             }
         }
         return result
+    }
+
+    private func restoreCachedOutputs(
+        fingerprint: String,
+        invocation: WorkflowNodeInvocation,
+        node: WorkflowNode,
+        nodeDirectory: URL
+    ) throws -> WorkflowVerifiedNodeOutputs? {
+        guard let cacheDirectory else { return nil }
+        let entry = cacheDirectory.appendingPathComponent(fingerprint, isDirectory: true)
+        let manifestURL = entry.appendingPathComponent(WorkflowNodeCacheManifest.filename)
+        guard fileManager.fileExists(atPath: manifestURL.path) else { return nil }
+        do {
+            let manifest = try WorkflowBundleCodec.decoder().decode(
+                WorkflowNodeCacheManifest.self,
+                from: Data(contentsOf: manifestURL)
+            )
+            guard manifest.contractVersion == WorkflowNodeCacheManifest.contractVersion,
+                  manifest.fingerprint == fingerprint else {
+                throw ValidationError("Node cache manifest does not match its fingerprint.")
+            }
+            try clearAttemptOutputs(invocation.outputs, nodeDirectory: nodeDirectory)
+            var providerValues: [String: WorkflowValue] = [:]
+            let filesRoot = entry.appendingPathComponent("files", isDirectory: true)
+            for output in manifest.outputs {
+                guard let descriptor = invocation.outputs[output.name], descriptor.type == output.type else {
+                    throw ValidationError("Node cache output contract has changed for '\(output.name)'.")
+                }
+                if let relativePath = output.relativePath {
+                    guard let descriptorPath = descriptor.path else {
+                        throw ValidationError("Node cache output '\(output.name)' no longer has a path.")
+                    }
+                    let destination = try invocationOutputURL(descriptorPath, nodeDirectory: nodeDirectory)
+                    guard try nodeRelativePath(destination, nodeDirectory: nodeDirectory) == relativePath else {
+                        throw ValidationError("Node cache output path has changed for '\(output.name)'.")
+                    }
+                    let source = try confinedCacheURL(relativePath, root: filesRoot)
+                    try copyCacheItem(from: source, to: destination)
+                } else if let value = output.value {
+                    providerValues[output.name] = value
+                }
+            }
+            let verified = try verifyOutputs(
+                invocation.outputs,
+                providerValues: providerValues,
+                node: node,
+                nodeDirectory: nodeDirectory
+            )
+            let restoredRecords = try verified.outputs.map {
+                try cacheOutput($0, nodeDirectory: nodeDirectory)
+            }.sorted { $0.name < $1.name }
+            guard restoredRecords == manifest.outputs.sorted(by: { $0.name < $1.name }) else {
+                throw ValidationError("Node cache output hashes do not match its manifest.")
+            }
+            return verified
+        } catch {
+            try? clearAttemptOutputs(invocation.outputs, nodeDirectory: nodeDirectory)
+            try? fileManager.removeItem(at: entry)
+            return nil
+        }
+    }
+
+    private func storeCachedOutputs(
+        _ verified: WorkflowVerifiedNodeOutputs,
+        fingerprint: String,
+        policy: WorkflowNodeCachePolicy,
+        nodeDirectory: URL
+    ) throws {
+        guard let cacheDirectory else { return }
+        try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        let entry = cacheDirectory.appendingPathComponent(fingerprint, isDirectory: true)
+        if fileManager.fileExists(atPath: entry.path), policy == .automatic { return }
+        let staging = cacheDirectory.appendingPathComponent(".\(fingerprint).\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: staging) }
+        let filesRoot = staging.appendingPathComponent("files", isDirectory: true)
+        try fileManager.createDirectory(at: filesRoot, withIntermediateDirectories: true)
+        let outputs = try verified.outputs.map { output -> WorkflowNodeCacheOutput in
+            let record = try cacheOutput(output, nodeDirectory: nodeDirectory)
+            if let relativePath = record.relativePath {
+                let source = try invocationOutputURL(relativePath, nodeDirectory: nodeDirectory)
+                let destination = try confinedCacheURL(relativePath, root: filesRoot)
+                try copyCacheItem(from: source, to: destination)
+            }
+            return record
+        }.sorted { $0.name < $1.name }
+        try WorkflowBundleCodec.write(
+            WorkflowNodeCacheManifest(
+                contractVersion: WorkflowNodeCacheManifest.contractVersion,
+                fingerprint: fingerprint,
+                outputs: outputs
+            ),
+            to: staging.appendingPathComponent(WorkflowNodeCacheManifest.filename)
+        )
+        if fileManager.fileExists(atPath: entry.path) {
+            try fileManager.removeItem(at: entry)
+        }
+        try fileManager.moveItem(at: staging, to: entry)
+    }
+
+    private func cacheOutput(
+        _ output: GraphRunNodeOutput,
+        nodeDirectory: URL
+    ) throws -> WorkflowNodeCacheOutput {
+        guard let sha256 = output.sha256 else {
+            throw ValidationError("Workflow output '\(output.name)' has no cache fingerprint.")
+        }
+        let relativePath: String?
+        if let path = output.path {
+            relativePath = try nodeRelativePath(artifactURL(for: path), nodeDirectory: nodeDirectory)
+        } else {
+            relativePath = nil
+        }
+        return WorkflowNodeCacheOutput(
+            name: output.name,
+            type: output.type,
+            value: output.value,
+            relativePath: relativePath,
+            contentType: output.contentType,
+            sizeBytes: output.sizeBytes,
+            sha256: sha256
+        )
+    }
+
+    private func nodeRelativePath(_ url: URL, nodeDirectory: URL) throws -> String {
+        let candidate = url.standardizedFileURL.path
+        let root = nodeDirectory.standardizedFileURL.path
+        guard candidate.hasPrefix(root + "/") else {
+            throw ValidationError("Workflow cache output escapes the node directory: \(candidate)")
+        }
+        return String(candidate.dropFirst(root.count + 1))
+    }
+
+    private func confinedCacheURL(_ path: String, root: URL) throws -> URL {
+        guard isConfinedRelativeWorkflowPath(path) else {
+            throw ValidationError("Workflow cache contains an unconfined path: \(path)")
+        }
+        let candidate = root.appendingPathComponent(path).standardizedFileURL
+        guard candidate.path.hasPrefix(root.standardizedFileURL.path + "/") else {
+            throw ValidationError("Workflow cache path escapes its entry: \(path)")
+        }
+        return candidate
+    }
+
+    private func copyCacheItem(from source: URL, to destination: URL) throws {
+        let values = try source.resourceValues(forKeys: [.isSymbolicLinkKey])
+        guard values.isSymbolicLink != true else {
+            throw ValidationError("Workflow cache items cannot be symbolic links: \(source.path)")
+        }
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try fileManager.copyItem(at: source, to: destination)
+    }
+
+    private func clearAttemptOutputs(
+        _ outputs: [String: WorkflowInvocationOutput],
+        nodeDirectory: URL
+    ) throws {
+        for descriptor in outputs.values {
+            guard let path = descriptor.path else { continue }
+            let outputURL = try invocationOutputURL(path, nodeDirectory: nodeDirectory)
+            if fileManager.fileExists(atPath: outputURL.path) {
+                try fileManager.removeItem(at: outputURL)
+            }
+        }
+        let artifacts = nodeDirectory.appendingPathComponent("artifacts", isDirectory: true)
+        if fileManager.fileExists(atPath: artifacts.path) {
+            try fileManager.removeItem(at: artifacts)
+        }
+        let stdout = nodeDirectory.appendingPathComponent("stdout.txt")
+        if fileManager.fileExists(atPath: stdout.path) {
+            try fileManager.removeItem(at: stdout)
+        }
     }
 
     private func verifyOutputs(
@@ -764,10 +1705,7 @@ struct WorkflowRunner {
         if fileManager.fileExists(atPath: cancellationURL.path) {
             try fileManager.removeItem(at: cancellationURL)
         }
-        let processIDURL = runDirectory.appendingPathComponent("worker-child.pid")
-        if fileManager.fileExists(atPath: processIDURL.path) {
-            try fileManager.removeItem(at: processIDURL)
-        }
+        try WorkflowChildProcessRegistry.clear(in: runDirectory, fileManager: fileManager)
         try fileManager.createDirectory(
             at: runDirectory.appendingPathComponent("outputs", isDirectory: true),
             withIntermediateDirectories: true
@@ -883,6 +1821,8 @@ struct WorkflowRunner {
                         startedAt: nil,
                         completedAt: nil,
                         exitStatus: nil,
+                        attempt: 0,
+                        maxAttempts: $0.execution?.resolvedMaxAttempts ?? 1,
                         fingerprint: "",
                         artifacts: [],
                         error: nil
@@ -1099,7 +2039,7 @@ struct WorkflowRunner {
     }
 
     private func record(_ event: GraphRunEvent) throws {
-        let data = try WorkflowBundleCodec.encoder().encode(event)
+        let data = try WorkflowBundleCodec.lineEncoder().encode(event)
         let url = runDirectory.appendingPathComponent("events.jsonl")
         if !fileManager.fileExists(atPath: url.path) {
             try Data().write(to: url)
@@ -1160,6 +2100,41 @@ private struct WorkflowVerifiedNodeOutputs {
     let artifacts: [GraphRunArtifact]
     let outputs: [GraphRunNodeOutput]
     let values: [String: WorkflowValue]
+}
+
+private struct WorkflowNodeCacheManifest: Codable {
+    static let contractVersion = "mere.run/node-cache.v1"
+    static let filename = "cache.json"
+
+    let contractVersion: String
+    let fingerprint: String
+    let outputs: [WorkflowNodeCacheOutput]
+
+    enum CodingKeys: String, CodingKey {
+        case contractVersion = "contract_version"
+        case fingerprint
+        case outputs
+    }
+}
+
+private struct WorkflowNodeCacheOutput: Codable, Equatable {
+    let name: String
+    let type: WorkflowPortType
+    let value: WorkflowValue?
+    let relativePath: String?
+    let contentType: String?
+    let sizeBytes: Int64?
+    let sha256: String
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case type
+        case value
+        case relativePath = "relative_path"
+        case contentType = "content_type"
+        case sizeBytes = "size_bytes"
+        case sha256
+    }
 }
 
 private struct WorkflowOutputDirectoryManifest: Codable {
@@ -1266,6 +2241,10 @@ private func workflowValue(_ value: WorkflowValue, matches type: WorkflowPortTyp
     }
 }
 
+func workflowNodeAllowsResumeReuse(_ node: WorkflowNode) -> Bool {
+    node.arguments.values.allSatisfy { $0.secretNames.isEmpty }
+}
+
 private func isConfinedRelativeWorkflowPath(_ path: String) -> Bool {
     !path.isEmpty
         && !path.hasPrefix("/")
@@ -1274,7 +2253,7 @@ private func isConfinedRelativeWorkflowPath(_ path: String) -> Bool {
         }
 }
 
-private func workflowVersion(_ current: String, satisfiesMinimum minimum: String) -> Bool {
+func workflowVersion(_ current: String, satisfiesMinimum minimum: String) -> Bool {
     func components(_ value: String) -> [Int] {
         value
             .split(separator: ".")

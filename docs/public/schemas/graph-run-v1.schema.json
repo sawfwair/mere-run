@@ -94,6 +94,8 @@
         "started_at": { "type": ["string", "null"], "format": "date-time" },
         "completed_at": { "type": ["string", "null"], "format": "date-time" },
         "exit_status": { "type": ["integer", "null"] },
+        "attempt": { "type": "integer", "minimum": 0 },
+        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
         "fingerprint": { "type": "string" },
         "provider": { "$ref": "#/$defs/provider" },
         "models": { "type": "array", "items": { "$ref": "#/$defs/model" } },

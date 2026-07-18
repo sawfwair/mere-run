@@ -24,6 +24,7 @@
       "propertyNames": { "$ref": "#/$defs/id" },
       "additionalProperties": { "$ref": "#/$defs/reference" }
     },
+    "execution": { "$ref": "#/$defs/graph_execution" },
     "metadata": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/value" }
@@ -38,9 +39,15 @@
       "properties": {
         "$ref": {
           "type": "string",
-          "pattern": "^(inputs\\.[a-z][a-z0-9-]{0,63}|nodes\\.[a-z][a-z0-9-]{0,63}\\.outputs\\.[a-z][a-z0-9-]{0,63})$"
+          "pattern": "^(inputs\\.[a-z][a-z0-9-]{0,63}|nodes\\.[a-z][a-z0-9-]{0,63}\\.outputs\\.[a-z][a-z0-9_]{0,63})$"
         }
       }
+    },
+    "secret_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["$secret"],
+      "properties": { "$secret": { "$ref": "#/$defs/id" } }
     },
     "value": {
       "anyOf": [
@@ -51,6 +58,7 @@
         { "type": "boolean" },
         { "type": "array", "items": { "$ref": "#/$defs/value" } },
         { "$ref": "#/$defs/reference" },
+        { "$ref": "#/$defs/secret_reference" },
         { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
       ]
     },
@@ -75,7 +83,24 @@
         "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}(\\.[a-z][a-z0-9-]{0,63})+$" },
         "provider": { "type": "string", "pattern": "^(mere\\.run|mere-[a-z0-9-]+)$" },
         "arguments": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } },
-        "depends_on": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true }
+        "depends_on": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+        "execution": { "$ref": "#/$defs/execution" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 604800 },
+        "cache": { "enum": ["auto", "never", "refresh"] }
+      }
+    },
+    "graph_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_parallel_nodes": { "type": "integer", "minimum": 1, "maximum": 32 }
       }
     },
     "port_type": {
