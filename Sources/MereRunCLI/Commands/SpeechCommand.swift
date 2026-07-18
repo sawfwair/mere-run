@@ -7,6 +7,7 @@ struct Speech: ParsableCommand {
         subcommands: [
             SpeechSynthesize.self,
             SpeechTranscribe.self,
+            SpeechListen.self,
             SpeechProfile.self,
         ]
     )

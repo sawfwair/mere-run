@@ -775,6 +775,9 @@ Key options:
 - `--stream`
 - `--stream-chunk-ms`
 - `--stream-decode-ms`
+- `--input-format pcm-s16le` (raw stdin only)
+- `--sample-rate 16000` (raw stdin only)
+- `--jsonl` (raw stdin only)
 - `--no-timestamps`
 - `--output`
 - `--quiet`
@@ -785,7 +788,27 @@ Examples:
 swift run mere.run speech transcribe ./audio.wav
 swift run mere.run speech transcribe ./audio.wav --task translate --backend qwen
 swift run mere.run speech transcribe ./audio.wav --stream --output ./transcript.txt
+producer | swift run mere.run speech transcribe - \
+  --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
 ```
+
+Raw streaming stdin is protocol v1: mono signed 16-bit little-endian PCM at
+16 kHz. JSONL stdout begins with `ready`, followed by versioned `partial`,
+`commit`, and `stats` events, and ends with exactly one terminal `final` on
+graceful EOF. Diagnostics remain on stderr.
+
+### `mere.run speech listen`
+
+Capture a macOS input device and transcribe it in real time with Qwen.
+
+```bash
+swift run mere.run speech listen [options]
+```
+
+Use `--list-devices` to print stable CoreAudio UIDs and `--device <uid>` to
+select one. The system input is the default. `--decode-ms` defaults to 2000,
+`--silence-ms` defaults to 900, and `--jsonl` emits the same protocol-v1 event
+stream as raw stdin. Ctrl-C gracefully flushes the active utterance.
 
 ### `mere.run speech profile`
 

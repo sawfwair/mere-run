@@ -93,16 +93,20 @@ public actor Qwen3ASRGenerator: ASRGenerator {
         guard request.minDecodeAudioMs >= 0 else {
             throw ASRStreamingError.invalidInput("minDecodeAudioMs must be >= 0.")
         }
+        guard request.maxQueuedAudioMs > 0 else {
+            throw ASRStreamingError.invalidInput("maxQueuedAudioMs must be > 0.")
+        }
 
         if thinker == nil || tokenizer == nil || melExtractor == nil || modelConfig == nil {
             try await prepare()
         }
         return Qwen3ASRStreamingSession(
             request: request,
-            decode: { [generator = self] samples in
+            decode: { [generator = self] samples, melSpec in
                 try await generator.decodeSamplesDetailed(
                     samples,
                     request: request,
+                    precomputedMelSpec: melSpec,
                     progressHandler: nil
                 )
             }
@@ -261,6 +265,7 @@ public actor Qwen3ASRGenerator: ASRGenerator {
     fileprivate func decodeSamplesDetailed(
         _ samples: [Float],
         request: ASRStreamingRequest,
+        precomputedMelSpec: Qwen3ASRStreamingMel? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> Qwen3ASRStreamingDecodeOutput {
         guard let thinker, let tokenizer, let melExtractor else {
@@ -269,10 +274,12 @@ public actor Qwen3ASRGenerator: ASRGenerator {
 
         let sampleRate = max(1, request.sampleRate)
         let audioDuration = TimeInterval(samples.count) / TimeInterval(sampleRate)
+        let decodeStarted = Date()
 
         progressHandler?(ASRProgress(stage: .extractingFeatures, message: "Extracting mel spectrogram..."))
-        let melSpec = melExtractor.extract(from: samples)
+        let melSpec = precomputedMelSpec?.value ?? melExtractor.extract(from: samples)
         MLX.eval(melSpec)
+        let melFinished = Date()
         if Self.debugEnabled {
             let melMean = MLX.mean(melSpec).item(Float.self)
             let melStd = MLX.sqrt(MLX.variance(melSpec)).item(Float.self)
@@ -288,6 +295,7 @@ public actor Qwen3ASRGenerator: ASRGenerator {
             audioFeatures = audioFeatures.asType(.bfloat16)
         }
         MLX.eval(audioFeatures)
+        let audioEncodingFinished = Date()
         if Self.debugEnabled {
             let message = "[ASR DEBUG] melSpec shape=\(melSpec.shape) audioFeatures shape=\(audioFeatures.shape) dtype=\(audioFeatures.dtype)\n"
             FileHandle.standardError.write(Data(message.utf8))
@@ -303,6 +311,19 @@ public actor Qwen3ASRGenerator: ASRGenerator {
             maxTokens: request.maxTokens,
             progressHandler: progressHandler
         )
+        let generationFinished = Date()
+
+        if Self.debugEnabled {
+            let message = String(
+                format: "[ASR DEBUG] timing audio=%.3fs mel=%.1fms encoder=%.1fms decoder=%.1fms total=%.1fms\n",
+                audioDuration,
+                melFinished.timeIntervalSince(decodeStarted) * 1_000,
+                audioEncodingFinished.timeIntervalSince(melFinished) * 1_000,
+                generationFinished.timeIntervalSince(audioEncodingFinished) * 1_000,
+                generationFinished.timeIntervalSince(decodeStarted) * 1_000
+            )
+            FileHandle.standardError.write(Data(message.utf8))
+        }
 
         Memory.clearCache()
 
@@ -656,6 +677,10 @@ private struct Qwen3ASRDecodedTranscription: Sendable {
     let tokensGenerated: Int
 }
 
+struct Qwen3ASRStreamingMel: @unchecked Sendable {
+    let value: MLXArray
+}
+
 struct Qwen3ASRStreamingDecodeOutput: Sendable {
     let result: ASRResult
     let tokensGenerated: Int
@@ -665,8 +690,9 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
     nonisolated let events: AsyncThrowingStream<ASRStreamingEvent, Error>
 
     private let request: ASRStreamingRequest
-    private let decode: @Sendable ([Float]) async throws -> Qwen3ASRStreamingDecodeOutput
+    private let decode: @Sendable ([Float], Qwen3ASRStreamingMel) async throws -> Qwen3ASRStreamingDecodeOutput
     private let continuation: AsyncThrowingStream<ASRStreamingEvent, Error>.Continuation
+    private let melExtractor = MelSpectrogram()
 
     private var melBuffer: IncrementalMelSpectrogram
     private var decodeCadence: StreamingDecodeCadence
@@ -678,10 +704,14 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
     private var canceled = false
     private var decodeInFlight = false
     private var pendingDecode = false
+    private var forcePendingDecode = false
+    private var forcedDecodeSampleCount: Int?
+    private var decodeTask: Task<Void, Never>?
+    private var decodeFailure: Error?
 
     init(
         request: ASRStreamingRequest,
-        decode: @escaping @Sendable ([Float]) async throws -> Qwen3ASRStreamingDecodeOutput
+        decode: @escaping @Sendable ([Float], Qwen3ASRStreamingMel) async throws -> Qwen3ASRStreamingDecodeOutput
     ) {
         self.request = request
         self.decode = decode
@@ -706,18 +736,61 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
         }
 
         melBuffer.append(samples)
+        let maximumQueuedSamples = request.sampleRate * request.maxQueuedAudioMs / 1_000
+        let queuedSamples = melBuffer.sampleCount - decodeCadence.lastDecodedSampleCount
+        guard queuedSamples <= maximumQueuedSamples else {
+            throw ASRStreamingError.invalidInput(
+                "backpressure_exceeded: more than \(request.maxQueuedAudioMs) ms of audio is waiting for decode."
+            )
+        }
         guard decodeCadence.shouldDecode(bufferedSampleCount: melBuffer.sampleCount) else { return }
-        try await scheduleDecode(force: false)
+        scheduleDecode(force: false)
+        // Give the decode task a chance to snapshot the newest audio without
+        // making ingestion wait for model inference.
+        await Task.yield()
     }
 
     func finish() async throws {
+        try await completeFinalization(
+            requiredSampleCount: melBuffer.sampleCount,
+            alwaysForceDecode: true
+        )
+    }
+
+    func finish(requiredSampleCount: Int) async throws {
+        try await completeFinalization(
+            requiredSampleCount: requiredSampleCount,
+            alwaysForceDecode: false
+        )
+    }
+
+    private func completeFinalization(
+        requiredSampleCount: Int,
+        alwaysForceDecode: Bool
+    ) async throws {
         if canceled || didFinish { return }
+        guard requiredSampleCount >= 0, requiredSampleCount <= melBuffer.sampleCount else {
+            throw ASRStreamingError.invalidInput(
+                "requiredSampleCount must be within the streamed audio range."
+            )
+        }
 
         didFinish = true
-        while decodeInFlight {
-            try await Task.sleep(nanoseconds: 1_000_000)
+        if let decodeTask {
+            await decodeTask.value
         }
-        try await scheduleDecode(force: true)
+        if let decodeFailure {
+            throw decodeFailure
+        }
+        if alwaysForceDecode || decodeCadence.lastDecodedSampleCount < requiredSampleCount {
+            scheduleDecode(force: true, sampleCount: requiredSampleCount)
+            if let decodeTask {
+                await decodeTask.value
+            }
+            if let decodeFailure {
+                throw decodeFailure
+            }
+        }
         emitFinalIfNeeded()
         continuation.finish()
     }
@@ -726,34 +799,67 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
         guard !canceled else { return }
         canceled = true
         didFinish = true
+        decodeTask?.cancel()
         continuation.finish()
     }
 
-    private func scheduleDecode(force: Bool) async throws {
+    private func scheduleDecode(force: Bool, sampleCount: Int? = nil) {
         pendingDecode = true
+        forcePendingDecode = forcePendingDecode || force
+        if force {
+            forcedDecodeSampleCount = sampleCount ?? melBuffer.sampleCount
+        }
+        guard decodeTask == nil else { return }
+
+        decodeTask = Task { [weak self] in
+            await self?.runDecodeLoop()
+        }
+    }
+
+    private func runDecodeLoop() async {
+        do {
+            try await performDecodeLoop()
+        } catch is CancellationError {
+            // Cancellation is terminal and intentionally does not surface as a decode error.
+        } catch {
+            decodeFailure = error
+            continuation.finish(throwing: error)
+        }
+        decodeTask = nil
+    }
+
+    private func performDecodeLoop() async throws {
         if decodeInFlight { return }
 
         decodeInFlight = true
         defer { decodeInFlight = false }
 
-        var forceNextDecode = force
-        while pendingDecode || forceNextDecode {
+        while pendingDecode || forcePendingDecode {
+            let forceNextDecode = forcePendingDecode
+            let requestedSampleCount = forceNextDecode ? forcedDecodeSampleCount : nil
             pendingDecode = false
+            forcePendingDecode = false
+            forcedDecodeSampleCount = nil
             if canceled { return }
 
-            let snapshot = melBuffer.snapshotSamples()
+            let snapshot = if let requestedSampleCount {
+                melBuffer.snapshotSamples(count: requestedSampleCount)
+            } else {
+                melBuffer.snapshotSamples()
+            }
             guard !snapshot.isEmpty else {
-                forceNextDecode = false
                 continue
             }
 
             if !decodeCadence.shouldDecode(bufferedSampleCount: snapshot.count, force: forceNextDecode) {
-                forceNextDecode = false
                 continue
             }
 
             let start = Date()
-            let output = try await decode(snapshot)
+            let melSpec = Qwen3ASRStreamingMel(
+                value: melBuffer.extract(using: melExtractor, sampleCount: snapshot.count)
+            )
+            let output = try await decode(snapshot, melSpec)
             if canceled { return }
 
             let latencyMs = Date().timeIntervalSince(start) * 1_000
@@ -773,7 +879,6 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
                 tokensGenerated: output.tokensGenerated
             )
             continuation.yield(.stats(stats))
-            forceNextDecode = false
         }
     }
 

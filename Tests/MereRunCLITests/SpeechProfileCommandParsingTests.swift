@@ -37,6 +37,6 @@ final class SpeechProfileCommandParsingTests: XCTestCase {
 
     func testSpeechExposesProfileEntrypoint() {
         let commandNames = Speech.configuration.subcommands.compactMap { $0.configuration.commandName }
-        XCTAssertEqual(commandNames.sorted(), ["profile", "synthesize", "transcribe"])
+        XCTAssertEqual(commandNames.sorted(), ["listen", "profile", "synthesize", "transcribe"])
     }
 }
