@@ -471,6 +471,9 @@ swift run mere.run model benchmark chat --json
 # Small tool-call eval: synthetic Mere tools, parsed tool names/arguments only
 swift run mere.run model benchmark tool-calls --json
 
+# Gemma4 tool-result continuation: one- and two-tool chains against a real checkpoint
+swift run mere.run model benchmark tool-continuations --log-responses --json
+
 # Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend
 swift run mere.run model benchmark vlm --json
 

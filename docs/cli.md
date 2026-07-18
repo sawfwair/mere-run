@@ -1767,6 +1767,26 @@ and the activation threshold; leaving them unset uses the runtime policy
 defaults. The default fixture is deterministic and intended for throughput
 comparison, not model-quality evaluation.
 
+### `mere.run model benchmark tool-continuations`
+
+Run two deterministic real-checkpoint Gemma 4 cases that continue after
+completed tool results. The cases exercise typed nested and null arguments,
+reasoning metadata, tool-call correlation fields, and a repeated two-tool chain.
+They require the final answer to use the authoritative results and reject a
+spurious additional tool call.
+
+```bash
+swift run mere.run model benchmark tool-continuations \
+  --model text-chat-gemma4-12b-4bit \
+  --log-responses \
+  --json
+```
+
+Use `--dry-run` to print the plan without loading a checkpoint. `--model-root`
+accepts a local converted Gemma 4 directory while leaving the managed install
+untouched. `--max-tokens` and `--context-size` override the per-case generation
+and context limits.
+
 ### `mere.run model benchmark q36-mtp`
 
 Run a requested-token real-checkpoint Qwen-family MTP comparison. The command

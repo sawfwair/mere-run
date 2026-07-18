@@ -2054,6 +2054,95 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.messages[0].content, "Follow repo rules.")
     }
 
+    func testChatRequestPreservesReasoningAndToolCorrelationFields() throws {
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [
+                OpenAIChatMessage(
+                    role: "assistant",
+                    content: "Working...",
+                    reasoning_content: "I should write the file.",
+                    tool_calls: [
+                        OpenAIChatToolCall(
+                            id: "call_123",
+                            function: OpenAIChatToolCallFunction(
+                                name: "write_file",
+                                arguments: #"{"path":"note.txt","overwrite":false}"#
+                            )
+                        ),
+                    ]
+                ),
+                OpenAIChatMessage(
+                    role: "tool",
+                    content: "Wrote 4 bytes.",
+                    name: "write_file",
+                    tool_call_id: "call_123"
+                ),
+            ]
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textChatGemma4.openAICompatibility
+        )
+
+        XCTAssertEqual(chatRequest.messages[0].reasoningContent, "I should write the file.")
+        XCTAssertEqual(
+            chatRequest.messages[0].toolCalls,
+            [
+                ChatMessageToolCall(
+                    id: "call_123",
+                    name: "write_file",
+                    arguments: [
+                        "path": .string("note.txt"),
+                        "overwrite": .bool(false),
+                    ]
+                ),
+            ]
+        )
+        XCTAssertEqual(chatRequest.messages[1].name, "write_file")
+        XCTAssertEqual(chatRequest.messages[1].toolCallID, "call_123")
+    }
+
+    func testChatRequestRejectsInvalidToolCallArguments() {
+        let request = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [
+                OpenAIChatMessage(
+                    role: "assistant",
+                    tool_calls: [
+                        OpenAIChatToolCall(
+                            id: "call_123",
+                            function: OpenAIChatToolCallFunction(
+                                name: "write_file",
+                                arguments: "not-json"
+                            )
+                        ),
+                    ]
+                ),
+            ]
+        )
+
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: RuntimeServingEngine.textChatGemma4.openAICompatibility
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? APIRequestValidationError,
+                .invalidField(
+                    "messages.tool_calls.function.arguments",
+                    "must be a JSON object"
+                )
+            )
+        }
+    }
+
     func testChatRequestMapsSupportedStopSequences() throws {
         let single = OpenAIChatRequest(
             model: "mererun-test-model",

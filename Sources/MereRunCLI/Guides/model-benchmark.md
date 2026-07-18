@@ -102,6 +102,18 @@ mere.run model benchmark vlm \
   --json
 ```
 
+## Gemma4 Tool-Continuation Benchmark
+
+Validate grounded continuation after completed Gemma 4 tool calls:
+
+```bash
+mere.run model benchmark tool-continuations --log-responses
+```
+
+The cases cover typed nested/null arguments, reasoning preservation, tool-call
+ids, tool names, and a repeated two-tool chain. `--model-root` accepts a local
+converted Gemma 4 directory without changing the managed installation.
+
 ## Gemma4 KV Benchmark
 
 `model benchmark gemma4-kv` runs a fixed-token comparison for the selected

@@ -23,6 +23,11 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("tool-calls"))
     }
 
+    func testBenchmarkCommandExposesToolContinuationsSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("tool-continuations"))
+    }
+
     func testBenchmarkCommandExposesCodeSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("code"))

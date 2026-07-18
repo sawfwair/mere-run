@@ -14,6 +14,7 @@ the decision guide for which benchmark to run and how to read the result.
 | --- | --- | --- |
 | Grounded assistant behavior | `model benchmark chat` | Answers over provided evidence, abstention, formats, concise summaries, and local-action boundaries |
 | Tool selection | `model benchmark tool-calls` | Parsed tool names and arguments for synthetic Mere-style tools |
+| Tool continuation | `model benchmark tool-continuations` | Grounded final answers after completed Gemma 4 tool calls and repeated tool chains |
 | Coding ability | `model benchmark code` | Generated Python against HumanEval tests in a local sandbox |
 | Vision-language behavior | `model benchmark vlm` | Synthetic image-question fixtures, or external `lmms-eval` datasets |
 | API serving throughput | `model benchmark api-workload` | End-to-end `/v1/chat/completions` request latency, TTFT, cache, and batching counters |
@@ -162,6 +163,21 @@ swift run mere.run model benchmark vlm \
 ```
 
 ## Runtime Benchmarks
+
+### Gemma 4 Tool Continuation
+
+`model benchmark tool-continuations` runs two deterministic real-checkpoint
+Gemma 4 histories: a typed tool call containing boolean, nested, and null JSON
+arguments followed by its result, and a two-tool chain with preserved reasoning
+and call ids. Both cases require a grounded final answer and reject another
+tool call after the completed results.
+
+```bash
+mere.run model benchmark tool-continuations --log-responses
+```
+
+Use `--model-root` to validate a locally converted Gemma 4 directory without
+installing or replacing the managed model.
 
 ### API Workload
 

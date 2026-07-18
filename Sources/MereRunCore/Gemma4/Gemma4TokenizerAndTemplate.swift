@@ -8,19 +8,44 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
     public let eosTokenId: Int?
     public let turnTokenId: Int?
     public let toolCallEndTokenId: Int?
+    let canonicalChatTemplateVariant: Gemma4CanonicalChatTemplate.Variant?
 
-    public init(
+    private let chatTemplateOverride: String?
+
+    public convenience init(
         tokenizer: any Tokenizer,
         maxLength: Int,
         eosTokenId: Int?,
         turnTokenId: Int?,
         toolCallEndTokenId: Int? = nil
     ) {
+        self.init(
+            tokenizer: tokenizer,
+            maxLength: maxLength,
+            eosTokenId: eosTokenId,
+            turnTokenId: turnTokenId,
+            toolCallEndTokenId: toolCallEndTokenId,
+            chatTemplateOverride: nil,
+            canonicalChatTemplateVariant: nil
+        )
+    }
+
+    private init(
+        tokenizer: any Tokenizer,
+        maxLength: Int,
+        eosTokenId: Int?,
+        turnTokenId: Int?,
+        toolCallEndTokenId: Int?,
+        chatTemplateOverride: String?,
+        canonicalChatTemplateVariant: Gemma4CanonicalChatTemplate.Variant?
+    ) {
         self.tokenizer = tokenizer
         self.maxLength = maxLength
         self.eosTokenId = eosTokenId
         self.turnTokenId = turnTokenId
         self.toolCallEndTokenId = toolCallEndTokenId
+        self.chatTemplateOverride = chatTemplateOverride
+        self.canonicalChatTemplateVariant = canonicalChatTemplateVariant
     }
 
     public static func load(
@@ -28,6 +53,7 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
         maxLengthOverride: Int? = nil,
         hubApi: HubApi = .shared
     ) async throws -> Gemma4TokenizerAndTemplate {
+        let canonicalTemplate = try Gemma4CanonicalChatTemplate.override(for: rootURL)
         let tokenizer = try await AutoTokenizer.from(modelFolder: rootURL, hubApi: hubApi)
         let tokenizerConfigURL = rootURL.appending(path: "tokenizer_config.json")
 
@@ -47,7 +73,9 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
             maxLength: maxLength,
             eosTokenId: tokenizer.eosTokenId,
             turnTokenId: tokenizer.convertTokenToId("<turn|>"),
-            toolCallEndTokenId: tokenizer.convertTokenToId("<tool_call|>")
+            toolCallEndTokenId: tokenizer.convertTokenToId("<tool_call|>"),
+            chatTemplateOverride: canonicalTemplate?.template,
+            canonicalChatTemplateVariant: canonicalTemplate?.variant
         )
     }
 
@@ -64,7 +92,7 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
 
         var encoded = try tokenizer.applyChatTemplate(
             messages: renderedMessages,
-            chatTemplate: nil,
+            chatTemplate: chatTemplateOverride.map { .literal($0) },
             addGenerationPrompt: addGenerationPrompt,
             truncation: false,
             maxLength: nil,
@@ -114,31 +142,54 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
 
         switch message.role {
         case .assistant:
-            let toolCalls = Gemma4ToolParser.parseToolCalls(message.content)
-            if !toolCalls.isEmpty {
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
                 let renderedToolCalls: [[String: any Sendable]] = toolCalls.map { call in
-                    [
+                    var renderedCall: [String: any Sendable] = [
                         "function": [
                             "name": call.name,
-                            "arguments": call.arguments,
+                            "arguments": renderArguments(call.arguments),
                         ] as [String: any Sendable],
                     ]
+                    if let id = call.id, !id.isEmpty {
+                        renderedCall["id"] = id
+                    }
+                    return renderedCall
                 }
                 rendered["tool_calls"] = renderedToolCalls
-
                 let content = stripToolCalls(from: message.content)
                 if !content.isEmpty {
                     rendered["content"] = content
                 }
             } else {
-                rendered["content"] = renderContent(for: message)
+                let parsedToolCalls = Gemma4ToolParser.parseToolCalls(message.content)
+                if !parsedToolCalls.isEmpty {
+                    rendered["tool_calls"] = parsedToolCalls.map { call in
+                        [
+                            "function": [
+                                "name": call.name,
+                                "arguments": call.arguments,
+                            ] as [String: any Sendable],
+                        ]
+                    }
+                    let content = stripToolCalls(from: message.content)
+                    if !content.isEmpty {
+                        rendered["content"] = content
+                    }
+                } else {
+                    rendered["content"] = renderContent(for: message)
+                }
+            }
+            if let reasoningContent = message.reasoningContent, !reasoningContent.isEmpty {
+                rendered["reasoning_content"] = reasoningContent
             }
         case .tool:
-            let toolResponses: [[String: any Sendable]] = [[
-                "name": "tool",
-                "response": message.content,
-            ]]
-            rendered["tool_responses"] = toolResponses
+            rendered["content"] = renderContent(for: message)
+            if let name = message.name, !name.isEmpty {
+                rendered["name"] = name
+            }
+            if let toolCallID = message.toolCallID, !toolCallID.isEmpty {
+                rendered["tool_call_id"] = toolCallID
+            }
         default:
             rendered["content"] = renderContent(for: message)
         }
@@ -164,6 +215,29 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
                 options: .regularExpression
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func renderArguments(
+        _ arguments: [String: OpenAIJSONValue]
+    ) -> [String: any Sendable] {
+        arguments.mapValues(renderJSONValue)
+    }
+
+    private static func renderJSONValue(_ value: OpenAIJSONValue) -> any Sendable {
+        switch value {
+        case .string(let value):
+            value
+        case .number(let value):
+            value
+        case .bool(let value):
+            value
+        case .object(let value):
+            value.mapValues(renderJSONValue)
+        case .array(let value):
+            value.map(renderJSONValue)
+        case .null:
+            Optional<String>.none
+        }
     }
 }
 

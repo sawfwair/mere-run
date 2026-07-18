@@ -229,8 +229,11 @@ gated for larger machines. On 32 GB Apple Silicon Macs, use
 `text-chat-gemma4-turbo`, which installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE
 snapshot and runs through the native Swift Gemma runtime. On smaller supported
 machines, `text-chat-gemma4-12b-4bit` installs the
-`mlx-community/gemma-4-12B-it-4bit` snapshot as the compact managed Gemma 12B
-chat tier.
+checksum-pinned `Sawfwair/gemma-4-12B-it-MLX-4bit` snapshot as the compact
+managed Gemma 12B chat tier. Sawfwair's package is independently converted
+from Google's verified dense checkpoint, includes `MERERUN_CONVERSION.json`
+with source and emitted artifact hashes, and is published as the user-facing
+`v1.0.0` release.
 
 `text-chat-lfm25-a1b-8bit` uses the public
 `LiquidAI/LFM2.5-8B-A1B-MLX-8bit` snapshot at the pinned catalog revision. It is
