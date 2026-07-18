@@ -19,7 +19,9 @@ struct Graph: AsyncParsableCommand {
             GraphMaterialize.self,
             GraphExportJob.self,
             GraphRun.self,
+            GraphRunJob.self,
             GraphSubmit.self,
+            GraphSubmitJob.self,
             GraphWorker.self,
         ]
     )
@@ -599,6 +601,170 @@ struct GraphSubmitRequest: Codable, Equatable {
         case inputsPath = "inputs_path"
         case runDirectory = "run_directory"
         case executor
+    }
+}
+
+struct GraphRunJobRequest: Codable, Equatable {
+    let bundlePath: String
+    let runDirectory: String
+    let resume: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case bundlePath = "bundle_path"
+        case runDirectory = "run_directory"
+        case resume
+    }
+}
+
+typealias GraphRunJobEnvelope = StructuredRunEnvelope<GraphRunJobRequest, WorkflowRunOutcome>
+
+struct GraphRunJob: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "run-job",
+        abstract: "Run an existing immutable workflow job bundle locally."
+    )
+
+    @Option(name: [.long], help: "Portable job bundle directory.")
+    var bundle: String
+
+    @Option(name: [.customLong("run-dir")], help: "Durable run directory, separate from the immutable bundle.")
+    var runDirectory: String
+
+    @Flag(name: [.long], help: "Reuse verified outputs from a prior interrupted run.")
+    var resume = false
+
+    @Flag(name: [.long], help: "Emit one final structured run report.")
+    var json = false
+
+    @Flag(name: [.customLong("json-stream")], help: "Emit run events as newline-delimited JSON.")
+    var jsonStream = false
+
+    func run() async throws {
+        guard !(json && jsonStream) else {
+            throw ValidationError("--json and --json-stream are mutually exclusive.")
+        }
+        let eventHandler: ((GraphRunEvent) -> Void)? = jsonStream ? { event in
+            emitGraphStreamEvent(event)
+        } : nil
+        let envelope: GraphRunJobEnvelope = try makeEnvelope(eventHandler: eventHandler)
+        if json { print(try StructuredRunOutput.encode(envelope)) }
+        if !json && !jsonStream { print(envelope.summary) }
+        if envelope.result.state == .failed || envelope.result.state == .cancelled { throw ExitCode.failure }
+    }
+
+    func makeEnvelope(
+        now: @escaping () -> Date = Date.init,
+        eventHandler: ((GraphRunEvent) -> Void)? = nil,
+        processRunner: WorkflowProcessRunning = WorkflowProcessRunner()
+    ) throws -> GraphRunJobEnvelope {
+        let bundleURL = URL(fileURLWithPath: bundle).standardizedFileURL
+        let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
+        try requireSeparateWorkflowDirectories(bundle: bundleURL, run: runURL)
+        _ = try verifiedPortableWorkflowBundle(at: bundleURL)
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundleURL,
+            runDirectory: runURL,
+            resume: resume,
+            processRunner: processRunner,
+            eventHandler: eventHandler
+        ).execute()
+        return GraphRunJobEnvelope(
+            schemaVersion: 1,
+            mereRunVersion: MereRunCLIVersion.current,
+            command: ["graph", "run-job"],
+            mode: .run,
+            status: structuredStatus(outcome.state),
+            createdAt: now(),
+            cwd: FileManager.default.currentDirectoryPath,
+            summary: "Workflow \(outcome.state.rawValue): \(outcome.jobID)",
+            request: .init(
+                bundlePath: bundleURL.path,
+                runDirectory: runURL.path,
+                resume: resume
+            ),
+            result: outcome,
+            diagnostics: outcome.state == .failed ? [.init(
+                id: "workflow_run_failed",
+                severity: .blocker,
+                title: "Workflow run failed",
+                message: "Inspect \(runURL.appendingPathComponent(GraphRunManifest.filename).path) for node details."
+            )] : [],
+            actions: []
+        )
+    }
+}
+
+struct GraphSubmitJobRequest: Codable, Equatable {
+    let bundlePath: String
+    let runDirectory: String
+    let executor: String
+
+    enum CodingKeys: String, CodingKey {
+        case bundlePath = "bundle_path"
+        case runDirectory = "run_directory"
+        case executor
+    }
+}
+
+typealias GraphSubmitJobEnvelope = StructuredRunEnvelope<GraphSubmitJobRequest, WorkflowRemoteJob>
+
+struct GraphSubmitJob: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "submit-job",
+        abstract: "Submit an existing immutable workflow job bundle to SSH or Relay."
+    )
+
+    @Option(name: [.long], help: "Portable job bundle directory.")
+    var bundle: String
+
+    @Option(name: [.long], help: "Remote executor reference: ssh:<profile> or relay:<profile>.")
+    var executor: String
+
+    @Option(name: [.customLong("run-dir")], help: "Local durable run directory, separate from the immutable bundle.")
+    var runDirectory: String
+
+    @Flag(name: [.long], help: "Emit a structured submission report.")
+    var json = false
+
+    func run() async throws {
+        let envelope = try await makeEnvelope()
+        if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.result.jobReference) }
+    }
+
+    func makeEnvelope(
+        now: @escaping () -> Date = Date.init,
+        submitter: (String, URL, URL) async throws -> WorkflowRemoteJob = { reference, bundle, run in
+            try await WorkflowExecutorController.submit(
+                reference: reference,
+                bundleDirectory: bundle,
+                localRunDirectory: run
+            )
+        }
+    ) async throws -> GraphSubmitJobEnvelope {
+        let bundleURL = URL(fileURLWithPath: bundle).standardizedFileURL
+        let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
+        try requireSeparateWorkflowDirectories(bundle: bundleURL, run: runURL)
+        let verified = try verifiedPortableWorkflowBundle(at: bundleURL)
+        try copyPortableWorkflowBundle(verified, to: runURL)
+        let remoteJob = try await submitter(executor, runURL, runURL)
+        return GraphSubmitJobEnvelope(
+            schemaVersion: 1,
+            mereRunVersion: MereRunCLIVersion.current,
+            command: ["graph", "submit-job"],
+            mode: .run,
+            status: structuredStatus(remoteJob.state),
+            createdAt: now(),
+            cwd: FileManager.default.currentDirectoryPath,
+            summary: "Submitted workflow job \(remoteJob.jobID) to \(executor).",
+            request: .init(
+                bundlePath: bundleURL.path,
+                runDirectory: runURL.path,
+                executor: executor
+            ),
+            result: remoteJob,
+            diagnostics: [],
+            actions: []
+        )
     }
 }
 

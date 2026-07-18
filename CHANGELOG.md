@@ -16,6 +16,9 @@ The format is based on Keep a Changelog.
 - added repeatable `run fetch --artifact <name>` selection with verified reuse
   of already-downloaded artifacts, allowing interrupted and partial remote
   result retrieval without transferring the complete artifact set again.
+- added `graph run-job` and `graph submit-job` so one verified immutable export
+  can execute unchanged through local, SSH, and Relay while mutable run state
+  remains in a separate directory.
 
 ## 0.22.0 - 2026-07-17
 

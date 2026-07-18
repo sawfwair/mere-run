@@ -214,6 +214,131 @@ enum WorkflowBundleCodec {
     }
 }
 
+func verifiedPortableWorkflowBundle(
+    at directory: URL,
+    fileManager: FileManager = .default
+) throws -> WorkflowBundleMaterialization {
+    let directory = directory.standardizedFileURL
+    for filename in [
+        WorkflowJobManifest.filename,
+        "graph.json",
+        "inputs.json",
+        WorkflowAssetManifest.filename,
+    ] {
+        let document = directory.appendingPathComponent(filename)
+        let values = try document.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard fileManager.fileExists(atPath: document.path),
+              values.isRegularFile == true,
+              values.isSymbolicLink != true else {
+            throw ValidationError("Workflow bundle document is missing or unsafe: \(filename)")
+        }
+    }
+    let graph = try WorkflowGraphDocument.load(from: directory.appendingPathComponent("graph.json"))
+    let inputs = try WorkflowInputsDocument.load(from: directory.appendingPathComponent("inputs.json"))
+    let assets = try WorkflowBundleCodec.decoder().decode(
+        WorkflowAssetManifest.self,
+        from: Data(contentsOf: directory.appendingPathComponent(WorkflowAssetManifest.filename))
+    )
+    let job = try WorkflowBundleCodec.decoder().decode(
+        WorkflowJobManifest.self,
+        from: Data(contentsOf: directory.appendingPathComponent(WorkflowJobManifest.filename))
+    )
+    guard job.contractVersion == WorkflowJobManifest.contractVersion else {
+        throw ValidationError("Unsupported workflow job contract '\(job.contractVersion)'.")
+    }
+    guard assets.schemaVersion == 1 else {
+        throw ValidationError("Unsupported workflow asset manifest version '\(assets.schemaVersion)'.")
+    }
+    guard try WorkflowBundleCodec.hash(graph) == job.graphFingerprint else {
+        throw ValidationError("Workflow graph fingerprint does not match job.json.")
+    }
+    let inputFingerprint = try WorkflowBundleCodec.hash(WorkflowPortableInputFingerprint(inputs: inputs, assets: assets))
+    guard inputFingerprint == job.inputFingerprint else {
+        throw ValidationError("Workflow input fingerprint does not match job.json.")
+    }
+    let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
+    guard validation.status != .blocked else {
+        throw ValidationError(validation.diagnostics.map(\.message).joined(separator: " "))
+    }
+    let assetRoot = directory.appendingPathComponent("assets/sha256", isDirectory: true)
+    for entry in assets.groups.flatMap(\.entries) {
+        guard isPortableWorkflowPath(entry.path), isWorkflowSHA256(entry.digest) else {
+            throw ValidationError("Workflow asset manifest contains an invalid path or digest.")
+        }
+        let source = assetRoot.appendingPathComponent(entry.digest)
+        let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true,
+              values.isSymbolicLink != true,
+              try ModelArtifactPin.fileByteCount(source) == entry.sizeBytes,
+              try ModelArtifactPin.fileSHA256(source) == entry.digest else {
+            throw ValidationError("Workflow asset digest verification failed for '\(entry.path)'.")
+        }
+    }
+    return WorkflowBundleMaterialization(
+        directory: directory,
+        graph: graph,
+        inputs: inputs,
+        assets: assets,
+        job: job
+    )
+}
+
+func copyPortableWorkflowBundle(
+    _ bundle: WorkflowBundleMaterialization,
+    to destination: URL,
+    fileManager: FileManager = .default
+) throws {
+    let destination = destination.standardizedFileURL
+    if fileManager.fileExists(atPath: destination.path),
+       !(try fileManager.contentsOfDirectory(atPath: destination.path)).isEmpty {
+        throw ValidationError("Workflow run directory must be empty before bundle submission.")
+    }
+    try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+    for filename in [
+        WorkflowJobManifest.filename,
+        "graph.json",
+        "inputs.json",
+        WorkflowAssetManifest.filename,
+    ] {
+        try fileManager.copyItem(
+            at: bundle.directory.appendingPathComponent(filename),
+            to: destination.appendingPathComponent(filename)
+        )
+    }
+    let destinationAssets = destination.appendingPathComponent("assets/sha256", isDirectory: true)
+    try fileManager.createDirectory(at: destinationAssets, withIntermediateDirectories: true)
+    for digest in Set(bundle.assets.groups.flatMap(\.entries).map(\.digest)).sorted() {
+        try fileManager.copyItem(
+            at: bundle.directory.appendingPathComponent("assets/sha256/\(digest)"),
+            to: destinationAssets.appendingPathComponent(digest)
+        )
+    }
+}
+
+func requireSeparateWorkflowDirectories(bundle: URL, run: URL) throws {
+    let bundle = bundle.standardizedFileURL.path
+    let run = run.standardizedFileURL.path
+    guard bundle != run,
+          !run.hasPrefix(bundle + "/"),
+          !bundle.hasPrefix(run + "/") else {
+        throw ValidationError("Immutable bundle and run directories must be separate and non-nested.")
+    }
+}
+
+private func isPortableWorkflowPath(_ path: String) -> Bool {
+    !path.isEmpty
+        && !path.hasPrefix("/")
+        && path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy {
+            $0 != "." && $0 != ".." && !$0.isEmpty
+        }
+}
+
+private func isWorkflowSHA256(_ value: String) -> Bool {
+    value.count == 64 && value.utf8.allSatisfy { byte in
+        (byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)
+    }
+}
+
 struct WorkflowBundleMaterializer {
     let graph: WorkflowGraphDocument
     let suppliedInputs: WorkflowInputsDocument

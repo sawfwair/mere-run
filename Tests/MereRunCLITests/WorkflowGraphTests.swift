@@ -1173,6 +1173,134 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(job.placement?.nodes.first?.blockers.first?.code, "model_missing")
     }
 
+    func testRunJobExecutesTheVerifiedBundleWithoutMutatingIt() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: try singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle"),
+            jobID: { UUID(uuidString: "00000000-0000-0000-0000-000000000123")! }
+        ).materialize()
+        let sourceDocuments = try portableBundleDocuments(at: bundle.directory)
+        let runDirectory = root.appendingPathComponent("local-run")
+        let command = try GraphRunJob.parse([
+            "--bundle", bundle.directory.path,
+            "--run-dir", runDirectory.path,
+        ])
+
+        let envelope = try command.makeEnvelope(processRunner: FixtureWorkflowProcessRunner())
+
+        XCTAssertEqual(envelope.command, ["graph", "run-job"])
+        XCTAssertEqual(envelope.result.state, .finished)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: bundle.directory.appendingPathComponent(GraphRunManifest.filename).path
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: runDirectory.appendingPathComponent(GraphRunManifest.filename).path
+        ))
+        XCTAssertEqual(try portableBundleDocuments(at: bundle.directory), sourceDocuments)
+        XCTAssertEqual(try portableBundleDocuments(at: runDirectory), sourceDocuments)
+    }
+
+    func testSubmitJobCopiesExactVerifiedBundleBytesBeforeTransport() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dataset = root.appendingPathComponent("dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        try Data([0x89, 0x50, 0x4e, 0x47]).write(to: dataset.appendingPathComponent("frame.png"))
+        try Data("caption".utf8).write(to: dataset.appendingPathComponent("frame.txt"))
+        let bundle = try WorkflowBundleMaterializer(
+            graph: try trainingGraph(),
+            suppliedInputs: .init(values: ["data": .string(dataset.path)]),
+            destination: root.appendingPathComponent("bundle"),
+            jobID: { UUID(uuidString: "00000000-0000-0000-0000-000000000456")! }
+        ).materialize()
+        let sourceDocuments = try portableBundleDocuments(at: bundle.directory)
+        let sourceAssets = try portableBundleAssets(at: bundle.directory)
+        let runDirectory = root.appendingPathComponent("remote-run")
+        let command = try GraphSubmitJob.parse([
+            "--bundle", bundle.directory.path,
+            "--executor", "relay:fixture",
+            "--run-dir", runDirectory.path,
+        ])
+        var submitted = false
+
+        let envelope = try await command.makeEnvelope(submitter: { reference, submittedBundle, submittedRun in
+            submitted = true
+            XCTAssertEqual(reference, "relay:fixture")
+            XCTAssertEqual(submittedBundle.path, runDirectory.standardizedFileURL.path)
+            XCTAssertEqual(submittedRun.path, runDirectory.standardizedFileURL.path)
+            XCTAssertEqual(try self.portableBundleDocuments(at: submittedBundle), sourceDocuments)
+            XCTAssertEqual(try self.portableBundleAssets(at: submittedBundle), sourceAssets)
+            return WorkflowRemoteJob(
+                jobID: bundle.job.jobID,
+                jobReference: "relay://fixture/\(bundle.job.jobID)",
+                state: .queued,
+                executor: reference,
+                runDirectory: submittedRun.path,
+                createdAt: bundle.job.createdAt,
+                updatedAt: bundle.job.createdAt,
+                artifacts: [],
+                error: nil,
+                placement: nil,
+                metrics: nil
+            )
+        })
+
+        XCTAssertTrue(submitted)
+        XCTAssertEqual(envelope.command, ["graph", "submit-job"])
+        XCTAssertEqual(envelope.result.jobReference, "relay://fixture/\(bundle.job.jobID)")
+        XCTAssertEqual(try portableBundleDocuments(at: bundle.directory), sourceDocuments)
+        XCTAssertEqual(try portableBundleDocuments(at: runDirectory), sourceDocuments)
+        XCTAssertEqual(try portableBundleAssets(at: bundle.directory), sourceAssets)
+        XCTAssertEqual(try portableBundleAssets(at: runDirectory), sourceAssets)
+    }
+
+    func testSubmitJobRejectsTamperedAndNestedBundlesBeforeTransport() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: try singleImageGraph(),
+            suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle")
+        ).materialize()
+        var graph = try WorkflowGraphDocument.load(
+            from: bundle.directory.appendingPathComponent("graph.json")
+        )
+        graph = WorkflowGraphDocument(
+            schemaVersion: graph.schemaVersion,
+            kind: graph.kind,
+            name: "tampered",
+            inputs: graph.inputs,
+            nodes: graph.nodes,
+            outputs: graph.outputs,
+            metadata: graph.metadata
+        )
+        try WorkflowBundleCodec.write(graph, to: bundle.directory.appendingPathComponent("graph.json"))
+        var submitted = false
+        let command = try GraphSubmitJob.parse([
+            "--bundle", bundle.directory.path,
+            "--executor", "ssh:fixture",
+            "--run-dir", root.appendingPathComponent("run").path,
+        ])
+
+        do {
+            _ = try await command.makeEnvelope(submitter: { _, _, _ in
+                submitted = true
+                throw NSError(domain: "fixture", code: 1)
+            })
+            XCTFail("Expected tampered bundle validation to fail.")
+        } catch {
+            XCTAssertTrue(String(describing: error).contains("fingerprint"))
+        }
+        XCTAssertFalse(submitted)
+        XCTAssertThrowsError(try requireSeparateWorkflowDirectories(
+            bundle: bundle.directory,
+            run: bundle.directory.appendingPathComponent("run")
+        ))
+    }
+
     private func singleImageGraph() throws -> WorkflowGraphDocument {
         try decodeGraph("""
         {
@@ -1188,6 +1316,29 @@ final class WorkflowGraphTests: XCTestCase {
           "outputs": {"image": {"$ref": "nodes.generate.outputs.image"}}
         }
         """)
+    }
+
+    private func portableBundleDocuments(at directory: URL) throws -> [String: Data] {
+        try Dictionary(uniqueKeysWithValues: [
+            WorkflowJobManifest.filename,
+            "graph.json",
+            "inputs.json",
+            WorkflowAssetManifest.filename,
+        ].map { filename in
+            (filename, try Data(contentsOf: directory.appendingPathComponent(filename)))
+        })
+    }
+
+    private func portableBundleAssets(at directory: URL) throws -> [String: Data] {
+        let manifest = try WorkflowBundleCodec.decoder().decode(
+            WorkflowAssetManifest.self,
+            from: Data(contentsOf: directory.appendingPathComponent(WorkflowAssetManifest.filename))
+        )
+        return try Dictionary(uniqueKeysWithValues: Set(
+            manifest.groups.flatMap(\.entries).map(\.digest)
+        ).map { digest in
+            (digest, try Data(contentsOf: directory.appendingPathComponent("assets/sha256/\(digest)")))
+        })
     }
 
     private func trainingGraph() throws -> WorkflowGraphDocument {

@@ -129,6 +129,34 @@ assets.json
 assets/sha256/<digest>
 ```
 
+An exported bundle can be executed directly without materializing the source
+graph again. The bundle remains immutable and the mutable run record must use a
+separate, non-nested directory:
+
+```bash
+mere.run graph run-job \
+  --bundle ./job-bundle \
+  --run-dir ./runs/local \
+  --json
+
+mere.run graph submit-job \
+  --bundle ./job-bundle \
+  --executor ssh:gpu-box \
+  --run-dir ./runs/ssh \
+  --json
+
+mere.run graph submit-job \
+  --bundle ./job-bundle \
+  --executor relay:fleet \
+  --run-dir ./runs/relay \
+  --json
+```
+
+All four portable documents and every content-addressed asset are verified
+before execution or transport. This is the acceptance path for proving that
+local, SSH, and Relay consume the same resolved seeds, fingerprints, manifests,
+and asset bytes.
+
 The job pins each companion provider by ID, semantic version, catalog SHA-256,
 and node kinds. It also records managed model repository, revision, and catalog
 identity. At execution time the run record adds the installed model manifest
@@ -152,6 +180,12 @@ execution, resource, and secret fields during canonical fingerprint checks.
 mere.run graph run workflow.json \
   --inputs-json inputs.json \
   --run-dir ./runs/job \
+  --json
+
+mere.run graph run-job \
+  --bundle ./job-bundle \
+  --run-dir ./runs/exported-job \
+  --resume \
   --json
 
 mere.run graph run workflow.json \
@@ -274,6 +308,12 @@ mere.run graph submit workflow.json \
   --executor ssh:gpu-box \
   --run-dir ./runs/job \
   --json
+
+mere.run graph submit-job \
+  --bundle ./job-bundle \
+  --executor ssh:gpu-box \
+  --run-dir ./runs/exported-ssh-job \
+  --json
 ```
 
 SSH uses the system `ssh` and `scp`, `BatchMode=yes`, and normal host-key
@@ -289,6 +329,12 @@ mere.run graph submit workflow.json \
   --inputs-json inputs.json \
   --executor relay:fleet \
   --run-dir ./runs/job \
+  --json
+
+mere.run graph submit-job \
+  --bundle ./job-bundle \
+  --executor relay:fleet \
+  --run-dir ./runs/exported-relay-job \
   --json
 ```
 
