@@ -109,7 +109,7 @@ commands, package checks, and CUDA validation limits, see
 [Linux QuickStart](./linux-quickstart.md).
 
 ```bash
-scripts/package-linux.sh --version 0.22.0
+scripts/package-linux.sh --version 0.23.0
 ls dist/linux/
 ```
 
