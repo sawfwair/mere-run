@@ -8,6 +8,15 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added checksum-gated canonical Gemma 4 chat templates, typed assistant
+  tool-call and tool-response history, and a deterministic
+  `model benchmark tool-continuations` lane for validating grounded final
+  answers after one- and two-tool chains against real checkpoints.
+- added a pinned `mlx-vlm` conversion script for reproducing the current Gemma
+  4 12B affine 4-bit MLX artifact directly from Google's verified dense
+  checkpoint without modifying an installed managed model, published the
+  audited conversion as `Sawfwair/gemma-4-12B-it-MLX-4bit@v1.0.0`, and pinned
+  managed compact Gemma pulls to the exact hosted release commit.
 - expanded portable workflow graphs with deterministic stable-topological
   parallel scheduling, graph-level concurrency limits, node-level bounded
   retries and timeouts, and fail-fast cancellation of in-flight child work.

@@ -12,7 +12,8 @@ public struct Gemma4Resources: Sendable, Hashable {
     public static let maxUpstreamModelId = "google/gemma-4-31B-it"
     public static let turboUpstreamModelId = "mlx-community/gemma-4-26b-a4b-it-nvfp4"
     public static let twelveBUpstreamModelId = "google/gemma-4-12B-it"
-    public static let twelveB4BitUpstreamModelId = "mlx-community/gemma-4-12B-it-4bit"
+    public static let twelveB4BitUpstreamModelId = "Sawfwair/gemma-4-12B-it-MLX-4bit"
+    public static let twelveB4BitUpstreamRevision = "0d75fd929a55a29ea3d431b43b2ab5142a6566bf"
     public static let defaultUpstreamModelId = maxUpstreamModelId
     public static let defaultContextLength = 32_768
     public static let defaultKVGroupSize = 64
@@ -38,6 +39,7 @@ public struct Gemma4Resources: Sendable, Hashable {
         "video_preprocessor_config.json",
         "chat_template.jinja",
         "chat_template.json",
+        "MERERUN_CONVERSION.json",
         "model.safetensors",
         "model.safetensors.index.json",
         "*.safetensors",

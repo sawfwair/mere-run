@@ -4,6 +4,23 @@ import XCTest
 
 final class MereRunModelManifestTests: MereRunCoreTestCase {
 
+    func testGemma4TwelveB4BitTemplatePinsSawfwairConversion() throws {
+        let manifest = MereRunModelManifest.template(
+            for: .gemma4TwelveB4Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Gemma4Resources.twelveB4BitModelId)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            Gemma4Resources.twelveB4BitUpstreamModelId
+                + "@\(Gemma4Resources.twelveB4BitUpstreamRevision)"
+        )
+    }
+
     func testTemplateRoundTrip() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
