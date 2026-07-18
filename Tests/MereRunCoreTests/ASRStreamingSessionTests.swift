@@ -31,7 +31,7 @@ final class ASRStreamingSessionTests: XCTestCase {
                 decodeIntervalMs: 100,
                 minDecodeAudioMs: 100
             ),
-            decode: { _ in
+            decode: { _, _ in
                 await outputs.next()
             }
         )
@@ -46,7 +46,9 @@ final class ASRStreamingSessionTests: XCTestCase {
 
         let chunk = Array(repeating: Float(0), count: 1_600)
         try await session.feed(samples: chunk)
+        await outputs.waitUntilCount(1)
         try await session.feed(samples: chunk)
+        await outputs.waitUntilCount(2)
         try await session.finish()
 
         let events = try await eventsTask.value
@@ -91,7 +93,7 @@ final class ASRStreamingSessionTests: XCTestCase {
                 decodeIntervalMs: 100,
                 minDecodeAudioMs: 100
             ),
-            decode: { _ in
+            decode: { _, _ in
                 await outputs.next()
             }
         )
@@ -117,6 +119,128 @@ final class ASRStreamingSessionTests: XCTestCase {
             XCTFail("Unexpected error type: \(error)")
         }
     }
+
+    func testBackpressureFailsInsteadOfDroppingAudio() async throws {
+        let gate = DecodeGate()
+        let session = Qwen3ASRStreamingSession(
+            request: ASRStreamingRequest(
+                sampleRate: 1_000,
+                decodeIntervalMs: 100,
+                minDecodeAudioMs: 100,
+                maxQueuedAudioMs: 200
+            ),
+            decode: { samples, _ in
+                await gate.wait()
+                return Qwen3ASRStreamingDecodeOutput(
+                    result: ASRResult(text: "held", duration: Double(samples.count) / 1_000),
+                    tokensGenerated: 1
+                )
+            }
+        )
+
+        try await session.feed(samples: Array(repeating: 0, count: 100))
+        do {
+            try await session.feed(samples: Array(repeating: 0, count: 101))
+            XCTFail("Expected bounded undecoded audio to fail")
+        } catch let error as ASRStreamingError {
+            XCTAssertTrue(error.localizedDescription.contains("backpressure_exceeded"))
+        }
+        await gate.open()
+        await session.cancel()
+    }
+
+    func testRequiredPrefixFinalizationSkipsRedecodeOfTrailingSilence() async throws {
+        let outputs = DecodeOutputSequence(
+            outputs: [
+                Qwen3ASRStreamingDecodeOutput(
+                    result: ASRResult(text: "complete phrase", duration: 0.1),
+                    tokensGenerated: 2
+                )
+            ]
+        )
+        let session = Qwen3ASRStreamingSession(
+            request: ASRStreamingRequest(
+                sampleRate: 1_000,
+                decodeIntervalMs: 10_000,
+                minDecodeAudioMs: 100
+            ),
+            decode: { _, _ in await outputs.next() }
+        )
+        let eventsTask = Task {
+            var events: [ASRStreamingEvent] = []
+            for try await event in session.events { events.append(event) }
+            return events
+        }
+
+        try await session.feed(samples: Array(repeating: 0, count: 100))
+        await outputs.waitUntilCount(1)
+        try await session.feed(samples: Array(repeating: 0, count: 90))
+        try await session.finish(requiredSampleCount: 100)
+
+        let events = try await eventsTask.value
+        let decodeCount = await outputs.count()
+        XCTAssertEqual(decodeCount, 1)
+        XCTAssertEqual(
+            events.compactMap { if case .stats(let value) = $0 { value.decodeCount } else { nil } },
+            [1]
+        )
+        XCTAssertEqual(
+            events.compactMap { if case .final(let value) = $0 { value.text } else { nil } },
+            ["complete phrase"]
+        )
+    }
+
+    func testRequiredPrefixFinalizationDecodesOnlyThroughSpeechEnd() async throws {
+        let decodedSampleCounts = DecodedSampleCounts()
+        let session = Qwen3ASRStreamingSession(
+            request: ASRStreamingRequest(
+                sampleRate: 1_000,
+                decodeIntervalMs: 10_000,
+                minDecodeAudioMs: 10_000
+            ),
+            decode: { samples, _ in
+                await decodedSampleCounts.append(samples.count)
+                return Qwen3ASRStreamingDecodeOutput(
+                    result: ASRResult(text: "speech only", duration: Double(samples.count) / 1_000),
+                    tokensGenerated: 2
+                )
+            }
+        )
+        let eventsTask = Task {
+            for try await _ in session.events {}
+        }
+
+        try await session.feed(samples: Array(repeating: 0, count: 190))
+        try await session.finish(requiredSampleCount: 100)
+        _ = try await eventsTask.value
+
+        let counts = await decodedSampleCounts.values()
+        XCTAssertEqual(counts, [100])
+    }
+}
+
+private actor DecodedSampleCounts {
+    private var counts: [Int] = []
+
+    func append(_ count: Int) {
+        counts.append(count)
+    }
+
+    func values() -> [Int] {
+        counts
+    }
+}
+
+private actor DecodeGate {
+    private var isOpen = false
+
+    func wait() async {
+        while !isOpen { await Task.yield() }
+    }
+
+    func open() {
+        isOpen = true
+    }
 }
 
 private actor DecodeOutputSequence {
@@ -137,5 +261,13 @@ private actor DecodeOutputSequence {
         let value = outputs[min(index, outputs.count - 1)]
         index += 1
         return value
+    }
+
+    func count() -> Int {
+        index
+    }
+
+    func waitUntilCount(_ expected: Int) async {
+        while index < expected { await Task.yield() }
     }
 }

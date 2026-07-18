@@ -6,6 +6,7 @@ This page covers speech synthesis, transcription, and voice-profile management.
 
 - `mere.run speech synthesize`
 - `mere.run speech transcribe`
+- `mere.run speech listen`
 - `mere.run speech profile list`
 - `mere.run speech profile create`
 - `mere.run speech profile delete`
@@ -38,6 +39,16 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
+Batch transcription prefers Parakeet. Live transcription uses Qwen and accepts
+raw `pcm-s16le/16000/mono` on stdin:
+
+```bash
+audio-source | swift run mere.run speech transcribe - \
+  --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
+swift run mere.run speech listen --list-devices
+swift run mere.run speech listen --device <core-audio-uid>
+```
+
 ### Manage voice profiles
 
 ```bash
@@ -52,6 +63,7 @@ swift run mere.run speech profile delete narrator
 
 - `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechListenCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechProfileListCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechProfileCreateCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechProfileDeleteCommand.swift`
@@ -72,6 +84,7 @@ Tokenizer internals:
 ### STT runtime
 
 - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
+- `Sources/AudioSTT/Qwen3ASR/Qwen3ASRLiveSession.swift`
 - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
 
 ## How speech synthesis flows

@@ -9,6 +9,8 @@ public struct RealFFTPlan {
 
     #if canImport(Accelerate)
     private let acceleratePlan: vDSP.FFT<DSPSplitComplex>?
+    private let dftRealBasis: [Float]?
+    private let dftImaginaryBasis: [Float]?
     #endif
 
     public init(size: Int) throws {
@@ -20,8 +22,25 @@ public struct RealFFTPlan {
         if size.nonzeroBitCount == 1 {
             let log2n = vDSP_Length(log2(Double(size)))
             self.acceleratePlan = vDSP.FFT(log2n: log2n, radix: .radix2, ofType: DSPSplitComplex.self)
+            self.dftRealBasis = nil
+            self.dftImaginaryBasis = nil
         } else {
             self.acceleratePlan = nil
+            let frequencyCount = (size / 2) + 1
+            let denominator = Float(size)
+            var realBasis: [Float] = []
+            var imaginaryBasis: [Float] = []
+            realBasis.reserveCapacity(frequencyCount * size)
+            imaginaryBasis.reserveCapacity(frequencyCount * size)
+            for frequency in 0..<frequencyCount {
+                for sampleIndex in 0..<size {
+                    let angle = -2 * Float.pi * Float(frequency * sampleIndex) / denominator
+                    realBasis.append(cos(angle))
+                    imaginaryBasis.append(sin(angle))
+                }
+            }
+            self.dftRealBasis = realBasis
+            self.dftImaginaryBasis = imaginaryBasis
         }
         #endif
     }
@@ -37,6 +56,13 @@ public struct RealFFTPlan {
         #if canImport(Accelerate)
         if let acceleratePlan {
             return acceleratePowerSpectrum(frame, plan: acceleratePlan)
+        }
+        if let dftRealBasis, let dftImaginaryBasis {
+            return acceleratePowerSpectrum(
+                frame,
+                realBasis: dftRealBasis,
+                imaginaryBasis: dftImaginaryBasis
+            )
         }
         #endif
 
@@ -75,6 +101,34 @@ public struct RealFFTPlan {
             magnitudes[index] = (real[index] * real[index]) + (imag[index] * imag[index])
         }
         magnitudes[size / 2] = imag[0] * imag[0]
+        return magnitudes
+    }
+
+    private func acceleratePowerSpectrum(
+        _ frame: [Float],
+        realBasis: [Float],
+        imaginaryBasis: [Float]
+    ) -> [Float] {
+        let frequencyCount = (size / 2) + 1
+        var real = [Float](repeating: 0, count: frequencyCount)
+        var imaginary = [Float](repeating: 0, count: frequencyCount)
+        vDSP_mmul(
+            realBasis, 1,
+            frame, 1,
+            &real, 1,
+            vDSP_Length(frequencyCount), 1, vDSP_Length(size)
+        )
+        vDSP_mmul(
+            imaginaryBasis, 1,
+            frame, 1,
+            &imaginary, 1,
+            vDSP_Length(frequencyCount), 1, vDSP_Length(size)
+        )
+
+        var magnitudes = [Float](repeating: 0, count: frequencyCount)
+        for index in 0..<frequencyCount {
+            magnitudes[index] = (real[index] * real[index]) + (imaginary[index] * imaginary[index])
+        }
         return magnitudes
     }
     #endif

@@ -14,7 +14,10 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 448)
         XCTAssertFalse(cmd.stream)
         XCTAssertEqual(cmd.streamChunkMs, 200)
-        XCTAssertEqual(cmd.streamDecodeMs, 500)
+        XCTAssertEqual(cmd.streamDecodeMs, 2_000)
+        XCTAssertNil(cmd.inputFormat)
+        XCTAssertNil(cmd.sampleRate)
+        XCTAssertFalse(cmd.jsonl)
         XCTAssertTrue(cmd.timestamps)
     }
 
@@ -48,6 +51,36 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.stream)
         XCTAssertEqual(cmd.streamChunkMs, 120)
         XCTAssertEqual(cmd.streamDecodeMs, 640)
+    }
+
+    func testSpeechTranscribeParsesRawPCMStandardInput() throws {
+        let cmd = try SpeechTranscribe.parse([
+            "-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "16000", "--jsonl",
+        ])
+        XCTAssertEqual(cmd.audio, "-")
+        XCTAssertEqual(cmd.inputFormat, "pcm-s16le")
+        XCTAssertEqual(cmd.sampleRate, 16_000)
+        XCTAssertTrue(cmd.jsonl)
+        XCTAssertNoThrow(try cmd.validate())
+    }
+
+    func testSpeechTranscribeRejectsInvalidRawPCMContracts() throws {
+        XCTAssertThrowsError(try SpeechTranscribe.parse(["-"]))
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "48000",
+        ]))
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "/tmp/input.wav", "--stream", "--jsonl",
+        ]))
+    }
+
+    func testSpeechListenParsesDefaultsAndDevice() throws {
+        let defaults = try SpeechListen.parse([])
+        XCTAssertEqual(defaults.decodeMs, 2_000)
+        XCTAssertEqual(defaults.silenceMs, 900)
+        let selected = try SpeechListen.parse(["--device", "input-uid", "--jsonl"])
+        XCTAssertEqual(selected.device, "input-uid")
+        XCTAssertTrue(selected.jsonl)
     }
 
     func testSpeechTranscribeRejectsLegacyHFCacheFlags() {
@@ -87,7 +120,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         ]))
 
         let speechNames = Set(Speech.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(speechNames, Set(["synthesize", "transcribe", "profile"]))
+        XCTAssertEqual(speechNames, Set(["synthesize", "transcribe", "listen", "profile"]))
 
         let visionNames = Set(Vision.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(visionNames, Set([

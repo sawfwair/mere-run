@@ -43,13 +43,14 @@ struct SpeechTranscribe: AsyncParsableCommand {
 
         Example:
           mere.run speech transcribe audio.wav
+          mere.run speech transcribe - --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
           mere.run speech transcribe audio.wav --backend parakeet
           mere.run speech transcribe audio.wav --task translate --backend auto
           mere.run speech transcribe audio.wav --backend qwen --model speech-asr-qwen3
         """
     )
 
-    @Argument(help: "Input audio file (WAV format, 16kHz recommended).")
+    @Argument(help: "Input audio file, or '-' for raw streaming stdin.")
     var audio: String
 
     @Option(name: [.customShort("o"), .long], help: "Output file for transcript (optional, prints to stdout if omitted).")
@@ -77,7 +78,16 @@ struct SpeechTranscribe: AsyncParsableCommand {
     var streamChunkMs: Int = 200
 
     @Option(name: [.customLong("stream-decode-ms")], help: "Decode interval in ms for streaming mode.")
-    var streamDecodeMs: Int = 500
+    var streamDecodeMs: Int = 2_000
+
+    @Option(name: [.customLong("input-format")], help: "Raw stdin format. Protocol v1 accepts pcm-s16le.")
+    var inputFormat: String?
+
+    @Option(name: [.customLong("sample-rate")], help: "Raw stdin sample rate. Protocol v1 requires 16000.")
+    var sampleRate: Int?
+
+    @Flag(name: [.long], help: "Emit versioned live ASR events as JSON Lines on stdout.")
+    var jsonl: Bool = false
 
     @Flag(
         name: [.customLong("timestamps")],
@@ -89,7 +99,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress progress output).")
     var quiet: Bool = false
 
-    func run() async throws {
+    func validate() throws {
+        let readsStandardInput = audio == "-"
         if stream {
             guard streamChunkMs > 0 else {
                 throw ValidationError("--stream-chunk-ms must be > 0.")
@@ -99,7 +110,38 @@ struct SpeechTranscribe: AsyncParsableCommand {
             }
         }
 
+        if readsStandardInput {
+            guard stream else {
+                throw ValidationError("Raw stdin requires --stream.")
+            }
+            guard inputFormat == "pcm-s16le" else {
+                throw ValidationError("Raw stdin requires --input-format pcm-s16le.")
+            }
+            guard sampleRate == 16_000 else {
+                throw ValidationError("Raw stdin requires --sample-rate 16000.")
+            }
+            guard output == nil else {
+                throw ValidationError("Raw streaming stdin cannot be combined with --output.")
+            }
+        } else if inputFormat != nil || sampleRate != nil {
+            throw ValidationError("--input-format and --sample-rate are only valid when reading raw stdin ('-').")
+        }
+        if jsonl && !stream {
+            throw ValidationError("--jsonl requires --stream.")
+        }
+        if jsonl && !readsStandardInput {
+            throw ValidationError("--jsonl is only valid with raw streaming stdin ('-').")
+        }
+    }
+
+    func run() async throws {
+        let readsStandardInput = audio == "-"
+
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        if readsStandardInput {
+            try await runStandardInput()
+            return
+        }
         let audioURL = URL(fileURLWithPath: audio).standardizedFileURL
 
         guard FileManager.default.fileExists(atPath: audioURL.path) else {
@@ -178,6 +220,64 @@ struct SpeechTranscribe: AsyncParsableCommand {
         }
 
         print(outputText)
+    }
+
+    private func runStandardInput() async throws {
+        let progressHandler: (@Sendable (ASRProgress) -> Void)?
+        if quiet {
+            progressHandler = nil
+        } else {
+            progressHandler = { progress in
+                if let message = progress.message {
+                    CLIStderr.write("[\(progress.stage.rawValue)] \(message)\n")
+                }
+            }
+        }
+        let generator = try await CLIQwenASRLoader.prepare(model: model, progressHandler: progressHandler)
+        let request = ASRStreamingRequest(
+            language: language,
+            task: task.task,
+            maxTokens: maxTokens,
+            sampleRate: 16_000,
+            decodeIntervalMs: streamDecodeMs,
+            minDecodeAudioMs: 1_600
+        )
+        let live = Qwen3ASRLiveSession(
+            generator: generator,
+            request: request,
+            configuration: Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
+        )
+        if jsonl {
+            try LiveASRCLIWriter.write(.ready())
+        } else if !quiet {
+            CLIStderr.write("Ready: qwen live ASR (pcm-s16le/16000/mono).\n")
+        }
+        let eventTask = Task {
+            try await LiveASRCLIWriter.consume(live.events, jsonl: jsonl, quiet: quiet)
+        }
+
+        var decoder = PCM16LittleEndianDecoder()
+        do {
+            while let data = try FileHandle.standardInput.read(upToCount: 32_000), !data.isEmpty {
+                let samples = decoder.decode(data)
+                if !samples.isEmpty {
+                    try await live.feed(samples: samples)
+                }
+            }
+            try decoder.validateEOF()
+            try await live.finish(reason: .eof)
+            try await eventTask.value
+        } catch {
+            eventTask.cancel()
+            await live.cancel()
+            if jsonl {
+                try? LiveASRCLIWriter.write(.error(
+                    code: LiveASRCLIWriter.errorCode(for: error),
+                    message: error.localizedDescription
+                ))
+            }
+            throw error
+        }
     }
 
     private func runStreaming(

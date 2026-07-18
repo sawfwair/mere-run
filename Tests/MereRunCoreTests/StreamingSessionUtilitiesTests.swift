@@ -29,4 +29,18 @@ final class StreamingSessionUtilitiesTests: XCTestCase {
         XCTAssertFalse(cadence.shouldDecode(bufferedSampleCount: 0, force: true))
         XCTAssertTrue(cadence.shouldDecode(bufferedSampleCount: 10, force: true))
     }
+
+    func testDecodeCadenceUsesMinimumForFirstDecodeThenInterval() {
+        var cadence = StreamingDecodeCadence(
+            sampleRate: 1_000,
+            decodeIntervalMs: 2_000,
+            minDecodeAudioMs: 1_600
+        )
+
+        XCTAssertFalse(cadence.shouldDecode(bufferedSampleCount: 1_599))
+        XCTAssertTrue(cadence.shouldDecode(bufferedSampleCount: 1_600))
+        cadence.markDecoded(sampleCount: 1_600)
+        XCTAssertFalse(cadence.shouldDecode(bufferedSampleCount: 3_599))
+        XCTAssertTrue(cadence.shouldDecode(bufferedSampleCount: 3_600))
+    }
 }

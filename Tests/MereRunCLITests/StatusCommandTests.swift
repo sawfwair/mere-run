@@ -34,6 +34,11 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
+    func testStatusAdvertisesLiveASRProtocol() {
+        XCTAssertEqual(StatusCapabilitiesSnapshot.current.asrStreamingProtocols, [1])
+        XCTAssertEqual(StatusCapabilitiesSnapshot.current.asrStreamingInputFormats, ["pcm-s16le/16000/mono"])
+    }
+
     func testFormatterShowsLoadedAndInstalledModels() {
         let snapshot = StatusSnapshot(
             server: StatusServerSnapshot(
