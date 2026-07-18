@@ -4,15 +4,23 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.23.0 - 2026-07-18
 
 ### Added
 
-- expanded portable workflow graphs with deterministic parallel scheduling,
-  bounded retries and timeouts, verified cross-run caching, resource and named
-  secret contracts, reusable plugin-side composition, and stricter executor
-  compatibility checks. These additions establish `0.23.0` as the minimum
-  worker version for newly materialized graph jobs.
+- expanded portable workflow graphs with deterministic stable-topological
+  parallel scheduling, graph-level concurrency limits, node-level bounded
+  retries and timeouts, and fail-fast cancellation of in-flight child work.
+- added verified cross-run node caching with dependency, argument, model,
+  provider, and input-artifact fingerprints plus explicit `auto`, `never`, and
+  `refresh` cache policies.
+- added typed resource requirements and named secret references, with
+  preflight enforcement for accelerator and system memory, disk, CPU, network,
+  configured secrets, provider versions, and worker compatibility. Newly
+  materialized graph jobs require a `mere.run` 0.23.0 worker or newer.
+- added reusable plugin-side workflow composition, provider output-port
+  references, structured catalog metadata, and shared compatibility fixtures
+  for consistent graph decoding across Swift, Python, TypeScript, and Rust.
 - added repeatable `run fetch --artifact <name>` selection with verified reuse
   of already-downloaded artifacts, allowing interrupted and partial remote
   result retrieval without transferring the complete artifact set again.
@@ -22,6 +30,10 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- fixed graph cancellation, retry, timeout, and resume cleanup so every owned
+  child process is terminated and reusable outputs remain digest-verified.
+- suppressed harmless SSH archive metadata warnings without hiding transfer or
+  integrity failures.
 - fixed canonical `image-zimage-nano` resolution for valid managed installs
   created from the current mflux mirror's legacy `@main` manifest.
 

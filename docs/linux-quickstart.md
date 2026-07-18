@@ -31,7 +31,7 @@ Use this path on Debian or Ubuntu-style systems after building a matching
 `.deb`, or when a matching `.deb` is attached to a release:
 
 ```bash
-version=0.22.0
+version=0.23.0
 case "$(uname -m)" in
   x86_64|amd64) deb_arch=amd64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
@@ -51,7 +51,7 @@ Use this path after building a matching tarball, or when a matching tarball is
 attached to a release:
 
 ```bash
-version=0.22.0
+version=0.23.0
 case "$(uname -m)" in
   x86_64|amd64) linux_arch=x86_64 ;;
   *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
@@ -79,7 +79,7 @@ hosts after building it, or when a matching CUDA tarball is attached to a
 release:
 
 ```bash
-version=0.22.0
+version=0.23.0
 tar -xzf "./dist/linux/mere-run-${version}-linux-x86_64-cuda.tar.gz"
 cd "mere-run-${version}-linux-x86_64-cuda"
 ./install.sh
@@ -130,7 +130,7 @@ x86_64 CUDA development host:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.22.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
 ls dist/linux/
 ```
 
@@ -144,7 +144,7 @@ MERERUN_LINUX_ACCEL=cuda \
 MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
 MERERUN_NATIVE_BUILD_JOBS=14 \
 MERERUN_CUDA_ARCHITECTURES="86-real;90-virtual" \
-  scripts/package-linux.sh --version 0.22.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
 ```
 
 Run a real GPU smoke on the target runtime class before widening support claims.
@@ -161,7 +161,7 @@ repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.22.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
 ls dist/linux/
 ```
 
@@ -257,7 +257,7 @@ When a Linux release includes `SHA256SUMS`, place it beside the matching
 tarball or `.deb` before checking it:
 
 ```bash
-tag=v0.22.0
+tag=v0.23.0
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
 sha256sum -c SHA256SUMS
