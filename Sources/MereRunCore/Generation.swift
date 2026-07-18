@@ -143,6 +143,18 @@ public extension ImageGenerator {
 
 // MARK: - Chat Types
 
+public struct ChatMessageToolCall: Sendable, Hashable, Codable {
+    public var id: String?
+    public var name: String
+    public var arguments: [String: OpenAIJSONValue]
+
+    public init(id: String? = nil, name: String, arguments: [String: OpenAIJSONValue]) {
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+    }
+}
+
 public struct ChatMessage: Sendable, Hashable, Codable {
     public enum Role: String, Sendable, Hashable, Codable {
         case system
@@ -154,11 +166,27 @@ public struct ChatMessage: Sendable, Hashable, Codable {
     public var role: Role
     public var content: String
     public var imageUrl: String?
+    public var reasoningContent: String?
+    public var name: String?
+    public var toolCallID: String?
+    public var toolCalls: [ChatMessageToolCall]?
 
-    public init(role: Role, content: String, imageUrl: String? = nil) {
+    public init(
+        role: Role,
+        content: String,
+        imageUrl: String? = nil,
+        reasoningContent: String? = nil,
+        name: String? = nil,
+        toolCallID: String? = nil,
+        toolCalls: [ChatMessageToolCall]? = nil
+    ) {
         self.role = role
         self.content = content
         self.imageUrl = imageUrl
+        self.reasoningContent = reasoningContent
+        self.name = name
+        self.toolCallID = toolCallID
+        self.toolCalls = toolCalls
     }
 }
 

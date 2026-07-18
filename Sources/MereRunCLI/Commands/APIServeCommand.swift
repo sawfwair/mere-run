@@ -2341,11 +2341,52 @@ enum APIServerContract {
 
         let imageURL = try firstImageURL(from: msg, capabilities: capabilities)
         let content = renderMessageContent(msg)
+        let toolCalls = try chatMessageToolCalls(from: msg)
         return ChatMessage(
             role: role,
             content: content,
-            imageUrl: imageURL
+            imageUrl: imageURL,
+            reasoningContent: msg.reasoning_content,
+            name: msg.name,
+            toolCallID: msg.tool_call_id,
+            toolCalls: toolCalls
         )
+    }
+
+    private static func chatMessageToolCalls(
+        from message: OpenAIChatMessage
+    ) throws -> [ChatMessageToolCall]? {
+        guard message.role.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "assistant",
+              let openAIToolCalls = message.tool_calls,
+              !openAIToolCalls.isEmpty else {
+            return nil
+        }
+
+        return try openAIToolCalls.compactMap { toolCall in
+            guard toolCall.type == "function", let function = toolCall.function else {
+                return nil
+            }
+            guard let data = function.arguments.data(using: .utf8) else {
+                throw APIRequestValidationError.invalidField(
+                    "messages.tool_calls.function.arguments",
+                    "must be a UTF-8 JSON object"
+                )
+            }
+            let arguments: [String: OpenAIJSONValue]
+            do {
+                arguments = try JSONDecoder().decode([String: OpenAIJSONValue].self, from: data)
+            } catch {
+                throw APIRequestValidationError.invalidField(
+                    "messages.tool_calls.function.arguments",
+                    "must be a JSON object"
+                )
+            }
+            return ChatMessageToolCall(
+                id: toolCall.id,
+                name: function.name,
+                arguments: arguments
+            )
+        }
     }
 
     private static func firstImageURL(

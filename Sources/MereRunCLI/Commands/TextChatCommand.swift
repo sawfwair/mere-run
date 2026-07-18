@@ -332,7 +332,11 @@ struct TextChat: AsyncParsableCommand {
                     CLIStderr.write(cleanResponse(textBeforeTools, showThinking: request.showThinking) + "\n")
                 }
 
-                loopMessages.append(ChatMessage(role: .assistant, content: result.response))
+                loopMessages.append(ChatMessage(
+                    role: .assistant,
+                    content: result.response,
+                    reasoningContent: result.reasoningContent
+                ))
 
                 for call in calls {
                     if !quiet { CLIStderr.write("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n") }
@@ -353,7 +357,7 @@ struct TextChat: AsyncParsableCommand {
                         output = "Denied: tool execution was not approved."
                     }
                     if !quiet { CLIStderr.write("[tool] → \(output.prefix(200))\n") }
-                    loopMessages.append(ChatMessage(role: .tool, content: output))
+                    loopMessages.append(ChatMessage(role: .tool, content: output, name: call.name))
                 }
 
                 if !quiet { CLIStderr.write("[tool-loop] Iteration \(iteration + 1)/\(maxIterations)\n") }

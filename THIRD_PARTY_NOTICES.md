@@ -6,6 +6,17 @@ extra bootstrap step.
 
 It also includes small third-party evaluation fixtures where noted below.
 
+It includes Google's two canonical Gemma 4 chat-template variants published on
+2026-07-15. They are bundled as small runtime resources so known stale model
+packages can receive Google's tool-calling and turn-closure fixes without
+re-downloading unchanged weights. The E4B template comes from
+`google/gemma-4-E4B-it` at revision
+`fa62d88df2e6df5efa9d26ad6b3beaea2765f0cd`; the shared 12B/26B/31B template
+comes from `google/gemma-4-12B-it` at revision
+`12ace6d648d72bd41519e140f1185f34d38c7e3d`. Both upstream model repositories
+identify Google as the template author and publish the model artifacts under
+their accompanying Gemma terms.
+
 Some native runtime implementations are ports of upstream open-source model
 code; those source-derived implementations are noted below as well.
 

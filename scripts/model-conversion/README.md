@@ -3,6 +3,35 @@
 These scripts are audited release tools. They are never invoked by a
 `mere.run` inference command and never become a Python sidecar.
 
+## Gemma 4 12B MLX 4-bit
+
+`convert_gemma4_12b_mlx.py` verifies Google's exact 23,919,549,408-byte Gemma 4
+12B-it BF16 checkpoint at revision
+`12ace6d648d72bd41519e140f1185f34d38c7e3d`, stages the pinned July 15 config,
+generation, processor, tokenizer, and canonical chat-template metadata, and
+converts it to affine MLX 4-bit with group size 64. Its PEP 723 environment pins
+Python and every serialization dependency. The output includes
+`MERERUN_CONVERSION.json` with source, tool, metadata, and emitted artifact
+hashes. MLX-VLM currently rewrites processor and tokenizer configuration to its
+local defaults during conversion, so the script restores the verified pinned
+upstream bytes before final validation.
+
+Gemma 4 12B is a unified multimodal architecture, so this converter uses
+MLX-VLM's conversion path. Plain `mlx-lm.convert` rejects
+`gemma4_unified` and must not be worked around by relabeling the config or
+discarding the non-language tensors.
+
+```bash
+scripts/model-conversion/convert_gemma4_12b_mlx.py \
+  --source "/path/to/google/gemma-4-12B-it" \
+  --output "/path/to/gemma-4-12B-it-mlx-4bit"
+```
+
+The July update did not change the Google 12B weight blob. Conversion is useful
+for producing an independently controlled MLX package; existing compatible
+weights can receive the checksum-gated canonical template overlay without
+being downloaded again.
+
 The VDA-S, TripoSR, and InstantMesh converters have one frozen serialization
 environment: CPython 3.11.15 with the exact packages in
 `requirements-vfx.txt`. They fail closed on any other tool version and verify
