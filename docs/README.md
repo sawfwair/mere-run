@@ -37,12 +37,13 @@ If you are new to the repo, read these in order:
 2. [Linux QuickStart](./linux-quickstart.md), if you are installing the headless CLI on Linux
 3. [CLI Reference](./cli.md)
 4. [Portable Workflows](./workflows.md), if you are automating local or remote jobs
-5. [Benchmarking](./benchmarking.md)
-6. [Cookbooks](./cookbooks.md)
-7. [Configuration](./configuration.md)
-8. [Model Sources](./model-sources.md)
-9. [Companion Plugins](./plugins.md)
-10. [Repository Tour](./repository-tour.md)
+5. [Graph Studio](./graph/studio.md), if you want to author Graph v2 workflows visually
+6. [Benchmarking](./benchmarking.md)
+7. [Cookbooks](./cookbooks.md)
+8. [Configuration](./configuration.md)
+9. [Model Sources](./model-sources.md)
+10. [Companion Plugins](./plugins.md)
+11. [Repository Tour](./repository-tour.md)
 
 ## Choose your path
 
@@ -54,6 +55,7 @@ If you are new to the repo, read these in order:
 - [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
 - [Portable Workflows](./workflows.md)
+- [Graph Studio](./graph/studio.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
 - [Companion Plugins](./plugins.md)
@@ -97,6 +99,8 @@ If you are new to the repo, read these in order:
   execution, VLM datasets, API workload, and runtime microbenchmarks
 - [Portable Workflows](./workflows.md): typed graphs, immutable job bundles,
   local execution, SSH and relay executors, run artifacts, and remote lifecycle
+- [Graph Studio](./graph/studio.md): visual Graph v2 authoring in the browser or
+  a cross-platform Tauri desktop app, using the same version-1 workflow contract
 - [Companion Plugins](./plugins.md): public catalog discovery, safe installation,
   doctor checks, and the typed graph-provider boundary
 

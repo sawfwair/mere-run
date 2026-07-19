@@ -7,6 +7,7 @@
 - [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
 - [Portable Workflows](./workflows.md)
+- [Graph Studio](./graph/studio.md)
 - [Companion Plugins](./plugins.md)
 - [Configuration](./configuration.md)
 - [Quality Gate](./gate.md)

@@ -4,7 +4,18 @@
 contract locally, over SSH, and through a relay-managed GPU fleet. A future
 canvas can author this document, but it does not own execution behavior.
 
-## Graph V1
+## Graph v2 runtime and v1 contract
+
+The current execution system is the second-generation graph runtime: immutable
+job bundles, typed provider catalogs, executor preflight, resumable runs,
+parallel scheduling, and one execution contract across local, SSH, and Relay.
+That product/runtime generation is called **Graph v2**.
+
+The serialized workflow ABI remains deliberately stable at version 1. Graph v2
+therefore still reads and writes `mere.run/workflow-graph` documents with
+`schema_version: 1`; the runtime name is not a request to emit a
+`schema_version: 2` document. See [Graph Studio](./graph/studio.md) for the
+visual authoring surfaces built on this contract.
 
 Every graph uses `schema_version: 1` and `kind: "mere.run/workflow-graph"`.
 Identifiers match `[a-z][a-z0-9-]{0,63}`. Supported graph input types are

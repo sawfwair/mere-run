@@ -148,6 +148,22 @@ final class DocumentationContractTests: XCTestCase {
         )
     }
 
+    func testGraphStudioDocumentationPreservesTheVersionBoundary() throws {
+        let studioURL = repositoryRoot.appendingPathComponent("docs/graph/studio.md")
+        let navigationURL = repositoryRoot.appendingPathComponent("docs/.vitepress/config.mts")
+        let workflowsURL = repositoryRoot.appendingPathComponent("docs/workflows.md")
+        let studio = try String(contentsOf: studioURL, encoding: .utf8)
+        let navigation = try String(contentsOf: navigationURL, encoding: .utf8)
+        let workflows = try String(contentsOf: workflowsURL, encoding: .utf8)
+
+        XCTAssertTrue(navigation.contains("link: '/graph/studio'"))
+        XCTAssertTrue(studio.contains("Graph v2"))
+        XCTAssertTrue(studio.contains("`schema_version: 1`"))
+        XCTAssertTrue(studio.contains("https://studio.mere.run/"))
+        XCTAssertTrue(workflows.contains("Graph v2 runtime and v1 contract"))
+        XCTAssertTrue(studio.contains("Do not change a workflow to `schema_version: 2`"))
+    }
+
     private func commandTree() -> [CommandNode] {
         nodes(from: MereRunCLI.configuration.subcommands)
     }
