@@ -56,6 +56,7 @@ export default defineConfig({
         text: 'Workflows and Operations',
         items: [
           { text: 'Portable Workflows', link: '/workflows' },
+          { text: 'Graph Studio', link: '/graph/studio' },
           { text: 'Configuration', link: '/configuration' },
           { text: 'Quality Gate', link: '/gate' },
           { text: 'Model Sources', link: '/model-sources' },
