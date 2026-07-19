@@ -55,6 +55,10 @@ public enum SCAIL2Palette {
     /// This bound accepts that codec drift; the separation requirement still
     /// rejects pixels that cannot be assigned to one palette entry confidently.
     public static let codecTolerance: UInt8 = 192
+    /// With a tolerance of 192, subject colors become assignable at channel 63.
+    /// Values below that boundary are the measured hidden-background range in
+    /// the official upstream H.264 animation masks.
+    private static let hiddenBackgroundTolerance: UInt8 = 62
     private static let minimumPaletteSeparation = 32
 
     public static func binaryMask(from image: MediaImage) throws -> [UInt8] {
@@ -122,7 +126,7 @@ public enum SCAIL2Palette {
             let red = rgba[offset]
             let green = rgba[offset + 1]
             let blue = rgba[offset + 2]
-            if max(red, max(green, blue)) <= 24 {
+            if max(red, max(green, blue)) <= hiddenBackgroundTolerance {
                 rgba[offset] = hiddenBackgroundRGBA.0
                 rgba[offset + 1] = hiddenBackgroundRGBA.1
                 rgba[offset + 2] = hiddenBackgroundRGBA.2

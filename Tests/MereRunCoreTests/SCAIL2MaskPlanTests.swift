@@ -139,15 +139,24 @@ final class SCAIL2MaskPlanTests: XCTestCase {
 
     func testPaletteSnappingAcceptsUnambiguousProResEdgeColor() throws {
         let blackBackground = try MediaImage(
-            width: 1,
+            width: 2,
             height: 1,
-            rgba8: [3, 2, 4, 255]
+            rgba8: [
+                3, 2, 4, 255,
+                0, 5, 62, 255,
+            ]
         )
         let snappedBackground = try SCAIL2Palette.snapped(
             blackBackground,
             tolerance: SCAIL2Palette.codecTolerance
         )
-        XCTAssertEqual(snappedBackground.rgba8, [0, 0, 0, 255])
+        XCTAssertEqual(
+            snappedBackground.rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+            ]
+        )
 
         let decodedEdge = try MediaImage(
             width: 1,
