@@ -6,41 +6,94 @@ The format is based on Keep a Changelog.
 
 ## 0.24.0 - 2026-07-19
 
-### Added
-
-- added first-class creative material nodes for reusable text, numeric, boolean,
-  JSON, seed, choice, join, template, enhancement, and image-description
-  workflows, with native deterministic intrinsics, strict template validation,
-  explicit installed-model execution, recursive typed catalog schemas, frozen
-  seeds, and source-correlated run provenance.
-- added native Swift/MLX SCAIL-2 14B subject animation and replacement through
-  `video animate`, including exact seven-color mask packing, mixed-stream RoPE,
-  OpenCLIP and UMT5 conditioning, Wan 2.1 VAE support, 81/5 segmented clean
-  history, additional references, UniPC CFG sampling, MP4 output, typed
-  preflight, and a managed model ID for the separately packaged MIT-licensed
-  MLX checkpoint. Real-checkpoint rendering remains an opt-in installed-model
-  gate because the checkpoint is approximately 43 GiB.
-- added resident Parakeet live transcription for raw PCM and streamed files,
-  preserving the V1 partial, commit, stats, final, cancellation, silence, and
-  bounded-backpressure contract already used by Qwen live ASR.
-- added discoverable live ASR backend capabilities to `mere.run status` so
-  remote schedulers can select Parakeet or Qwen deliberately.
-
-### Changed
-
-- changed live `--backend auto` policy to match batch ASR: transcription uses
-  fast Parakeet while translation uses quality-first Qwen.
-
-## 0.23.0 - 2026-07-18
+This release contains the complete `v0.23.0..v0.24.0` delta: 22 commits
+changing 115 files across model storage, live speech, documentation, Graph
+Studio contracts, native SCAIL-2 video, and workflow-graph authoring.
 
 ### Added
 
 - added byte-exact `model storage --json` accounting and dry-run-first
   `model gc`, including shared-payload ownership, legacy-link preservation,
-  stale partial/snapshot/blob collection, and macOS Studio cleanup previews.
+  stale partial/snapshot/blob collection, macOS Studio cleanup previews,
+  cross-process locking, and an ownership recheck before deletion (#190).
 - added revision-addressed Hub snapshots, ETag-addressed hard-linked blobs,
-  paginated tree discovery, cross-process storage locking, and zero-copy
-  adoption of matching legacy payloads.
+  paginated tree discovery, and zero-copy adoption of matching legacy
+  payloads (#190).
+- added resident Parakeet live transcription for raw PCM and streamed files,
+  preserving the V1 ready, partial, commit, stats, final, cancellation,
+  silence, and bounded-backpressure contract already used by Qwen live ASR
+  (#191).
+- added live ASR backend capabilities to `mere.run status` so local and remote
+  schedulers can deliberately select Parakeet or Qwen (#191).
+- added generated command inventories, CLI/documentation ownership and
+  navigation contract tests, and
+  `scripts/update-docs-command-reference.sh` so command or runtime-page drift
+  fails the normal repository gate (#192).
+- added dedicated public guides for plugins, persistent worlds, Graph Studio,
+  and the Graph v2 runtime generation while preserving Workflow Graph
+  `schema_version: 1` as the stable portable ABI (#192, #193).
+- added native Swift/MLX SCAIL-2 14B subject animation and replacement through
+  `video animate`, including exact seven-color mask packing, mixed-stream RoPE,
+  OpenCLIP and UMT5 conditioning, Wan 2.1 VAE support, 81/5 segmented clean
+  history, additional references, Flow-UniPC CFG sampling, typed preflight,
+  MP4 output, and a managed model ID for the separately packaged MIT-licensed
+  MLX checkpoint (#194).
+- added `video prepare-masks`, a typed native SAM 3.1 preparation workflow for
+  one to six SCAIL subjects with reference-seeded preview masks, bounded
+  corrections, independent video tracking, seven-color palette encoding,
+  quality reports, immutable manifests, and Apple ProRes or FFmpeg output
+  (#196).
+- added first-class creative material nodes for reusable text, numeric, boolean,
+  JSON, seed, choice, join, template, enhancement, and image-description
+  workflows, with native deterministic intrinsics, strict template validation,
+  explicit installed-model execution, recursive typed catalog schemas, frozen
+  seeds, presentation metadata, synchronized public schemas and fixtures, and
+  source-correlated run provenance (#197).
+
+### Changed
+
+- changed `model remove` to report referenced and reclaimable bytes and delete
+  unshared backing payloads by default while preserving shared, external, and
+  legacy-linked data. `--keep-cache` retains link-only removal, and model
+  listings now label per-model values as non-additive `Referenced` bytes
+  (#190).
+- changed live `--backend auto` policy to match batch ASR: transcription uses
+  fast Parakeet while translation uses quality-first Qwen (#191).
+- refreshed the documentation homepage, getting-started flow, CLI reference,
+  navigation, model sources, speech, workflow, storage, testing, and
+  development guidance around all 22 top-level commands and the current
+  runtime surface (#192).
+- documented Graph Studio's local-first security boundary: native authoring,
+  persistence, catalogs, validation, preflight, and execution use Tauri
+  IPC/Rust without Python, a loopback HTTP API, authentication, or network
+  access. Direct SSH, Relay, hosted Authorization Code + PKCE, and Mere Node
+  device authorization remain explicit opt-in boundaries (#195).
+- pinned the public SCAIL-2 MLX snapshot and kept checkpoint conversion,
+  upstream PyTorch exporters, and publication tooling outside the runtime.
+  Multi-reference ordering, tail pad/trim behavior, and driving-audio
+  preservation now flow through native animation and replacement (#194,
+  #196).
+- extended graph catalogs and public schemas with recursive value shapes and
+  presentation metadata, and propagated source graph/input fingerprints
+  through materialized jobs and `run.json`. Graphs using creative material
+  nodes require a 0.24.0-or-newer worker (#197).
+- removed the untrusted Homebrew tap step from the hosted macOS CI lane and
+  kept platform-specific ProRes round-trip coverage off headless runners
+  (#196).
+
+### Fixed
+
+- fixed model-size reporting that double-counted shared symlink targets and
+  allowed repo-flat caches, obsolete revisions, and incomplete downloads to
+  accumulate indefinitely (#190).
+- fixed SCAIL mask correction propagation so edits stay bounded, aligned
+  native mask semantics with the pinned upstream fixtures, accepted upstream
+  H.264 mask backgrounds, and matched upstream codec boundary margins (#196).
+
+## 0.23.0 - 2026-07-18
+
+### Added
+
 - added checksum-gated canonical Gemma 4 chat templates, typed assistant
   tool-call and tool-response history, and a deterministic
   `model benchmark tool-continuations` lane for validating grounded final
@@ -77,12 +130,6 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
-- fixed `model remove` so it reports referenced versus reclaimable bytes and
-  actually deletes unshared backing payloads by default while preserving
-  shared consumers; `--keep-cache` retains the prior link-only behavior.
-- fixed model-size reporting that double-counted shared symlink targets and
-  allowed repo-flat caches, obsolete revisions, and incomplete downloads to
-  accumulate indefinitely.
 - fixed graph cancellation, retry, timeout, and resume cleanup so every owned
   child process is terminated and reusable outputs remain digest-verified.
 - suppressed harmless SSH archive metadata warnings without hiding transfer or
