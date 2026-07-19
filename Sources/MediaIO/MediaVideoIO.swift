@@ -214,6 +214,17 @@ public enum MediaVideoIO {
         #endif
     }
 
+    /// Writes a categorical color video without 4:2:0 chroma subsampling.
+    /// SCAIL-2 masks use RGB channels as discrete labels, so ordinary H.264
+    /// output is not an acceptable interchange format for these artifacts.
+    public static func writePaletteVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
+        #if canImport(AVFoundation) && canImport(CoreGraphics)
+        try AppleMediaVideoIO.writePaletteVideo(frameURLs: frameURLs, fps: fps, to: outputURL)
+        #else
+        try FFmpegMediaIO.writePaletteVideo(frameURLs: frameURLs, fps: fps, to: outputURL)
+        #endif
+    }
+
     public static func hasAudioTrack(_ url: URL) -> Bool {
         #if canImport(AVFoundation)
         AppleMediaVideoIO.hasAudioTrack(url)

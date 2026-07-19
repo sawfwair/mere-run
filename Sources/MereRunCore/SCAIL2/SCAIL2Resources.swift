@@ -144,6 +144,33 @@ public struct SCAIL2Resources: Hashable, Sendable {
     public static let modelID = "video-scail2-14b-mlx"
     public static let upstreamRepoID = "zai-org/SCAIL-2"
     public static let upstreamRevision = "150cc0ca4e98e50e60b9295dacde39442fdccab2"
+    public static let managedRepoID = "Sawfwair/SCAIL-2-14B-MLX"
+    public static let managedRevision = "535a208194417f69bfafc29529483b377a45e088"
+    public static let snapshotPatterns = [
+        "LICENSE",
+        "README.md",
+        "MERERUN_CONVERSION.json",
+        "clip.safetensors",
+        "config.json",
+        "mererun_model.json",
+        "model-00001-of-00008.safetensors",
+        "model-00002-of-00008.safetensors",
+        "model-00003-of-00008.safetensors",
+        "model-00004-of-00008.safetensors",
+        "model-00005-of-00008.safetensors",
+        "model-00006-of-00008.safetensors",
+        "model-00007-of-00008.safetensors",
+        "model-00008-of-00008.safetensors",
+        "model-fp32-islands.safetensors",
+        "model.safetensors.index.json",
+        "provenance.json",
+        "t5_encoder-00001-of-00003.safetensors",
+        "t5_encoder-00002-of-00003.safetensors",
+        "t5_encoder-00003-of-00003.safetensors",
+        "t5_encoder.safetensors.index.json",
+        "tokenizer.json",
+        "vae.safetensors",
+    ]
 
     public let rootURL: URL
 

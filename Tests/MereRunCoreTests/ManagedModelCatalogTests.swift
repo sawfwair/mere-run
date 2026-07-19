@@ -1259,7 +1259,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
     }
 
-    func testSCAIL2SpecRemainsLocalUntilSawfwairReleaseIsPinned() throws {
+    func testSCAIL2SpecPinsImmutableSawfwairRelease() throws {
         let id = ModelResolver.ModelID.scail2Video14BMLX.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
 
@@ -1267,8 +1267,10 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .scail2MLX)
         XCTAssertEqual(spec.upstreamRepoId, SCAIL2Resources.upstreamRepoID)
         XCTAssertEqual(spec.upstreamRevision, SCAIL2Resources.upstreamRevision)
-        XCTAssertNil(spec.hubFallback)
-        XCTAssertFalse(spec.canBePulledWithoutConfiguration)
+        XCTAssertEqual(spec.hubFallback?.repoId, SCAIL2Resources.managedRepoID)
+        XCTAssertEqual(spec.hubFallback?.revision, SCAIL2Resources.managedRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, SCAIL2Resources.snapshotPatterns)
+        XCTAssertTrue(spec.canBePulledWithoutConfiguration)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.estimatedDownloadBytes, 46_648_000_000)
         XCTAssertEqual(spec.defaultCLICommands, ["video animate"])

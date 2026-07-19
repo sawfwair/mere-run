@@ -625,6 +625,35 @@ enum FFmpegMediaIO {
         )
     }
 
+    static func writePaletteVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
+        guard let first = frameURLs.first else {
+            throw MediaIOError.videoOperationFailed("No frames supplied for palette video writing.")
+        }
+        let tempDir = first.deletingLastPathComponent()
+        let listURL = tempDir.appendingPathComponent("mererun-palette-frames-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: listURL) }
+        let resolvedFPS = try MediaVideoFrameRateResolver.resolve(fps)
+        let duration = 1.0 / resolvedFPS.framesPerSecond
+        let list = frameURLs.map { "file '\($0.path.replacingOccurrences(of: "'", with: "'\\''"))'\nduration \(duration)" }
+            .joined(separator: "\n")
+        try list.write(to: listURL, atomically: true, encoding: .utf8)
+        _ = try FFmpegProcess.run(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error",
+                "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", listURL.path,
+                "-r", "\(resolvedFPS.timeScale)",
+                "-c:v", "prores_ks",
+                "-profile:v", "4",
+                "-pix_fmt", "yuva444p10le",
+                outputURL.path
+            ]
+        )
+    }
+
     static func hasAudioTrack(_ url: URL) -> Bool {
         guard let result = try? FFmpegProcess.run(
             tool: MediaTool.ffprobePath,

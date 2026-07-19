@@ -14,9 +14,12 @@ final class VideoCommandTests: XCTestCase {
         super.tearDown()
     }
 
-    func testVideoCommandExposesGenerateExportLatentsAndSession() {
+    func testVideoCommandExposesGenerateMaskPreparationExportLatentsAndSession() {
         let commandNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(commandNames, Set(["animate", "generate", "export-latents", "session"]))
+        XCTAssertEqual(
+            commandNames,
+            Set(["animate", "generate", "prepare-masks", "export-latents", "session"])
+        )
     }
 
     func testVideoAnimateParsesNativeSCAIL2DefaultsAndReferences() throws {
@@ -40,8 +43,55 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(command.fps, 16)
         XCTAssertEqual(command.segmentLength, 81)
         XCTAssertEqual(command.segmentOverlap, 5)
+        XCTAssertEqual(command.tailPolicy, .drop)
+        XCTAssertEqual(command.audioSource, .none)
         XCTAssertEqual(command.additionalReferences, ["/tmp/ref-2.png"])
         XCTAssertEqual(command.additionalReferenceMasks, ["/tmp/ref-mask-2.png"])
+    }
+
+    func testVideoAnimateParsesPadTrimAndDrivingAudio() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mov",
+            "--tail-policy", "pad-trim",
+            "--audio-source", "driving",
+        ])
+
+        XCTAssertEqual(command.tailPolicy, .padTrim)
+        XCTAssertEqual(command.audioSource, .driving)
+    }
+
+    func testVideoPrepareMasksParsesPreviewAndJSON() throws {
+        let command = try VideoPrepareMasks.parse([
+            "--plan", "/tmp/request.json",
+            "--output-dir", "/tmp/artifacts",
+            "--preview-frame", "12",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertEqual(command.plan, "/tmp/request.json")
+        XCTAssertEqual(command.outputDirectory, "/tmp/artifacts")
+        XCTAssertEqual(command.previewFrame, 12)
+        XCTAssertTrue(command.preflight)
+        XCTAssertTrue(command.json)
+    }
+
+    func testVideoPrepareMasksRecordsTheManagedSAMRevision() throws {
+        let modelID = ModelResolver.ModelID.visionSegmentSAM31.rawValue
+        let resolved = VisionSegment.ResolvedModel(
+            modelID: modelID,
+            rootURL: URL(fileURLWithPath: "/tmp/sam31"),
+            isManaged: true
+        )
+
+        XCTAssertEqual(
+            VideoPrepareMasks.modelRevision(for: resolved),
+            try XCTUnwrap(ManagedModelCatalog.spec(for: modelID)?.upstreamRevision)
+        )
     }
 
     func testVideoAnimatePreflightReportsMissingInputsWithoutLoading() throws {

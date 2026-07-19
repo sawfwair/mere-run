@@ -103,10 +103,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         }
         annotatedFrameURLs[seedFrameIndex] = seedRun.annotatedImageURL
 
-        let seedDetections: [String: SAM31SegmentationDetection] = Dictionary(uniqueKeysWithValues: normalizeSeedDetections(seedRun.detections).compactMap { detection in
-            guard let objectID = detection.objectID else { return nil }
-            return (objectID, detection)
-        })
+        let seedDetections = bestDetectionsByObjectID(normalizeSeedDetections(seedRun.detections))
         let trackingStates = normalizedPrompts.compactMap { promptObject -> TrackingState? in
             guard let detection = seedDetections[promptObject.objectID] else { return nil }
             let trackedObject = SAM31TrackedObject(
@@ -292,10 +289,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             )
             annotatedFrameURLs[frameIndex] = stabilizedRun.annotatedImageURL
 
-            let detectionsByObjectID: [String: SAM31SegmentationDetection] = Dictionary(uniqueKeysWithValues: stabilizedRun.detections.compactMap { detection in
-                guard let objectID = detection.objectID else { return nil }
-                return (objectID, detection)
-            })
+            let detectionsByObjectID = bestDetectionsByObjectID(stabilizedRun.detections)
 
             let frameResults = orderedStates.map { state -> SAM31TrackingObjectResult in
                 let object = state.trackedObject
@@ -402,6 +396,10 @@ public final class SAM31VideoTracker: @unchecked Sendable {
                         )
                     }
                 )
+            case .mask:
+                if promptObject.maskPrompt != nil {
+                    promptSet.objectPrompts.append(promptObject)
+                }
             }
         }
         return promptSet
@@ -421,10 +419,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         maskOutputDirectoryURL: URL?,
         frameIndex: Int
     ) throws -> SAM31SegmentationRun {
-        let detectionsByObjectID: [String: SAM31SegmentationDetection] = Dictionary(uniqueKeysWithValues: initialRun.detections.compactMap { detection in
-            guard let objectID = detection.objectID else { return nil }
-            return (objectID, detection)
-        })
+        let detectionsByObjectID = bestDetectionsByObjectID(initialRun.detections)
         let fallbackPromptObjects = trackingStates.compactMap { state -> SAM31PromptObject? in
             let previousResult = previousResultsByObject[state.trackedObject.objectID] ?? state.seedResult
             let detection = detectionsByObjectID[state.trackedObject.objectID]
@@ -512,6 +507,15 @@ public final class SAM31VideoTracker: @unchecked Sendable {
                     label: state.trackedObject.objectID
                 )
             )
+        case .mask:
+            return SAM31PromptObject(
+                objectID: state.trackedObject.objectID,
+                label: state.trackedObject.label,
+                promptKind: .mask,
+                boxPrompt: state.seedPromptObject.boxPrompt,
+                pointPrompts: state.seedPromptObject.pointPrompts,
+                maskPrompt: state.seedPromptObject.maskPrompt
+            )
         }
     }
 
@@ -542,5 +546,17 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             }
         }
         return false
+    }
+
+    private func bestDetectionsByObjectID(
+        _ detections: [SAM31SegmentationDetection]
+    ) -> [String: SAM31SegmentationDetection] {
+        detections.reduce(into: [:]) { result, detection in
+            guard let objectID = detection.objectID else { return }
+            if let existing = result[objectID], existing.score >= detection.score {
+                return
+            }
+            result[objectID] = detection
+        }
     }
 }

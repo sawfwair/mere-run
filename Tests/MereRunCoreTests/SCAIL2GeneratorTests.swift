@@ -19,6 +19,33 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
         )
     }
 
+    func testPadTrimFrameCountCompletesFinalWindow() {
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 1,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            81
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 82,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            157
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 157,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            157
+        )
+    }
+
     func testCleanHistoryReplacesOnlyLatentPrefix() {
         let latent = MLXArray(Array(0..<8).map(Float.init), [1, 4, 1, 2])
         let history = MLX.full([1, 2, 1, 2], values: MLXArray(Float(99)))

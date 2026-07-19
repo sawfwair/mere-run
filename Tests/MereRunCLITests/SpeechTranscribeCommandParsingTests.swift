@@ -146,7 +146,10 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         ]))
 
         let videoNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(videoNames, Set(["animate", "generate", "session", "export-latents"]))
+        XCTAssertEqual(
+            videoNames,
+            Set(["animate", "generate", "session", "export-latents", "prepare-masks"])
+        )
 
         let sfxNames = Set(SFX.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(sfxNames, Set(["ae", "clap", "condition", "generate", "video"]))

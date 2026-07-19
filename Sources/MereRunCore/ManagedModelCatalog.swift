@@ -2085,6 +2085,11 @@ public enum ManagedModelCatalog {
             id: ModelResolver.ModelID.scail2Video14BMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: SCAIL2Resources.managedRepoID,
+                revision: SCAIL2Resources.managedRevision,
+                patterns: SCAIL2Resources.snapshotPatterns
+            ),
             upstreamRepoId: SCAIL2Resources.upstreamRepoID,
             upstreamRevision: SCAIL2Resources.upstreamRevision,
             validationKind: .scail2MLX,

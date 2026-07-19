@@ -83,6 +83,7 @@ Public tree:
   - `mere.run video animate` — Animate or replace a masked subject with native Swift/MLX SCAIL-2.
   - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
+  - `mere.run video prepare-masks` — Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1.
   - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
 - [`mere.run world`](/runtime/world) — Run persistent local conditioned-video world sessions.
   - `mere.run world serve` — Serve one warm DreamX causal world session over loopback HTTP.
@@ -1624,14 +1625,38 @@ The required image/video masks use seven-color SCAIL-2 segmentation. Important
 options are `--mode animation|replacement`, `--model-root`, `--width`,
 `--height`, `--steps`, `--guidance-scale`, `--shift`, `--fps`,
 `--segment-length`, `--segment-overlap`, and paired repeatable
-`--additional-reference` / `--additional-reference-mask`. Defaults match the
+`--additional-reference` / `--additional-reference-mask`. `--tail-policy`
+accepts `drop` or `pad-trim`; `--audio-source` accepts `none` or `driving`.
+Defaults match the
 official 480p recipe: 896x512, 40 UniPC steps, guidance 5, shift 3, 16 fps,
-81-frame segments, and five clean-history overlap frames.
+81-frame segments, and five clean-history overlap frames. Compatibility
+defaults are `drop` and `none`.
 
 `--preflight --json` validates the MLX model root, input pairs, output, and
 execution plan without loading MLX or decoding video. The converted checkpoint
 is distributed separately from the mere.run source repository; runtime
 generation is native Swift/MLX and never launches Python or ComfyUI.
+
+### `mere.run video prepare-masks`
+
+Prepare reference and driving masks from a typed schema-version 1 plan:
+
+```bash
+swift run mere.run video prepare-masks \
+  --plan ./request.json \
+  --output-dir ./artifacts \
+  [--preview-frame <frame>] \
+  [--preflight --json]
+```
+
+Plans contain exact driver geometry/FPS/range, one to six stable subjects,
+unique legal palette colours, project-materialized reference images,
+text/box/positive/negative selectors, and optional point/box/dense painted-PNG
+keyframe corrections. Preview mode segments references plus one selected
+driving frame. Full mode tracks both directions, records gaps and quality
+warnings, and emits reference masks, a ProRes 4444 categorical driving mask,
+overlay MP4, contact sheet, tracking/quality JSON, normalized driver, and a
+canonical hashed manifest.
 
 ### `mere.run video generate`
 
