@@ -139,11 +139,12 @@ final class SCAIL2MaskPlanTests: XCTestCase {
 
     func testPaletteSnappingAcceptsUnambiguousProResEdgeColor() throws {
         let blackBackground = try MediaImage(
-            width: 2,
+            width: 3,
             height: 1,
             rgba8: [
                 3, 2, 4, 255,
                 0, 5, 62, 255,
+                30, 40, 65, 255,
             ]
         )
         let snappedBackground = try SCAIL2Palette.snapped(
@@ -155,19 +156,33 @@ final class SCAIL2MaskPlanTests: XCTestCase {
             [
                 0, 0, 0, 255,
                 0, 0, 0, 255,
+                0, 0, 0, 255,
             ]
         )
 
         let decodedEdge = try MediaImage(
-            width: 1,
+            width: 4,
             height: 1,
-            rgba8: [14, 12, 86, 255]
+            rgba8: [
+                14, 12, 86, 255,
+                82, 84, 115, 255,
+                51, 61, 83, 255,
+                50, 49, 68, 255,
+            ]
         )
         let snapped = try SCAIL2Palette.snapped(
             decodedEdge,
             tolerance: SCAIL2Palette.codecTolerance
         )
-        XCTAssertEqual(snapped.rgba8, [0, 0, 255, 255])
+        XCTAssertEqual(
+            snapped.rgba8,
+            [
+                0, 0, 255, 255,
+                0, 0, 255, 255,
+                0, 0, 255, 255,
+                0, 0, 255, 255,
+            ]
+        )
     }
 
     func testManifestRequiresAndEncodesTheExactModelRevision() throws {
