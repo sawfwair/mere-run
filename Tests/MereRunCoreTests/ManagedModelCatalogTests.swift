@@ -1259,6 +1259,32 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
     }
 
+    func testSCAIL2SpecRemainsLocalUntilSawfwairReleaseIsPinned() throws {
+        let id = ModelResolver.ModelID.scail2Video14BMLX.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.validationKind, .scail2MLX)
+        XCTAssertEqual(spec.upstreamRepoId, SCAIL2Resources.upstreamRepoID)
+        XCTAssertEqual(spec.upstreamRevision, SCAIL2Resources.upstreamRevision)
+        XCTAssertNil(spec.hubFallback)
+        XCTAssertFalse(spec.canBePulledWithoutConfiguration)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 46_648_000_000)
+        XCTAssertEqual(spec.defaultCLICommands, ["video animate"])
+
+        let manifest = MereRunModelManifest.template(
+            for: .scail2Video14BMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.engine, .wanVideo)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 40)
+        XCTAssertEqual(manifest.defaults?.cfg, 5)
+        XCTAssertEqual(manifest.defaults?.sigmaShift, 3)
+        XCTAssertTrue(manifest.supports?.contains(.videoGeneration) == true)
+    }
+
     func testLTX23CompanionGemma3TextEncoderSpecIsKnownButHidden() throws {
         let companionID = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))

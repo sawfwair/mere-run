@@ -103,6 +103,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
+| `video` | `video-scail2-14b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
 
@@ -706,6 +707,24 @@ state IDs rather than mutable MLX tensors. Camera controls are represented as
 XYZ translation and rotation so a DreamX-derived causal camera conditioner can
 replace the current text-plus-first-frame mode without changing the session
 schema.
+
+### `video-scail2-14b-mlx`
+
+The native SCAIL-2 model root is:
+
+```text
+.../models/video-scail2-14b-mlx
+```
+
+The planned Sawfwair release package contains sharded BF16 transformer
+and UMT5 weights, FP16 OpenCLIP weights, the Wan 2.1 VAE, tokenizer,
+configuration, MIT license, model card, and a conversion receipt with immutable
+source and artifact hashes. The package is approximately 43 GiB.
+
+The mere.run repository contains only the native Swift/MLX runtime. It does not
+ship a checkpoint converter or an upstream Python reference implementation.
+Until the Sawfwair snapshot is published and pinned, supply the prepared model
+root with `--model-root`.
 
 ### `video-dreamx-world-5b-ar-mlx`
 

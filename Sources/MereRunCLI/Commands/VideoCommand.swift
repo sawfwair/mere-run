@@ -14,6 +14,7 @@ struct Video: AsyncParsableCommand {
         commandName: "video",
         abstract: "Generate videos with native Swift/MLX LTX pipelines.",
         subcommands: [
+            VideoAnimate.self,
             VideoExportLatents.self,
             VideoGenerate.self,
             VideoSession.self

@@ -222,7 +222,15 @@ public final class Wan2Tokenizer: @unchecked Sendable {
     }
 
     public func encode(_ text: String) -> (tokenIDs: [Int], mask: [Int]) {
-        var ids = tokenizer.encode(text: text, addSpecialTokens: true)
+        // Hugging Face's T5 fast-tokenizer post-processor represents an empty
+        // prompt as EOS only. swift-transformers otherwise exposes the
+        // SentencePiece metaspace token before EOS for this edge case.
+        var ids: [Int]
+        if text.isEmpty, let eosTokenID = tokenizer.eosTokenId {
+            ids = [eosTokenID]
+        } else {
+            ids = tokenizer.encode(text: text, addSpecialTokens: true)
+        }
         if ids.count > maxLength {
             ids = Array(ids.prefix(maxLength))
         }

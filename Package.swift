@@ -337,6 +337,7 @@ targets.append(contentsOf: [
       "QwenImageEdit/Model/Transformer/README.md",
       "QwenImageEdit/Model/VAE/README.md",
       "SAM3/README.md",
+      "SCAIL2/README.md",
       "Support/README.md",
       "Trellis2/README.md",
       "TripoSR/README.md",

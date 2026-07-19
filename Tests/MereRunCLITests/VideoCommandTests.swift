@@ -16,7 +16,54 @@ final class VideoCommandTests: XCTestCase {
 
     func testVideoCommandExposesGenerateExportLatentsAndSession() {
         let commandNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(commandNames, Set(["generate", "export-latents", "session"]))
+        XCTAssertEqual(commandNames, Set(["animate", "generate", "export-latents", "session"]))
+    }
+
+    func testVideoAnimateParsesNativeSCAIL2DefaultsAndReferences() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mp4",
+            "--additional-reference", "/tmp/ref-2.png",
+            "--additional-reference-mask", "/tmp/ref-mask-2.png",
+        ])
+
+        XCTAssertEqual(command.model, SCAIL2Resources.modelID)
+        XCTAssertEqual(command.mode, .animation)
+        XCTAssertEqual(command.width, 896)
+        XCTAssertEqual(command.height, 512)
+        XCTAssertEqual(command.steps, 40)
+        XCTAssertEqual(command.guidanceScale, 5)
+        XCTAssertEqual(command.shift, 3)
+        XCTAssertEqual(command.fps, 16)
+        XCTAssertEqual(command.segmentLength, 81)
+        XCTAssertEqual(command.segmentOverlap, 5)
+        XCTAssertEqual(command.additionalReferences, ["/tmp/ref-2.png"])
+        XCTAssertEqual(command.additionalReferenceMasks, ["/tmp/ref-mask-2.png"])
+    }
+
+    func testVideoAnimatePreflightReportsMissingInputsWithoutLoading() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/missing-ref.png",
+            "--reference-mask", "/tmp/missing-ref-mask.png",
+            "--driving-video", "/tmp/missing-pose.mp4",
+            "--driving-mask", "/tmp/missing-pose-mask.mp4",
+            "--preflight",
+            "--json",
+        ])
+        let options = try command.makeOptions(
+            prompt: command.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+        )
+        let report = command.makePreflightReport(options: options, modelRootURL: nil)
+
+        XCTAssertEqual(report.status, "blocked")
+        XCTAssertFalse(report.modelInstalled)
+        XCTAssertEqual(report.missingInputFiles.count, 4)
+        XCTAssertEqual(report.mode, "animation")
     }
 
     func testVideoGenerateParsesDefaults() throws {

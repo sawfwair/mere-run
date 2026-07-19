@@ -1,0 +1,300 @@
+import ArgumentParser
+import Foundation
+import MereRunCore
+
+enum SCAIL2CLIMode: String, CaseIterable, ExpressibleByArgument {
+    case animation
+    case replacement
+
+    var runtimeMode: SCAIL2Mode {
+        switch self {
+        case .animation: .animation
+        case .replacement: .replacement
+        }
+    }
+}
+
+struct SCAIL2AnimationPreflightReport: Codable, Equatable {
+    let status: String
+    let model: String
+    let modelRoot: String?
+    let modelInstalled: Bool
+    let missingModelFiles: [String]
+    let missingInputFiles: [String]
+    let output: String
+    let mode: String
+    let width: Int
+    let height: Int
+    let steps: Int
+    let guidanceScale: Float
+    let shift: Float
+    let fps: Int
+    let segmentLength: Int
+    let segmentOverlap: Int
+    let additionalReferenceCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case model
+        case modelRoot = "model_root"
+        case modelInstalled = "model_installed"
+        case missingModelFiles = "missing_model_files"
+        case missingInputFiles = "missing_input_files"
+        case output
+        case mode
+        case width
+        case height
+        case steps
+        case guidanceScale = "guidance_scale"
+        case shift
+        case fps
+        case segmentLength = "segment_length"
+        case segmentOverlap = "segment_overlap"
+        case additionalReferenceCount = "additional_reference_count"
+    }
+}
+
+struct VideoAnimate: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "animate",
+        abstract: "Animate or replace a masked subject with native Swift/MLX SCAIL-2.",
+        discussion: """
+        SCAIL-2 consumes a reference image and seven-color reference mask, plus
+        a driving video and matching seven-color mask video. Animation preserves
+        the source scene; replacement moves the reference subject into the
+        driving scene. Prints the output MP4 path to stdout.
+
+        Example:
+          mere.run video animate "a dancer in a red silk dress" \
+            --reference ref.png --reference-mask ref-mask.png \
+            --driving-video pose.mp4 --driving-mask pose-mask.mp4 \
+            --model-root /path/to/video-scail2-14b-mlx -o result.mp4
+        """
+    )
+
+    @Argument(help: "Text prompt describing the subject and motion.")
+    var prompt: String
+
+    @Option(name: [.customLong("reference")], help: "Reference RGB image path.")
+    var reference: String
+
+    @Option(name: [.customLong("reference-mask")], help: "Seven-color reference mask image path.")
+    var referenceMask: String
+
+    @Option(name: [.customLong("driving-video")], help: "Driving pose/render video path.")
+    var drivingVideo: String
+
+    @Option(name: [.customLong("driving-mask")], help: "Seven-color driving mask video path.")
+    var drivingMask: String
+
+    @Option(name: [.customLong("additional-reference")], parsing: .upToNextOption, help: "Additional reference image path; repeat for multiple subjects.")
+    var additionalReferences: [String] = []
+
+    @Option(name: [.customLong("additional-reference-mask")], parsing: .upToNextOption, help: "Mask paired by position with each --additional-reference.")
+    var additionalReferenceMasks: [String] = []
+
+    @Option(name: [.customShort("o"), .long], help: "Output MP4 path.")
+    var output: String?
+
+    @Option(name: [.customShort("m"), .long], help: "Managed SCAIL-2 model id or local MLX model root.")
+    var model: String = SCAIL2Resources.modelID
+
+    @Option(name: [.customLong("model-root")], help: "Local SCAIL-2 MLX model root; takes precedence over --model.")
+    var modelRoot: String?
+
+    @Option(name: [.long], help: "SCAIL-2 task mode: animation or replacement.")
+    var mode: SCAIL2CLIMode = .animation
+
+    @Option(name: [.long], help: "Target width; must be divisible by 32.")
+    var width: Int = 896
+
+    @Option(name: [.long], help: "Target height; must be divisible by 32.")
+    var height: Int = 512
+
+    @Option(name: [.long], help: "UniPC denoising steps.")
+    var steps: Int = 40
+
+    @Option(name: [.customLong("guidance-scale")], help: "Classifier-free guidance scale.")
+    var guidanceScale: Float = 5
+
+    @Option(name: [.long], help: "Flow schedule shift; 3 is recommended at 480p.")
+    var shift: Float = 3
+
+    @Option(name: [.long], help: "Random seed.")
+    var seed: Int = 42
+
+    @Option(name: [.long], help: "Output frames per second.")
+    var fps: Int = 16
+
+    @Option(name: [.customLong("segment-length")], help: "Pixel frames per long-video segment; must equal 1 modulo 4.")
+    var segmentLength: Int = 81
+
+    @Option(name: [.customLong("segment-overlap")], help: "Clean-history overlap in pixel frames; must equal 1 modulo 4.")
+    var segmentOverlap: Int = 5
+
+    @Option(name: [.customLong("negative-prompt")], help: "Optional negative prompt.")
+    var negativePrompt: String = ""
+
+    @Flag(name: [.customLong("preflight")], help: "Validate paths and the execution plan without loading models.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "Emit JSON with --preflight.")
+    var json: Bool = false
+
+    @Flag(name: [.short, .long], help: "Suppress diagnostics on stderr.")
+    var quiet: Bool = false
+
+    func run() async throws {
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for video animate.")
+        }
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { throw ValidationError("Prompt cannot be empty.") }
+        guard additionalReferences.count == additionalReferenceMasks.count else {
+            throw ValidationError("--additional-reference and --additional-reference-mask counts must match.")
+        }
+
+        let outputURL = CLIOutput.resolveOutputURL(
+            output,
+            defaultPrefix: "mererun-scail2",
+            defaultExtension: "mp4"
+        )
+        let runtimeRoot = try await resolveModelRoot(forPreflight: preflight)
+        let options = try makeOptions(prompt: trimmedPrompt, outputURL: outputURL)
+
+        if preflight {
+            let report = makePreflightReport(options: options, modelRootURL: runtimeRoot)
+            if json {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                print(String(decoding: try encoder.encode(report), as: UTF8.self))
+            } else {
+                if !quiet {
+                    CLIStderr.write("SCAIL-2 preflight: \(report.status)\n")
+                    if let root = report.modelRoot { CLIStderr.write("Model root: \(root)\n") }
+                    for path in report.missingInputFiles { CLIStderr.write("Missing input: \(path)\n") }
+                    for path in report.missingModelFiles { CLIStderr.write("Missing model file: \(path)\n") }
+                }
+                print(report.status)
+            }
+            return
+        }
+
+        guard let runtimeRoot else {
+            throw ValidationError("Model \(model) is not installed; convert the pinned SCAIL-2 checkpoint or pass --model-root.")
+        }
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if !quiet {
+            CLIStderr.write("Engine: native Swift/MLX SCAIL-2\n")
+            CLIStderr.write("Model root: \(runtimeRoot.path)\n")
+            CLIStderr.write("Mode: \(mode.rawValue)\n")
+        }
+        let reportsProgress = !quiet
+        let result = try await SCAIL2Generator().generate(
+            options: options,
+            resources: SCAIL2Resources(rootURL: runtimeRoot),
+            progressHandler: { progress in
+                guard reportsProgress else { return }
+                if progress.stage == .denoising {
+                    CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
+                } else {
+                    CLIStderr.write("\(progress.stage.rawValue)\n")
+                }
+            }
+        )
+        if !quiet {
+            CLIStderr.write("Frames: \(result.frameCount), segments: \(result.segmentCount)\n")
+            CLIStderr.write("Saved: \(result.outputURL.path)\n")
+        }
+        print(result.outputURL.path)
+    }
+
+    func makeOptions(prompt: String, outputURL: URL) throws -> SCAIL2GenerationOptions {
+        try SCAIL2GenerationOptions(
+            prompt: prompt,
+            negativePrompt: negativePrompt,
+            reference: SCAIL2ReferenceInput(
+                imageURL: URL(fileURLWithPath: reference).standardizedFileURL,
+                maskURL: URL(fileURLWithPath: referenceMask).standardizedFileURL
+            ),
+            additionalReferences: zip(additionalReferences, additionalReferenceMasks).map {
+                SCAIL2ReferenceInput(
+                    imageURL: URL(fileURLWithPath: $0.0).standardizedFileURL,
+                    maskURL: URL(fileURLWithPath: $0.1).standardizedFileURL
+                )
+            },
+            drivingVideoURL: URL(fileURLWithPath: drivingVideo).standardizedFileURL,
+            drivingMaskVideoURL: URL(fileURLWithPath: drivingMask).standardizedFileURL,
+            outputURL: outputURL,
+            mode: mode.runtimeMode,
+            width: width,
+            height: height,
+            steps: steps,
+            guidanceScale: guidanceScale,
+            shift: shift,
+            seed: UInt64(bitPattern: Int64(seed)),
+            fps: fps,
+            segmentLength: segmentLength,
+            segmentOverlap: segmentOverlap
+        )
+    }
+
+    func makePreflightReport(
+        options: SCAIL2GenerationOptions,
+        modelRootURL: URL?
+    ) -> SCAIL2AnimationPreflightReport {
+        let inputs = [
+            options.reference.imageURL,
+            options.reference.maskURL,
+            options.drivingVideoURL,
+            options.drivingMaskVideoURL,
+        ] + options.additionalReferences.flatMap { [$0.imageURL, $0.maskURL] }
+        let missingInputs = inputs.filter { !FileManager.default.fileExists(atPath: $0.path) }
+        let missingModels = modelRootURL.map { SCAIL2Resources(rootURL: $0).validate() } ?? []
+        let installed = modelRootURL != nil && missingModels.isEmpty
+        return SCAIL2AnimationPreflightReport(
+            status: missingInputs.isEmpty && installed ? "ok" : "blocked",
+            model: model,
+            modelRoot: modelRootURL?.path,
+            modelInstalled: installed,
+            missingModelFiles: missingModels.map(\.path),
+            missingInputFiles: missingInputs.map(\.path),
+            output: options.outputURL.path,
+            mode: mode.rawValue,
+            width: width,
+            height: height,
+            steps: steps,
+            guidanceScale: guidanceScale,
+            shift: shift,
+            fps: fps,
+            segmentLength: segmentLength,
+            segmentOverlap: segmentOverlap,
+            additionalReferenceCount: additionalReferences.count
+        )
+    }
+
+    private func resolveModelRoot(forPreflight: Bool) async throws -> URL? {
+        if let modelRoot, !modelRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return URL(fileURLWithPath: modelRoot).standardizedFileURL
+        }
+        let requested = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let explicit = URL(fileURLWithPath: requested).standardizedFileURL
+        if FileManager.default.fileExists(atPath: explicit.path) { return explicit }
+        if forPreflight {
+            return ManagedModelResolver.resolveInstalledModel(id: requested)
+        }
+        do {
+            return try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: requested,
+                defaultModelID: SCAIL2Resources.modelID,
+                allowAutoDownload: false
+            ).url
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw ValidationError(error.localizedDescription)
+        }
+    }
+}

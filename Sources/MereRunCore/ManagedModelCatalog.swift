@@ -68,6 +68,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case ltxVideo23FullMLX
     case ltxVideo23A2VMLX
     case wan22TI2VMLX
+    case scail2MLX
     case dreamXCausalMLX
     case hfTextChat
 }
@@ -2081,6 +2082,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.scail2Video14BMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            upstreamRepoId: SCAIL2Resources.upstreamRepoID,
+            upstreamRevision: SCAIL2Resources.upstreamRevision,
+            validationKind: .scail2MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 46_648_000_000,
+            defaultCLICommands: ["video animate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.dreamXWorld5BARMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -2312,6 +2324,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .scail2MLX:
+            return SCAIL2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .dreamXCausalMLX:
             return Wan2DreamXCausalResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hfTextChat:
@@ -2375,6 +2389,18 @@ public extension ManagedModelSpec {
             let missing = resources.validate(fileManager: fileManager)
             if !missing.isEmpty {
                 return missing.map { "Missing required Wan2.2 TI2V MLX file: \($0.path)" }
+            }
+            do {
+                _ = try resources.loadConfiguration()
+                return []
+            } catch {
+                return [error.localizedDescription]
+            }
+        case .scail2MLX:
+            let resources = SCAIL2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
+            let missing = resources.validate(fileManager: fileManager)
+            if !missing.isEmpty {
+                return missing.map { "Missing required SCAIL-2 MLX file: \($0.path)" }
             }
             do {
                 _ = try resources.loadConfiguration()
