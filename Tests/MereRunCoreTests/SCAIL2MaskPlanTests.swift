@@ -218,6 +218,10 @@ final class SCAIL2MaskPlanTests: XCTestCase {
     }
 
     func testPaletteVideoRoundTripPreservesLegalLabels() throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true",
+            "GitHub's headless macOS runner aborts inside the native ProRes 4444 encoder."
+        )
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("scail-palette-test-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
