@@ -716,7 +716,7 @@ The native SCAIL-2 model root is:
 .../models/video-scail2-14b-mlx
 ```
 
-The separately published Sawfwair package contains sharded BF16 transformer
+The planned Sawfwair release package contains sharded BF16 transformer
 and UMT5 weights, FP16 OpenCLIP weights, the Wan 2.1 VAE, tokenizer,
 configuration, MIT license, model card, and a conversion receipt with immutable
 source and artifact hashes. The package is approximately 43 GiB.

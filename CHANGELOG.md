@@ -12,7 +12,7 @@ The format is based on Keep a Changelog.
   `video animate`, including exact seven-color mask packing, mixed-stream RoPE,
   OpenCLIP and UMT5 conditioning, Wan 2.1 VAE support, 81/5 segmented clean
   history, additional references, UniPC CFG sampling, MP4 output, typed
-  preflight, and a managed model ID for the separately published MIT-licensed
+  preflight, and a managed model ID for the separately packaged MIT-licensed
   MLX checkpoint. Real-checkpoint rendering remains an opt-in installed-model
   gate because the checkpoint is approximately 43 GiB.
 - added resident Parakeet live transcription for raw PCM and streamed files,

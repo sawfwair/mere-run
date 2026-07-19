@@ -20,7 +20,7 @@ This page covers the native video-generation path exposed through `mere.run vide
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
-- `video-scail2-14b-mlx`: separately published MIT-licensed SCAIL-2 14B MLX
+- `video-scail2-14b-mlx`: separately packaged MIT-licensed SCAIL-2 14B MLX
   bundle for reference- and mask-conditioned subject animation/replacement with
   long-video clean history.
 
@@ -28,8 +28,9 @@ This page covers the native video-generation path exposed through `mere.run vide
 
 ### SCAIL-2 subject animation and replacement
 
-Install the separately released Sawfwair MLX bundle at the managed model path
-or pass its directory with `--model-root`. Then preflight and render natively:
+When published, install the Sawfwair MLX bundle at the managed model path.
+Until then, place the prepared bundle there or pass its directory with
+`--model-root`. Then preflight and render natively:
 
 ```bash
 swift run mere.run video animate \

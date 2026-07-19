@@ -1,7 +1,7 @@
 # SCAIL-2 native runtime
 
 This directory owns the native Swift/MLX SCAIL-2 implementation. The runtime
-consumes the separately published MIT-licensed model root named
+consumes the separately packaged MIT-licensed model root named
 `video-scail2-14b-mlx`; it never starts Python or ComfyUI.
 
 The local root contains:
