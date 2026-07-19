@@ -7,6 +7,7 @@
 - [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
 - [Portable Workflows](./workflows.md)
+- [Companion Plugins](./plugins.md)
 - [Configuration](./configuration.md)
 - [Quality Gate](./gate.md)
 - [Model Sources](./model-sources.md)
@@ -22,6 +23,7 @@
   - [Music Runtime](./runtime/music.md)
   - [SFX Runtime](./runtime/sfx.md)
   - [Video Runtime](./runtime/video.md)
+  - [Persistent World Runtime](./runtime/world.md)
   - [Model Management](./runtime/model-management.md)
   - [Local API Server](./runtime/api-server.md)
 - Internals

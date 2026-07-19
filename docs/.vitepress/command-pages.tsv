@@ -1,0 +1,24 @@
+# Top-level CLI command to canonical public documentation page.
+# Keep rows in MereRunCLI command order. DocumentationContractTests enforces ownership and navigation.
+guide	/cookbooks
+image	/runtime/image
+text	/runtime/text
+speech	/runtime/speech
+vision	/runtime/vision
+music	/runtime/music
+sfx	/runtime/sfx
+video	/runtime/video
+world	/runtime/world
+graph	/workflows
+executor	/workflows#executor-profiles
+run	/workflows#run-directories
+model	/runtime/model-management
+adapter	/runtime/model-management
+status	/runtime/model-management
+gate	/gate
+config	/configuration
+api	/runtime/api-server
+open-webui	/runtime/api-server#open-webui-companion
+plugin	/plugins
+setup	/getting-started
+agent	/getting-started

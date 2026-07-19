@@ -36,11 +36,13 @@ If you are new to the repo, read these in order:
 1. [Getting Started](./getting-started.md)
 2. [Linux QuickStart](./linux-quickstart.md), if you are installing the headless CLI on Linux
 3. [CLI Reference](./cli.md)
-4. [Benchmarking](./benchmarking.md)
-5. [Cookbooks](./cookbooks.md)
-6. [Configuration](./configuration.md)
-7. [Model Sources](./model-sources.md)
-8. [Repository Tour](./repository-tour.md)
+4. [Portable Workflows](./workflows.md), if you are automating local or remote jobs
+5. [Benchmarking](./benchmarking.md)
+6. [Cookbooks](./cookbooks.md)
+7. [Configuration](./configuration.md)
+8. [Model Sources](./model-sources.md)
+9. [Companion Plugins](./plugins.md)
+10. [Repository Tour](./repository-tour.md)
 
 ## Choose your path
 
@@ -51,8 +53,10 @@ If you are new to the repo, read these in order:
 - [CLI Reference](./cli.md)
 - [Benchmarking](./benchmarking.md)
 - [Cookbooks](./cookbooks.md)
+- [Portable Workflows](./workflows.md)
 - [Configuration](./configuration.md)
 - [Model Sources](./model-sources.md)
+- [Companion Plugins](./plugins.md)
 
 ### I want to contribute code
 
@@ -71,6 +75,7 @@ If you are new to the repo, read these in order:
 - [Music Runtime](./runtime/music.md)
 - [SFX Runtime](./runtime/sfx.md)
 - [Video Runtime](./runtime/video.md)
+- [Persistent World Runtime](./runtime/world.md)
 - [Model Management](./runtime/model-management.md)
 - [Local API Server](./runtime/api-server.md)
 
@@ -90,6 +95,10 @@ If you are new to the repo, read these in order:
   and local model-store behavior
 - [Benchmarking](./benchmarking.md): local quality evals, generated-code
   execution, VLM datasets, API workload, and runtime microbenchmarks
+- [Portable Workflows](./workflows.md): typed graphs, immutable job bundles,
+  local execution, SSH and relay executors, run artifacts, and remote lifecycle
+- [Companion Plugins](./plugins.md): public catalog discovery, safe installation,
+  doctor checks, and the typed graph-provider boundary
 
 ### Repository guides
 
@@ -111,8 +120,29 @@ If you are new to the repo, read these in order:
 - [Music Runtime](./runtime/music.md)
 - [SFX Runtime](./runtime/sfx.md)
 - [Video Runtime](./runtime/video.md)
+- [Persistent World Runtime](./runtime/world.md)
 - [Model Management](./runtime/model-management.md)
 - [Local API Server](./runtime/api-server.md)
+
+## Keep command docs synchronized
+
+The generated command inventories on the docs home, Getting Started, and CLI
+reference come directly from `MereRunCLI.configuration`. Every top-level command
+also has an explicit owner in `.vitepress/command-pages.tsv`.
+
+After adding, renaming, removing, or redescribing a command, run:
+
+```bash
+./scripts/update-docs-command-reference.sh
+```
+
+`DocumentationContractTests` fails the normal `swift test` and
+`./scripts/check.sh` gates when:
+
+- a generated command inventory differs from the CLI configuration
+- a top-level command lacks a canonical docs owner or sidebar entry
+- a runtime guide is absent from the sidebar
+- a command invocation in Markdown names a subcommand that no longer exists
 
 ### Internal implementation guides
 

@@ -960,15 +960,11 @@ Viewer rule:
 - viewer buttons render declarative actions
 - viewer does not invent hidden command behavior
 
-Possible future commands:
-
-```bash
-mere.run run view ./runs/my-run
-mere.run image generate --visualize
-mere.run api serve --visualize
-```
-
-This is intentionally not part of the first implementation milestone.
+There is no generic run-view command. The current viewer entrypoint is
+`mere.run image visualize-run` for compatible local image-training runs. Other
+clients should build views from `mere.run run inspect --json` and the same
+reports, events, metrics, artifacts, and declarative actions that the CLI
+writes.
 
 ## Command adoption matrix
 

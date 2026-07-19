@@ -42,5 +42,6 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 - Prefer typed decoding at config/tokenizer boundaries over `[String: Any]`
 - Keep stdout machine-readable and stderr diagnostic in CLI commands
 - Add or update the closest test file for command parsing, model resolution, or compatibility behavior
+- After changing the command tree or command abstracts, run `./scripts/update-docs-command-reference.sh`; the docs contract owns every top-level command and fails `swift test` on drift
 - Add a module README before a source directory grows past 500 direct Swift lines
 - If a change requires real checkpoint assets or GPU-only validation, stop after the local gate and report the remaining validation gap explicitly

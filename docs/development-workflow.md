@@ -54,9 +54,19 @@ for every tiny edit.
 This catches docs hygiene regressions and verifies the CLI help surface still
 matches the public tree.
 
+If the change adds, removes, renames, or redescribes a CLI command, first run:
+
+```bash
+./scripts/update-docs-command-reference.sh
+```
+
+The documentation contract also requires every top-level command to have a
+canonical page in `docs/.vitepress/command-pages.tsv` and a sidebar entry.
+
 ### Command parsing or CLI UX change
 
 ```bash
+./scripts/update-docs-command-reference.sh
 swift test
 ./scripts/check.sh
 ```

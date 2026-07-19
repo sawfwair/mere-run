@@ -26,6 +26,9 @@ export interface MereProductDocsThemeOptions {
   guideHref?: string
   architectureHref?: string
   operationsHref?: string
+  workflowsHref?: string
+  runtimeHref?: string
+  pluginsHref?: string
   referenceHref?: string
   cliHref?: string
 }
@@ -49,36 +52,39 @@ export function createMereProductDocsTheme(options: MereProductDocsThemeOptions)
   const guideHref = options.guideHref ?? '/'
   const architectureHref = options.architectureHref ?? guideHref
   const operationsHref = options.operationsHref ?? guideHref
+  const workflowsHref = options.workflowsHref ?? guideHref
+  const runtimeHref = options.runtimeHref ?? architectureHref
+  const pluginsHref = options.pluginsHref ?? referenceHref
   const referenceHref = options.referenceHref ?? guideHref
   const cliHref = options.cliHref ?? referenceHref
   const planes: MereAtlasPlane[] = [
     {
-      name: `${options.productName} guide`,
-      signal: 'Setup paths, product workflows, and common tasks',
-      href: guideHref,
+      name: `${options.productName} CLI`,
+      signal: 'Complete command tree, setup paths, and practical cookbooks',
+      href: referenceHref,
       accent: 'green',
-      items: ['Guide', 'Workflows', 'Setup'],
+      items: ['Commands', 'Cookbooks', 'Setup'],
     },
     {
-      name: 'Architecture',
-      signal: 'Boundaries, data flow, and integration contracts',
-      href: architectureHref,
+      name: 'Portable workflows',
+      signal: 'Immutable bundles across local, SSH, and relay executors',
+      href: workflowsHref,
       accent: 'blue',
-      items: ['Contracts', 'Runtime', 'Data'],
+      items: ['Graphs', 'Executors', 'Runs'],
     },
     {
-      name: 'Operations',
-      signal: 'Deploy, verify, release, and troubleshoot',
-      href: operationsHref,
+      name: 'Runtime families',
+      signal: 'Image, text, audio, vision, video, 3D, and persistent worlds',
+      href: runtimeHref,
       accent: 'plum',
-      items: ['Deploy', 'Testing', 'Runbooks'],
+      items: ['Multimodal', 'Resident', 'Local'],
     },
     {
-      name: 'Mere atlas',
-      signal: 'Cross-product docs and ecosystem inventory',
-      href: 'https://mere-docs.mere.world/',
+      name: 'Companion plugins',
+      signal: 'Verified external tools and typed graph providers',
+      href: pluginsHref,
       accent: 'copper',
-      items: ['Products', 'Matrix', 'Reference'],
+      items: ['Catalog', 'Doctor', 'Providers'],
     },
   ]
 

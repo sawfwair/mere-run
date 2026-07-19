@@ -4,6 +4,7 @@
 - Install SwiftLint and ripgrep (`brew install swiftlint ripgrep`) and run `./scripts/check.sh` before opening a PR.
 - Add or update tests when changing command parsing, model resolution, inference behavior, or security-sensitive defaults.
 - Update `README.md`, `docs/`, and `CHANGELOG.md` when you change public setup, behavior, or operator-facing flags.
+- Run `./scripts/update-docs-command-reference.sh` after adding, removing, renaming, or redescribing a CLI command; CI rejects command inventories, docs ownership, navigation, and examples that drift from the code.
 - If you touch vendored artifacts or third-party package pins, update [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
 - Do not add hosted-service, billing, or app-store-only surfaces back into this repo.
 

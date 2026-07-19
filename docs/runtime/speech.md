@@ -39,15 +39,22 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
-Batch transcription prefers Parakeet. Live transcription uses Qwen and accepts
-raw `pcm-s16le/16000/mono` on stdin:
+In automatic mode, transcription prefers Parakeet while translation routes to
+Qwen. Streaming transcription uses the selected backend and accepts raw
+`pcm-s16le/16000/mono` on stdin. Use `--backend parakeet` or `--backend qwen`
+to pin it explicitly:
 
 ```bash
 audio-source | swift run mere.run speech transcribe - \
   --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
+audio-source | swift run mere.run speech transcribe - \
+  --stream --backend parakeet \
+  --input-format pcm-s16le --sample-rate 16000 --jsonl
 swift run mere.run speech listen --list-devices
 swift run mere.run speech listen --device <core-audio-uid>
 ```
+
+`speech listen` remains the Qwen-backed macOS microphone convenience command.
 
 ### Manage voice profiles
 
@@ -86,6 +93,7 @@ Tokenizer internals:
 - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
 - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRLiveSession.swift`
 - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
+- `Sources/AudioSTT/Parakeet/ParakeetASRLiveSession.swift`
 
 ## How speech synthesis flows
 
