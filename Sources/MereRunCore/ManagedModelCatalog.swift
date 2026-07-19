@@ -2089,7 +2089,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: SCAIL2Resources.upstreamRevision,
             validationKind: .scail2MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 82_456_800_394,
+            estimatedDownloadBytes: 46_648_000_000,
             defaultCLICommands: ["video animate"]
         ),
         ManagedModelSpec(

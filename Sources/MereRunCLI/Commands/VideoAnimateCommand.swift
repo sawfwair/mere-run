@@ -96,10 +96,10 @@ struct VideoAnimate: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output MP4 path.")
     var output: String?
 
-    @Option(name: [.customShort("m"), .long], help: "Managed SCAIL-2 model id or local converted model root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed SCAIL-2 model id or local MLX model root.")
     var model: String = SCAIL2Resources.modelID
 
-    @Option(name: [.customLong("model-root")], help: "Local converted SCAIL-2 model root; takes precedence over --model.")
+    @Option(name: [.customLong("model-root")], help: "Local SCAIL-2 MLX model root; takes precedence over --model.")
     var modelRoot: String?
 
     @Option(name: [.long], help: "SCAIL-2 task mode: animation or replacement.")

@@ -159,14 +159,14 @@ public struct SCAIL2Resources: Hashable, Sendable {
     public var textEncoderIndexURL: URL { rootURL.appendingPathComponent("t5_encoder.safetensors.index.json") }
     public var tokenizerURL: URL { rootURL.appendingPathComponent("tokenizer.json") }
     public var vaeURL: URL { rootURL.appendingPathComponent("vae.safetensors") }
-    public var sourceLicenseURL: URL { rootURL.appendingPathComponent("LICENSE-SCAIL-2") }
-    public var sourceReadmeURL: URL { rootURL.appendingPathComponent("README-SCAIL-2.md") }
-    public var provenanceURL: URL { rootURL.appendingPathComponent("provenance.json") }
+    public var licenseURL: URL { rootURL.appendingPathComponent("LICENSE") }
+    public var readmeURL: URL { rootURL.appendingPathComponent("README.md") }
+    public var conversionReceiptURL: URL { rootURL.appendingPathComponent("MERERUN_CONVERSION.json") }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
         var missing = [
             configURL, clipURL, tokenizerURL, vaeURL,
-            sourceLicenseURL, sourceReadmeURL, provenanceURL,
+            licenseURL, readmeURL, conversionReceiptURL,
         ]
             .filter { !fileManager.fileExists(atPath: $0.path) }
         if !fileManager.fileExists(atPath: transformerURL.path) {

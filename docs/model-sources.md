@@ -716,20 +716,15 @@ The native SCAIL-2 model root is:
 .../models/video-scail2-14b-mlx
 ```
 
-This is a local converted-model ID because the official
-`zai-org/SCAIL-2` release publishes PyTorch checkpoints, not a native MLX
-package. The conversion tool pins model revision
-`150cc0ca4e98e50e60b9295dacde39442fdccab2` and code revision
-`5cfe1b8daac8bcb22ee19794e6c04f1bf5de6ac5`, then emits sharded BF16
-transformer and UMT5 weights, FP16 OpenCLIP weights, the FP32 Wan 2.1 VAE,
-configuration, tokenizer, source README, license, and provenance. Python is
-used only during conversion; `video animate` executes in Swift/MLX.
+The separately published Sawfwair package contains sharded BF16 transformer
+and UMT5 weights, FP16 OpenCLIP weights, the Wan 2.1 VAE, tokenizer,
+configuration, MIT license, model card, and a conversion receipt with immutable
+source and artifact hashes. The package is approximately 43 GiB.
 
-The official snapshot is 82,456,800,394 bytes before conversion, and staging
-requires enough additional free space for the converted output. The model card
-labels the model weights MIT; the upstream implementation copied into the
-converted root is Apache-2.0. Review the pinned upstream model card and code
-license before redistributing either artifact.
+The mere.run repository contains only the native Swift/MLX runtime. It does not
+ship a checkpoint converter or an upstream Python reference implementation.
+Until the Sawfwair snapshot is published and pinned, supply the prepared model
+root with `--model-root`.
 
 ### `video-dreamx-world-5b-ar-mlx`
 

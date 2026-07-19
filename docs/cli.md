@@ -1628,11 +1628,10 @@ options are `--mode animation|replacement`, `--model-root`, `--width`,
 official 480p recipe: 896x512, 40 UniPC steps, guidance 5, shift 3, 16 fps,
 81-frame segments, and five clean-history overlap frames.
 
-`--preflight --json` validates the converted model root, input pairs, output,
-and execution plan without loading MLX or decoding video. The official
-checkpoint must first be converted with
-`scripts/model-conversion/convert_scail2.py`; runtime generation never launches
-Python or a ComfyUI process.
+`--preflight --json` validates the MLX model root, input pairs, output, and
+execution plan without loading MLX or decoding video. The converted checkpoint
+is distributed separately from the mere.run source repository; runtime
+generation is native Swift/MLX and never launches Python or ComfyUI.
 
 ### `mere.run video generate`
 

@@ -454,7 +454,7 @@ final class SCAIL2ParityTests: MereRunCoreTestCase {
         let path = ProcessInfo.processInfo.environment["MERERUN_TEST_SCAIL2_TRACE"] ?? ""
         try XCTSkipIf(
             path.isEmpty || !FileManager.default.fileExists(atPath: path),
-            "Set MERERUN_TEST_SCAIL2_TRACE to export_scail2_trace.py output."
+            "Set MERERUN_TEST_SCAIL2_TRACE to a validated reference trace."
         )
         return try MLX.loadArrays(url: URL(fileURLWithPath: path))
     }

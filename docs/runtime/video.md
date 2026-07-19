@@ -20,29 +20,16 @@ This page covers the native video-generation path exposed through `mere.run vide
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
-- `video-scail2-14b-mlx`: local converted SCAIL-2 14B bundle for reference- and
-  mask-conditioned subject animation/replacement with long-video clean history.
+- `video-scail2-14b-mlx`: separately published MIT-licensed SCAIL-2 14B MLX
+  bundle for reference- and mask-conditioned subject animation/replacement with
+  long-video clean history.
 
 ## Typical workflows
 
 ### SCAIL-2 subject animation and replacement
 
-Convert the pinned official snapshot once (conversion needs roughly 77 GiB of
-source data plus output staging space):
-
-```bash
-huggingface-cli download zai-org/SCAIL-2 \
-  --revision 150cc0ca4e98e50e60b9295dacde39442fdccab2 \
-  --local-dir /path/to/SCAIL-2
-git clone --branch wan-scail2 https://github.com/zai-org/SCAIL-2.git /path/to/SCAIL-2-code
-git -C /path/to/SCAIL-2-code checkout 5cfe1b8daac8bcb22ee19794e6c04f1bf5de6ac5
-python3 scripts/model-conversion/convert_scail2.py \
-  --source-root /path/to/SCAIL-2 \
-  --code-root /path/to/SCAIL-2-code \
-  --output-root /path/to/video-scail2-14b-mlx
-```
-
-Then preflight and render natively:
+Install the separately released Sawfwair MLX bundle at the managed model path
+or pass its directory with `--model-root`. Then preflight and render natively:
 
 ```bash
 swift run mere.run video animate \

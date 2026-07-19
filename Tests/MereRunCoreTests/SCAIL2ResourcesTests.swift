@@ -27,9 +27,9 @@ final class SCAIL2ResourcesTests: XCTestCase {
             resources.clipURL,
             resources.tokenizerURL,
             resources.vaeURL,
-            resources.sourceLicenseURL,
-            resources.sourceReadmeURL,
-            resources.provenanceURL,
+            resources.licenseURL,
+            resources.readmeURL,
+            resources.conversionReceiptURL,
         ]
         for file in files {
             try Data().write(to: file)

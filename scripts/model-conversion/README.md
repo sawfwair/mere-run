@@ -45,33 +45,6 @@ the byte count and SHA-256 of every emitted weights, configuration, provenance,
 and license file before publishing the staged directory. Their `--license-file`
 argument is mandatory and accepts only the exact pinned upstream license bytes.
 
-## SCAIL-2 14B
-
-`convert_scail2.py` converts only the official `zai-org/SCAIL-2` snapshot at
-model revision `150cc0ca4e98e50e60b9295dacde39442fdccab2`, using the upstream
-SAT key converter from code revision
-`5cfe1b8daac8bcb22ee19794e6c04f1bf5de6ac5`. It memory-maps the 65 GB
-transformer checkpoint and writes bounded safetensors shards instead of
-materializing a second full state dictionary. Before deserialization it checks
-the exact byte count and SHA-256 of the transformer, UMT5, OpenCLIP, VAE,
-tokenizer, model card, upstream converter, and source license; duplicate mapped
-keys fail conversion. Transformer matmuls use BF16, while the timestep
-embedding/projection, adaptive modulation, and output head remain FP32 to match
-the explicit autocast-disabled islands in the upstream forward.
-
-```bash
-python3 scripts/model-conversion/convert_scail2.py \
-  --source-root /path/to/pinned-huggingface-snapshot \
-  --code-root /path/to/pinned-wan-scail2-checkout \
-  --output-root /path/to/video-scail2-14b-mlx
-```
-
-The output contains native transformer, UMT5, OpenCLIP visual, and Wan 2.1 VAE
-weights plus `config.json`, `tokenizer.json`, the managed
-`mererun_model.json` manifest, pinned provenance, and retained upstream
-documentation/license files. Python and PyTorch are conversion tools only;
-`mere.run video animate` is native Swift/MLX.
-
 ## DreamX-World 5B camera adapter
 
 `extract_dreamx_camera_adapter.py` reads safetensors headers and downloads only

@@ -1259,7 +1259,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
     }
 
-    func testSCAIL2SpecIsPinnedLocalConversionOnly() throws {
+    func testSCAIL2SpecRemainsLocalUntilSawfwairReleaseIsPinned() throws {
         let id = ModelResolver.ModelID.scail2Video14BMLX.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
 
@@ -1270,7 +1270,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertNil(spec.hubFallback)
         XCTAssertFalse(spec.canBePulledWithoutConfiguration)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 82_456_800_394)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 46_648_000_000)
         XCTAssertEqual(spec.defaultCLICommands, ["video animate"])
 
         let manifest = MereRunModelManifest.template(
