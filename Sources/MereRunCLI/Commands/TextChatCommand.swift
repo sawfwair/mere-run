@@ -174,9 +174,31 @@ struct TextChat: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Suppress progress output.")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the chat request without loading or downloading a model.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
+    @Flag(name: [.customLong("require-installed")], help: "Require an installed model and never download implicitly.")
+    var requireInstalled: Bool = false
+
     func run() async throws {
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         try Self.validate(responseFormat: responseFormat, modelID: normalizedModelId)
+        let installedModelPath = resolvedInstalledModelPath(modelID: normalizedModelId)
+        if preflight {
+            try emitPreflight(modelID: normalizedModelId, installedModelPath: installedModelPath)
+            return
+        }
+        if requireInstalled {
+            guard installedModelPath != nil else {
+                throw ValidationError(
+                    "Model '\(normalizedModelId)' is not installed. Run 'mere.run model pull \(normalizedModelId)' explicitly."
+                )
+            }
+        }
+        let runtimeModelRoot = requireInstalled ? installedModelPath : modelRoot
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let imageReference: String?
@@ -262,7 +284,7 @@ struct TextChat: AsyncParsableCommand {
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
             if normalizedModelId == Psi3ChatResources.defaultModelId {
                 let generator = Psi3ChatGenerator(modelId: Psi3ChatResources.defaultModelId)
-                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
             } else if Gemma4Resources.handles(modelSpec: normalizedModelId) {
                 let effectiveModelId = normalizedModelId.isEmpty ? Gemma4Resources.defaultModelId : normalizedModelId
                 let kvQuantization = try self.resolveGemma4KVCacheQuantization(for: effectiveModelId)
@@ -270,7 +292,7 @@ struct TextChat: AsyncParsableCommand {
                     modelId: effectiveModelId,
                     kvCacheQuantization: kvQuantization
                 )
-                let response = try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                let response = try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
                 lastGemma4MTPStats = await generator.mtpStats()
                 return response
             } else if ManagedModelCatalog.spec(for: normalizedModelId)?.validationKind == .codegenGGUF {
@@ -278,15 +300,15 @@ struct TextChat: AsyncParsableCommand {
                 // `text code` uses). On Linux CUDA this is the GB10-optimized
                 // llama.cpp runtime, which has fast quantized-MoE kernels MLX lacks.
                 let generator = CodeGenGenerator(modelId: normalizedModelId)
-                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
             } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
                 let effectiveModelId = normalizedModelId.isEmpty ? LFM2Resources.defaultModelId : normalizedModelId
                 let generator = LFM2Generator(modelId: effectiveModelId)
-                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
             } else {
                 let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
                 let generator = Q35Generator(modelId: effectiveModelId)
-                return try await generator.chat(req, modelPath: self.modelRoot, progressHandler: progressHandler)
+                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
             }
         }
 
@@ -410,6 +432,59 @@ struct TextChat: AsyncParsableCommand {
         }
     }
 
+    private func resolvedInstalledModelPath(modelID: String) -> String? {
+        if let modelRoot, !modelRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let url = URL(fileURLWithPath: modelRoot).standardizedFileURL
+            return FileManager.default.fileExists(atPath: url.path) ? url.path : nil
+        }
+        return ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
+    }
+
+    private func emitPreflight(modelID: String, installedModelPath: String?) throws {
+        var diagnostics: [PreflightDiagnostic] = []
+        if modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
+            diagnostics.append(.init(
+                id: "text_chat_model_unknown",
+                severity: .blocker,
+                title: "Unknown chat model",
+                message: "No managed model is cataloged as '\(modelID)'."
+            ))
+        }
+        if requireInstalled, installedModelPath == nil {
+            diagnostics.append(.init(
+                id: "text_chat_model_not_installed",
+                severity: .blocker,
+                title: "Chat model is not installed",
+                message: "Install '\(modelID)' explicitly before running this workflow node."
+            ))
+        }
+        if let image, !image.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !image.lowercased().hasPrefix("data:image/") {
+            let imageURL = URL(fileURLWithPath: image).standardizedFileURL
+            if !FileManager.default.fileExists(atPath: imageURL.path) {
+                diagnostics.append(.init(
+                    id: "text_chat_image_missing",
+                    severity: .blocker,
+                    title: "Chat image is missing",
+                    message: "Image file not found: \(imageURL.path)"
+                ))
+            }
+        }
+        let report = TextChatPreflightReport(
+            schemaVersion: 1,
+            status: StructuredRunOutput.status(for: diagnostics),
+            model: modelID,
+            installed: installedModelPath != nil,
+            modelPath: installedModelPath,
+            diagnostics: diagnostics
+        )
+        if json {
+            print(try StructuredRunOutput.encode(report))
+        } else {
+            print(report.summary)
+        }
+    }
+
     static func formatGemma4MTPStats(_ stats: Gemma4MTPStats) -> String {
         let state: String
         if stats.active {
@@ -522,6 +597,28 @@ struct TextChat: AsyncParsableCommand {
 
     private static func stdinIsInteractive() -> Bool {
         CLIStdin.isInteractive()
+    }
+}
+
+private struct TextChatPreflightReport: Codable, Equatable {
+    let schemaVersion: Int
+    let status: StructuredRunStatus
+    let model: String
+    let installed: Bool
+    let modelPath: String?
+    let diagnostics: [PreflightDiagnostic]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case status
+        case model
+        case installed
+        case modelPath = "model_path"
+        case diagnostics
+    }
+
+    var summary: String {
+        "\(status.rawValue): \(model) \(installed ? "is installed" : "is not installed")"
     }
 }
 

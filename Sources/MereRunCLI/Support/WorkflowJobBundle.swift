@@ -159,6 +159,8 @@ struct WorkflowJobManifest: Codable, Equatable, Sendable {
     let createdAt: Date
     let graphFingerprint: String
     let inputFingerprint: String
+    let sourceGraphFingerprint: String?
+    let sourceInputFingerprint: String?
     let requirements: WorkflowJobRequirements
     let outputs: [WorkflowJobOutput]
 
@@ -168,8 +170,32 @@ struct WorkflowJobManifest: Codable, Equatable, Sendable {
         case createdAt = "created_at"
         case graphFingerprint = "graph_fingerprint"
         case inputFingerprint = "input_fingerprint"
+        case sourceGraphFingerprint = "source_graph_fingerprint"
+        case sourceInputFingerprint = "source_input_fingerprint"
         case requirements
         case outputs
+    }
+
+    init(
+        contractVersion: String,
+        jobID: String,
+        createdAt: Date,
+        graphFingerprint: String,
+        inputFingerprint: String,
+        sourceGraphFingerprint: String? = nil,
+        sourceInputFingerprint: String? = nil,
+        requirements: WorkflowJobRequirements,
+        outputs: [WorkflowJobOutput]
+    ) {
+        self.contractVersion = contractVersion
+        self.jobID = jobID
+        self.createdAt = createdAt
+        self.graphFingerprint = graphFingerprint
+        self.inputFingerprint = inputFingerprint
+        self.sourceGraphFingerprint = sourceGraphFingerprint
+        self.sourceInputFingerprint = sourceInputFingerprint
+        self.requirements = requirements
+        self.outputs = outputs
     }
 }
 
@@ -374,6 +400,8 @@ struct WorkflowBundleMaterializer {
         }
         try prepareDestination()
 
+        let sourceGraphFingerprint = try WorkflowBundleCodec.hash(graph)
+        let sourceInputFingerprint = try WorkflowBundleCodec.hash(suppliedInputs)
         let resolvedInputs = resolveDefaults()
         let resolvedGraph = resolveSeeds()
         let assetsDirectory = destination
@@ -412,6 +440,8 @@ struct WorkflowBundleMaterializer {
             createdAt: now(),
             graphFingerprint: graphFingerprint,
             inputFingerprint: inputFingerprint,
+            sourceGraphFingerprint: sourceGraphFingerprint,
+            sourceInputFingerprint: sourceInputFingerprint,
             requirements: requirements(graph: portableGraph, resolvedInputs: resolvedInputs),
             outputs: portableGraph.outputs.keys.sorted().compactMap { name in
                 guard case .reference(let reference)? = portableGraph.outputs[name] else { return nil }
@@ -930,6 +960,8 @@ struct GraphRunManifest: Codable, Equatable, Sendable {
     let jobID: String
     let graphName: String
     let graphFingerprint: String
+    let sourceGraphFingerprint: String?
+    let sourceInputFingerprint: String?
     var state: GraphRunState
     let createdAt: Date
     var updatedAt: Date
@@ -944,6 +976,8 @@ struct GraphRunManifest: Codable, Equatable, Sendable {
         case jobID = "job_id"
         case graphName = "graph_name"
         case graphFingerprint = "graph_fingerprint"
+        case sourceGraphFingerprint = "source_graph_fingerprint"
+        case sourceInputFingerprint = "source_input_fingerprint"
         case state
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -952,6 +986,38 @@ struct GraphRunManifest: Codable, Equatable, Sendable {
         case nodes
         case outputs
         case error
+    }
+
+    init(
+        contractVersion: String,
+        jobID: String,
+        graphName: String,
+        graphFingerprint: String,
+        sourceGraphFingerprint: String? = nil,
+        sourceInputFingerprint: String? = nil,
+        state: GraphRunState,
+        createdAt: Date,
+        updatedAt: Date,
+        attempt: Int,
+        executor: GraphRunExecutorRecord,
+        nodes: [GraphRunNodeRecord],
+        outputs: [GraphRunArtifact],
+        error: String?
+    ) {
+        self.contractVersion = contractVersion
+        self.jobID = jobID
+        self.graphName = graphName
+        self.graphFingerprint = graphFingerprint
+        self.sourceGraphFingerprint = sourceGraphFingerprint
+        self.sourceInputFingerprint = sourceInputFingerprint
+        self.state = state
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.attempt = attempt
+        self.executor = executor
+        self.nodes = nodes
+        self.outputs = outputs
+        self.error = error
     }
 }
 
@@ -1079,6 +1145,107 @@ struct WorkflowNodeInvocation: Equatable {
     let runArguments: [String]
     let outputs: [String: WorkflowInvocationOutput]
     let streamsEvents: Bool
+    let intrinsic: WorkflowIntrinsicInvocation?
+    let stdoutOutputName: String?
+
+    init(
+        command: [String],
+        executable: URL,
+        preflightArguments: [String],
+        runArguments: [String],
+        outputs: [String: WorkflowInvocationOutput],
+        streamsEvents: Bool,
+        intrinsic: WorkflowIntrinsicInvocation? = nil,
+        stdoutOutputName: String? = nil
+    ) {
+        self.command = command
+        self.executable = executable
+        self.preflightArguments = preflightArguments
+        self.runArguments = runArguments
+        self.outputs = outputs
+        self.streamsEvents = streamsEvents
+        self.intrinsic = intrinsic
+        self.stdoutOutputName = stdoutOutputName
+    }
+}
+
+struct WorkflowIntrinsicInvocation: Equatable {
+    let kind: String
+    let arguments: [String: WorkflowValue]
+
+    func evaluate() throws -> [String: WorkflowValue] {
+        switch kind {
+        case "text.value":
+            return ["text": try required("value")]
+        case "integer.value", "number.value", "boolean.value", "json.value":
+            return ["value": try required("value")]
+        case "seed.value":
+            return ["seed": try required("seed")]
+        case "choice.value":
+            guard case .array(let options) = try required("options"),
+                  options.allSatisfy({ $0.stringValue != nil }),
+                  case .string(let selected) = try required("selected") else {
+                throw ValidationError("choice.value requires string options and a selected string.")
+            }
+            guard options.contains(.string(selected)) else {
+                throw ValidationError("choice.value selected value must appear in options.")
+            }
+            return ["value": .string(selected)]
+        case "text.join":
+            guard case .array(let parts) = try required("parts"),
+                  parts.allSatisfy({ $0.stringValue != nil }) else {
+                throw ValidationError("text.join parts must resolve to an array of strings.")
+            }
+            let separator = arguments["separator"]?.stringValue ?? "\n"
+            return ["text": .string(parts.compactMap(\.stringValue).joined(separator: separator))]
+        case "text.template":
+            guard case .string(let template) = try required("template"),
+                  case .object(let variables) = try required("variables"),
+                  variables.values.allSatisfy({ $0.stringValue != nil }) else {
+                throw ValidationError("text.template requires a string template and string variables.")
+            }
+            return ["text": .string(try renderTemplate(template, variables: variables))]
+        default:
+            throw ValidationError("Unsupported intrinsic workflow node kind '\(kind)'.")
+        }
+    }
+
+    private func required(_ name: String) throws -> WorkflowValue {
+        guard let value = arguments[name], value != .null else {
+            throw ValidationError("\(kind) requires argument '\(name)'.")
+        }
+        return value
+    }
+
+    private func renderTemplate(
+        _ template: String,
+        variables: [String: WorkflowValue]
+    ) throws -> String {
+        let expression = try NSRegularExpression(pattern: #"(?<!\\)\{\{([^{}]+)\}\}"#)
+        let source = template as NSString
+        let matches = expression.matches(
+            in: template,
+            range: NSRange(location: 0, length: source.length)
+        )
+        var rendered = template
+        for match in matches.reversed() {
+            let name = source.substring(with: match.range(at: 1))
+            guard name.range(
+                of: "^[a-z][a-z0-9_]{0,63}$",
+                options: .regularExpression
+            ) != nil else {
+                throw ValidationError("text.template placeholder '{{\(name)}}' is invalid.")
+            }
+            guard let replacement = variables[name]?.stringValue else {
+                throw ValidationError("text.template is missing variable '\(name)'.")
+            }
+            guard let range = Range(match.range, in: rendered) else {
+                throw ValidationError("text.template could not resolve placeholder '\(name)'.")
+            }
+            rendered.replaceSubrange(range, with: replacement)
+        }
+        return rendered.replacingOccurrences(of: #"\{{"#, with: "{{")
+    }
 }
 
 enum WorkflowNodeCommandBuilder {
@@ -1098,6 +1265,69 @@ enum WorkflowNodeCommandBuilder {
         }
         let artifacts = nodeDirectory.appendingPathComponent("artifacts", isDirectory: true)
         switch node.kind {
+        case "text.value", "integer.value", "number.value", "boolean.value",
+             "json.value", "seed.value", "choice.value", "text.join", "text.template":
+            guard let entry = WorkflowNodeRegistry.entry(for: node) else {
+                throw ValidationError("Unsupported workflow node kind '\(node.kind)'.")
+            }
+            return .init(
+                command: ["intrinsic", node.kind],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: [],
+                outputs: Dictionary(uniqueKeysWithValues: entry.outputs.map { output in
+                    (
+                        output.name,
+                        WorkflowInvocationOutput(
+                            type: output.type,
+                            path: nil,
+                            optional: output.optional,
+                            contentTypes: output.contentTypes
+                        )
+                    )
+                }),
+                streamsEvents: false,
+                intrinsic: WorkflowIntrinsicInvocation(kind: node.kind, arguments: arguments)
+            )
+        case "text.enhance":
+            let instruction = try requiredString("instruction", in: arguments)
+            let text = try requiredString("text", in: arguments)
+            var args = [
+                "text", "chat",
+                "--prompt", "\(instruction)\n\nText:\n\(text)",
+                "--model", try requiredString("model", in: arguments),
+            ]
+            appendInteger("max_tokens", flag: "--max-tokens", from: arguments, to: &args)
+            appendNumber("temperature", flag: "--temperature", from: arguments, to: &args)
+            args += ["--no-thinking", "--require-installed", "--quiet"]
+            return .init(
+                command: ["text", "chat"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: args + ["--preflight", "--json"],
+                runArguments: args,
+                outputs: ["text": valueOutput(.string)],
+                streamsEvents: false,
+                stdoutOutputName: "text"
+            )
+        case "image.describe":
+            var args = [
+                "text", "chat",
+                "--prompt", try requiredString("instruction", in: arguments),
+                "--image", try requiredString("image", in: arguments),
+                "--model", try requiredString("model", in: arguments),
+            ]
+            appendInteger("max_tokens", flag: "--max-tokens", from: arguments, to: &args)
+            appendNumber("temperature", flag: "--temperature", from: arguments, to: &args)
+            args += ["--no-thinking", "--require-installed", "--quiet"]
+            return .init(
+                command: ["text", "chat"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: args + ["--preflight", "--json"],
+                runArguments: args,
+                outputs: ["text": valueOutput(.string)],
+                streamsEvents: false,
+                stdoutOutputName: "text"
+            )
         case "image.train-lora":
             let output = artifacts.appendingPathComponent("adapter.safetensors")
             var args = ["image", "train-lora", "--data", try requiredString("data", in: arguments), "--output", output.path]
@@ -1236,6 +1466,15 @@ enum WorkflowNodeCommandBuilder {
             path: url.path,
             optional: false,
             contentTypes: contentTypes
+        )
+    }
+
+    private static func valueOutput(_ type: WorkflowPortType) -> WorkflowInvocationOutput {
+        WorkflowInvocationOutput(
+            type: type,
+            path: nil,
+            optional: false,
+            contentTypes: []
         )
     }
 
