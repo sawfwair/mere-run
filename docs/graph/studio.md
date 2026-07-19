@@ -48,17 +48,44 @@ It is designed for:
 - macOS, Windows, and Linux native installation;
 - local file and directory inputs;
 - local, SSH, and Relay execution;
-- offline or loopback-only authoring;
+- offline authoring and local execution;
 - native project and run workspaces.
 
 Desktop Studio requires a compatible `mere.run` executable for local execution.
 Optional workflow tools add templates, programs, and conservative ComfyUI
 prompt import; core graph authoring remains available without them.
 
+The desktop product has one native backend: the frontend invokes Rust through
+Tauri IPC, and Rust invokes the installed CLI. It does not ship a Python
+runtime, browser compatibility server, or loopback HTTP API.
+
 Native packaging is implemented for each platform. Public installer links are
 published from [studio.mere.run](https://studio.mere.run/) only after the
 matching platform artifact has passed its signing and package-verification
 gate; the hosted app remains available without a desktop install.
+
+## Authentication boundary
+
+Local Studio never requires Mere World sign-in. Launch, authoring, project
+save and load, catalog discovery, validation, preflight, and local execution
+remain available without an account or network connection when the required
+CLI and model assets are already installed.
+
+Identity is introduced only when Studio crosses an account or fleet boundary:
+
+| Surface | Authentication |
+| --- | --- |
+| Desktop local | None. Tauri IPC stays on the machine. |
+| Desktop SSH | The configured SSH credentials for that target. |
+| Desktop Relay | Relay credentials, requested only after Relay is selected. |
+| Hosted Studio | Mere World OAuth Authorization Code with PKCE. |
+| Mere Node joining Relay | OAuth device grant completed by the operator at `mere.world/device`. |
+
+The Node device flow does not open a browser callback or local web server. The
+Node requests a device code, shows the verification URL and user code, polls
+Relay for completion, stores the resulting rotating credentials in its
+platform configuration directory, and authenticates its Relay WebSocket with
+a bearer token. Desktop local mode does none of this.
 
 ## The project model
 
@@ -99,4 +126,6 @@ node is rejected during authoring or preflight instead of failing after queueing
 
 The `mere.run` repository keeps its CLI and documentation synchronized through
 `DocumentationContractTests`. Graph Studio, Relay, and Node maintain shared
-contract fixtures and run their own local gates before release.
+contract fixtures and run their own local gates before release. Studio's gate
+also rejects a returning Python host, browser proxy, or authentication
+dependency in the native runtime.

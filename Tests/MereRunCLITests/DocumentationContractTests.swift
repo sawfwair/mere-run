@@ -162,6 +162,11 @@ final class DocumentationContractTests: XCTestCase {
         XCTAssertTrue(studio.contains("https://studio.mere.run/"))
         XCTAssertTrue(workflows.contains("Graph v2 runtime and v1 contract"))
         XCTAssertTrue(studio.contains("Do not change a workflow to `schema_version: 2`"))
+        XCTAssertTrue(studio.contains("Local Studio never requires Mere World sign-in"))
+        XCTAssertTrue(studio.contains("Mere World OAuth Authorization Code with PKCE"))
+        XCTAssertTrue(studio.contains("OAuth device grant"))
+        XCTAssertTrue(studio.contains("does not open a browser callback or local web server"))
+        XCTAssertTrue(studio.contains("does not ship a Python"))
     }
 
     private func commandTree() -> [CommandNode] {
