@@ -84,6 +84,8 @@ enum AppleMediaVideoIO {
         frameCount: Int,
         fps: Int,
         to outputURL: URL,
+        fileType: AVFileType = .mp4,
+        codec: AVVideoCodecType = .h264,
         fillFrame: (_ frameIndex: Int, _ destination: UnsafeMutablePointer<UInt8>, _ bytesPerRow: Int) throws -> Void
     ) throws {
         guard width > 0, height > 0, frameCount > 0 else {
@@ -97,20 +99,27 @@ enum AppleMediaVideoIO {
         )
         try? FileManager.default.removeItem(at: outputURL)
 
-        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
-            throw MediaIOError.videoOperationFailed("Could not create MP4 writer for \(outputURL.path).")
+        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: fileType) else {
+            throw MediaIOError.videoOperationFailed("Could not create video writer for \(outputURL.path).")
         }
-        let settings: AppleVideoSettings = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
+        var settings: AppleVideoSettings = [
+            AVVideoCodecKey: codec,
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
-            AVVideoCompressionPropertiesKey: [
+        ]
+        var compressionProperties: AppleVideoSettings = [
+            AVVideoExpectedSourceFrameRateKey: integerFPS,
+        ]
+        if codec == .h264 {
+            compressionProperties.merge([
                 AVVideoAverageBitRateKey: max(1_000_000, width * height * integerFPS * 4),
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-            ],
-        ]
+            ]) { _, new in new }
+        }
+        settings[AVVideoCompressionPropertiesKey] = compressionProperties
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         input.expectsMediaDataInRealTime = false
+        input.mediaTimeScale = frameRate.timeScale
         guard writer.canAdd(input) else {
             throw MediaIOError.videoOperationFailed("AVAssetWriter rejected video input settings.")
         }
@@ -312,6 +321,39 @@ enum AppleMediaVideoIO {
             fps: Int(frameRate.timeScale),
             to: outputURL
         )
+    }
+
+    static func writePaletteVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
+        let frameRate = try MediaVideoFrameRateResolver.resolve(fps, fallbackFPS: 1)
+        guard let firstURL = frameURLs.first else {
+            throw MediaIOError.videoOperationFailed("No frames supplied for palette video writing.")
+        }
+        let firstImage = try MediaImageIO.decode(firstURL)
+        try writeMP4(
+            width: firstImage.width,
+            height: firstImage.height,
+            frameCount: frameURLs.count,
+            fps: Int(frameRate.timeScale),
+            to: outputURL,
+            fileType: .mov,
+            codec: .proRes4444
+        ) { frameIndex, destination, bytesPerRow in
+            let image = try MediaImageIO.decode(frameURLs[frameIndex])
+            guard image.width == firstImage.width, image.height == firstImage.height else {
+                throw MediaIOError.videoOperationFailed("Palette frame dimensions do not match.")
+            }
+            for y in 0..<image.height {
+                let destinationRow = destination.advanced(by: y * bytesPerRow)
+                for x in 0..<image.width {
+                    let source = ((y * image.width) + x) * 4
+                    let target = x * 4
+                    destinationRow[target] = image.rgba8[source + 2]
+                    destinationRow[target + 1] = image.rgba8[source + 1]
+                    destinationRow[target + 2] = image.rgba8[source]
+                    destinationRow[target + 3] = 255
+                }
+            }
+        }
     }
 
     static func hasAudioTrack(_ url: URL) -> Bool {

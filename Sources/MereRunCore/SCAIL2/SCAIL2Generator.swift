@@ -15,6 +15,9 @@ public enum SCAIL2GenerationError: LocalizedError, Sendable {
     case mismatchedDrivingFrames(video: Int, mask: Int)
     case noUsableSegment(frameCount: Int, segmentLength: Int)
     case missingModelFiles([URL])
+    case invalidReferenceCount(Int)
+    case invalidReferenceMask(URL, colors: [SCAIL2SubjectColor])
+    case duplicateReferenceColor(SCAIL2SubjectColor)
 
     public var errorDescription: String? {
         switch self {
@@ -40,6 +43,12 @@ public enum SCAIL2GenerationError: LocalizedError, Sendable {
             return "SCAIL-2 could not form a complete \(segmentLength)-frame segment from \(frameCount) driving frames."
         case .missingModelFiles(let urls):
             return "SCAIL-2 model root is missing: \(urls.map(\.lastPathComponent).joined(separator: ", "))."
+        case .invalidReferenceCount(let count):
+            return "SCAIL-2 requires one to six reference subjects; received \(count)."
+        case .invalidReferenceMask(let url, let colors):
+            return "SCAIL-2 reference mask \(url.path) must contain exactly one non-background palette color; found \(colors.map(\.rawValue).sorted())."
+        case .duplicateReferenceColor(let color):
+            return "SCAIL-2 reference masks must use unique palette colors; duplicate: \(color.rawValue)."
         }
     }
 }
@@ -52,6 +61,11 @@ public struct SCAIL2ReferenceInput: Hashable, Sendable {
         self.imageURL = imageURL
         self.maskURL = maskURL
     }
+}
+
+public enum SCAIL2TailPolicy: String, Codable, CaseIterable, Hashable, Sendable {
+    case drop
+    case padTrim = "pad-trim"
 }
 
 public struct SCAIL2GenerationOptions: Hashable, Sendable {
@@ -72,6 +86,7 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
     public let fps: Int
     public let segmentLength: Int
     public let segmentOverlap: Int
+    public let tailPolicy: SCAIL2TailPolicy
 
     public init(
         prompt: String,
@@ -90,7 +105,8 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
         seed: UInt64 = 42,
         fps: Int = 16,
         segmentLength: Int = 81,
-        segmentOverlap: Int = 5
+        segmentOverlap: Int = 5,
+        tailPolicy: SCAIL2TailPolicy = .drop
     ) throws {
         guard width > 0, height > 0, width.isMultiple(of: 32), height.isMultiple(of: 32) else {
             throw SCAIL2GenerationError.invalidResolution(width: width, height: height)
@@ -123,6 +139,7 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
         self.fps = fps
         self.segmentLength = segmentLength
         self.segmentOverlap = segmentOverlap
+        self.tailPolicy = tailPolicy
     }
 }
 
@@ -158,6 +175,19 @@ public enum SCAIL2SegmentBuilder {
         }
         return result
     }
+
+    public static func paddedFrameCount(
+        frameCount: Int,
+        segmentLength: Int,
+        segmentOverlap: Int
+    ) -> Int {
+        guard frameCount > 0 else { return 0 }
+        guard frameCount > segmentLength else { return segmentLength }
+        let stride = segmentLength - segmentOverlap
+        let remainder = frameCount - segmentLength
+        let additionalSegments = (remainder + stride - 1) / stride
+        return segmentLength + additionalSegments * stride
+    }
 }
 
 public final class SCAIL2Generator: @unchecked Sendable {
@@ -187,10 +217,25 @@ public final class SCAIL2Generator: @unchecked Sendable {
             requestedWidth: options.width,
             requestedHeight: options.height
         )
-        let referenceMaskImage = try decodeImage(options.reference.maskURL)
+        let referenceMaskImage = try Self.normalizedMaskForMode(
+            try validatedReferenceMask(options.reference.maskURL),
+            mode: options.mode,
+            role: .mainReference
+        )
         let additionalImages = try options.additionalReferences.map {
-            (try decodeImage($0.imageURL), try decodeImage($0.maskURL))
+            (
+                try decodeImage($0.imageURL),
+                try Self.normalizedMaskForMode(
+                    try validatedReferenceMask($0.maskURL),
+                    mode: options.mode,
+                    role: .additionalSubjectReference
+                )
+            )
         }
+        try validateReferenceColors(
+            [referenceMaskImage] + additionalImages.map(\.1),
+            urls: [options.reference.maskURL] + options.additionalReferences.map(\.maskURL)
+        )
 
         let temporaryRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("mererun-scail2-\(UUID().uuidString)", isDirectory: true)
@@ -214,8 +259,27 @@ public final class SCAIL2Generator: @unchecked Sendable {
                 mask: maskSequence.frameURLs.count
             )
         }
+        let originalFrameCount = drivingSequence.frameURLs.count
+        let drivingFrameURLs: [URL]
+        let maskFrameURLs: [URL]
+        if options.tailPolicy == .padTrim,
+           let lastDriving = drivingSequence.frameURLs.last,
+           let lastMask = maskSequence.frameURLs.last {
+            let paddedCount = SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: originalFrameCount,
+                segmentLength: options.segmentLength,
+                segmentOverlap: options.segmentOverlap
+            )
+            drivingFrameURLs = drivingSequence.frameURLs
+                + [URL](repeating: lastDriving, count: paddedCount - originalFrameCount)
+            maskFrameURLs = maskSequence.frameURLs
+                + [URL](repeating: lastMask, count: paddedCount - originalFrameCount)
+        } else {
+            drivingFrameURLs = drivingSequence.frameURLs
+            maskFrameURLs = maskSequence.frameURLs
+        }
         let segments = SCAIL2SegmentBuilder.build(
-            frameCount: drivingSequence.frameURLs.count,
+            frameCount: drivingFrameURLs.count,
             segmentLength: options.segmentLength,
             segmentOverlap: options.segmentOverlap
         )
@@ -283,8 +347,10 @@ public final class SCAIL2Generator: @unchecked Sendable {
         drivingSegments.reserveCapacity(segments.count)
         for range in segments {
             try Task.checkCancellation()
-            let drivingImages = try decodeImages(drivingSequence.frameURLs[range])
-            let maskImages = try decodeImages(maskSequence.frameURLs[range])
+            let drivingImages = try decodeImages(drivingFrameURLs[range])
+            let maskImages = try decodeMaskImages(maskFrameURLs[range]).map {
+                try Self.normalizedMaskForMode($0, mode: options.mode, role: .driving)
+            }
             let drivingPixels = SCAIL2InputPreprocessor.centerCroppedTensor(
                 images: drivingImages,
                 width: dimensions.width,
@@ -406,7 +472,10 @@ public final class SCAIL2Generator: @unchecked Sendable {
             Memory.clearCache()
         }
 
-        let pixels = MLX.concatenated(outputSegments, axis: 1)
+        let combinedPixels = MLX.concatenated(outputSegments, axis: 1)
+        let pixels = options.tailPolicy == .padTrim && combinedPixels.dim(1) > originalFrameCount
+            ? combinedPixels[0..., 0..<originalFrameCount, 0..., 0..., 0...]
+            : combinedPixels
         let frames = MLX.clip((pixels + 1) * 127.5, min: 0, max: 255).asType(.uint8)
         eval(frames)
         progressHandler?(GenerationProgress(stage: .saving, stepIndex: options.steps, totalSteps: options.steps))
@@ -456,7 +525,30 @@ public final class SCAIL2Generator: @unchecked Sendable {
         ]
     }
 
+    static func normalizedMaskForMode(
+        _ image: MediaImage,
+        mode: SCAIL2Mode,
+        role: SCAIL2MaskRole
+    ) throws -> MediaImage {
+        var rgba = image.rgba8
+        let background = role.background(mode: mode)
+        for pixelIndex in 0..<(image.width * image.height) {
+            let offset = pixelIndex * 4
+            let rgb = (rgba[offset], rgba[offset + 1], rgba[offset + 2])
+            guard rgb == (255, 255, 255) || rgb == (0, 0, 0) else { continue }
+            rgba[offset] = background.0
+            rgba[offset + 1] = background.1
+            rgba[offset + 2] = background.2
+            rgba[offset + 3] = background.3
+        }
+        return try MediaImage(width: image.width, height: image.height, rgba8: rgba)
+    }
+
     private func validateInputs(_ options: SCAIL2GenerationOptions) throws {
+        let referenceCount = 1 + options.additionalReferences.count
+        guard (1...6).contains(referenceCount) else {
+            throw SCAIL2GenerationError.invalidReferenceCount(referenceCount)
+        }
         let urls = [
             options.reference.imageURL,
             options.reference.maskURL,
@@ -478,6 +570,52 @@ public final class SCAIL2Generator: @unchecked Sendable {
 
     private func decodeImages(_ urls: ArraySlice<URL>) throws -> [MediaImage] {
         try urls.map(decodeImage)
+    }
+
+    private func decodeMaskImages(_ urls: ArraySlice<URL>) throws -> [MediaImage] {
+        try urls.map {
+            try SCAIL2Palette.snapped(
+                try decodeImage($0),
+                tolerance: SCAIL2Palette.codecTolerance
+            )
+        }
+    }
+
+    private func validatedReferenceMask(_ url: URL) throws -> MediaImage {
+        let image = try decodeImage(url)
+        let colors = try SCAIL2Palette.subjectColors(
+            in: image,
+            tolerance: SCAIL2Palette.codecTolerance
+        )
+        guard colors.count == 1 else {
+            throw SCAIL2GenerationError.invalidReferenceMask(
+                url,
+                colors: colors.sorted { $0.rawValue < $1.rawValue }
+            )
+        }
+        return try SCAIL2Palette.snapped(
+            image,
+            tolerance: SCAIL2Palette.codecTolerance
+        )
+    }
+
+    private func validateReferenceColors(
+        _ images: [MediaImage],
+        urls: [URL]
+    ) throws {
+        var colors = Set<SCAIL2SubjectColor>()
+        for (image, url) in zip(images, urls) {
+            let maskColors = try SCAIL2Palette.subjectColors(in: image, tolerance: 0)
+            guard let color = maskColors.first, maskColors.count == 1 else {
+                throw SCAIL2GenerationError.invalidReferenceMask(
+                    url,
+                    colors: maskColors.sorted { $0.rawValue < $1.rawValue }
+                )
+            }
+            guard colors.insert(color).inserted else {
+                throw SCAIL2GenerationError.duplicateReferenceColor(color)
+            }
+        }
     }
 
     private func encodeText(

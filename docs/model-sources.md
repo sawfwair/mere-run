@@ -716,15 +716,21 @@ The native SCAIL-2 model root is:
 .../models/video-scail2-14b-mlx
 ```
 
-The planned Sawfwair release package contains sharded BF16 transformer
+The pinned `Sawfwair/SCAIL-2-14B-MLX` release package contains sharded BF16 transformer
 and UMT5 weights, FP16 OpenCLIP weights, the Wan 2.1 VAE, tokenizer,
 configuration, MIT license, model card, and a conversion receipt with immutable
 source and artifact hashes. The package is approximately 43 GiB.
 
 The mere.run repository contains only the native Swift/MLX runtime. It does not
 ship a checkpoint converter or an upstream Python reference implementation.
-Until the Sawfwair snapshot is published and pinned, supply the prepared model
-root with `--model-root`.
+Install the immutable managed snapshot with:
+
+```bash
+mere.run model pull video-scail2-14b-mlx
+```
+
+An explicitly prepared compatible root can still be supplied with
+`--model-root`.
 
 ### `video-dreamx-world-5b-ar-mlx`
 

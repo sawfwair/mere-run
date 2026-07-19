@@ -19,6 +19,33 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
         )
     }
 
+    func testPadTrimFrameCountCompletesFinalWindow() {
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 1,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            81
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 82,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            157
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 157,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            157
+        )
+    }
+
     func testCleanHistoryReplacesOnlyLatentPrefix() {
         let latent = MLXArray(Array(0..<8).map(Float.init), [1, 4, 1, 2])
         let history = MLX.full([1, 2, 1, 2], values: MLXArray(Float(99)))
@@ -93,5 +120,78 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
         XCTAssertEqual(output[3], 4.5, accuracy: 1e-6)
         XCTAssertEqual(output[6], 10.5, accuracy: 1e-6)
         XCTAssertEqual(output[9], 12.5, accuracy: 1e-6)
+    }
+
+    func testMaskBackgroundMatchesOfficialModeAndRoleSemantics() throws {
+        let mask = try MediaImage(
+            width: 3,
+            height: 1,
+            rgba8: [
+                255, 255, 255, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .animation,
+                role: .mainReference
+            ).rgba8,
+            [
+                255, 255, 255, 255,
+                255, 255, 255, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .animation,
+                role: .driving
+            ).rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .replacement,
+                role: .mainReference
+            ).rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .replacement,
+                role: .driving
+            ).rgba8,
+            [
+                255, 255, 255, 255,
+                255, 255, 255, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .animation,
+                role: .additionalSubjectReference
+            ).rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
     }
 }

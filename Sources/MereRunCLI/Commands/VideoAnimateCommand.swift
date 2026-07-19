@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MediaIO
 import MereRunCore
 
 enum SCAIL2CLIMode: String, CaseIterable, ExpressibleByArgument {
@@ -12,6 +13,23 @@ enum SCAIL2CLIMode: String, CaseIterable, ExpressibleByArgument {
         case .replacement: .replacement
         }
     }
+}
+
+enum SCAIL2CLITailPolicy: String, CaseIterable, ExpressibleByArgument {
+    case drop
+    case padTrim = "pad-trim"
+
+    var runtimePolicy: SCAIL2TailPolicy {
+        switch self {
+        case .drop: .drop
+        case .padTrim: .padTrim
+        }
+    }
+}
+
+enum SCAIL2CLIAudioSource: String, CaseIterable, ExpressibleByArgument {
+    case none
+    case driving
 }
 
 struct SCAIL2AnimationPreflightReport: Codable, Equatable {
@@ -32,6 +50,8 @@ struct SCAIL2AnimationPreflightReport: Codable, Equatable {
     let segmentLength: Int
     let segmentOverlap: Int
     let additionalReferenceCount: Int
+    let tailPolicy: String
+    let audioSource: String
 
     enum CodingKeys: String, CodingKey {
         case status
@@ -51,6 +71,8 @@ struct SCAIL2AnimationPreflightReport: Codable, Equatable {
         case segmentLength = "segment_length"
         case segmentOverlap = "segment_overlap"
         case additionalReferenceCount = "additional_reference_count"
+        case tailPolicy = "tail_policy"
+        case audioSource = "audio_source"
     }
 }
 
@@ -132,6 +154,12 @@ struct VideoAnimate: AsyncParsableCommand {
     @Option(name: [.customLong("segment-overlap")], help: "Clean-history overlap in pixel frames; must equal 1 modulo 4.")
     var segmentOverlap: Int = 5
 
+    @Option(name: [.customLong("tail-policy")], help: "Incomplete final-window behavior: drop or pad-trim.")
+    var tailPolicy: SCAIL2CLITailPolicy = .drop
+
+    @Option(name: [.customLong("audio-source")], help: "Output audio source: none or driving.")
+    var audioSource: SCAIL2CLIAudioSource = .none
+
     @Option(name: [.customLong("negative-prompt")], help: "Optional negative prompt.")
     var negativePrompt: String = ""
 
@@ -160,7 +188,11 @@ struct VideoAnimate: AsyncParsableCommand {
             defaultExtension: "mp4"
         )
         let runtimeRoot = try await resolveModelRoot(forPreflight: preflight)
-        let options = try makeOptions(prompt: trimmedPrompt, outputURL: outputURL)
+        let generatedVideoURL = audioSource == .driving && !preflight
+            ? outputURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(outputURL.deletingPathExtension().lastPathComponent)-\(UUID().uuidString).mp4")
+            : outputURL
+        let options = try makeOptions(prompt: trimmedPrompt, outputURL: generatedVideoURL)
 
         if preflight {
             let report = makePreflightReport(options: options, modelRootURL: runtimeRoot)
@@ -206,11 +238,28 @@ struct VideoAnimate: AsyncParsableCommand {
                 }
             }
         )
+        if generatedVideoURL != outputURL {
+            defer { try? FileManager.default.removeItem(at: generatedVideoURL) }
+            let drivingURL = URL(fileURLWithPath: drivingVideo).standardizedFileURL
+            if MediaVideoIO.hasAudioTrack(drivingURL) {
+                try MediaVideoIO.mux(
+                    videoURL: generatedVideoURL,
+                    audioURL: drivingURL,
+                    outputURL: outputURL,
+                    audioBitRate: 192_000
+                )
+            } else {
+                if FileManager.default.fileExists(atPath: outputURL.path) {
+                    try FileManager.default.removeItem(at: outputURL)
+                }
+                try FileManager.default.moveItem(at: generatedVideoURL, to: outputURL)
+            }
+        }
         if !quiet {
             CLIStderr.write("Frames: \(result.frameCount), segments: \(result.segmentCount)\n")
-            CLIStderr.write("Saved: \(result.outputURL.path)\n")
+            CLIStderr.write("Saved: \(outputURL.path)\n")
         }
-        print(result.outputURL.path)
+        print(outputURL.path)
     }
 
     func makeOptions(prompt: String, outputURL: URL) throws -> SCAIL2GenerationOptions {
@@ -239,7 +288,8 @@ struct VideoAnimate: AsyncParsableCommand {
             seed: UInt64(bitPattern: Int64(seed)),
             fps: fps,
             segmentLength: segmentLength,
-            segmentOverlap: segmentOverlap
+            segmentOverlap: segmentOverlap,
+            tailPolicy: tailPolicy.runtimePolicy
         )
     }
 
@@ -263,7 +313,11 @@ struct VideoAnimate: AsyncParsableCommand {
             modelInstalled: installed,
             missingModelFiles: missingModels.map(\.path),
             missingInputFiles: missingInputs.map(\.path),
-            output: options.outputURL.path,
+            output: CLIOutput.resolveOutputURL(
+                output,
+                defaultPrefix: "mererun-scail2",
+                defaultExtension: "mp4"
+            ).path,
             mode: mode.rawValue,
             width: width,
             height: height,
@@ -273,7 +327,9 @@ struct VideoAnimate: AsyncParsableCommand {
             fps: fps,
             segmentLength: segmentLength,
             segmentOverlap: segmentOverlap,
-            additionalReferenceCount: additionalReferences.count
+            additionalReferenceCount: additionalReferences.count,
+            tailPolicy: tailPolicy.rawValue,
+            audioSource: audioSource.rawValue
         )
     }
 

@@ -17,6 +17,7 @@ struct Video: AsyncParsableCommand {
             VideoAnimate.self,
             VideoExportLatents.self,
             VideoGenerate.self,
+            VideoPrepareMasks.self,
             VideoSession.self
         ]
     )

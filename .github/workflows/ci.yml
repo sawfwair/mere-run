@@ -13,7 +13,11 @@ jobs:
         with:
           xcode-version: '26.4'
       - name: Install check dependencies
-        run: brew install swiftlint ripgrep
+        run: |
+          # macos-26 currently carries an untrusted aws/tap that causes every
+          # Homebrew command to fail before resolving Homebrew/core formulae.
+          brew untap --force aws/tap
+          brew install swiftlint ripgrep
       - name: Run package checks
         run: ./scripts/check.sh
 

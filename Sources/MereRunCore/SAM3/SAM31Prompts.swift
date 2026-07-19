@@ -4,6 +4,7 @@ public enum SAM31PromptKind: String, Codable, CaseIterable, Hashable, Sendable {
     case text
     case box
     case point
+    case mask
 }
 
 public struct SAM31PromptPoint: Codable, Hashable, Sendable {
@@ -40,6 +41,16 @@ public struct SAM31PromptBox: Codable, Hashable, Sendable {
     }
 }
 
+public struct SAM31PromptMask: Codable, Hashable, Sendable {
+    public let path: String
+    public let label: String?
+
+    public init(path: String, label: String? = nil) {
+        self.path = path
+        self.label = label
+    }
+}
+
 public struct SAM31PromptObject: Codable, Hashable, Sendable {
     public let objectID: String
     public let label: String
@@ -47,6 +58,7 @@ public struct SAM31PromptObject: Codable, Hashable, Sendable {
     public let textPrompt: String?
     public let boxPrompt: SAM31PromptBox?
     public let pointPrompts: [SAM31PromptPoint]
+    public let maskPrompt: SAM31PromptMask?
 
     public init(
         objectID: String,
@@ -54,7 +66,8 @@ public struct SAM31PromptObject: Codable, Hashable, Sendable {
         promptKind: SAM31PromptKind,
         textPrompt: String? = nil,
         boxPrompt: SAM31PromptBox? = nil,
-        pointPrompts: [SAM31PromptPoint] = []
+        pointPrompts: [SAM31PromptPoint] = [],
+        maskPrompt: SAM31PromptMask? = nil
     ) {
         self.objectID = objectID
         self.label = label
@@ -62,6 +75,7 @@ public struct SAM31PromptObject: Codable, Hashable, Sendable {
         self.textPrompt = textPrompt
         self.boxPrompt = boxPrompt
         self.pointPrompts = pointPrompts
+        self.maskPrompt = maskPrompt
     }
 }
 
@@ -83,24 +97,53 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
     public var textPrompts: [String]
     public var boxPrompts: [SAM31PromptBox]
     public var pointPrompts: [SAM31PromptPoint]
+    public var maskPrompts: [SAM31PromptMask]
+    public var objectPrompts: [SAM31PromptObject]
 
     public init(
         textPrompts: [String] = [],
         boxPrompts: [SAM31PromptBox] = [],
-        pointPrompts: [SAM31PromptPoint] = []
+        pointPrompts: [SAM31PromptPoint] = [],
+        maskPrompts: [SAM31PromptMask] = [],
+        objectPrompts: [SAM31PromptObject] = []
     ) {
         self.textPrompts = textPrompts
         self.boxPrompts = boxPrompts
         self.pointPrompts = pointPrompts
+        self.maskPrompts = maskPrompts
+        self.objectPrompts = objectPrompts
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case textPrompts
+        case boxPrompts
+        case pointPrompts
+        case maskPrompts
+        case objectPrompts
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        textPrompts = try container.decodeIfPresent([String].self, forKey: .textPrompts) ?? []
+        boxPrompts = try container.decodeIfPresent([SAM31PromptBox].self, forKey: .boxPrompts) ?? []
+        pointPrompts = try container.decodeIfPresent([SAM31PromptPoint].self, forKey: .pointPrompts) ?? []
+        maskPrompts = try container.decodeIfPresent([SAM31PromptMask].self, forKey: .maskPrompts) ?? []
+        objectPrompts = try container.decodeIfPresent([SAM31PromptObject].self, forKey: .objectPrompts) ?? []
     }
 
     public var isEmpty: Bool {
-        textPrompts.isEmpty && boxPrompts.isEmpty && pointPrompts.isEmpty
+        textPrompts.isEmpty
+            && boxPrompts.isEmpty
+            && pointPrompts.isEmpty
+            && maskPrompts.isEmpty
+            && objectPrompts.isEmpty
     }
 
     public func normalized(maxObjects: Int = 16) throws -> [SAM31PromptObject] {
-        var objects: [SAM31PromptObject] = []
-        objects.reserveCapacity(textPrompts.count + boxPrompts.count + pointPrompts.count)
+        var objects = objectPrompts
+        objects.reserveCapacity(
+            objectPrompts.count + textPrompts.count + boxPrompts.count + pointPrompts.count + maskPrompts.count
+        )
 
         for prompt in textPrompts {
             let label = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -148,12 +191,36 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
             )
         }
 
+        for mask in maskPrompts {
+            let label = normalizedLabel(mask.label, fallback: "mask-object")
+            objects.append(
+                SAM31PromptObject(
+                    objectID: "",
+                    label: label,
+                    promptKind: .mask,
+                    maskPrompt: mask
+                )
+            )
+        }
+
         guard objects.count <= maxObjects else {
             throw ValidationError.tooManyObjects(objects.count, maxSupported: maxObjects)
         }
 
         var countsByBaseID: [String: Int] = [:]
         return objects.map { object in
+            let explicitID = slugify(object.objectID)
+            if !object.objectID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return SAM31PromptObject(
+                    objectID: explicitID,
+                    label: object.label,
+                    promptKind: object.promptKind,
+                    textPrompt: object.textPrompt,
+                    boxPrompt: object.boxPrompt,
+                    pointPrompts: object.pointPrompts,
+                    maskPrompt: object.maskPrompt
+                )
+            }
             let base = slugify(object.label.isEmpty ? "object" : object.label)
             let count = countsByBaseID[base, default: 0] + 1
             countsByBaseID[base] = count
@@ -164,7 +231,8 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
                 promptKind: object.promptKind,
                 textPrompt: object.textPrompt,
                 boxPrompt: object.boxPrompt,
-                pointPrompts: object.pointPrompts
+                pointPrompts: object.pointPrompts,
+                maskPrompt: object.maskPrompt
             )
         }
     }

@@ -6,6 +6,7 @@ This page covers the native video-generation path exposed through `mere.run vide
 
 - `mere.run video generate`
 - `mere.run video animate`
+- `mere.run video prepare-masks`
 - `mere.run video session`
 - `mere.run video export-latents`
 
@@ -28,9 +29,45 @@ This page covers the native video-generation path exposed through `mere.run vide
 
 ### SCAIL-2 subject animation and replacement
 
-When published, install the Sawfwair MLX bundle at the managed model path.
-Until then, place the prepared bundle there or pass its directory with
-`--model-root`. Then preflight and render natively:
+Install the immutable Sawfwair MLX snapshot and the separately licensed SAM
+3.1 model:
+
+```bash
+swift run mere.run model pull video-scail2-14b-mlx
+swift run mere.run model pull vision-segment-sam31 --accept-model-license
+```
+
+Create a schema-version 1 mask plan, preview one target frame, and then prepare
+the immutable full mask revision:
+
+```bash
+swift run mere.run video prepare-masks \
+  --plan ./mask-plan.json \
+  --output-dir ./mask-preview \
+  --preview-frame 12 \
+  --json
+
+swift run mere.run video prepare-masks \
+  --plan ./mask-plan.json \
+  --output-dir ./approved-mask-candidate \
+  --json
+```
+
+The full result contains an exact-geometry/FPS driving proxy, per-subject
+reference masks, a ProRes 4444 categorical mask video, overlay preview, contact
+sheet, tracking and quality reports, and a canonical SHA-256 manifest. The plan
+supports one to six stable subjects, text/box/point selectors, and dense painted
+PNG corrections. White is background; legal subject colours are blue, red,
+green, magenta, cyan, and yellow.
+
+Prepared review artifacts always use white as the canonical background. During
+inference, `video animate` matches the official SCAIL-2 mask-role semantics:
+animation keeps the main reference background visible and hides the driving
+background, while replacement hides the reference background and keeps the
+driving scene visible. Additional subject-reference backgrounds are hidden.
+Subject colors and reference-to-driving correspondence are unchanged.
+
+After reviewing the mask artifacts, preflight and render natively:
 
 ```bash
 swift run mere.run video animate \
@@ -39,7 +76,6 @@ swift run mere.run video animate \
   --reference-mask ./ref-mask.png \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
-  --model-root /path/to/video-scail2-14b-mlx \
   --preflight --json
 
 swift run mere.run video animate \
@@ -48,21 +84,25 @@ swift run mere.run video animate \
   --reference-mask ./ref-mask.png \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
-  --model-root /path/to/video-scail2-14b-mlx \
   --mode animation \
+  --tail-policy pad-trim \
+  --audio-source driving \
   --output ./animated.mp4
 ```
 
-Masks use SCAIL-2's seven exact colors: white, red, green, blue, yellow,
-magenta, and cyan. Pixels are considered active only when each required RGB
-channel is above 225 after decoding. The default long-video contract uses
-81-frame segments with five decoded frames of clean overlap; incomplete tails
-after the last full window are intentionally dropped to match upstream.
+Decoded mask pixels are snapped to the nearest legal colour inside a strict
+tolerance, and ambiguous or out-of-tolerance pixels are rejected. The default
+long-video contract uses 81-frame segments with five decoded frames of clean
+overlap. Compatibility defaults remain `--tail-policy drop` and
+`--audio-source none`; `pad-trim` pads only the internal final window, trims the
+result to the exact requested frame count, and `driving` muxes source audio to
+that exact duration.
 
 Use `--mode replacement` to place the reference subject into the driving
 scene. Pair repeatable `--additional-reference` and
 `--additional-reference-mask` values for multi-subject conditioning. The
-driving video and driving-mask video must have identical decoded frame counts.
+driving video and driving-mask video must have identical decoded frame counts,
+and reference/mask ordering is preserved.
 
 ### Fast visual draft
 

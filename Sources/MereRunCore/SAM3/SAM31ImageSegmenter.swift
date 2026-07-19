@@ -339,7 +339,7 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                         promptKind: .text
                     )
                 )
-            case .box, .point:
+            case .box, .point, .mask:
                 guard let trackerModel = state.model.trackerModel else {
                     throw SegmenterError.interactivePromptingUnavailable
                 }
@@ -578,9 +578,36 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                 imageWidth: imageWidth,
                 imageHeight: imageHeight
             )
-            boxTensor = nil
+            boxTensor = makeBoxPromptTensor(
+                promptObject.boxPrompt,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
         case .box:
-            pointTensor = nil
+            pointTensor = makePointPromptTensor(
+                promptObject.pointPrompts,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
+            boxTensor = makeBoxPromptTensor(
+                promptObject.boxPrompt,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
+        case .mask:
+            pointTensor = makePointPromptTensor(
+                promptObject.pointPrompts,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
             boxTensor = makeBoxPromptTensor(
                 promptObject.boxPrompt,
                 targetWidth: coarseWidth,
@@ -592,10 +619,22 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             return []
         }
 
+        let maskTensor: MLXArray?
+        if let path = promptObject.maskPrompt?.path {
+            let image = try MediaImageIO.decode(URL(fileURLWithPath: path).standardizedFileURL)
+            let values = stride(from: 0, to: image.rgba8.count, by: 4).map {
+                image.rgba8[$0] >= 128 ? Float(1) : Float(0)
+            }
+            maskTensor = MLXArray(values).reshaped(1, image.height, image.width, 1)
+        } else {
+            maskTensor = nil
+        }
+
         let output = trackerModel.segment(
             featurePyramid: featurePyramid,
             boxPrompt: boxTensor,
             pointPrompt: pointTensor,
+            maskPrompt: maskTensor,
             multimaskOutput: multimask
         )
         MLX.eval(output.predMasks, output.iouScores, output.objectScores)
