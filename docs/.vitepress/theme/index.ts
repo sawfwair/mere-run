@@ -5,10 +5,13 @@ export default createMereProductDocsTheme({
   productDomain: 'docs.mere.run',
   docsUrl: 'https://docs.mere.run/',
   productHref: 'https://mere.run',
-  corePrefix: 'Local-first inference on Apple Silicon with public CLI and runtime docs.',
+  corePrefix: 'Multimodal inference, portable graphs, and persistent local runtimes.',
   guideHref: '/getting-started',
   architectureHref: '/architecture',
   operationsHref: '/development-workflow',
+  workflowsHref: '/workflows',
+  runtimeHref: '/runtime/image',
+  pluginsHref: '/plugins',
   referenceHref: '/cli',
   cliHref: '/cli'
 })

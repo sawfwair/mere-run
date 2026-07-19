@@ -15,27 +15,162 @@ swift run mere.run --help
 
 Public tree:
 
-- `mere.run guide`
-- `mere.run image { dataset, generate, reconstruct-3d, reconstruct-3d-trellis2, reconstruct-3d-multiview, run-plan, train-lora, visualize-run, validate }`
-- `mere.run text { chat, code, embed, anonymize, train-lora }`
-- `mere.run speech { synthesize, transcribe }`
-- `mere.run speech profile { list, create, delete }`
-- `mere.run vision { caption, inspect, ground, segment, track, track-live, pose, flow, depth-video, geometry, geometry-multiview, image-to-3d, image-to-3d-trellis2, image-to-3d-multiview, ocr }`
-- `mere.run music { analyze, generate, realtime, transcribe }`
-- `mere.run sfx { ae, clap, condition, generate, video }`
-- `mere.run video { generate, export-latents }`
-- `mere.run world serve`
-- `mere.run run { list, inspect }`
-- `mere.run model { list, pull, remove, info, capabilities, runtime, benchmark, repair-manifests }`
-- `mere.run adapter { list, pull }`
-- `mere.run status`
-- `mere.run gate`
-- `mere.run config { set, get, unset, list, path }`
-- `mere.run api serve`
-- `mere.run open-webui quickstart`
-- `mere.run plugin { list, info, install, doctor }`
-- `mere.run setup`
-- `mere.run agent { onboard, install-pi, start }`
+<!-- BEGIN GENERATED: CLI TREE -->
+- [`mere.run guide`](/cookbooks) — Read offline mere.run command cookbooks.
+- [`mere.run image`](/runtime/image) — Generate and validate image models.
+  - `mere.run image dataset` — Inspect image training datasets.
+    - `mere.run image dataset discover` — Find image-caption dataset candidates under a root directory.
+  - `mere.run image generate` — Generate images with local image models.
+  - `mere.run image reconstruct-3d` — Reconstruct a colored object mesh from one image with native TripoSR.
+  - `mere.run image reconstruct-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
+  - `mere.run image reconstruct-3d-multiview` — Reconstruct a colored mesh from 4 or 6 user-supplied views with native InstantMesh.
+  - `mere.run image run-plan` — Run a saved image workflow plan.
+  - `mere.run image train-lora` — Train a local image LoRA adapter.
+  - `mere.run image visualize-run` — Open a local LoRA training run viewer.
+  - `mere.run image validate` — Run advanced deterministic validation for local image model families.
+- [`mere.run text`](/runtime/text) — Run local chat, code, embedding, and anonymization workflows.
+  - `mere.run text chat` — Run local chat with text chat models.
+  - `mere.run text code` — Run local code generation with GGUF models via llama.cpp.
+  - `mere.run text embed` — Generate text embeddings using native Qwen3-Embedding-0.6B.
+  - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
+  - `mere.run text train-lora` — Train a native text LoRA adapter from chat-style SFT JSONL.
+- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, and manage voice profiles.
+  - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.
+  - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
+  - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen ASR.
+  - `mere.run speech profile` — Manage saved voice clone profiles.
+    - `mere.run speech profile list` — List saved speech voice profiles.
+    - `mere.run speech profile create` — Create a speech profile from reference audio.
+    - `mere.run speech profile delete` — Delete a speech profile by id.
+- [`mere.run vision`](/runtime/vision) — Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media.
+  - `mere.run vision caption` — Generate training-friendly captions for images.
+  - `mere.run vision inspect` — Describe or answer questions about an image using Qwen3-VL.
+  - `mere.run vision face` — Detect faces, create identity embeddings, and compare faces locally.
+    - `mere.run vision face detect` — Detect faces and five-point landmarks in an image.
+    - `mere.run vision face embed` — Create a normalized ArcFace embedding for one face in an image.
+    - `mere.run vision face compare` — Compare one face from each of two images with cosine similarity.
+    - `mere.run vision face batch` — Analyze many images with one warm detector/recognizer session and emit JSONL.
+  - `mere.run vision ground` — Ground text queries in an image with the native Falcon Perception runtime.
+  - `mere.run vision segment` — Segment prompted objects in an image with the native SAM 3.1 runtime.
+  - `mere.run vision track` — Track prompted objects through a video with the native SAM 3.1 runtime.
+  - `mere.run vision track-live` — Capture from a camera and track text-prompted objects with the native SAM 3.1 runtime.
+  - `mere.run vision pose` — Detect body, hand, and face landmarks in an image with the native platform runtime.
+  - `mere.run vision flow` — Generate dense optical flow between two equal-size images.
+  - `mere.run vision depth-video` — Generate temporally consistent relative or metric video depth with native VDA-S.
+  - `mere.run vision geometry` — Generate metric depth, normals, camera intrinsics, and a point cloud with native MoGe-2.
+  - `mere.run vision geometry-multiview` — Solve native DA3-Small multi-view relative geometry, confidence, and cameras.
+  - `mere.run vision image-to-3d` — Reconstruct a colored object mesh from one image with native TripoSR.
+  - `mere.run vision image-to-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
+  - `mere.run vision image-to-3d-multiview` — VFX alias for native 4/6-view InstantMesh reconstruction.
+  - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.
+- [`mere.run music`](/runtime/music) — Generate music locally.
+  - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
+  - `mere.run music generate` — Generate audio from a music prompt.
+  - `mere.run music realtime` — Run Magenta RealTime 2 music generation.
+  - `mere.run music transcribe` — Transcribe a full music mix into instrument-separated MIDI with MuScriptor.
+- [`mere.run sfx`](/runtime/sfx) — Generate sound effects locally.
+  - `mere.run sfx ae` — Encode or decode Woosh audio autoencoder latents.
+    - `mere.run sfx ae encode` — Encode audio into normalized Woosh-AE latents.
+    - `mere.run sfx ae decode` — Decode normalized Woosh-AE latents into audio.
+  - `mere.run sfx clap` — Embed and score sound effects with Woosh-CLAP.
+    - `mere.run sfx clap score` — Score a text prompt against an audio file.
+  - `mere.run sfx condition` — Export Woosh conditioning tensors.
+    - `mere.run sfx condition text` — Encode a prompt with the Woosh text conditioner.
+  - `mere.run sfx generate` — Generate a sound effect from a text prompt.
+  - `mere.run sfx video` — Generate sound effects from video conditioning.
+    - `mere.run sfx video generate` — Generate an 8-second sound effect from a video or Synchformer features.
+- [`mere.run video`](/runtime/video) — Generate videos with native Swift/MLX LTX pipelines.
+  - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
+  - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
+  - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
+- [`mere.run world`](/runtime/world) — Run persistent local conditioned-video world sessions.
+  - `mere.run world serve` — Serve one warm DreamX causal world session over loopback HTTP.
+- [`mere.run graph`](/workflows) — Validate, materialize, run, and submit portable workflow graphs.
+  - `mere.run graph catalog` — List registered workflow node contracts.
+  - `mere.run graph dataset` — Discover graph-ready datasets without loading model runtimes.
+    - `mere.run graph dataset discover` — Find and rank image-caption dataset directories under a root.
+  - `mere.run graph validate` — Validate a typed workflow graph without executing it.
+  - `mere.run graph preflight` — Preflight a workflow graph against an executor.
+  - `mere.run graph materialize` — Create an immutable workflow job bundle in a run directory.
+  - `mere.run graph export-job` — Export an immutable workflow job bundle for any executor.
+  - `mere.run graph run` — Run a workflow graph locally.
+  - `mere.run graph run-job` — Run an existing immutable workflow job bundle locally.
+  - `mere.run graph submit` — Submit a portable workflow job to an SSH or relay executor.
+  - `mere.run graph submit-job` — Submit an existing immutable workflow job bundle to SSH or Relay.
+  - `mere.run graph worker` — Run the portable workflow worker protocol.
+    - `mere.run graph worker probe` — Report worker capabilities.
+    - `mere.run graph worker execute` — Execute a materialized job bundle.
+    - `mere.run graph worker inspect` — Inspect a worker run manifest.
+    - `mere.run graph worker cancel` — Request cooperative worker cancellation.
+- [`mere.run executor`](/workflows#executor-profiles) — Manage local, SSH, and relay workflow executors.
+  - `mere.run executor add` — Add an executor profile.
+    - `mere.run executor add ssh` — Add an SSH executor.
+    - `mere.run executor add relay` — Add a relay executor.
+  - `mere.run executor list` — List executor profiles.
+  - `mere.run executor inspect` — Inspect an executor profile.
+  - `mere.run executor probe` — Probe executor capabilities.
+  - `mere.run executor login` — Sign in to a relay executor through its advertised device authorization flow.
+  - `mere.run executor auth-status` — Inspect relay authentication without printing credentials.
+  - `mere.run executor logout` — Remove the saved credential for a relay executor.
+  - `mere.run executor fleet` — Inspect relay node identity, eligibility, inventory, and recent work.
+  - `mere.run executor node-refresh` — Ask a connected relay node to rescan its capabilities and installed models.
+  - `mere.run executor node-configure` — Update relay scheduling policy for a fleet node.
+  - `mere.run executor remove` — Remove an executor profile.
+- [`mere.run run`](/workflows#run-directories) — Inspect durable mere.run workflow reports and run directories.
+  - `mere.run run list` — Find durable run directories, structured reports, and run plans under a root.
+  - `mere.run run inspect` — Inspect a run directory, structured report, or run plan.
+  - `mere.run run watch` — Watch the worker event stream for an SSH or relay graph job.
+  - `mere.run run fetch` — Fetch a remote graph run into the standard local run-directory format.
+  - `mere.run run cancel` — Cancel a graph run.
+  - `mere.run run retry` — Retry an immutable relay graph job.
+- [`mere.run model`](/runtime/model-management) — List, pull, remove, inspect, and clean up models.
+  - `mere.run model list` — List all known models with install status.
+  - `mere.run model pull` — Download a managed model into the local model store.
+  - `mere.run model remove` — Remove a model from the local model store.
+  - `mere.run model storage` — Inspect physical model storage, sharing, and reclaimable space.
+  - `mere.run model gc` — Find or delete unreferenced model payloads and partial downloads.
+  - `mere.run model info` — Print a model's manifest, validation status, and resolved component paths.
+  - `mere.run model capabilities` — Show which managed models this machine can run.
+  - `mere.run model runtime` — Read and update per-model API runtime settings.
+    - `mere.run model runtime get` — Print typed API runtime settings for a managed model.
+    - `mere.run model runtime set` — Update typed API runtime settings for a managed model.
+  - `mere.run model benchmark` — Run focused local model benchmarks.
+    - `mere.run model benchmark chat` — Run a small grounded-chat eval slice against local assistant models.
+    - `mere.run model benchmark tool-calls` — Run a small tool-call selection eval against local chat models.
+    - `mere.run model benchmark tool-continuations` — Evaluate Gemma 4 continuation after completed tool calls.
+    - `mere.run model benchmark code` — Run a real coding-eval slice against local coding models.
+    - `mere.run model benchmark gemma4-kv` — Compare Gemma4 default KV cache decode against packed PolarKV.
+    - `mere.run model benchmark gemma4-mtp` — Compare Gemma4 serial decode against verified MTP speculative decode.
+    - `mere.run model benchmark q36-mtp` — Compare Qwen3.6 serial decode against adaptive and forced MTP speculative decode.
+    - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
+    - `mere.run model benchmark vlm` — Compare vision-language chat models on synthetic or lmms-eval datasets.
+  - `mere.run model repair-manifests` — Write missing mererun_model.json for known models in the local mere.run model store.
+- [`mere.run adapter`](/runtime/model-management) — List and pull verified LoRA adapters.
+  - `mere.run adapter list` — List cataloged LoRA adapters and their install state.
+  - `mere.run adapter pull` — Download and verify a cataloged LoRA adapter.
+- [`mere.run status`](/runtime/model-management) — Show local server, loaded model, and installed model status.
+- [`mere.run gate`](/gate) — Run the end-to-end quality gate against installed models.
+- [`mere.run config`](/configuration) — Get and set persisted mere.run configuration (e.g. Hugging Face token).
+  - `mere.run config set` — Set a config value.
+  - `mere.run config get` — Print a config value (secrets masked).
+  - `mere.run config unset` — Remove a config value.
+  - `mere.run config list` — Show all config values (secrets masked).
+  - `mere.run config path` — Print the config file path.
+- [`mere.run api`](/runtime/api-server) — Serve local models through API surfaces.
+  - `mere.run api serve` — Start an OpenAI-compatible API server for local chat and embedding models.
+- [`mere.run open-webui`](/runtime/api-server#open-webui-companion) — Start the optional Open WebUI companion against a local mere.run API.
+  - `mere.run open-webui quickstart` — Start mere.run, run the official Open WebUI Docker image, and configure the connection.
+- [`mere.run plugin`](/plugins) — Discover and install official mere.run companion plugins.
+  - `mere.run plugin list` — List official plugins from the live catalog.
+  - `mere.run plugin info` — Show one plugin's catalog entry and install command.
+  - `mere.run plugin install` — Install one official plugin using its catalog install command.
+  - `mere.run plugin doctor` — Run an installed plugin's doctor command.
+- [`mere.run setup`](/getting-started) — Choose a guided, BYOA, or manual mere.run setup path.
+- [`mere.run agent`](/getting-started) — Install and start the optional guided local setup agent.
+  - `mere.run agent onboard` — Summarize this machine's model capabilities and prepare the optional Pi agent.
+  - `mere.run agent install-pi` — Install the latest Pi coding-agent release for use with mere.run.
+  - `mere.run agent start` — Start Pi against a local mere.run setup-agent API server.
+<!-- END GENERATED: CLI TREE -->
 
 ## Global model-store override
 
@@ -125,6 +260,13 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
+For live microphone transcription on macOS:
+
+```bash
+swift run mere.run speech listen --list-devices
+swift run mere.run speech listen --device <core-audio-uid>
+```
+
 ### Inspect, segment, track, and OCR
 
 ```bash
@@ -178,9 +320,34 @@ swift run mere.run sfx generate \
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
   --variant unified-av \
-  --model-root ~/Library/Application\ Support/MereRun/models/video-ltx23-av-mlx \
+  --model video-ltx23-full-mlx \
+  --duration 5 \
   --output ./clip.mp4
 ```
+
+### Run a portable workflow
+
+```bash
+mere.run graph validate workflow.json --inputs-json inputs.json --json
+mere.run graph preflight workflow.json --inputs-json inputs.json --executor local --json
+mere.run graph run workflow.json --inputs-json inputs.json --run-dir ./runs/local
+mere.run run inspect ./runs/local --json
+```
+
+The same immutable job bundle can run through configured SSH or relay
+executors. See [Portable Workflows](./workflows.md).
+
+### Start a persistent world session
+
+```bash
+mere.run world serve \
+  --base-model video-wan22-ti2v-5b-mlx \
+  --model video-dreamx-world-5b-ar-mlx \
+  --prepare
+```
+
+See [Persistent World Runtime](./runtime/world.md) for the HTTP lifecycle,
+camera controls, state artifacts, and authentication boundary.
 
 ### Serve a local API
 
@@ -201,6 +368,9 @@ swift run mere.run plugin install mere-runpod
 swift run mere.run plugin install mere-runpod --yes
 swift run mere.run plugin doctor mere-runpod
 ```
+
+See [Companion Plugins](./plugins.md) for installation verification and the
+typed graph-provider boundary.
 
 ## Command reference
 

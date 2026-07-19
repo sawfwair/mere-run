@@ -715,9 +715,13 @@ The native DreamX-World autoregressive checkpoint root is:
 .../models/video-dreamx-world-5b-ar-mlx
 ```
 
-`mere.run world prepare` converts the pinned `GD-ML/DreamX-World-5B`
-checkpoint into the MLX-native root. The runtime pairs it with
-`video-wan22-ti2v-5b-mlx` for the tokenizer, text encoder, and VAE resources.
-The checkpoint provides learned camera conditioning, block-causal attention,
+The public CLI does not convert this local-only checkpoint. Supply a previously
+converted `GD-ML/DreamX-World-5B` root at the managed path above or pass its
+directory to `mere.run world serve --model`. The runtime pairs it with
+`video-wan22-ti2v-5b-mlx` for tokenizer, text encoder, and VAE resources. The
+checkpoint provides learned camera conditioning, block-causal attention,
 persistent attention caches, and autoregressive forcing for long-lived local
-world sessions. It is not downloaded automatically at runtime.
+world sessions. It is never downloaded or converted automatically at runtime.
+
+See [Persistent World Runtime](./runtime/world.md) for the server and request
+lifecycle.

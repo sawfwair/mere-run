@@ -120,21 +120,36 @@ packages are local smoke artifacts, not useful release targets.
 
 ## Understand the command tree
 
-The public CLI is modality-first:
+The public CLI is modality-first, with separate operational families for
+portable graphs, executors, run artifacts, models, adapters, serving, and
+extensions. This inventory is generated from the CLI configuration:
 
-- `mere.run guide ...`
-- `mere.run image ...`
-- `mere.run text ...`
-- `mere.run speech ...`
-- `mere.run vision ...`
-- `mere.run music ...`
-- `mere.run sfx ...`
-- `mere.run video ...`
-- `mere.run model ...`
-- `mere.run status`
-- `mere.run api ...`
-- `mere.run setup ...`
-- `mere.run agent ...`
+<!-- BEGIN GENERATED: CLI TOP LEVEL -->
+| Command | Purpose |
+| --- | --- |
+| [`mere.run guide`](/cookbooks) | Read offline mere.run command cookbooks. |
+| [`mere.run image`](/runtime/image) | Generate and validate image models. |
+| [`mere.run text`](/runtime/text) | Run local chat, code, embedding, and anonymization workflows. |
+| [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, and manage voice profiles. |
+| [`mere.run vision`](/runtime/vision) | Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media. |
+| [`mere.run music`](/runtime/music) | Generate music locally. |
+| [`mere.run sfx`](/runtime/sfx) | Generate sound effects locally. |
+| [`mere.run video`](/runtime/video) | Generate videos with native Swift/MLX LTX pipelines. |
+| [`mere.run world`](/runtime/world) | Run persistent local conditioned-video world sessions. |
+| [`mere.run graph`](/workflows) | Validate, materialize, run, and submit portable workflow graphs. |
+| [`mere.run executor`](/workflows#executor-profiles) | Manage local, SSH, and relay workflow executors. |
+| [`mere.run run`](/workflows#run-directories) | Inspect durable mere.run workflow reports and run directories. |
+| [`mere.run model`](/runtime/model-management) | List, pull, remove, inspect, and clean up models. |
+| [`mere.run adapter`](/runtime/model-management) | List and pull verified LoRA adapters. |
+| [`mere.run status`](/runtime/model-management) | Show local server, loaded model, and installed model status. |
+| [`mere.run gate`](/gate) | Run the end-to-end quality gate against installed models. |
+| [`mere.run config`](/configuration) | Get and set persisted mere.run configuration (e.g. Hugging Face token). |
+| [`mere.run api`](/runtime/api-server) | Serve local models through API surfaces. |
+| [`mere.run open-webui`](/runtime/api-server#open-webui-companion) | Start the optional Open WebUI companion against a local mere.run API. |
+| [`mere.run plugin`](/plugins) | Discover and install official mere.run companion plugins. |
+| [`mere.run setup`](/getting-started) | Choose a guided, BYOA, or manual mere.run setup path. |
+| [`mere.run agent`](/getting-started) | Install and start the optional guided local setup agent. |
+<!-- END GENERATED: CLI TOP LEVEL -->
 
 For the full reference, see [CLI Reference](./cli.md).
 

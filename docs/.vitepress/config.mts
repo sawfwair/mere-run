@@ -22,7 +22,7 @@ function resolveBase(): string {
 
 export default defineConfig({
   title: 'mere.run',
-  description: 'Local-first inference on Apple Silicon with a public Swift package and CLI.',
+  description: 'Local multimodal inference, portable workflow graphs, and headless executors from one public Swift CLI.',
   base: resolveBase(),
   cleanUrls: true,
   lastUpdated: true,
@@ -36,10 +36,10 @@ export default defineConfig({
     nav: [
       { text: 'Getting Started', link: '/getting-started' },
       { text: 'CLI', link: '/cli' },
-      { text: 'Benchmarking', link: '/benchmarking' },
-      { text: 'Cookbooks', link: '/cookbooks' },
+      { text: 'Workflows', link: '/workflows' },
       { text: 'Runtime', link: '/runtime/image' },
-      { text: 'Internals', link: '/internals/cli-and-runtime' }
+      { text: 'Plugins', link: '/plugins' },
+      { text: 'Contribute', link: '/repository-tour' }
     ],
     sidebar: [
       {
@@ -47,12 +47,19 @@ export default defineConfig({
         items: [
           { text: 'Docs Home', link: '/' },
           { text: 'Getting Started', link: '/getting-started' },
+          { text: 'Linux QuickStart', link: '/linux-quickstart' },
           { text: 'CLI Reference', link: '/cli' },
-          { text: 'Cookbooks', link: '/cookbooks' },
+          { text: 'Offline Cookbooks', link: '/cookbooks' },
+        ]
+      },
+      {
+        text: 'Workflows and Operations',
+        items: [
           { text: 'Portable Workflows', link: '/workflows' },
           { text: 'Configuration', link: '/configuration' },
           { text: 'Quality Gate', link: '/gate' },
-          { text: 'Model Sources', link: '/model-sources' }
+          { text: 'Model Sources', link: '/model-sources' },
+          { text: 'Companion Plugins', link: '/plugins' }
         ]
       },
       {
@@ -78,7 +85,9 @@ export default defineConfig({
           { text: 'Speech Runtime', link: '/runtime/speech' },
           { text: 'Vision Runtime', link: '/runtime/vision' },
           { text: 'Music Runtime', link: '/runtime/music' },
+          { text: 'SFX Runtime', link: '/runtime/sfx' },
           { text: 'Video Runtime', link: '/runtime/video' },
+          { text: 'Persistent Worlds', link: '/runtime/world' },
           { text: 'Model Management', link: '/runtime/model-management' },
           { text: 'Local API Server', link: '/runtime/api-server' }
         ]

@@ -38,11 +38,28 @@ This script is the main gate for contributors. It runs:
 - `swift build`
 - `swift test`
 - help smoke for the public command tree
+- generated CLI documentation and command-owner synchronization
 - `mere.run model list` output sanity checks
 - `mere.run status` output sanity checks
 - docs and source hygiene sweeps
 
 Use this for almost every change before you stop.
+
+### CLI documentation contract
+
+`DocumentationContractTests` derives the complete public command tree from
+`MereRunCLI.configuration`. It compares that tree with the generated command
+inventories, verifies that every top-level command owns a navigable docs page,
+checks runtime-guide sidebar coverage, and rejects stale command paths in
+Markdown examples.
+
+When a command changes intentionally, regenerate the inventories before running
+the main gate:
+
+```bash
+./scripts/update-docs-command-reference.sh
+swift test --filter DocumentationContractTests
+```
 
 ## Linux CLI compatibility fixture
 
