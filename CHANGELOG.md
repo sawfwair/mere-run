@@ -8,6 +8,13 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added native Swift/MLX SCAIL-2 14B subject animation and replacement through
+  `video animate`, including exact seven-color mask packing, mixed-stream RoPE,
+  OpenCLIP and UMT5 conditioning, Wan 2.1 VAE support, 81/5 segmented clean
+  history, additional references, UniPC CFG sampling, MP4 output, typed
+  preflight, a local-only managed model ID, and a revision-pinned streaming
+  conversion tool. Real-checkpoint rendering remains an opt-in installed-model
+  gate because the official source snapshot is 82,456,800,394 bytes.
 - added resident Parakeet live transcription for raw PCM and streamed files,
   preserving the V1 partial, commit, stats, final, cancellation, silence, and
   bounded-backpressure contract already used by Qwen live ASR.

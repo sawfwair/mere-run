@@ -744,6 +744,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 96
             ),
             descriptor(
+                ModelResolver.ModelID.scail2Video14BMLX.rawValue,
+                "SCAIL-2 14B MLX",
+                "Animates or replaces masked subjects from reference images and driving videos with native Swift/MLX.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 ModelResolver.ModelID.dreamXWorld5BARMLX.rawValue,
                 "DreamX World 5B AR MLX",
                 "Runs persistent camera-conditioned world generation with the native causal Swift MLX runtime.",

@@ -164,20 +164,27 @@ public struct Wan2UniPCScheduler {
         precondition(steps > 0)
         precondition(shift > 0)
         var shifted: [Float] = []
+        var scheduledTimesteps: [Float] = []
         shifted.reserveCapacity(steps + 1)
+        scheduledTimesteps.reserveCapacity(steps)
         for index in 0..<steps {
-            let fraction = Float(index) / Float(steps)
-            let sigma = 1 + (1 / Float(trainTimesteps) - 1) * fraction
-            shifted.append(shift * sigma / (1 + (shift - 1) * sigma))
-        }
-        if abs(shifted[0] - 1) < 1e-6 {
-            shifted[0] -= 1e-6
+            // Matches upstream `np.linspace(sigma_max, sigma_min,
+            // steps + 1)[:-1]`. Its training schedule stores sigma_max
+            // `(trainTimesteps - 1) / trainTimesteps` as float32 before NumPy
+            // builds the inference grid in float64. Upstream then derives
+            // integer timesteps before storing the shifted sigmas as float32.
+            let sigmaMaximum = Double(
+                Float(Double(trainTimesteps - 1) / Double(trainTimesteps))
+            )
+            let sigma = sigmaMaximum * (1 - Double(index) / Double(steps))
+            let shift64 = Double(shift)
+            let scheduled = shift64 * sigma / (1 + (shift64 - 1) * sigma)
+            shifted.append(Float(scheduled))
+            scheduledTimesteps.append(Float(Int(scheduled * Double(trainTimesteps))))
         }
         shifted.append(0)
         self.sigmas = shifted
-        self.timesteps = shifted.dropLast().map {
-            Float(Int(($0 * Float(trainTimesteps)).rounded(.towardZero)))
-        }
+        self.timesteps = scheduledTimesteps
     }
 
     public mutating func step(modelOutput: MLXArray, sample initialSample: MLXArray) -> MLXArray {

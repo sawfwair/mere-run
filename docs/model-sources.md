@@ -103,6 +103,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
+| `video` | `video-scail2-14b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
 
@@ -706,6 +707,29 @@ state IDs rather than mutable MLX tensors. Camera controls are represented as
 XYZ translation and rotation so a DreamX-derived causal camera conditioner can
 replace the current text-plus-first-frame mode without changing the session
 schema.
+
+### `video-scail2-14b-mlx`
+
+The native SCAIL-2 model root is:
+
+```text
+.../models/video-scail2-14b-mlx
+```
+
+This is a local converted-model ID because the official
+`zai-org/SCAIL-2` release publishes PyTorch checkpoints, not a native MLX
+package. The conversion tool pins model revision
+`150cc0ca4e98e50e60b9295dacde39442fdccab2` and code revision
+`5cfe1b8daac8bcb22ee19794e6c04f1bf5de6ac5`, then emits sharded BF16
+transformer and UMT5 weights, FP16 OpenCLIP weights, the FP32 Wan 2.1 VAE,
+configuration, tokenizer, source README, license, and provenance. Python is
+used only during conversion; `video animate` executes in Swift/MLX.
+
+The official snapshot is 82,456,800,394 bytes before conversion, and staging
+requires enough additional free space for the converted output. The model card
+labels the model weights MIT; the upstream implementation copied into the
+converted root is Apache-2.0. Review the pinned upstream model card and code
+license before redistributing either artifact.
 
 ### `video-dreamx-world-5b-ar-mlx`
 

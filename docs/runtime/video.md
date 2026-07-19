@@ -5,6 +5,7 @@ This page covers the native video-generation path exposed through `mere.run vide
 ## Public surface
 
 - `mere.run video generate`
+- `mere.run video animate`
 - `mere.run video session`
 - `mere.run video export-latents`
 
@@ -19,8 +20,61 @@ This page covers the native video-generation path exposed through `mere.run vide
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
+- `video-scail2-14b-mlx`: local converted SCAIL-2 14B bundle for reference- and
+  mask-conditioned subject animation/replacement with long-video clean history.
 
 ## Typical workflows
+
+### SCAIL-2 subject animation and replacement
+
+Convert the pinned official snapshot once (conversion needs roughly 77 GiB of
+source data plus output staging space):
+
+```bash
+huggingface-cli download zai-org/SCAIL-2 \
+  --revision 150cc0ca4e98e50e60b9295dacde39442fdccab2 \
+  --local-dir /path/to/SCAIL-2
+git clone --branch wan-scail2 https://github.com/zai-org/SCAIL-2.git /path/to/SCAIL-2-code
+git -C /path/to/SCAIL-2-code checkout 5cfe1b8daac8bcb22ee19794e6c04f1bf5de6ac5
+python3 scripts/model-conversion/convert_scail2.py \
+  --source-root /path/to/SCAIL-2 \
+  --code-root /path/to/SCAIL-2-code \
+  --output-root /path/to/video-scail2-14b-mlx
+```
+
+Then preflight and render natively:
+
+```bash
+swift run mere.run video animate \
+  "a dancer in a red silk dress" \
+  --reference ./ref.png \
+  --reference-mask ./ref-mask.png \
+  --driving-video ./pose.mp4 \
+  --driving-mask ./pose-mask.mp4 \
+  --model-root /path/to/video-scail2-14b-mlx \
+  --preflight --json
+
+swift run mere.run video animate \
+  "a dancer in a red silk dress" \
+  --reference ./ref.png \
+  --reference-mask ./ref-mask.png \
+  --driving-video ./pose.mp4 \
+  --driving-mask ./pose-mask.mp4 \
+  --model-root /path/to/video-scail2-14b-mlx \
+  --mode animation \
+  --output ./animated.mp4
+```
+
+Masks use SCAIL-2's seven exact colors: white, red, green, blue, yellow,
+magenta, and cyan. Pixels are considered active only when each required RGB
+channel is above 225 after decoding. The default long-video contract uses
+81-frame segments with five decoded frames of clean overlap; incomplete tails
+after the last full window are intentionally dropped to match upstream.
+
+Use `--mode replacement` to place the reference subject into the driving
+scene. Pair repeatable `--additional-reference` and
+`--additional-reference-mask` values for multi-subject conditioning. The
+driving video and driving-mask video must have identical decoded frame counts.
 
 ### Fast visual draft
 
@@ -175,6 +229,7 @@ zero-memory. MP4 formats and backend selection are unchanged.
 ### CLI
 
 - `Sources/MereRunCLI/Commands/VideoCommand.swift`
+- `Sources/MereRunCLI/Commands/VideoAnimateCommand.swift`
 - `Sources/MereRunCLI/Commands/VideoSessionCommand.swift`
 
 ### Runtime
@@ -183,6 +238,8 @@ zero-memory. MP4 formats and backend selection are unchanged.
 - `Sources/MereRunCore/LTX/LTXInferenceTimings.swift`
 - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
 - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
+- `Sources/MereRunCore/SCAIL2/SCAIL2Generator.swift`
+- `Sources/MereRunCore/SCAIL2/SCAIL2Transformer.swift`
 
 ## Source Reading Notes
 

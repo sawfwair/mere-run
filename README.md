@@ -51,7 +51,7 @@ current flags.
 | Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Bonsai 27B binary/ternary vision chat; code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
-| Video and worlds | `video generate`, `video session`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, and a warm DreamX causal world session with camera-conditioned transitions |
+| Video and worlds | `video generate`, `video animate`, `video session`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native SCAIL-2 masked subject animation/replacement, and a warm DreamX causal world session with camera-conditioned transitions |
 | Music and sound | `music analyze`, `generate`, `realtime`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
 | Speech | `speech synthesize`, `speech transcribe`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, and Parakeet batch transcription |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
@@ -678,6 +678,16 @@ swift run mere.run video generate \
   --duration 5 \
   --image ./performer.png \
   --output ./performance.mp4
+
+# Animate a masked reference subject from a driving video with native SCAIL-2
+swift run mere.run video animate \
+  "a dancer in a red silk dress" \
+  --reference ./ref.png \
+  --reference-mask ./ref-mask.png \
+  --driving-video ./pose.mp4 \
+  --driving-mask ./pose-mask.mp4 \
+  --model-root /path/to/video-scail2-14b-mlx \
+  --output ./animated.mp4
 ```
 
 ## Command tree
@@ -692,7 +702,7 @@ The public CLI is modality-first:
 - `mere.run vision { caption, inspect, ground, segment, track, track-live, pose, flow, depth-video, geometry, geometry-multiview, image-to-3d, image-to-3d-trellis2, image-to-3d-multiview, ocr }`
 - `mere.run music { analyze, generate, realtime, transcribe }`
 - `mere.run sfx { ae, clap, condition, generate, video }`
-- `mere.run video { generate, session, export-latents }`
+- `mere.run video { animate, generate, session, export-latents }`
 - `mere.run world serve`
 - `mere.run run { list, inspect }`
 - `mere.run model { list, pull, remove, info, capabilities, runtime, benchmark, repair-manifests }`

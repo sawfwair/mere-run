@@ -1,0 +1,28 @@
+# SCAIL-2 native runtime
+
+This directory owns the native Swift/MLX integration of `zai-org/SCAIL-2`.
+The runtime consumes a converted local model root named
+`video-scail2-14b-mlx`; it never starts Python or ComfyUI during inference.
+
+The local root contains:
+
+- `config.json`: the typed SCAIL-2 14B architecture and generation defaults.
+- `model.safetensors` or a sharded `model.safetensors.index.json`: the 40-block
+  SCAIL-2 diffusion transformer.
+- `clip.safetensors`: the visual tower of OpenCLIP XLM-R ViT-H/14.
+- `t5_encoder.safetensors` or a sharded index: UMT5-XXL text encoder weights.
+- `tokenizer.json`: the local UMT5 tokenizer.
+- `vae.safetensors`: the Wan 2.1 16-channel video VAE.
+- `LICENSE-SCAIL-2`, `README-SCAIL-2.md`, and `provenance.json`: the pinned
+  upstream source terms, model card, revisions, and source hashes.
+
+`scripts/model-conversion/convert_scail2.py` builds this root from the official
+checkpoint revision pinned by `SCAIL2Resources`. The official model is too large
+for implicit runtime download, so the managed-model entry is intentionally
+local-only until a converted snapshot is published and pinned.
+
+The input contract is one reference image and seven-color reference mask, a
+driving video and matching seven-color mask video, plus an animation or
+replacement mode. Mask colors are packed in this order: white, red, green,
+blue, yellow, magenta, cyan. Long videos use 81-frame segments with five clean
+history frames, matching upstream SCAIL-2.

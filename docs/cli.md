@@ -80,6 +80,7 @@ Public tree:
   - `mere.run sfx video` — Generate sound effects from video conditioning.
     - `mere.run sfx video generate` — Generate an 8-second sound effect from a video or Synchformer features.
 - [`mere.run video`](/runtime/video) — Generate videos with native Swift/MLX LTX pipelines.
+  - `mere.run video animate` — Animate or replace a masked subject with native Swift/MLX SCAIL-2.
   - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
   - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
@@ -210,7 +211,7 @@ are:
 - Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 For subsystem-specific implementation guides, see:
 
@@ -1604,6 +1605,34 @@ model availability, raw-video conditioning requirements, duration, effective
 step count, CFG, renoise schedule, and follow-up actions before loading MLX or
 generating audio. `.npy` feature inputs do not require Synchformer during
 preflight or generation.
+
+### `mere.run video animate`
+
+Animate or replace a masked reference subject using the native Swift/MLX
+SCAIL-2 runtime:
+
+```bash
+swift run mere.run video animate "<prompt>" \
+  --reference <image> \
+  --reference-mask <mask-image> \
+  --driving-video <video> \
+  --driving-mask <mask-video> \
+  [options]
+```
+
+The required image/video masks use seven-color SCAIL-2 segmentation. Important
+options are `--mode animation|replacement`, `--model-root`, `--width`,
+`--height`, `--steps`, `--guidance-scale`, `--shift`, `--fps`,
+`--segment-length`, `--segment-overlap`, and paired repeatable
+`--additional-reference` / `--additional-reference-mask`. Defaults match the
+official 480p recipe: 896x512, 40 UniPC steps, guidance 5, shift 3, 16 fps,
+81-frame segments, and five clean-history overlap frames.
+
+`--preflight --json` validates the converted model root, input pairs, output,
+and execution plan without loading MLX or decoding video. The official
+checkpoint must first be converted with
+`scripts/model-conversion/convert_scail2.py`; runtime generation never launches
+Python or a ComfyUI process.
 
 ### `mere.run video generate`
 
