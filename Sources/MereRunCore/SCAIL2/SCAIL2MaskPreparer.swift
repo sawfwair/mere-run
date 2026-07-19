@@ -151,6 +151,32 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
         return ordered[selected].offset
     }
 
+    public static func correctionPropagationRange(
+        at index: Int,
+        corrections: [SCAIL2MaskCorrection]
+    ) -> ClosedRange<Int>? {
+        let ordered = corrections.sorted {
+            $0.frameIndex < $1.frameIndex
+        }
+        guard ordered.indices.contains(index) else { return nil }
+        let correction = ordered[index]
+        let start: Int
+        if index > ordered.startIndex {
+            let previous = ordered[index - 1].frameIndex
+            start = previous + ((correction.frameIndex - previous) / 2) + 1
+        } else {
+            start = 0
+        }
+        let end: Int
+        if index < ordered.index(before: ordered.endIndex) {
+            let next = ordered[index + 1].frameIndex
+            end = correction.frameIndex + ((next - correction.frameIndex) / 2)
+        } else {
+            end = .max
+        }
+        return start...end
+    }
+
     private func preparePreview(
         plan: SCAIL2MaskPlan,
         previewFrame: Int,
@@ -643,7 +669,8 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
             seedFrameSearchLimit: plan.seedFrameSearchLimit
         )
         var correctionRuns: [(SCAIL2MaskCorrection, SAM31TrackingRun)] = []
-        for correction in corrections.sorted(by: { $0.frameIndex < $1.frameIndex }) {
+        let orderedCorrections = corrections.sorted(by: { $0.frameIndex < $1.frameIndex })
+        for (correctionIndex, correction) in orderedCorrections.enumerated() {
             let correctionRoot = temporaryRoot
                 .appendingPathComponent("correction-\(subject.id)-\(correction.frameIndex)", isDirectory: true)
             let maskURL = try correction.paintedBinaryCorrectionPNG.map { path -> URL in
@@ -654,12 +681,20 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
                 return output
             }
             let prompt = correction.selector.promptObject(subjectID: subject.id, maskURL: maskURL)
+            let propagationRange = Self.correctionPropagationRange(
+                at: correctionIndex,
+                corrections: orderedCorrections
+            )!
             let run = try tracker.track(
                 videoURL: drivingProxyURL,
                 promptSet: SAM31PromptSet(objectPrompts: [prompt]),
                 outputVideoURL: correctionRoot.appendingPathComponent("overlay.mp4"),
                 jsonOutputURL: correctionRoot.appendingPathComponent("tracking.json"),
                 initFrameIndex: correction.frameIndex,
+                startFrameIndex: propagationRange.lowerBound,
+                endFrameIndex: propagationRange.upperBound == .max
+                    ? nil
+                    : propagationRange.upperBound,
                 threshold: plan.threshold,
                 resolution: plan.resolution,
                 maskOutputDirectoryURL: correctionRoot.appendingPathComponent("masks", isDirectory: true)

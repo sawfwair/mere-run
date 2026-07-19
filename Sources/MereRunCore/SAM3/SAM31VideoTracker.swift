@@ -4,6 +4,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
     public enum TrackingError: LocalizedError, Sendable {
         case unsupportedPlatform
         case initFrameOutOfRange(Int)
+        case invalidPropagationRange(start: Int, seed: Int, end: Int?)
 
         public var errorDescription: String? {
             switch self {
@@ -11,6 +12,9 @@ public final class SAM31VideoTracker: @unchecked Sendable {
                 return "Video tracking requires a supported MediaIO video backend."
             case .initFrameOutOfRange(let frame):
                 return "Initial tracking frame \(frame) is outside the extracted video frame range."
+            case .invalidPropagationRange(let start, let seed, let end):
+                let endDescription = end.map(String.init) ?? "end"
+                return "Tracking propagation range \(start)...\(endDescription) does not contain seed frame \(seed)."
             }
         }
     }
@@ -35,6 +39,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         outputVideoURL: URL,
         jsonOutputURL: URL? = nil,
         initFrameIndex: Int = 0,
+        startFrameIndex: Int = 0,
         endFrameIndex: Int? = nil,
         threshold: Float = 0.3,
         resolution: Int = 1008,
@@ -58,6 +63,15 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         let asset = try SAM31VideoIO.extractFrames(from: videoURL, into: framesDir, endFrame: endFrameIndex)
         guard initFrameIndex >= 0, initFrameIndex < asset.frameURLs.count else {
             throw TrackingError.initFrameOutOfRange(initFrameIndex)
+        }
+        guard startFrameIndex >= 0,
+              startFrameIndex <= initFrameIndex,
+              endFrameIndex.map({ $0 >= initFrameIndex }) ?? true else {
+            throw TrackingError.invalidPropagationRange(
+                start: startFrameIndex,
+                seed: initFrameIndex,
+                end: endFrameIndex
+            )
         }
 
         var annotatedFrameURLs = asset.frameURLs
@@ -155,9 +169,13 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             frameJSONDir: frameJSONDir,
             maskOutputDirectoryURL: maskOutputDirectoryURL
         )
-        if seedFrameIndex > 0 {
+        if seedFrameIndex > startFrameIndex {
             try propagate(
-                frameIndices: Array(stride(from: seedFrameIndex - 1, through: 0, by: -1)),
+                frameIndices: Array(stride(
+                    from: seedFrameIndex - 1,
+                    through: startFrameIndex,
+                    by: -1
+                )),
                 frameURLs: asset.frameURLs,
                 annotatedFrameURLs: &annotatedFrameURLs,
                 resultsByFrame: &resultsByFrame,

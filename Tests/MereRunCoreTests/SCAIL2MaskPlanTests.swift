@@ -77,11 +77,28 @@ final class SCAIL2MaskPlanTests: XCTestCase {
                 frameIndex: 30,
                 positivePoints: [SCAIL2MaskPoint(x: 30, y: 30)]
             ),
+            SCAIL2MaskCorrection(
+                subjectID: "dancer",
+                frameIndex: 50,
+                positivePoints: [SCAIL2MaskPoint(x: 50, y: 50)]
+            ),
         ]
 
         XCTAssertEqual(SCAIL2MaskPreparer.correctionIndex(for: 20, corrections: corrections), 0)
         XCTAssertEqual(SCAIL2MaskPreparer.correctionIndex(for: 21, corrections: corrections), 1)
-        XCTAssertEqual(SCAIL2MaskPreparer.correctionIndex(for: 100, corrections: corrections), 1)
+        XCTAssertEqual(SCAIL2MaskPreparer.correctionIndex(for: 41, corrections: corrections), 2)
+        XCTAssertEqual(
+            SCAIL2MaskPreparer.correctionPropagationRange(at: 0, corrections: corrections),
+            0...20
+        )
+        XCTAssertEqual(
+            SCAIL2MaskPreparer.correctionPropagationRange(at: 1, corrections: corrections),
+            21...40
+        )
+        XCTAssertEqual(
+            SCAIL2MaskPreparer.correctionPropagationRange(at: 2, corrections: corrections),
+            41...Int.max
+        )
     }
 
     func testPaletteCompositionUsesStablePriorityAndReportsOverlap() throws {
