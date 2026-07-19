@@ -24,5 +24,10 @@ immutable `Sawfwair/SCAIL-2-14B-MLX` snapshot pinned in
 The input contract is one reference image and seven-color reference mask, a
 driving video and matching seven-color mask video, plus an animation or
 replacement mode. Mask colors are packed in this order: white, red, green,
-blue, yellow, magenta, cyan. Long videos use 81-frame segments with five clean
-history frames, matching upstream SCAIL-2.
+blue, yellow, magenta, cyan. Review artifacts keep white as their canonical
+background. At inference time the runtime matches the official SCAIL-2 role
+contract: animation keeps the main reference background visible and hides the
+driving background, while replacement hides reference backgrounds and keeps
+the driving scene visible. Additional subject-reference backgrounds are
+hidden. Subject colors are unchanged. Long videos use 81-frame segments with
+five clean history frames, matching upstream SCAIL-2.

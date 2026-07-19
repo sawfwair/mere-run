@@ -31,8 +31,26 @@ public struct SCAIL2PaletteComposition: Hashable, Sendable {
     }
 }
 
+enum SCAIL2MaskRole {
+    case mainReference
+    case additionalSubjectReference
+    case driving
+
+    func background(mode: SCAIL2Mode) -> (UInt8, UInt8, UInt8, UInt8) {
+        switch (mode, self) {
+        case (.animation, .mainReference), (.replacement, .driving):
+            SCAIL2Palette.backgroundRGBA
+        case (.animation, .driving),
+             (.replacement, .mainReference),
+             (_, .additionalSubjectReference):
+            SCAIL2Palette.hiddenBackgroundRGBA
+        }
+    }
+}
+
 public enum SCAIL2Palette {
     public static let backgroundRGBA: (UInt8, UInt8, UInt8, UInt8) = (255, 255, 255, 255)
+    public static let hiddenBackgroundRGBA: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 255)
     /// ProRes 4444 can darken categorical edge pixels during YCbCr conversion.
     /// This bound accepts that codec drift; the separation requirement still
     /// rejects pixels that cannot be assigned to one palette entry confidently.
@@ -104,6 +122,13 @@ public enum SCAIL2Palette {
             let red = rgba[offset]
             let green = rgba[offset + 1]
             let blue = rgba[offset + 2]
+            if max(red, max(green, blue)) <= 24 {
+                rgba[offset] = hiddenBackgroundRGBA.0
+                rgba[offset + 1] = hiddenBackgroundRGBA.1
+                rgba[offset + 2] = hiddenBackgroundRGBA.2
+                rgba[offset + 3] = hiddenBackgroundRGBA.3
+                continue
+            }
             let distances = legal.map { entry -> Int in
                 let dr = Int(red) - Int(entry.rgba.0)
                 let dg = Int(green) - Int(entry.rgba.1)
@@ -182,7 +207,7 @@ public enum SCAIL2Palette {
                 paletteMask.rgba8[offset + 1],
                 paletteMask.rgba8[offset + 2]
             )
-            guard maskRGB != (255, 255, 255) else { continue }
+            guard maskRGB != (255, 255, 255), maskRGB != (0, 0, 0) else { continue }
             rgba[offset] = UInt8(
                 Float(rgba[offset]) * (1 - clampedAlpha) + Float(maskRGB.0) * clampedAlpha
             )

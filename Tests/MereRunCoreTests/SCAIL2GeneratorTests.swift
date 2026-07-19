@@ -121,4 +121,77 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
         XCTAssertEqual(output[6], 10.5, accuracy: 1e-6)
         XCTAssertEqual(output[9], 12.5, accuracy: 1e-6)
     }
+
+    func testMaskBackgroundMatchesOfficialModeAndRoleSemantics() throws {
+        let mask = try MediaImage(
+            width: 3,
+            height: 1,
+            rgba8: [
+                255, 255, 255, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .animation,
+                role: .mainReference
+            ).rgba8,
+            [
+                255, 255, 255, 255,
+                255, 255, 255, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .animation,
+                role: .driving
+            ).rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .replacement,
+                role: .mainReference
+            ).rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .replacement,
+                role: .driving
+            ).rgba8,
+            [
+                255, 255, 255, 255,
+                255, 255, 255, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        XCTAssertEqual(
+            try SCAIL2Generator.normalizedMaskForMode(
+                mask,
+                mode: .animation,
+                role: .additionalSubjectReference
+            ).rgba8,
+            [
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+    }
 }

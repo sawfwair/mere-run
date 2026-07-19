@@ -217,9 +217,20 @@ public final class SCAIL2Generator: @unchecked Sendable {
             requestedWidth: options.width,
             requestedHeight: options.height
         )
-        let referenceMaskImage = try validatedReferenceMask(options.reference.maskURL)
+        let referenceMaskImage = try Self.normalizedMaskForMode(
+            try validatedReferenceMask(options.reference.maskURL),
+            mode: options.mode,
+            role: .mainReference
+        )
         let additionalImages = try options.additionalReferences.map {
-            (try decodeImage($0.imageURL), try validatedReferenceMask($0.maskURL))
+            (
+                try decodeImage($0.imageURL),
+                try Self.normalizedMaskForMode(
+                    try validatedReferenceMask($0.maskURL),
+                    mode: options.mode,
+                    role: .additionalSubjectReference
+                )
+            )
         }
         try validateReferenceColors(
             [referenceMaskImage] + additionalImages.map(\.1),
@@ -337,7 +348,9 @@ public final class SCAIL2Generator: @unchecked Sendable {
         for range in segments {
             try Task.checkCancellation()
             let drivingImages = try decodeImages(drivingFrameURLs[range])
-            let maskImages = try decodeMaskImages(maskFrameURLs[range])
+            let maskImages = try decodeMaskImages(maskFrameURLs[range]).map {
+                try Self.normalizedMaskForMode($0, mode: options.mode, role: .driving)
+            }
             let drivingPixels = SCAIL2InputPreprocessor.centerCroppedTensor(
                 images: drivingImages,
                 width: dimensions.width,
@@ -510,6 +523,25 @@ public final class SCAIL2Generator: @unchecked Sendable {
             0...,
             0...
         ]
+    }
+
+    static func normalizedMaskForMode(
+        _ image: MediaImage,
+        mode: SCAIL2Mode,
+        role: SCAIL2MaskRole
+    ) throws -> MediaImage {
+        var rgba = image.rgba8
+        let background = role.background(mode: mode)
+        for pixelIndex in 0..<(image.width * image.height) {
+            let offset = pixelIndex * 4
+            let rgb = (rgba[offset], rgba[offset + 1], rgba[offset + 2])
+            guard rgb == (255, 255, 255) || rgb == (0, 0, 0) else { continue }
+            rgba[offset] = background.0
+            rgba[offset + 1] = background.1
+            rgba[offset + 2] = background.2
+            rgba[offset + 3] = background.3
+        }
+        return try MediaImage(width: image.width, height: image.height, rgba8: rgba)
     }
 
     private func validateInputs(_ options: SCAIL2GenerationOptions) throws {

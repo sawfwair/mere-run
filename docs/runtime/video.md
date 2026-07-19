@@ -60,6 +60,13 @@ supports one to six stable subjects, text/box/point selectors, and dense painted
 PNG corrections. White is background; legal subject colours are blue, red,
 green, magenta, cyan, and yellow.
 
+Prepared review artifacts always use white as the canonical background. During
+inference, `video animate` matches the official SCAIL-2 mask-role semantics:
+animation keeps the main reference background visible and hides the driving
+background, while replacement hides the reference background and keeps the
+driving scene visible. Additional subject-reference backgrounds are hidden.
+Subject colors and reference-to-driving correspondence are unchanged.
+
 After reviewing the mask artifacts, preflight and render natively:
 
 ```bash
