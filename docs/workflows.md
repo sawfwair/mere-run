@@ -41,9 +41,24 @@ Each node may independently set retry, timeout, and cache policy.
 
 The V1 node catalog contains:
 
+- `text.value`, `integer.value`, `number.value`, `boolean.value`, `json.value`
+- `seed.value`, `choice.value`
+- `text.join`, `text.template`
+- `text.enhance`, `image.describe`
 - `image.train-lora`
 - `image.generate`
 - `video.generate`
+
+The value and text nodes make authored creative material reusable without
+turning it into a runtime graph input. Literal values, seeds, joins, and
+templates execute as native deterministic intrinsics. `text.template` accepts
+strict `{{name}}` identifiers, preserves escaped `\{{name}}` text, and blocks
+missing variables. `text.enhance` and `image.describe` require an explicit
+installed model and never trigger a hidden pull.
+
+Catalog value schemas recursively describe array items, object properties, and
+additional properties. Editors may expose those nested slots as typed ports
+while the serialized graph continues to use ordinary nested JSON references.
 
 Companion plugins may add typed nodes without adding arbitrary command or
 Python execution to the graph ABI. Plugin nodes name their provider explicitly:
@@ -115,8 +130,11 @@ never pulls models automatically on a worker.
 
 ## Portable job bundles
 
-Materialization resolves defaults and random seeds, fingerprints the canonical
-graph and inputs, and copies declared file inputs into a content-addressed store.
+Materialization records source graph and input fingerprints, resolves defaults
+and random seeds, fingerprints the portable graph and inputs, and copies
+declared file inputs into a content-addressed store. The optional source
+fingerprints also flow into `run.json`, allowing authoring clients to display
+results only when they match the currently open source documents.
 
 ```bash
 mere.run graph materialize workflow.json \
@@ -181,9 +199,8 @@ machine paths never enter the bundle.
 
 Bundles pin their minimum compatible `mere.run` worker version. Preflight and
 submission reject older SSH or Relay workers before transfer or queueing; the
-worker repeats the check before execution. Graphs materialized by this release
-require `mere.run` 0.23.0 or newer because older workers do not preserve the new
-execution, resource, and secret fields during canonical fingerprint checks.
+worker repeats the check before execution. Graphs using creative material nodes
+require `mere.run` 0.24.0 or newer.
 
 ## Local execution
 

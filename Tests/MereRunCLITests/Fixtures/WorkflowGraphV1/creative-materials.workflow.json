@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "kind": "mere.run/workflow-graph",
+  "name": "creative-materials-fixture",
+  "inputs": {
+    "subject": {
+      "type": "string",
+      "default": "luminous botanist"
+    }
+  },
+  "nodes": [
+    {
+      "id": "subject",
+      "kind": "text.value",
+      "arguments": {"value": {"$ref": "inputs.subject"}}
+    },
+    {
+      "id": "style",
+      "kind": "text.value",
+      "arguments": {"value": "editorial portrait"}
+    },
+    {
+      "id": "parts",
+      "kind": "text.join",
+      "arguments": {
+        "parts": [
+          {"$ref": "nodes.subject.outputs.text"},
+          {"$ref": "nodes.style.outputs.text"}
+        ],
+        "separator": ", "
+      }
+    },
+    {
+      "id": "format",
+      "kind": "choice.value",
+      "arguments": {
+        "options": ["square", "portrait", "landscape"],
+        "selected": "portrait"
+      }
+    },
+    {
+      "id": "prompt",
+      "kind": "text.template",
+      "arguments": {
+        "template": "{{body}}; {{format}} composition",
+        "variables": {
+          "body": {"$ref": "nodes.parts.outputs.text"},
+          "format": {"$ref": "nodes.format.outputs.value"}
+        }
+      }
+    },
+    {
+      "id": "seed",
+      "kind": "seed.value",
+      "arguments": {"seed": 42}
+    }
+  ],
+  "outputs": {
+    "prompt": {"$ref": "nodes.prompt.outputs.text"},
+    "format": {"$ref": "nodes.format.outputs.value"},
+    "seed": {"$ref": "nodes.seed.outputs.seed"}
+  },
+  "execution": {"max_parallel_nodes": 2},
+  "metadata": {"fixture": "creative-materials-v1"}
+}

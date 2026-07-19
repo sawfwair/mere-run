@@ -291,6 +291,95 @@ struct WorkflowInputsDocument: Codable, Equatable, Sendable {
     }
 }
 
+enum WorkflowValueSchemaType: String, Codable, Equatable, Sendable {
+    case string
+    case integer
+    case number
+    case boolean
+    case array
+    case object
+    case json
+    case enumeration = "enum"
+}
+
+final class WorkflowValueSchema: Codable, @unchecked Sendable, Equatable {
+    let type: WorkflowValueSchemaType
+    let title: String?
+    let description: String?
+    let defaultValue: WorkflowValue?
+    let values: [String]?
+    let properties: [String: WorkflowValueSchema]?
+    let required: [String]?
+    let items: WorkflowValueSchema?
+    let additionalProperties: WorkflowValueSchema?
+    let minimum: Double?
+    let maximum: Double?
+    let step: Double?
+    let multiline: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case title
+        case description
+        case defaultValue = "default"
+        case values
+        case properties
+        case required
+        case items
+        case additionalProperties = "additional_properties"
+        case minimum
+        case maximum
+        case step
+        case multiline
+    }
+
+    init(
+        type: WorkflowValueSchemaType,
+        title: String? = nil,
+        description: String? = nil,
+        defaultValue: WorkflowValue? = nil,
+        values: [String]? = nil,
+        properties: [String: WorkflowValueSchema]? = nil,
+        required: [String]? = nil,
+        items: WorkflowValueSchema? = nil,
+        additionalProperties: WorkflowValueSchema? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil,
+        step: Double? = nil,
+        multiline: Bool? = nil
+    ) {
+        self.type = type
+        self.title = title
+        self.description = description
+        self.defaultValue = defaultValue
+        self.values = values
+        self.properties = properties
+        self.required = required
+        self.items = items
+        self.additionalProperties = additionalProperties
+        self.minimum = minimum
+        self.maximum = maximum
+        self.step = step
+        self.multiline = multiline
+    }
+
+    static func == (lhs: WorkflowValueSchema, rhs: WorkflowValueSchema) -> Bool {
+        lhs.type == rhs.type
+            && lhs.title == rhs.title
+            && lhs.description == rhs.description
+            && lhs.defaultValue == rhs.defaultValue
+            && lhs.values == rhs.values
+            && lhs.properties == rhs.properties
+            && lhs.required == rhs.required
+            && lhs.items == rhs.items
+            && lhs.additionalProperties == rhs.additionalProperties
+            && lhs.minimum == rhs.minimum
+            && lhs.maximum == rhs.maximum
+            && lhs.step == rhs.step
+            && lhs.multiline == rhs.multiline
+    }
+}
+
 struct WorkflowNodeField: Codable, Equatable, Sendable {
     let name: String
     let type: WorkflowFieldType
@@ -305,7 +394,7 @@ struct WorkflowNodeField: Codable, Equatable, Sendable {
     let multiline: Bool?
     let secret: Bool?
     let advanced: Bool?
-    let valueSchema: WorkflowValue?
+    let valueSchema: WorkflowValueSchema?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -338,7 +427,7 @@ struct WorkflowNodeField: Codable, Equatable, Sendable {
         multiline: Bool? = nil,
         secret: Bool? = nil,
         advanced: Bool? = nil,
-        valueSchema: WorkflowValue? = nil
+        valueSchema: WorkflowValueSchema? = nil
     ) {
         self.name = name
         self.type = type
@@ -491,6 +580,14 @@ struct WorkflowNodeTraits: Codable, Equatable, Sendable {
         supportsProgress: false,
         supportsPreviews: false
     )
+
+    static let material = WorkflowNodeTraits(
+        deterministic: true,
+        cacheable: true,
+        sideEffects: "none",
+        supportsProgress: false,
+        supportsPreviews: true
+    )
 }
 
 struct WorkflowNodeProviderIdentity: Codable, Equatable, Hashable, Sendable {
@@ -507,6 +604,21 @@ struct WorkflowNodeProviderIdentity: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+struct WorkflowNodePresentation: Codable, Equatable, Sendable {
+    let style: String
+    let primaryArgument: String?
+
+    enum CodingKeys: String, CodingKey {
+        case style
+        case primaryArgument = "primary_argument"
+    }
+
+    init(style: String, primaryArgument: String? = nil) {
+        self.style = style
+        self.primaryArgument = primaryArgument
+    }
+}
+
 struct WorkflowNodeCatalogEntry: Codable, Equatable, Sendable {
     let kind: String
     let title: String
@@ -516,6 +628,7 @@ struct WorkflowNodeCatalogEntry: Codable, Equatable, Sendable {
     let outputs: [WorkflowNodeOutput]
     let requirements: WorkflowNodeRequirements
     let traits: WorkflowNodeTraits
+    let presentation: WorkflowNodePresentation?
     let provider: WorkflowNodeProviderIdentity?
 
     init(
@@ -527,6 +640,7 @@ struct WorkflowNodeCatalogEntry: Codable, Equatable, Sendable {
         outputs: [WorkflowNodeOutput],
         requirements: WorkflowNodeRequirements = .none,
         traits: WorkflowNodeTraits = .core,
+        presentation: WorkflowNodePresentation? = nil,
         provider: WorkflowNodeProviderIdentity? = nil
     ) {
         self.kind = kind
@@ -537,12 +651,184 @@ struct WorkflowNodeCatalogEntry: Codable, Equatable, Sendable {
         self.outputs = outputs
         self.requirements = requirements
         self.traits = traits
+        self.presentation = presentation
         self.provider = provider
     }
 }
 
 enum WorkflowNodeRegistry {
     static let entries: [WorkflowNodeCatalogEntry] = [
+        WorkflowNodeCatalogEntry(
+            kind: "text.value",
+            title: "Text",
+            description: "A reusable text value.",
+            category: "values",
+            inputs: [
+                .init(name: "value", type: .string, required: true, multiline: true),
+            ],
+            outputs: [.init(name: "text", type: .string)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "value")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "integer.value",
+            title: "Integer",
+            description: "A reusable whole-number value.",
+            category: "values",
+            inputs: [
+                .init(name: "value", type: .integer, required: true),
+            ],
+            outputs: [.init(name: "value", type: .integer)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "value")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "number.value",
+            title: "Number",
+            description: "A reusable numeric value.",
+            category: "values",
+            inputs: [
+                .init(name: "value", type: .number, required: true),
+            ],
+            outputs: [.init(name: "value", type: .number)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "value")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "boolean.value",
+            title: "Boolean",
+            description: "A reusable true or false value.",
+            category: "values",
+            inputs: [
+                .init(name: "value", type: .boolean, required: true),
+            ],
+            outputs: [.init(name: "value", type: .boolean)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "value")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "json.value",
+            title: "JSON",
+            description: "A reusable structured JSON value.",
+            category: "values",
+            inputs: [
+                .init(name: "value", type: .json, required: true),
+            ],
+            outputs: [.init(name: "value", type: .json)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "value")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "seed.value",
+            title: "Seed",
+            description: "A reproducible seed, generated once when omitted.",
+            category: "values",
+            inputs: [
+                .init(name: "seed", type: .integer, required: false),
+            ],
+            outputs: [.init(name: "seed", type: .integer)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "seed")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "choice.value",
+            title: "Choice",
+            description: "A selected value from an explicit list of options.",
+            category: "values",
+            inputs: [
+                .init(
+                    name: "options",
+                    type: .json,
+                    required: true,
+                    valueSchema: .init(type: .array, items: .init(type: .string))
+                ),
+                .init(name: "selected", type: .string, required: true),
+            ],
+            outputs: [.init(name: "value", type: .string)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "selected")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "text.join",
+            title: "Join text",
+            description: "Join an ordered list of text values.",
+            category: "text",
+            inputs: [
+                .init(
+                    name: "parts",
+                    type: .json,
+                    required: true,
+                    valueSchema: .init(type: .array, items: .init(type: .string))
+                ),
+                .init(name: "separator", type: .string, required: false, defaultValue: .string("\n")),
+            ],
+            outputs: [.init(name: "text", type: .string)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "parts")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "text.template",
+            title: "Text template",
+            description: "Render {{name}} placeholders with named text variables.",
+            category: "text",
+            inputs: [
+                .init(name: "template", type: .string, required: true, multiline: true),
+                .init(
+                    name: "variables",
+                    type: .json,
+                    required: true,
+                    valueSchema: .init(type: .object, additionalProperties: .init(type: .string))
+                ),
+            ],
+            outputs: [.init(name: "text", type: .string)],
+            traits: .material,
+            presentation: .init(style: "material", primaryArgument: "template")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "text.enhance",
+            title: "Enhance text",
+            description: "Improve text with an explicitly selected installed chat model.",
+            category: "text",
+            inputs: [
+                .init(name: "text", type: .string, required: true, multiline: true),
+                .init(name: "instruction", type: .string, required: true, multiline: true),
+                .init(name: "model", type: .string, required: true),
+                .init(name: "max_tokens", type: .integer, required: false, defaultValue: .integer(512), minimum: 1),
+                .init(name: "temperature", type: .number, required: false, defaultValue: .number(0.3), minimum: 0),
+            ],
+            outputs: [.init(name: "text", type: .string)],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            ),
+            presentation: .init(style: "material", primaryArgument: "text")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "image.describe",
+            title: "Describe image",
+            description: "Describe an image with an explicitly selected installed vision model.",
+            category: "text",
+            inputs: [
+                .init(
+                    name: "image",
+                    type: .asset,
+                    required: true,
+                    acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]
+                ),
+                .init(name: "instruction", type: .string, required: true, multiline: true),
+                .init(name: "model", type: .string, required: true),
+                .init(name: "max_tokens", type: .integer, required: false, defaultValue: .integer(256), minimum: 1),
+                .init(name: "temperature", type: .number, required: false, defaultValue: .number(0.2), minimum: 0),
+            ],
+            outputs: [.init(name: "text", type: .string)],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            ),
+            presentation: .init(style: "material", primaryArgument: "image")
+        ),
         WorkflowNodeCatalogEntry(
             kind: "image.train-lora",
             title: "Train image LoRA",
@@ -648,6 +934,7 @@ enum WorkflowNodeRegistry {
                 outputs: entry.outputs,
                 requirements: entry.requirements,
                 traits: entry.traits,
+                presentation: entry.presentation,
                 provider: builtInProvider
             )
         }
@@ -955,12 +1242,26 @@ enum WorkflowGraphValidator {
                 expected: field.type,
                 enumValues: field.values,
                 acceptedContentTypes: field.acceptedContentTypes,
+                valueSchema: field.valueSchema,
                 nodeID: node.id,
                 field: field.name,
                 graph: graph,
                 nodesByID: nodesByID,
                 diagnostics: &diagnostics
             )
+        }
+        if node.kind == "choice.value",
+           case .array(let options)? = node.arguments["options"],
+           case .string(let selected)? = node.arguments["selected"] {
+            let optionStrings = options.compactMap(\.stringValue)
+            if optionStrings.count == options.count, !optionStrings.contains(selected) {
+                diagnostics.append(.init(
+                    id: "workflow_choice_selected_invalid_\(node.id)",
+                    severity: .blocker,
+                    title: "Choice selection is unavailable",
+                    message: "Node '\(node.id)' selected value must appear in its options."
+                ))
+            }
         }
         for dependency in node.dependsOn ?? [] where nodesByID[dependency] == nil {
             diagnostics.append(.init(
@@ -1015,6 +1316,7 @@ enum WorkflowGraphValidator {
         expected: WorkflowFieldType,
         enumValues: [String]?,
         acceptedContentTypes: [String]?,
+        valueSchema: WorkflowValueSchema? = nil,
         nodeID: String,
         field: String,
         graph: WorkflowGraphDocument,
@@ -1064,6 +1366,7 @@ enum WorkflowGraphValidator {
                     expected: .asset,
                     enumValues: nil,
                     acceptedContentTypes: acceptedContentTypes,
+                    valueSchema: nil,
                     nodeID: nodeID,
                     field: field,
                     graph: graph,
@@ -1082,6 +1385,7 @@ enum WorkflowGraphValidator {
                         expected: .json,
                         enumValues: nil,
                         acceptedContentTypes: nil,
+                        valueSchema: nil,
                         nodeID: nodeID,
                         field: field,
                         graph: graph,
@@ -1096,6 +1400,7 @@ enum WorkflowGraphValidator {
                         expected: .json,
                         enumValues: nil,
                         acceptedContentTypes: nil,
+                        valueSchema: nil,
                         nodeID: nodeID,
                         field: field,
                         graph: graph,
@@ -1106,6 +1411,17 @@ enum WorkflowGraphValidator {
             default:
                 break
             }
+            if let valueSchema {
+                validateValueSchema(
+                    value,
+                    schema: valueSchema,
+                    nodeID: nodeID,
+                    field: field,
+                    graph: graph,
+                    nodesByID: nodesByID,
+                    diagnostics: &diagnostics
+                )
+            }
             return
         }
         if !matches(value, fieldType: expected, enumValues: enumValues) {
@@ -1114,6 +1430,89 @@ enum WorkflowGraphValidator {
                 severity: .blocker,
                 title: "Node argument type mismatch",
                 message: "Node '\(nodeID)' argument '\(field)' must be '\(expected.rawValue)'."
+            ))
+        }
+    }
+
+    private static func validateValueSchema(
+        _ value: WorkflowValue,
+        schema: WorkflowValueSchema,
+        nodeID: String,
+        field: String,
+        graph: WorkflowGraphDocument,
+        nodesByID: [String: WorkflowNode],
+        diagnostics: inout [PreflightDiagnostic]
+    ) {
+        if case .reference = value {
+            let expected: WorkflowFieldType = switch schema.type {
+            case .string: .string
+            case .integer: .integer
+            case .number: .number
+            case .boolean: .boolean
+            case .enumeration: .string
+            case .array, .object, .json: .json
+            }
+            validateValue(
+                value,
+                expected: expected,
+                enumValues: nil,
+                acceptedContentTypes: nil,
+                valueSchema: nil,
+                nodeID: nodeID,
+                field: field,
+                graph: graph,
+                nodesByID: nodesByID,
+                diagnostics: &diagnostics
+            )
+            return
+        }
+
+        switch (schema.type, value) {
+        case (.string, .string), (.integer, .integer), (.number, .number),
+             (.number, .integer), (.boolean, .boolean), (.json, _):
+            return
+        case (.enumeration, .string(let selected)):
+            if let values = schema.values, !values.contains(selected) {
+                diagnostics.append(.init(
+                    id: "workflow_node_argument_schema_\(nodeID)_\(field.replacingOccurrences(of: "/", with: "_"))",
+                    severity: .blocker,
+                    title: "Node argument choice mismatch",
+                    message: "Node '\(nodeID)' argument '\(field)' is not an allowed value."
+                ))
+            }
+        case (.array, .array(let values)):
+            guard let items = schema.items else { return }
+            for (index, nested) in values.enumerated() {
+                validateValueSchema(
+                    nested,
+                    schema: items,
+                    nodeID: nodeID,
+                    field: "\(field)/\(index)",
+                    graph: graph,
+                    nodesByID: nodesByID,
+                    diagnostics: &diagnostics
+                )
+            }
+        case (.object, .object(let values)):
+            guard let additionalProperties = schema.additionalProperties else { return }
+            for key in values.keys.sorted() {
+                guard let nested = values[key] else { continue }
+                validateValueSchema(
+                    nested,
+                    schema: additionalProperties,
+                    nodeID: nodeID,
+                    field: "\(field)/\(key)",
+                    graph: graph,
+                    nodesByID: nodesByID,
+                    diagnostics: &diagnostics
+                )
+            }
+        default:
+            diagnostics.append(.init(
+                id: "workflow_node_argument_schema_\(nodeID)_\(field.replacingOccurrences(of: "/", with: "_"))",
+                severity: .blocker,
+                title: "Node argument structure mismatch",
+                message: "Node '\(nodeID)' argument '\(field)' does not match its declared value_schema."
             ))
         }
     }

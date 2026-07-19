@@ -4,10 +4,15 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.24.0 - 2026-07-19
 
 ### Added
 
+- added first-class creative material nodes for reusable text, numeric, boolean,
+  JSON, seed, choice, join, template, enhancement, and image-description
+  workflows, with native deterministic intrinsics, strict template validation,
+  explicit installed-model execution, recursive typed catalog schemas, frozen
+  seeds, and source-correlated run provenance.
 - added native Swift/MLX SCAIL-2 14B subject animation and replacement through
   `video animate`, including exact seven-color mask packing, mixed-stream RoPE,
   OpenCLIP and UMT5 conditioning, Wan 2.1 VAE support, 81/5 segmented clean

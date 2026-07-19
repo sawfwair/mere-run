@@ -9,6 +9,8 @@
     "job_id": { "type": "string", "format": "uuid" },
     "graph_name": { "type": "string" },
     "graph_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_graph_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_input_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "state": { "$ref": "#/$defs/state" },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" },

@@ -8,20 +8,198 @@ final class WorkflowGraphTests: XCTestCase {
             name: "policy",
             type: .json,
             required: false,
-            valueSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "enabled": .object([
-                        "type": .string("boolean"),
-                        "default": .boolean(true),
-                    ]),
-                ]),
-            ])
+            valueSchema: .init(
+                type: .object,
+                properties: [
+                    "enabled": .init(type: .boolean, defaultValue: .boolean(true)),
+                ]
+            )
         )
 
         let data = try WorkflowBundleCodec.encoder().encode(field)
         XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("value_schema"))
         XCTAssertEqual(try WorkflowBundleCodec.decoder().decode(WorkflowNodeField.self, from: data), field)
+    }
+
+    func testCreativeMaterialCatalogIsTypedAndPresented() throws {
+        let expectedKinds = [
+            "text.value", "integer.value", "number.value", "boolean.value", "json.value",
+            "seed.value", "choice.value", "text.join", "text.template", "text.enhance",
+            "image.describe",
+        ]
+        for kind in expectedKinds {
+            let entry = try XCTUnwrap(WorkflowNodeRegistry.entry(for: kind))
+            XCTAssertEqual(entry.presentation?.style, "material")
+        }
+        let join = try XCTUnwrap(WorkflowNodeRegistry.entry(for: "text.join"))
+        XCTAssertEqual(join.inputs.first(where: { $0.name == "parts" })?.valueSchema?.type, .array)
+        XCTAssertEqual(
+            join.inputs.first(where: { $0.name == "parts" })?.valueSchema?.items?.type,
+            .string
+        )
+        let template = try XCTUnwrap(WorkflowNodeRegistry.entry(for: "text.template"))
+        XCTAssertEqual(
+            template.inputs.first(where: { $0.name == "variables" })?
+                .valueSchema?.additionalProperties?.type,
+            .string
+        )
+    }
+
+    func testCreativeMaterialIntrinsicsHaveExactSemantics() throws {
+        XCTAssertEqual(
+            try WorkflowIntrinsicInvocation(
+                kind: "text.join",
+                arguments: ["parts": .array([]), "separator": .string("|")]
+            ).evaluate(),
+            ["text": .string("")]
+        )
+        XCTAssertEqual(
+            try WorkflowIntrinsicInvocation(
+                kind: "text.template",
+                arguments: [
+                    "template": .string(#"{{name}} + {{name}} + \{{literal}}"#),
+                    "variables": .object([
+                        "name": .string("Mere"),
+                        "extra": .string("retained"),
+                    ]),
+                ]
+            ).evaluate(),
+            ["text": .string("Mere + Mere + {{literal}}")]
+        )
+        XCTAssertThrowsError(try WorkflowIntrinsicInvocation(
+            kind: "choice.value",
+            arguments: [
+                "options": .array([.string("square")]),
+                "selected": .string("wide"),
+            ]
+        ).evaluate())
+        XCTAssertThrowsError(try WorkflowIntrinsicInvocation(
+            kind: "text.join",
+            arguments: ["parts": .array([.integer(1)])]
+        ).evaluate())
+        XCTAssertThrowsError(try WorkflowIntrinsicInvocation(
+            kind: "text.template",
+            arguments: [
+                "template": .string("{{missing}}"),
+                "variables": .object([:]),
+            ]
+        ).evaluate())
+    }
+
+    func testCreativeMaterialGraphRunsWithNestedReferencesAndFrozenSeed() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let graph = try decodeGraph(#"""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "creative-materials",
+          "inputs": {},
+          "execution": {"max_parallel_nodes": 3},
+          "nodes": [
+            {"id": "alpha", "kind": "text.value", "arguments": {"value": "alpha"}},
+            {"id": "beta", "kind": "text.value", "arguments": {"value": "beta"}},
+            {
+              "id": "joined",
+              "kind": "text.join",
+              "arguments": {
+                "parts": [
+                  {"$ref": "nodes.alpha.outputs.text"},
+                  {"$ref": "nodes.beta.outputs.text"}
+                ],
+                "separator": "|"
+              }
+            },
+            {
+              "id": "templated",
+              "kind": "text.template",
+              "arguments": {
+                "template": "Result: {{body}}",
+                "variables": {"body": {"$ref": "nodes.joined.outputs.text"}}
+              }
+            },
+            {
+              "id": "format",
+              "kind": "choice.value",
+              "arguments": {"options": ["square", "wide"], "selected": "wide"}
+            },
+            {"id": "seed", "kind": "seed.value", "arguments": {}}
+          ],
+          "outputs": {
+            "text": {"$ref": "nodes.templated.outputs.text"},
+            "format": {"$ref": "nodes.format.outputs.value"},
+            "seed": {"$ref": "nodes.seed.outputs.seed"}
+          }
+        }
+        """#)
+        let sourceGraphFingerprint = try WorkflowBundleCodec.hash(graph)
+        let sourceInputs = WorkflowInputsDocument(values: [:])
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: sourceInputs,
+            destination: root.appendingPathComponent("bundle"),
+            seed: { 42 }
+        ).materialize()
+
+        XCTAssertEqual(bundle.job.sourceGraphFingerprint, sourceGraphFingerprint)
+        XCTAssertEqual(bundle.job.sourceInputFingerprint, try WorkflowBundleCodec.hash(sourceInputs))
+        XCTAssertEqual(bundle.graph.nodes.first(where: { $0.id == "seed" })?.arguments["seed"], .integer(42))
+        XCTAssertNotEqual(bundle.job.sourceGraphFingerprint, bundle.job.graphFingerprint)
+
+        let runDirectory = root.appendingPathComponent("run")
+        let outcome = try WorkflowRunner(
+            bundleDirectory: bundle.directory,
+            runDirectory: runDirectory,
+            processRunner: FixtureWorkflowProcessRunner()
+        ).execute()
+        XCTAssertEqual(outcome.state, .finished)
+
+        let manifest = try WorkflowBundleCodec.decoder().decode(
+            GraphRunManifest.self,
+            from: Data(contentsOf: runDirectory.appendingPathComponent(GraphRunManifest.filename))
+        )
+        XCTAssertEqual(manifest.sourceGraphFingerprint, sourceGraphFingerprint)
+        XCTAssertEqual(
+            manifest.nodes.first(where: { $0.id == "templated" })?
+                .outputs.first(where: { $0.name == "text" })?.value,
+            .string("Result: alpha|beta")
+        )
+        XCTAssertEqual(
+            manifest.nodes.first(where: { $0.id == "format" })?
+                .outputs.first(where: { $0.name == "value" })?.value,
+            .string("wide")
+        )
+        XCTAssertEqual(
+            manifest.nodes.first(where: { $0.id == "seed" })?
+                .outputs.first(where: { $0.name == "seed" })?.value,
+            .integer(42)
+        )
+    }
+
+    func testModelBackedCreativeNodesRequireInstalledExplicitModels() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let enhance = WorkflowNode(
+            id: "enhance",
+            kind: "text.enhance",
+            arguments: [
+                "text": .string("draft"),
+                "instruction": .string("Make it vivid."),
+                "model": .string("text-chat-gemma4-12b-4bit"),
+                "max_tokens": .integer(512),
+                "temperature": .number(0.3),
+            ],
+            dependsOn: nil
+        )
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: enhance,
+            arguments: enhance.arguments,
+            nodeDirectory: root
+        )
+        XCTAssertTrue(invocation.preflightArguments.suffix(2).elementsEqual(["--preflight", "--json"]))
+        XCTAssertTrue(invocation.runArguments.contains("--require-installed"))
+        XCTAssertTrue(invocation.runArguments.contains("--no-thinking"))
+        XCTAssertEqual(invocation.stdoutOutputName, "text")
     }
 
     func testNVIDIAMemoryProbeParsesLargestGPU() {
@@ -197,6 +375,32 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(
             try WorkflowBundleCodec.hash(WorkflowPortableInputFingerprint(inputs: inputs, assets: assets)),
             compatibility.canonicalFixture.inputFingerprint
+        )
+
+        let materialGraph = try WorkflowGraphDocument.load(
+            from: fixtures.appendingPathComponent(compatibility.materialFixture.graph)
+        )
+        let materialInputs = try WorkflowInputsDocument.load(
+            from: fixtures.appendingPathComponent(compatibility.materialFixture.inputs)
+        )
+        let materialAssets = try WorkflowBundleCodec.decoder().decode(
+            WorkflowAssetManifest.self,
+            from: Data(contentsOf: fixtures.appendingPathComponent(compatibility.materialFixture.assets))
+        )
+        let materialValidation = WorkflowGraphValidator.validate(
+            graph: materialGraph,
+            inputs: materialInputs
+        )
+        XCTAssertEqual(materialValidation.order, compatibility.materialFixture.executionOrder)
+        XCTAssertEqual(
+            try WorkflowBundleCodec.hash(materialGraph),
+            compatibility.materialFixture.graphFingerprint
+        )
+        XCTAssertEqual(
+            try WorkflowBundleCodec.hash(
+                WorkflowPortableInputFingerprint(inputs: materialInputs, assets: materialAssets)
+            ),
+            compatibility.materialFixture.inputFingerprint
         )
     }
 
@@ -1443,11 +1647,13 @@ private struct WorkflowCompatibilityFixture: Decodable {
     let schemaVersion: Int
     let kind: String
     let canonicalFixture: CanonicalFixture
+    let materialFixture: CanonicalFixture
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case kind
         case canonicalFixture = "canonical_fixture"
+        case materialFixture = "material_fixture"
     }
 
     struct CanonicalFixture: Decodable {

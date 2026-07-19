@@ -14,9 +14,9 @@
     "plugin_event": "mere.run/plugin-graph-event.v1"
   },
   "components": [
-    { "id": "mere.run", "minimum_version": "0.23.0" },
-    { "id": "mere-workflow-tools", "minimum_version": "0.2.0" },
-    { "id": "mere-run-graph-studio", "minimum_version": "0.1.0" },
+    { "id": "mere.run", "minimum_version": "0.24.0" },
+    { "id": "mere-workflow-tools", "minimum_version": "0.3.0" },
+    { "id": "mere-run-graph-studio", "minimum_version": "0.3.0" },
     { "id": "mere.run-node", "minimum_version": "0.1.9" }
   ],
   "canonical_fixture": {
@@ -27,5 +27,14 @@
     "graph_fingerprint": "83327833196a00799c19507aaf2b34b36450346fb543467a2d4edfe2465316bc",
     "input_fingerprint": "5380b7fbbed8ce21bf5fa4b3e1426fb479d9a289a2da06d531366b3f9120f30d",
     "execution_order": ["image-a", "image-b", "video"]
+  },
+  "material_fixture": {
+    "id": "creative-materials-v1",
+    "graph": "creative-materials.workflow.json",
+    "inputs": "creative-materials.inputs.json",
+    "assets": "creative-materials.assets.json",
+    "graph_fingerprint": "1790e6ed75ab3b757501bc5ef331def1e57ae9622ae3b5752f95abaee14b2f91",
+    "input_fingerprint": "ba0aedb2359a8d03bbd4e364e5331ff09d0cd139a83eadb397c93dfea4254da2",
+    "execution_order": ["subject", "style", "parts", "format", "prompt", "seed"]
   }
 }
