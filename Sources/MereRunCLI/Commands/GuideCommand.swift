@@ -592,6 +592,13 @@ enum GuideRegistry {
             resourceName: "model-remove.md"
         ),
         GuideTopic(
+            topic: "model-storage",
+            title: "Model Storage",
+            commandPaths: [["model", "storage"], ["model", "gc"]],
+            models: [],
+            resourceName: "model-storage.md"
+        ),
+        GuideTopic(
             topic: "model-repair-manifests",
             title: "Model Repair Manifests",
             commandPaths: [["model", "repair-manifests"]],

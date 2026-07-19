@@ -6,7 +6,9 @@ These are the public runtime environment variables that matter in the OSS repo.
 
 ### `MERERUN_MODELS_DIR`
 
-Overrides the shared local model store.
+Overrides the model links and model-local-files store. Large managed Hub
+payloads normally live under `MERERUN_HUB_CACHE`, so moving only this directory
+does not move most downloaded bytes.
 
 ```bash
 export MERERUN_MODELS_DIR=/Volumes/Models/mere.run
@@ -23,7 +25,8 @@ Default:
 
 ### `MERERUN_HUB_CACHE`
 
-Overrides the Hugging Face snapshot cache used by managed model pulls.
+Overrides the physical payload store used by managed model pulls. This is the
+location to move when large downloaded weights need to live on another disk.
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface

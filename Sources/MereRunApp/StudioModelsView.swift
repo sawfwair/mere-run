@@ -12,10 +12,79 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
     let status: String
     let size: String
     let usageTerms: StudioModelUsageTerms?
+    let referencedBytes: Int64?
+    let reclaimableBytes: Int64?
+    let sharedBytes: Int64?
+    let externalBytes: Int64?
+
+    init(
+        id: String,
+        category: String,
+        status: String,
+        size: String,
+        usageTerms: StudioModelUsageTerms?,
+        referencedBytes: Int64? = nil,
+        reclaimableBytes: Int64? = nil,
+        sharedBytes: Int64? = nil,
+        externalBytes: Int64? = nil
+    ) {
+        self.id = id
+        self.category = category
+        self.status = status
+        self.size = size
+        self.usageTerms = usageTerms
+        self.referencedBytes = referencedBytes
+        self.reclaimableBytes = reclaimableBytes
+        self.sharedBytes = sharedBytes
+        self.externalBytes = externalBytes
+    }
 
     var isInstalled: Bool {
         status.lowercased() == "installed"
     }
+}
+
+private enum StudioModelsAlert: Identifiable {
+    case removal(StudioModelInventoryRow)
+    case cleanup(StudioModelGarbagePlan)
+
+    var id: String {
+        switch self {
+        case .removal(let row): "removal:\(row.id)"
+        case .cleanup: "cleanup"
+        }
+    }
+}
+
+private struct StudioModelGarbageCollectOutput: Decodable {
+    let plan: StudioModelGarbagePlan
+    let result: StudioModelGarbageResult?
+}
+
+private struct StudioModelGarbagePlan: Decodable {
+    let reclaimableBytes: Int64
+    let items: [StudioModelGarbageItem]
+}
+
+private struct StudioModelGarbageItem: Decodable {}
+
+private struct StudioModelGarbageResult: Decodable {
+    let reclaimedBytes: Int64
+}
+
+private struct StudioModelStorageReport: Decodable {
+    let applicationSupportBytes: Int64
+    let garbageCollectableBytes: Int64
+    let models: [StudioModelStorageUsage]
+}
+
+private struct StudioModelStorageUsage: Decodable {
+    let id: String
+    let installed: Bool
+    let referencedBytes: Int64
+    let reclaimableBytes: Int64
+    let sharedBytes: Int64
+    let externalBytes: Int64
 }
 
 struct StudioRuntimeSettings: Codable, Equatable {
@@ -139,7 +208,9 @@ struct StudioModelsSheet: View {
     @State private var loadingInfoID: String?
     @State private var loadingRuntimeID: String?
     @State private var removingID: String?
-    @State private var pendingRemoval: StudioModelInventoryRow?
+    @State private var pendingAlert: StudioModelsAlert?
+    @State private var storageReport: StudioModelStorageReport?
+    @State private var isCleaningStorage = false
     @State private var runtimeSettingsByID: [String: StudioRuntimeSettings] = [:]
     @State private var runtimeAlias = ""
     @State private var runtimeTTL = ""
@@ -201,15 +272,30 @@ struct StudioModelsSheet: View {
             }
             select(first)
         }
-        .alert(item: $pendingRemoval) { row in
-            Alert(
-                title: Text("Purge \(row.id)?"),
-                message: Text("This deletes \(row.size) from the local model store."),
-                primaryButton: .destructive(Text("Purge")) {
-                    Task { await purge(row) }
-                },
-                secondaryButton: .cancel()
-            )
+        .alert(item: $pendingAlert) { pending in
+            switch pending {
+            case .removal(let row):
+                Alert(
+                    title: Text("Purge \(row.id)?"),
+                    message: Text(removalMessage(row)),
+                    primaryButton: .destructive(Text("Purge")) {
+                        Task { await purge(row) }
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .cleanup(let plan):
+                Alert(
+                    title: Text("Clean up model storage?"),
+                    message: Text(
+                        "This deletes \(Self.bytes(plan.reclaimableBytes)) across \(plan.items.count) "
+                            + "unreferenced items. Installed and legacy-linked payloads are preserved."
+                    ),
+                    primaryButton: .destructive(Text("Clean Up")) {
+                        Task { await cleanStorage() }
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
         }
     }
 
@@ -240,6 +326,15 @@ struct StudioModelsSheet: View {
             }
             .buttonStyle(.bordered)
             .help("Reveal the model store in Finder")
+
+            Button {
+                Task { await previewStorageCleanup() }
+            } label: {
+                Label("Clean Up", systemImage: "externaldrive.badge.minus")
+            }
+            .buttonStyle(.bordered)
+            .disabled(isRefreshing || isCleaningStorage)
+            .help("Preview unreferenced payloads and partial downloads before deleting them")
 
             Button {
                 Task { await refresh() }
@@ -381,7 +476,7 @@ struct StudioModelsSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.id)
                         .font(.system(size: 18, weight: .semibold))
-                    Text("\(row.category) · \(row.status) · \(row.size)")
+                    Text("\(row.category) · \(row.status) · \(row.size) referenced")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                     if let usageTerms = row.usageTerms {
@@ -463,7 +558,7 @@ struct StudioModelsSheet: View {
                 .help("Reveal this model's source folder in Finder")
 
                 Button(role: .destructive) {
-                    pendingRemoval = row
+                    pendingAlert = .removal(row)
                 } label: {
                     Label("Purge", systemImage: "trash")
                 }
@@ -568,16 +663,24 @@ struct StudioModelsSheet: View {
         isRefreshing = true
         statusMessage = "Refreshing model inventory..."
         let result = await controller.utilityCommandResult(args: ["model", "list"])
-        isRefreshing = false
 
         guard result.exitCode == 0 else {
+            isRefreshing = false
             statusMessage = "Could not list models"
             detailText = result.outputText
             return
         }
 
         rows = StudioModelInventoryParser.rows(from: result.stdout)
-        statusMessage = "\(installedRows.count) downloaded · \(rows.count) known"
+        let storageResult = await controller.utilityCommandResult(args: ["model", "storage", "--json"])
+        if storageResult.exitCode == 0,
+           let data = storageResult.stdout.data(using: .utf8),
+           let report = try? JSONDecoder().decode(StudioModelStorageReport.self, from: data) {
+            storageReport = report
+            applyStorageUsage(report)
+        }
+        isRefreshing = false
+        updateStatusMessage()
         if let selectedID, visibleRows.contains(where: { $0.id == selectedID }) {
             return
         }
@@ -749,6 +852,90 @@ struct StudioModelsSheet: View {
         } else {
             statusMessage = "Could not purge \(row.id)"
         }
+    }
+
+    @MainActor
+    private func previewStorageCleanup() async {
+        isCleaningStorage = true
+        statusMessage = "Inspecting model storage..."
+        let command = await controller.utilityCommandResult(args: ["model", "gc", "--json"])
+        isCleaningStorage = false
+        guard command.exitCode == 0,
+              let data = command.stdout.data(using: .utf8),
+              let output = try? JSONDecoder().decode(StudioModelGarbageCollectOutput.self, from: data) else {
+            statusMessage = "Could not inspect model storage"
+            detailText = command.outputText
+            return
+        }
+        guard !output.plan.items.isEmpty else {
+            statusMessage = "Model storage is clean"
+            return
+        }
+        pendingAlert = .cleanup(output.plan)
+        statusMessage = "\(Self.bytes(output.plan.reclaimableBytes)) can be cleaned up"
+    }
+
+    @MainActor
+    private func cleanStorage() async {
+        isCleaningStorage = true
+        statusMessage = "Cleaning model storage..."
+        let command = await controller.utilityCommandResult(args: ["model", "gc", "--force", "--json"])
+        isCleaningStorage = false
+        guard command.exitCode == 0,
+              let data = command.stdout.data(using: .utf8),
+              let output = try? JSONDecoder().decode(StudioModelGarbageCollectOutput.self, from: data),
+              let result = output.result else {
+            statusMessage = "Could not clean model storage"
+            detailText = command.outputText
+            return
+        }
+        statusMessage = "Reclaimed \(Self.bytes(result.reclaimedBytes))"
+        await refresh()
+    }
+
+    private func applyStorageUsage(_ report: StudioModelStorageReport) {
+        let usageByID = Dictionary(uniqueKeysWithValues: report.models.map { ($0.id, $0) })
+        rows = rows.map { row in
+            guard let usage = usageByID[row.id], usage.installed else { return row }
+            return StudioModelInventoryRow(
+                id: row.id,
+                category: row.category,
+                status: row.status,
+                size: Self.bytes(usage.referencedBytes),
+                usageTerms: row.usageTerms,
+                referencedBytes: usage.referencedBytes,
+                reclaimableBytes: usage.reclaimableBytes,
+                sharedBytes: usage.sharedBytes,
+                externalBytes: usage.externalBytes
+            )
+        }
+    }
+
+    private func updateStatusMessage() {
+        if let storageReport {
+            statusMessage = "\(installedRows.count) downloaded · \(Self.bytes(storageReport.applicationSupportBytes)) used"
+                + " · \(Self.bytes(storageReport.garbageCollectableBytes)) cleanable"
+        } else {
+            statusMessage = "\(installedRows.count) downloaded · \(rows.count) known"
+        }
+    }
+
+    private func removalMessage(_ row: StudioModelInventoryRow) -> String {
+        guard let reclaimable = row.reclaimableBytes else {
+            return "This model references \(row.size). Shared payloads used by other models will be preserved."
+        }
+        var message = "This model references \(row.size) and will reclaim \(Self.bytes(reclaimable)) now."
+        if let shared = row.sharedBytes, shared > 0 {
+            message += " \(Self.bytes(shared)) shared with other models will be preserved."
+        }
+        if let external = row.externalBytes, external > 0 {
+            message += " \(Self.bytes(external)) stored outside MereRun will be preserved."
+        }
+        return message
+    }
+
+    private static func bytes(_ count: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
     }
 
     private func revealStore() {

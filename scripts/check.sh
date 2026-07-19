@@ -59,6 +59,8 @@ fi
 "$mere_run_bin" video generate --help >/dev/null
 "$mere_run_bin" video export-latents --help >/dev/null
 "$mere_run_bin" model --help >/dev/null
+"$mere_run_bin" model storage --help >/dev/null
+"$mere_run_bin" model gc --help >/dev/null
 "$mere_run_bin" adapter --help >/dev/null
 "$mere_run_bin" adapter list --help >/dev/null
 "$mere_run_bin" adapter pull --help >/dev/null
@@ -69,7 +71,7 @@ fi
 "$mere_run_bin" api serve --help >/dev/null
 
 model_list_output="$("$mere_run_bin" model list)"
-rg -q '^ID +Category +Status +Size$' <<<"$model_list_output"
+rg -q '^ID +Category +Status +Referenced$' <<<"$model_list_output"
 rg -q '^image-klein-max +image +' <<<"$model_list_output"
 
 status_output="$("$mere_run_bin" status --timeout-seconds 0.1)"

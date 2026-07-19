@@ -38,4 +38,19 @@ final class HubSnapshotTests: XCTestCase {
         XCTAssertTrue(redirected.absoluteString.contains("tokenizer%2Fadded_tokens.json"))
         XCTAssertFalse(redirected.absoluteString.contains("tokenizer%252Fadded_tokens.json"))
     }
+
+    func testRevisionKeysAreStableAndRevisionSpecific() {
+        XCTAssertEqual(HubSnapshot.revisionKey("main"), HubSnapshot.revisionKey("main"))
+        XCTAssertNotEqual(HubSnapshot.revisionKey("main"), HubSnapshot.revisionKey("feature"))
+        XCTAssertEqual(HubSnapshot.revisionKey("main").count, 64)
+    }
+
+    func testNextPageLinkResolution() throws {
+        let source = try XCTUnwrap(URL(string: "https://huggingface.co/api/models/org/repo/tree/main"))
+        let header = "<https://huggingface.co/api/models/org/repo/tree/main?cursor=abc>; rel=\"next\", <https://example.test/end>; rel=\"last\""
+        let next = HubSnapshot.nextPageURL(from: header, relativeTo: source)
+
+        XCTAssertEqual(next?.absoluteString, "https://huggingface.co/api/models/org/repo/tree/main?cursor=abc")
+        XCTAssertNil(HubSnapshot.nextPageURL(from: nil, relativeTo: source))
+    }
 }
