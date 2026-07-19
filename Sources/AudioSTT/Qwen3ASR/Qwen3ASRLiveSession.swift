@@ -1,7 +1,7 @@
 import Foundation
 import AudioCore
 
-public struct Qwen3ASRLiveConfiguration: Sendable, Hashable {
+public struct ASRLiveConfiguration: Sendable, Hashable {
     public var decodeIntervalMs: Int
     public var minDecodeAudioMs: Int
     public var silenceMs: Int
@@ -26,14 +26,14 @@ public struct Qwen3ASRLiveConfiguration: Sendable, Hashable {
     }
 }
 
-public enum Qwen3ASRLiveFinishReason: String, Sendable, Hashable, Codable {
+public enum ASRLiveFinishReason: String, Sendable, Hashable, Codable {
     case eof
     case stopped
     case cancelled
     case maxDuration = "max_duration"
 }
 
-public struct Qwen3ASRLiveTranscript: Sendable, Hashable, Codable {
+public struct ASRLiveTranscript: Sendable, Hashable, Codable {
     public let utteranceId: String
     public let revision: Int
     public let text: String
@@ -41,12 +41,17 @@ public struct Qwen3ASRLiveTranscript: Sendable, Hashable, Codable {
     public let endMs: Int
 }
 
-public enum Qwen3ASRLiveEvent: Sendable, Hashable {
-    case partial(Qwen3ASRLiveTranscript)
-    case commit(Qwen3ASRLiveTranscript)
+public enum ASRLiveEvent: Sendable, Hashable {
+    case partial(ASRLiveTranscript)
+    case commit(ASRLiveTranscript)
     case stats(ASRStreamingStats, queuedAudioMs: Int)
-    case final(Qwen3ASRLiveFinishReason)
+    case final(ASRLiveFinishReason)
 }
+
+public typealias Qwen3ASRLiveConfiguration = ASRLiveConfiguration
+public typealias Qwen3ASRLiveFinishReason = ASRLiveFinishReason
+public typealias Qwen3ASRLiveTranscript = ASRLiveTranscript
+public typealias Qwen3ASRLiveEvent = ASRLiveEvent
 
 /// Quality-oriented utterance coordinator for live Qwen ASR.
 ///

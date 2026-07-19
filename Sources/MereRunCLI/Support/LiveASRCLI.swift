@@ -3,6 +3,14 @@ import AudioCore
 import AudioSTT
 import MereRunCore
 
+struct CLILiveASRSession {
+    let backend: SpeechBackendOption
+    let events: AsyncThrowingStream<ASRLiveEvent, Error>
+    let feed: @Sendable ([Float]) async throws -> Void
+    let finish: @Sendable (ASRLiveFinishReason) async throws -> Void
+    let cancel: @Sendable () async -> Void
+}
+
 struct PCM16LittleEndianDecoder {
     private var trailingByte: UInt8?
 
@@ -81,7 +89,7 @@ struct LiveASRProtocolEvent: Encodable {
         return event
     }
 
-    static func transcript(type: String, value: Qwen3ASRLiveTranscript) -> Self {
+    static func transcript(type: String, value: ASRLiveTranscript) -> Self {
         var event = Self(type: type)
         event.utteranceId = value.utteranceId
         event.revision = value.revision
@@ -99,7 +107,7 @@ struct LiveASRProtocolEvent: Encodable {
         return event
     }
 
-    static func final(_ reason: Qwen3ASRLiveFinishReason) -> Self {
+    static func final(_ reason: ASRLiveFinishReason) -> Self {
         var event = Self(type: "final")
         event.reason = reason.rawValue
         return event
@@ -127,7 +135,7 @@ enum LiveASRCLIWriter {
     }
 
     static func consume(
-        _ events: AsyncThrowingStream<Qwen3ASRLiveEvent, Error>,
+        _ events: AsyncThrowingStream<ASRLiveEvent, Error>,
         jsonl: Bool,
         quiet: Bool
     ) async throws {
@@ -203,5 +211,24 @@ enum CLIQwenASRLoader {
         if fileManager.fileExists(atPath: nested.appendingPathComponent("config.json").path) { return nested }
         if fileManager.fileExists(atPath: base.appendingPathComponent("config.json").path) { return base }
         return nil
+    }
+}
+
+enum CLIParakeetASRLoader {
+    static func prepare(
+        model: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ParakeetGenerator {
+        let normalized = model?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = normalized?.isEmpty == false ? normalized : nil
+        let explicitPath = value.map { URL(fileURLWithPath: $0).standardizedFileURL }
+            .flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+        let modelId = explicitPath == nil ? (value ?? ParakeetResources.defaultModelId) : ParakeetResources.defaultModelId
+        let generator = ParakeetGenerator(modelId: modelId)
+        try await generator.prepare(
+            modelPath: explicitPath?.path,
+            progressHandler: progressHandler
+        )
+        return generator
     }
 }

@@ -43,16 +43,73 @@ public actor ParakeetGenerator: ASRGenerator {
             try await loadModel(from: root, progressHandler: progressHandler)
         }
 
+        progressHandler?(ASRProgress(stage: .loadingAudio, message: "Loading audio..."))
+        let audio = try AudioReader.readAudio(from: request.audioURL)
+        return try transcribePrepared(
+            samples: audio,
+            language: request.language,
+            progressHandler: progressHandler
+        )
+    }
+
+    public func transcribe(
+        samples: [Float],
+        language: String? = nil,
+        modelPath: String? = nil,
+        progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
+    ) async throws -> ASRResult {
+        let root = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+
+        if loadedModelPath != root.path {
+            progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading Parakeet model..."))
+            try await loadModel(from: root, progressHandler: progressHandler)
+        }
+
         guard let model, let audioPreprocessor, let modelConfig else {
             throw ParakeetError.modelNotLoaded
         }
 
-        progressHandler?(ASRProgress(stage: .loadingAudio, message: "Loading audio..."))
-        let audio = try AudioReader.readAudio(from: request.audioURL)
-        let audioDuration = TimeInterval(audio.count) / TimeInterval(modelConfig.preprocessor.sampleRate)
+        return decode(
+            samples: samples,
+            language: language,
+            model: model,
+            audioPreprocessor: audioPreprocessor,
+            modelConfig: modelConfig,
+            progressHandler: progressHandler
+        )
+    }
+
+    public func transcribePrepared(
+        samples: [Float],
+        language: String? = nil,
+        progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
+    ) throws -> ASRResult {
+        guard let model, let audioPreprocessor, let modelConfig else {
+            throw ParakeetError.modelNotLoaded
+        }
+
+        return decode(
+            samples: samples,
+            language: language,
+            model: model,
+            audioPreprocessor: audioPreprocessor,
+            modelConfig: modelConfig,
+            progressHandler: progressHandler
+        )
+    }
+
+    private func decode(
+        samples: [Float],
+        language: String?,
+        model: any ParakeetDecodingModel,
+        audioPreprocessor: ParakeetAudioPreprocessor,
+        modelConfig: ParakeetModelConfig,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) -> ASRResult {
+        let audioDuration = TimeInterval(samples.count) / TimeInterval(modelConfig.preprocessor.sampleRate)
 
         progressHandler?(ASRProgress(stage: .extractingFeatures, message: "Extracting log-mel features..."))
-        let mel = audioPreprocessor.logMelSpectrogram(from: audio)
+        let mel = audioPreprocessor.logMelSpectrogram(from: samples)
         MLX.eval(mel)
 
         if Self.debugEnabled {
@@ -85,7 +142,7 @@ public actor ParakeetGenerator: ASRGenerator {
 
         return ASRResult(
             text: first.text,
-            language: request.language,
+            language: language,
             duration: audioDuration,
             tokenAlignments: ParakeetAlignment.toASRTokenAlignments(flattened),
             sentenceAlignments: ParakeetAlignment.toASRSentenceAlignments(first.sentences)

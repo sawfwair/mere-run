@@ -71,7 +71,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Option(name: [.long], help: "Maximum tokens to generate (default: 448).")
     var maxTokens: Int = 448
 
-    @Flag(name: [.long], help: "Enable streaming ASR mode (forces Qwen backend).")
+    @Flag(name: [.long], help: "Enable streaming ASR mode using the selected backend.")
     var stream: Bool = false
 
     @Option(name: [.customLong("stream-chunk-ms")], help: "Audio feed chunk size in ms for streaming mode.")
@@ -107,6 +107,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
             }
             guard streamDecodeMs > 0 else {
                 throw ValidationError("--stream-decode-ms must be > 0.")
+            }
+            if task == .translate, backend == .parakeet {
+                throw ValidationError("Parakeet does not support translation; use --backend qwen or --backend auto.")
             }
         }
 
@@ -148,13 +151,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
             throw ValidationError("Audio file not found: \(audioURL.path)")
         }
 
-        if stream && backend == .parakeet {
-            CLIStderr.write("Streaming mode forces Qwen backend; ignoring --backend parakeet.\n")
-        }
-
         if !quiet {
-            let backendLabel = stream ? SpeechBackendOption.qwen.rawValue : backend.rawValue
-            CLIStderr.write("Task=\(task.rawValue) backend=\(backendLabel)\n")
+            CLIStderr.write("Task=\(task.rawValue) backend=\(backend.rawValue)\n")
         }
 
         let progressHandler: (@Sendable (ASRProgress) -> Void)?
@@ -233,24 +231,11 @@ struct SpeechTranscribe: AsyncParsableCommand {
                 }
             }
         }
-        let generator = try await CLIQwenASRLoader.prepare(model: model, progressHandler: progressHandler)
-        let request = ASRStreamingRequest(
-            language: language,
-            task: task.task,
-            maxTokens: maxTokens,
-            sampleRate: 16_000,
-            decodeIntervalMs: streamDecodeMs,
-            minDecodeAudioMs: 1_600
-        )
-        let live = Qwen3ASRLiveSession(
-            generator: generator,
-            request: request,
-            configuration: Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
-        )
+        let live = try await makeLiveSession(progressHandler: progressHandler)
         if jsonl {
             try LiveASRCLIWriter.write(.ready())
         } else if !quiet {
-            CLIStderr.write("Ready: qwen live ASR (pcm-s16le/16000/mono).\n")
+            CLIStderr.write("Ready: \(live.backend.rawValue) live ASR (pcm-s16le/16000/mono).\n")
         }
         let eventTask = Task {
             try await LiveASRCLIWriter.consume(live.events, jsonl: jsonl, quiet: quiet)
@@ -261,11 +246,11 @@ struct SpeechTranscribe: AsyncParsableCommand {
             while let data = try FileHandle.standardInput.read(upToCount: 32_000), !data.isEmpty {
                 let samples = decoder.decode(data)
                 if !samples.isEmpty {
-                    try await live.feed(samples: samples)
+                    try await live.feed(samples)
                 }
             }
             try decoder.validateEOF()
-            try await live.finish(reason: .eof)
+            try await live.finish(.eof)
             try await eventTask.value
         } catch {
             eventTask.cancel()
@@ -285,68 +270,50 @@ struct SpeechTranscribe: AsyncParsableCommand {
         audioURL: URL,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws {
-        let normalizedOverride = normalized(model)
-        let overridePath = existingPath(from: normalizedOverride)
-        let qwenModelId: String
-        if let normalizedOverride, overridePath == nil {
-            qwenModelId = normalizedOverride
-        } else {
-            qwenModelId = Qwen3ASRResources.defaultModelId
-        }
-
-        let generator = Qwen3ASRGenerator(modelId: qwenModelId)
-        if let modelPath = overridePath {
-            try await generator.prepare(modelPath: modelPath.path, progressHandler: progressHandler)
-        } else if let localModelRoot = localQwenModelRootIfAvailable() {
-            try await generator.prepare(modelPath: localModelRoot.path, progressHandler: progressHandler)
-        }
-
-        let streamRequest = ASRStreamingRequest(
-            language: request.language,
-            task: request.task,
-            maxTokens: request.maxTokens,
-            sampleRate: 16_000,
-            decodeIntervalMs: streamDecodeMs
-        )
-        let session = try await generator.makeStreamingSession(streamRequest)
-        let chunkSamples = max(1, (streamRequest.sampleRate * streamChunkMs) / 1_000)
+        let live = try await makeLiveSession(progressHandler: progressHandler)
+        let chunkSamples = max(1, (16_000 * streamChunkMs) / 1_000)
         let audioSamples = try AudioReader.readAudio(from: audioURL)
 
-        let eventTask = Task { () throws -> ASRResult in
-            var finalResult: ASRResult?
-            for try await event in session.events {
+        let eventTask = Task { () throws -> [String] in
+            var commits: [String] = []
+            for try await event in live.events {
                 switch event {
-                case .partial(let text):
+                case .partial(let transcript):
                     if !quiet {
-                        CLIStderr.write("[partial] \(text)\n")
+                        CLIStderr.write("[partial] \(transcript.text)\n")
                     }
+                case .commit(let transcript):
+                    commits.append(transcript.text)
                 case .stats:
                     break
-                case .final(let result):
-                    finalResult = result
+                case .final:
+                    break
                 }
             }
-            if let finalResult {
-                return finalResult
-            }
-            throw ASRStreamingError.invalidState("ASR stream ended without final result.")
+            return commits
         }
 
         do {
             var start = 0
             while start < audioSamples.count {
                 let end = min(audioSamples.count, start + chunkSamples)
-                try await session.feed(samples: Array(audioSamples[start..<end]))
+                try await live.feed(Array(audioSamples[start..<end]))
                 start = end
+                try await Task.sleep(for: .milliseconds(streamChunkMs))
             }
-            try await session.finish()
+            try await live.finish(.eof)
 
-            let result = try await eventTask.value
+            let text = try await eventTask.value.joined(separator: "\n")
+            let result = ASRResult(
+                text: text,
+                language: request.language,
+                duration: Double(audioSamples.count) / 16_000
+            )
             let outputText = renderOutput(result: result, includeTimestamps: timestamps)
 
             if !quiet {
                 let durationStr = String(format: "%.2f", result.duration)
-                CLIStderr.write("Resolved backend: qwen (streaming_forced_qwen_v1)\n")
+                CLIStderr.write("Resolved backend: \(live.backend.rawValue) (streaming_policy_v1)\n")
                 CLIStderr.write("Audio duration: \(durationStr)s\n")
                 if let lang = result.language {
                     CLIStderr.write("Language: \(lang)\n")
@@ -366,40 +333,75 @@ struct SpeechTranscribe: AsyncParsableCommand {
             print(outputText)
         } catch {
             eventTask.cancel()
-            await session.cancel()
+            await live.cancel()
             throw error
         }
     }
 
-    private func localQwenModelRootIfAvailable() -> URL? {
-        let fm = FileManager.default
-        let base = MereRunModelPaths.resolveModelDir(Qwen3ASRResources.defaultModelId) { root in
-            fm.fileExists(atPath: root.appendingPathComponent("config.json").path)
-                || fm.fileExists(atPath: root.appendingPathComponent("\(Qwen3ASRResources.defaultModelId)/config.json").path)
+    private func makeLiveSession(
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> CLILiveASRSession {
+        let selected = try resolvedStreamingBackend()
+        let request = ASRStreamingRequest(
+            language: language,
+            task: task.task,
+            maxTokens: maxTokens,
+            sampleRate: 16_000,
+            decodeIntervalMs: streamDecodeMs,
+            minDecodeAudioMs: 1_600
+        )
+        let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
+
+        switch selected {
+        case .parakeet:
+            var parakeetConfiguration = configuration
+            parakeetConfiguration.silenceMs = min(configuration.silenceMs, 600)
+            let generator = try await CLIParakeetASRLoader.prepare(
+                model: model,
+                progressHandler: progressHandler
+            )
+            let live = ParakeetASRLiveSession(
+                generator: generator,
+                request: request,
+                configuration: parakeetConfiguration
+            )
+            return CLILiveASRSession(
+                backend: .parakeet,
+                events: live.events,
+                feed: { try await live.feed(samples: $0) },
+                finish: { try await live.finish(reason: $0) },
+                cancel: { await live.cancel() }
+            )
+        case .qwen:
+            let generator = try await CLIQwenASRLoader.prepare(
+                model: model,
+                progressHandler: progressHandler
+            )
+            let live = Qwen3ASRLiveSession(
+                generator: generator,
+                request: request,
+                configuration: configuration
+            )
+            return CLILiveASRSession(
+                backend: .qwen,
+                events: live.events,
+                feed: { try await live.feed(samples: $0) },
+                finish: { try await live.finish(reason: $0) },
+                cancel: { await live.cancel() }
+            )
+        case .auto:
+            preconditionFailure("Streaming backend must resolve before session creation.")
         }
-        let nested = base.appendingPathComponent(Qwen3ASRResources.defaultModelId, isDirectory: true)
-        if fm.fileExists(atPath: nested.appendingPathComponent("config.json").path) {
-            return nested
-        }
-        if fm.fileExists(atPath: base.appendingPathComponent("config.json").path) {
-            return base
-        }
-        return nil
     }
 
-    private func existingPath(from value: String?) -> URL? {
-        guard let value else { return nil }
-        let url = URL(fileURLWithPath: value).standardizedFileURL
-        if FileManager.default.fileExists(atPath: url.path) {
-            return url
+    private func resolvedStreamingBackend() throws -> SpeechBackendOption {
+        if task == .translate {
+            guard backend != .parakeet else {
+                throw ValidationError("Parakeet does not support translation; use --backend qwen or --backend auto.")
+            }
+            return .qwen
         }
-        return nil
-    }
-
-    private func normalized(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        return backend == .auto ? .parakeet : backend
     }
 
     private func renderOutput(result: ASRResult, includeTimestamps: Bool) -> String {

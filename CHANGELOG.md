@@ -4,6 +4,21 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Added
+
+- added resident Parakeet live transcription for raw PCM and streamed files,
+  preserving the V1 partial, commit, stats, final, cancellation, silence, and
+  bounded-backpressure contract already used by Qwen live ASR.
+- added discoverable live ASR backend capabilities to `mere.run status` so
+  remote schedulers can select Parakeet or Qwen deliberately.
+
+### Changed
+
+- changed live `--backend auto` policy to match batch ASR: transcription uses
+  fast Parakeet while translation uses quality-first Qwen.
+
 ## 0.23.0 - 2026-07-18
 
 ### Added
