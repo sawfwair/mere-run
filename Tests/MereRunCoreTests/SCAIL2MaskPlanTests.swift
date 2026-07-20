@@ -31,12 +31,132 @@ final class SCAIL2MaskPlanTests: XCTestCase {
 
         try plan.validate()
         XCTAssertEqual(plan.schemaVersion, 1)
+        XCTAssertEqual(plan.mode, .animation)
         XCTAssertEqual(plan.subjects.count, 1)
         XCTAssertEqual(plan.subjects[0].color, .blue)
         XCTAssertEqual(plan.threshold, 0.05)
         XCTAssertEqual(plan.resolution, 1008)
         XCTAssertEqual(plan.seedFrameSearchLimit, 48)
         XCTAssertEqual(plan.paletteTolerance, SCAIL2Palette.codecTolerance)
+    }
+
+    func testDecodesReplacementPreparationMode() throws {
+        let data = Data(
+            """
+            {
+              "schema_version": 1,
+              "mode": "replacement",
+              "driving_video": "driver.mp4",
+              "width": 832,
+              "height": 480,
+              "fps": 16,
+              "subjects": [{
+                "id": "performer",
+                "color": "blue",
+                "reference_image": "reference.png",
+                "reference_selector": {"text": "the puppet"},
+                "driving_selector": {"text": "the dancer"}
+              }]
+            }
+            """.utf8
+        )
+
+        let plan = try JSONDecoder().decode(SCAIL2MaskPlan.self, from: data)
+
+        try plan.validate()
+        XCTAssertEqual(plan.mode, .replacement)
+        XCTAssertEqual(plan.width, 832)
+        XCTAssertEqual(plan.height, 480)
+    }
+
+    func testRelativeInputsResolveAgainstThePlanFile() throws {
+        let plan = SCAIL2MaskPlan(
+            mode: .replacement,
+            drivingVideo: "driver.mp4",
+            width: 832,
+            height: 480,
+            fps: 16,
+            subjects: [
+                SCAIL2MaskSubject(
+                    id: "performer",
+                    color: .blue,
+                    referenceImage: "refs/puppet.png",
+                    referenceSelector: SCAIL2MaskSelector(text: "the puppet"),
+                    drivingSelector: SCAIL2MaskSelector(text: "the dancer")
+                ),
+            ],
+            corrections: [
+                SCAIL2MaskCorrection(
+                    subjectID: "performer",
+                    frameIndex: 4,
+                    paintedBinaryCorrectionPNG: "corrections/frame-4.png"
+                ),
+            ]
+        )
+        let planURL = URL(fileURLWithPath: "/tmp/recast/request.json")
+
+        let resolved = plan.resolvingPaths(relativeTo: planURL)
+
+        XCTAssertEqual(resolved.drivingVideo, "/tmp/recast/driver.mp4")
+        XCTAssertEqual(resolved.subjects[0].referenceImage, "/tmp/recast/refs/puppet.png")
+        XCTAssertEqual(
+            resolved.corrections[0].paintedBinaryCorrectionPNG,
+            "/tmp/recast/corrections/frame-4.png"
+        )
+    }
+
+    func testReplacementReferenceIsAspectFitAndMattedToBlack() throws {
+        let source = try MediaImage(
+            width: 2,
+            height: 2,
+            rgba8: [
+                255, 0, 0, 255, 0, 255, 0, 255,
+                0, 0, 255, 255, 255, 255, 0, 255,
+            ]
+        )
+
+        let prepared = try SCAIL2MaskPreparer.preparedReference(
+            image: source,
+            binaryMask: [1, 0, 0, 1],
+            color: .blue,
+            width: 4,
+            height: 2,
+            mode: .replacement
+        )
+
+        XCTAssertEqual(prepared.image.width, 4)
+        XCTAssertEqual(prepared.image.height, 2)
+        XCTAssertEqual(pixel(prepared.image, x: 0, y: 0), [0, 0, 0, 255])
+        XCTAssertEqual(pixel(prepared.image, x: 1, y: 0), [255, 0, 0, 255])
+        XCTAssertEqual(pixel(prepared.image, x: 2, y: 0), [0, 0, 0, 255])
+        XCTAssertEqual(pixel(prepared.image, x: 2, y: 1), [255, 255, 0, 255])
+        XCTAssertEqual(pixel(prepared.paletteMask, x: 1, y: 0), [0, 0, 255, 255])
+        XCTAssertEqual(pixel(prepared.paletteMask, x: 2, y: 0), [255, 255, 255, 255])
+    }
+
+    func testAnimationReferencePreservesTheFittedScene() throws {
+        let source = try MediaImage(
+            width: 2,
+            height: 1,
+            rgba8: [
+                12, 34, 56, 255,
+                78, 90, 123, 255,
+            ]
+        )
+
+        let prepared = try SCAIL2MaskPreparer.preparedReference(
+            image: source,
+            binaryMask: [1, 0],
+            color: .red,
+            width: 2,
+            height: 1,
+            mode: .animation
+        )
+
+        XCTAssertEqual(pixel(prepared.image, x: 0, y: 0), [12, 34, 56, 255])
+        XCTAssertEqual(pixel(prepared.image, x: 1, y: 0), [78, 90, 123, 255])
+        XCTAssertEqual(pixel(prepared.paletteMask, x: 0, y: 0), [255, 0, 0, 255])
+        XCTAssertEqual(pixel(prepared.paletteMask, x: 1, y: 0), [255, 255, 255, 255])
     }
 
     func testRejectsMoreThanSixSubjects() {
@@ -63,6 +183,11 @@ final class SCAIL2MaskPlanTests: XCTestCase {
                 .invalidSubjectCount(7)
             )
         }
+    }
+
+    private func pixel(_ image: MediaImage, x: Int, y: Int) -> [UInt8] {
+        let offset = ((y * image.width) + x) * 4
+        return Array(image.rgba8[offset..<(offset + 4)])
     }
 
     func testCorrectionPropagationUsesNearestImmutableBoundary() {
@@ -215,6 +340,45 @@ final class SCAIL2MaskPlanTests: XCTestCase {
             object["model_revision"] as? String,
             "a992e302ea9b0f03f41dfd93414a4fd0e818f65b"
         )
+    }
+
+    func testDurableTrackingReportStripsTemporaryMaskPaths() throws {
+        let subject = SCAIL2MaskTrackingSubject(
+            id: "performer",
+            color: .blue,
+            seedFrameIndex: 0,
+            frames: [
+                SAM31TrackingFrameResult(
+                    frameIndex: 0,
+                    timestampSeconds: 0,
+                    detections: [
+                        SAM31TrackingObjectResult(
+                            objectID: "performer",
+                            label: "performer",
+                            score: 0.9,
+                            visible: true,
+                            box: SAM31SegmentationBox(x1: 1, y1: 2, x2: 3, y2: 4),
+                            maskAreaPixels: 42,
+                            maskPath: "/var/folders/temporary/mask.png"
+                        ),
+                    ]
+                ),
+            ]
+        )
+
+        let encoded = try JSONEncoder().encode(
+            SCAIL2MaskTrackingReport(
+                modelID: "vision-segment-sam31",
+                frameCount: 1,
+                fps: 16,
+                subjects: [subject]
+            )
+        )
+        let json = try XCTUnwrap(String(data: encoded, encoding: .utf8))
+
+        XCTAssertNil(subject.frames[0].detections[0].maskPath)
+        XCTAssertFalse(json.contains("/var/folders/temporary"))
+        XCTAssertFalse(json.contains("\"maskPath\""))
     }
 
     func testPaletteVideoRoundTripPreservesLegalLabels() throws {

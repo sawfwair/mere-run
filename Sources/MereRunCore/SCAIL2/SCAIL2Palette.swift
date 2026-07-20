@@ -134,13 +134,23 @@ public enum SCAIL2Palette {
                 rgba[offset + 3] = hiddenBackgroundRGBA.3
                 continue
             }
-            let distances = legal.map { entry -> Int in
+            var selected = 0
+            var minimum = Int.max
+            var nextMinimum = Int.max
+            for (index, entry) in legal.enumerated() {
                 let dr = Int(red) - Int(entry.rgba.0)
                 let dg = Int(green) - Int(entry.rgba.1)
                 let db = Int(blue) - Int(entry.rgba.2)
-                return max(abs(dr), max(abs(dg), abs(db)))
+                let distance = max(abs(dr), max(abs(dg), abs(db)))
+                if distance < minimum {
+                    nextMinimum = minimum
+                    minimum = distance
+                    selected = index
+                } else if distance < nextMinimum {
+                    nextMinimum = distance
+                }
             }
-            guard let minimum = distances.min(), minimum <= Int(tolerance) else {
+            guard minimum <= Int(tolerance) else {
                 throw SCAIL2PaletteError.colorOutsideTolerance(
                     red: red,
                     green: green,
@@ -148,13 +158,6 @@ public enum SCAIL2Palette {
                     tolerance: tolerance
                 )
             }
-            guard let selected = distances.firstIndex(of: minimum) else {
-                throw SCAIL2PaletteError.ambiguousColor(red: red, green: green, blue: blue)
-            }
-            let nextMinimum = distances.enumerated()
-                .filter { $0.offset != selected }
-                .map(\.element)
-                .min() ?? Int.max
             guard nextMinimum - minimum >= minimumPaletteSeparation else {
                 throw SCAIL2PaletteError.ambiguousColor(red: red, green: green, blue: blue)
             }

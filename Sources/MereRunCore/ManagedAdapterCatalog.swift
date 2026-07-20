@@ -8,6 +8,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
     public let baseModelID: String
     public let format: String
     public let license: String
+    public let upstreamRevision: String?
     public let releaseManifestURL: URL
     public let downloadURL: URL
     public let artifact: ModelArtifactPin
@@ -20,6 +21,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         baseModelID: String,
         format: String,
         license: String,
+        upstreamRevision: String? = nil,
         releaseManifestURL: URL,
         downloadURL: URL,
         artifact: ModelArtifactPin
@@ -31,6 +33,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         self.baseModelID = baseModelID
         self.format = format
         self.license = license
+        self.upstreamRevision = upstreamRevision
         self.releaseManifestURL = releaseManifestURL
         self.downloadURL = downloadURL
         self.artifact = artifact
@@ -74,6 +77,8 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
 
 public enum ManagedAdapterCatalog {
     public static let merePlatformAssistantID = "mere-platform-assistant"
+    public static let scail2LightX2VFourStepID = "scail2-lightx2v-4step"
+    public static let scail2LightX2VFourStepRevision = "27ae38da91014b947dd39cc3fa78b97cd7b386dd"
 
     public static let allSpecs: [ManagedAdapterSpec] = [
         ManagedAdapterSpec(
@@ -94,6 +99,27 @@ public enum ManagedAdapterCatalog {
                 filename: "mere-platform-assistant-v22.safetensors",
                 byteCount: 128_131_022,
                 sha256: "c4fec5979631b4031196c1e21c0b990437a26c5ebc52aec32f89338d64063290"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: scail2LightX2VFourStepID,
+            title: "LightX2V Wan 2.1 I2V 4-step",
+            version: String(scail2LightX2VFourStepRevision.prefix(12)),
+            summary: "Apache-2.0 four-step distilled Wan 2.1 I2V adapter for native SCAIL-2.",
+            baseModelID: SCAIL2Resources.modelID,
+            format: SCAIL2DistilledAdapter.format,
+            license: "Apache-2.0",
+            upstreamRevision: scail2LightX2VFourStepRevision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/lightx2v/Wan2.1-Distill-Loras/commit/\(scail2LightX2VFourStepRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/lightx2v/Wan2.1-Distill-Loras/resolve/\(scail2LightX2VFourStepRevision)/wan2.1_i2v_lora_rank64_lightx2v_4step.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "wan2.1_i2v_lora_rank64_lightx2v_4step.safetensors",
+                byteCount: 739_472_104,
+                sha256: "8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1"
             )
         ),
     ]

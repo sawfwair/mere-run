@@ -439,7 +439,7 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
                     id: $0.subject.id,
                     color: $0.subject.color,
                     seedFrameIndex: $0.base.objects.first?.seedFrameIndex,
-                    frames: $0.base.frames
+                    frames: effectiveTrackingFrames(for: $0, frameCount: drivingFrames.count)
                 )
             }
         )
@@ -471,6 +471,7 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
                 id: reference.id,
                 color: reference.color,
                 referenceImagePath: reference.referenceImagePath,
+                preparedReferenceImagePath: reference.preparedReferenceImagePath,
                 referenceMaskPath: reference.referenceMaskPath,
                 seedFrameIndex: seed,
                 gapRanges: contiguousRanges(gapsBySubject[reference.id] ?? [])
@@ -619,25 +620,38 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
                 height: referenceImage.height,
                 allowEmpty: false
             )
-            let palette = try SCAIL2Palette.compose(
-                width: referenceImage.width,
-                height: referenceImage.height,
-                subjectMasks: [(subject.color, binary)]
-            ).image
+            let prepared = try Self.preparedReference(
+                image: referenceImage,
+                binaryMask: binary,
+                color: subject.color,
+                width: plan.width,
+                height: plan.height,
+                mode: plan.mode
+            )
+            let preparedImageURL = outputDirectoryURL
+                .appendingPathComponent("reference-\(subject.id)-prepared.png")
             let maskURL = outputDirectoryURL
                 .appendingPathComponent("reference-\(subject.id)-mask.png")
             let overlayURL = outputDirectoryURL
                 .appendingPathComponent("reference-\(subject.id)-overlay.png")
-            try MediaImageIO.writePNG(palette, to: maskURL)
-            let overlay = try SCAIL2Palette.overlay(image: referenceImage, paletteMask: palette)
+            try MediaImageIO.writePNG(prepared.image, to: preparedImageURL)
+            try MediaImageIO.writePNG(prepared.paletteMask, to: maskURL)
+            let overlay = try SCAIL2Palette.overlay(
+                image: prepared.image,
+                paletteMask: prepared.paletteMask
+            )
             try MediaImageIO.writePNG(overlay, to: overlayURL)
             overlays.append(overlay)
-            artifactURLs.append(contentsOf: [maskURL, overlayURL])
+            artifactURLs.append(contentsOf: [preparedImageURL, maskURL, overlayURL])
             manifests.append(
                 SCAIL2MaskSubjectManifest(
                     id: subject.id,
                     color: subject.color,
                     referenceImagePath: subject.referenceImage,
+                    preparedReferenceImagePath: relativePath(
+                        preparedImageURL,
+                        to: outputDirectoryURL
+                    ),
                     referenceMaskPath: relativePath(maskURL, to: outputDirectoryURL),
                     seedFrameIndex: nil,
                     gapRanges: []
@@ -645,6 +659,74 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
             )
         }
         return (manifests, overlays, artifactURLs)
+    }
+
+    static func preparedReference(
+        image: MediaImage,
+        binaryMask: [UInt8],
+        color: SCAIL2SubjectColor,
+        width: Int,
+        height: Int,
+        mode: SCAIL2Mode
+    ) throws -> (image: MediaImage, paletteMask: MediaImage) {
+        guard binaryMask.count == image.width * image.height else {
+            throw SCAIL2PaletteError.dimensionMismatch(
+                expectedWidth: image.width,
+                expectedHeight: image.height,
+                actualWidth: binaryMask.count,
+                actualHeight: 1
+            )
+        }
+        let scale = min(
+            Double(width) / Double(image.width),
+            Double(height) / Double(image.height)
+        )
+        let scaledWidth = min(width, max(1, Int((Double(image.width) * scale).rounded())))
+        let scaledHeight = min(height, max(1, Int((Double(image.height) * scale).rounded())))
+        let originX = (width - scaledWidth) / 2
+        let originY = (height - scaledHeight) / 2
+        var preparedRGBA = [UInt8](repeating: 0, count: width * height * 4)
+        var paletteRGBA = [UInt8](repeating: 255, count: width * height * 4)
+        let subjectRGBA = color.rgba8
+
+        for pixelIndex in 0..<(width * height) {
+            preparedRGBA[(pixelIndex * 4) + 3] = 255
+            paletteRGBA[(pixelIndex * 4) + 3] = 255
+        }
+
+        for targetY in 0..<scaledHeight {
+            let sourceY = min(
+                image.height - 1,
+                Int((Double(targetY) + 0.5) * Double(image.height) / Double(scaledHeight))
+            )
+            for targetX in 0..<scaledWidth {
+                let sourceX = min(
+                    image.width - 1,
+                    Int((Double(targetX) + 0.5) * Double(image.width) / Double(scaledWidth))
+                )
+                let sourcePixel = (sourceY * image.width) + sourceX
+                let destinationPixel = ((targetY + originY) * width) + targetX + originX
+                let source = sourcePixel * 4
+                let destination = destinationPixel * 4
+                let selected = binaryMask[sourcePixel] != 0
+                if mode == .animation || selected {
+                    preparedRGBA[destination] = image.rgba8[source]
+                    preparedRGBA[destination + 1] = image.rgba8[source + 1]
+                    preparedRGBA[destination + 2] = image.rgba8[source + 2]
+                    preparedRGBA[destination + 3] = image.rgba8[source + 3]
+                }
+                if selected {
+                    paletteRGBA[destination] = subjectRGBA.0
+                    paletteRGBA[destination + 1] = subjectRGBA.1
+                    paletteRGBA[destination + 2] = subjectRGBA.2
+                    paletteRGBA[destination + 3] = subjectRGBA.3
+                }
+            }
+        }
+        return (
+            try MediaImage(width: width, height: height, rgba8: preparedRGBA),
+            try MediaImage(width: width, height: height, rgba8: paletteRGBA)
+        )
     }
 
     private func track(
@@ -781,6 +863,20 @@ public final class SCAIL2MaskPreparer: @unchecked Sendable {
             detection.score,
             maskGeometry(mask, width: width, height: height)
         )
+    }
+
+    private func effectiveTrackingFrames(
+        for track: SubjectTrack,
+        frameCount: Int
+    ) -> [SAM31TrackingFrameResult] {
+        (0..<frameCount).compactMap { frameIndex in
+            let correctionIndex = Self.correctionIndex(
+                for: frameIndex,
+                corrections: track.corrections.map(\.correction)
+            )
+            let run = correctionIndex.map { track.corrections[$0].run } ?? track.base
+            return run.frames.first { $0.frameIndex == frameIndex }
+        }
     }
 
     private func loadBinaryMask(

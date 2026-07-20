@@ -732,6 +732,16 @@ mere.run model pull video-scail2-14b-mlx
 An explicitly prepared compatible root can still be supplied with
 `--model-root`.
 
+The optional `scail2-lightx2v-4step` adapter is not part of that model package
+or this repository. `mere.run adapter pull` downloads only
+`wan2.1_i2v_lora_rank64_lightx2v_4step.safetensors` from
+`lightx2v/Wan2.1-Distill-Loras` at immutable revision
+`27ae38da91014b947dd39cc3fa78b97cd7b386dd`, verifies 739,472,104 bytes and
+SHA-256 `8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1`,
+and stores it outside git under the managed adapter directory. The upstream
+model card declares Apache-2.0. The Wan 2.2 adapters are deliberately rejected
+for SCAIL-2 because they target the incompatible Wan 2.2 MoE base.
+
 ### `video-dreamx-world-5b-ar-mlx`
 
 The native DreamX-World autoregressive checkpoint root is:

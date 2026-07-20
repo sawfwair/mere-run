@@ -116,6 +116,27 @@ public struct Wan2FlowMatchEulerScheduler: Sendable {
         self.timesteps = shifted.dropLast().map { $0 * Float(trainTimesteps) }
     }
 
+    public init(
+        denoisingStepList: [Int],
+        shift: Float = 5,
+        trainTimesteps: Int = 1_000
+    ) {
+        precondition(!denoisingStepList.isEmpty)
+        precondition(trainTimesteps > 1)
+        precondition(shift > 0)
+        precondition(denoisingStepList.allSatisfy { (1...trainTimesteps).contains($0) })
+        precondition(zip(
+            denoisingStepList,
+            denoisingStepList.dropFirst()
+        ).allSatisfy { $0.0 > $0.1 })
+        let scheduled = denoisingStepList.map { trainingStep -> Float in
+            let sigma = Float(trainingStep) / Float(trainTimesteps)
+            return shift * sigma / (1 + (shift - 1) * sigma)
+        }
+        self.sigmas = scheduled + [0]
+        self.timesteps = scheduled.map { $0 * Float(trainTimesteps) }
+    }
+
     public mutating func step(velocity: MLXArray, sample: MLXArray) -> MLXArray {
         precondition(stepIndex < timesteps.count)
         let delta = sigmas[stepIndex + 1] - sigmas[stepIndex]

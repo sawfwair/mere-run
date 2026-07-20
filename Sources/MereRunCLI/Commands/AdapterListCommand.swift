@@ -45,6 +45,7 @@ struct ManagedAdapterListItem: Codable, Equatable {
     let baseModelID: String
     let format: String
     let license: String
+    let upstreamRevision: String?
     let releaseManifestURL: String
     let downloadURL: String
     let filename: String
@@ -62,6 +63,7 @@ struct ManagedAdapterListItem: Codable, Equatable {
         self.baseModelID = spec.baseModelID
         self.format = spec.format
         self.license = spec.license
+        self.upstreamRevision = spec.upstreamRevision
         self.releaseManifestURL = spec.releaseManifestURL.absoluteString
         self.downloadURL = spec.downloadURL.absoluteString
         self.filename = spec.artifact.filename

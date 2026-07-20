@@ -18,6 +18,14 @@ struct AdapterCommandTests {
         #expect(command.quiet)
     }
 
+    @Test("SCAIL-2 distilled adapter pull parses its canonical id")
+    func parsesSCAIL2Pull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.scail2LightX2VFourStepID,
+        ])
+        #expect(command.target == ManagedAdapterCatalog.scail2LightX2VFourStepID)
+    }
+
     @Test("Local LoRA paths remain supported")
     func resolvesLocalPath() throws {
         let relative = "fixtures/local-adapter.safetensors"

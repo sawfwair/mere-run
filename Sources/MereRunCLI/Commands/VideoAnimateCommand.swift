@@ -32,6 +32,23 @@ enum SCAIL2CLIAudioSource: String, CaseIterable, ExpressibleByArgument {
     case driving
 }
 
+enum SCAIL2CLISampler: String, CaseIterable, ExpressibleByArgument {
+    case unipc
+    case euler
+
+    var runtimeSampler: SCAIL2Sampler {
+        switch self {
+        case .unipc: .unipc
+        case .euler: .euler
+        }
+    }
+}
+
+enum SCAIL2CLIProfile: String, CaseIterable, ExpressibleByArgument {
+    case quality
+    case fast
+}
+
 struct SCAIL2AnimationPreflightReport: Codable, Equatable {
     let status: String
     let model: String
@@ -41,11 +58,16 @@ struct SCAIL2AnimationPreflightReport: Codable, Equatable {
     let missingInputFiles: [String]
     let output: String
     let mode: String
+    let profile: String
     let width: Int
     let height: Int
     let steps: Int
     let guidanceScale: Float
     let shift: Float
+    let sampler: String
+    let denoisingSchedule: String
+    let distilledAdapter: String?
+    let distilledAdapterStrength: Float
     let fps: Int
     let segmentLength: Int
     let segmentOverlap: Int
@@ -62,11 +84,16 @@ struct SCAIL2AnimationPreflightReport: Codable, Equatable {
         case missingInputFiles = "missing_input_files"
         case output
         case mode
+        case profile
         case width
         case height
         case steps
         case guidanceScale = "guidance_scale"
         case shift
+        case sampler
+        case denoisingSchedule = "denoising_schedule"
+        case distilledAdapter = "distilled_adapter"
+        case distilledAdapterStrength = "distilled_adapter_strength"
         case fps
         case segmentLength = "segment_length"
         case segmentOverlap = "segment_overlap"
@@ -127,6 +154,9 @@ struct VideoAnimate: AsyncParsableCommand {
     @Option(name: [.long], help: "SCAIL-2 task mode: animation or replacement.")
     var mode: SCAIL2CLIMode = .animation
 
+    @Option(name: [.long], help: "Render recipe: quality (40-step UniPC by default) or fast (managed LightX2V 4-step adapter).")
+    var profile: SCAIL2CLIProfile = .quality
+
     @Option(name: [.long], help: "Target width; must be divisible by 32.")
     var width: Int = 896
 
@@ -141,6 +171,15 @@ struct VideoAnimate: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Flow schedule shift; 3 is recommended at 480p.")
     var shift: Float = 3
+
+    @Option(name: [.long], help: "Denoising sampler: unipc or euler.")
+    var sampler: SCAIL2CLISampler = .unipc
+
+    @Option(name: [.customLong("distilled-adapter")], help: "Installed adapter catalog id or local distilled Wan 2.1 I2V safetensors path.")
+    var distilledAdapter: String?
+
+    @Option(name: [.customLong("distilled-adapter-strength")], help: "Distilled adapter multiplier.")
+    var distilledAdapterStrength: Float = 1
 
     @Option(name: [.long], help: "Random seed.")
     var seed: Int = 42
@@ -224,6 +263,10 @@ struct VideoAnimate: AsyncParsableCommand {
             CLIStderr.write("Engine: native Swift/MLX SCAIL-2\n")
             CLIStderr.write("Model root: \(runtimeRoot.path)\n")
             CLIStderr.write("Mode: \(mode.rawValue)\n")
+            CLIStderr.write("Profile: \(profile.rawValue)\n")
+            if let distilledAdapterURL = options.distilledAdapterURL {
+                CLIStderr.write("Distilled adapter: \(distilledAdapterURL.path)\n")
+            }
         }
         let reportsProgress = !quiet
         let result = try await SCAIL2Generator().generate(
@@ -263,7 +306,21 @@ struct VideoAnimate: AsyncParsableCommand {
     }
 
     func makeOptions(prompt: String, outputURL: URL) throws -> SCAIL2GenerationOptions {
-        try SCAIL2GenerationOptions(
+        let effectiveAdapterReference = profile == .fast
+            ? distilledAdapter ?? ManagedAdapterCatalog.scail2LightX2VFourStepID
+            : distilledAdapter
+        let resolvedDistilledAdapter = try ManagedAdapterArgumentResolver.resolve(
+            effectiveAdapterReference,
+            baseModelID: SCAIL2Resources.modelID
+        )
+        let effectiveSteps = profile == .fast ? 4 : steps
+        let effectiveGuidanceScale: Float = profile == .fast ? 1 : guidanceScale
+        let effectiveShift: Float = profile == .fast ? 5 : shift
+        let effectiveSampler: SCAIL2Sampler = profile == .fast ? .euler : sampler.runtimeSampler
+        let effectiveSchedule: SCAIL2DenoisingSchedule = profile == .fast
+            ? .lightX2VFourStep
+            : .standard
+        return try SCAIL2GenerationOptions(
             prompt: prompt,
             negativePrompt: negativePrompt,
             reference: SCAIL2ReferenceInput(
@@ -282,9 +339,15 @@ struct VideoAnimate: AsyncParsableCommand {
             mode: mode.runtimeMode,
             width: width,
             height: height,
-            steps: steps,
-            guidanceScale: guidanceScale,
-            shift: shift,
+            steps: effectiveSteps,
+            guidanceScale: effectiveGuidanceScale,
+            shift: effectiveShift,
+            sampler: effectiveSampler,
+            denoisingSchedule: effectiveSchedule,
+            distilledAdapterURL: resolvedDistilledAdapter.map {
+                URL(fileURLWithPath: $0).standardizedFileURL
+            },
+            distilledAdapterStrength: distilledAdapterStrength,
             seed: UInt64(bitPattern: Int64(seed)),
             fps: fps,
             segmentLength: segmentLength,
@@ -303,6 +366,7 @@ struct VideoAnimate: AsyncParsableCommand {
             options.drivingVideoURL,
             options.drivingMaskVideoURL,
         ] + options.additionalReferences.flatMap { [$0.imageURL, $0.maskURL] }
+            + (options.distilledAdapterURL.map { [$0] } ?? [])
         let missingInputs = inputs.filter { !FileManager.default.fileExists(atPath: $0.path) }
         let missingModels = modelRootURL.map { SCAIL2Resources(rootURL: $0).validate() } ?? []
         let installed = modelRootURL != nil && missingModels.isEmpty
@@ -319,11 +383,16 @@ struct VideoAnimate: AsyncParsableCommand {
                 defaultExtension: "mp4"
             ).path,
             mode: mode.rawValue,
+            profile: profile.rawValue,
             width: width,
             height: height,
-            steps: steps,
-            guidanceScale: guidanceScale,
-            shift: shift,
+            steps: options.steps,
+            guidanceScale: options.guidanceScale,
+            shift: options.shift,
+            sampler: options.sampler.rawValue,
+            denoisingSchedule: options.denoisingSchedule.rawValue,
+            distilledAdapter: options.distilledAdapterURL?.path,
+            distilledAdapterStrength: options.distilledAdapterStrength,
             fps: fps,
             segmentLength: segmentLength,
             segmentOverlap: segmentOverlap,

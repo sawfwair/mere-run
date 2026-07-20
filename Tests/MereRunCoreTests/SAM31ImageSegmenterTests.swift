@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 import MLX
 import XCTest
 @testable import MereRunCore
@@ -62,6 +63,80 @@ final class SAM31ImageSegmenterTests: MereRunCoreTestCase {
         XCTAssertEqual(detections[0].label, "a person")
         XCTAssertGreaterThan(detections[0].score, 0.5)
         XCTAssertGreaterThan(detections[0].maskAreaPixels, 0)
+    }
+
+    func testBinaryMaskPromptAcceptsEveryPaletteColor() throws {
+        let image = try MediaImage(
+            width: 4,
+            height: 1,
+            rgba8: [
+                0, 0, 255, 255,
+                255, 0, 0, 255,
+                0, 255, 0, 255,
+                0, 0, 0, 255,
+            ]
+        )
+
+        XCTAssertEqual(
+            SAM31ImageSegmenter.binaryMaskPromptValues(from: image),
+            [1, 1, 1, 0]
+        )
+    }
+
+    func testDenseMaskPromptIncludesTheUpstreamNotAPointToken() {
+        let encoder = SAM31InteractivePromptEncoder(
+            config: SAM31PromptEncoderConfig(
+                hiddenSize: 8,
+                imageSize: 8,
+                patchSize: 4,
+                maskInputChannels: 4
+            )
+        )
+        let output = encoder(
+            masks: MLX.ones([1, 8, 8, 1], dtype: .float32),
+            targetHeight: 2,
+            targetWidth: 2
+        )
+
+        XCTAssertEqual(output.sparseEmbeddings.shape, [1, 1, 8])
+        XCTAssertEqual(output.denseEmbeddings.shape, [1, 4, 8])
+    }
+
+    func testSmallEnclosedMaskHolesAreFilledWithoutClosingBackground() {
+        let mask: [UInt8] = [
+            0, 0, 0, 0, 0,
+            0, 1, 1, 1, 0,
+            0, 1, 0, 1, 0,
+            0, 1, 1, 1, 0,
+            0, 0, 0, 0, 0,
+        ]
+
+        let filled = SAM31ImageSegmenter.fillSmallHoles(
+            binaryMask: mask,
+            width: 5,
+            height: 5,
+            maximumArea: 1
+        )
+
+        XCTAssertEqual(filled[12], 1)
+        XCTAssertEqual(filled[0], 0)
+    }
+
+    func testInteractiveDecoderMLPCheckpointKeysMapToNativeLayers() {
+        let prefix = "tracker_model.interactive_sam_mask_decoder.output_hypernetworks_mlps.2"
+
+        XCTAssertEqual(
+            SAM31ImageSegmenter.mapCheckpointKey("\(prefix).proj_in.weight"),
+            "\(prefix).layer1.weight"
+        )
+        XCTAssertEqual(
+            SAM31ImageSegmenter.mapCheckpointKey("\(prefix).layers.0.bias"),
+            "\(prefix).layer2.bias"
+        )
+        XCTAssertEqual(
+            SAM31ImageSegmenter.mapCheckpointKey("\(prefix).proj_out.weight"),
+            "\(prefix).layer3.weight"
+        )
     }
 
     func testJSONMetadataEncodesExpectedShape() throws {

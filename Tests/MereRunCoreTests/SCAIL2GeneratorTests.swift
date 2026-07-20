@@ -26,7 +26,15 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
                 segmentLength: 81,
                 segmentOverlap: 5
             ),
-            81
+            1
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 65,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            65
         )
         XCTAssertEqual(
             SCAIL2SegmentBuilder.paddedFrameCount(
@@ -34,7 +42,7 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
                 segmentLength: 81,
                 segmentOverlap: 5
             ),
-            157
+            85
         )
         XCTAssertEqual(
             SCAIL2SegmentBuilder.paddedFrameCount(
@@ -43,6 +51,23 @@ final class SCAIL2GeneratorTests: MereRunCoreTestCase {
                 segmentOverlap: 5
             ),
             157
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.paddedFrameCount(
+                frameCount: 200,
+                segmentLength: 81,
+                segmentOverlap: 5
+            ),
+            201
+        )
+        XCTAssertEqual(
+            SCAIL2SegmentBuilder.build(
+                frameCount: 201,
+                segmentLength: 81,
+                segmentOverlap: 5,
+                includePartialFinalSegment: true
+            ),
+            [0..<81, 76..<157, 152..<201]
         )
     }
 

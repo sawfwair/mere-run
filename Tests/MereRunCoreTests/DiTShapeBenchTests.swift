@@ -78,6 +78,160 @@ final class DiTShapeBenchTests: XCTestCase {
         return best
     }
 
+    /// Measures the fused SDPA dispatch used by a full upstream-equivalent
+    /// SCAIL-2 window. This is env-gated because the key/value tensors occupy
+    /// about 900 MB and the larger query sizes intentionally stress Metal's
+    /// command-buffer watchdog. Set
+    /// `MERERUN_SCAIL2_BENCH_QUERY_TOKENS=1024,2048` to isolate sizes during
+    /// watchdog qualification. `MERERUN_SCAIL2_BENCH_EVAL_BATCH=4` controls
+    /// how many kernels are submitted before each synchronization.
+    func testSCAIL2AttentionQueryChunkSizes() throws {
+        try benchGate()
+        let keyTokens = 42_510
+        let heads = 40
+        let headDimension = 128
+        let keys = MLXRandom.normal([1, heads, keyTokens, headDimension]).asType(.bfloat16)
+        let values = MLXRandom.normal([1, heads, keyTokens, headDimension]).asType(.bfloat16)
+        MLX.eval(keys, values)
+        let scale = Float(1.0 / Double(headDimension).squareRoot())
+        let configuredQueryTokens = ProcessInfo.processInfo.environment[
+            "MERERUN_SCAIL2_BENCH_QUERY_TOKENS"
+        ]?
+            .split(separator: ",")
+            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            .filter { $0 > 0 } ?? []
+        let queryTokenSizes = configuredQueryTokens.isEmpty
+            ? [1_024, 2_048, 4_096, 8_192]
+            : configuredQueryTokens
+        let evaluationBatchSize = max(
+            1,
+            Int(ProcessInfo.processInfo.environment["MERERUN_SCAIL2_BENCH_EVAL_BATCH"] ?? "") ?? 1
+        )
+        let clearCacheAfterChunk = ProcessInfo.processInfo.environment[
+            "MERERUN_SCAIL2_BENCH_CLEAR_CACHE"
+        ] == "1"
+
+        for queryTokens in queryTokenSizes {
+            let queries = MLXRandom.normal([1, heads, queryTokens, headDimension]).asType(.bfloat16)
+            MLX.eval(queries)
+            let start = CFAbsoluteTimeGetCurrent()
+            let output = MLXFast.scaledDotProductAttention(
+                queries: queries,
+                keys: keys,
+                values: values,
+                scale: scale,
+                mask: .none
+            )
+            MLX.eval(output)
+            print(
+                String(
+                    format: "[dit-bench] SCAIL-2 SDPA q=%d k=%d %.3f ms",
+                    queryTokens,
+                    keyTokens,
+                    (CFAbsoluteTimeGetCurrent() - start) * 1_000
+                )
+            )
+            Memory.clearCache()
+        }
+
+        let fullQueries = MLXRandom.normal([1, heads, keyTokens, headDimension]).asType(.bfloat16)
+        MLX.eval(fullQueries)
+        let fullStart = CFAbsoluteTimeGetCurrent()
+        let chunkSize = configuredQueryTokens.first ?? 2_048
+        let fullOutput: MLXArray
+        if clearCacheAfterChunk {
+            var chunks: [MLXArray] = []
+            for start in stride(from: 0, to: keyTokens, by: chunkSize) {
+                let end = min(start + chunkSize, keyTokens)
+                let chunk = MLXFast.scaledDotProductAttention(
+                    queries: fullQueries[0..., 0..., start..<end, 0...],
+                    keys: keys,
+                    values: values,
+                    scale: scale,
+                    mask: .none
+                )
+                MLX.eval(chunk)
+                Memory.clearCache()
+                chunks.append(chunk)
+            }
+            fullOutput = MLX.concatenated(chunks, axis: 2)
+        } else {
+            fullOutput = SCAIL2SelfAttention.scaledDotProductAttention(
+                queries: fullQueries,
+                keys: keys,
+                values: values,
+                scale: scale,
+                maximumQueryTokens: chunkSize,
+                maximumKernelsPerEvaluation: evaluationBatchSize
+            )
+        }
+        MLX.eval(fullOutput)
+        print(
+            String(
+                format: "[dit-bench] SCAIL-2 full q=%d k=%d chunk=%d eval-batch=%d clear=%d %.3f ms",
+                keyTokens,
+                keyTokens,
+                chunkSize,
+                evaluationBatchSize,
+                clearCacheAfterChunk ? 1 : 0,
+                (CFAbsoluteTimeGetCurrent() - fullStart) * 1_000
+            )
+        )
+    }
+
+    /// Compares dense and affine 4-bit projection throughput at the exact
+    /// token and channel sizes of an 832x480 SCAIL-2 window.
+    func testSCAIL2ProjectionShapes() throws {
+        try benchGate()
+        let tokens = 42_510
+        let hidden = 5_120
+        let feedForward = 13_824
+        let input = MLXRandom.normal([1, tokens, hidden]).asType(.bfloat16)
+        MLX.eval(input)
+
+        func measure(_ label: String, _ body: () -> MLXArray) {
+            MLX.eval(body())
+            var best = Double.greatestFiniteMagnitude
+            for _ in 0..<3 {
+                let start = CFAbsoluteTimeGetCurrent()
+                MLX.eval(body())
+                best = min(best, CFAbsoluteTimeGetCurrent() - start)
+            }
+            print(String(format: "[dit-bench] SCAIL-2 %@ %.3f ms", label, best * 1_000))
+            Memory.clearCache()
+        }
+
+        let denseSquare = Linear(hidden, hidden, bias: true)
+        denseSquare.update(parameters: denseSquare.parameters().mapValues { $0.asType(.bfloat16) })
+        MLX.eval(denseSquare.parameters())
+        measure("bf16 \(hidden)->\(hidden)") { denseSquare(input) }
+
+        let quantizedSquare = QuantizedLinear(
+            hidden,
+            hidden,
+            bias: true,
+            groupSize: 64,
+            bits: 4
+        )
+        MLX.eval(quantizedSquare.parameters())
+        measure("q4-g64 \(hidden)->\(hidden)") { quantizedSquare(input) }
+
+        let denseUp = Linear(hidden, feedForward, bias: true)
+        denseUp.update(parameters: denseUp.parameters().mapValues { $0.asType(.bfloat16) })
+        MLX.eval(denseUp.parameters())
+        measure("bf16 \(hidden)->\(feedForward)") { denseUp(input) }
+
+        let quantizedUp = QuantizedLinear(
+            hidden,
+            feedForward,
+            bias: true,
+            groupSize: 64,
+            bits: 4
+        )
+        MLX.eval(quantizedUp.parameters())
+        measure("q4-g64 \(hidden)->\(feedForward)") { quantizedUp(input) }
+    }
+
     func testKleinNanoShapes() throws {
         try benchGate()
         // klein-nano: hidden 3072 (24 heads x 128), mlp_ratio 3, 5 double +

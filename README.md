@@ -681,12 +681,14 @@ swift run mere.run video generate \
 
 # Animate a masked reference subject from a driving video with native SCAIL-2
 swift run mere.run model pull video-scail2-14b-mlx
+swift run mere.run adapter pull scail2-lightx2v-4step
 swift run mere.run video animate \
   "a dancer in a red silk dress" \
-  --reference ./ref.png \
-  --reference-mask ./ref-mask.png \
+  --reference ./reference-dancer-prepared.png \
+  --reference-mask ./reference-dancer-mask.png \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
+  --profile fast \
   --tail-policy pad-trim \
   --audio-source driving \
   --output ./animated.mp4
