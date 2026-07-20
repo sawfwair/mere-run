@@ -277,6 +277,13 @@ enum SCAIL2RoPE {
 }
 
 final class SCAIL2SelfAttention: Module {
+    // An 81-frame 480p SCAIL window produces roughly 40k tokens. Evaluating
+    // that entire query axis in one Metal command can exceed the macOS GPU
+    // watchdog. Query slicing is exact because every slice still attends to
+    // the complete key/value sequence.
+    static let maximumQueryTokensPerKernel = 1_024
+    static let maximumKernelsPerEvaluation = 1
+
     let heads: Int
     let headDimension: Int
     let scale: Float
@@ -314,14 +321,62 @@ final class SCAIL2SelfAttention: Module {
         let v = value(typed).reshaped(batch, sequence, heads, headDimension).transposed(0, 2, 1, 3)
         q = SCAIL2RoPE.apply(q, cache: rope).transposed(0, 2, 1, 3)
         k = SCAIL2RoPE.apply(k, cache: rope).transposed(0, 2, 1, 3)
-        let attended = MLXFast.scaledDotProductAttention(
+        let attended = Self.scaledDotProductAttention(
             queries: q,
             keys: k,
             values: v,
             scale: scale,
-            mask: .none
+            maximumQueryTokens: Self.maximumQueryTokensPerKernel,
+            maximumKernelsPerEvaluation: Self.maximumKernelsPerEvaluation
         )
         return output(attended.transposed(0, 2, 1, 3).reshaped(batch, sequence, heads * headDimension))
+    }
+
+    static func scaledDotProductAttention(
+        queries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        scale: Float,
+        maximumQueryTokens: Int?,
+        maximumKernelsPerEvaluation: Int = 1
+    ) -> MLXArray {
+        guard let maximumQueryTokens,
+              maximumQueryTokens > 0,
+              queries.dim(2) > maximumQueryTokens else {
+            return MLXFast.scaledDotProductAttention(
+                queries: queries,
+                keys: keys,
+                values: values,
+                scale: scale,
+                mask: .none
+            )
+        }
+
+        precondition(maximumKernelsPerEvaluation > 0)
+        var outputs: [MLXArray] = []
+        outputs.reserveCapacity((queries.dim(2) + maximumQueryTokens - 1) / maximumQueryTokens)
+        var pending: [MLXArray] = []
+        pending.reserveCapacity(maximumKernelsPerEvaluation)
+        for start in stride(from: 0, to: queries.dim(2), by: maximumQueryTokens) {
+            let end = min(start + maximumQueryTokens, queries.dim(2))
+            let output = MLXFast.scaledDotProductAttention(
+                queries: queries[0..., 0..., start..<end, 0...],
+                keys: keys,
+                values: values,
+                scale: scale,
+                mask: .none
+            )
+            outputs.append(output)
+            pending.append(output)
+            if pending.count == maximumKernelsPerEvaluation {
+                eval(pending)
+                pending.removeAll(keepingCapacity: true)
+            }
+        }
+        if !pending.isEmpty {
+            eval(pending)
+        }
+        return MLX.concatenated(outputs, axis: 2)
     }
 }
 
@@ -676,10 +731,12 @@ public final class SCAIL2TransformerModel: Module {
 
     public func callAsFunction(
         _ input: SCAIL2TransformerInput,
-        conditioning: SCAIL2PreparedConditioning
+        conditioning: SCAIL2PreparedConditioning,
+        evaluationBlockInterval: Int? = nil
     ) -> MLXArray {
         validate(input)
         precondition(conditioning.crossAttentionCaches.count == blocks.count)
+        precondition(evaluationBlockInterval.map { $0 > 0 } ?? true)
         let assembled = assembleTokens(input)
         var hidden = assembled.tokens
         let timestep = input.timestep.ndim == 0 ? input.timestep.reshaped(1) : input.timestep
@@ -696,7 +753,8 @@ public final class SCAIL2TransformerModel: Module {
             poseWidthShift: configuration.poseWidthShift,
             replacementReferenceHeightShift: configuration.replacementReferenceHeightShift
         )
-        for (block, crossCache) in zip(blocks, conditioning.crossAttentionCaches) {
+        for (index, pair) in zip(blocks, conditioning.crossAttentionCaches).enumerated() {
+            let (block, crossCache) = pair
             hidden = block(
                 hidden,
                 modulationInput: modulation,
@@ -705,6 +763,11 @@ public final class SCAIL2TransformerModel: Module {
                 rope: rope,
                 crossCache: crossCache
             )
+            if let evaluationBlockInterval,
+               (index + 1).isMultiple(of: evaluationBlockInterval) {
+                eval(hidden)
+                Memory.clearCache()
+            }
         }
         let patches = outputHead(hidden, timestepEmbedding: timestepEmbedding)
         return unpatchifyVideo(

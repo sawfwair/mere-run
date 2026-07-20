@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 
 public final class SAM31VideoTracker: @unchecked Sendable {
     public enum TrackingError: LocalizedError, Sendable {
@@ -117,7 +118,18 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         }
         annotatedFrameURLs[seedFrameIndex] = seedRun.annotatedImageURL
 
-        let seedDetections = bestDetectionsByObjectID(normalizeSeedDetections(seedRun.detections))
+        var seedDetections = bestDetectionsByObjectID(normalizeSeedDetections(seedRun.detections))
+        for promptObject in normalizedPrompts {
+            if let authoritative = try authoritativeMaskSeedDetection(
+                for: promptObject,
+                frameWidth: asset.frameWidth,
+                frameHeight: asset.frameHeight,
+                frameIndex: seedFrameIndex,
+                maskOutputDirectoryURL: maskOutputDirectoryURL
+            ) {
+                seedDetections[promptObject.objectID] = authoritative
+            }
+        }
         let trackingStates = normalizedPrompts.compactMap { promptObject -> TrackingState? in
             guard let detection = seedDetections[promptObject.objectID] else { return nil }
             let trackedObject = SAM31TrackedObject(
@@ -288,7 +300,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
                 resolution: resolution,
                 showBoxes: showBoxes,
                 showLabels: showLabels,
-                multimask: false,
+                multimask: true,
                 maskOutputDirectoryURL: maskDirectory
             )
             let stabilizedRun = try stabilizedRunIfNeeded(
@@ -307,7 +319,12 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             )
             annotatedFrameURLs[frameIndex] = stabilizedRun.annotatedImageURL
 
-            let detectionsByObjectID = bestDetectionsByObjectID(stabilizedRun.detections)
+            let detectionsByObjectID = Self.trackingDetectionsByObjectID(
+                stabilizedRun.detections,
+                previousResultsByObject: previousResultsByObject,
+                seedResultsByObject: statesByObjectID.mapValues(\.seedResult),
+                threshold: threshold
+            )
 
             let frameResults = orderedStates.map { state -> SAM31TrackingObjectResult in
                 let object = state.trackedObject
@@ -437,11 +454,21 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         maskOutputDirectoryURL: URL?,
         frameIndex: Int
     ) throws -> SAM31SegmentationRun {
-        let detectionsByObjectID = bestDetectionsByObjectID(initialRun.detections)
+        let seedResultsByObject = Dictionary(
+            uniqueKeysWithValues: trackingStates.map {
+                ($0.trackedObject.objectID, $0.seedResult)
+            }
+        )
+        let detectionsByObjectID = Self.trackingDetectionsByObjectID(
+            initialRun.detections,
+            previousResultsByObject: previousResultsByObject,
+            seedResultsByObject: seedResultsByObject,
+            threshold: threshold
+        )
         let fallbackPromptObjects = trackingStates.compactMap { state -> SAM31PromptObject? in
             let previousResult = previousResultsByObject[state.trackedObject.objectID] ?? state.seedResult
             let detection = detectionsByObjectID[state.trackedObject.objectID]
-            guard needsFallback(
+            guard Self.needsFallback(
                 detection: detection,
                 previousResult: previousResult,
                 seedResult: state.seedResult,
@@ -477,7 +504,7 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             resolution: resolution,
             showBoxes: showBoxes,
             showLabels: showLabels,
-            multimask: false,
+            multimask: true,
             maskOutputDirectoryURL: rerunMaskDirectory
         )
     }
@@ -529,15 +556,88 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             return SAM31PromptObject(
                 objectID: state.trackedObject.objectID,
                 label: state.trackedObject.label,
-                promptKind: .mask,
-                boxPrompt: state.seedPromptObject.boxPrompt,
+                promptKind: .box,
+                boxPrompt: SAM31PromptBox(
+                    x1: state.seedResult.box.x1,
+                    y1: state.seedResult.box.y1,
+                    x2: state.seedResult.box.x2,
+                    y2: state.seedResult.box.y2,
+                    label: state.trackedObject.objectID
+                ),
                 pointPrompts: state.seedPromptObject.pointPrompts,
-                maskPrompt: state.seedPromptObject.maskPrompt
+                maskPrompt: nil
             )
         }
     }
 
-    private func needsFallback(
+    private func authoritativeMaskSeedDetection(
+        for promptObject: SAM31PromptObject,
+        frameWidth: Int,
+        frameHeight: Int,
+        frameIndex: Int,
+        maskOutputDirectoryURL: URL?
+    ) throws -> SAM31SegmentationDetection? {
+        guard let maskPath = promptObject.maskPrompt?.path else { return nil }
+        let decoded = try MediaImageIO.decode(URL(fileURLWithPath: maskPath).standardizedFileURL)
+        let image = decoded.width == frameWidth && decoded.height == frameHeight
+            ? decoded
+            : try MediaImageIO.resized(decoded, width: frameWidth, height: frameHeight)
+
+        var area = 0
+        var minX = frameWidth
+        var minY = frameHeight
+        var maxX = -1
+        var maxY = -1
+        for pixelIndex in 0..<(frameWidth * frameHeight) {
+            let offset = pixelIndex * 4
+            let foreground = max(
+                image.rgba8[offset],
+                max(image.rgba8[offset + 1], image.rgba8[offset + 2])
+            )
+            guard foreground >= 128 else { continue }
+            let x = pixelIndex % frameWidth
+            let y = pixelIndex / frameWidth
+            area += 1
+            minX = min(minX, x)
+            minY = min(minY, y)
+            maxX = max(maxX, x)
+            maxY = max(maxY, y)
+        }
+        guard area > 0 else { return nil }
+
+        let persistedMaskPath: String
+        if let maskOutputDirectoryURL {
+            let directory = maskOutputDirectoryURL.appendingPathComponent(
+                String(format: "frame_%05d", frameIndex),
+                isDirectory: true
+            )
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory
+                .appendingPathComponent("\(promptObject.objectID)_authoritative")
+                .appendingPathExtension("png")
+            try MediaImageIO.writePNG(image, to: url)
+            persistedMaskPath = url.path
+        } else {
+            persistedMaskPath = URL(fileURLWithPath: maskPath).standardizedFileURL.path
+        }
+
+        return SAM31SegmentationDetection(
+            objectID: promptObject.objectID,
+            label: promptObject.label,
+            promptKind: .mask,
+            score: 1,
+            box: SAM31SegmentationBox(
+                x1: Float(minX),
+                y1: Float(minY),
+                x2: Float(maxX + 1),
+                y2: Float(maxY + 1)
+            ),
+            maskAreaPixels: area,
+            maskPath: persistedMaskPath
+        )
+    }
+
+    static func needsFallback(
         detection: SAM31SegmentationDetection?,
         previousResult: SAM31TrackingObjectResult,
         seedResult: SAM31TrackingObjectResult,
@@ -558,12 +658,75 @@ public final class SAM31VideoTracker: @unchecked Sendable {
             return true
         }
         if previousResult.visible && previousResult.maskAreaPixels > 0 {
+            if candidateArea < Int(Float(previousArea) * 0.45) {
+                return true
+            }
             let overlap = SAM31ImageSegmenter.iou(detection.box, previousResult.box)
             if overlap < 0.05 {
                 return true
             }
         }
+        if candidateArea < Int(Float(seedArea) * 0.3) {
+            return true
+        }
         return false
+    }
+
+    static func preferredTrackingDetection(
+        _ detections: [SAM31SegmentationDetection],
+        previousResult: SAM31TrackingObjectResult,
+        seedResult: SAM31TrackingObjectResult,
+        threshold: Float
+    ) -> SAM31SegmentationDetection? {
+        guard !detections.isEmpty else { return nil }
+        let stable = detections.filter {
+            !needsFallback(
+                detection: $0,
+                previousResult: previousResult,
+                seedResult: seedResult,
+                threshold: threshold
+            )
+        }
+        return stable.min { lhs, rhs in
+            trackingCandidateCost(lhs, previousResult: previousResult)
+                < trackingCandidateCost(rhs, previousResult: previousResult)
+        }
+    }
+
+    private static func trackingCandidateCost(
+        _ detection: SAM31SegmentationDetection,
+        previousResult: SAM31TrackingObjectResult
+    ) -> Float {
+        let referenceArea = Float(max(previousResult.maskAreaPixels, 1))
+        let areaRatio = Float(max(detection.maskAreaPixels, 1)) / referenceArea
+        let areaCost = abs(log(areaRatio))
+        let overlap = SAM31ImageSegmenter.iou(detection.box, previousResult.box)
+        let candidatePenalty = Float(detection.candidateIndex ?? 0) * 0.25
+        return areaCost + ((1 - overlap) * 2) + candidatePenalty - (detection.score * 0.25)
+    }
+
+    static func trackingDetectionsByObjectID(
+        _ detections: [SAM31SegmentationDetection],
+        previousResultsByObject: [String: SAM31TrackingObjectResult],
+        seedResultsByObject: [String: SAM31TrackingObjectResult],
+        threshold: Float
+    ) -> [String: SAM31SegmentationDetection] {
+        let grouped = Dictionary(grouping: detections) { $0.objectID }
+        var selected: [String: SAM31SegmentationDetection] = [:]
+        for (objectID, objectDetections) in grouped {
+            guard let objectID,
+                  let seed = seedResultsByObject[objectID] else {
+                continue
+            }
+            let previous = previousResultsByObject[objectID] ?? seed
+            selected[objectID] = Self.preferredTrackingDetection(
+                objectDetections,
+                previousResult: previous,
+                seedResult: seed,
+                threshold: threshold
+            )
+        }
+        return selected
     }
 
     private func bestDetectionsByObjectID(

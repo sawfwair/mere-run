@@ -37,6 +37,14 @@ swift run mere.run model pull video-scail2-14b-mlx
 swift run mere.run model pull vision-segment-sam31 --accept-model-license
 ```
 
+For interactive recast work, also pull the checksum-pinned Apache-2.0
+LightX2V Wan 2.1 I2V adapter. Adapter weights remain in the local adapter store
+and are not bundled with mere.run:
+
+```bash
+swift run mere.run adapter pull scail2-lightx2v-4step
+```
+
 Create a schema-version 1 mask plan, preview one target frame, and then prepare
 the immutable full mask revision:
 
@@ -54,11 +62,20 @@ swift run mere.run video prepare-masks \
 ```
 
 The full result contains an exact-geometry/FPS driving proxy, per-subject
-reference masks, a ProRes 4444 categorical mask video, overlay preview, contact
-sheet, tracking and quality reports, and a canonical SHA-256 manifest. The plan
+prepared reference images and masks, a ProRes 4444 categorical mask video,
+overlay preview, contact sheet, tracking and quality reports, and a canonical
+SHA-256 manifest. Set the plan's `mode` to `replacement` to aspect-fit every
+reference into the target canvas and matte all non-subject pixels to black;
+`animation` preserves the fitted reference scene. The plan
 supports one to six stable subjects, text/box/point selectors, and dense painted
 PNG corrections. White is background; legal subject colours are blue, red,
 green, magenta, cyan, and yellow.
+
+The native transformer preserves upstream global self-attention while splitting
+the query axis into independently evaluated Metal command buffers. Every query
+slice still attends to the complete key/value sequence; the split only keeps a
+full 81-frame window below the macOS GPU watchdog and does not introduce local
+or sliding-window attention.
 
 Prepared review artifacts always use white as the canonical background. During
 inference, `video animate` matches the official SCAIL-2 mask-role semantics:
@@ -72,16 +89,16 @@ After reviewing the mask artifacts, preflight and render natively:
 ```bash
 swift run mere.run video animate \
   "a dancer in a red silk dress" \
-  --reference ./ref.png \
-  --reference-mask ./ref-mask.png \
+  --reference ./reference-performer-prepared.png \
+  --reference-mask ./reference-performer-mask.png \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
   --preflight --json
 
 swift run mere.run video animate \
   "a dancer in a red silk dress" \
-  --reference ./ref.png \
-  --reference-mask ./ref-mask.png \
+  --reference ./reference-performer-prepared.png \
+  --reference-mask ./reference-performer-mask.png \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
   --mode animation \
@@ -90,13 +107,41 @@ swift run mere.run video animate \
   --output ./animated.mp4
 ```
 
+The default `--profile fast` managed four-step path selects the pinned
+`scail2-lightx2v-4step` adapter, disables classifier-free guidance, uses shift
+5, Euler updates, and the adapter's exact `1000, 750, 500, 250` training-step
+schedule at 832x480. `--profile quality` remains available as an explicit
+opt-in to the configurable 40-step UniPC/CFG recipe:
+
+```bash
+swift run mere.run video animate \
+  "a silver puppet follows the dancer" \
+  --reference ./reference-performer-prepared.png \
+  --reference-mask ./reference-performer-mask.png \
+  --driving-video ./pose.mp4 \
+  --driving-mask ./pose-mask.mp4 \
+  --mode replacement \
+  --tail-policy pad-trim \
+  --audio-source driving \
+  --output ./recast-fast.mp4
+```
+
+SCAIL-2's unified motion interface has a task-specific 20-channel input
+projection, while the generic Wan 2.1 I2V adapter carries a 36-channel
+projection difference. The native fuser requires every shared transformer
+target to match exactly, applies the compatible 487 LoRA pairs and parameter
+differences, and explicitly leaves only that incompatible input-projection
+weight untouched. It does not use a general skip-mismatch mode.
+
 Decoded mask pixels are snapped to the nearest legal colour inside a strict
 tolerance, and ambiguous or out-of-tolerance pixels are rejected. The default
 long-video contract uses 81-frame segments with five decoded frames of clean
 overlap. Compatibility defaults remain `--tail-policy drop` and
-`--audio-source none`; `pad-trim` pads only the internal final window, trims the
-result to the exact requested frame count, and `driving` muxes source audio to
-that exact duration.
+`--audio-source none`; `pad-trim` keeps already legal `1 mod 4` temporal
+lengths unchanged, pads only an incomplete final segment to the next legal
+latent length, trims the result to the exact requested frame count, and
+`driving` muxes source audio to that exact duration. It never expands a legal
+65-frame clip to an unused 81-frame window.
 
 Use `--mode replacement` to place the reference subject into the driving
 scene. Pair repeatable `--additional-reference` and

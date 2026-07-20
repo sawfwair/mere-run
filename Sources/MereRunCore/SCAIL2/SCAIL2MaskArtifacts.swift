@@ -25,6 +25,7 @@ public struct SCAIL2MaskSubjectManifest: Codable, Hashable, Sendable {
     public let id: String
     public let color: SCAIL2SubjectColor
     public let referenceImagePath: String
+    public let preparedReferenceImagePath: String
     public let referenceMaskPath: String
     public let seedFrameIndex: Int?
     public let gapRanges: [ClosedRange<Int>]
@@ -33,6 +34,7 @@ public struct SCAIL2MaskSubjectManifest: Codable, Hashable, Sendable {
         case id
         case color
         case referenceImagePath = "reference_image_path"
+        case preparedReferenceImagePath = "prepared_reference_image_path"
         case referenceMaskPath = "reference_mask_path"
         case seedFrameIndex = "seed_frame_index"
         case gapRanges = "gap_ranges"
@@ -42,6 +44,7 @@ public struct SCAIL2MaskSubjectManifest: Codable, Hashable, Sendable {
         id: String,
         color: SCAIL2SubjectColor,
         referenceImagePath: String,
+        preparedReferenceImagePath: String,
         referenceMaskPath: String,
         seedFrameIndex: Int?,
         gapRanges: [ClosedRange<Int>]
@@ -49,6 +52,7 @@ public struct SCAIL2MaskSubjectManifest: Codable, Hashable, Sendable {
         self.id = id
         self.color = color
         self.referenceImagePath = referenceImagePath
+        self.preparedReferenceImagePath = preparedReferenceImagePath
         self.referenceMaskPath = referenceMaskPath
         self.seedFrameIndex = seedFrameIndex
         self.gapRanges = gapRanges
@@ -279,7 +283,23 @@ public struct SCAIL2MaskTrackingSubject: Codable, Hashable, Sendable {
         self.id = id
         self.color = color
         self.seedFrameIndex = seedFrameIndex
-        self.frames = frames
+        self.frames = frames.map { frame in
+            SAM31TrackingFrameResult(
+                frameIndex: frame.frameIndex,
+                timestampSeconds: frame.timestampSeconds,
+                detections: frame.detections.map { detection in
+                    SAM31TrackingObjectResult(
+                        objectID: detection.objectID,
+                        label: detection.label,
+                        score: detection.score,
+                        visible: detection.visible,
+                        box: detection.box,
+                        maskAreaPixels: detection.maskAreaPixels,
+                        maskPath: nil
+                    )
+                }
+            )
+        }
     }
 }
 

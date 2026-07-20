@@ -1627,10 +1627,13 @@ options are `--mode animation|replacement`, `--model-root`, `--width`,
 `--segment-length`, `--segment-overlap`, and paired repeatable
 `--additional-reference` / `--additional-reference-mask`. `--tail-policy`
 accepts `drop` or `pad-trim`; `--audio-source` accepts `none` or `driving`.
-Defaults match the
-official 480p recipe: 896x512, 40 UniPC steps, guidance 5, shift 3, 16 fps,
-81-frame segments, and five clean-history overlap frames. Compatibility
-defaults are `drop` and `none`.
+`--profile fast` is the default: 832x480, the separately pulled
+`scail2-lightx2v-4step` adapter, and the published no-CFG four-step Euler
+recipe with shift 5. `--profile quality` explicitly selects the configurable
+40-step UniPC/CFG recipe. The segment defaults remain 81 frames with five
+clean-history overlap frames; compatibility defaults are `drop` and `none`.
+`pad-trim` preserves legal `1 mod 4` clip lengths and pads only the final
+incomplete temporal segment to the next legal length.
 
 `--preflight --json` validates the MLX model root, input pairs, output, and
 execution plan without loading MLX or decoding video. The converted checkpoint
@@ -1649,14 +1652,17 @@ swift run mere.run video prepare-masks \
   [--preflight --json]
 ```
 
-Plans contain exact driver geometry/FPS/range, one to six stable subjects,
+Plans contain `mode` (`animation` or `replacement`), exact driver
+geometry/FPS/range, one to six stable subjects,
 unique legal palette colours, project-materialized reference images,
 text/box/positive/negative selectors, and optional point/box/dense painted-PNG
 keyframe corrections. Preview mode segments references plus one selected
-driving frame. Full mode tracks both directions, records gaps and quality
-warnings, and emits reference masks, a ProRes 4444 categorical driving mask,
-overlay MP4, contact sheet, tracking/quality JSON, normalized driver, and a
-canonical hashed manifest.
+driving frame. Reference preparation aspect-fits each image and its mask into
+the requested canvas; replacement mode mattes non-subject reference pixels to
+black. Full mode tracks both directions, records gaps and quality warnings, and
+emits prepared reference image/mask pairs, a ProRes 4444 categorical driving
+mask, overlay MP4, contact sheet, tracking/quality JSON, normalized driver, and
+a canonical hashed manifest.
 
 ### `mere.run video generate`
 
@@ -1986,12 +1992,15 @@ List the built-in public adapter catalog or install one immutable release:
 mere.run adapter list
 mere.run adapter list --json
 mere.run adapter pull mere-platform-assistant
+mere.run adapter pull scail2-lightx2v-4step
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
 installing the adapter. Stdout contains only the installed path; progress and
 verification diagnostics go to stderr. Use the adapter id directly with
-`text chat --lora` or `api serve --lora`.
+`text chat --lora`, `api serve --lora`, or the matching SCAIL
+`video animate --distilled-adapter` option. `video animate --profile fast`
+selects `scail2-lightx2v-4step` and its fixed four-step schedule.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.

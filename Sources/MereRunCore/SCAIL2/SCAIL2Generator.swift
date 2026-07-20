@@ -9,6 +9,14 @@ public enum SCAIL2GenerationError: LocalizedError, Sendable {
     case invalidFrameRate(Int)
     case invalidGuidanceScale(Float)
     case invalidScheduleShift(Float)
+    case invalidAdapterStrength(Float)
+    case invalidDistilledSchedule(
+        schedule: SCAIL2DenoisingSchedule,
+        steps: Int,
+        sampler: SCAIL2Sampler,
+        hasAdapter: Bool,
+        guidanceScale: Float
+    )
     case invalidSegment(length: Int, overlap: Int)
     case inputNotFound(URL)
     case inputDecodeFailed(URL)
@@ -31,6 +39,16 @@ public enum SCAIL2GenerationError: LocalizedError, Sendable {
             return "SCAIL-2 guidance scale must be positive; received \(scale)."
         case .invalidScheduleShift(let shift):
             return "SCAIL-2 schedule shift must be positive; received \(shift)."
+        case .invalidAdapterStrength(let strength):
+            return "SCAIL-2 distilled adapter strength must be positive and finite; received \(strength)."
+        case .invalidDistilledSchedule(
+            let schedule,
+            let steps,
+            let sampler,
+            let hasAdapter,
+            let guidanceScale
+        ):
+            return "SCAIL-2 schedule \(schedule.rawValue) requires 4 steps, Euler, a distilled adapter, and guidance <= 1; received steps=\(steps), sampler=\(sampler.rawValue), adapter=\(hasAdapter), guidance=\(guidanceScale)."
         case .invalidSegment(let length, let overlap):
             return "SCAIL-2 segment length and overlap must equal 1 modulo 4, with 0 < overlap < length; received length=\(length), overlap=\(overlap)."
         case .inputNotFound(let url):
@@ -68,6 +86,16 @@ public enum SCAIL2TailPolicy: String, Codable, CaseIterable, Hashable, Sendable 
     case padTrim = "pad-trim"
 }
 
+public enum SCAIL2Sampler: String, Codable, CaseIterable, Hashable, Sendable {
+    case unipc
+    case euler
+}
+
+public enum SCAIL2DenoisingSchedule: String, Codable, CaseIterable, Hashable, Sendable {
+    case standard
+    case lightX2VFourStep = "lightx2v-4step"
+}
+
 public struct SCAIL2GenerationOptions: Hashable, Sendable {
     public let prompt: String
     public let negativePrompt: String
@@ -82,6 +110,10 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
     public let steps: Int
     public let guidanceScale: Float
     public let shift: Float
+    public let sampler: SCAIL2Sampler
+    public let denoisingSchedule: SCAIL2DenoisingSchedule
+    public let distilledAdapterURL: URL?
+    public let distilledAdapterStrength: Float
     public let seed: UInt64
     public let fps: Int
     public let segmentLength: Int
@@ -102,6 +134,10 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
         steps: Int = 40,
         guidanceScale: Float = 5,
         shift: Float = 3,
+        sampler: SCAIL2Sampler = .unipc,
+        denoisingSchedule: SCAIL2DenoisingSchedule = .standard,
+        distilledAdapterURL: URL? = nil,
+        distilledAdapterStrength: Float = 1,
         seed: UInt64 = 42,
         fps: Int = 16,
         segmentLength: Int = 81,
@@ -115,6 +151,22 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
         guard fps > 0 else { throw SCAIL2GenerationError.invalidFrameRate(fps) }
         guard guidanceScale > 0 else { throw SCAIL2GenerationError.invalidGuidanceScale(guidanceScale) }
         guard shift > 0 else { throw SCAIL2GenerationError.invalidScheduleShift(shift) }
+        guard distilledAdapterStrength > 0, distilledAdapterStrength.isFinite else {
+            throw SCAIL2GenerationError.invalidAdapterStrength(distilledAdapterStrength)
+        }
+        if denoisingSchedule == .lightX2VFourStep,
+           steps != 4
+            || sampler != .euler
+            || distilledAdapterURL == nil
+            || guidanceScale > 1 {
+            throw SCAIL2GenerationError.invalidDistilledSchedule(
+                schedule: denoisingSchedule,
+                steps: steps,
+                sampler: sampler,
+                hasAdapter: distilledAdapterURL != nil,
+                guidanceScale: guidanceScale
+            )
+        }
         guard segmentLength > 0,
               segmentOverlap > 0,
               segmentOverlap < segmentLength,
@@ -135,6 +187,10 @@ public struct SCAIL2GenerationOptions: Hashable, Sendable {
         self.steps = steps
         self.guidanceScale = guidanceScale
         self.shift = shift
+        self.sampler = sampler
+        self.denoisingSchedule = denoisingSchedule
+        self.distilledAdapterURL = distilledAdapterURL
+        self.distilledAdapterStrength = distilledAdapterStrength
         self.seed = seed
         self.fps = fps
         self.segmentLength = segmentLength
@@ -157,7 +213,8 @@ public enum SCAIL2SegmentBuilder {
         frameCount: Int,
         segmentLength: Int,
         segmentOverlap: Int,
-        temporalStride: Int = 4
+        temporalStride: Int = 4,
+        includePartialFinalSegment: Bool = false
     ) -> [Range<Int>] {
         precondition(segmentLength > 0 && segmentOverlap > 0 && segmentOverlap < segmentLength)
         precondition(temporalStride > 0)
@@ -169,8 +226,19 @@ public enum SCAIL2SegmentBuilder {
         let stride = segmentLength - segmentOverlap
         var result: [Range<Int>] = []
         var start = 0
-        while start + segmentLength <= frameCount {
-            result.append(start..<(start + segmentLength))
+        while start < frameCount {
+            let available = min(segmentLength, frameCount - start)
+            let keep = ((available - 1) / temporalStride) * temporalStride + 1
+            if keep <= 0 || (!result.isEmpty && keep <= segmentOverlap) {
+                break
+            }
+            if keep < segmentLength && !includePartialFinalSegment {
+                break
+            }
+            result.append(start..<(start + keep))
+            if keep < segmentLength {
+                break
+            }
             start += stride
         }
         return result
@@ -182,11 +250,24 @@ public enum SCAIL2SegmentBuilder {
         segmentOverlap: Int
     ) -> Int {
         guard frameCount > 0 else { return 0 }
-        guard frameCount > segmentLength else { return segmentLength }
+        func nextLegalFrameCount(_ count: Int) -> Int {
+            ((count - 1 + 3) / 4) * 4 + 1
+        }
+        guard frameCount > segmentLength else {
+            return min(segmentLength, nextLegalFrameCount(frameCount))
+        }
         let stride = segmentLength - segmentOverlap
-        let remainder = frameCount - segmentLength
-        let additionalSegments = (remainder + stride - 1) / stride
-        return segmentLength + additionalSegments * stride
+        var lastFullStart = 0
+        while lastFullStart + segmentLength < frameCount {
+            let nextStart = lastFullStart + stride
+            if nextStart + segmentLength <= frameCount {
+                lastFullStart = nextStart
+                continue
+            }
+            let finalLength = nextLegalFrameCount(frameCount - nextStart)
+            return nextStart + min(segmentLength, finalLength)
+        }
+        return frameCount
     }
 }
 
@@ -281,7 +362,8 @@ public final class SCAIL2Generator: @unchecked Sendable {
         let segments = SCAIL2SegmentBuilder.build(
             frameCount: drivingFrameURLs.count,
             segmentLength: options.segmentLength,
-            segmentOverlap: options.segmentOverlap
+            segmentOverlap: options.segmentOverlap,
+            includePartialFinalSegment: options.tailPolicy == .padTrim
         )
         guard !segments.isEmpty else {
             throw SCAIL2GenerationError.noUsableSegment(
@@ -379,6 +461,23 @@ public final class SCAIL2Generator: @unchecked Sendable {
             resources: resources,
             configuration: configuration
         )
+        if let adapterURL = options.distilledAdapterURL {
+            progressHandler?(GenerationProgress(
+                stage: .loadingLoRA,
+                stepIndex: 0,
+                totalSteps: 1
+            ))
+            try SCAIL2DistilledAdapter.apply(
+                url: adapterURL,
+                to: transformer,
+                strength: options.distilledAdapterStrength
+            )
+            progressHandler?(GenerationProgress(
+                stage: .loadingLoRA,
+                stepIndex: 1,
+                totalSteps: 1
+            ))
+        }
         let prompt = text.prompt.expandedDimensions(axis: 0)
         let negativePrompt = text.negativePrompt.expandedDimensions(axis: 0)
         let positiveConditioning = transformer.prepareConditioning(
@@ -414,8 +513,17 @@ public final class SCAIL2Generator: @unchecked Sendable {
             ]).asType(.float32)
             var latent = Self.applyCleanHistory(noise, history: historyLatent)
             eval(latent)
-            var scheduler = Wan2UniPCScheduler(steps: options.steps, shift: options.shift)
-            for (stepIndex, timestep) in scheduler.timesteps.enumerated() {
+            var uniPCScheduler = Wan2UniPCScheduler(steps: options.steps, shift: options.shift)
+            var eulerScheduler = options.denoisingSchedule == .lightX2VFourStep
+                ? Wan2FlowMatchEulerScheduler(
+                    denoisingStepList: [1_000, 750, 500, 250],
+                    shift: options.shift
+                )
+                : Wan2FlowMatchEulerScheduler(steps: options.steps, shift: options.shift)
+            let timesteps = options.sampler == .unipc
+                ? uniPCScheduler.timesteps
+                : eulerScheduler.timesteps
+            for (stepIndex, timestep) in timesteps.enumerated() {
                 try Task.checkCancellation()
                 progressHandler?(GenerationProgress(
                     stage: .denoising,
@@ -437,16 +545,29 @@ public final class SCAIL2Generator: @unchecked Sendable {
                     timestep: MLXArray(timestep),
                     mode: options.mode
                 )
-                let conditional = transformer(modelInput, conditioning: positiveConditioning)
+                let conditional = transformer(
+                    modelInput,
+                    conditioning: positiveConditioning,
+                    evaluationBlockInterval: 1
+                )
                 eval(conditional)
                 let velocity: MLXArray
                 if options.guidanceScale <= 1 {
                     velocity = conditional
                 } else {
-                    let unconditional = transformer(modelInput, conditioning: negativeConditioning)
+                    let unconditional = transformer(
+                        modelInput,
+                        conditioning: negativeConditioning,
+                        evaluationBlockInterval: 1
+                    )
                     velocity = unconditional + options.guidanceScale * (conditional - unconditional)
                 }
-                latent = scheduler.step(modelOutput: velocity, sample: latent)
+                switch options.sampler {
+                case .unipc:
+                    latent = uniPCScheduler.step(modelOutput: velocity, sample: latent)
+                case .euler:
+                    latent = eulerScheduler.step(velocity: velocity, sample: latent)
+                }
                 latent = Self.applyCleanHistory(latent, history: historyLatent)
                 eval(latent)
                 Memory.clearCache()
@@ -549,12 +670,15 @@ public final class SCAIL2Generator: @unchecked Sendable {
         guard (1...6).contains(referenceCount) else {
             throw SCAIL2GenerationError.invalidReferenceCount(referenceCount)
         }
-        let urls = [
+        var urls = [
             options.reference.imageURL,
             options.reference.maskURL,
             options.drivingVideoURL,
             options.drivingMaskVideoURL,
         ] + options.additionalReferences.flatMap { [$0.imageURL, $0.maskURL] }
+        if let distilledAdapterURL = options.distilledAdapterURL {
+            urls.append(distilledAdapterURL)
+        }
         for url in urls where !FileManager.default.fileExists(atPath: url.path) {
             throw SCAIL2GenerationError.inputNotFound(url)
         }

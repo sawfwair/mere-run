@@ -101,6 +101,15 @@ then
   exit 1
 fi
 
+if rg -n -i -g '*.swift' \
+  -e 'python' \
+  -e 'Process *\(' \
+  Sources/MereRunCore/SCAIL2 Sources/MereRunCLI/Commands/VideoAnimateCommand.swift Sources/MereRunCLI/Commands/VideoPrepareMasksCommand.swift
+then
+  echo "Native SCAIL-2 Swift sources contain a prohibited sidecar runtime hook." >&2
+  exit 1
+fi
+
 if [[ "${MERERUN_RUN_E2E:-}" == "core" ]]; then
   ./scripts/e2e_smoke.sh --core
 elif [[ "${MERERUN_RUN_E2E:-}" == "installed" ]]; then

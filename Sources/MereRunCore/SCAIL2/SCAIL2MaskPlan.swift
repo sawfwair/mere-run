@@ -253,6 +253,7 @@ public struct SCAIL2MaskPlan: Codable, Hashable, Sendable {
     }
 
     public let schemaVersion: Int
+    public let mode: SCAIL2Mode
     public let drivingVideo: String
     public let inSeconds: Double?
     public let outSeconds: Double?
@@ -268,6 +269,7 @@ public struct SCAIL2MaskPlan: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
+        case mode
         case drivingVideo = "driving_video"
         case inSeconds = "in_seconds"
         case outSeconds = "out_seconds"
@@ -284,6 +286,7 @@ public struct SCAIL2MaskPlan: Codable, Hashable, Sendable {
 
     public init(
         schemaVersion: Int = 1,
+        mode: SCAIL2Mode = .animation,
         drivingVideo: String,
         inSeconds: Double? = nil,
         outSeconds: Double? = nil,
@@ -298,6 +301,7 @@ public struct SCAIL2MaskPlan: Codable, Hashable, Sendable {
         paletteTolerance: UInt8 = SCAIL2Palette.codecTolerance
     ) {
         self.schemaVersion = schemaVersion
+        self.mode = mode
         self.drivingVideo = drivingVideo
         self.inSeconds = inSeconds
         self.outSeconds = outSeconds
@@ -315,6 +319,7 @@ public struct SCAIL2MaskPlan: Codable, Hashable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        mode = try container.decodeIfPresent(SCAIL2Mode.self, forKey: .mode) ?? .animation
         drivingVideo = try container.decode(String.self, forKey: .drivingVideo)
         inSeconds = try container.decodeIfPresent(Double.self, forKey: .inSeconds)
         outSeconds = try container.decodeIfPresent(Double.self, forKey: .outSeconds)
@@ -384,12 +389,15 @@ public struct SCAIL2MaskPlan: Codable, Hashable, Sendable {
     public func resolvingPaths(relativeTo planURL: URL) -> Self {
         let baseURL = planURL.deletingLastPathComponent()
         func resolve(_ path: String) -> String {
-            let url = URL(fileURLWithPath: path)
-            return (url.path.hasPrefix("/") ? url : baseURL.appendingPathComponent(path))
+            let url = path.hasPrefix("/")
+                ? URL(fileURLWithPath: path)
+                : baseURL.appendingPathComponent(path)
+            return url
                 .standardizedFileURL.path
         }
         return Self(
             schemaVersion: schemaVersion,
+            mode: mode,
             drivingVideo: resolve(drivingVideo),
             inSeconds: inSeconds,
             outSeconds: outSeconds,
