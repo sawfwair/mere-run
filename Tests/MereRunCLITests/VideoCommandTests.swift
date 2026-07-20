@@ -35,13 +35,13 @@ final class VideoCommandTests: XCTestCase {
 
         XCTAssertEqual(command.model, SCAIL2Resources.modelID)
         XCTAssertEqual(command.mode, .animation)
-        XCTAssertEqual(command.profile, .quality)
-        XCTAssertEqual(command.width, 896)
-        XCTAssertEqual(command.height, 512)
-        XCTAssertEqual(command.steps, 40)
-        XCTAssertEqual(command.guidanceScale, 5)
-        XCTAssertEqual(command.shift, 3)
-        XCTAssertEqual(command.sampler, .unipc)
+        XCTAssertEqual(command.profile, .fast)
+        XCTAssertEqual(command.width, 832)
+        XCTAssertEqual(command.height, 480)
+        XCTAssertNil(command.steps)
+        XCTAssertNil(command.guidanceScale)
+        XCTAssertNil(command.shift)
+        XCTAssertNil(command.sampler)
         XCTAssertNil(command.distilledAdapter)
         XCTAssertEqual(command.distilledAdapterStrength, 1)
         XCTAssertEqual(command.fps, 16)
@@ -51,6 +51,42 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(command.audioSource, .none)
         XCTAssertEqual(command.additionalReferences, ["/tmp/ref-2.png"])
         XCTAssertEqual(command.additionalReferenceMasks, ["/tmp/ref-mask-2.png"])
+
+        var effectiveCommand = command
+        effectiveCommand.distilledAdapter = "/tmp/lightx2v.safetensors"
+        let options = try effectiveCommand.makeOptions(
+            prompt: effectiveCommand.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+        )
+        XCTAssertEqual(options.steps, 4)
+        XCTAssertEqual(options.guidanceScale, 1)
+        XCTAssertEqual(options.shift, 5)
+        XCTAssertEqual(options.sampler, .euler)
+        XCTAssertEqual(options.denoisingSchedule, .lightX2VFourStep)
+        XCTAssertEqual(options.distilledAdapterURL?.path, "/tmp/lightx2v.safetensors")
+    }
+
+    func testVideoAnimateQualityProfileRemainsExplicitlyAvailable() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mov",
+            "--profile", "quality",
+        ])
+
+        let options = try command.makeOptions(
+            prompt: command.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+        )
+        XCTAssertEqual(command.profile, .quality)
+        XCTAssertEqual(options.steps, 40)
+        XCTAssertEqual(options.guidanceScale, 5)
+        XCTAssertEqual(options.shift, 3)
+        XCTAssertEqual(options.sampler, .unipc)
+        XCTAssertEqual(options.denoisingSchedule, .standard)
+        XCTAssertNil(options.distilledAdapterURL)
     }
 
     func testVideoAnimateParsesPadTrimAndDrivingAudio() throws {

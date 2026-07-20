@@ -4,6 +4,15 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Changed
+
+- made the proven four-step SCAIL-2 adapter recipe the default for
+  `video animate`, including its 832x480 geometry, no-CFG Euler schedule, and
+  shift 5. The configurable 40-step UniPC recipe remains available through
+  explicit `--profile quality` selection.
+
 ## 0.24.0 - 2026-07-19
 
 This release contains the complete `v0.23.0..v0.24.0` delta: 22 commits

@@ -688,7 +688,6 @@ swift run mere.run video animate \
   --reference-mask ./reference-dancer-mask.png \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
-  --profile fast \
   --tail-policy pad-trim \
   --audio-source driving \
   --output ./animated.mp4

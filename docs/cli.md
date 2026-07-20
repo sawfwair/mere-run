@@ -1627,11 +1627,11 @@ options are `--mode animation|replacement`, `--model-root`, `--width`,
 `--segment-length`, `--segment-overlap`, and paired repeatable
 `--additional-reference` / `--additional-reference-mask`. `--tail-policy`
 accepts `drop` or `pad-trim`; `--audio-source` accepts `none` or `driving`.
-`--profile quality` is the compatibility default: 896x512, 40 UniPC steps,
-guidance 5, shift 3, 16 fps, 81-frame segments, and five clean-history overlap
-frames. `--profile fast` requires the separately pulled
-`scail2-lightx2v-4step` adapter and fixes the published no-CFG four-step Euler
-recipe with shift 5. Compatibility defaults are `drop` and `none`.
+`--profile fast` is the default: 832x480, the separately pulled
+`scail2-lightx2v-4step` adapter, and the published no-CFG four-step Euler
+recipe with shift 5. `--profile quality` explicitly selects the configurable
+40-step UniPC/CFG recipe. The segment defaults remain 81 frames with five
+clean-history overlap frames; compatibility defaults are `drop` and `none`.
 `pad-trim` preserves legal `1 mod 4` clip lengths and pads only the final
 incomplete temporal segment to the next legal length.
 

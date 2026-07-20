@@ -139,8 +139,8 @@ mere.run text chat \
 byte count and SHA-256, and prints the installed adapter path on stdout.
 Catalog ids are accepted by `text chat --lora`, `api serve --lora`, and the
 compatible SCAIL `video animate --distilled-adapter` surface; local paths
-remain supported. `video animate --profile fast` selects the SCAIL adapter ID
-and its published four-step schedule automatically.
+remain supported. The default `video animate --profile fast` selects the SCAIL
+adapter ID and its published four-step schedule automatically.
 
 ### `mere.run setup`
 

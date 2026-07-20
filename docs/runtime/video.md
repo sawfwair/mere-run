@@ -107,11 +107,11 @@ swift run mere.run video animate \
   --output ./animated.mp4
 ```
 
-Add `--profile fast` for the managed four-step path. It selects the pinned
+The default `--profile fast` managed four-step path selects the pinned
 `scail2-lightx2v-4step` adapter, disables classifier-free guidance, uses shift
 5, Euler updates, and the adapter's exact `1000, 750, 500, 250` training-step
-schedule. `--profile quality` remains the default and retains the configurable
-40-step UniPC/CFG recipe:
+schedule at 832x480. `--profile quality` remains available as an explicit
+opt-in to the configurable 40-step UniPC/CFG recipe:
 
 ```bash
 swift run mere.run video animate \
@@ -121,7 +121,6 @@ swift run mere.run video animate \
   --driving-video ./pose.mp4 \
   --driving-mask ./pose-mask.mp4 \
   --mode replacement \
-  --profile fast \
   --tail-policy pad-trim \
   --audio-source driving \
   --output ./recast-fast.mp4

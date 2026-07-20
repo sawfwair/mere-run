@@ -154,26 +154,26 @@ struct VideoAnimate: AsyncParsableCommand {
     @Option(name: [.long], help: "SCAIL-2 task mode: animation or replacement.")
     var mode: SCAIL2CLIMode = .animation
 
-    @Option(name: [.long], help: "Render recipe: quality (40-step UniPC by default) or fast (managed LightX2V 4-step adapter).")
-    var profile: SCAIL2CLIProfile = .quality
+    @Option(name: [.long], help: "Render recipe: fast (default managed four-step adapter) or quality (40-step UniPC).")
+    var profile: SCAIL2CLIProfile = .fast
 
     @Option(name: [.long], help: "Target width; must be divisible by 32.")
-    var width: Int = 896
+    var width: Int = 832
 
     @Option(name: [.long], help: "Target height; must be divisible by 32.")
-    var height: Int = 512
+    var height: Int = 480
 
-    @Option(name: [.long], help: "UniPC denoising steps.")
-    var steps: Int = 40
+    @Option(name: [.long], help: "Quality-profile denoising steps (default 40; fast is fixed at 4).")
+    var steps: Int?
 
-    @Option(name: [.customLong("guidance-scale")], help: "Classifier-free guidance scale.")
-    var guidanceScale: Float = 5
+    @Option(name: [.customLong("guidance-scale")], help: "Quality-profile CFG scale (default 5; fast disables CFG).")
+    var guidanceScale: Float?
 
-    @Option(name: [.long], help: "Flow schedule shift; 3 is recommended at 480p.")
-    var shift: Float = 3
+    @Option(name: [.long], help: "Quality-profile flow shift (default 3; fast is fixed at 5).")
+    var shift: Float?
 
-    @Option(name: [.long], help: "Denoising sampler: unipc or euler.")
-    var sampler: SCAIL2CLISampler = .unipc
+    @Option(name: [.long], help: "Quality-profile sampler (default UniPC; fast is fixed to Euler).")
+    var sampler: SCAIL2CLISampler?
 
     @Option(name: [.customLong("distilled-adapter")], help: "Installed adapter catalog id or local distilled Wan 2.1 I2V safetensors path.")
     var distilledAdapter: String?
@@ -313,10 +313,10 @@ struct VideoAnimate: AsyncParsableCommand {
             effectiveAdapterReference,
             baseModelID: SCAIL2Resources.modelID
         )
-        let effectiveSteps = profile == .fast ? 4 : steps
-        let effectiveGuidanceScale: Float = profile == .fast ? 1 : guidanceScale
-        let effectiveShift: Float = profile == .fast ? 5 : shift
-        let effectiveSampler: SCAIL2Sampler = profile == .fast ? .euler : sampler.runtimeSampler
+        let effectiveSteps = profile == .fast ? 4 : (steps ?? 40)
+        let effectiveGuidanceScale: Float = profile == .fast ? 1 : (guidanceScale ?? 5)
+        let effectiveShift: Float = profile == .fast ? 5 : (shift ?? 3)
+        let effectiveSampler: SCAIL2Sampler = profile == .fast ? .euler : (sampler?.runtimeSampler ?? .unipc)
         let effectiveSchedule: SCAIL2DenoisingSchedule = profile == .fast
             ? .lightX2VFourStep
             : .standard
