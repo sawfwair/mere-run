@@ -26,7 +26,13 @@ export default defineConfig({
   base: resolveBase(),
   cleanUrls: true,
   lastUpdated: true,
-  srcExclude: ['README.md', 'SUMMARY.md'],
+  srcExclude: [
+    'README.md',
+    'macos-studio-roadmap.md',
+    'falcon-perception-disparity-report.md',
+    'architecture/vfx-geometry-model-report.md',
+    'benchmarks/vfx-geometry-apple-silicon.md'
+  ],
   markdown: mereMarkdown(),
   themeConfig: {
     siteTitle: 'mere.run Docs',
@@ -74,7 +80,8 @@ export default defineConfig({
           { text: 'Repository Tour', link: '/repository-tour' },
           { text: 'Development Workflow', link: '/development-workflow' },
           { text: 'Testing Guide', link: '/testing' },
-          { text: 'Architecture Reading Map', link: '/architecture' }
+          { text: 'Architecture Reading Map', link: '/architecture' },
+          { text: 'mlx-swift Fork Policy', link: '/mlx-swift-fork' }
         ]
       },
       {
