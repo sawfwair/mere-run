@@ -4,14 +4,71 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.25.0 - 2026-07-21
+
+This release contains the complete `v0.24.0..v0.25.0` delta: 4 commits
+changing 78 files across native Cosmos3 Edge inference, persistent
+action-conditioned worlds, and the SCAIL-2 recast workflow.
+
+### Added
+
+- added a native Swift/MLX implementation of NVIDIA Cosmos3 Edge through
+  `video cosmos3`, covering text-to-image, image editing, text/image/video
+  generation, policy prediction, action-conditioned forward dynamics, inverse
+  dynamics, and image/video reasoning (#200).
+- added the managed `video-cosmos3-edge-mlx` model with an immutable official
+  snapshot pin, complete generation and understanding checkpoint validation,
+  published per-mode sampling defaults, and explicit OpenMDW-1.1 model-license
+  acceptance (#200).
+- added `world serve --backend cosmos3` with normalized `camera_pose`
+  trajectories, semantic camera controls, direct `model_space_actions`, warm
+  model reuse, autoregressive seed progression, pixel-stable public-frame
+  handoffs, and exact inverse traversal of cached navigation edges without
+  stochastic regeneration (#200).
+- added native Cosmos3 packed SigLIP2 vision, multimodal reasoner, tokenizer,
+  action packing for all 15 published domains, shifted-flow UniPC schedules,
+  Wan VAE loading, and generation/understanding mixture-of-transformers
+  execution (#200).
+- added independently generated Cosmos3 checkpoint inventories and numerical
+  parity fixtures against pinned NVIDIA sources. Runtime inference neither
+  vendors nor invokes upstream Python, PyTorch, or Diffusers code (#200).
+- added a checksum-pinned, remote-only Apache-2.0 LightX2V four-step adapter
+  to the managed adapter catalog for native SCAIL-2 rendering (#199).
+- added review-first SCAIL-2 recast preparation with dense painted-mask
+  corrections, replacement reference matting, stable multi-subject tracking,
+  palette validation, immutable manifests, previews, and quality reports
+  (#199).
 
 ### Changed
 
 - made the proven four-step SCAIL-2 adapter recipe the default for
   `video animate`, including its 832x480 geometry, no-CFG Euler schedule, and
   shift 5. The configurable 40-step UniPC recipe remains available through
-  explicit `--profile quality` selection.
+  explicit `--profile quality` selection (#199).
+- changed native SCAIL-2 attention execution to split the query axis across
+  independently evaluated Metal command buffers while preserving global
+  key/value attention, keeping full 81-frame windows below the macOS GPU
+  watchdog without introducing local or sliding-window attention (#199).
+- extended persistent-world session responses and transition receipts with an
+  explicit backend identity, action space/domain, and normalized model-space
+  trajectory. `raw_actions` remains a compatibility alias (#200).
+- documented the Cosmos3 model-license boundary, immutable NVIDIA source pins,
+  native implementation provenance, public CLI modes, and world-session
+  behavior in the model registry, guides, and third-party notices (#200).
+
+### Fixed
+
+- fixed SCAIL-2 reference and driving mask-role semantics for animation versus
+  replacement, including legal palette handling, dense correction encoding,
+  aspect-fit replacement references, and canonical white review backgrounds
+  (#199).
+- fixed SCAIL-2 tracking across collapsed masks and visibility gaps so objects
+  can re-anchor from their seeds without swapping stable multi-subject IDs
+  (#199).
+- fixed `video animate --preflight` on clean installations so the default
+  managed adapter is reported as a missing pinned input instead of throwing
+  before the preflight report; real renders still require checksum-verified
+  adapter installation (#200).
 
 ## 0.24.0 - 2026-07-19
 
