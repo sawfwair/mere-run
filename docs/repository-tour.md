@@ -81,6 +81,8 @@ Key subdirectories:
 - `ACEStep/`: music generation pipeline
 - `Woosh/`: sound-effect generation pipeline
 - `LTX/`: video generation pipeline
+- `Cosmos3/`: Cosmos3-Edge image/video generation, vision reasoning,
+  learned-action prediction, and persistent world simulation
 - `LoRA/`: LoRA loading and application support
 - `Support/`: manifests, model resolution, model paths, and Hub snapshot helpers
 - `Training/`, `Quantization/`: advanced model-training and quantization

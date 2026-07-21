@@ -339,7 +339,7 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                         promptKind: .text
                     )
                 )
-            case .box, .point:
+            case .box, .point, .mask:
                 guard let trackerModel = state.model.trackerModel else {
                     throw SegmenterError.interactivePromptingUnavailable
                 }
@@ -471,6 +471,7 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
     private static func loadWeights(resources: SAM31Resources, into model: SAM31Model) throws {
         let targetParameters = Dictionary(uniqueKeysWithValues: model.parameters().flattened())
         var anyMapped = false
+        var mappedKeys = Set<String>()
 
         func applyArrays(_ arrays: [String: MLXArray]) throws {
             var updates: [(String, MLXArray)] = []
@@ -481,6 +482,7 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                 guard let target = targetParameters[resolvedKey] else { continue }
                 guard let adapted = adaptWeight(value, to: target) else { continue }
                 updates.append((resolvedKey, adapted))
+                mappedKeys.insert(resolvedKey)
             }
 
             if !updates.isEmpty {
@@ -509,6 +511,16 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
 
         guard anyMapped else {
             throw SegmenterError.failedToMapWeights
+        }
+        let missingTrackerKeys = targetParameters.keys
+            .filter { $0.hasPrefix("tracker_model.") && !mappedKeys.contains($0) }
+            .sorted()
+        guard missingTrackerKeys.isEmpty else {
+            let preview = missingTrackerKeys.prefix(12).joined(separator: ", ")
+            throw SegmenterError.failedToLoadWeights(
+                resources.modelRootURL,
+                reason: "Missing \(missingTrackerKeys.count) native tracker weights: \(preview)"
+            )
         }
     }
 
@@ -544,7 +556,16 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
         return nil
     }
 
-    private static func mapCheckpointKey(_ key: String) -> String {
+    static func mapCheckpointKey(_ key: String) -> String {
+        if key.contains("tracker_model.interactive_sam_mask_decoder."),
+           key.contains(".output_hypernetworks_mlps.")
+            || key.contains(".iou_prediction_head.")
+            || key.contains(".pred_obj_score_head.") {
+            return key
+                .replacingOccurrences(of: ".proj_in.", with: ".layer1.")
+                .replacingOccurrences(of: ".layers.0.", with: ".layer2.")
+                .replacingOccurrences(of: ".proj_out.", with: ".layer3.")
+        }
         if key.contains(".scale_layers.0.") {
             return key.replacingOccurrences(of: ".scale_layers.0.", with: ".scale_layers.first.")
         }
@@ -578,9 +599,36 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                 imageWidth: imageWidth,
                 imageHeight: imageHeight
             )
-            boxTensor = nil
+            boxTensor = makeBoxPromptTensor(
+                promptObject.boxPrompt,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
         case .box:
-            pointTensor = nil
+            pointTensor = makePointPromptTensor(
+                promptObject.pointPrompts,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
+            boxTensor = makeBoxPromptTensor(
+                promptObject.boxPrompt,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
+        case .mask:
+            pointTensor = makePointPromptTensor(
+                promptObject.pointPrompts,
+                targetWidth: coarseWidth,
+                targetHeight: coarseHeight,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
+            )
             boxTensor = makeBoxPromptTensor(
                 promptObject.boxPrompt,
                 targetWidth: coarseWidth,
@@ -592,10 +640,20 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             return []
         }
 
+        let maskTensor: MLXArray?
+        if let path = promptObject.maskPrompt?.path {
+            let image = try MediaImageIO.decode(URL(fileURLWithPath: path).standardizedFileURL)
+            let values = Self.binaryMaskPromptValues(from: image)
+            maskTensor = MLXArray(values).reshaped(1, image.height, image.width, 1)
+        } else {
+            maskTensor = nil
+        }
+
         let output = trackerModel.segment(
             featurePyramid: featurePyramid,
             boxPrompt: boxTensor,
             pointPrompt: pointTensor,
+            maskPrompt: maskTensor,
             multimaskOutput: multimask
         )
         MLX.eval(output.predMasks, output.iouScores, output.objectScores)
@@ -631,6 +689,12 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
                 }
             }
             binaryMask = largestConnectedComponent(binaryMask: binaryMask, width: imageWidth, height: imageHeight)
+            binaryMask = fillSmallHoles(
+                binaryMask: binaryMask,
+                width: imageWidth,
+                height: imageHeight,
+                maximumArea: max(64, (imageWidth * imageHeight) / 200)
+            )
             area = binaryMask.reduce(0) { $0 + ($1 == 0 ? 0 : 1) }
             guard area > 0 else { continue }
 
@@ -782,6 +846,67 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             filtered[index] = 1
         }
         return filtered
+    }
+
+    static func fillSmallHoles(
+        binaryMask: [UInt8],
+        width: Int,
+        height: Int,
+        maximumArea: Int
+    ) -> [UInt8] {
+        guard width > 0,
+              height > 0,
+              binaryMask.count == width * height,
+              maximumArea > 0 else {
+            return binaryMask
+        }
+        var result = binaryMask
+        var visited = [UInt8](repeating: 0, count: binaryMask.count)
+        let neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        for startIndex in binaryMask.indices
+        where binaryMask[startIndex] == 0 && visited[startIndex] == 0 {
+            var queue = [startIndex]
+            var cursor = 0
+            var component: [Int] = []
+            var touchesBorder = false
+            visited[startIndex] = 1
+
+            while cursor < queue.count {
+                let index = queue[cursor]
+                cursor += 1
+                component.append(index)
+                let x = index % width
+                let y = index / width
+                if x == 0 || y == 0 || x == width - 1 || y == height - 1 {
+                    touchesBorder = true
+                }
+                for (dx, dy) in neighbors {
+                    let nextX = x + dx
+                    let nextY = y + dy
+                    guard nextX >= 0,
+                          nextX < width,
+                          nextY >= 0,
+                          nextY < height else {
+                        continue
+                    }
+                    let nextIndex = (nextY * width) + nextX
+                    guard binaryMask[nextIndex] == 0,
+                          visited[nextIndex] == 0 else {
+                        continue
+                    }
+                    visited[nextIndex] = 1
+                    queue.append(nextIndex)
+                }
+            }
+
+            if !touchesBorder && component.count <= maximumArea {
+                for index in component {
+                    result[index] = 1
+                }
+            }
+        }
+        return result
     }
 
     private static func writeMaskArtifacts(
@@ -1528,6 +1653,16 @@ public final class SAM31ImageSegmenter: @unchecked Sendable {
             try data.write(to: url, options: [.atomic])
         } catch {
             throw SegmenterError.failedToEncodeMetadata(error.localizedDescription)
+        }
+    }
+
+    static func binaryMaskPromptValues(from image: MediaImage) -> [Float] {
+        stride(from: 0, to: image.rgba8.count, by: 4).map { offset in
+            let foreground = max(
+                image.rgba8[offset],
+                max(image.rgba8[offset + 1], image.rgba8[offset + 2])
+            )
+            return foreground >= 128 ? 1 : 0
         }
     }
 

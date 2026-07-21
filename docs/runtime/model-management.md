@@ -50,7 +50,7 @@ Examples:
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - sfx: `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s`, `sfx-mmaudio-large-44k-v2`
-- video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`
+- video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 The public runtime resolves these IDs directly, so docs and examples should use
 the canonical names shown by `mere.run model list`.
@@ -125,23 +125,26 @@ Adapters use a separate checksum-pinned catalog and install under:
 ~/Library/Application Support/MereRun/adapters/<adapter-id>/<version>/
 ```
 
-The first public entry is the promoted Mere Platform Assistant v22 for the
-`text-chat-gemma4-12b-4bit` base model:
+Catalog entries include the promoted Mere Platform Assistant v22 and the
+remote-only Apache-2.0 LightX2V Wan 2.1 I2V four-step adapter:
 
 ```bash
 mere.run model pull text-chat-gemma4-12b-4bit
 mere.run adapter list
 mere.run adapter pull mere-platform-assistant
+mere.run adapter pull scail2-lightx2v-4step
 mere.run text chat \
   --model text-chat-gemma4-12b-4bit \
   --lora mere-platform-assistant \
   --prompt "What can you help me with in Mere?"
 ```
 
-`adapter pull` downloads the immutable public release, verifies its exact byte
-count and SHA-256, and prints the installed adapter path on stdout. Catalog ids
-are accepted by `text chat --lora` and `api serve --lora`; local paths remain
-supported.
+`adapter pull` downloads the immutable upstream artifact, verifies its exact
+byte count and SHA-256, and prints the installed adapter path on stdout.
+Catalog ids are accepted by `text chat --lora`, `api serve --lora`, and the
+compatible SCAIL `video animate --distilled-adapter` surface; local paths
+remain supported. The default `video animate --profile fast` selects the SCAIL
+adapter ID and its published four-step schedule automatically.
 
 ### `mere.run setup`
 

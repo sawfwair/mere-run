@@ -1508,7 +1508,10 @@ final class SAM31TrackerModel: Module {
                     Float(maskHeight) / Float(maskPrompt.dim(1)),
                     Float(maskWidth) / Float(maskPrompt.dim(2)),
                 ])
-                resizedMaskPrompt = Upsample(scaleFactor: scale, mode: .nearest)(maskPrompt)
+                resizedMaskPrompt = Upsample(
+                    scaleFactor: scale,
+                    mode: .linear(alignCorners: false)
+                )(maskPrompt)
             }
         } else {
             resizedMaskPrompt = nil

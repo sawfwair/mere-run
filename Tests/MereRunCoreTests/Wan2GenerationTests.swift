@@ -56,6 +56,20 @@ final class Wan2GenerationTests: MereRunCoreTestCase {
         XCTAssertEqual(scheduler.sigmas[0], 1, accuracy: 1e-6)
     }
 
+    func testLightX2VFourStepScheduleUsesPublishedTrainingIndices() {
+        let scheduler = Wan2FlowMatchEulerScheduler(
+            denoisingStepList: [1_000, 750, 500, 250],
+            shift: 5
+        )
+        XCTAssertEqual(scheduler.sigmas.count, 5)
+        XCTAssertEqual(scheduler.timesteps.count, 4)
+        XCTAssertEqual(scheduler.timesteps[0], 1_000, accuracy: 1e-5)
+        XCTAssertEqual(scheduler.timesteps[1], 937.5, accuracy: 1e-5)
+        XCTAssertEqual(scheduler.timesteps[2], 833.333_3, accuracy: 1e-4)
+        XCTAssertEqual(scheduler.timesteps[3], 625, accuracy: 1e-5)
+        XCTAssertEqual(scheduler.sigmas.last, 0)
+    }
+
     func testEulerStepUsesNextMinusCurrentSigma() {
         var scheduler = Wan2FlowMatchEulerScheduler(steps: 2, shift: 1)
         let sample = MLXArray([1, 2], [1, 2])

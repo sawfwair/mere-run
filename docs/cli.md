@@ -79,12 +79,15 @@ Public tree:
   - `mere.run sfx generate` — Generate a sound effect from a text prompt.
   - `mere.run sfx video` — Generate sound effects from video conditioning.
     - `mere.run sfx video generate` — Generate an 8-second sound effect from a video or Synchformer features.
-- [`mere.run video`](/runtime/video) — Generate videos with native Swift/MLX LTX pipelines.
+- [`mere.run video`](/runtime/video) — Generate and understand video with native Swift/MLX pipelines.
+  - `mere.run video animate` — Animate or replace a masked subject with native Swift/MLX SCAIL-2.
+  - `mere.run video cosmos3` — Run native NVIDIA Cosmos3-Edge generation and action modes.
   - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
+  - `mere.run video prepare-masks` — Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1.
   - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
 - [`mere.run world`](/runtime/world) — Run persistent local conditioned-video world sessions.
-  - `mere.run world serve` — Serve one warm DreamX causal world session over loopback HTTP.
+  - `mere.run world serve` — Serve one warm native world-model session over HTTP.
 - [`mere.run graph`](/workflows) — Validate, materialize, run, and submit portable workflow graphs.
   - `mere.run graph catalog` — List registered workflow node contracts.
   - `mere.run graph dataset` — Discover graph-ready datasets without loading model runtimes.
@@ -210,7 +213,7 @@ are:
 - Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 For subsystem-specific implementation guides, see:
 
@@ -1605,6 +1608,103 @@ step count, CFG, renoise schedule, and follow-up actions before loading MLX or
 generating audio. `.npy` feature inputs do not require Synchformer during
 preflight or generation.
 
+### `mere.run video cosmos3`
+
+Run the complete pinned `nvidia/Cosmos3-Edge` checkpoint through native
+Swift/MLX:
+
+```bash
+mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+
+mere.run video cosmos3 \
+  "continue forward through the same corridor" \
+  --mode forward-dynamics \
+  --image ./vesper.png \
+  --action-domain camera_pose \
+  --action-file ./camera-actions.json \
+  --action-chunk-size 60 \
+  --action-resolution 256 \
+  --output ./vesper-forward.mp4
+```
+
+`--mode` accepts `text-to-image`, `image-to-image`, `text-to-video`,
+`image-to-video`, `video-to-video`, `policy`, `forward-dynamics`,
+`inverse-dynamics`, and `reasoner`. Action domains cover the published
+automotive, camera, hand, Push-T, UMI, Bridge, DROID, RoboMIND, Galbot, AgiBot,
+and Fractal layouts. Policy and inverse-dynamics outputs are written as JSON.
+Forward-dynamics action files contain normalized model-space values, not meters;
+the resident Cosmos3 world server can also accept them as
+`model_space_actions`.
+
+The reasoner accepts text alone or one `--image`/`--video` and shares the
+checkpoint's understanding transformer with its packed SigLIP2 vision tower:
+
+```bash
+mere.run video cosmos3 \
+  "Describe the navigable paths and obstacles." \
+  --mode reasoner --image ./vesper.png --max-new-tokens 128
+```
+
+See `mere.run guide video-cosmos3` for sampling defaults, action JSON, exact
+upstream pins, and the resident world-server recipe.
+
+### `mere.run video animate`
+
+Animate or replace a masked reference subject using the native Swift/MLX
+SCAIL-2 runtime:
+
+```bash
+swift run mere.run video animate "<prompt>" \
+  --reference <image> \
+  --reference-mask <mask-image> \
+  --driving-video <video> \
+  --driving-mask <mask-video> \
+  [options]
+```
+
+The required image/video masks use seven-color SCAIL-2 segmentation. Important
+options are `--mode animation|replacement`, `--model-root`, `--width`,
+`--height`, `--steps`, `--guidance-scale`, `--shift`, `--fps`,
+`--segment-length`, `--segment-overlap`, and paired repeatable
+`--additional-reference` / `--additional-reference-mask`. `--tail-policy`
+accepts `drop` or `pad-trim`; `--audio-source` accepts `none` or `driving`.
+`--profile fast` is the default: 832x480, the separately pulled
+`scail2-lightx2v-4step` adapter, and the published no-CFG four-step Euler
+recipe with shift 5. `--profile quality` explicitly selects the configurable
+40-step UniPC/CFG recipe. The segment defaults remain 81 frames with five
+clean-history overlap frames; compatibility defaults are `drop` and `none`.
+`pad-trim` preserves legal `1 mod 4` clip lengths and pads only the final
+incomplete temporal segment to the next legal length.
+
+`--preflight --json` validates the MLX model root, input pairs, output, and
+execution plan without loading MLX or decoding video. The converted checkpoint
+is distributed separately from the mere.run source repository; runtime
+generation is native Swift/MLX and never launches Python or ComfyUI.
+
+### `mere.run video prepare-masks`
+
+Prepare reference and driving masks from a typed schema-version 1 plan:
+
+```bash
+swift run mere.run video prepare-masks \
+  --plan ./request.json \
+  --output-dir ./artifacts \
+  [--preview-frame <frame>] \
+  [--preflight --json]
+```
+
+Plans contain `mode` (`animation` or `replacement`), exact driver
+geometry/FPS/range, one to six stable subjects,
+unique legal palette colours, project-materialized reference images,
+text/box/positive/negative selectors, and optional point/box/dense painted-PNG
+keyframe corrections. Preview mode segments references plus one selected
+driving frame. Reference preparation aspect-fits each image and its mask into
+the requested canvas; replacement mode mattes non-subject reference pixels to
+black. Full mode tracks both directions, records gaps and quality warnings, and
+emits prepared reference image/mask pairs, a ProRes 4444 categorical driving
+mask, overlay MP4, contact sheet, tracking/quality JSON, normalized driver, and
+a canonical hashed manifest.
+
 ### `mere.run video generate`
 
 Generate MP4 video with the native LTX and Wan2.2 pipelines.
@@ -1933,12 +2033,15 @@ List the built-in public adapter catalog or install one immutable release:
 mere.run adapter list
 mere.run adapter list --json
 mere.run adapter pull mere-platform-assistant
+mere.run adapter pull scail2-lightx2v-4step
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
 installing the adapter. Stdout contains only the installed path; progress and
 verification diagnostics go to stderr. Use the adapter id directly with
-`text chat --lora` or `api serve --lora`.
+`text chat --lora`, `api serve --lora`, or the matching SCAIL
+`video animate --distilled-adapter` option. `video animate --profile fast`
+selects `scail2-lightx2v-4step` and its fixed four-step schedule.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.

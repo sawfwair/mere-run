@@ -19,6 +19,24 @@ struct ManagedAdapterCatalogTests {
         #expect(spec.downloadURL.host == "releases.merekit.com")
     }
 
+    @Test("SCAIL-2 LightX2V release is an immutable remote-only pin")
+    func scail2LightX2VReleaseIsPinned() throws {
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+        )
+        #expect(spec.version == "27ae38da9101")
+        #expect(spec.baseModelID == SCAIL2Resources.modelID)
+        #expect(spec.format == SCAIL2DistilledAdapter.format)
+        #expect(spec.license == "Apache-2.0")
+        #expect(spec.upstreamRevision == "27ae38da91014b947dd39cc3fa78b97cd7b386dd")
+        #expect(spec.artifact.filename == "wan2.1_i2v_lora_rank64_lightx2v_4step.safetensors")
+        #expect(spec.artifact.byteCount == 739_472_104)
+        #expect(spec.artifact.sha256 == "8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1")
+        #expect(spec.downloadURL.scheme == "https")
+        #expect(spec.downloadURL.host == "huggingface.co")
+        #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
+    }
+
     @Test("Catalog ids resolve case-insensitively")
     func normalizedLookup() {
         #expect(ManagedAdapterCatalog.spec(for: " MERE-PLATFORM-ASSISTANT ")?.version == "22")

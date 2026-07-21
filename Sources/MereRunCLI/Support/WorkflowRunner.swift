@@ -630,12 +630,10 @@ struct WorkflowRunner: @unchecked Sendable {
                 ))
                 sequence += 1
 
-                let preflight = try runProcess(
-                    executable: invocation.executable,
-                    arguments: invocation.preflightArguments,
+                let preflight = try preflightInvocation(
+                    invocation,
                     currentDirectory: nodeDirectory,
-                    timeoutSeconds: nil,
-                    stdoutLineHandler: nil
+                    nodeID: nodeID
                 )
                 try throwIfCancellationRequested()
                 try Data(preflight.stdout.utf8).write(
@@ -683,9 +681,8 @@ struct WorkflowRunner: @unchecked Sendable {
                     do {
                         var providerOutputs: [String: WorkflowValue]?
                         var providerSequence = -1
-                        let result = try runProcess(
-                            executable: invocation.executable,
-                            arguments: invocation.runArguments,
+                        let execution = try executeInvocation(
+                            invocation,
                             currentDirectory: nodeDirectory,
                             timeoutSeconds: node.execution?.timeoutSeconds,
                             stdoutLineHandler: invocation.streamsEvents ? { line in
@@ -724,6 +721,10 @@ struct WorkflowRunner: @unchecked Sendable {
                                 }
                             } : nil
                         )
+                        let result = execution.result
+                        if let intrinsicOutputs = execution.outputs {
+                            providerOutputs = intrinsicOutputs
+                        }
                         try throwIfCancellationRequested()
                         try Data(result.stdout.utf8).write(
                             to: nodeDirectory.appendingPathComponent("stdout.txt"),
@@ -999,12 +1000,10 @@ struct WorkflowRunner: @unchecked Sendable {
                     message: nil
                 ))
                 sequence += 1
-                let preflight = try runProcess(
-                    executable: invocation.executable,
-                    arguments: invocation.preflightArguments,
+                let preflight = try preflightInvocation(
+                    invocation,
                     currentDirectory: nodeDirectory,
-                    timeoutSeconds: nil,
-                    stdoutLineHandler: nil
+                    nodeID: nodeID
                 )
                 try throwIfCancellationRequested()
                 try Data(preflight.stdout.utf8).write(
@@ -1193,9 +1192,8 @@ struct WorkflowRunner: @unchecked Sendable {
             do {
                 var providerOutputs: [String: WorkflowValue]?
                 var providerSequence = -1
-                let result = try runProcess(
-                    executable: prepared.invocation.executable,
-                    arguments: prepared.invocation.runArguments,
+                let execution = try executeInvocation(
+                    prepared.invocation,
                     currentDirectory: prepared.directory,
                     timeoutSeconds: prepared.node.execution?.timeoutSeconds,
                     stdoutLineHandler: prepared.invocation.streamsEvents ? { line in
@@ -1217,6 +1215,10 @@ struct WorkflowRunner: @unchecked Sendable {
                         }
                     } : nil
                 )
+                let result = execution.result
+                if let intrinsicOutputs = execution.outputs {
+                    providerOutputs = intrinsicOutputs
+                }
                 try throwIfCancellationRequested()
                 try Data(result.stdout.utf8).write(
                     to: prepared.directory.appendingPathComponent("stdout.txt"),
@@ -1288,6 +1290,62 @@ struct WorkflowRunner: @unchecked Sendable {
             error: "Node '\(prepared.node.id)' exhausted its retry policy.",
             cancelled: false
         )
+    }
+
+    private func preflightInvocation(
+        _ invocation: WorkflowNodeInvocation,
+        currentDirectory: URL,
+        nodeID: String
+    ) throws -> WorkflowProcessResult {
+        if invocation.intrinsic != nil {
+            let report = ["node_id": nodeID, "status": "ready"]
+            let stdout = String(
+                decoding: try WorkflowBundleCodec.lineEncoder().encode(report),
+                as: UTF8.self
+            ) + "\n"
+            return WorkflowProcessResult(status: 0, stdout: stdout)
+        }
+        return try runProcess(
+            executable: invocation.executable,
+            arguments: invocation.preflightArguments,
+            currentDirectory: currentDirectory,
+            timeoutSeconds: nil,
+            stdoutLineHandler: nil
+        )
+    }
+
+    private func executeInvocation(
+        _ invocation: WorkflowNodeInvocation,
+        currentDirectory: URL,
+        timeoutSeconds: Int?,
+        stdoutLineHandler: ((String) throws -> Void)?
+    ) throws -> (result: WorkflowProcessResult, outputs: [String: WorkflowValue]?) {
+        if let intrinsic = invocation.intrinsic {
+            try throwIfCancellationRequested()
+            let outputs = try intrinsic.evaluate()
+            let stdout = String(
+                decoding: try WorkflowBundleCodec.lineEncoder().encode(outputs),
+                as: UTF8.self
+            ) + "\n"
+            return (WorkflowProcessResult(status: 0, stdout: stdout), outputs)
+        }
+        let result = try runProcess(
+            executable: invocation.executable,
+            arguments: invocation.runArguments,
+            currentDirectory: currentDirectory,
+            timeoutSeconds: timeoutSeconds,
+            stdoutLineHandler: stdoutLineHandler
+        )
+        guard result.status == 0, let outputName = invocation.stdoutOutputName else {
+            return (result, nil)
+        }
+        var scalar = result.stdout
+        if scalar.hasSuffix("\r\n") {
+            scalar.removeLast(2)
+        } else if scalar.hasSuffix("\n") {
+            scalar.removeLast()
+        }
+        return (result, [outputName: .string(scalar)])
     }
 
     private func runProcess(
@@ -1807,6 +1865,8 @@ struct WorkflowRunner: @unchecked Sendable {
             jobID: job.jobID,
             graphName: graph.name,
             graphFingerprint: job.graphFingerprint,
+            sourceGraphFingerprint: job.sourceGraphFingerprint,
+            sourceInputFingerprint: job.sourceInputFingerprint,
             state: .planned,
             createdAt: now(),
             updatedAt: now(),

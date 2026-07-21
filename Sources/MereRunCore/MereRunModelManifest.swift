@@ -78,6 +78,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case ltxVideo = "ltx-video"
         /// Wan2 native video family.
         case wanVideo = "wan-video"
+        /// NVIDIA Cosmos3-Edge native omnimodal world-model family.
+        case cosmos3Edge = "cosmos3-edge"
         /// Psi agent chat family.
         case psiChat = "psi-chat"
         /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
@@ -157,6 +159,9 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case musicGeneration = "music_generation"
         case musicTranscription = "music_transcription"
         case videoGeneration = "video_generation"
+        case actionGeneration = "action_generation"
+        case worldSimulation = "world_simulation"
+        case visionReasoning = "vision_reasoning"
         case audioToVideoGeneration = "audio_to_video_generation"
         case loraInference = "lora_inference"
         case loraTraining = "lora_training"
@@ -1681,6 +1686,46 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     scheduler: nil
                 ),
                 upstreamRepoId: "\(Wan2Resources.managedRepoID)@\(Wan2Resources.managedRevision)",
+                createdAt: createdAt
+            )
+        case .cosmos3EdgeMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .cosmos3Edge,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 35, cfg: 6.0, sigmaShift: 10.0),
+                supports: [.videoGeneration, .actionGeneration, .worldSimulation, .visionReasoning],
+                components: Components(
+                    tokenizer: .local(path: "text_tokenizer"),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "transformer"),
+                    vae: .local(path: "vae"),
+                    scheduler: .local(path: "scheduler")
+                ),
+                upstreamRepoId: "\(Cosmos3Resources.officialRepoID)@\(Cosmos3Resources.officialRevision)",
+                createdAt: createdAt
+            )
+        case .scail2Video14BMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .wanVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 40, cfg: 5.0, sigmaShift: 3.0),
+                supports: [.videoGeneration],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: .local(path: "."),
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(SCAIL2Resources.upstreamRepoID)@\(SCAIL2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .dreamXWorld5BARMLX:

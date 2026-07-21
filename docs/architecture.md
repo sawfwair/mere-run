@@ -182,6 +182,25 @@ definitions. Read it in this order:
 - decoder and encoder support modules
 - unified AV generator types near the end
 
+Cosmos3-Edge omnimodal generation and world simulation:
+
+- CLI generation and reasoner:
+  `Sources/MereRunCLI/Commands/VideoCosmos3Command.swift`
+- Persistent world server:
+  `Sources/MereRunCLI/Commands/WorldCommand.swift`
+- Runtime entrypoints:
+  - `Sources/MereRunCore/Cosmos3/Cosmos3EdgeGenerator.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3Reasoner.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3WorldSession.swift`
+- Read next:
+  - `Sources/MereRunCore/Cosmos3/Cosmos3Resources.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3Action.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3Sequence.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3Transformer.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3ModelLoader.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3Scheduler.swift`
+  - `Sources/MereRunCore/Cosmos3/Cosmos3ReasonerVision.swift`
+
 ## Validation and diagnostics
 
 The advanced image validator is intentionally separate from generation:

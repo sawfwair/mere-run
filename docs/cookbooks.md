@@ -56,6 +56,7 @@ Creative and runtime workflows:
 - `music transcribe`
 - `sfx generate`
 - `video generate`
+- `video cosmos3`
 - `video export-latents`
 - `api serve`
 - `open-webui`

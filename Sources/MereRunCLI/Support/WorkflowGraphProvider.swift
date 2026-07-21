@@ -173,6 +173,7 @@ enum WorkflowGraphProviderRegistry {
                 outputs: node.outputs,
                 requirements: node.requirements,
                 traits: node.traits,
+                presentation: node.presentation,
                 provider: identity
             )
         }

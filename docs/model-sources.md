@@ -103,6 +103,8 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
+| `video` | `video-cosmos3-edge-mlx` |
+| `video` | `video-scail2-14b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
 <!-- managed-model-catalog:end -->
 
@@ -706,6 +708,69 @@ state IDs rather than mutable MLX tensors. Camera controls are represented as
 XYZ translation and rotation so a DreamX-derived causal camera conditioner can
 replace the current text-plus-first-frame mode without changing the session
 schema.
+
+### `video-scail2-14b-mlx`
+
+The native SCAIL-2 model root is:
+
+```text
+.../models/video-scail2-14b-mlx
+```
+
+The pinned `Sawfwair/SCAIL-2-14B-MLX` release package contains sharded BF16 transformer
+and UMT5 weights, FP16 OpenCLIP weights, the Wan 2.1 VAE, tokenizer,
+configuration, MIT license, model card, and a conversion receipt with immutable
+source and artifact hashes. The package is approximately 43 GiB.
+
+The mere.run repository contains only the native Swift/MLX runtime. It does not
+ship a checkpoint converter or an upstream Python reference implementation.
+Install the immutable managed snapshot with:
+
+```bash
+mere.run model pull video-scail2-14b-mlx
+```
+
+An explicitly prepared compatible root can still be supplied with
+`--model-root`.
+
+The optional `scail2-lightx2v-4step` adapter is not part of that model package
+or this repository. `mere.run adapter pull` downloads only
+`wan2.1_i2v_lora_rank64_lightx2v_4step.safetensors` from
+`lightx2v/Wan2.1-Distill-Loras` at immutable revision
+`27ae38da91014b947dd39cc3fa78b97cd7b386dd`, verifies 739,472,104 bytes and
+SHA-256 `8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1`,
+and stores it outside git under the managed adapter directory. The upstream
+model card declares Apache-2.0. The Wan 2.2 adapters are deliberately rejected
+for SCAIL-2 because they target the incompatible Wan 2.2 MoE base.
+
+### `video-cosmos3-edge-mlx`
+
+The native Cosmos3-Edge root is the complete official
+`nvidia/Cosmos3-Edge` snapshot pinned at revision
+`6f58f6b4c91288838e60b6bcb2cc45d997e961de`:
+
+```text
+.../models/video-cosmos3-edge-mlx
+```
+
+The approximately 9.2 GB snapshot includes the mixed
+understanding/generation transformer, Wan VAE, scheduler, generation tokenizer,
+reasoner tokenizer/configuration, packed SigLIP2 vision encoder, and multimodal
+projector. The Swift/MLX runtime loads these official safetensors directly; it
+does not invoke Python, PyTorch, or Diffusers during inference.
+
+```bash
+mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+mere.run guide video-cosmos3
+```
+
+The checkpoint is governed by NVIDIA Open Model Development and Use License
+1.1 (`OpenMDW-1.1`). The managed catalog exposes the pinned license URL,
+requires explicit acceptance, and disables runtime auto-download.
+
+Numerical parity fixtures are generated against NVIDIA's Cosmos framework
+commit `ed8287fd7477113f8ac4f6b84290514d55cf0cdc`; the VAE/scheduler reference is
+Diffusers v0.39.0 commit `a3608b512ed7248499a44c61d954965ed9bdae4d`.
 
 ### `video-dreamx-world-5b-ar-mlx`
 

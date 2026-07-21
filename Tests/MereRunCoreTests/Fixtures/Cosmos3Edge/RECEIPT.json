@@ -1,0 +1,10 @@
+{
+  "cosmos3_edge_revision": "6f58f6b4c91288838e60b6bcb2cc45d997e961de",
+  "files": {
+    "checkpoint-inventory.json": "319e9995abcb1aba8694febe210c12f5a7fce10a013575d2f5695788a8004ad3",
+    "tiny-mot-layer.safetensors": "cc1b2f5567181f9fdce5fca300c093f915afafc56e6b6573499f2ddc47dfd2b8",
+    "tiny-reasoner-vision.safetensors": "9f12ad87cfac2c900f6238a301629deeede1b806af33e2de8c3437c0e5874f06"
+  },
+  "nvidia_framework_revision": "ed8287fd7477113f8ac4f6b84290514d55cf0cdc",
+  "schema": "mere.cosmos3-edge.upstream-fixtures.v1"
+}

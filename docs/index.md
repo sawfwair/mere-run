@@ -49,7 +49,7 @@ the page that owns its public documentation.
 | [`mere.run vision`](/runtime/vision) | Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media. |
 | [`mere.run music`](/runtime/music) | Generate music locally. |
 | [`mere.run sfx`](/runtime/sfx) | Generate sound effects locally. |
-| [`mere.run video`](/runtime/video) | Generate videos with native Swift/MLX LTX pipelines. |
+| [`mere.run video`](/runtime/video) | Generate and understand video with native Swift/MLX pipelines. |
 | [`mere.run world`](/runtime/world) | Run persistent local conditioned-video world sessions. |
 | [`mere.run graph`](/workflows) | Validate, materialize, run, and submit portable workflow graphs. |
 | [`mere.run executor`](/workflows#executor-profiles) | Manage local, SSH, and relay workflow executors. |

@@ -67,7 +67,7 @@ public enum QuantizedModelManifestWriter {
             case .lightOnOCR: return .ocr
             case .aceStep, .magentaRT2, .muScriptor: return .music
             case .woosh, .mmaudio: return .sfx
-            case .ltxVideo, .wanVideo: return .video
+            case .ltxVideo, .wanVideo, .cosmos3Edge: return .video
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
             }
@@ -150,6 +150,8 @@ public enum QuantizedModelManifestWriter {
                     return [.soundEffectGeneration, .videoToAudioGeneration]
                 case .ltxVideo, .wanVideo:
                     return [.videoGeneration]
+                case .cosmos3Edge:
+                    return [.videoGeneration, .actionGeneration, .worldSimulation, .visionReasoning]
                 case .psiChat:
                     return [.chat]
                 case .deepseekV4Flash:
@@ -231,6 +233,8 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)
             case .wanVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 5.0, sigmaShift: 5.0)
+            case .cosmos3Edge:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 35, cfg: 6.0, sigmaShift: 10.0)
             }
         }
 

@@ -21,6 +21,74 @@ private let wan2VAE22StandardDeviationValues: [Float] = [
     0.3971, 1.0600, 0.3943, 0.5537, 0.5444, 0.4089, 0.7468, 0.7744,
 ]
 
+private let wan2VAE21MeanValues: [Float] = [
+    -0.7571, -0.7089, -0.9113, 0.1075, -0.1745, 0.9653, -0.1517, 1.5508,
+    0.4134, -0.0715, 0.5517, -0.3632, -0.1922, -0.9497, 0.2503, -0.2921,
+]
+
+private let wan2VAE21StandardDeviationValues: [Float] = [
+    2.8184, 1.4541, 2.3275, 2.6558, 1.2196, 1.7708, 2.6052, 2.0743,
+    3.2687, 2.1526, 2.8652, 1.5579, 1.6382, 1.1253, 2.8251, 1.9160,
+]
+
+public struct Wan2VAEConfiguration: Hashable, Sendable {
+    public let latentChannels: Int
+    public let encoderDimensions: Int
+    public let decoderDimensions: Int
+    public let imagePatchSize: Int
+    public let blockResampleShortcut: Bool
+    public let decoderResampleReducesChannels: Bool
+    public let latentMean: [Float]
+    public let latentStandardDeviation: [Float]
+
+    public init(
+        latentChannels: Int,
+        encoderDimensions: Int,
+        decoderDimensions: Int,
+        imagePatchSize: Int,
+        blockResampleShortcut: Bool = true,
+        decoderResampleReducesChannels: Bool = false,
+        latentMean: [Float],
+        latentStandardDeviation: [Float]
+    ) {
+        precondition(latentChannels > 0)
+        precondition(encoderDimensions > 0 && decoderDimensions > 0)
+        precondition(imagePatchSize > 0)
+        precondition(latentMean.count == latentChannels)
+        precondition(latentStandardDeviation.count == latentChannels)
+        precondition(latentStandardDeviation.allSatisfy { $0 > 0 })
+        self.latentChannels = latentChannels
+        self.encoderDimensions = encoderDimensions
+        self.decoderDimensions = decoderDimensions
+        self.imagePatchSize = imagePatchSize
+        self.blockResampleShortcut = blockResampleShortcut
+        self.decoderResampleReducesChannels = decoderResampleReducesChannels
+        self.latentMean = latentMean
+        self.latentStandardDeviation = latentStandardDeviation
+    }
+
+    public static let wan22TI2V = Wan2VAEConfiguration(
+        latentChannels: 48,
+        encoderDimensions: 160,
+        decoderDimensions: 256,
+        imagePatchSize: 2,
+        blockResampleShortcut: true,
+        latentMean: wan2VAE22MeanValues,
+        latentStandardDeviation: wan2VAE22StandardDeviationValues
+    )
+
+    public static let wan21 = Wan2VAEConfiguration(
+        latentChannels: 16,
+        encoderDimensions: 96,
+        decoderDimensions: 96,
+        imagePatchSize: 1,
+        blockResampleShortcut: false,
+        decoderResampleReducesChannels: true,
+        latentMean: wan2VAE21MeanValues,
+        latentStandardDeviation: wan2VAE21StandardDeviationValues
+    )
+}
+
 final class Wan2VAECausalConv3D: Module {
     let kernel: (temporal: Int, height: Int, width: Int)
     let stride: (temporal: Int, height: Int, width: Int)
@@ -279,16 +347,18 @@ final class Wan2VAEAverageDownsample: Module {
 final class Wan2VAEResample: Module {
     enum Mode { case up2D, up3D, down2D, down3D }
     let dimensions: Int
+    let outputDimensions: Int
     let mode: Mode
     @ModuleInfo(key: "resample_weight") var spatialWeight: MLXArray
     @ModuleInfo(key: "resample_bias") var spatialBias: MLXArray
     @ModuleInfo(key: "time_conv") var temporalConv: Wan2VAECausalConv3D?
 
-    init(dimensions: Int, mode: Mode) {
+    init(dimensions: Int, outputDimensions: Int? = nil, mode: Mode) {
         self.dimensions = dimensions
+        self.outputDimensions = outputDimensions ?? dimensions
         self.mode = mode
-        self._spatialWeight.wrappedValue = MLX.zeros([dimensions, 3, 3, dimensions])
-        self._spatialBias.wrappedValue = MLX.zeros([dimensions])
+        self._spatialWeight.wrappedValue = MLX.zeros([self.outputDimensions, 3, 3, dimensions])
+        self._spatialBias.wrappedValue = MLX.zeros([self.outputDimensions])
         switch mode {
         case .up3D:
             self._temporalConv.wrappedValue = Wan2VAECausalConv3D(
@@ -317,15 +387,17 @@ final class Wan2VAEResample: Module {
         var width = input.dim(3)
         var hidden = input
         if mode == .up3D, let temporalConv {
-            if firstChunk && frames > 1 {
-                let first = hidden[0..., 0..<1]
-                let rest = temporalConv(hidden[0..., 1...])
-                    .reshaped(batch, frames - 1, height, width, 2, dimensions)
-                let interleaved = MLX.stacked(
-                    [rest[0..., 0..., 0..., 0..., 0, 0...], rest[0..., 0..., 0..., 0..., 1, 0...]],
-                    axis: 2
-                ).reshaped(batch, (frames - 1) * 2, height, width, dimensions)
-                hidden = MLX.concatenated([first, interleaved], axis: 1)
+            if firstChunk {
+                if frames > 1 {
+                    let first = hidden[0..., 0..<1]
+                    let rest = temporalConv(hidden[0..., 1...])
+                        .reshaped(batch, frames - 1, height, width, 2, dimensions)
+                    let interleaved = MLX.stacked(
+                        [rest[0..., 0..., 0..., 0..., 0, 0...], rest[0..., 0..., 0..., 0..., 1, 0...]],
+                        axis: 2
+                    ).reshaped(batch, (frames - 1) * 2, height, width, dimensions)
+                    hidden = MLX.concatenated([first, interleaved], axis: 1)
+                }
             } else {
                 let temporal = temporalConv(hidden).reshaped(batch, frames, height, width, 2, dimensions)
                 hidden = MLX.stacked(
@@ -346,7 +418,7 @@ final class Wan2VAEResample: Module {
             flattened = MLX.convGeneral(flattened, spatialWeight) + spatialBias
             height = flattened.dim(1)
             width = flattened.dim(2)
-            hidden = flattened.reshaped(batch, frames, height, width, dimensions)
+            hidden = flattened.reshaped(batch, frames, height, width, outputDimensions)
         case .down2D, .down3D:
             var flattened = hidden.reshaped(batch * frames, height, width, dimensions)
             flattened = MLX.padded(flattened, widths: [[0, 0], [0, 1], [0, 1], [0, 0]])
@@ -370,8 +442,15 @@ final class Wan2VAEUpBlock: Module {
     @ModuleInfo(key: "avg_shortcut") var shortcut: Wan2VAEDuplicateUpsample?
     @ModuleInfo(key: "upsamples") var layers: [Module]
 
-    init(inputChannels: Int, outputChannels: Int, temporalUpsample: Bool, upsample: Bool) {
-        self._shortcut.wrappedValue = upsample ? Wan2VAEDuplicateUpsample(
+    init(
+        inputChannels: Int,
+        outputChannels: Int,
+        temporalUpsample: Bool,
+        upsample: Bool,
+        useBlockShortcut: Bool,
+        resampleOutputChannels: Int
+    ) {
+        self._shortcut.wrappedValue = upsample && useBlockShortcut ? Wan2VAEDuplicateUpsample(
             inputChannels: inputChannels,
             outputChannels: outputChannels,
             temporalFactor: temporalUpsample ? 2 : 1,
@@ -386,6 +465,7 @@ final class Wan2VAEUpBlock: Module {
         if upsample {
             modules.append(Wan2VAEResample(
                 dimensions: outputChannels,
+                outputDimensions: resampleOutputChannels,
                 mode: temporalUpsample ? .up3D : .up2D
             ))
         }
@@ -410,16 +490,22 @@ final class Wan2VAEUpBlock: Module {
 }
 
 final class Wan2VAEDownBlock: Module {
-    @ModuleInfo(key: "avg_shortcut") var shortcut: Wan2VAEAverageDownsample
+    @ModuleInfo(key: "avg_shortcut") var shortcut: Wan2VAEAverageDownsample?
     @ModuleInfo(key: "downsamples") var layers: [Module]
 
-    init(inputChannels: Int, outputChannels: Int, temporalDownsample: Bool, downsample: Bool) {
-        self._shortcut.wrappedValue = Wan2VAEAverageDownsample(
+    init(
+        inputChannels: Int,
+        outputChannels: Int,
+        temporalDownsample: Bool,
+        downsample: Bool,
+        useBlockShortcut: Bool
+    ) {
+        self._shortcut.wrappedValue = useBlockShortcut ? Wan2VAEAverageDownsample(
             inputChannels: inputChannels,
             outputChannels: outputChannels,
             temporalFactor: temporalDownsample ? 2 : 1,
             spatialFactor: downsample ? 2 : 1
-        )
+        ) : nil
         var modules: [Module] = []
         var input = inputChannels
         for _ in 0..<2 {
@@ -436,8 +522,8 @@ final class Wan2VAEDownBlock: Module {
     }
 
     func callAsFunction(_ input: MLXArray) -> MLXArray {
-        let skip = shortcut(input)
-        eval(skip)
+        let skip = shortcut?(input)
+        if let skip { eval(skip) }
         var hidden = input
         for layer in layers {
             if let residual = layer as? Wan2VAEResidualBlock {
@@ -447,7 +533,7 @@ final class Wan2VAEDownBlock: Module {
             }
             eval(hidden)
         }
-        return hidden + skip
+        return skip.map { hidden + $0 } ?? hidden
     }
 }
 
@@ -476,7 +562,13 @@ final class Wan2VAEDecoder3D: Module {
     @ModuleInfo(key: "upsamples") var upsampleBlocks: [Wan2VAEUpBlock]
     @ModuleInfo(key: "head") var head: Wan2VAEHead
 
-    init(baseDimensions: Int = 256, latentChannels: Int = 48) {
+    init(
+        baseDimensions: Int = 256,
+        latentChannels: Int = 48,
+        outputChannels: Int = 12,
+        useBlockShortcuts: Bool = true,
+        resampleReducesChannels: Bool = false
+    ) {
         let dimensions = [baseDimensions * 4, baseDimensions * 4, baseDimensions * 4, baseDimensions * 2, baseDimensions]
         self._inputConv.wrappedValue = Wan2VAECausalConv3D(
             inputChannels: latentChannels,
@@ -489,15 +581,27 @@ final class Wan2VAEDecoder3D: Module {
             Wan2VAEAttentionBlock(dimensions: dimensions[0]),
             Wan2VAEResidualBlock(inputChannels: dimensions[0], outputChannels: dimensions[0]),
         ]
+        var currentDimensions = dimensions[0]
         self._upsampleBlocks.wrappedValue = (0..<4).map { index in
-            Wan2VAEUpBlock(
-                inputChannels: dimensions[index],
+            let block = Wan2VAEUpBlock(
+                inputChannels: currentDimensions,
                 outputChannels: dimensions[index + 1],
                 temporalUpsample: index < 2,
-                upsample: index < 3
+                upsample: index < 3,
+                useBlockShortcut: useBlockShortcuts,
+                resampleOutputChannels: resampleReducesChannels && index < 3
+                    ? dimensions[index + 1] / 2
+                    : dimensions[index + 1]
             )
+            currentDimensions = resampleReducesChannels && index < 3
+                ? dimensions[index + 1] / 2
+                : dimensions[index + 1]
+            return block
         }
-        self._head.wrappedValue = Wan2VAEHead(inputChannels: dimensions.last!)
+        self._head.wrappedValue = Wan2VAEHead(
+            inputChannels: dimensions.last!,
+            outputChannels: outputChannels
+        )
     }
 
     func callAsFunction(_ input: MLXArray) -> MLXArray {
@@ -524,10 +628,15 @@ final class Wan2VAEEncoder3D: Module {
     @ModuleInfo(key: "middle") var middle: [Module]
     @ModuleInfo(key: "head") var head: Wan2VAEHead
 
-    init(baseDimensions: Int = 160, outputChannels: Int = 96) {
+    init(
+        baseDimensions: Int = 160,
+        inputChannels: Int = 12,
+        outputChannels: Int = 96,
+        useBlockShortcuts: Bool = true
+    ) {
         let dimensions = [baseDimensions, baseDimensions, baseDimensions * 2, baseDimensions * 4, baseDimensions * 4]
         self._inputConv.wrappedValue = Wan2VAECausalConv3D(
-            inputChannels: 12,
+            inputChannels: inputChannels,
             outputChannels: dimensions[0],
             kernel: (3, 3, 3),
             padding: (1, 1, 1)
@@ -537,7 +646,8 @@ final class Wan2VAEEncoder3D: Module {
                 inputChannels: dimensions[index],
                 outputChannels: dimensions[index + 1],
                 temporalDownsample: index == 1 || index == 2,
-                downsample: index < 3
+                downsample: index < 3,
+                useBlockShortcut: useBlockShortcuts
             )
         }
         self._middle.wrappedValue = [
@@ -567,30 +677,64 @@ final class Wan2VAEEncoder3D: Module {
 
 public final class Wan2VAEModel: Module {
     let latentChannels: Int
+    let imagePatchSize: Int
+    let latentMean: MLXArray
+    let latentStandardDeviation: MLXArray
     @ModuleInfo(key: "conv1") var encoderProjection: Wan2VAECausalConv3D
     @ModuleInfo(key: "encoder") var encoder: Wan2VAEEncoder3D
     @ModuleInfo(key: "conv2") var decoderProjection: Wan2VAECausalConv3D
     @ModuleInfo(key: "decoder") var decoder: Wan2VAEDecoder3D
 
-    public init(latentChannels: Int = 48, encoderDimensions: Int = 160, decoderDimensions: Int = 256) {
-        self.latentChannels = latentChannels
+    public convenience init(
+        latentChannels: Int = 48,
+        encoderDimensions: Int = 160,
+        decoderDimensions: Int = 256
+    ) {
+        let defaults = Wan2VAEConfiguration.wan22TI2V
+        self.init(configuration: Wan2VAEConfiguration(
+            latentChannels: latentChannels,
+            encoderDimensions: encoderDimensions,
+            decoderDimensions: decoderDimensions,
+            imagePatchSize: defaults.imagePatchSize,
+            blockResampleShortcut: defaults.blockResampleShortcut,
+            decoderResampleReducesChannels: defaults.decoderResampleReducesChannels,
+            latentMean: Array(defaults.latentMean.prefix(latentChannels)),
+            latentStandardDeviation: Array(defaults.latentStandardDeviation.prefix(latentChannels))
+        ))
+    }
+
+    public init(configuration: Wan2VAEConfiguration) {
+        self.latentChannels = configuration.latentChannels
+        self.imagePatchSize = configuration.imagePatchSize
+        self.latentMean = MLXArray(configuration.latentMean).reshaped(
+            1, 1, 1, 1, configuration.latentChannels
+        )
+        self.latentStandardDeviation = MLXArray(configuration.latentStandardDeviation).reshaped(
+            1, 1, 1, 1, configuration.latentChannels
+        )
+        let imageChannels = 3 * configuration.imagePatchSize * configuration.imagePatchSize
         self._encoderProjection.wrappedValue = Wan2VAECausalConv3D(
-            inputChannels: latentChannels * 2,
-            outputChannels: latentChannels * 2,
+            inputChannels: configuration.latentChannels * 2,
+            outputChannels: configuration.latentChannels * 2,
             kernel: (1, 1, 1)
         )
         self._encoder.wrappedValue = Wan2VAEEncoder3D(
-            baseDimensions: encoderDimensions,
-            outputChannels: latentChannels * 2
+            baseDimensions: configuration.encoderDimensions,
+            inputChannels: imageChannels,
+            outputChannels: configuration.latentChannels * 2,
+            useBlockShortcuts: configuration.blockResampleShortcut
         )
         self._decoderProjection.wrappedValue = Wan2VAECausalConv3D(
-            inputChannels: latentChannels,
-            outputChannels: latentChannels,
+            inputChannels: configuration.latentChannels,
+            outputChannels: configuration.latentChannels,
             kernel: (1, 1, 1)
         )
         self._decoder.wrappedValue = Wan2VAEDecoder3D(
-            baseDimensions: decoderDimensions,
-            latentChannels: latentChannels
+            baseDimensions: configuration.decoderDimensions,
+            latentChannels: configuration.latentChannels,
+            outputChannels: imageChannels,
+            useBlockShortcuts: configuration.blockResampleShortcut,
+            resampleReducesChannels: configuration.decoderResampleReducesChannels
         )
     }
 
@@ -602,16 +746,29 @@ public final class Wan2VAEModel: Module {
     public func encodeVideo(_ video: MLXArray) -> MLXArray {
         precondition(video.ndim == 5 && video.dim(4) == 3)
         precondition(video.dim(1) >= 1 && (video.dim(1) - 1) % 4 == 0)
-        let packed = Self.patchify(video)
+        precondition(video.dim(2).isMultiple(of: imagePatchSize))
+        precondition(video.dim(3).isMultiple(of: imagePatchSize))
+        let packed = Self.patchify(video, patchSize: imagePatchSize)
         let moments = encoderProjection(encoder(packed))
         let mean = moments[0..., 0..., 0..., 0..., 0..<latentChannels]
-        return Self.normalize(mean)
+        return normalizeLatents(mean)
     }
 
     public func decode(_ normalizedLatents: MLXArray) -> MLXArray {
-        let denormalized = Self.denormalize(normalizedLatents)
+        precondition(normalizedLatents.dim(4) == latentChannels)
+        let denormalized = denormalizeLatents(normalizedLatents)
         let decoded = decoder(decoderProjection(denormalized))
-        return MLX.clip(Self.unpatchify(decoded), min: -1, max: 1)
+        return MLX.clip(Self.unpatchify(decoded, patchSize: imagePatchSize), min: -1, max: 1)
+    }
+
+    public func normalizeLatents(_ latents: MLXArray) -> MLXArray {
+        precondition(latents.dim(4) == latentChannels)
+        return (latents - latentMean) / latentStandardDeviation
+    }
+
+    public func denormalizeLatents(_ latents: MLXArray) -> MLXArray {
+        precondition(latents.dim(4) == latentChannels)
+        return latents * latentStandardDeviation + latentMean
     }
 
     public static func normalize(_ latents: MLXArray) -> MLXArray {

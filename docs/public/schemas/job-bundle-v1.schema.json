@@ -11,6 +11,8 @@
     "created_at": { "type": "string", "format": "date-time" },
     "graph_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "input_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_graph_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_input_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "requirements": {
       "type": "object",
       "additionalProperties": false,

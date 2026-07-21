@@ -18,6 +18,14 @@ struct AdapterCommandTests {
         #expect(command.quiet)
     }
 
+    @Test("SCAIL-2 distilled adapter pull parses its canonical id")
+    func parsesSCAIL2Pull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.scail2LightX2VFourStepID,
+        ])
+        #expect(command.target == ManagedAdapterCatalog.scail2LightX2VFourStepID)
+    }
+
     @Test("Local LoRA paths remain supported")
     func resolvesLocalPath() throws {
         let relative = "fixtures/local-adapter.safetensors"
@@ -39,5 +47,21 @@ struct AdapterCommandTests {
                 adaptersRoot: emptyRoot
             )
         }
+    }
+
+    @Test("Preflight resolves an uninstalled catalog id to its pinned destination")
+    func preflightResolvesUninstalledCatalogDestination() throws {
+        let emptyRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-adapter-preflight-test-\(UUID().uuidString)", isDirectory: true)
+        let resolved = try ManagedAdapterArgumentResolver.resolve(
+            ManagedAdapterCatalog.scail2LightX2VFourStepID,
+            baseModelID: SCAIL2Resources.modelID,
+            adaptersRoot: emptyRoot,
+            requireInstalled: false
+        )
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+        )
+        #expect(resolved == spec.installedFileURL(adaptersRoot: emptyRoot).path)
     }
 }

@@ -57,6 +57,8 @@ fi
 "$mere_run_bin" music analyze --help >/dev/null
 "$mere_run_bin" music generate --help >/dev/null
 "$mere_run_bin" video generate --help >/dev/null
+"$mere_run_bin" video animate --help >/dev/null
+"$mere_run_bin" video prepare-masks --help >/dev/null
 "$mere_run_bin" video export-latents --help >/dev/null
 "$mere_run_bin" model --help >/dev/null
 "$mere_run_bin" model storage --help >/dev/null
@@ -85,6 +87,26 @@ if rg -n \
   Sources/MereRunCore
 then
   echo "Default runtime paths still contain unconditional generator debug prints." >&2
+  exit 1
+fi
+
+if rg -n -i \
+  -e 'import +PythonKit' \
+  -e 'maestro' \
+  -e 'wangp' \
+  -e 'conversion[_ -]?(script|utility)' \
+  Sources/MereRunCore/SCAIL2 Sources/MereRunCLI/Commands/VideoAnimateCommand.swift Sources/MereRunCLI/Commands/VideoPrepareMasksCommand.swift
+then
+  echo "Native SCAIL-2 sources contain a prohibited runtime or provenance dependency." >&2
+  exit 1
+fi
+
+if rg -n -i -g '*.swift' \
+  -e 'python' \
+  -e 'Process *\(' \
+  Sources/MereRunCore/SCAIL2 Sources/MereRunCLI/Commands/VideoAnimateCommand.swift Sources/MereRunCLI/Commands/VideoPrepareMasksCommand.swift
+then
+  echo "Native SCAIL-2 Swift sources contain a prohibited sidecar runtime hook." >&2
   exit 1
 fi
 

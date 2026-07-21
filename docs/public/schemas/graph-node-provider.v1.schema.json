@@ -39,7 +39,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["object", "array", "string", "integer", "number", "boolean", "enum"]},
+        "type": {"enum": ["object", "array", "string", "integer", "number", "boolean", "enum", "json"]},
         "title": {"type": "string"},
         "description": {"type": "string"},
         "default": {"$ref": "#/$defs/value"},
@@ -47,6 +47,7 @@
         "properties": {"type": "object", "additionalProperties": {"$ref": "#/$defs/value_schema"}},
         "required": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
         "items": {"$ref": "#/$defs/value_schema"},
+        "additional_properties": {"$ref": "#/$defs/value_schema"},
         "minimum": {"type": "number"},
         "maximum": {"type": "number"},
         "step": {"type": "number", "exclusiveMinimum": 0},
@@ -112,6 +113,15 @@
         "supports_previews": {"type": "boolean"}
       }
     },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["style"],
+      "properties": {
+        "style": {"const": "material"},
+        "primary_argument": {"$ref": "#/$defs/id"}
+      }
+    },
     "node": {
       "type": "object",
       "additionalProperties": false,
@@ -124,7 +134,8 @@
         "inputs": {"type": "array", "items": {"$ref": "#/$defs/input"}},
         "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/output"}},
         "requirements": {"$ref": "#/$defs/requirements"},
-        "traits": {"$ref": "#/$defs/traits"}
+        "traits": {"$ref": "#/$defs/traits"},
+        "presentation": {"$ref": "#/$defs/presentation"}
       }
     }
   }

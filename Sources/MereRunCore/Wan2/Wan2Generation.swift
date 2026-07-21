@@ -116,6 +116,27 @@ public struct Wan2FlowMatchEulerScheduler: Sendable {
         self.timesteps = shifted.dropLast().map { $0 * Float(trainTimesteps) }
     }
 
+    public init(
+        denoisingStepList: [Int],
+        shift: Float = 5,
+        trainTimesteps: Int = 1_000
+    ) {
+        precondition(!denoisingStepList.isEmpty)
+        precondition(trainTimesteps > 1)
+        precondition(shift > 0)
+        precondition(denoisingStepList.allSatisfy { (1...trainTimesteps).contains($0) })
+        precondition(zip(
+            denoisingStepList,
+            denoisingStepList.dropFirst()
+        ).allSatisfy { $0.0 > $0.1 })
+        let scheduled = denoisingStepList.map { trainingStep -> Float in
+            let sigma = Float(trainingStep) / Float(trainTimesteps)
+            return shift * sigma / (1 + (shift - 1) * sigma)
+        }
+        self.sigmas = scheduled + [0]
+        self.timesteps = scheduled.map { $0 * Float(trainTimesteps) }
+    }
+
     public mutating func step(velocity: MLXArray, sample: MLXArray) -> MLXArray {
         precondition(stepIndex < timesteps.count)
         let delta = sigmas[stepIndex + 1] - sigmas[stepIndex]
@@ -160,24 +181,39 @@ public struct Wan2UniPCScheduler {
     private var stepIndex = 0
     private var currentOrder = 1
 
+    public init(timesteps: [Float], sigmas: [Float]) {
+        precondition(!timesteps.isEmpty)
+        precondition(sigmas.count == timesteps.count + 1)
+        precondition(sigmas.last == 0)
+        self.timesteps = timesteps
+        self.sigmas = sigmas
+    }
+
     public init(steps: Int, shift: Float = 5, trainTimesteps: Int = 1_000) {
         precondition(steps > 0)
         precondition(shift > 0)
         var shifted: [Float] = []
+        var scheduledTimesteps: [Float] = []
         shifted.reserveCapacity(steps + 1)
+        scheduledTimesteps.reserveCapacity(steps)
         for index in 0..<steps {
-            let fraction = Float(index) / Float(steps)
-            let sigma = 1 + (1 / Float(trainTimesteps) - 1) * fraction
-            shifted.append(shift * sigma / (1 + (shift - 1) * sigma))
-        }
-        if abs(shifted[0] - 1) < 1e-6 {
-            shifted[0] -= 1e-6
+            // Matches upstream `np.linspace(sigma_max, sigma_min,
+            // steps + 1)[:-1]`. Its training schedule stores sigma_max
+            // `(trainTimesteps - 1) / trainTimesteps` as float32 before NumPy
+            // builds the inference grid in float64. Upstream then derives
+            // integer timesteps before storing the shifted sigmas as float32.
+            let sigmaMaximum = Double(
+                Float(Double(trainTimesteps - 1) / Double(trainTimesteps))
+            )
+            let sigma = sigmaMaximum * (1 - Double(index) / Double(steps))
+            let shift64 = Double(shift)
+            let scheduled = shift64 * sigma / (1 + (shift64 - 1) * sigma)
+            shifted.append(Float(scheduled))
+            scheduledTimesteps.append(Float(Int(scheduled * Double(trainTimesteps))))
         }
         shifted.append(0)
         self.sigmas = shifted
-        self.timesteps = shifted.dropLast().map {
-            Float(Int(($0 * Float(trainTimesteps)).rounded(.towardZero)))
-        }
+        self.timesteps = scheduledTimesteps
     }
 
     public mutating func step(modelOutput: MLXArray, sample initialSample: MLXArray) -> MLXArray {

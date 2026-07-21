@@ -4,6 +4,61 @@ import XCTest
 @testable import MereRunCore
 
 final class VideoCommandTests: XCTestCase {
+    func testVideoCommandExposesCosmos3NativeSurface() {
+        XCTAssertTrue(
+            Video.configuration.subcommands.contains {
+                $0.configuration.commandName == "cosmos3"
+            }
+        )
+    }
+
+    func testCosmos3CommandParsesActionParityOptions() throws {
+        let command = try VideoCosmos3.parse([
+            "move through the existing scene",
+            "--mode", "forward-dynamics",
+            "--image", "/tmp/source.png",
+            "--action-file", "/tmp/actions.json",
+            "--action-domain", "camera_pose",
+            "--action-chunk-size", "16",
+            "--action-resolution", "256",
+            "--action-viewpoint", "ego_view",
+            "--steps", "30",
+            "--guidance-scale", "1",
+            "--shift", "5",
+        ])
+        XCTAssertEqual(command.mode, .forwardDynamics)
+        XCTAssertEqual(command.actionDomain, "camera_pose")
+        XCTAssertEqual(command.actionChunkSize, 16)
+        XCTAssertEqual(command.actionResolution, 256)
+        XCTAssertEqual(command.steps, 30)
+        XCTAssertEqual(command.guidanceScale, 1)
+        XCTAssertEqual(command.shift, 5)
+    }
+
+    func testCosmos3CommandParsesImageEditAndReasonerParityModes() throws {
+        let edit = try VideoCosmos3.parse([
+            "replace the sky",
+            "--mode", "image-to-image",
+            "--image", "/tmp/source.png",
+        ])
+        XCTAssertEqual(edit.mode, .imageToImage)
+
+        let reasoner = try VideoCosmos3.parse([
+            "What changes across the clip?",
+            "--mode", "reasoner",
+            "--video", "/tmp/source.mp4",
+            "--max-new-tokens", "96",
+            "--temperature", "0",
+            "--top-p", "0.95",
+            "--max-video-frames", "12",
+        ])
+        XCTAssertEqual(reasoner.mode, .reasoner)
+        XCTAssertEqual(reasoner.maxNewTokens, 96)
+        XCTAssertEqual(reasoner.temperature, 0)
+        XCTAssertEqual(reasoner.topP, 0.95)
+        XCTAssertEqual(reasoner.maxVideoFrames, 12)
+    }
+
     private var temporaryDirectories: [URL] = []
 
     override func tearDown() {
@@ -14,9 +69,202 @@ final class VideoCommandTests: XCTestCase {
         super.tearDown()
     }
 
-    func testVideoCommandExposesGenerateExportLatentsAndSession() {
+    func testVideoCommandExposesGenerateMaskPreparationExportLatentsAndSession() {
         let commandNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(commandNames, Set(["generate", "export-latents", "session"]))
+        XCTAssertEqual(
+            commandNames,
+            Set(["animate", "cosmos3", "generate", "prepare-masks", "export-latents", "session"])
+        )
+    }
+
+    func testVideoAnimateParsesNativeSCAIL2DefaultsAndReferences() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mp4",
+            "--additional-reference", "/tmp/ref-2.png",
+            "--additional-reference-mask", "/tmp/ref-mask-2.png",
+        ])
+
+        XCTAssertEqual(command.model, SCAIL2Resources.modelID)
+        XCTAssertEqual(command.mode, .animation)
+        XCTAssertEqual(command.profile, .fast)
+        XCTAssertEqual(command.width, 832)
+        XCTAssertEqual(command.height, 480)
+        XCTAssertNil(command.steps)
+        XCTAssertNil(command.guidanceScale)
+        XCTAssertNil(command.shift)
+        XCTAssertNil(command.sampler)
+        XCTAssertNil(command.distilledAdapter)
+        XCTAssertEqual(command.distilledAdapterStrength, 1)
+        XCTAssertEqual(command.fps, 16)
+        XCTAssertEqual(command.segmentLength, 81)
+        XCTAssertEqual(command.segmentOverlap, 5)
+        XCTAssertEqual(command.tailPolicy, .drop)
+        XCTAssertEqual(command.audioSource, .none)
+        XCTAssertEqual(command.additionalReferences, ["/tmp/ref-2.png"])
+        XCTAssertEqual(command.additionalReferenceMasks, ["/tmp/ref-mask-2.png"])
+
+        var effectiveCommand = command
+        effectiveCommand.distilledAdapter = "/tmp/lightx2v.safetensors"
+        let options = try effectiveCommand.makeOptions(
+            prompt: effectiveCommand.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+        )
+        XCTAssertEqual(options.steps, 4)
+        XCTAssertEqual(options.guidanceScale, 1)
+        XCTAssertEqual(options.shift, 5)
+        XCTAssertEqual(options.sampler, .euler)
+        XCTAssertEqual(options.denoisingSchedule, .lightX2VFourStep)
+        XCTAssertEqual(options.distilledAdapterURL?.path, "/tmp/lightx2v.safetensors")
+    }
+
+    func testVideoAnimateQualityProfileRemainsExplicitlyAvailable() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mov",
+            "--profile", "quality",
+        ])
+
+        let options = try command.makeOptions(
+            prompt: command.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+        )
+        XCTAssertEqual(command.profile, .quality)
+        XCTAssertEqual(options.steps, 40)
+        XCTAssertEqual(options.guidanceScale, 5)
+        XCTAssertEqual(options.shift, 3)
+        XCTAssertEqual(options.sampler, .unipc)
+        XCTAssertEqual(options.denoisingSchedule, .standard)
+        XCTAssertNil(options.distilledAdapterURL)
+    }
+
+    func testVideoAnimateParsesPadTrimAndDrivingAudio() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mov",
+            "--tail-policy", "pad-trim",
+            "--audio-source", "driving",
+        ])
+
+        XCTAssertEqual(command.tailPolicy, .padTrim)
+        XCTAssertEqual(command.audioSource, .driving)
+    }
+
+    func testVideoAnimateParsesDistilledFastRecipe() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mov",
+            "--steps", "6",
+            "--guidance-scale", "1",
+            "--shift", "5",
+            "--sampler", "euler",
+            "--distilled-adapter", "/tmp/lightx2v.safetensors",
+            "--distilled-adapter-strength", "0.8",
+        ])
+
+        XCTAssertEqual(command.steps, 6)
+        XCTAssertEqual(command.guidanceScale, 1)
+        XCTAssertEqual(command.shift, 5)
+        XCTAssertEqual(command.sampler, .euler)
+        XCTAssertEqual(command.distilledAdapter, "/tmp/lightx2v.safetensors")
+        XCTAssertEqual(command.distilledAdapterStrength, 0.8)
+    }
+
+    func testVideoAnimateFastProfileUsesPinnedManagedRecipe() throws {
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/ref.png",
+            "--reference-mask", "/tmp/ref-mask.png",
+            "--driving-video", "/tmp/pose.mp4",
+            "--driving-mask", "/tmp/pose-mask.mov",
+            "--profile", "fast",
+            "--distilled-adapter", "/tmp/lightx2v.safetensors",
+        ])
+
+        XCTAssertEqual(command.profile, .fast)
+        let options = try command.makeOptions(
+            prompt: command.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+        )
+        XCTAssertEqual(options.steps, 4)
+        XCTAssertEqual(options.guidanceScale, 1)
+        XCTAssertEqual(options.shift, 5)
+        XCTAssertEqual(options.sampler, .euler)
+        XCTAssertEqual(options.denoisingSchedule, .lightX2VFourStep)
+    }
+
+    func testVideoPrepareMasksParsesPreviewAndJSON() throws {
+        let command = try VideoPrepareMasks.parse([
+            "--plan", "/tmp/request.json",
+            "--output-dir", "/tmp/artifacts",
+            "--preview-frame", "12",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertEqual(command.plan, "/tmp/request.json")
+        XCTAssertEqual(command.outputDirectory, "/tmp/artifacts")
+        XCTAssertEqual(command.previewFrame, 12)
+        XCTAssertTrue(command.preflight)
+        XCTAssertTrue(command.json)
+    }
+
+    func testVideoPrepareMasksRecordsTheManagedSAMRevision() throws {
+        let modelID = ModelResolver.ModelID.visionSegmentSAM31.rawValue
+        let resolved = VisionSegment.ResolvedModel(
+            modelID: modelID,
+            rootURL: URL(fileURLWithPath: "/tmp/sam31"),
+            isManaged: true
+        )
+
+        XCTAssertEqual(
+            VideoPrepareMasks.modelRevision(for: resolved),
+            try XCTUnwrap(ManagedModelCatalog.spec(for: modelID)?.upstreamRevision)
+        )
+    }
+
+    func testVideoAnimatePreflightReportsMissingInputsWithoutLoading() throws {
+        let adaptersRoot = try makeTempDirectory()
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", "/tmp/missing-ref.png",
+            "--reference-mask", "/tmp/missing-ref-mask.png",
+            "--driving-video", "/tmp/missing-pose.mp4",
+            "--driving-mask", "/tmp/missing-pose-mask.mp4",
+            "--preflight",
+            "--json",
+        ])
+        let options = try command.makeOptions(
+            prompt: command.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4"),
+            requireInstalledAdapter: false,
+            adaptersRoot: adaptersRoot
+        )
+        let report = command.makePreflightReport(options: options, modelRootURL: nil)
+
+        XCTAssertEqual(report.status, "blocked")
+        XCTAssertFalse(report.modelInstalled)
+        XCTAssertEqual(report.missingInputFiles.count, 5)
+        XCTAssertTrue(
+            report.missingInputFiles.contains(
+                try XCTUnwrap(
+                    ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+                ).installedFileURL(adaptersRoot: adaptersRoot).path
+            )
+        )
+        XCTAssertEqual(report.mode, "animation")
     }
 
     func testVideoGenerateParsesDefaults() throws {

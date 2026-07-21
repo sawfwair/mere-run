@@ -68,6 +68,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case ltxVideo23FullMLX
     case ltxVideo23A2VMLX
     case wan22TI2VMLX
+    case cosmos3EdgeMLX
+    case scail2MLX
     case dreamXCausalMLX
     case hfTextChat
 }
@@ -517,6 +519,14 @@ public enum ManagedModelCatalog {
     private static let ltxGemmaTextEncoderUsageRestriction = ManagedModelUsageRestriction(
         summary: "The LTX 2.3 Gemma text-encoder companion uses Google's custom Gemma Terms of Use and Prohibited Use Policy.",
         terms: [ltxGemmaTextEncoderUsageTerm]
+    )
+
+    private static let cosmos3EdgeUsageRestriction = usageRestriction(
+        summary: "Cosmos3-Edge is distributed under NVIDIA Open Model Development and Use License 1.1; its use, redistribution, attribution, and acceptable-use conditions apply.",
+        license: "OpenMDW-1.1",
+        sourceRepoId: Cosmos3Resources.officialRepoID,
+        sourceRevision: Cosmos3Resources.officialRevision,
+        licenseURL: "https://huggingface.co/\(Cosmos3Resources.officialRepoID)/blob/\(Cosmos3Resources.officialRevision)/LICENSE"
     )
 
     public static let allSpecs: [ManagedModelSpec] = [
@@ -2081,6 +2091,43 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.cosmos3EdgeMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Cosmos3Resources.officialRepoID,
+                revision: Cosmos3Resources.officialRevision,
+                patterns: Cosmos3Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Cosmos3Resources.officialRepoID,
+            upstreamRevision: Cosmos3Resources.officialRevision,
+            usageRestriction: cosmos3EdgeUsageRestriction,
+            validationKind: .cosmos3EdgeMLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 9_200_000_000,
+            defaultCLICommands: [
+                "video cosmos3",
+                "video cosmos3 --mode reasoner",
+                "world serve --backend cosmos3",
+            ]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.scail2Video14BMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: SCAIL2Resources.managedRepoID,
+                revision: SCAIL2Resources.managedRevision,
+                patterns: SCAIL2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: SCAIL2Resources.upstreamRepoID,
+            upstreamRevision: SCAIL2Resources.upstreamRevision,
+            validationKind: .scail2MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 46_648_000_000,
+            defaultCLICommands: ["video animate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.dreamXWorld5BARMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -2312,6 +2359,12 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .cosmos3EdgeMLX:
+            let resources = Cosmos3Resources(rootURL: rootURL)
+            return resources.validate(fileManager: fileManager)
+                + resources.validateReasoner(fileManager: fileManager)
+        case .scail2MLX:
+            return SCAIL2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .dreamXCausalMLX:
             return Wan2DreamXCausalResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hfTextChat:
@@ -2375,6 +2428,35 @@ public extension ManagedModelSpec {
             let missing = resources.validate(fileManager: fileManager)
             if !missing.isEmpty {
                 return missing.map { "Missing required Wan2.2 TI2V MLX file: \($0.path)" }
+            }
+            do {
+                _ = try resources.loadConfiguration()
+                return []
+            } catch {
+                return [error.localizedDescription]
+            }
+        case .cosmos3EdgeMLX:
+            let resources = Cosmos3Resources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            )
+            let missing = resources.validate(fileManager: fileManager)
+                + resources.validateReasoner(fileManager: fileManager)
+            if !missing.isEmpty {
+                return missing.map { "Missing required Cosmos3-Edge file: \($0.path)" }
+            }
+            do {
+                _ = try resources.loadTransformerConfiguration()
+                _ = try resources.loadVAEConfiguration()
+                _ = try resources.loadReasonerConfiguration()
+                return []
+            } catch {
+                return [error.localizedDescription]
+            }
+        case .scail2MLX:
+            let resources = SCAIL2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
+            let missing = resources.validate(fileManager: fileManager)
+            if !missing.isEmpty {
+                return missing.map { "Missing required SCAIL-2 MLX file: \($0.path)" }
             }
             do {
                 _ = try resources.loadConfiguration()

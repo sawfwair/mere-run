@@ -280,6 +280,7 @@ final class SAM31RandomPositionalEmbedding: Module {
 final class SAM31InteractivePromptEncoder: Module {
     let embedDim: Int
     let imageEmbeddingSize: (height: Int, width: Int)
+    let inputImageSize: (height: Int, width: Int)
 
     @ModuleInfo(key: "point_embed") var pointEmbed: Embedding
     @ModuleInfo(key: "not_a_point_embed") var notAPointEmbed: Embedding
@@ -290,6 +291,7 @@ final class SAM31InteractivePromptEncoder: Module {
     init(config: SAM31PromptEncoderConfig) {
         self.embedDim = config.hiddenSize
         self.imageEmbeddingSize = (config.imageSize / config.patchSize, config.imageSize / config.patchSize)
+        self.inputImageSize = (config.imageSize, config.imageSize)
         self._pointEmbed.wrappedValue = Embedding(embeddingCount: config.numPointEmbeddings, dimensions: config.hiddenSize)
         self._notAPointEmbed.wrappedValue = Embedding(embeddingCount: 1, dimensions: config.hiddenSize)
         self._maskEmbed.wrappedValue = SAM31MaskEmbedConvs(
@@ -338,6 +340,12 @@ final class SAM31InteractivePromptEncoder: Module {
         if let masks {
             batch = masks.dim(0)
             denseEmbeddings = maskEmbed(masks)
+            if sparseEmbeddings.dim(1) == 0 {
+                sparseEmbeddings = MLX.broadcast(
+                    notAPointEmbed.weight.reshaped(1, 1, embedDim),
+                    to: [batch, 1, embedDim]
+                )
+            }
         } else {
             let base = noMaskEmbed.weight.reshaped(1, 1, embedDim)
             denseEmbeddings = MLX.broadcast(base, to: [batch, targetHeight * targetWidth, embedDim])
@@ -352,7 +360,10 @@ final class SAM31InteractivePromptEncoder: Module {
 
     private func embedPoints(_ coords: MLXArray, labels: MLXArray, targetHeight: Int, targetWidth: Int) -> MLXArray {
         let shifted = coords + 0.5
-        let normalizer = MLXArray([Float(max(targetWidth, 1)), Float(max(targetHeight, 1))], [1, 1, 2]).asType(.float32)
+        let normalizer = MLXArray(
+            [Float(max(inputImageSize.width, 1)), Float(max(inputImageSize.height, 1))],
+            [1, 1, 2]
+        ).asType(.float32)
         var pointEmbeddings = sharedEmbedding.forwardWithCoords(shifted / normalizer)
 
         let count = labels.dim(labels.ndim - 1)
@@ -373,8 +384,11 @@ final class SAM31InteractivePromptEncoder: Module {
     }
 
     private func embedBoxes(_ boxes: MLXArray, targetHeight: Int, targetWidth: Int) -> MLXArray {
-        let reshaped = boxes.reshaped(boxes.dim(0), boxes.dim(1) * 2, 2)
-        let normalizer = MLXArray([Float(max(targetWidth, 1)), Float(max(targetHeight, 1))], [1, 1, 2]).asType(.float32)
+        let reshaped = (boxes + 0.5).reshaped(boxes.dim(0), boxes.dim(1) * 2, 2)
+        let normalizer = MLXArray(
+            [Float(max(inputImageSize.width, 1)), Float(max(inputImageSize.height, 1))],
+            [1, 1, 2]
+        ).asType(.float32)
         let cornerEmbeddings = sharedEmbedding.forwardWithCoords(reshaped / normalizer)
         let firstLabel = MLXArray([2], [1, 1]).asType(.int32)
         let secondLabel = MLXArray([3], [1, 1]).asType(.int32)
