@@ -26,7 +26,7 @@ embeddings, PII anonymization, and native text LoRA preparation.
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
-- `text-chat-mebot`
+- `text-chat-mebot` (API serving; not a `text chat` dispatch lane)
 - `text-chat-psi-agent`
 
 ### Code
@@ -85,8 +85,10 @@ Concurrent serve workloads use ragged, cache-safe decode batching when
 overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
 
-Gemma4, Qwen-family, and LFM2 API-serving settings can select explicit
-`--kv-cache-mode affine4` or `--kv-cache-mode affine8` as long-context memory
+Per-model API-serving KV behavior is set with `mere.run model runtime
+--kv-cache-mode` (see [Model Management](./model-management.md)); it is not a
+flag on `text chat` or `api serve`. For Gemma4, Qwen-family, and LFM2 models
+you can select explicit `affine4` or `affine8` as long-context memory
 controls relative to full-precision K/V. Qwen-family and LFM2 dequantize the
 generic cache for attention, so these modes are not assumed faster. Gemma uses
 its model-specific quantized KV path; `text-chat-gemma4-turbo` already defaults
@@ -158,6 +160,42 @@ swift run mere.run text chat \
   --prompt 'Return an object with a name and an array of tags.'
 ```
 
+### Tool use
+
+`text chat` can run a local agentic tool loop. `--tools` takes a
+comma-separated list of built-in tool names (`write_file`, `shell_exec`), and
+`--tool-loop` enables the loop: generate, execute tool calls, feed results
+back, continue, capped at 10 iterations. Tools execute inside a sandbox
+directory — `--sandbox-dir` sets it; the default is a per-process temp
+directory — and each call asks for interactive `[y/N]` approval by default.
+`shell_exec` additionally requires `--allow-shell-exec`, and `write_file` only
+targets absolute paths outside the sandbox with `--allow-absolute-tool-paths`.
+`--auto-approve-tools` skips confirmation for `write_file` only; `shell_exec`
+always requires interactive approval even when that flag is set.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --prompt "Create hello.py that prints the current time, then run it." \
+  --tools write_file,shell_exec \
+  --tool-loop \
+  --allow-shell-exec \
+  --sandbox-dir ./work
+```
+
+### Vision input
+
+`text chat` accepts `--image` with a local file path or a `data:image/...` URI
+for vision-capable chat models such as Bonsai 27B or `vision-chat-gemma4-12b`.
+The image attaches to the user prompt for multimodal prefill.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-bonsai-27b-2bit \
+  --image ./photo.png \
+  --prompt "Describe what is in this photo."
+```
+
 ### Local code generation
 
 ```bash
@@ -227,6 +265,22 @@ training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
 model ids, manifests, runtime constraints, and eval artifacts remain under the
 MereRun command plane.
+
+Core hyperparameters (defaults are tuned for local Gemma4 SFT):
+
+- `--training-steps` / `--steps` — number of optimizer steps (default `600`)
+- `--batch-size` — training batch size (default `1`)
+- `--learning-rate` / `--lr` — optimizer learning rate (default `0.0001`)
+- `--rank` — LoRA rank (default `16`)
+- `--alpha` — LoRA alpha (defaults to the rank)
+- `--max-sequence-length` — maximum training sequence length (default `4096`)
+- `--seed` — random seed (default `42`)
+- `--target-modules` — comma-separated LoRA target suffixes (default
+  `q_proj,k_proj,v_proj,o_proj`)
+- `--adapter-name` — adapter display name (default `local-assistant`)
+
+This list is deliberately not exhaustive; run
+`swift run mere.run text train-lora --help` for the full flag surface.
 
 The optimizer projects only loss-masked target positions through the lm_head
 (prompt and padding rows never contribute loss, so gradients are unchanged),

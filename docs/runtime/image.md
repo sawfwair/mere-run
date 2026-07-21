@@ -5,8 +5,14 @@ model families are supported, and how the code is organized.
 
 ## Public surface
 
+- `mere.run image dataset`
 - `mere.run image generate`
+- `mere.run image reconstruct-3d`
+- `mere.run image reconstruct-3d-trellis2`
+- `mere.run image reconstruct-3d-multiview`
+- `mere.run image run-plan`
 - `mere.run image train-lora`
+- `mere.run image visualize-run`
 - `mere.run image validate`
 
 ## Model families
@@ -96,6 +102,20 @@ checkpoints, and the fast Klein target surface. Use
 `--lora-target-mode transformer-linear-walk` when you want an ai-toolkit-style
 comparison that trains every transformer Linear/QuantizedLinear layer instead
 of the default suffix allowlist.
+
+Core `train-lora` hyperparameters and their defaults:
+
+- `--training-steps` / `--steps`: number of optimizer steps; default `1000`
+- `--batch-size`: training batch size; default `1`
+- `--learning-rate` / `--lr`: learning rate; default `1e-4`
+- `--rank`: LoRA rank; default `16`
+- `--alpha`: LoRA alpha; defaults to the rank
+- `--seed`: random seed; defaults to wall-clock time when omitted or zero
+
+`--recipe` presets set curated values for steps, learning rate, rank, and
+alpha; an explicit flag always wins over the recipe. `swift run mere.run image
+train-lora --help` and the [CLI Reference](../cli.md) list the full flag
+surface.
 
 ```bash
 swift run mere.run model pull image-klein-base-9b --accept-model-license
@@ -353,6 +373,41 @@ with the same roughly 2.94 GiB warm incremental MLX peak. The two paths were
 internally deterministic and visually close but not bit-exact, so the portable
 graph remains the production default. The exact uniform-mask removal is
 independent of this experimental switch.
+
+### 3D reconstruction
+
+Three subcommands turn object images into colored meshes, each backed by a
+native runtime:
+
+- `image reconstruct-3d`: single-image reconstruction with native TripoSR
+  (managed id `image-3d-triposr`). This is the canonical image-family spelling
+  of `vision image-to-3d`; both run the same implementation.
+- `image reconstruct-3d-trellis2`: single-image 512-resolution PBR O-Voxel
+  reconstruction with native MLX TRELLIS.2 (managed id `image-3d-trellis2-4b`).
+- `image reconstruct-3d-multiview`: reconstruction from user-supplied views
+  with native InstantMesh (managed id `image-3d-instantmesh-base`). Repeat
+  `--view` exactly 4 or 6 times; no views are generated for you.
+
+```bash
+swift run mere.run image reconstruct-3d ./object.png --output ./object-3d
+swift run mere.run image reconstruct-3d-trellis2 ./object.png \
+  --output ./object-trellis2 \
+  --seed 42
+swift run mere.run image reconstruct-3d-multiview \
+  --view ./front.png --view ./right.png --view ./back.png --view ./left.png \
+  --output ./object-instantmesh
+```
+
+The single-image commands crop transparent PNG foregrounds automatically;
+TRELLIS.2 requires transparent alpha unless `--already-framed` opts an opaque,
+isolated object into black-background conditioning. All three accept
+`--dry-run` to verify inputs and checkpoints and print the execution plan
+without loading weights, and `--json` for structured stdout. TripoSR and
+InstantMesh take a `--resolution` extraction-grid override (2 through 512 and
+2 through 256 respectively) plus `--no-vertex-colors` for geometry-only
+export; multiview optionally takes a `--cameras` JSON file with one 16-value
+C2W/intrinsics camera per view. The [Vision Runtime](./vision.md) page covers
+the equivalent `vision image-to-3d*` commands and TRELLIS.2 output artifacts.
 
 ### Deterministic validation
 

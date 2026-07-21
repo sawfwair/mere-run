@@ -11,7 +11,7 @@ struct Config: ParsableCommand {
         survive across shells without environment variables. The Hugging Face token is
         used to pull gated models (e.g. image-klein-9b).
 
-        Resolution precedence for the HF token: --hf-token/HF_TOKEN env > config file.
+        Resolution precedence for the HF token: HF_TOKEN (then HUGGING_FACE_HUB_TOKEN) env > config file.
 
         Keys: hf-token, hf-endpoint
 

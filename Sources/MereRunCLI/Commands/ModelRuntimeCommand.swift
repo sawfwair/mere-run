@@ -118,7 +118,7 @@ struct ModelRuntimeSet: ParsableCommand {
 
     @Option(
         name: [.long],
-        help: "Set runtime KV cache mode: default; affine8 (Gemma4/Qwen/LFM2); or Gemma4-only polar2/auto."
+        help: "Set runtime KV cache mode: default; affine4/affine8 (affine8 for Gemma4/Qwen/LFM2); or Gemma4-only polar2/auto."
     )
     var kvCacheMode: RuntimeKVCacheMode?
 

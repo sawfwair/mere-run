@@ -60,9 +60,37 @@ swift run mere.run speech listen --device <core-audio-uid>
 
 ```bash
 swift run mere.run speech profile list
-swift run mere.run speech profile create ./reference.wav --name narrator
-swift run mere.run speech profile delete narrator
+swift run mere.run speech profile create --name narrator --audio ./reference.wav
+# `profile list` prints each profile's UUID; pass it to delete.
+swift run mere.run speech profile delete --id <profile-uuid>
 ```
+
+### Voice cloning
+
+`speech synthesize` defaults to `--mode style`, which renders the `--voice`
+description. Pass `--mode clone` with either a saved profile or ad-hoc
+reference audio:
+
+```bash
+# Clone a saved profile (id or name).
+swift run mere.run speech synthesize \
+  "Hello from mere.run" \
+  --mode clone --profile narrator \
+  --output ./cloned.wav
+
+# Clone ad-hoc reference audio and save it as a reusable profile.
+swift run mere.run speech synthesize \
+  "Hello from mere.run" \
+  --mode clone --ref-audio ./ref.wav \
+  --ref-text "Transcript of the reference audio." \
+  --save-profile narrator \
+  --output ./cloned.wav
+```
+
+If `--ref-text` is omitted, the reference audio is auto-transcribed with the
+speech transcriber. `--language` hints the language (default `auto`). Add
+`--stream` to emit audio incrementally while generating; `--stream-chunk-tokens`
+sets the chunk interval (default 25).
 
 ## Runtime entrypoints
 
@@ -71,9 +99,7 @@ swift run mere.run speech profile delete narrator
 - `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechListenCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileListCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileCreateCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileDeleteCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechProfileCommand.swift` (the `list`, `create`, and `delete` profile subcommands)
 
 ### TTS runtime
 

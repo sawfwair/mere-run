@@ -26,7 +26,13 @@ export default defineConfig({
   base: resolveBase(),
   cleanUrls: true,
   lastUpdated: true,
-  srcExclude: ['README.md', 'SUMMARY.md'],
+  srcExclude: [
+    'README.md',
+    'macos-studio-roadmap.md',
+    'falcon-perception-disparity-report.md',
+    'architecture/vfx-geometry-model-report.md',
+    'benchmarks/vfx-geometry-apple-silicon.md'
+  ],
   markdown: mereMarkdown(),
   themeConfig: {
     siteTitle: 'mere.run Docs',
@@ -75,7 +81,8 @@ export default defineConfig({
           { text: 'Repository Tour', link: '/repository-tour' },
           { text: 'Development Workflow', link: '/development-workflow' },
           { text: 'Testing Guide', link: '/testing' },
-          { text: 'Architecture Reading Map', link: '/architecture' }
+          { text: 'Architecture Reading Map', link: '/architecture' },
+          { text: 'mlx-swift Fork Policy', link: '/mlx-swift-fork' }
         ]
       },
       {
@@ -98,7 +105,9 @@ export default defineConfig({
         items: [
           { text: 'CLI and Runtime Internals', link: '/internals/cli-and-runtime' },
           { text: 'Structured Runs, Preflights, and Declarative Actions', link: '/internals/structured-runs-preflight-actions' },
-          { text: 'Source Layout Reference', link: '/internals/source-layout' }
+          { text: 'Source Layout Reference', link: '/internals/source-layout' },
+          { text: 'Guarded Acceleration Audit', link: '/internals/guarded-acceleration' },
+          { text: 'DiT Forward-Pass Performance', link: '/internals/dit-performance' }
         ]
       }
     ],
@@ -111,7 +120,7 @@ export default defineConfig({
     },
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © mere.run contributors'
+      copyright: 'Copyright © 2026 Sawfwair Inc. and mere.run contributors'
     }
   }
 })

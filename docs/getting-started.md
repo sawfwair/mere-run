@@ -220,6 +220,29 @@ explicitly. On 96 GB+ Apple Silicon Macs, the hardware-tier and premier agent
 path selects DeepSeek V4 Flash as the preferred setup agent. On Linux, install
 or provide Pi separately with `--pi-path` or PATH before using `--start`.
 
+### Agent commands
+
+`mere.run agent` exposes the guided setup agent directly, with `onboard` as
+the default subcommand:
+
+- `mere.run agent onboard` — summarize this machine's model capabilities and
+  prepare the optional Pi agent
+- `mere.run agent install-pi` — install the latest Pi coding-agent release
+- `mere.run agent start` — start Pi against a local mere.run setup-agent API
+  server
+
+```bash
+swift run mere.run agent onboard --pull-recommended --accept-model-license
+swift run mere.run agent start
+```
+
+`agent onboard` also takes `--install-pi`, `--configure-pi`, `--model`, and
+`--host`/`--port` to write the Pi provider extension. `agent start`
+bootstraps by default — it auto-pulls the missing managed model from Hugging
+Face and auto-installs Pi; pass `--no-bootstrap` to refuse both. Other
+`start` flags include `--model`, `--prompt`, `--skip-server`,
+`--allow-unsupported`, and `--pi-path`.
+
 ## Run a first workflow
 
 ### Image generation

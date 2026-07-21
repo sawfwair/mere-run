@@ -12,6 +12,11 @@ This page covers `mere.run api serve`, the local API surface exposed by the pack
 - `POST /v1/embeddings`
 - `POST /v1/images/generations`
 - `POST /v1/images/edits`
+- `POST /v1/vision/geometry`
+- `POST /v1/vision/geometry/multiview`
+- `POST /v1/vision/image-to-3d`
+- `POST /v1/vision/image-to-3d-multiview`
+- `POST /v1/vision/depth-video`
 - `POST /v1/audio/speech`
 - `POST /v1/audio/transcriptions`
 
@@ -270,9 +275,9 @@ swift run mere.run api serve \
 - non-loopback binds require an API key, and the OpenAI-compatible routes
   support basic rate limiting
 - chat, embedding, image generation, and TTS requests must use
-  `Content-Type: application/json`; image editing and STT requests must use
-  `multipart/form-data`; browser-simple form/text posts are rejected before the
-  request body is processed
+  `Content-Type: application/json`; image editing, STT, and vision
+  geometry/3D/depth requests must use `multipart/form-data`; browser-simple
+  form/text posts are rejected before the request body is processed
 - chat requests are validated before generation; `max_tokens`,
   `max_completion_tokens`, `temperature`, and `top_p` must stay within bounded
   ranges
@@ -471,6 +476,66 @@ text.
 
 Unsupported format choices return OpenAI-style `invalid_request_error` payloads
 instead of being ignored.
+
+## Vision geometry and 3D compatibility
+
+The five `/v1/vision/*` routes take `multipart/form-data` and return JSON whose
+artifacts are server-local `file://` URLs, retained for one hour. Because those
+URLs only make sense on the serving machine, the routes are loopback-only:
+authenticated remote clients get an error, and their model ids are filtered out
+of `/v1/models` for non-loopback clients. Inputs must be uploaded file parts;
+client filesystem paths are rejected. Each route accepts only its managed
+default model id (depth video also accepts its metric variant).
+
+`POST /v1/vision/geometry` accepts:
+
+- `image`: required single input image file part
+- `model`: only `vision-geometry-moge2-small`
+- `resolution_level`: integer 0 through 9; defaults to 9
+- `token_count`: optional integer 1 through 3,600
+- `max_points`: optional positive point-count cap
+
+`POST /v1/vision/geometry/multiview` accepts:
+
+- `image` / `image[]`: one or more image file parts; multipart order is the
+  view order
+- `model`: only `vision-geometry-da3-small`
+- `process_resolution`: defaults to 504
+- `reference_view`: `first`, `middle`, `saddle-balanced`, or
+  `saddle-similarity-range`; defaults to `saddle-balanced`
+- `confidence_percentile`: 0 through 100; defaults to 40
+- `max_points`: defaults to 1,000,000
+- `cameras`: optional known-camera JSON, as either one uploaded JSON file or
+  one inline field, not both
+
+`POST /v1/vision/image-to-3d` accepts:
+
+- `image`: exactly one input image file part
+- `model`: only `image-3d-triposr`
+- `resolution`: integer 2 through 512; defaults to 256
+- `density_threshold`: defaults to 25
+- `foreground_ratio`: greater than 0 and at most 1; defaults to 0.85
+- `already_framed`: boolean; defaults to false
+- `vertex_colors`: boolean; defaults to true
+
+`POST /v1/vision/image-to-3d-multiview` accepts:
+
+- `image` / `image[]`: exactly 4 or 6 non-empty view file parts
+- `model`: only `image-3d-instantmesh-base`
+- `resolution`: integer 2 through 256; defaults to 128
+- `vertex_colors`: boolean; defaults to true
+- `cameras`: optional `schemaVersion` 1 JSON with one 16-value camera per
+  uploaded view
+
+`POST /v1/vision/depth-video` accepts:
+
+- `video`: exactly one input video file part
+- `model`: `vision-depth-vda-small` (default) or `vision-depth-vda-small-metric`
+- `input_size`: integer 14 through 1,008; defaults to 518
+- `max_frames`: integer 1 through 2,400; defaults to 240
+
+Uploads are capped at 100 MiB for the single-image geometry and image-to-3d
+routes and 512 MiB for the multi-view and depth-video routes.
 
 ## Open WebUI companion
 

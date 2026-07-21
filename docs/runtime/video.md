@@ -22,6 +22,11 @@ This page covers the native video-generation path exposed through `mere.run vide
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
+- `video-wan22-ti2v-5b-mlx`: native Wan2.2 TI2V image-to-video lane. `video
+  generate --model video-wan22-ti2v-5b-mlx` requires `--image` (it animates a
+  start frame and rejects `--end-image`), snaps width/height to a 32px grid and
+  frame counts to `4n+1`, and takes `--steps` (40), `--guidance-scale` (5), and
+  `--shift` (5).
 - `video-scail2-14b-mlx`: separately packaged MIT-licensed SCAIL-2 14B MLX
   bundle for reference- and mask-conditioned subject animation/replacement with
   long-video clean history.
@@ -301,8 +306,8 @@ audio-to-video modality guidance in full unified AV.
 
 ```bash
 swift run mere.run video export-latents \
-  --prompt "storm clouds over the ocean" \
-  --output ./latents.npz
+  "storm clouds over the ocean" \
+  --output ./latents.safetensors
 ```
 
 `video export-latents` still targets the distilled video-only latent path.
