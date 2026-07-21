@@ -149,8 +149,8 @@ audio-to-video modality guidance in full unified AV.
 
 ```bash
 swift run mere.run video export-latents \
-  --prompt "storm clouds over the ocean" \
-  --output ./latents.npz
+  "storm clouds over the ocean" \
+  --output ./latents.safetensors
 ```
 
 `video export-latents` still targets the distilled video-only latent path.

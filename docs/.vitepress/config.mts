@@ -110,7 +110,7 @@ export default defineConfig({
     },
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © mere.run contributors'
+      copyright: 'Copyright © 2026 Sawfwair Inc. and mere.run contributors'
     }
   }
 })

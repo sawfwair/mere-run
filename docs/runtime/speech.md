@@ -60,8 +60,9 @@ swift run mere.run speech listen --device <core-audio-uid>
 
 ```bash
 swift run mere.run speech profile list
-swift run mere.run speech profile create ./reference.wav --name narrator
-swift run mere.run speech profile delete narrator
+swift run mere.run speech profile create --name narrator --audio ./reference.wav
+# `profile list` prints each profile's UUID; pass it to delete.
+swift run mere.run speech profile delete --id <profile-uuid>
 ```
 
 ## Runtime entrypoints
