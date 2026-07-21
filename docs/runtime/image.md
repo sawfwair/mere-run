@@ -103,6 +103,20 @@ checkpoints, and the fast Klein target surface. Use
 comparison that trains every transformer Linear/QuantizedLinear layer instead
 of the default suffix allowlist.
 
+Core `train-lora` hyperparameters and their defaults:
+
+- `--training-steps` / `--steps`: number of optimizer steps; default `1000`
+- `--batch-size`: training batch size; default `1`
+- `--learning-rate` / `--lr`: learning rate; default `1e-4`
+- `--rank`: LoRA rank; default `16`
+- `--alpha`: LoRA alpha; defaults to the rank
+- `--seed`: random seed; defaults to wall-clock time when omitted or zero
+
+`--recipe` presets set curated values for steps, learning rate, rank, and
+alpha; an explicit flag always wins over the recipe. `swift run mere.run image
+train-lora --help` and the [CLI Reference](../cli.md) list the full flag
+surface.
+
 ```bash
 swift run mere.run model pull image-klein-base-9b --accept-model-license
 swift run mere.run model pull image-klein-9b --accept-model-license

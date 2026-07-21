@@ -160,8 +160,18 @@ swift run mere.run vision segment ./image.png --prompt "a person"
 
 ```bash
 swift run mere.run model pull vision-ground-falcon-perception
-swift run mere.run vision ground ./image.png --query "a person"
+swift run mere.run vision ground ./image.png --query "cat" "person in red" \
+  --mask-output-dir ./masks
 ```
+
+`--query` (alias `--prompt`) accepts one or more grounding expressions in a
+single run; at least one is required. If `--model`/`-m` is omitted, the command
+resolves the managed `vision-ground-falcon-perception` package from the local
+model store; it also accepts a local Falcon Perception model root directory.
+The annotated image defaults to `<stem>_grounded.<ext>` (`--output`/`-o`
+overrides it), JSON metadata defaults to `<stem>_grounded.json`
+(`--json-output` overrides it), and `--mask-output-dir` exports one PNG mask
+per detection.
 
 ### Track objects through a video
 

@@ -1,10 +1,12 @@
 # Cookbooks
 
 `mere.run guide` is the offline cookbook reader built into the CLI. It prints
-Markdown by default and can emit JSON for agents or tools.
+Markdown by default, can emit JSON for agents or tools, and `--markdown` renders
+the topic list as a Markdown table.
 
 ```bash
 mere.run guide --list
+mere.run guide --list --markdown > guides.md
 mere.run guide image generate
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-acestep
@@ -25,6 +27,7 @@ iteration tips, troubleshooting, and source links.
 Creative and runtime workflows:
 
 - `image generate`
+- `image train-lora`
 - `image validate`
 - `text chat`
 - `text code`
@@ -39,6 +42,14 @@ Creative and runtime workflows:
 - `vision segment`
 - `vision track`
 - `vision track-live`
+- `vision pose`
+- `vision flow`
+- `vision geometry`
+- `vision geometry-multiview`
+- `vision image-to-3d`
+- `vision image-to-3d-trellis2`
+- `vision image-to-3d-multiview`
+- `vision depth-video`
 - `vision ocr`
 - `music analyze`
 - `music generate`
@@ -48,15 +59,19 @@ Creative and runtime workflows:
 - `video export-latents`
 - `api serve`
 - `open-webui`
+- `plugin`
 - `status`
 
 Operational workflows:
 
 - `model list`
+- `model runtime`
+- `model benchmark`
 - `model capabilities`
 - `model info`
 - `model pull`
 - `model remove`
+- `model storage`
 - `model repair-manifests`
 - `setup`
 - `agent onboard`

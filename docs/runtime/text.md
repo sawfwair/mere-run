@@ -266,6 +266,22 @@ while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
 model ids, manifests, runtime constraints, and eval artifacts remain under the
 MereRun command plane.
 
+Core hyperparameters (defaults are tuned for local Gemma4 SFT):
+
+- `--training-steps` / `--steps` — number of optimizer steps (default `600`)
+- `--batch-size` — training batch size (default `1`)
+- `--learning-rate` / `--lr` — optimizer learning rate (default `0.0001`)
+- `--rank` — LoRA rank (default `16`)
+- `--alpha` — LoRA alpha (defaults to the rank)
+- `--max-sequence-length` — maximum training sequence length (default `4096`)
+- `--seed` — random seed (default `42`)
+- `--target-modules` — comma-separated LoRA target suffixes (default
+  `q_proj,k_proj,v_proj,o_proj`)
+- `--adapter-name` — adapter display name (default `local-assistant`)
+
+This list is deliberately not exhaustive; run
+`swift run mere.run text train-lora --help` for the full flag surface.
+
 The optimizer projects only loss-masked target positions through the lm_head
 (prompt and padding rows never contribute loss, so gradients are unchanged),
 reads the loss back every 10 steps rather than per step, writes a
