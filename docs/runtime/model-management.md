@@ -86,8 +86,10 @@ keep their backing payloads live.
 ### `mere.run status`
 
 Combines the model inventory with a local API probe. It reports the active
-model-store path/source, installed managed models, whether the configured API
-server answers `/health`, and the model IDs returned by `/v1/models`.
+model-store path/source, installed managed models, and whether the configured
+API server answers `/health`. When the server exposes `/runtime/status`, that
+snapshot (active models, admission, batching, KV reuse, cache/memory stats) is
+the primary readout; the model IDs from `/v1/models` are the fallback.
 
 ### `mere.run model capabilities`
 

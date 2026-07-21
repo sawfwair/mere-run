@@ -99,9 +99,7 @@ sets the chunk interval (default 25).
 - `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechListenCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileListCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileCreateCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileDeleteCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechProfileCommand.swift` (the `list`, `create`, and `delete` profile subcommands)
 
 ### TTS runtime
 

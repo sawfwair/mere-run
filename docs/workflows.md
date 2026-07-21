@@ -8,8 +8,8 @@ canvas can author this document, but it does not own execution behavior.
 
 Every graph uses `schema_version: 1` and `kind: "mere.run/workflow-graph"`.
 Identifiers match `[a-z][a-z0-9-]{0,63}`. Supported graph input types are
-`string`, `integer`, `number`, `boolean`, `enum`, `asset`, and
-`asset_directory`.
+`string`, `integer`, `number`, `boolean`, `enum`, `json`, `asset`,
+`asset_directory`, and `asset_collection`.
 
 References are complete JSON values:
 

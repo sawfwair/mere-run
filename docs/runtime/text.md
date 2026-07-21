@@ -26,7 +26,7 @@ embeddings, PII anonymization, and native text LoRA preparation.
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
-- `text-chat-mebot`
+- `text-chat-mebot` (API serving; not a `text chat` dispatch lane)
 - `text-chat-psi-agent`
 
 ### Code
@@ -85,8 +85,10 @@ Concurrent serve workloads use ragged, cache-safe decode batching when
 overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
 
-Gemma4, Qwen-family, and LFM2 API-serving settings can select explicit
-`--kv-cache-mode affine4` or `--kv-cache-mode affine8` as long-context memory
+Per-model API-serving KV behavior is set with `mere.run model runtime
+--kv-cache-mode` (see [Model Management](./model-management.md)); it is not a
+flag on `text chat` or `api serve`. For Gemma4, Qwen-family, and LFM2 models
+you can select explicit `affine4` or `affine8` as long-context memory
 controls relative to full-precision K/V. Qwen-family and LFM2 dequantize the
 generic cache for attention, so these modes are not assumed faster. Gemma uses
 its model-specific quantized KV path; `text-chat-gemma4-turbo` already defaults

@@ -19,6 +19,11 @@ This page covers the native video-generation path exposed through `mere.run vide
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
+- `video-wan22-ti2v-5b-mlx`: native Wan2.2 TI2V image-to-video lane. `video
+  generate --model video-wan22-ti2v-5b-mlx` requires `--image` (it animates a
+  start frame and rejects `--end-image`), snaps width/height to a 32px grid and
+  frame counts to `4n+1`, and takes `--steps` (40), `--guidance-scale` (5), and
+  `--shift` (5).
 
 ## Typical workflows
 
