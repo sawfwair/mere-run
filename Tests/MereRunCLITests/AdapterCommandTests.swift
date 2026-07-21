@@ -48,4 +48,20 @@ struct AdapterCommandTests {
             )
         }
     }
+
+    @Test("Preflight resolves an uninstalled catalog id to its pinned destination")
+    func preflightResolvesUninstalledCatalogDestination() throws {
+        let emptyRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-adapter-preflight-test-\(UUID().uuidString)", isDirectory: true)
+        let resolved = try ManagedAdapterArgumentResolver.resolve(
+            ManagedAdapterCatalog.scail2LightX2VFourStepID,
+            baseModelID: SCAIL2Resources.modelID,
+            adaptersRoot: emptyRoot,
+            requireInstalled: false
+        )
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+        )
+        #expect(resolved == spec.installedFileURL(adaptersRoot: emptyRoot).path)
+    }
 }

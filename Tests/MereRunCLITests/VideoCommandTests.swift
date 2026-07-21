@@ -236,6 +236,7 @@ final class VideoCommandTests: XCTestCase {
     }
 
     func testVideoAnimatePreflightReportsMissingInputsWithoutLoading() throws {
+        let adaptersRoot = try makeTempDirectory()
         let command = try VideoAnimate.parse([
             "a dancer turns",
             "--reference", "/tmp/missing-ref.png",
@@ -247,13 +248,22 @@ final class VideoCommandTests: XCTestCase {
         ])
         let options = try command.makeOptions(
             prompt: command.prompt,
-            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4"),
+            requireInstalledAdapter: false,
+            adaptersRoot: adaptersRoot
         )
         let report = command.makePreflightReport(options: options, modelRootURL: nil)
 
         XCTAssertEqual(report.status, "blocked")
         XCTAssertFalse(report.modelInstalled)
-        XCTAssertEqual(report.missingInputFiles.count, 4)
+        XCTAssertEqual(report.missingInputFiles.count, 5)
+        XCTAssertTrue(
+            report.missingInputFiles.contains(
+                try XCTUnwrap(
+                    ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+                ).installedFileURL(adaptersRoot: adaptersRoot).path
+            )
+        )
         XCTAssertEqual(report.mode, "animation")
     }
 
