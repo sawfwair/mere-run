@@ -158,6 +158,42 @@ swift run mere.run text chat \
   --prompt 'Return an object with a name and an array of tags.'
 ```
 
+### Tool use
+
+`text chat` can run a local agentic tool loop. `--tools` takes a
+comma-separated list of built-in tool names (`write_file`, `shell_exec`), and
+`--tool-loop` enables the loop: generate, execute tool calls, feed results
+back, continue, capped at 10 iterations. Tools execute inside a sandbox
+directory — `--sandbox-dir` sets it; the default is a per-process temp
+directory — and each call asks for interactive `[y/N]` approval by default.
+`shell_exec` additionally requires `--allow-shell-exec`, and `write_file` only
+targets absolute paths outside the sandbox with `--allow-absolute-tool-paths`.
+`--auto-approve-tools` skips confirmation for `write_file` only; `shell_exec`
+always requires interactive approval even when that flag is set.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --prompt "Create hello.py that prints the current time, then run it." \
+  --tools write_file,shell_exec \
+  --tool-loop \
+  --allow-shell-exec \
+  --sandbox-dir ./work
+```
+
+### Vision input
+
+`text chat` accepts `--image` with a local file path or a `data:image/...` URI
+for vision-capable chat models such as Bonsai 27B or `vision-chat-gemma4-12b`.
+The image attaches to the user prompt for multimodal prefill.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-bonsai-27b-2bit \
+  --image ./photo.png \
+  --prompt "Describe what is in this photo."
+```
+
 ### Local code generation
 
 ```bash

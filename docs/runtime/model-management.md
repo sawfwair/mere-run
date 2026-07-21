@@ -13,6 +13,8 @@ the model-management commands.
 - `mere.run model storage`
 - `mere.run model gc`
 - `mere.run model repair-manifests`
+- `mere.run model runtime`
+- `mere.run model benchmark`
 - `mere.run adapter list`
 - `mere.run adapter pull`
 - `mere.run status`
@@ -168,6 +170,54 @@ install links, or `--force --json` for structured automation.
 
 Repairs manifest metadata in the local store when that metadata is missing or
 stale.
+
+### `mere.run model runtime`
+
+Reads and updates typed per-model API runtime settings — how a model behaves
+when served by `mere.run api serve`. `get` prints the stored settings for one
+managed model id or configured alias; `set` updates them:
+
+```bash
+mere.run model runtime get text-chat-gemma4
+mere.run model runtime set text-chat-gemma4 \
+  --alias gemma --pinned --ttl-seconds 600 \
+  --max-context-tokens 8192 --temperature 0.7
+```
+
+`set` accepts `--alias` (request-facing alias), `--pinned`/`--unpinned` (keep
+the model loaded across automatic TTL/LRU eviction), `--ttl-seconds` (unload
+TTL), `--max-context-tokens`, `--max-tokens`, `--temperature`, `--top-p`,
+`--engine` (engine override, validated against catalog compatibility), and
+`--kv-cache-mode` (`default`, `affine4`, `affine8` — `affine8` applies to
+Gemma4/Qwen/LFM2 — plus Gemma4-only `polar2`/`auto`). Each option has a
+matching clear flag (`--clear-alias`, `--clear-ttl`,
+`--clear-max-context-tokens`, `--clear-max-tokens`,
+`--clear-temperature`, `--clear-top-p`, `--clear-engine`,
+`--clear-kv-cache-mode`) to remove the stored value. Both subcommands accept
+`--json`. Only models with configurable API residency are accepted.
+
+### `mere.run model benchmark`
+
+Runs focused local model benchmarks. This is a developer and performance tool,
+not part of the everyday inference workflow. Lanes:
+
+- `chat` — runs a small grounded-chat eval slice against local assistant models.
+- `tool-calls` — runs a small tool-call selection eval against local chat models.
+- `tool-continuations` — evaluates Gemma 4 continuation after completed tool
+  calls.
+- `code` — runs a real coding-eval slice against local coding models.
+- `gemma4-kv` — compares Gemma4 default KV cache decode against packed PolarKV.
+- `gemma4-mtp` — compares Gemma4 serial decode against verified MTP speculative
+  decode.
+- `q36-mtp` — compares Qwen3.6 serial decode against adaptive and forced MTP
+  speculative decode.
+- `api-workload` — replays a chat workload against a running API server and
+  measures runtime cache counters.
+- `vlm` — compares vision-language chat models on synthetic or lmms-eval
+  datasets.
+
+Each lane accepts `--json` for machine-readable reports; see
+`mere.run model benchmark <lane> --help` for lane-specific flags.
 
 ## Related docs
 

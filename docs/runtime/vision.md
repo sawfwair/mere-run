@@ -1,7 +1,8 @@
 # Vision Runtime
 
 This page covers captioning, inspection, face analysis, grounding, segmentation, tracking,
-pose extraction, optical flow, image-to-3D reconstruction, and OCR.
+pose extraction, optical flow, video depth, single- and multi-view geometry,
+image-to-3D reconstruction, and OCR.
 
 ## Public surface
 
@@ -10,12 +11,16 @@ pose extraction, optical flow, image-to-3D reconstruction, and OCR.
 - `mere.run vision face detect`
 - `mere.run vision face embed`
 - `mere.run vision face compare`
+- `mere.run vision face batch`
 - `mere.run vision ground`
 - `mere.run vision segment`
 - `mere.run vision track`
 - `mere.run vision track-live`
 - `mere.run vision pose`
 - `mere.run vision flow`
+- `mere.run vision depth-video`
+- `mere.run vision geometry`
+- `mere.run vision geometry-multiview`
 - `mere.run vision image-to-3d`
 - `mere.run vision image-to-3d-trellis2`
 - `mere.run vision image-to-3d-multiview`
@@ -27,6 +32,10 @@ pose extraction, optical flow, image-to-3D reconstruction, and OCR.
 - `vision-ground-falcon-perception`
 - `vision-face-buffalo-l`
 - `vision-segment-sam31`
+- `vision-geometry-moge2-small`
+- `vision-depth-vda-small`
+- `vision-depth-vda-small-metric`
+- `vision-geometry-da3-small`
 - `image-3d-triposr`
 - `image-3d-trellis2-4b`
 - `image-3d-instantmesh-base`
@@ -124,6 +133,17 @@ per detected face. `embed` selects the largest face by default or accepts
 `mere-face-tools` plugin for resumable folder indexing, SQLite search, and
 review/export workflows.
 
+For folder-scale processing, `face batch` keeps the detector and embedding
+sessions warm across many images:
+
+```bash
+swift run mere.run vision face batch --input-list ./images.txt --jsonl-output ./faces.jsonl
+```
+
+`--input-list` reads one image path per line (positional image paths also
+work), `--jsonl-output` writes one durable JSONL record per image instead of
+stdout, and `--fail-fast` stops at the first unreadable or invalid image.
+
 Buffalo-L pretrained weights are provided by InsightFace for non-commercial
 research use. The pull command requires `--accept-model-license` to acknowledge
 the upstream restriction and prints the authoritative license URL before the
@@ -179,6 +199,56 @@ swift run mere.run vision flow ./frame-001.png ./frame-002.png \
 The two images must have equal dimensions. Output vectors use the Middlebury
 `.flo` format and preserve full-resolution 32-bit horizontal and vertical
 motion components.
+
+### Generate temporally consistent video depth
+
+```bash
+swift run mere.run model pull vision-depth-vda-small
+swift run mere.run vision depth-video ./clip.mp4 --output ./clip-depth
+```
+
+Native Video Depth Anything Small writes per-frame depth EXRs, preview PNGs, a
+review MP4, and a depth-sequence manifest JSON into the output directory
+(default `<stem>-depth` next to the input). `--input-size` bounds the longest
+network edge before aspect-ratio adjustment (default 518) and `--max-frames`
+bounds decoded source frames (default 240). The default model is relative
+depth; `--model vision-depth-vda-small-metric` switches to the metric variant.
+`--dry-run` hashes and decodes the bounded input, verifies media/network limits
+and the checkpoint, then prints the plan without inference; `--json` prints the
+structured result on stdout.
+
+### Recover metric geometry from a single image
+
+```bash
+swift run mere.run model pull vision-geometry-moge2-small
+swift run mere.run vision geometry ./photo.jpg --output ./photo-geometry
+```
+
+Native MoGe-2 emits metric depth and normal EXRs with preview PNGs, a validity
+mask, camera intrinsics JSON, a point-cloud PLY, and a manifest (default
+directory `<stem>-geometry`). `--resolution-level` selects quality 0 through 9
+(default 9), `--token-count` overrides the DINO base-token count (1 to 3600),
+and `--max-points` caps the PLY point count. `--dry-run` and `--json` behave as
+in `depth-video`.
+
+### Solve multi-view geometry and cameras
+
+```bash
+swift run mere.run model pull vision-geometry-da3-small
+swift run mere.run vision geometry-multiview ./view-01.jpg ./view-02.jpg ./view-03.jpg \
+  --output ./scene
+```
+
+Native DA3-Small solves relative depth, per-view confidence, and cameras
+across the ordered views, exporting per-view depth/confidence EXRs and preview
+PNGs, camera JSON, colored point clouds (PLY and GLB), a Nerfstudio/3DGS
+initialization handoff, and a scene manifest (default directory
+`<first-stem>-da3-scene`). `--cameras` supplies one calibrated W2C camera per
+image as JSON; `--process-resolution` bounds the longest processed side
+(default 504); `--reference-view` picks `first`, `middle`, `saddle-balanced`
+(default), or `saddle-similarity-range`; `--confidence-percentile` (default 40)
+discards low-confidence points and `--max-points` caps scene exports.
+`--dry-run` and `--json` behave as in `depth-video`.
 
 ### Reconstruct a PBR object with TRELLIS.2
 
@@ -289,12 +359,16 @@ swift run mere.run vision ocr ./page.png \
 
 - `Sources/MereRunCLI/Commands/VisionCaptionCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionInspectCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionFaceCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionGroundCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionSegmentCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionTrackCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionTrackLiveCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionPoseCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionFlowCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionDepthVideoCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionGeometryCommand.swift`
+- `Sources/MereRunCLI/Commands/VisionGeometryMultiViewCommand.swift`
 - `Sources/MereRunCLI/Commands/VisionOCRCommand.swift`
 
 ### Pose runtime

@@ -1,6 +1,32 @@
 # Configuration
 
-These are the public runtime environment variables that matter in the OSS repo.
+These are the persisted CLI settings and public runtime environment variables
+that matter in the OSS repo.
+
+## Persisted settings: `mere.run config`
+
+`mere.run config` persists settings that should survive across shells without
+environment variables, in `~/Library/Application Support/MereRun/config.json`
+(written with `0600` permissions because it carries secrets). Subcommands:
+`set`, `get`, `unset`, `list`, and `path` (prints the config file path).
+
+Keys:
+
+- `hf-token` — Hugging Face access token, used to pull gated models
+  (e.g. `image-klein-9b`). Treated as a secret: `get` and `list` print it
+  masked; pass `--reveal` to `get` to print it in full.
+- `hf-endpoint` — alternate Hugging Face endpoint for managed downloads.
+
+```bash
+swift run mere.run config set hf-token hf_xxxxxxxx
+swift run mere.run config get hf-token --reveal
+swift run mere.run config list
+```
+
+Environment variables take precedence over the config file: the HF token
+resolves from `HF_TOKEN` (then `HUGGING_FACE_HUB_TOKEN`) before falling back to
+the stored `hf-token`, and the endpoint resolves from `HF_ENDPOINT` before the
+stored `hf-endpoint`, defaulting to `https://huggingface.co`.
 
 ## Model store
 
