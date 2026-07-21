@@ -97,7 +97,9 @@ export default defineConfig({
         items: [
           { text: 'CLI and Runtime Internals', link: '/internals/cli-and-runtime' },
           { text: 'Structured Runs, Preflights, and Declarative Actions', link: '/internals/structured-runs-preflight-actions' },
-          { text: 'Source Layout Reference', link: '/internals/source-layout' }
+          { text: 'Source Layout Reference', link: '/internals/source-layout' },
+          { text: 'Guarded Acceleration Audit', link: '/internals/guarded-acceleration' },
+          { text: 'DiT Forward-Pass Performance', link: '/internals/dit-performance' }
         ]
       }
     ],
