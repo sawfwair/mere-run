@@ -29,4 +29,13 @@ final class WorldCommandTests: XCTestCase {
         XCTAssertEqual(command.model, Wan2DreamXCausalResources.modelID)
         XCTAssertEqual(command.port, 8_791)
     }
+
+    func testWorldServeSelectsCosmos3ActionBackend() throws {
+        let command = try WorldServe.parse([
+            "--backend", "cosmos3",
+            "--model", Cosmos3Resources.modelID,
+        ])
+        XCTAssertEqual(command.backend, .cosmos3)
+        XCTAssertEqual(command.model, Cosmos3Resources.modelID)
+    }
 }

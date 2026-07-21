@@ -5,6 +5,7 @@ This page covers the native video-generation path exposed through `mere.run vide
 ## Public surface
 
 - `mere.run video generate`
+- `mere.run video cosmos3`
 - `mere.run video animate`
 - `mere.run video prepare-masks`
 - `mere.run video session`
@@ -24,8 +25,32 @@ This page covers the native video-generation path exposed through `mere.run vide
 - `video-scail2-14b-mlx`: separately packaged MIT-licensed SCAIL-2 14B MLX
   bundle for reference- and mask-conditioned subject animation/replacement with
   long-video clean history.
+- `video-cosmos3-edge-mlx`: official pinned NVIDIA Cosmos3-Edge snapshot for
+  image/video generation and editing, multimodal reasoning, policy,
+  forward/inverse dynamics, and camera-controlled world transitions. Its model
+  weights are governed by OpenMDW-1.1.
 
 ## Typical workflows
+
+### Cosmos3 generation, actions, and reasoning
+
+```bash
+mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+
+mere.run video cosmos3 "the camera enters the open doorway" \
+  --mode image-to-video \
+  --image ./doorway.png \
+  --width 512 --height 320 --num-frames 17 \
+  --output ./enter-doorway.mp4
+
+mere.run video cosmos3 "Identify safe routes through the room." \
+  --mode reasoner \
+  --image ./doorway.png
+```
+
+Use `mere.run guide video-cosmos3` for the full mode matrix and action-domain
+contract. The same runtime powers `world serve --backend cosmos3`, which keeps
+the transformer, VAE, and terminal latent resident across transitions.
 
 ### SCAIL-2 subject animation and replacement
 

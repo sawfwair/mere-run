@@ -181,6 +181,14 @@ public struct Wan2UniPCScheduler {
     private var stepIndex = 0
     private var currentOrder = 1
 
+    public init(timesteps: [Float], sigmas: [Float]) {
+        precondition(!timesteps.isEmpty)
+        precondition(sigmas.count == timesteps.count + 1)
+        precondition(sigmas.last == 0)
+        self.timesteps = timesteps
+        self.sigmas = sigmas
+    }
+
     public init(steps: Int, shift: Float = 5, trainTimesteps: Int = 1_000) {
         precondition(steps > 0)
         precondition(shift > 0)

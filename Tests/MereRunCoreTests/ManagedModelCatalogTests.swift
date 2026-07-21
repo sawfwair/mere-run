@@ -77,6 +77,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",
             "video-ltx23-a2vid-mlx",
+            "video-cosmos3-edge-mlx",
         ])
         let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
             + ManagedModelCatalog.allSpecs
@@ -1285,6 +1286,47 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(manifest.defaults?.cfg, 5)
         XCTAssertEqual(manifest.defaults?.sigmaShift, 3)
         XCTAssertTrue(manifest.supports?.contains(.videoGeneration) == true)
+    }
+
+    func testCosmos3EdgeSpecPinsCompleteOfficialOmnimodalSnapshot() throws {
+        let id = ModelResolver.ModelID.cosmos3EdgeMLX.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.installShape, .structuredRoot)
+        XCTAssertEqual(spec.validationKind, .cosmos3EdgeMLX)
+        XCTAssertEqual(spec.upstreamRepoId, Cosmos3Resources.officialRepoID)
+        XCTAssertEqual(spec.upstreamRevision, Cosmos3Resources.officialRevision)
+        XCTAssertEqual(spec.hubFallback?.repoId, Cosmos3Resources.officialRepoID)
+        XCTAssertEqual(spec.hubFallback?.revision, Cosmos3Resources.officialRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, Cosmos3Resources.snapshotPatterns)
+        XCTAssertTrue(spec.canBePulledWithoutConfiguration)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 9_200_000_000)
+        XCTAssertEqual(spec.usageRestriction?.terms.first?.license, "OpenMDW-1.1")
+        XCTAssertEqual(spec.defaultCLICommands, [
+            "video cosmos3",
+            "video cosmos3 --mode reasoner",
+            "world serve --backend cosmos3",
+        ])
+        XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("transformer/*"))
+        XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("vae/*"))
+        XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("vision_encoder/*"))
+        XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("model-*.safetensors"))
+
+        let manifest = MereRunModelManifest.template(
+            for: .cosmos3EdgeMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.engine, .cosmos3Edge)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 35)
+        XCTAssertEqual(manifest.defaults?.cfg, 6)
+        XCTAssertEqual(manifest.defaults?.sigmaShift, 10)
+        XCTAssertTrue(manifest.supports?.contains(.videoGeneration) == true)
+        XCTAssertTrue(manifest.supports?.contains(.actionGeneration) == true)
+        XCTAssertTrue(manifest.supports?.contains(.worldSimulation) == true)
+        XCTAssertTrue(manifest.supports?.contains(.visionReasoning) == true)
     }
 
     func testLTX23CompanionGemma3TextEncoderSpecIsKnownButHidden() throws {

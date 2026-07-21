@@ -387,15 +387,17 @@ final class Wan2VAEResample: Module {
         var width = input.dim(3)
         var hidden = input
         if mode == .up3D, let temporalConv {
-            if firstChunk && frames > 1 {
-                let first = hidden[0..., 0..<1]
-                let rest = temporalConv(hidden[0..., 1...])
-                    .reshaped(batch, frames - 1, height, width, 2, dimensions)
-                let interleaved = MLX.stacked(
-                    [rest[0..., 0..., 0..., 0..., 0, 0...], rest[0..., 0..., 0..., 0..., 1, 0...]],
-                    axis: 2
-                ).reshaped(batch, (frames - 1) * 2, height, width, dimensions)
-                hidden = MLX.concatenated([first, interleaved], axis: 1)
+            if firstChunk {
+                if frames > 1 {
+                    let first = hidden[0..., 0..<1]
+                    let rest = temporalConv(hidden[0..., 1...])
+                        .reshaped(batch, frames - 1, height, width, 2, dimensions)
+                    let interleaved = MLX.stacked(
+                        [rest[0..., 0..., 0..., 0..., 0, 0...], rest[0..., 0..., 0..., 0..., 1, 0...]],
+                        axis: 2
+                    ).reshaped(batch, (frames - 1) * 2, height, width, dimensions)
+                    hidden = MLX.concatenated([first, interleaved], axis: 1)
+                }
             } else {
                 let temporal = temporalConv(hidden).reshaped(batch, frames, height, width, 2, dimensions)
                 hidden = MLX.stacked(

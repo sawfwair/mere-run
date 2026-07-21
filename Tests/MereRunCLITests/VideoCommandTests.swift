@@ -4,6 +4,61 @@ import XCTest
 @testable import MereRunCore
 
 final class VideoCommandTests: XCTestCase {
+    func testVideoCommandExposesCosmos3NativeSurface() {
+        XCTAssertTrue(
+            Video.configuration.subcommands.contains {
+                $0.configuration.commandName == "cosmos3"
+            }
+        )
+    }
+
+    func testCosmos3CommandParsesActionParityOptions() throws {
+        let command = try VideoCosmos3.parse([
+            "move through the existing scene",
+            "--mode", "forward-dynamics",
+            "--image", "/tmp/source.png",
+            "--action-file", "/tmp/actions.json",
+            "--action-domain", "camera_pose",
+            "--action-chunk-size", "16",
+            "--action-resolution", "256",
+            "--action-viewpoint", "ego_view",
+            "--steps", "30",
+            "--guidance-scale", "1",
+            "--shift", "5",
+        ])
+        XCTAssertEqual(command.mode, .forwardDynamics)
+        XCTAssertEqual(command.actionDomain, "camera_pose")
+        XCTAssertEqual(command.actionChunkSize, 16)
+        XCTAssertEqual(command.actionResolution, 256)
+        XCTAssertEqual(command.steps, 30)
+        XCTAssertEqual(command.guidanceScale, 1)
+        XCTAssertEqual(command.shift, 5)
+    }
+
+    func testCosmos3CommandParsesImageEditAndReasonerParityModes() throws {
+        let edit = try VideoCosmos3.parse([
+            "replace the sky",
+            "--mode", "image-to-image",
+            "--image", "/tmp/source.png",
+        ])
+        XCTAssertEqual(edit.mode, .imageToImage)
+
+        let reasoner = try VideoCosmos3.parse([
+            "What changes across the clip?",
+            "--mode", "reasoner",
+            "--video", "/tmp/source.mp4",
+            "--max-new-tokens", "96",
+            "--temperature", "0",
+            "--top-p", "0.95",
+            "--max-video-frames", "12",
+        ])
+        XCTAssertEqual(reasoner.mode, .reasoner)
+        XCTAssertEqual(reasoner.maxNewTokens, 96)
+        XCTAssertEqual(reasoner.temperature, 0)
+        XCTAssertEqual(reasoner.topP, 0.95)
+        XCTAssertEqual(reasoner.maxVideoFrames, 12)
+    }
+
     private var temporaryDirectories: [URL] = []
 
     override func tearDown() {
@@ -18,7 +73,7 @@ final class VideoCommandTests: XCTestCase {
         let commandNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(
             commandNames,
-            Set(["animate", "generate", "prepare-masks", "export-latents", "session"])
+            Set(["animate", "cosmos3", "generate", "prepare-masks", "export-latents", "session"])
         )
     }
 
@@ -181,6 +236,7 @@ final class VideoCommandTests: XCTestCase {
     }
 
     func testVideoAnimatePreflightReportsMissingInputsWithoutLoading() throws {
+        let adaptersRoot = try makeTempDirectory()
         let command = try VideoAnimate.parse([
             "a dancer turns",
             "--reference", "/tmp/missing-ref.png",
@@ -192,13 +248,22 @@ final class VideoCommandTests: XCTestCase {
         ])
         let options = try command.makeOptions(
             prompt: command.prompt,
-            outputURL: URL(fileURLWithPath: "/tmp/result.mp4")
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4"),
+            requireInstalledAdapter: false,
+            adaptersRoot: adaptersRoot
         )
         let report = command.makePreflightReport(options: options, modelRootURL: nil)
 
         XCTAssertEqual(report.status, "blocked")
         XCTAssertFalse(report.modelInstalled)
-        XCTAssertEqual(report.missingInputFiles.count, 4)
+        XCTAssertEqual(report.missingInputFiles.count, 5)
+        XCTAssertTrue(
+            report.missingInputFiles.contains(
+                try XCTUnwrap(
+                    ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+                ).installedFileURL(adaptersRoot: adaptersRoot).path
+            )
+        )
         XCTAssertEqual(report.mode, "animation")
     }
 

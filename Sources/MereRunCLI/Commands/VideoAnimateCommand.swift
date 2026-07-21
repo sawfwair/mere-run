@@ -231,7 +231,11 @@ struct VideoAnimate: AsyncParsableCommand {
             ? outputURL.deletingLastPathComponent()
                 .appendingPathComponent(".\(outputURL.deletingPathExtension().lastPathComponent)-\(UUID().uuidString).mp4")
             : outputURL
-        let options = try makeOptions(prompt: trimmedPrompt, outputURL: generatedVideoURL)
+        let options = try makeOptions(
+            prompt: trimmedPrompt,
+            outputURL: generatedVideoURL,
+            requireInstalledAdapter: !preflight
+        )
 
         if preflight {
             let report = makePreflightReport(options: options, modelRootURL: runtimeRoot)
@@ -305,13 +309,20 @@ struct VideoAnimate: AsyncParsableCommand {
         print(outputURL.path)
     }
 
-    func makeOptions(prompt: String, outputURL: URL) throws -> SCAIL2GenerationOptions {
+    func makeOptions(
+        prompt: String,
+        outputURL: URL,
+        requireInstalledAdapter: Bool = true,
+        adaptersRoot: URL = MereRunModelPaths.adaptersDir
+    ) throws -> SCAIL2GenerationOptions {
         let effectiveAdapterReference = profile == .fast
             ? distilledAdapter ?? ManagedAdapterCatalog.scail2LightX2VFourStepID
             : distilledAdapter
         let resolvedDistilledAdapter = try ManagedAdapterArgumentResolver.resolve(
             effectiveAdapterReference,
-            baseModelID: SCAIL2Resources.modelID
+            baseModelID: SCAIL2Resources.modelID,
+            adaptersRoot: adaptersRoot,
+            requireInstalled: requireInstalledAdapter
         )
         let effectiveSteps = profile == .fast ? 4 : (steps ?? 40)
         let effectiveGuidanceScale: Float = profile == .fast ? 1 : (guidanceScale ?? 5)
