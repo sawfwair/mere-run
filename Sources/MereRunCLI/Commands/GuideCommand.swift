@@ -463,6 +463,13 @@ enum GuideRegistry {
             resourceName: "video-generate.md"
         ),
         GuideTopic(
+            topic: "video-cosmos3",
+            title: "Cosmos3-Edge",
+            commandPaths: [["video", "cosmos3"], ["world", "serve"]],
+            models: ["video-cosmos3-edge-mlx"],
+            resourceName: "video-cosmos3.md"
+        ),
+        GuideTopic(
             topic: "video-export-latents",
             title: "Video Export Latents",
             commandPaths: [["video", "export-latents"]],

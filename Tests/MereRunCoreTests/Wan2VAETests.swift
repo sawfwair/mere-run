@@ -77,9 +77,11 @@ final class Wan2VAETests: MereRunCoreTestCase {
         let model = Wan2VAEModel(latentChannels: 48, encoderDimensions: 4, decoderDimensions: 4)
         let image = MLX.zeros([1, 1, 32, 32, 3])
         let latent = model.encodeImage(image)
+        let decodedImage = model.decode(MLX.zeros([1, 1, 2, 2, 48]))
         let decoded = model.decode(MLX.zeros([1, 2, 2, 2, 48]))
-        eval(latent, decoded)
+        eval(latent, decodedImage, decoded)
         XCTAssertEqual(latent.shape, [1, 1, 2, 2, 48])
+        XCTAssertEqual(decodedImage.shape, [1, 1, 32, 32, 3])
         XCTAssertEqual(decoded.shape, [1, 5, 32, 32, 3])
         XCTAssertTrue(decoded.asArray(Float.self).allSatisfy(\.isFinite))
     }

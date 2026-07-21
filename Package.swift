@@ -307,6 +307,7 @@ targets.append(contentsOf: [
       "ACEStep/VAE/README.md",
       "Asset3D/README.md",
       "CodeGen/README.md",
+      "Cosmos3/README.md",
       "Decode/README.md",
       "DeepseekV4Flash/README.md",
       "DepthAnything3/README.md",
@@ -419,6 +420,9 @@ targets.append(contentsOf: [
     name: "MereRunCoreTests",
     dependencies: mereRunCoreTestDependencies,
     path: "Tests/MereRunCoreTests",
+    resources: [
+      .copy("Fixtures")
+    ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   ),

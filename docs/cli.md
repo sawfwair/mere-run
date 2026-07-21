@@ -79,14 +79,15 @@ Public tree:
   - `mere.run sfx generate` — Generate a sound effect from a text prompt.
   - `mere.run sfx video` — Generate sound effects from video conditioning.
     - `mere.run sfx video generate` — Generate an 8-second sound effect from a video or Synchformer features.
-- [`mere.run video`](/runtime/video) — Generate videos with native Swift/MLX LTX pipelines.
+- [`mere.run video`](/runtime/video) — Generate and understand video with native Swift/MLX pipelines.
   - `mere.run video animate` — Animate or replace a masked subject with native Swift/MLX SCAIL-2.
+  - `mere.run video cosmos3` — Run native NVIDIA Cosmos3-Edge generation and action modes.
   - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
   - `mere.run video prepare-masks` — Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1.
   - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
 - [`mere.run world`](/runtime/world) — Run persistent local conditioned-video world sessions.
-  - `mere.run world serve` — Serve one warm DreamX causal world session over loopback HTTP.
+  - `mere.run world serve` — Serve one warm native world-model session over HTTP.
 - [`mere.run graph`](/workflows) — Validate, materialize, run, and submit portable workflow graphs.
   - `mere.run graph catalog` — List registered workflow node contracts.
   - `mere.run graph dataset` — Discover graph-ready datasets without loading model runtimes.
@@ -1606,6 +1607,46 @@ model availability, raw-video conditioning requirements, duration, effective
 step count, CFG, renoise schedule, and follow-up actions before loading MLX or
 generating audio. `.npy` feature inputs do not require Synchformer during
 preflight or generation.
+
+### `mere.run video cosmos3`
+
+Run the complete pinned `nvidia/Cosmos3-Edge` checkpoint through native
+Swift/MLX:
+
+```bash
+mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+
+mere.run video cosmos3 \
+  "continue forward through the same corridor" \
+  --mode forward-dynamics \
+  --image ./vesper.png \
+  --action-domain camera_pose \
+  --action-file ./camera-actions.json \
+  --action-chunk-size 60 \
+  --action-resolution 256 \
+  --output ./vesper-forward.mp4
+```
+
+`--mode` accepts `text-to-image`, `image-to-image`, `text-to-video`,
+`image-to-video`, `video-to-video`, `policy`, `forward-dynamics`,
+`inverse-dynamics`, and `reasoner`. Action domains cover the published
+automotive, camera, hand, Push-T, UMI, Bridge, DROID, RoboMIND, Galbot, AgiBot,
+and Fractal layouts. Policy and inverse-dynamics outputs are written as JSON.
+Forward-dynamics action files contain normalized model-space values, not meters;
+the resident Cosmos3 world server can also accept them as
+`model_space_actions`.
+
+The reasoner accepts text alone or one `--image`/`--video` and shares the
+checkpoint's understanding transformer with its packed SigLIP2 vision tower:
+
+```bash
+mere.run video cosmos3 \
+  "Describe the navigable paths and obstacles." \
+  --mode reasoner --image ./vesper.png --max-new-tokens 128
+```
+
+See `mere.run guide video-cosmos3` for sampling defaults, action JSON, exact
+upstream pins, and the resident world-server recipe.
 
 ### `mere.run video animate`
 

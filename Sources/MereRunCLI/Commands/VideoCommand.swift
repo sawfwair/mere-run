@@ -12,9 +12,10 @@ enum LTXVideoVariant: String, CaseIterable, ExpressibleByArgument {
 struct Video: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "video",
-        abstract: "Generate videos with native Swift/MLX LTX pipelines.",
+        abstract: "Generate and understand video with native Swift/MLX pipelines.",
         subcommands: [
             VideoAnimate.self,
+            VideoCosmos3.self,
             VideoExportLatents.self,
             VideoGenerate.self,
             VideoPrepareMasks.self,

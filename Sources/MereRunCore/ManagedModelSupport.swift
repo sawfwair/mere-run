@@ -744,6 +744,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 96
             ),
             descriptor(
+                ModelResolver.ModelID.cosmos3EdgeMLX.rawValue,
+                "Cosmos3-Edge MLX",
+                "Runs NVIDIA Cosmos3-Edge video, action, navigation, and reasoner modes with native Swift MLX.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 ModelResolver.ModelID.scail2Video14BMLX.rawValue,
                 "SCAIL-2 14B MLX",
                 "Animates or replaces masked subjects from reference images and driving videos with native Swift/MLX.",

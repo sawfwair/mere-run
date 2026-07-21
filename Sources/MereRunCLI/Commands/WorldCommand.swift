@@ -5,6 +5,11 @@ import MereRunCore
 import NIOCore
 import NIOPosix
 
+enum WorldBackend: String, CaseIterable, ExpressibleByArgument {
+    case dreamx
+    case cosmos3
+}
+
 struct World: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "world",
@@ -16,7 +21,7 @@ struct World: AsyncParsableCommand {
 struct WorldServe: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "serve",
-        abstract: "Serve one warm DreamX causal world session over loopback HTTP."
+        abstract: "Serve one warm native world-model session over HTTP."
     )
 
     @Option(name: [.long], help: "Host to bind to.")
@@ -27,6 +32,9 @@ struct WorldServe: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Bearer token required by world endpoints.")
     var apiKey: String?
+
+    @Option(name: [.long], help: "World runtime backend: dreamx or cosmos3.")
+    var backend: WorldBackend = .dreamx
 
     @Option(name: [.long], help: "Wan2.2 TI2V base resource model id or local root.")
     var baseModel = Wan2Resources.modelID
@@ -46,26 +54,53 @@ struct WorldServe: AsyncParsableCommand {
         if !Self.isLoopback(host), resolvedKey?.isEmpty != false {
             throw ValidationError("Non-loopback world servers require --api-key.")
         }
-        let baseRoot = try resolveRoot(baseModel)
-        let causalRoot = try resolveRoot(model)
-        let baseResources = Wan2Resources(rootURL: baseRoot)
-        let missingBase = baseResources.validate()
-        guard missingBase.isEmpty else {
-            throw ValidationError("Wan2.2 base resources are incomplete: \(missingBase.map(\.path).joined(separator: ", "))")
-        }
-        let causalResources = Wan2DreamXCausalResources(rootURL: causalRoot)
-        let missingCausal = causalResources.validate()
-        guard missingCausal.isEmpty else {
-            throw ValidationError("DreamX causal resources are incomplete: \(missingCausal.map(\.path).joined(separator: ", "))")
-        }
         let stateURL = stateDirectory.map { URL(fileURLWithPath: $0).standardizedFileURL }
             ?? Self.defaultStateDirectory()
-        let session = Wan2WorldSession(
-            resources: baseResources,
-            stateDirectory: stateURL,
-            causalWeightsURL: causalResources.weightsURL
-        )
-        let runtime = WorldHTTPRuntime(session: session)
+        let sessionBackend: WorldSessionBackend
+        switch backend {
+        case .dreamx:
+            let baseRoot = try resolveRoot(baseModel)
+            let causalRoot = try resolveRoot(model)
+            let baseResources = Wan2Resources(rootURL: baseRoot)
+            let missingBase = baseResources.validate()
+            guard missingBase.isEmpty else {
+                throw ValidationError(
+                    "Wan2.2 base resources are incomplete: "
+                        + missingBase.map(\.path).joined(separator: ", ")
+                )
+            }
+            let causalResources = Wan2DreamXCausalResources(rootURL: causalRoot)
+            let missingCausal = causalResources.validate()
+            guard missingCausal.isEmpty else {
+                throw ValidationError(
+                    "DreamX causal resources are incomplete: "
+                        + missingCausal.map(\.path).joined(separator: ", ")
+                )
+            }
+            sessionBackend = .dreamx(Wan2WorldSession(
+                resources: baseResources,
+                stateDirectory: stateURL,
+                causalWeightsURL: causalResources.weightsURL
+            ))
+        case .cosmos3:
+            let requestedModel = model == Wan2DreamXCausalResources.modelID
+                ? Cosmos3Resources.modelID
+                : model
+            let root = try resolveRoot(requestedModel)
+            let resources = Cosmos3Resources(rootURL: root)
+            let missing = resources.validate()
+            guard missing.isEmpty else {
+                throw ValidationError(
+                    "Cosmos3-Edge resources are incomplete: "
+                        + missing.map(\.path).joined(separator: ", ")
+                )
+            }
+            sessionBackend = .cosmos3(Cosmos3WorldSession(
+                resources: resources,
+                stateDirectory: stateURL
+            ))
+        }
+        let runtime = WorldHTTPRuntime(session: sessionBackend)
         if prepare {
             try await runtime.prepare()
         }
@@ -116,21 +151,57 @@ private struct WorldTransitionPayload: Codable, Sendable {
     let output: String?
     let width: Int?
     let height: Int?
+    let numFrames: Int?
+    let steps: Int?
+    let guidanceScale: Float?
+    let shift: Float?
     let seed: UInt64?
     let fps: Int?
+    let modelSpaceActions: [[Float]]?
 
-    func request() -> Wan2WorldTransitionRequest {
-        Wan2WorldTransitionRequest(
-            prompt: prompt,
-            camera: camera,
-            sourceImageURL: sourceImage.map { URL(fileURLWithPath: $0).standardizedFileURL },
-            outputURL: output.map { URL(fileURLWithPath: $0).standardizedFileURL },
-            width: width ?? 512,
-            height: height ?? 288,
-            seed: seed ?? 42,
-            fps: fps ?? 24
+    func request(defaults: WorldTransitionDefaults) -> WorldTransitionRuntimeRequest {
+        return WorldTransitionRuntimeRequest(
+            base: Wan2WorldTransitionRequest(
+                prompt: prompt,
+                camera: camera,
+                sourceImageURL: sourceImage.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                outputURL: output.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                width: width ?? defaults.width,
+                height: height ?? defaults.height,
+            numFrames: numFrames ?? defaults.numFrames,
+                steps: steps ?? defaults.steps,
+                guidanceScale: guidanceScale ?? defaults.guidanceScale,
+                shift: shift ?? defaults.shift,
+                seed: seed ?? defaults.seed,
+                fps: fps ?? defaults.fps
+            ),
+            modelSpaceActions: modelSpaceActions
         )
     }
+
+    enum CodingKeys: String, CodingKey {
+        case prompt, camera, output, width, height, steps, shift, seed, fps
+        case sourceImage = "sourceImage"
+        case numFrames = "num_frames"
+        case guidanceScale = "guidance_scale"
+        case modelSpaceActions = "model_space_actions"
+    }
+}
+
+private struct WorldTransitionRuntimeRequest: Sendable {
+    let base: Wan2WorldTransitionRequest
+    let modelSpaceActions: [[Float]]?
+}
+
+private struct WorldTransitionDefaults: Sendable {
+    let width: Int
+    let height: Int
+    let numFrames: Int
+    let steps: Int
+    let guidanceScale: Float
+    let shift: Float
+    let seed: UInt64
+    let fps: Int
 }
 
 private struct WorldResetPayload: Codable, Sendable {
@@ -164,6 +235,37 @@ private struct WorldJobProgress: Codable, Sendable {
     }
 }
 
+private struct WorldTransitionReceiptPayload: Codable, Sendable {
+    let requestID: UUID
+    let previousStateID: UUID?
+    let stateID: UUID
+    let transitionIndex: Int
+    let outputURL: URL
+    let terminalFrameURL: URL
+    let camera: Wan2WorldCameraControl
+    let conditioningMode: String
+    let actionDomain: Cosmos3ActionDomain?
+    let actionSpace: String?
+    let modelSpaceActions: [[Float]]?
+    let rawActions: [[Float]]?
+    let seed: UInt64
+
+    enum CodingKeys: String, CodingKey {
+        case camera, seed
+        case requestID = "request_id"
+        case previousStateID = "previous_state_id"
+        case stateID = "state_id"
+        case transitionIndex = "transition_index"
+        case outputURL = "output_url"
+        case terminalFrameURL = "terminal_frame_url"
+        case conditioningMode = "conditioning_mode"
+        case actionDomain = "action_domain"
+        case actionSpace = "action_space"
+        case modelSpaceActions = "model_space_actions"
+        case rawActions = "raw_actions"
+    }
+}
+
 private struct WorldJobSnapshot: Codable, Sendable {
     let jobID: UUID
     let status: WorldJobStatus
@@ -172,7 +274,7 @@ private struct WorldJobSnapshot: Codable, Sendable {
     let completedAt: Date?
     let progress: WorldJobProgress?
     let progressEvents: [WorldJobProgress]
-    let receipt: Wan2WorldTransitionReceipt?
+    let receipt: WorldTransitionReceiptPayload?
     let error: String?
 
     enum CodingKeys: String, CodingKey {
@@ -185,13 +287,36 @@ private struct WorldJobSnapshot: Codable, Sendable {
     }
 }
 
+private struct WorldSessionSnapshotPayload: Codable, Sendable {
+    let sessionID: UUID
+    let phase: String
+    let transitionCount: Int
+    let currentStateID: UUID?
+    let currentFrameURL: URL?
+    let conditioningMode: String
+    let keepsModelsWarm: Bool
+    let keepsTerminalLatent: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case phase
+        case sessionID = "session_id"
+        case transitionCount = "transition_count"
+        case currentStateID = "current_state_id"
+        case currentFrameURL = "current_frame_url"
+        case conditioningMode = "conditioning_mode"
+        case keepsModelsWarm = "keeps_models_warm"
+        case keepsTerminalLatent = "keeps_terminal_latent"
+    }
+}
+
 private struct WorldRuntimeSnapshot: Codable, Sendable {
     let object = "world.session"
-    let session: Wan2WorldSessionSnapshot
+    let backend: String
+    let session: WorldSessionSnapshotPayload
     let activeJob: WorldJobSnapshot?
 
     enum CodingKeys: String, CodingKey {
-        case object, session
+        case object, backend, session
         case activeJob = "active_job"
     }
 }
@@ -217,12 +342,171 @@ private enum WorldHTTPRuntimeError: LocalizedError {
     }
 }
 
+private enum WorldSessionBackend: Sendable {
+    case dreamx(Wan2WorldSession)
+    case cosmos3(Cosmos3WorldSession)
+
+    var identifier: String {
+        switch self {
+        case .dreamx: "dreamx"
+        case .cosmos3: "cosmos3"
+        }
+    }
+
+    var transitionDefaults: WorldTransitionDefaults {
+        switch self {
+        case .dreamx:
+            return WorldTransitionDefaults(
+                width: 512,
+                height: 320,
+                numFrames: 17,
+                steps: 40,
+                guidanceScale: 5,
+                shift: 5,
+                seed: 42,
+                fps: 24
+            )
+        case .cosmos3:
+            return WorldTransitionDefaults(
+                width: 320,
+                height: 176,
+                numFrames: 17,
+                steps: 30,
+                guidanceScale: 1,
+                shift: 3,
+                seed: 0,
+                fps: 30
+            )
+        }
+    }
+
+    func prepare() async throws {
+        switch self {
+        case .dreamx(let session):
+            try await session.prepare()
+        case .cosmos3(let session):
+            try await session.prepare()
+        }
+    }
+
+    func transition(
+        _ runtimeRequest: WorldTransitionRuntimeRequest,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) async throws -> WorldTransitionReceiptPayload {
+        let request = runtimeRequest.base
+        switch self {
+        case .dreamx(let session):
+            let receipt = try await session.transition(
+                request,
+                progressHandler: progressHandler
+            )
+            return WorldTransitionReceiptPayload(
+                requestID: receipt.requestID,
+                previousStateID: receipt.previousStateID,
+                stateID: receipt.stateID,
+                transitionIndex: receipt.transitionIndex,
+                outputURL: receipt.outputURL,
+                terminalFrameURL: receipt.terminalFrameURL,
+                camera: receipt.camera,
+                conditioningMode: receipt.conditioningMode.rawValue,
+                actionDomain: nil,
+                actionSpace: nil,
+                modelSpaceActions: nil,
+                rawActions: nil,
+                seed: receipt.seed
+            )
+        case .cosmos3(let session):
+            let receipt = try await session.transition(
+                Cosmos3WorldTransitionRequest(
+                    requestID: request.requestID,
+                    prompt: request.prompt,
+                    camera: request.camera,
+                    sourceImageURL: request.sourceImageURL,
+                    outputURL: request.outputURL,
+                    width: request.width,
+                    height: request.height,
+                    numFrames: request.numFrames,
+                    steps: request.steps,
+                    guidanceScale: request.guidanceScale,
+                    shift: request.shift,
+                    seed: request.seed,
+                    fps: request.fps,
+                    modelSpaceActions: runtimeRequest.modelSpaceActions
+                ),
+                progressHandler: progressHandler
+            )
+            return WorldTransitionReceiptPayload(
+                requestID: receipt.requestID,
+                previousStateID: receipt.previousStateID,
+                stateID: receipt.stateID,
+                transitionIndex: receipt.transitionIndex,
+                outputURL: receipt.outputURL,
+                terminalFrameURL: receipt.terminalFrameURL,
+                camera: receipt.camera,
+                conditioningMode: receipt.conditioningMode,
+                actionDomain: receipt.actionDomain,
+                actionSpace: receipt.actionSpace,
+                modelSpaceActions: receipt.modelSpaceActions,
+                rawActions: receipt.modelSpaceActions,
+                seed: receipt.seed
+            )
+        }
+    }
+
+    func reset(sourceImageURL: URL?) async throws {
+        switch self {
+        case .dreamx(let session):
+            try await session.reset(sourceImageURL: sourceImageURL)
+        case .cosmos3(let session):
+            try await session.reset(sourceImageURL: sourceImageURL)
+        }
+    }
+
+    func unload() async throws {
+        switch self {
+        case .dreamx(let session):
+            try await session.unload()
+        case .cosmos3(let session):
+            try await session.unload()
+        }
+    }
+
+    func snapshot() async -> WorldSessionSnapshotPayload {
+        switch self {
+        case .dreamx(let session):
+            let snapshot = await session.snapshot()
+            return WorldSessionSnapshotPayload(
+                sessionID: snapshot.sessionID,
+                phase: snapshot.phase.rawValue,
+                transitionCount: snapshot.transitionCount,
+                currentStateID: snapshot.currentStateID,
+                currentFrameURL: snapshot.currentFrameURL,
+                conditioningMode: snapshot.conditioningMode.rawValue,
+                keepsModelsWarm: snapshot.keepsModelsWarm,
+                keepsTerminalLatent: snapshot.keepsTerminalLatent
+            )
+        case .cosmos3(let session):
+            let snapshot = await session.snapshot()
+            return WorldSessionSnapshotPayload(
+                sessionID: snapshot.sessionID,
+                phase: snapshot.phase.rawValue,
+                transitionCount: snapshot.transitionCount,
+                currentStateID: snapshot.currentStateID,
+                currentFrameURL: snapshot.currentFrameURL,
+                conditioningMode: snapshot.conditioningMode,
+                keepsModelsWarm: snapshot.keepsModelsWarm,
+                keepsTerminalLatent: snapshot.keepsTerminalLatent
+            )
+        }
+    }
+}
+
 private actor WorldHTTPRuntime {
-    private let session: Wan2WorldSession
+    private let session: WorldSessionBackend
     private var jobs: [UUID: WorldJobSnapshot] = [:]
     private var tasks: [UUID: Task<Void, Never>] = [:]
 
-    init(session: Wan2WorldSession) {
+    init(session: WorldSessionBackend) {
         self.session = session
     }
 
@@ -232,7 +516,11 @@ private actor WorldHTTPRuntime {
     }
 
     func snapshot() async -> WorldRuntimeSnapshot {
-        WorldRuntimeSnapshot(session: await session.snapshot(), activeJob: activeJob)
+        WorldRuntimeSnapshot(
+            backend: session.identifier,
+            session: await session.snapshot(),
+            activeJob: activeJob
+        )
     }
 
     func startTransition(_ payload: WorldTransitionPayload) throws -> WorldJobSnapshot {
@@ -250,8 +538,9 @@ private actor WorldHTTPRuntime {
             error: nil
         )
         jobs[id] = job
+        let defaults = session.transitionDefaults
         tasks[id] = Task { [weak self] in
-            await self?.runTransition(id: id, request: payload.request())
+            await self?.runTransition(id: id, request: payload.request(defaults: defaults))
         }
         return job
     }
@@ -301,7 +590,7 @@ private actor WorldHTTPRuntime {
             .first
     }
 
-    private func runTransition(id: UUID, request: Wan2WorldTransitionRequest) async {
+    private func runTransition(id: UUID, request: WorldTransitionRuntimeRequest) async {
         guard let job = jobs[id] else { return }
         jobs[id] = WorldJobSnapshot(
             jobID: id,
@@ -384,7 +673,7 @@ private struct WorldHTTPServer: Sendable {
             router: router(),
             configuration: .init(address: .hostname(host, port: port))
         )
-        print("DreamX world server: http://\(host):\(port)/v1/world/session")
+        print("Native world server: http://\(host):\(port)/v1/world/session")
         print("Press Ctrl+C to stop.")
         try await app.runService()
     }
