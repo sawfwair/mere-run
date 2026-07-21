@@ -6,9 +6,9 @@ The format is based on Keep a Changelog.
 
 ## 0.25.0 - 2026-07-21
 
-This release contains the complete `v0.24.0..v0.25.0` delta: 4 commits
-changing 78 files across native Cosmos3 Edge inference, persistent
-action-conditioned worlds, and the SCAIL-2 recast workflow.
+This release contains every change merged since `v0.24.0` across native
+Cosmos3 Edge inference, persistent action-conditioned worlds, and the SCAIL-2
+recast workflow.
 
 ### Added
 
