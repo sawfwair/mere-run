@@ -646,7 +646,9 @@ conditioning. Set `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` only when pointing at an
 external `mlx-community/gemma-3-12b-it-4bit` checkout.
 
 The native Swift runtime uses this standalone distilled transformer for the
-fast video-only draft lane. It can still run synchronized AV when explicitly
+fast video-only draft lane. That route retains the checkpoint's joint AV
+denoising tokens but does not load or decode the audio VAE/vocoder, and its MP4
+contains no audio stream. It can still run synchronized AV when explicitly
 selected with `--variant unified-av`, but the canonical two-stage quality path
 uses `video-ltx23-full-mlx`.
 The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane

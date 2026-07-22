@@ -9,6 +9,35 @@ enum LTXVideoVariant: String, CaseIterable, ExpressibleByArgument {
     case distilled = "distilled"
 }
 
+enum LTXVideoGenerationRoute: String, Equatable {
+    case legacyDistilledVideo = "legacy-distilled-video"
+    case splitDistilledVideo = "split-distilled-video"
+    case unifiedAV = "unified-av"
+
+    var writesAudio: Bool {
+        self == .unifiedAV
+    }
+
+    var supportsPhaseTimings: Bool {
+        self != .legacyDistilledVideo
+    }
+}
+
+func resolveLTXVideoGenerationRoute(
+    variant: LTXVideoVariant,
+    modelRoot: URL,
+    fileManager: FileManager = .default
+) -> LTXVideoGenerationRoute {
+    switch variant {
+    case .unifiedAV:
+        return .unifiedAV
+    case .distilled:
+        return isLTX23SplitModelRoot(modelRoot, fileManager: fileManager)
+            ? .splitDistilledVideo
+            : .legacyDistilledVideo
+    }
+}
+
 struct Video: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "video",
@@ -235,10 +264,10 @@ struct VideoGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
     var json: Bool = false
 
-    @Flag(name: [.customLong("timings")], help: "Print native LTX unified-AV/A2Vid phase timings to stderr.")
+    @Flag(name: [.customLong("timings")], help: "Print native LTX split-distilled/unified-AV/A2Vid phase timings to stderr.")
     var timings: Bool = false
 
-    @Option(name: [.customLong("timings-output")], help: "Write native LTX unified-AV/A2Vid phase timings as JSON.")
+    @Option(name: [.customLong("timings-output")], help: "Write native LTX split-distilled/unified-AV/A2Vid phase timings as JSON.")
     var timingsOutput: String?
 
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
@@ -271,13 +300,6 @@ struct VideoGenerate: AsyncParsableCommand {
         guard !trimmedPrompt.isEmpty else {
             throw ValidationError("Prompt cannot be empty.")
         }
-        let hasSourceAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        if (timings || timingsOutput != nil), variant != .unifiedAV, !hasSourceAudio {
-            throw ValidationError(
-                "--timings and --timings-output require --variant unified-av or --audio."
-            )
-        }
-
         guard fps > 0 else {
             throw ValidationError("--fps must be >= 1")
         }
@@ -404,6 +426,11 @@ struct VideoGenerate: AsyncParsableCommand {
             return
         }
         if isWan2ModelRoot(resolvedRootURL) {
+            if timings || timingsOutput != nil {
+                throw ValidationError(
+                    "--timings and --timings-output are available for native LTX generation, not Wan2.2 TI2V."
+                )
+            }
             guard let sourceImageURL else {
                 throw ValidationError("Wan2.2 TI2V requires --image.")
             }
@@ -683,7 +710,13 @@ struct VideoGenerate: AsyncParsableCommand {
         outputURL: URL
     ) async throws {
         let rootURL = URL(fileURLWithPath: modelRoot).standardizedFileURL
-        if variant == .unifiedAV,
+        let route = resolveLTXVideoGenerationRoute(variant: variant, modelRoot: rootURL)
+        if (timings || timingsOutput != nil), !route.supportsPhaseTimings {
+            throw ValidationError(
+                "--timings and --timings-output require an LTX 2.3 split model, --variant unified-av, or --audio."
+            )
+        }
+        if route == .unifiedAV,
            isLTX23AudioToVideoModelRoot(rootURL),
            !isLTX23FullModelRoot(rootURL) {
             throw ValidationError(
@@ -696,12 +729,36 @@ struct VideoGenerate: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("Engine: native\n")
             CLIStderr.write("Variant: \(variant.rawValue)\n")
+            CLIStderr.write("Runtime lane: \(route.rawValue)\n")
             CLIStderr.write("Model root: \(rootURL.path)\n")
             CLIStderr.write("Mode: \(sourceImageURL == nil ? "text-to-video" : "image-to-video")\n")
         }
 
-        switch variant {
-        case .distilled:
+        let unifiedOptions = LTXUnifiedAVGenerationOptions(
+            prompt: prompt,
+            negativePrompt: negativePrompt ?? LTXUnifiedAVGenerationOptions.defaultNegativePrompt,
+            width: width,
+            height: height,
+            numFrames: numFrames,
+            fps: fps,
+            seed: seed,
+            inferenceSteps: inferenceSteps,
+            videoGuidance: LTXMultiModalGuidance(
+                classifierFreeScale: videoCFGGuidanceScale,
+                modalityScale: audioToVideoGuidanceScale
+            ),
+            audioGuidance: LTXMultiModalGuidance(
+                classifierFreeScale: audioCFGGuidanceScale,
+                modalityScale: videoToAudioGuidanceScale
+            ),
+            sourceImageURL: sourceImageURL,
+            imageStrength: imageStrength,
+            endImageURL: endImageURL,
+            endImageStrength: endImageStrength
+        )
+
+        switch route {
+        case .legacyDistilledVideo:
             if !quiet {
                 CLIStderr.write("Loading native distilled model...\n")
             }
@@ -746,6 +803,59 @@ struct VideoGenerate: AsyncParsableCommand {
                 throw error
             }
 
+        case .splitDistilledVideo:
+            let endToEndStart = videoMonotonicSeconds()
+            if !quiet {
+                CLIStderr.write("Loading native LTX 2.3 split distilled model for video-only output...\n")
+            }
+            let generator = LTXUnifiedAVGenerator()
+            do {
+                let loadTimings = try await generator.loadVideoOnly(modelRoot: rootURL)
+                if !quiet {
+                    CLIStderr.write(
+                        "Running standalone distilled joint denoising + video decode (audio output disabled)...\n"
+                    )
+                }
+                let result = try await generator.generateVideoOnly(options: unifiedOptions)
+                let unloadStart = videoMonotonicSeconds()
+                await generator.unload()
+                let unloadSeconds = videoMonotonicSeconds() - unloadStart
+
+                if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {
+                    let base = URL(fileURLWithPath: debugPrefix).standardizedFileURL
+                    let parent = base.deletingLastPathComponent()
+                    try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+                    let stem = base.lastPathComponent
+                    try MLX.save(array: result.frames, url: parent.appendingPathComponent("\(stem)_frames.npy"))
+                    try MLX.save(array: result.videoLatents, url: parent.appendingPathComponent("\(stem)_latents.npy"))
+                }
+
+                if !quiet {
+                    CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
+                    CLIStderr.write("Writing video-only MP4...\n")
+                }
+                let writeStart = videoMonotonicSeconds()
+                try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+                let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
+                try emitLTXVideoTimingReport(
+                    LTXVideoTimingReport(
+                        mode: "standalone-distilled-video-only",
+                        modelRoot: rootURL.path,
+                        residentModelReused: false,
+                        load: loadTimings,
+                        generation: result.timings,
+                        unloadSeconds: unloadSeconds,
+                        mp4WriteSeconds: mp4WriteSeconds,
+                        totalSeconds: videoMonotonicSeconds() - endToEndStart
+                    ),
+                    printToStandardError: timings,
+                    outputPath: timingsOutput
+                )
+            } catch {
+                await generator.unload()
+                throw error
+            }
+
         case .unifiedAV:
             let endToEndStart = videoMonotonicSeconds()
             if !quiet {
@@ -765,31 +875,7 @@ struct VideoGenerate: AsyncParsableCommand {
                         : "standalone distilled two-stage"
                     CLIStderr.write("Running \(lane) unified AV denoising + decode...\n")
                 }
-                let result = try await generator.generate(
-                    options: LTXUnifiedAVGenerationOptions(
-                        prompt: prompt,
-                        negativePrompt: negativePrompt
-                            ?? LTXUnifiedAVGenerationOptions.defaultNegativePrompt,
-                        width: width,
-                        height: height,
-                        numFrames: numFrames,
-                        fps: fps,
-                        seed: seed,
-                        inferenceSteps: inferenceSteps,
-                        videoGuidance: LTXMultiModalGuidance(
-                            classifierFreeScale: videoCFGGuidanceScale,
-                            modalityScale: audioToVideoGuidanceScale
-                        ),
-                        audioGuidance: LTXMultiModalGuidance(
-                            classifierFreeScale: audioCFGGuidanceScale,
-                            modalityScale: videoToAudioGuidanceScale
-                        ),
-                        sourceImageURL: sourceImageURL,
-                        imageStrength: imageStrength,
-                        endImageURL: endImageURL,
-                        endImageStrength: endImageStrength
-                    )
-                )
+                let result = try await generator.generate(options: unifiedOptions)
                 let unloadStart = videoMonotonicSeconds()
                 await generator.unload()
                 let unloadSeconds = videoMonotonicSeconds() - unloadStart
@@ -871,6 +957,8 @@ struct VideoGenerate: AsyncParsableCommand {
             imageStrength: imageStrength,
             endImage: endImage,
             endImageStrength: endImageStrength,
+            timings: timings,
+            timingsOutput: timingsOutput,
             generationArgv: generationActionArguments(outputURL: outputURL),
             cwd: fileManager.currentDirectoryPath
         )

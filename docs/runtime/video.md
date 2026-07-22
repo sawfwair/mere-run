@@ -183,6 +183,9 @@ and reference/mask ordering is preserved.
 
 The default `distilled` lane is the speed path. It generates video-only MP4s
 and is the right first pass for prompt, camera, subject, and composition checks.
+For the current split-layout LTX 2.3 model, it retains the joint AV denoising
+tokens that influence video through audio-to-video cross attention, but skips
+loading and decoding the audio VAE/vocoder and writes no audio stream.
 
 ```bash
 swift run mere.run video generate \

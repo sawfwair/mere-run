@@ -1715,7 +1715,8 @@ swift run mere.run video generate "<prompt>" [options]
 
 Key options:
 
-- `--variant`: `distilled` or `unified-av`
+- `--variant`: `distilled` for video-only output from current split or legacy
+  merged LTX roots, or `unified-av` for synchronized audio/video
 - `--model-root`
 - `--output`
 - `--width`, `--height`
@@ -1739,7 +1740,8 @@ Key options:
 - `--end-image-strength`
 - `--preflight`
 - `--json`: only with `--preflight`
-- `--timings`: native LTX 2.3 unified-AV/A2Vid phase timings on stderr
+- `--timings`: native LTX 2.3 split-distilled, unified-AV, or A2Vid phase
+  timings on stderr; unavailable for legacy merged distilled roots
 - `--timings-output`: write those timings as JSON
 - `--quiet`
 
@@ -1757,6 +1759,11 @@ for clip length so the CLI can choose the nearest legal `8n+1` frame count.
 Use the default `distilled` lane for faster video-only drafts. Use
 `--variant unified-av --model video-ltx23-full-mlx` for the current high-quality
 synchronized audio/video lane.
+
+On `video-ltx23-av-mlx`, distilled generation uses the split-layout LTX 2.3
+transformer and preserves its joint audio/video denoising contract because
+audio-to-video cross attention contributes to the video result. It skips
+loading the audio VAE and vocoder, and the resulting MP4 has no audio stream.
 
 With `--audio`, the command resolves `video-ltx23-full-mlx` automatically.
 The full/dev transformer performs guided half-resolution denoising with frozen
@@ -1780,7 +1787,8 @@ Preflight mode:
   audio offset, seed, input mode, whether audio conditions generation, whether
   the source soundtrack is preserved, diagnostics, and declarative actions.
 - blockers such as a missing model root, missing image, invalid frame rate, or
-  `--end-image` without `--image` produce JSON and a nonzero exit.
+  `--end-image` without `--image` produce JSON and a nonzero exit. Requesting
+  phase timings on a legacy merged distilled root or Wan2.2 is also blocked.
 - notes such as dimension/frame snapping remain machine-readable so a UI can
   explain the exact render that will run.
 

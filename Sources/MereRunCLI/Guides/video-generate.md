@@ -8,8 +8,9 @@ Generate an MP4 video from text, optionally anchored by a source image, with nat
 
 Managed ids:
 
-- `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX root for fast
-  video-only drafts.
+- `video-ltx23-av-mlx`: split-layout standalone distilled LTX 2.3 MLX root for
+  fast video-only drafts. The default `distilled` variant uses this model
+  directly and writes an MP4 without an audio stream.
 - `video-ltx23-full-mlx`: dev checkpoint, official distilled LoRA, vocoder,
   VAEs, and x2 upscaler for both high-quality synchronized `--variant unified-av`
   and native source-audio-conditioned video.
@@ -32,8 +33,9 @@ mere.run video generate --help
 - positional prompt: video prompt.
 - `--output`, `-o`: MP4 path.
 - `--model`, `-m`: managed id or local model root.
-- `--variant`: `distilled` for faster video-only drafts, or `unified-av` for
-  synchronized audio/video.
+- `--variant`: `distilled` for faster video-only drafts from current LTX 2.3
+  split roots or legacy merged roots, or `unified-av` for synchronized
+  audio/video.
 - `--model-root`: explicit local root, takes precedence over `--model`.
 - `--width`, `--height`: output size; snapped down to multiples of 64.
 - `--num-frames`: frame count; adjusted to `8n+1`.
@@ -56,8 +58,9 @@ mere.run video generate --help
   writing an MP4.
 - `--json`: with `--preflight`, emit a structured report with diagnostics and
   declarative follow-up actions.
-- `--timings`: print native LTX 2.3 unified-AV/A2Vid load, generation, decode,
-  write, and end-to-end phase timings to stderr.
+- `--timings`: print native LTX 2.3 split-distilled, unified-AV, or A2Vid load,
+  generation, decode, write, and end-to-end phase timings to stderr. Legacy
+  merged distilled roots do not expose phase timings.
 - `--timings-output`: write those timings as JSON.
 - `--quiet`, `-q`: suppress diagnostics.
 
@@ -70,13 +73,18 @@ mere.run video generate --help
 - Keep early drafts short: `--num-frames 65` at `24` fps is a fast test.
 - Use `video-ltx23-full-mlx --variant unified-av --fps 24` for representative
   LTX 2.3 dialogue, score, and SFX checks.
+- Split-layout distilled generation retains the model's joint audio/video
+  denoising tokens because audio-to-video cross attention contributes to the
+  video result, but skips loading the audio VAE/vocoder and never writes an
+  audio track.
 - Use standard aspect ratios before custom sizes.
 - With `--audio`, the source latent stays frozen through the guided full/dev
   stage and distilled-LoRA refinement; the selected source segment is muxed as
   the soundtrack. Short audio and incompatible models fail without fallback.
 - Use `--preflight --json` before long renders to confirm model availability,
   keyframe paths, output overwrite risk, resolved dimensions, and resolved
-  frame count/duration.
+  frame count/duration. Preflight also rejects `--timings` for legacy merged
+  distilled roots and Wan2.2 before generation starts.
 
 ## Examples
 

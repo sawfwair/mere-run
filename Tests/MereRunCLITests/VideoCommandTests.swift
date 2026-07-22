@@ -301,17 +301,39 @@ final class VideoCommandTests: XCTestCase {
     }
 
     func testVideoGenerateRejectsTimingOptionsForUnsupportedLane() async throws {
+        let modelRoot = try makeValidLTXModelRoot()
         let cmd = try VideoGenerate.parse([
             "a cinematic drone flythrough",
             "--timings",
+            "--model-root", modelRoot.path,
         ])
 
         do {
             try await cmd.run()
-            XCTFail("Expected timing options without unified AV or A2Vid to fail validation.")
+            XCTFail("Expected timing options with the legacy distilled lane to fail validation.")
         } catch {
-            XCTAssertTrue(String(describing: error).contains("require --variant unified-av or --audio"))
+            XCTAssertTrue(String(describing: error).contains("require an LTX 2.3 split model"))
         }
+    }
+
+    func testLTXVideoGenerationRoutePreservesLayoutAndAudioContracts() throws {
+        let legacyRoot = try makeValidLTXModelRoot()
+        let splitRoot = try makeValidSplitDistilledModelRoot()
+
+        let legacy = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: legacyRoot)
+        XCTAssertEqual(legacy, .legacyDistilledVideo)
+        XCTAssertFalse(legacy.writesAudio)
+        XCTAssertFalse(legacy.supportsPhaseTimings)
+
+        let split = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: splitRoot)
+        XCTAssertEqual(split, .splitDistilledVideo)
+        XCTAssertFalse(split.writesAudio)
+        XCTAssertTrue(split.supportsPhaseTimings)
+
+        let unified = resolveLTXVideoGenerationRoute(variant: .unifiedAV, modelRoot: splitRoot)
+        XCTAssertEqual(unified, .unifiedAV)
+        XCTAssertTrue(unified.writesAudio)
+        XCTAssertTrue(unified.supportsPhaseTimings)
     }
 
     func testVideoSessionParsesDefaults() throws {
@@ -490,6 +512,57 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(envelope.result.model.layout, "ltx23_full_split")
         XCTAssertEqual(envelope.result.plan.variant, "unified-av")
         XCTAssertTrue(envelope.result.plan.writesAudio)
+    }
+
+    func testVideoGenerateSplitDistilledPreflightReportsVideoOnlyContract() throws {
+        let modelRoot = try makeValidSplitDistilledModelRoot()
+        let output = makeTempOutput(name: "draft.mp4")
+        let timingsOutput = makeTempOutput(name: "draft-timings.json")
+        let cmd = try VideoGenerate.parse([
+            "a fox runs across snow",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--timings",
+            "--timings-output", timingsOutput.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.layout, "ltx23_distilled_split")
+        XCTAssertEqual(envelope.result.plan.variant, "distilled")
+        XCTAssertFalse(envelope.result.plan.writesAudio)
+        XCTAssertEqual(envelope.request.timings, true)
+        XCTAssertEqual(envelope.request.timingsOutput, timingsOutput.path)
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "timings_lane_unsupported" })
+    }
+
+    func testVideoGenerateLegacyDistilledPreflightBlocksPhaseTimings() throws {
+        let modelRoot = try makeValidLTXModelRoot()
+        let output = makeTempOutput(name: "draft.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a fox runs across snow",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--timings",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "timings_lane_unsupported" })
     }
 
     func testVideoGenerateA2VidPreflightBlocksIncompatibleManagedModel() throws {
@@ -767,6 +840,22 @@ final class VideoCommandTests: XCTestCase {
         ] {
             try createFile(rootURL.appendingPathComponent(name))
         }
+        return rootURL
+    }
+
+    private func makeValidSplitDistilledModelRoot() throws -> URL {
+        let rootURL = try makeTempDirectory()
+        for name in [
+            "split_model.json",
+            "transformer-distilled.safetensors",
+            "vae_decoder.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+        ] {
+            try createFile(rootURL.appendingPathComponent(name))
+        }
+        try Data(#"{"model_version":"2.3"}"#.utf8).write(
+            to: rootURL.appendingPathComponent("config.json")
+        )
         return rootURL
     }
 

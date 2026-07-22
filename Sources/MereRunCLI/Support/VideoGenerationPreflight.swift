@@ -26,6 +26,8 @@ struct VideoGenerationPreflightInput {
     let imageStrength: Float
     let endImage: String?
     let endImageStrength: Float
+    let timings: Bool
+    let timingsOutput: String?
     let generationArgv: [String]
     let cwd: String
 }
@@ -54,6 +56,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let imageStrength: Float
     let endImage: String?
     let endImageStrength: Float
+    let timings: Bool?
+    let timingsOutput: String?
 
     enum CodingKeys: String, CodingKey {
         case prompt
@@ -79,6 +83,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case imageStrength = "image_strength"
         case endImage = "end_image"
         case endImageStrength = "end_image_strength"
+        case timings
+        case timingsOutput = "timings_output"
     }
 }
 
@@ -240,9 +246,10 @@ struct VideoGenerationPreflightAnalyzer {
         var diagnostics: [PreflightDiagnostic] = []
         validateStaticOptions(diagnostics: &diagnostics)
         let model = modelSummary(diagnostics: &diagnostics)
+        validateTimingOptions(model: model, diagnostics: &diagnostics)
         let output = outputSummary(diagnostics: &diagnostics)
         let inputs = inputSummary(diagnostics: &diagnostics)
-        let plan = planSummary(inputs: inputs, diagnostics: &diagnostics)
+        let plan = planSummary(model: model, inputs: inputs, diagnostics: &diagnostics)
         let status = StructuredRunOutput.status(for: diagnostics)
 
         return VideoGenerationPreflightEnvelope(
@@ -290,8 +297,60 @@ struct VideoGenerationPreflightAnalyzer {
             image: input.image,
             imageStrength: input.imageStrength,
             endImage: input.endImage,
-            endImageStrength: input.endImageStrength
+            endImageStrength: input.endImageStrength,
+            timings: input.timings,
+            timingsOutput: input.timingsOutput
         )
+    }
+
+    private func validateTimingOptions(
+        model: VideoGenerationModelPreflightSummary,
+        diagnostics: inout [PreflightDiagnostic]
+    ) {
+        guard input.timings || input.timingsOutput != nil else { return }
+        guard !usesAudioConditioning else { return }
+        guard !usesWanGeometry else {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "timings_lane_unsupported",
+                    severity: .blocker,
+                    title: "Phase timings are unavailable for this lane",
+                    message: "--timings and --timings-output are available for native LTX generation, not Wan2.2 TI2V."
+                )
+            )
+            return
+        }
+
+        let route = resolvedLTXRoute(model: model)
+        if route?.supportsPhaseTimings == false {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "timings_lane_unsupported",
+                    severity: .blocker,
+                    title: "Phase timings are unavailable for this lane",
+                    message: "Use an LTX 2.3 split model, --variant unified-av, or --audio for phase timings."
+                )
+            )
+        }
+    }
+
+    private func resolvedLTXRoute(
+        model: VideoGenerationModelPreflightSummary
+    ) -> LTXVideoGenerationRoute? {
+        if let path = model.path {
+            return resolveLTXVideoGenerationRoute(
+                variant: input.variant,
+                modelRoot: URL(fileURLWithPath: path),
+                fileManager: fileManager
+            )
+        }
+        if input.variant == .unifiedAV {
+            return .unifiedAV
+        }
+        if input.model == ModelResolver.ModelID.ltxVideo23AVMLX.rawValue {
+            return .splitDistilledVideo
+        }
+        return nil
     }
 
     private func validateStaticOptions(diagnostics: inout [PreflightDiagnostic]) {
@@ -794,6 +853,7 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func planSummary(
+        model: VideoGenerationModelPreflightSummary,
         inputs: VideoGenerationInputPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationPlanPreflightSummary {
@@ -852,6 +912,8 @@ struct VideoGenerationPreflightAnalyzer {
             )
         }
 
+        let routeWritesAudio = resolvedLTXRoute(model: model)?.writesAudio
+            ?? (input.variant == .unifiedAV)
         return VideoGenerationPlanPreflightSummary(
             variant: usesWanGeometry
                 ? "wan22-ti2v"
@@ -867,7 +929,7 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0 ? Double(resolvedFrames) / Double(input.fps) : nil,
             seed: input.seed ?? 42,
-            writesAudio: usesAudioConditioning || (!usesWanGeometry && input.variant == .unifiedAV),
+            writesAudio: usesAudioConditioning || (!usesWanGeometry && routeWritesAudio),
             audioConditioning: usesAudioConditioning,
             preservesSourceAudio: usesAudioConditioning,
             resolvedAudioStartTime: usesAudioConditioning ? input.audioStartTime : nil

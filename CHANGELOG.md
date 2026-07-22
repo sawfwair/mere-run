@@ -14,6 +14,14 @@ The format is based on Keep a Changelog.
   improvements while preserving the existing Mere launch and OpenAI-compatible
   API contract.
 
+### Fixed
+
+- fixed bare and explicit `video generate --variant distilled` requests on
+  LTX 2.3 split MLX roots. The CLI now routes those roots through the native V2
+  standalone-distilled transformer, preserves the video-only MP4 contract,
+  skips unnecessary audio VAE/vocoder loading and decoding, and exposes phase
+  timings without changing legacy merged distilled or unified-AV output.
+
 ## 0.25.0 - 2026-07-21
 
 This release contains every change merged since `v0.24.0` across native
