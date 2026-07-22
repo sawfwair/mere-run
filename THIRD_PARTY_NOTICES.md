@@ -399,8 +399,8 @@ limitations under the License.
 ### `vendor/ds4`
 
 - purpose: packaged DeepSeek V4 Flash runtime used by the premier setup-agent tier
-- upstream project: [`antirez/ds4`](https://github.com/antirez/ds4)
-- pinned upstream commit: `be434773fe1c0335d76896ea07f62a376cd629e5`
+- upstream project: [DwarfStar (`antirez/ds4`)](https://github.com/antirez/ds4)
+- pinned upstream commit: `efdadd41e20134af4f3381e1ed90e96fe4faef6f`
 - rebuild note: regenerated with [`scripts/rebuild_ds4.sh`](./scripts/rebuild_ds4.sh)
 - license: MIT
 
