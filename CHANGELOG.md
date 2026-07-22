@@ -4,7 +4,11 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.26.0 - 2026-07-22
+
+This release contains every change merged since `v0.25.0`: the LTX 2.3
+draft/final product contract, the refreshed DwarfStar runtime, and a broad
+documentation and CLI-help accuracy pass.
 
 ### Changed
 
@@ -12,27 +16,35 @@ The format is based on Keep a Changelog.
   now uses `--quality draft|final` and `--output-mode
   video-only|audio-video`, defaults to fast draft video-only, and supports the
   full dev + distilled-LoRA final pipeline without forcing an audio stream.
-  The former `--variant distilled|unified-av` selector remains compatible.
+  The former `--variant distilled|unified-av` selector remains compatible
+  (#206).
 - clarified the LTX product workflow around fast draft iteration and
   higher-quality final renders: audio suppression controls the deliverable,
-  while checkpoint selection controls the meaningful speed/quality tradeoff.
+  while checkpoint selection controls the meaningful speed/quality tradeoff
+  (#206).
 - refreshed the bundled DwarfStar runtime for the DeepSeek V4 Flash premier
   agent tier from upstream `be434773` to `efdadd41`, including the current
   Metal kernels, server request hardening, KV-cache fixes, and session/runtime
   improvements while preserving the existing Mere launch and OpenAI-compatible
-  API contract.
+  API contract (#204).
+- corrected drift and expanded coverage across the public CLI and docs,
+  including configuration, model runtime and benchmarking, API vision routes,
+  image, speech, text, video, vision, agent workflows, and site navigation
+  (#203).
 
 ### Fixed
 
 - fixed canonical `video-ltx23-full-mlx` inspection and validation when an
   existing compatible install still carries the legacy
   `video-ltx23-a2vid-mlx` manifest ID. Component reporting now uses the
-  requested full layout while retaining an explicit compatibility warning.
+  requested full layout while retaining an explicit compatibility warning
+  (#206).
 - fixed bare and explicit `video generate --variant distilled` requests on
   LTX 2.3 split MLX roots. The CLI now routes those roots through the native V2
   standalone-distilled transformer, preserves the video-only MP4 contract,
   skips unnecessary audio VAE/vocoder loading and decoding, and exposes phase
-  timings without changing legacy merged distilled or unified-AV output.
+  timings without changing legacy merged distilled or unified-AV output
+  (#206).
 
 ## 0.25.0 - 2026-07-21
 
