@@ -4,6 +4,16 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Changed
+
+- refreshed the bundled DwarfStar runtime for the DeepSeek V4 Flash premier
+  agent tier from upstream `be434773` to `efdadd41`, including the current
+  Metal kernels, server request hardening, KV-cache fixes, and session/runtime
+  improvements while preserving the existing Mere launch and OpenAI-compatible
+  API contract.
+
 ## 0.25.0 - 2026-07-21
 
 This release contains every change merged since `v0.24.0` across native

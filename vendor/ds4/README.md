@@ -1,11 +1,15 @@
 # vendor/ds4
 
-Prebuilt DeepSeek V4 Flash inference binaries vendored from
-[ds4](https://github.com/antirez/ds4.git) at commit `be434773fe1c0335d76896ea07f62a376cd629e5`.
+Prebuilt DwarfStar inference binaries for DeepSeek V4 Flash vendored from
+[antirez/ds4](https://github.com/antirez/ds4.git) at commit `efdadd41e20134af4f3381e1ed90e96fe4faef6f`.
 
 Rebuild with:
 
     scripts/rebuild_ds4.sh
+
+Release builds can preserve the hardened-runtime Developer ID signature with:
+
+    DS4_CODESIGN_IDENTITY=<certificate-fingerprint> scripts/rebuild_ds4.sh
 
 Binaries:
 - `ds4`         interactive CLI (not used by mere.run runtime; included for parity)

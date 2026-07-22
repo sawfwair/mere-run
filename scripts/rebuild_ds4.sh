@@ -14,12 +14,15 @@ set -euo pipefail
 #   DS4_COMMIT        Override the pinned upstream commit.
 #   DS4_URL           Override the upstream git URL.
 #   DS4_LOCAL_SOURCE  If set, build from this local checkout instead of cloning.
+#   DS4_CODESIGN_IDENTITY
+#                      Optional macOS signing identity or certificate fingerprint.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR_DIR="${ROOT_DIR}/vendor/ds4"
-DS4_COMMIT="${DS4_COMMIT:-be434773fe1c0335d76896ea07f62a376cd629e5}"
+DS4_COMMIT="${DS4_COMMIT:-efdadd41e20134af4f3381e1ed90e96fe4faef6f}"
 DS4_URL="${DS4_URL:-https://github.com/antirez/ds4.git}"
 DS4_LOCAL_SOURCE="${DS4_LOCAL_SOURCE:-}"
+DS4_CODESIGN_IDENTITY="${DS4_CODESIGN_IDENTITY:-}"
 
 require_tool() {
   local tool="$1"
@@ -78,6 +81,22 @@ cp "${source_dir}/ds4-server" "${VENDOR_DIR}/ds4-server"
 cp "${source_dir}/ds4-bench" "${VENDOR_DIR}/ds4-bench"
 cp "${source_dir}/LICENSE" "${VENDOR_DIR}/LICENSE"
 chmod +x "${VENDOR_DIR}/ds4" "${VENDOR_DIR}/ds4-server" "${VENDOR_DIR}/ds4-bench"
+
+if [[ -n "$DS4_CODESIGN_IDENTITY" ]]; then
+  if [[ "$UNAME_S" != "Darwin" ]]; then
+    echo "[ds4] error: DS4_CODESIGN_IDENTITY is only supported on macOS." >&2
+    exit 1
+  fi
+  require_tool codesign
+  for executable_name in ds4 ds4-server ds4-bench; do
+    codesign \
+      --force \
+      --timestamp \
+      --options runtime \
+      --sign "$DS4_CODESIGN_IDENTITY" \
+      "${VENDOR_DIR}/${executable_name}"
+  done
+fi
 printf "%s\n" "${resolved_commit}" > "${VENDOR_DIR}/VERSION"
 
 # Metal shader sources are loaded at runtime relative to the process cwd, so we
@@ -90,12 +109,16 @@ fi
 cat > "${VENDOR_DIR}/README.md" <<EOF
 # vendor/ds4
 
-Prebuilt DeepSeek V4 Flash inference binaries vendored from
-[ds4](${DS4_URL}) at commit \`${resolved_commit}\`.
+Prebuilt DwarfStar inference binaries for DeepSeek V4 Flash vendored from
+[antirez/ds4](${DS4_URL}) at commit \`${resolved_commit}\`.
 
 Rebuild with:
 
     scripts/rebuild_ds4.sh
+
+Release builds can preserve the hardened-runtime Developer ID signature with:
+
+    DS4_CODESIGN_IDENTITY=<certificate-fingerprint> scripts/rebuild_ds4.sh
 
 Binaries:
 - \`ds4\`         interactive CLI (not used by mere.run runtime; included for parity)

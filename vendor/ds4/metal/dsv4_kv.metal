@@ -5,6 +5,10 @@ constant float dsv4_e4m3fn_exp_scale[16] = {
     32.0f, 64.0f, 128.0f, 256.0f,
 };
 
+constant float dsv4_e2m1fn_values[8] = {
+    0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f,
+};
+
 struct ds4_metal_args_dsv4_fp8_kv_quantize {
     int64_t ne00;
     int64_t ne01;
@@ -27,8 +31,21 @@ struct ds4_metal_args_dsv4_kv_fp8_store {
     int32_t raw_row;
 };
 
+struct ds4_metal_args_dsv4_indexer_qat {
+    uint32_t n_rows;
+    uint32_t head_dim;
+    uint64_t row_stride;
+};
+
 struct ds4_metal_args_dsv4_ratio4_shift {
     uint32_t width;
+};
+
+struct ds4_metal_args_dsv4_compressor_pack_ratio4 {
+    uint32_t head_dim;
+    uint32_t n_comp;
+    uint32_t replay;
+    uint32_t n_threads;
 };
 
 struct ds4_metal_args_dsv4_compressor_store_one {
@@ -71,6 +88,21 @@ static inline float dsv4_e4m3fn_dequant(float x) {
     }
 
     return sign * dsv4_e4m3fn_value(best);
+}
+
+static inline float dsv4_e2m1fn_dequant(float x) {
+    const float sign = x < 0.0f ? -1.0f : 1.0f;
+    const float ax = min(abs(x), 6.0f);
+    int best = 0;
+    float best_diff = abs(ax - dsv4_e2m1fn_values[0]);
+    for (int i = 1; i < 8; i++) {
+        const float diff = abs(ax - dsv4_e2m1fn_values[i]);
+        if (diff < best_diff || (diff == best_diff && ((i & 1) == 0) && ((best & 1) != 0))) {
+            best = i;
+            best_diff = diff;
+        }
+    }
+    return sign * dsv4_e2m1fn_values[best];
 }
 
 // Quantizes the non-RoPE part of a KV row through E4M3FN and writes the
@@ -126,6 +158,56 @@ kernel void kernel_dsv4_fp8_kv_quantize_f32(
     }
 }
 
+// The official DS4 indexer applies a 128-wide Hadamard rotation and then an
+// inplace FP4 activation-simulation pass to both indexer Q and indexer KV.
+kernel void kernel_dsv4_indexer_hadamard_fp4_f32(
+        constant ds4_metal_args_dsv4_indexer_qat & args,
+        device   char  * x,
+        threadgroup float * scratch [[threadgroup(0)]],
+        uint row [[threadgroup_position_in_grid]],
+        uint tid [[thread_position_in_threadgroup]]) {
+    if (row >= args.n_rows || args.head_dim != 128u || tid >= 128u) {
+        return;
+    }
+
+    threadgroup float *vals = scratch;
+    threadgroup float *absbuf = scratch + 128;
+    device float *xr = (device float *)(x + (uint64_t)row * args.row_stride);
+
+    vals[tid] = xr[tid];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (uint stride = 1u; stride < 128u; stride <<= 1u) {
+        if ((tid & stride) == 0u) {
+            const uint base = (tid & ~(2u * stride - 1u)) + (tid & (stride - 1u));
+            const float a = vals[base];
+            const float b = vals[base + stride];
+            vals[base] = a + b;
+            vals[base + stride] = a - b;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    float v = vals[tid] * 0.08838834764831845f;
+    const uint block = tid >> 5u;
+    const uint lane = tid & 31u;
+    const uint block_base = block * 32u;
+    absbuf[tid] = abs(v);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (uint stride = 16u; stride > 0u; stride >>= 1u) {
+        if (lane < stride) {
+            absbuf[block_base + lane] = max(absbuf[block_base + lane],
+                                            absbuf[block_base + lane + stride]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    const float amax = max(absbuf[block_base], 7.052966104933725e-38f);
+    const float scale = exp2(ceil(log2(amax / 6.0f)));
+    xr[tid] = dsv4_e2m1fn_dequant(clamp(v / scale, -6.0f, 6.0f)) * scale;
+}
+
 // Decode-side KV finalizer after RoPE. The normal RoPE kernel intentionally
 // remains separate because tiny trigonometric codegen changes can flip later
 // sampled tokens. This kernel only fuses the FP8 round-trip for the non-RoPE
@@ -167,13 +249,73 @@ kernel void kernel_dsv4_kv_fp8_store_f32(
         if (off + (int)tid < n_nope) {
             const float q = dsv4_e4m3fn_dequant(clamp(v / fp8_scale, -448.0f, 448.0f)) * fp8_scale;
             kv[off + tid] = q;
+            // Diagnostic only: skip the FP16 round-trip that normally matches the
+            // half-typed FlashAttention KV buffer's precision. With this enabled the
+            // indexer will see higher-precision raw values than FlashAttention does,
+            // which is informative but not a production-ready setting.
+#ifdef DS4_METAL_KV_RAW_F32
+            raw[off + tid] = q;
+#else
             raw[off + tid] = (float)((half)q);
+#endif
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 
     for (int i = n_nope + tid; i < head_dim; i += 64) {
+#ifdef DS4_METAL_KV_RAW_F32
+        raw[i] = kv[i];
+#else
         raw[i] = (float)((half)kv[i]);
+#endif
+    }
+}
+
+// Builds the two ratio-4 softmax-pool packs together. Each output plane holds
+// four previous-half rows followed by four current-half rows. Normal prefill
+// seeds plane zero with 0/-inf; replay seeds it from the previous compressor
+// state. Later planes take their previous half from the prior input group.
+kernel void kernel_dsv4_compressor_pack_ratio4(
+        constant ds4_metal_args_dsv4_compressor_pack_ratio4 & args,
+        device const uint * kv,
+        device const uint * score,
+        device const uint * state_kv,
+        device const uint * state_score,
+        device       uint * packed_kv,
+        device       uint * packed_score,
+        uint2 group [[threadgroup_position_in_grid]],
+        uint tid [[thread_index_in_threadgroup]]) {
+    if (group.x >= args.n_comp || group.y >= 8u ||
+        args.head_dim == 0u || args.n_threads == 0u) {
+        return;
+    }
+
+    const uint plane = group.x;
+    const uint row = group.y;
+    const uint64_t input_row_stride = 2ull * args.head_dim;
+    const uint64_t dst_row = ((uint64_t)plane * 8u + row) * args.head_dim;
+
+    for (uint col = tid; col < args.head_dim; col += args.n_threads) {
+        const uint64_t dst = dst_row + col;
+        if (row >= 4u) {
+            const uint token = plane * 4u + (row - 4u);
+            const uint64_t src = (uint64_t)token * input_row_stride +
+                                 args.head_dim + col;
+            packed_kv[dst] = kv[src];
+            packed_score[dst] = score[src];
+        } else if (plane != 0u) {
+            const uint token = (plane - 1u) * 4u + row;
+            const uint64_t src = (uint64_t)token * input_row_stride + col;
+            packed_kv[dst] = kv[src];
+            packed_score[dst] = score[src];
+        } else if (args.replay != 0u) {
+            const uint64_t src = (uint64_t)row * input_row_stride + col;
+            packed_kv[dst] = state_kv[src];
+            packed_score[dst] = state_score[src];
+        } else {
+            packed_kv[dst] = 0u;
+            packed_score[dst] = 0xff800000u;
+        }
     }
 }
 
