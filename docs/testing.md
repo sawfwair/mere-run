@@ -195,11 +195,13 @@ Use it to separate waveform/vocoder problems from mux or AAC encoding
 differences.
 
 `video-ltx23-full-mlx` is the managed LTX 2.3 dev + distilled-LoRA checkpoint
-for the high-quality two-stage `unified-av` and A2Vid paths. The standalone
-`video-ltx23-av-mlx` distilled split remains the fast draft lane. Both can be
-scanned by the comparison script after generating a sample. The Unsloth LTX 2.3
-GGUF checkpoints are a separate quantized runner shape, not a drop-in native
-MLX model root.
+for the high-quality two-stage `--quality final` and A2Vid paths. Generated
+audio is independently selected with `--output-mode audio-video`; leaving it
+off does not turn the full checkpoint into the fast lane. The standalone
+`video-ltx23-av-mlx` distilled split remains the fast `--quality draft` lane.
+Both can be scanned by the comparison script after generating a sample. The
+Unsloth LTX 2.3 GGUF checkpoints are a separate quantized runner shape, not a
+drop-in native MLX model root.
 
 ## End-to-end smoke tests
 

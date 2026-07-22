@@ -7,6 +7,10 @@ struct VideoGenerationPreflightInput {
     let outputURL: URL
     let model: String
     let variant: LTXVideoVariant
+    let quality: LTXVideoQuality?
+    let outputMode: LTXVideoOutputMode?
+    let legacyVariant: LTXVideoVariant?
+    let productSelectionValidationMessage: String?
     let modelRoot: String?
     let width: Int
     let height: Int
@@ -37,6 +41,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let output: String
     let model: String
     let variant: String
+    let quality: String?
+    let outputMode: String?
     let modelRoot: String?
     let width: Int
     let height: Int
@@ -64,6 +70,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case output
         case model
         case variant
+        case quality
+        case outputMode = "output_mode"
         case modelRoot = "model_root"
         case width
         case height
@@ -171,6 +179,8 @@ struct VideoGenerationPathPreflightSummary: Codable, Equatable {
 
 struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let variant: String
+    let quality: String?
+    let outputMode: String?
     let inputMode: String
     let requestedWidth: Int
     let requestedHeight: Int
@@ -189,6 +199,8 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case variant
+        case quality
+        case outputMode = "output_mode"
         case inputMode = "input_mode"
         case requestedWidth = "requested_width"
         case requestedHeight = "requested_height"
@@ -246,6 +258,7 @@ struct VideoGenerationPreflightAnalyzer {
         var diagnostics: [PreflightDiagnostic] = []
         validateStaticOptions(diagnostics: &diagnostics)
         let model = modelSummary(diagnostics: &diagnostics)
+        validateProductSelection(model: model, diagnostics: &diagnostics)
         validateTimingOptions(model: model, diagnostics: &diagnostics)
         let output = outputSummary(diagnostics: &diagnostics)
         let inputs = inputSummary(diagnostics: &diagnostics)
@@ -279,6 +292,8 @@ struct VideoGenerationPreflightAnalyzer {
             output: input.outputURL.path,
             model: input.model,
             variant: input.variant.rawValue,
+            quality: input.quality?.rawValue,
+            outputMode: input.outputMode?.rawValue,
             modelRoot: input.modelRoot,
             width: input.width,
             height: input.height,
@@ -328,7 +343,7 @@ struct VideoGenerationPreflightAnalyzer {
                     id: "timings_lane_unsupported",
                     severity: .blocker,
                     title: "Phase timings are unavailable for this lane",
-                    message: "Use an LTX 2.3 split model, --variant unified-av, or --audio for phase timings."
+                    message: "Use an LTX 2.3 split model, --quality final, --output-mode audio-video, or --audio for phase timings."
                 )
             )
         }
@@ -354,6 +369,26 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func validateStaticOptions(diagnostics: inout [PreflightDiagnostic]) {
+        if let message = input.productSelectionValidationMessage {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "video_product_selection_conflict",
+                    severity: .blocker,
+                    title: "Video product selection is ambiguous",
+                    message: message
+                )
+            )
+        }
+        if usesWanGeometry, input.quality != nil || input.outputMode != nil {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "ltx_product_selection_with_wan",
+                    severity: .blocker,
+                    title: "LTX product options do not apply to Wan",
+                    message: "--quality and --output-mode currently select native LTX generation, not Wan2.2 TI2V."
+                )
+            )
+        }
         if input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(
                 PreflightDiagnostic(
@@ -502,6 +537,41 @@ struct VideoGenerationPreflightAnalyzer {
                     message: "LTX audio/video is trained around 24 fps; --fps \(input.fps) can make motion look time-stretched relative to audio."
                 )
             )
+        }
+    }
+
+    private func validateProductSelection(
+        model: VideoGenerationModelPreflightSummary,
+        diagnostics: inout [PreflightDiagnostic]
+    ) {
+        guard let requestedQuality = input.quality,
+              let actualQuality = resolvedQuality(model: model),
+              requestedQuality != actualQuality else {
+            return
+        }
+        let requiredModel = requestedQuality == .final
+            ? ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+            : ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
+        diagnostics.append(
+            PreflightDiagnostic(
+                id: "video_quality_model_mismatch",
+                severity: .blocker,
+                title: "Checkpoint does not match requested quality",
+                message: "--quality \(requestedQuality.rawValue) requires \(requiredModel)."
+            )
+        )
+    }
+
+    private func resolvedQuality(
+        model: VideoGenerationModelPreflightSummary
+    ) -> LTXVideoQuality? {
+        switch model.layout {
+        case "ltx23_full_split", "ltx23_a2vid_split":
+            return .final
+        case "ltx23_distilled_split", "ltx_merged":
+            return .draft
+        default:
+            return nil
         }
     }
 
@@ -914,10 +984,15 @@ struct VideoGenerationPreflightAnalyzer {
 
         let routeWritesAudio = resolvedLTXRoute(model: model)?.writesAudio
             ?? (input.variant == .unifiedAV)
+        let resolvedOutputMode: LTXVideoOutputMode? = usesWanGeometry
+            ? nil
+            : (usesAudioConditioning || input.variant == .unifiedAV ? .audioVideo : .videoOnly)
         return VideoGenerationPlanPreflightSummary(
             variant: usesWanGeometry
                 ? "wan22-ti2v"
                 : (usesAudioConditioning ? "audio-to-video" : input.variant.rawValue),
+            quality: resolvedQuality(model: model)?.rawValue,
+            outputMode: resolvedOutputMode?.rawValue,
             inputMode: inputs.mode,
             requestedWidth: input.width,
             requestedHeight: input.height,

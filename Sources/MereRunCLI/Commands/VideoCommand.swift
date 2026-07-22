@@ -9,9 +9,28 @@ enum LTXVideoVariant: String, CaseIterable, ExpressibleByArgument {
     case distilled = "distilled"
 }
 
+enum LTXVideoQuality: String, CaseIterable, ExpressibleByArgument {
+    case draft
+    case final
+}
+
+enum LTXVideoOutputMode: String, CaseIterable, ExpressibleByArgument {
+    case videoOnly = "video-only"
+    case audioVideo = "audio-video"
+
+    var writesAudio: Bool {
+        self == .audioVideo
+    }
+
+    var compatibilityVariant: LTXVideoVariant {
+        writesAudio ? .unifiedAV : .distilled
+    }
+}
+
 enum LTXVideoGenerationRoute: String, Equatable {
     case legacyDistilledVideo = "legacy-distilled-video"
     case splitDistilledVideo = "split-distilled-video"
+    case fullQualityVideo = "full-quality-video"
     case unifiedAV = "unified-av"
 
     var writesAudio: Bool {
@@ -24,18 +43,33 @@ enum LTXVideoGenerationRoute: String, Equatable {
 }
 
 func resolveLTXVideoGenerationRoute(
-    variant: LTXVideoVariant,
+    outputMode: LTXVideoOutputMode,
     modelRoot: URL,
     fileManager: FileManager = .default
 ) -> LTXVideoGenerationRoute {
-    switch variant {
-    case .unifiedAV:
+    switch outputMode {
+    case .audioVideo:
         return .unifiedAV
-    case .distilled:
+    case .videoOnly:
+        if isLTX23AudioToVideoModelRoot(modelRoot, fileManager: fileManager) {
+            return .fullQualityVideo
+        }
         return isLTX23SplitModelRoot(modelRoot, fileManager: fileManager)
             ? .splitDistilledVideo
             : .legacyDistilledVideo
     }
+}
+
+func resolveLTXVideoGenerationRoute(
+    variant: LTXVideoVariant,
+    modelRoot: URL,
+    fileManager: FileManager = .default
+) -> LTXVideoGenerationRoute {
+    resolveLTXVideoGenerationRoute(
+        outputMode: variant == .unifiedAV ? .audioVideo : .videoOnly,
+        modelRoot: modelRoot,
+        fileManager: fileManager
+    )
 }
 
 struct Video: AsyncParsableCommand {
@@ -164,17 +198,22 @@ struct VideoGenerate: AsyncParsableCommand {
         Prints the output MP4 path to stdout.
         Progress and diagnostics are printed to stderr.
 
-        Use the default distilled variant for faster video-only drafts. Use
-        --variant unified-av for synchronized audio/video from the full LTX 2.3
-        dev + distilled-LoRA bundle. Supplying --audio uses that same full model
-        for native two-stage A2Vid and preserves the selected source segment as
-        the soundtrack.
+        Quality and output are separate choices. The default is a fast draft
+        checkpoint with video-only output. Use --quality final for the full LTX
+        2.3 dev + distilled-LoRA quality pipeline, and --output-mode audio-video
+        when synchronized generated audio is part of the deliverable. Supplying
+        --audio uses the full model for native two-stage A2Vid and preserves the
+        selected source segment as the soundtrack.
+
+        --variant distilled|unified-av remains available for compatibility. Do
+        not combine it with --quality or --output-mode.
 
         Examples:
           swift run mere.run video generate "a cinematic drone flythrough over snowy mountains" --num-frames 65
           swift run mere.run video generate "woman walking in neon rain" --image frame.png
           swift run mere.run video generate "a car drives from dawn into sunset" --image start.png --end-image end.png
-          swift run mere.run video generate "dialogue with clean background music" --variant unified-av --model video-ltx23-full-mlx --duration 15 --fps 24
+          swift run mere.run video generate "a cinematic final shot" --quality final --duration 4
+          swift run mere.run video generate "dialogue with clean background music" --quality final --output-mode audio-video --duration 15 --fps 24
           swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
           swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
         """
@@ -189,8 +228,14 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Managed video model id or local model root. Defaults by operation.")
     var model: String = ""
 
-    @Option(name: [.customLong("variant")], help: "Native LTX lane: distilled for faster video-only drafts, unified-av for synchronized audio/video.")
-    var variant: LTXVideoVariant = .distilled
+    @Option(name: [.customLong("quality")], help: "LTX checkpoint quality: draft uses standalone distilled; final uses dev + distilled-LoRA.")
+    var quality: LTXVideoQuality?
+
+    @Option(name: [.customLong("output-mode")], help: "LTX deliverable: video-only or synchronized audio-video.")
+    var outputMode: LTXVideoOutputMode?
+
+    @Option(name: [.customLong("variant")], help: "Compatibility selector: distilled defaults to draft video-only; unified-av defaults to final audio-video.")
+    var legacyVariant: LTXVideoVariant?
 
     @Option(name: [.customLong("model-root")], help: "Local LTX model root. Takes precedence over --model.")
     var modelRoot: String?
@@ -273,13 +318,51 @@ struct VideoGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    var variant: LTXVideoVariant {
+        effectiveOutputMode.compatibilityVariant
+    }
+
+    var requestedQuality: LTXVideoQuality {
+        if audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return .final
+        }
+        if let quality {
+            return quality
+        }
+        return legacyVariant == .unifiedAV ? .final : .draft
+    }
+
+    var effectiveOutputMode: LTXVideoOutputMode {
+        if audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return .audioVideo
+        }
+        if let outputMode {
+            return outputMode
+        }
+        return legacyVariant == .unifiedAV ? .audioVideo : .videoOnly
+    }
+
+    var productSelectionValidationMessage: String? {
+        if legacyVariant != nil, quality != nil || outputMode != nil {
+            return "Use --quality/--output-mode or the compatibility --variant option, not both."
+        }
+        let hasSourceAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        if hasSourceAudio, quality == .draft {
+            return "--audio requires --quality final because source-audio conditioning uses the dev + distilled-LoRA checkpoint."
+        }
+        if hasSourceAudio, outputMode == .videoOnly {
+            return "--audio preserves the selected soundtrack and requires --output-mode audio-video."
+        }
+        return nil
+    }
+
     var resolvedRequestedModel: String {
         let requested = model.trimmingCharacters(in: .whitespacesAndNewlines)
         if !requested.isEmpty {
             return requested
         }
         let hasAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        if hasAudio || variant == .unifiedAV {
+        if hasAudio || requestedQuality == .final {
             return ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
         }
         return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
@@ -294,6 +377,10 @@ struct VideoGenerate: AsyncParsableCommand {
         if preflight {
             try runPreflight(outputURL: outputURL)
             return
+        }
+
+        if let productSelectionValidationMessage {
+            throw ValidationError(productSelectionValidationMessage)
         }
 
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -401,6 +488,7 @@ struct VideoGenerate: AsyncParsableCommand {
         ).path
 
         let resolvedRootURL = URL(fileURLWithPath: resolvedModelRoot).standardizedFileURL
+        try validateProductSelection(modelRoot: resolvedRootURL)
         if let sourceAudioURL {
             try validateNativeAudioToVideoModelRoot(resolvedRootURL)
             try await runNativeAudioToVideoGenerate(
@@ -498,7 +586,7 @@ struct VideoGenerate: AsyncParsableCommand {
             numFrames: resolvedNumFrames,
             fps: fps,
             seed: seed ?? 42,
-            variant: variant,
+            outputMode: effectiveOutputMode,
             negativePrompt: negativePrompt,
             inferenceSteps: a2vSteps,
             videoCFGGuidanceScale: videoCFGGuidanceScale,
@@ -512,6 +600,31 @@ struct VideoGenerate: AsyncParsableCommand {
             modelRoot: resolvedModelRoot,
             outputURL: outputURL
         )
+    }
+
+    private func validateProductSelection(modelRoot: URL) throws {
+        if isWan2ModelRoot(modelRoot) {
+            if quality != nil || outputMode != nil {
+                throw ValidationError("--quality and --output-mode currently select native LTX generation, not Wan2.2 TI2V.")
+            }
+            return
+        }
+        guard let quality else { return }
+        switch quality {
+        case .draft:
+            guard !isLTX23FullModelRoot(modelRoot), !isLTX23AudioToVideoModelRoot(modelRoot) else {
+                throw ValidationError(
+                    "--quality draft requires \(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue), not the full dev checkpoint."
+                )
+            }
+        case .final:
+            let supportsRequestedFinalPath = isLTX23AudioToVideoModelRoot(modelRoot)
+            guard supportsRequestedFinalPath else {
+                throw ValidationError(
+                    "--quality final requires \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
+                )
+            }
+        }
     }
 
     private func isWan2ModelRoot(_ rootURL: URL) -> Bool {
@@ -695,7 +808,7 @@ struct VideoGenerate: AsyncParsableCommand {
         numFrames: Int,
         fps: Int,
         seed: Int,
-        variant: LTXVideoVariant,
+        outputMode: LTXVideoOutputMode,
         negativePrompt: String?,
         inferenceSteps: Int,
         videoCFGGuidanceScale: Float,
@@ -710,10 +823,10 @@ struct VideoGenerate: AsyncParsableCommand {
         outputURL: URL
     ) async throws {
         let rootURL = URL(fileURLWithPath: modelRoot).standardizedFileURL
-        let route = resolveLTXVideoGenerationRoute(variant: variant, modelRoot: rootURL)
+        let route = resolveLTXVideoGenerationRoute(outputMode: outputMode, modelRoot: rootURL)
         if (timings || timingsOutput != nil), !route.supportsPhaseTimings {
             throw ValidationError(
-                "--timings and --timings-output require an LTX 2.3 split model, --variant unified-av, or --audio."
+                "--timings and --timings-output require an LTX 2.3 split model, --quality final, --output-mode audio-video, or --audio."
             )
         }
         if route == .unifiedAV,
@@ -728,7 +841,8 @@ struct VideoGenerate: AsyncParsableCommand {
 
         if !quiet {
             CLIStderr.write("Engine: native\n")
-            CLIStderr.write("Variant: \(variant.rawValue)\n")
+            CLIStderr.write("Quality: \(isLTX23AudioToVideoModelRoot(rootURL) ? LTXVideoQuality.final.rawValue : LTXVideoQuality.draft.rawValue)\n")
+            CLIStderr.write("Output mode: \(outputMode.rawValue)\n")
             CLIStderr.write("Runtime lane: \(route.rawValue)\n")
             CLIStderr.write("Model root: \(rootURL.path)\n")
             CLIStderr.write("Mode: \(sourceImageURL == nil ? "text-to-video" : "image-to-video")\n")
@@ -856,6 +970,59 @@ struct VideoGenerate: AsyncParsableCommand {
                 throw error
             }
 
+        case .fullQualityVideo:
+            let endToEndStart = videoMonotonicSeconds()
+            if !quiet {
+                CLIStderr.write("Loading native LTX 2.3 full-quality model for video-only output...\n")
+            }
+            let generator = LTXUnifiedAVGenerator()
+            do {
+                let loadTimings = try await generator.loadFullVideoOnly(modelRoot: rootURL)
+                if !quiet {
+                    CLIStderr.write(
+                        "Running guided dev stage 1 + distilled-LoRA stage 2 (audio output disabled)...\n"
+                    )
+                }
+                let result = try await generator.generateVideoOnly(options: unifiedOptions)
+                let unloadStart = videoMonotonicSeconds()
+                await generator.unload()
+                let unloadSeconds = videoMonotonicSeconds() - unloadStart
+
+                if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {
+                    let base = URL(fileURLWithPath: debugPrefix).standardizedFileURL
+                    let parent = base.deletingLastPathComponent()
+                    try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+                    let stem = base.lastPathComponent
+                    try MLX.save(array: result.frames, url: parent.appendingPathComponent("\(stem)_frames.npy"))
+                    try MLX.save(array: result.videoLatents, url: parent.appendingPathComponent("\(stem)_latents.npy"))
+                }
+
+                if !quiet {
+                    CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
+                    CLIStderr.write("Writing full-quality video-only MP4...\n")
+                }
+                let writeStart = videoMonotonicSeconds()
+                try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+                let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
+                try emitLTXVideoTimingReport(
+                    LTXVideoTimingReport(
+                        mode: "full-video-only",
+                        modelRoot: rootURL.path,
+                        residentModelReused: false,
+                        load: loadTimings,
+                        generation: result.timings,
+                        unloadSeconds: unloadSeconds,
+                        mp4WriteSeconds: mp4WriteSeconds,
+                        totalSeconds: videoMonotonicSeconds() - endToEndStart
+                    ),
+                    printToStandardError: timings,
+                    outputPath: timingsOutput
+                )
+            } catch {
+                await generator.unload()
+                throw error
+            }
+
         case .unifiedAV:
             let endToEndStart = videoMonotonicSeconds()
             if !quiet {
@@ -938,6 +1105,10 @@ struct VideoGenerate: AsyncParsableCommand {
             outputURL: outputURL,
             model: resolvedRequestedModel,
             variant: variant,
+            quality: quality,
+            outputMode: outputMode,
+            legacyVariant: legacyVariant,
+            productSelectionValidationMessage: productSelectionValidationMessage,
             modelRoot: modelRoot,
             width: width,
             height: height,
@@ -994,8 +1165,6 @@ struct VideoGenerate: AsyncParsableCommand {
             outputURL.path,
             "--model",
             resolvedRequestedModel,
-            "--variant",
-            variant.rawValue,
             "--width",
             String(width),
             "--height",
@@ -1005,6 +1174,15 @@ struct VideoGenerate: AsyncParsableCommand {
             "--fps",
             String(fps),
         ]
+        if let quality {
+            args += ["--quality", quality.rawValue]
+        }
+        if let outputMode {
+            args += ["--output-mode", outputMode.rawValue]
+        }
+        if let legacyVariant {
+            args += ["--variant", legacyVariant.rawValue]
+        }
         if let duration {
             args += ["--duration", String(duration)]
         }
@@ -1014,7 +1192,7 @@ struct VideoGenerate: AsyncParsableCommand {
         if let negativePrompt {
             args += ["--negative-prompt", negativePrompt]
         }
-        if audio != nil || variant == .unifiedAV {
+        if audio != nil || requestedQuality == .final || effectiveOutputMode == .audioVideo {
             args += [
                 "--a2v-guidance-scale", String(a2vGuidanceScale),
                 "--video-cfg-guidance-scale", String(videoCFGGuidanceScale),
@@ -1061,7 +1239,7 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
         return
     }
 
-    if isLTX23FullModelRoot(rootURL) || isLTX23SplitModelRoot(rootURL) {
+    if isLTX23AudioToVideoModelRoot(rootURL) || isLTX23SplitModelRoot(rootURL) {
         return
     }
 

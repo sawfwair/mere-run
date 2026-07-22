@@ -14,10 +14,10 @@ This page covers the native video-generation path exposed through `mere.run vide
 ## Model family
 
 - `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX checkpoint for fast
-  video-only drafts.
+  drafts. This is the default `--quality draft` checkpoint.
 - `video-ltx23-full-mlx`: LTX 2.3 dev checkpoint, official distilled LoRA,
   vocoder, VAEs, and x2 upscaler. This is the shared quality bundle for both
-  `--variant unified-av` and source-audio A2Vid.
+  `--quality final`, generated synchronized audio, and source-audio A2Vid.
 - `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs. New
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
@@ -181,8 +181,9 @@ and reference/mask ordering is preserved.
 
 ### Fast visual draft
 
-The default `distilled` lane is the speed path. It generates video-only MP4s
-and is the right first pass for prompt, camera, subject, and composition checks.
+The default `--quality draft` lane is the speed path. It generates video-only
+MP4s by default and is the right first pass for prompt, camera, subject, and
+composition checks.
 For the current split-layout LTX 2.3 model, it retains the joint AV denoising
 tokens that influence video through audio-to-video cross attention, but skips
 loading and decoding the audio VAE/vocoder and writes no audio stream.
@@ -190,8 +191,6 @@ loading and decoding the audio VAE/vocoder and writes no audio stream.
 ```bash
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4
 ```
@@ -204,8 +203,6 @@ should move toward a specific final keyframe.
 ```bash
 swift run mere.run video generate \
   "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --image ./car-start.png \
   --image-strength 0.9 \
   --end-image ./car-end.png \
@@ -217,7 +214,26 @@ swift run mere.run video generate \
 `--end-image` requires `--image`; the start conditioning wins if very short
 clips make the start and end latent conditioning windows overlap.
 
-### Synchronized AV quality render
+### Final-quality render
+
+Quality and output are independent choices. `--quality final` uses the full
+dev + distilled-LoRA two-stage pipeline and still writes a video-only MP4 by
+default:
+
+```bash
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
+swift run mere.run video generate \
+  "a red fox runs across a snowy clearing, detailed winter fur, natural motion" \
+  --quality final \
+  --duration 4 \
+  --output ./fox-final.mp4
+```
+
+This is the final-quality checkpoint with audio components omitted from the
+deliverable. It is not a separate speed optimization; the meaningful speed
+change comes from selecting the draft checkpoint.
+
+### Synchronized AV final render
 
 For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma
 3 companion:
@@ -226,8 +242,8 @@ For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma
 swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music" \
-  --variant unified-av \
-  --model video-ltx23-full-mlx \
+  --quality final \
+  --output-mode audio-video \
   --duration 15 \
   --fps 24 \
   --output ./ltx23.mp4
@@ -238,12 +254,12 @@ representative unified AV tests. LTX 2.3 expects 24 fps timing; for example,
 15 seconds resolves to 361 frames at 24 fps because LTX frame counts must
 satisfy `8n+1`.
 
-`video-ltx23-full-mlx --variant unified-av` runs the official two-stage quality
+`--quality final --output-mode audio-video` runs the official two-stage quality
 path: guided dev denoising for both audio and video at half resolution, followed
 by x2 latent upscaling and four-step refinement after fusing the distilled LoRA.
 The older `video-ltx-av` merged root is retained only for `video export-latents`.
 
-Add `--timings` to print phase timings for native LTX 2.3 unified-AV or A2Vid
+Add `--timings` to print phase timings for native LTX 2.3 draft, final, or A2Vid
 generation. `--timings-output <path>` writes the same typed report as JSON,
 including model-component loading, text encoding, each denoising stage, LoRA
 fusion where applicable, upsampling, video/audio decode, MP4 writing, unload,

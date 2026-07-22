@@ -255,6 +255,40 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    private func writeMinimalLTX23FullModel(
+        at root: URL,
+        manifestID: ModelResolver.ModelID,
+        includeVocoder: Bool
+    ) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: manifestID,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        var files = [
+            "config.json",
+            "embedded_config.json",
+            "split_model.json",
+            "connector.safetensors",
+            "transformer-dev.safetensors",
+            "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            "vae_decoder.safetensors",
+            "vae_encoder.safetensors",
+            "audio_vae.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors",
+            "spatial_upscaler_x2_v1_1_config.json",
+        ]
+        if includeVocoder {
+            files.append("vocoder.safetensors")
+        }
+        for file in files {
+            try TestFileSystem.writeFile(
+                root.appendingPathComponent(file),
+                contents: file.hasSuffix(".json") ? Data(#"{"model_version":"2.3.0"}"#.utf8) : Data()
+            )
+        }
+    }
+
     func testValidModelPasses() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -397,6 +431,47 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.engine, .ltxVideo)
         XCTAssertEqual(report.manifest?.family, .video)
         XCTAssertEqual(report.manifest?.upstreamRepoId, "dgrauet/ltx-2.3-mlx@main")
+    }
+
+    func testLTX23FullCanonicalIDAcceptsCompatibleLegacyManifest() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)
+        try writeMinimalLTX23FullModel(
+            at: root,
+            manifestID: .ltxVideo23A2VMLX,
+            includeVocoder: true
+        )
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+        )
+
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertTrue(report.warnings.contains { $0.contains("Resolved compatible manifest id") })
+    }
+
+    func testLTX23FullCanonicalIDStillRequiresFullBundleAssets() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue)
+        try writeMinimalLTX23FullModel(
+            at: root,
+            manifestID: .ltxVideo23A2VMLX,
+            includeVocoder: false
+        )
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+        )
+
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { $0.contains("vocoder.safetensors") })
     }
 
     func testMissingWeightsFails() throws {

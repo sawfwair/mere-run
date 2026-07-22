@@ -3287,6 +3287,24 @@ public actor LTXUnifiedAVGenerator {
         return timings
     }
 
+    /// Loads the full dev + distilled-LoRA quality pipeline without requiring
+    /// audio decoder or vocoder output components.
+    @discardableResult
+    public func loadFullVideoOnly(
+        modelRoot: URL,
+        dtype: DType = .bfloat16
+    ) async throws -> LTXLoadTimings {
+        let root = modelRoot.standardizedFileURL
+        guard isLTX23AudioToVideoModelRoot(root) else {
+            throw LTXUnifiedAVGeneratorError.fullGenerationRequiresLTX23(root)
+        }
+        let timings = try await loadAudioToVideo(modelRoot: root, dtype: dtype)
+        loadedForFullTwoStage = true
+        loadedForReusableFullTwoStage = false
+        loadedForVideoOnlyOutput = true
+        return timings
+    }
+
     /// Loads the full dev transformer once and installs the distilled adapter as
     /// a reversible runtime path. Stage 1 uses the untouched dev weights; Stage 2
     /// enables the adapter without permanently fusing into the base checkpoint.

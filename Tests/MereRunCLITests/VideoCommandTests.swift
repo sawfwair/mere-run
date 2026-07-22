@@ -274,6 +274,12 @@ final class VideoCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.prompt, "a cinematic drone flythrough")
         XCTAssertEqual(cmd.variant, .distilled)
+        XCTAssertNil(cmd.quality)
+        XCTAssertNil(cmd.outputMode)
+        XCTAssertNil(cmd.legacyVariant)
+        XCTAssertEqual(cmd.requestedQuality, .draft)
+        XCTAssertEqual(cmd.effectiveOutputMode, .videoOnly)
+        XCTAssertEqual(cmd.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
         XCTAssertEqual(cmd.width, 768)
         XCTAssertEqual(cmd.height, 512)
         XCTAssertEqual(cmd.numFrames, 65)
@@ -287,6 +293,54 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertFalse(cmd.json)
         XCTAssertFalse(cmd.timings)
         XCTAssertNil(cmd.timingsOutput)
+    }
+
+    func testVideoGenerateSeparatesCheckpointQualityFromOutputMode() throws {
+        let finalVideo = try VideoGenerate.parse([
+            "a cinematic final shot",
+            "--quality", "final",
+        ])
+        XCTAssertEqual(finalVideo.requestedQuality, .final)
+        XCTAssertEqual(finalVideo.effectiveOutputMode, .videoOnly)
+        XCTAssertEqual(finalVideo.variant, .distilled)
+        XCTAssertEqual(finalVideo.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
+
+        let draftAV = try VideoGenerate.parse([
+            "a fast synchronized draft",
+            "--quality", "draft",
+            "--output-mode", "audio-video",
+        ])
+        XCTAssertEqual(draftAV.requestedQuality, .draft)
+        XCTAssertEqual(draftAV.effectiveOutputMode, .audioVideo)
+        XCTAssertEqual(draftAV.variant, .unifiedAV)
+        XCTAssertEqual(draftAV.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
+
+        let finalAV = try VideoGenerate.parse([
+            "a final synchronized shot",
+            "--quality", "final",
+            "--output-mode", "audio-video",
+        ])
+        XCTAssertEqual(finalAV.requestedQuality, .final)
+        XCTAssertEqual(finalAV.effectiveOutputMode, .audioVideo)
+        XCTAssertEqual(finalAV.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
+    }
+
+    func testVideoGenerateLegacyVariantDefaultsRemainCompatible() throws {
+        let distilled = try VideoGenerate.parse([
+            "a draft",
+            "--variant", "distilled",
+        ])
+        XCTAssertEqual(distilled.requestedQuality, .draft)
+        XCTAssertEqual(distilled.effectiveOutputMode, .videoOnly)
+        XCTAssertEqual(distilled.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
+
+        let unified = try VideoGenerate.parse([
+            "a final synchronized shot",
+            "--variant", "unified-av",
+        ])
+        XCTAssertEqual(unified.requestedQuality, .final)
+        XCTAssertEqual(unified.effectiveOutputMode, .audioVideo)
+        XCTAssertEqual(unified.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
     }
 
     func testVideoGenerateParsesTimingOptions() throws {
@@ -319,6 +373,8 @@ final class VideoCommandTests: XCTestCase {
     func testLTXVideoGenerationRoutePreservesLayoutAndAudioContracts() throws {
         let legacyRoot = try makeValidLTXModelRoot()
         let splitRoot = try makeValidSplitDistilledModelRoot()
+        let a2vRoot = try makeValidA2VidModelRoot()
+        let fullRoot = try makeValidFullModelRoot()
 
         let legacy = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: legacyRoot)
         XCTAssertEqual(legacy, .legacyDistilledVideo)
@@ -329,6 +385,15 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(split, .splitDistilledVideo)
         XCTAssertFalse(split.writesAudio)
         XCTAssertTrue(split.supportsPhaseTimings)
+
+        let fullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: fullRoot)
+        XCTAssertEqual(fullVideo, .fullQualityVideo)
+        XCTAssertFalse(fullVideo.writesAudio)
+        XCTAssertTrue(fullVideo.supportsPhaseTimings)
+
+        let compatibleFullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: a2vRoot)
+        XCTAssertEqual(compatibleFullVideo, .fullQualityVideo)
+        XCTAssertFalse(compatibleFullVideo.writesAudio)
 
         let unified = resolveLTXVideoGenerationRoute(variant: .unifiedAV, modelRoot: splitRoot)
         XCTAssertEqual(unified, .unifiedAV)
@@ -512,6 +577,106 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(envelope.result.model.layout, "ltx23_full_split")
         XCTAssertEqual(envelope.result.plan.variant, "unified-av")
         XCTAssertTrue(envelope.result.plan.writesAudio)
+    }
+
+    func testVideoGenerateFinalQualityDefaultsToVideoOnlyFullPipeline() throws {
+        let modelRoot = try makeValidFullModelRoot()
+        let output = makeTempOutput(name: "final.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a cinematic final shot",
+            "--quality", "final",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.layout, "ltx23_full_split")
+        XCTAssertEqual(envelope.result.plan.quality, "final")
+        XCTAssertEqual(envelope.result.plan.outputMode, "video-only")
+        XCTAssertFalse(envelope.result.plan.writesAudio)
+        let action = try XCTUnwrap(envelope.actions.first { $0.id == "start-video-generation" })
+        XCTAssertTrue(action.command?.argv.contains("--quality") == true)
+        XCTAssertTrue(action.command?.argv.contains("final") == true)
+        XCTAssertFalse(action.command?.argv.contains("--variant") == true)
+    }
+
+    func testVideoGenerateDraftAudioVideoKeepsDistilledCheckpoint() throws {
+        let modelRoot = try makeValidSplitDistilledModelRoot()
+        let output = makeTempOutput(name: "draft-av.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a synchronized draft",
+            "--quality", "draft",
+            "--output-mode", "audio-video",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.layout, "ltx23_distilled_split")
+        XCTAssertEqual(envelope.result.plan.quality, "draft")
+        XCTAssertEqual(envelope.result.plan.outputMode, "audio-video")
+        XCTAssertTrue(envelope.result.plan.writesAudio)
+    }
+
+    func testVideoGeneratePreflightBlocksAmbiguousLegacyAndProductSelectors() throws {
+        let modelRoot = try makeValidFullModelRoot()
+        let output = makeTempOutput(name: "ambiguous.mp4")
+        let cmd = try VideoGenerate.parse([
+            "an ambiguous request",
+            "--variant", "unified-av",
+            "--quality", "final",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "video_product_selection_conflict" })
+    }
+
+    func testVideoGeneratePreflightBlocksQualityModelMismatch() throws {
+        let modelRoot = try makeValidFullModelRoot()
+        let output = makeTempOutput(name: "mismatch.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a mismatched request",
+            "--quality", "draft",
+            "--model-root", modelRoot.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "video_quality_model_mismatch" })
     }
 
     func testVideoGenerateSplitDistilledPreflightReportsVideoOnlyContract() throws {
@@ -762,6 +927,10 @@ final class VideoCommandTests: XCTestCase {
 
     func testValidateNativeModelRootAcceptsFullLTX23Layout() throws {
         XCTAssertNoThrow(try validateNativeModelRoot(makeValidFullModelRoot()))
+    }
+
+    func testValidateNativeModelRootAcceptsCompatibleA2VidLayoutForFinalVideo() throws {
+        XCTAssertNoThrow(try validateNativeModelRoot(makeValidA2VidModelRoot()))
     }
 
     func testWanPreflightUsesNativeSpatialAndTemporalGeometry() throws {
