@@ -624,9 +624,9 @@ The unified AV model root is:
 .../models/video-ltx-av
 ```
 
-`mere.run video generate --variant distilled --model video-ltx-av` is the
-faster video-only draft path. `mere.run video generate --variant unified-av
---model video-ltx-av` remains available for the older synchronized AV root.
+`mere.run video generate --quality draft --model video-ltx-av` is the faster
+video-only draft path. The legacy `--variant` selector remains available for
+older scripts using this root.
 `MERERUN_VIDEO_LTX_MODEL_ROOT` can still point at this layout explicitly.
 
 ### `video-ltx23-av-mlx`
@@ -646,9 +646,11 @@ conditioning. Set `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT` only when pointing at an
 external `mlx-community/gemma-3-12b-it-4bit` checkout.
 
 The native Swift runtime uses this standalone distilled transformer for the
-fast video-only draft lane. It can still run synchronized AV when explicitly
-selected with `--variant unified-av`, but the canonical two-stage quality path
-uses `video-ltx23-full-mlx`.
+fast `--quality draft` lane. The default `--output-mode video-only` route
+retains the checkpoint's joint AV denoising tokens but does not load or decode
+the audio VAE/vocoder, and its MP4 contains no audio stream. It can also emit
+synchronized AV with `--output-mode audio-video`, but the canonical final
+quality path uses `video-ltx23-full-mlx`.
 The Unsloth `LTX-2.3-GGUF` checkpoint family is a separate quantized GGUF lane
 and is not loaded by the native MLX video runtime.
 
@@ -668,11 +670,13 @@ temporal upscalers. Hugging Face cache objects are shared with
 `video-ltx23-av-mlx` when both models are installed. The hidden Gemma 3
 companion is shared as well.
 
-The same bundle drives both official two-stage contracts. Unified AV jointly
-denoises guided video and audio latents in stage one, then refines both after
-LoRA fusion. A2Vid encodes source audio and freezes those audio latents through
-both stages; the original decoded source segment—not VAE-decoded audio—is muxed
-into the MP4.
+The same bundle drives all official two-stage final-quality contracts. The
+default `--quality final --output-mode video-only` route runs the full video
+pipeline without requiring audio in the deliverable. With `--output-mode
+audio-video`, unified AV jointly denoises guided video and audio latents in
+stage one, then refines both after LoRA fusion. A2Vid encodes source audio and
+freezes those audio latents through both stages; the original decoded source
+segment—not VAE-decoded audio—is muxed into the MP4.
 
 ### `video-ltx23-a2vid-mlx`
 
@@ -682,10 +686,10 @@ This deprecated compatibility ID preserves existing A2Vid installs and scripts:
 .../models/video-ltx23-a2vid-mlx
 ```
 
-Its legacy narrow manifest omits the vocoder, so it can run source-audio A2Vid
-but not generated-audio unified AV. Requests for either the legacy ID or the
-new full ID resolve to an already-installed compatible root when possible. New
-pulls should use `video-ltx23-full-mlx`.
+Its legacy narrow manifest may omit the vocoder, so it can run final-quality
+video-only and source-audio A2Vid but not generated-audio output. Requests for
+either the legacy ID or the new full ID resolve to an already-installed
+compatible root when possible. New pulls should use `video-ltx23-full-mlx`.
 
 ### `video-wan22-ti2v-5b-mlx`
 

@@ -92,9 +92,9 @@ public enum LTXDistilledLatentGeneratorError: LocalizedError {
             return "Missing LTX upsampler weights at \(url.path)"
         case .unsupportedLTX23SplitModel(let url):
             return """
-            Detected an LTX 2.3 split MLX model at \(url.path). This native loader still supports the older \
-            merged LTX layout; port the LTX 2.3 V2 connector, transformer, and split component loader before \
-            generation.
+            Detected an LTX 2.3 split MLX model at \(url.path). This legacy loader only supports the older \
+            merged LTX layout. Use `mere.run video generate --variant distilled` for video-only output from \
+            split models, or `--variant unified-av` for synchronized audio and video.
             """
         case .generatorNotLoaded:
             return "LTX distilled latent generator is not loaded."
@@ -2891,6 +2891,31 @@ public struct LTXUnifiedAVGenerationResult: @unchecked Sendable {
     }
 }
 
+public struct LTXUnifiedVideoGenerationResult: @unchecked Sendable {
+    public let frames: MLXArray
+    public let videoLatents: MLXArray
+    public let timings: LTXGenerationTimings
+
+    public init(
+        frames: MLXArray,
+        videoLatents: MLXArray,
+        timings: LTXGenerationTimings = LTXGenerationTimings()
+    ) {
+        self.frames = frames
+        self.videoLatents = videoLatents
+        self.timings = timings
+    }
+}
+
+private struct LTXUnifiedGenerationOutput {
+    let frames: MLXArray
+    let videoLatents: MLXArray
+    let audioLatents: MLXArray
+    let audioWaveform: MLXArray?
+    let audioSampleRate: Int?
+    let timings: LTXGenerationTimings
+}
+
 public struct LTXAudioToVideoGenerationOptions: Sendable {
     public static let defaultNegativePrompt = """
     blurry, out of focus, overexposed, underexposed, low contrast, washed out colors, excessive noise, \
@@ -3029,9 +3054,9 @@ public enum LTXUnifiedAVGeneratorError: LocalizedError {
             return "Missing LTX upsampler weights at \(url.path)"
         case .unsupportedLTX23SplitModel(let url):
             return """
-            Detected an LTX 2.3 split MLX model at \(url.path). This native loader still supports the older \
-            merged LTX layout; port the LTX 2.3 V2 connector, transformer, and split component loader before \
-            generation.
+            Detected an LTX 2.3 split MLX model at \(url.path). Use \
+            `mere.run video generate --variant distilled` for video-only output, or \
+            `--variant unified-av` for synchronized audio and video.
             """
         case .ltx23TextEncoderMissing(let id):
             return """
@@ -3242,6 +3267,7 @@ public actor LTXUnifiedAVGenerator {
     private var loadedForAudioToVideo = false
     private var loadedForFullTwoStage = false
     private var loadedForReusableFullTwoStage = false
+    private var loadedForVideoOnlyOutput = false
     private var twoStageGenerationConsumed = false
 
     public init() {}
@@ -3258,6 +3284,24 @@ public actor LTXUnifiedAVGenerator {
         let timings = try await loadAudioToVideo(modelRoot: root, dtype: dtype)
         loadedForFullTwoStage = true
         loadedForReusableFullTwoStage = false
+        return timings
+    }
+
+    /// Loads the full dev + distilled-LoRA quality pipeline without requiring
+    /// audio decoder or vocoder output components.
+    @discardableResult
+    public func loadFullVideoOnly(
+        modelRoot: URL,
+        dtype: DType = .bfloat16
+    ) async throws -> LTXLoadTimings {
+        let root = modelRoot.standardizedFileURL
+        guard isLTX23AudioToVideoModelRoot(root) else {
+            throw LTXUnifiedAVGeneratorError.fullGenerationRequiresLTX23(root)
+        }
+        let timings = try await loadAudioToVideo(modelRoot: root, dtype: dtype)
+        loadedForFullTwoStage = true
+        loadedForReusableFullTwoStage = false
+        loadedForVideoOnlyOutput = true
         return timings
     }
 
@@ -3402,6 +3446,36 @@ public actor LTXUnifiedAVGenerator {
         modelRoot: URL,
         dtype: DType = .bfloat16
     ) async throws -> LTXLoadTimings {
+        try await loadStandalone(
+            modelRoot: modelRoot,
+            dtype: dtype,
+            loadAudioOutput: true
+        )
+    }
+
+    /// Loads the standalone distilled transformer for video-only output.
+    ///
+    /// Audio latents remain part of the joint AV denoising contract because
+    /// audio-to-video cross attention influences every video block. This lane
+    /// skips only the audio VAE and vocoder, which are not needed when callers
+    /// do not request an audio waveform.
+    @discardableResult
+    public func loadVideoOnly(
+        modelRoot: URL,
+        dtype: DType = .bfloat16
+    ) async throws -> LTXLoadTimings {
+        try await loadStandalone(
+            modelRoot: modelRoot,
+            dtype: dtype,
+            loadAudioOutput: false
+        )
+    }
+
+    private func loadStandalone(
+        modelRoot: URL,
+        dtype: DType,
+        loadAudioOutput: Bool
+    ) async throws -> LTXLoadTimings {
         let totalStart = ltxMonotonicSeconds()
         await unload()
         let root = modelRoot.standardizedFileURL
@@ -3536,68 +3610,80 @@ public actor LTXUnifiedAVGenerator {
         )
         let upsamplerSeconds = ltxMonotonicSeconds() - upsamplerStart
 
-        let audioDecoderStart = ltxMonotonicSeconds()
-        let audioDecoder = LTXAudioDecoder()
-        let audioDecoderURL = isLTX23
-            ? root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
-            : transformerURL
-        try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: audioDecoderURL,
-            to: audioDecoder,
-            dtype: .float32,
-            verify: .none,
-            include: { key in
-                key.hasPrefix("audio_vae.decoder.")
-                    || key.hasPrefix("audio_vae.per_channel_statistics.")
-            },
-            mapper: { key, value in
-                mapAudioVaeDecoderWeight(key: key, value: value, dtype: .float32, sourceLayout: splitTensorLayout)
-            },
-            batchSize: 24
-        )
+        var loadedAudioDecoder: LTXAudioDecoder?
+        var loadedVocoder: LTXAudioVocoderBase?
+        var audioDecoderSeconds = 0.0
+        if loadAudioOutput {
+            let audioDecoderStart = ltxMonotonicSeconds()
+            let audioDecoder = LTXAudioDecoder()
+            let audioDecoderURL = isLTX23
+                ? root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
+                : transformerURL
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: audioDecoderURL,
+                to: audioDecoder,
+                dtype: .float32,
+                verify: .none,
+                include: { key in
+                    key.hasPrefix("audio_vae.decoder.")
+                        || key.hasPrefix("audio_vae.per_channel_statistics.")
+                },
+                mapper: { key, value in
+                    mapAudioVaeDecoderWeight(
+                        key: key,
+                        value: value,
+                        dtype: .float32,
+                        sourceLayout: splitTensorLayout
+                    )
+                },
+                batchSize: 24
+            )
 
-        let vocoderURL = isLTX23
-            ? root.appendingPathComponent("vocoder.safetensors", isDirectory: false)
-            : transformerURL
-        let vocoderMetadata = try SafetensorsStreamingLoader.metadata(url: vocoderURL)
-        let vocoderFlavor = detectLTXVocoderFlavor(keys: vocoderMetadata.keys)
-        let vocoder: LTXAudioVocoderBase = switch vocoderFlavor {
-        case .legacy:
-            LTXVocoder()
-        case .bandwidthExtension:
-            if let config = try loadLTXBWEVocoderConfig(modelRoot: root) {
-                LTXVocoderWithBWE(config: config)
-            } else {
-                throw LTXUnifiedAVGeneratorError.bweVocoderConfigMissing(root)
+            let vocoderURL = isLTX23
+                ? root.appendingPathComponent("vocoder.safetensors", isDirectory: false)
+                : transformerURL
+            let vocoderMetadata = try SafetensorsStreamingLoader.metadata(url: vocoderURL)
+            let vocoderFlavor = detectLTXVocoderFlavor(keys: vocoderMetadata.keys)
+            let vocoder: LTXAudioVocoderBase = switch vocoderFlavor {
+            case .legacy:
+                LTXVocoder()
+            case .bandwidthExtension:
+                if let config = try loadLTXBWEVocoderConfig(modelRoot: root) {
+                    LTXVocoderWithBWE(config: config)
+                } else {
+                    throw LTXUnifiedAVGeneratorError.bweVocoderConfigMissing(root)
+                }
             }
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: vocoderURL,
+                to: vocoder,
+                dtype: .float32,
+                verify: .none,
+                include: { key in
+                    key.hasPrefix("vocoder.")
+                },
+                mapper: { key, value in
+                    mapVocoderWeight(
+                        key: key,
+                        value: value,
+                        dtype: .float32,
+                        sourceLayout: isLTX23 ? .mlx : .pytorch,
+                        targetFlavor: vocoderFlavor
+                    )
+                },
+                batchSize: 24
+            )
+            loadedAudioDecoder = audioDecoder
+            loadedVocoder = vocoder
+            audioDecoderSeconds = ltxMonotonicSeconds() - audioDecoderStart
         }
-        try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: vocoderURL,
-            to: vocoder,
-            dtype: .float32,
-            verify: .none,
-            include: { key in
-                key.hasPrefix("vocoder.")
-            },
-            mapper: { key, value in
-                mapVocoderWeight(
-                    key: key,
-                    value: value,
-                    dtype: .float32,
-                    sourceLayout: isLTX23 ? .mlx : .pytorch,
-                    targetFlavor: vocoderFlavor
-                )
-            },
-            batchSize: 24
-        )
-        let audioDecoderSeconds = ltxMonotonicSeconds() - audioDecoderStart
 
         self.textEncoder = text
         self.transformer = model
         self.decoder = vaeDecoder
         self.upsampler = latentUpsampler
-        self.audioDecoder = audioDecoder
-        self.vocoder = vocoder
+        self.audioDecoder = loadedAudioDecoder
+        self.vocoder = loadedVocoder
         self.encoder = nil
         self.modelWeightsURL = transformerURL
         self.videoEncoderWeightsURL = isLTX23
@@ -3606,6 +3692,7 @@ public actor LTXUnifiedAVGenerator {
         self.videoVAEWeightLayout = splitTensorLayout
         self.loadedDType = dtype
         self.loadedRoot = root
+        self.loadedForVideoOnlyOutput = !loadAudioOutput
         return LTXLoadTimings(
             textEncoderSeconds: textEncoderSeconds,
             transformerSeconds: transformerSeconds,
@@ -3638,6 +3725,7 @@ public actor LTXUnifiedAVGenerator {
         loadedForAudioToVideo = false
         loadedForFullTwoStage = false
         loadedForReusableFullTwoStage = false
+        loadedForVideoOnlyOutput = false
         twoStageGenerationConsumed = false
         Memory.clearCache()
     }
@@ -4141,6 +4229,39 @@ public actor LTXUnifiedAVGenerator {
     public func generate(
         options: LTXUnifiedAVGenerationOptions
     ) async throws -> LTXUnifiedAVGenerationResult {
+        guard !loadedForVideoOnlyOutput else {
+            throw LTXUnifiedAVGeneratorError.audioDecoderNotLoaded
+        }
+        let output = try await generate(options: options, decodeAudio: true)
+        guard let audioWaveform = output.audioWaveform,
+              let audioSampleRate = output.audioSampleRate else {
+            throw LTXUnifiedAVGeneratorError.audioDecoderNotLoaded
+        }
+        return LTXUnifiedAVGenerationResult(
+            frames: output.frames,
+            videoLatents: output.videoLatents,
+            audioLatents: output.audioLatents,
+            audioWaveform: audioWaveform,
+            audioSampleRate: audioSampleRate,
+            timings: output.timings
+        )
+    }
+
+    public func generateVideoOnly(
+        options: LTXUnifiedAVGenerationOptions
+    ) async throws -> LTXUnifiedVideoGenerationResult {
+        let output = try await generate(options: options, decodeAudio: false)
+        return LTXUnifiedVideoGenerationResult(
+            frames: output.frames,
+            videoLatents: output.videoLatents,
+            timings: output.timings
+        )
+    }
+
+    private func generate(
+        options: LTXUnifiedAVGenerationOptions,
+        decodeAudio: Bool
+    ) async throws -> LTXUnifiedGenerationOutput {
         let totalStart = ltxMonotonicSeconds()
         var textEncodingSeconds = 0.0
         var textEncoderReloadSeconds = 0.0
@@ -4580,62 +4701,68 @@ public actor LTXUnifiedAVGenerator {
         }
 
         _ = decodedVideo
-        let audioDecodeStart = ltxMonotonicSeconds()
-        let activeAudioDecoder: LTXAudioDecoder
-        let activeVocoder: LTXAudioVocoderBase
-        if usesFullTwoStage {
-            guard let loadedRoot else {
-                throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+        var audioWaveform: MLXArray?
+        var audioSampleRate: Int?
+        if decodeAudio {
+            let audioDecodeStart = ltxMonotonicSeconds()
+            let activeAudioDecoder: LTXAudioDecoder
+            let activeVocoder: LTXAudioVocoderBase
+            if usesFullTwoStage {
+                guard let loadedRoot else {
+                    throw LTXUnifiedAVGeneratorError.generatorNotLoaded
+                }
+                if !usesReusableFullTwoStage {
+                    self.transformer = nil
+                    self.upsampler = nil
+                    Memory.clearCache()
+                }
+                activeAudioDecoder = try loadLTX23AudioDecoder(modelRoot: loadedRoot)
+                activeVocoder = try loadLTX23Vocoder(modelRoot: loadedRoot)
+                if !usesReusableFullTwoStage {
+                    self.audioDecoder = activeAudioDecoder
+                    self.vocoder = activeVocoder
+                }
+            } else {
+                guard let audioDecoder else {
+                    throw LTXUnifiedAVGeneratorError.audioDecoderNotLoaded
+                }
+                guard let vocoder else {
+                    throw LTXUnifiedAVGeneratorError.vocoderNotLoaded
+                }
+                activeAudioDecoder = audioDecoder
+                activeVocoder = vocoder
             }
-            if !usesReusableFullTwoStage {
-                self.transformer = nil
-                self.upsampler = nil
-                Memory.clearCache()
-            }
-            activeAudioDecoder = try loadLTX23AudioDecoder(modelRoot: loadedRoot)
-            activeVocoder = try loadLTX23Vocoder(modelRoot: loadedRoot)
-            if !usesReusableFullTwoStage {
-                self.audioDecoder = activeAudioDecoder
-                self.vocoder = activeVocoder
-            }
-        } else {
-            guard let audioDecoder else {
-                throw LTXUnifiedAVGeneratorError.audioDecoderNotLoaded
-            }
-            guard let vocoder else {
-                throw LTXUnifiedAVGeneratorError.vocoderNotLoaded
-            }
-            activeAudioDecoder = audioDecoder
-            activeVocoder = vocoder
+            let mel = activeAudioDecoder.decode(latents: audioLatents.asType(.float32))
+            saveLTXAVDebugArray(mel, suffix: "audio_mel")
+            let vocodedAudio = activeVocoder(mel)
+            saveLTXAVDebugAudio(
+                vocodedAudio,
+                suffix: "audio_vocoded_raw",
+                sampleRate: activeVocoder.outputSamplingRate
+            )
+            let waveform = matchLTXAudioWaveformDuration(
+                vocodedAudio,
+                videoFrames: options.numFrames,
+                fps: options.fps,
+                sampleRate: activeVocoder.outputSamplingRate
+            )
+            MLX.eval(waveform)
+            audioDecodeSeconds = ltxMonotonicSeconds() - audioDecodeStart
+            saveLTXAVDebugAudio(
+                waveform,
+                suffix: "audio_waveform_matched",
+                sampleRate: activeVocoder.outputSamplingRate
+            )
+            audioWaveform = waveform
+            audioSampleRate = activeVocoder.outputSamplingRate
         }
-        let mel = activeAudioDecoder.decode(latents: audioLatents.asType(.float32))
-        saveLTXAVDebugArray(mel, suffix: "audio_mel")
-        let vocodedAudio = activeVocoder(mel)
-        saveLTXAVDebugAudio(
-            vocodedAudio,
-            suffix: "audio_vocoded_raw",
-            sampleRate: activeVocoder.outputSamplingRate
-        )
-        let audioWaveform = matchLTXAudioWaveformDuration(
-            vocodedAudio,
-            videoFrames: options.numFrames,
-            fps: options.fps,
-            sampleRate: activeVocoder.outputSamplingRate
-        )
-        MLX.eval(audioWaveform)
-        audioDecodeSeconds = ltxMonotonicSeconds() - audioDecodeStart
-        saveLTXAVDebugAudio(
-            audioWaveform,
-            suffix: "audio_waveform_matched",
-            sampleRate: activeVocoder.outputSamplingRate
-        )
 
-        return LTXUnifiedAVGenerationResult(
+        return LTXUnifiedGenerationOutput(
             frames: frames,
             videoLatents: videoLatents,
             audioLatents: audioLatents,
             audioWaveform: audioWaveform,
-            audioSampleRate: activeVocoder.outputSamplingRate,
+            audioSampleRate: audioSampleRate,
             timings: LTXGenerationTimings(
                 textEncodingSeconds: textEncodingSeconds,
                 preparationSeconds: preparationSeconds,

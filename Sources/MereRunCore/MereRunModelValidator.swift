@@ -83,7 +83,8 @@ public enum MereRunModelValidator {
             errors.append("Missing \(MereRunModelManifest.filename). Manifests are required (no heuristic guessing).")
         }
 
-        let spec = manifest.flatMap { ManagedModelCatalog.spec(for: $0.id) }
+        let manifestSpec = manifest.flatMap { ManagedModelCatalog.spec(for: $0.id) }
+        let spec = expectedModelID.flatMap(ManagedModelCatalog.spec(for:)) ?? manifestSpec
         let usesMFluxZImage = spec?.validationKind == .zimageTurbo
             && ZImageTurboResources(rootURL: rootURL).hasMFluxWeights(fileManager: fileManager)
 
@@ -152,6 +153,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .ltxVideo
             || spec?.validationKind == .ltxVideo23MLX
             || spec?.validationKind == .ltxVideo23A2VMLX
+            || spec?.validationKind == .ltxVideo23FullMLX
             || spec?.validationKind == .insightFaceBuffaloL
             || spec?.validationKind == .moge2
             || spec?.validationKind == .videoDepthAnything
@@ -342,7 +344,11 @@ public enum MereRunModelValidator {
         errors: inout [String]
     ) {
         if let expectedModelID, manifest.id != expectedModelID {
-            errors.append("Manifest id mismatch: expected=\(expectedModelID) found=\(manifest.id)")
+            if manifestIDIsCompatible(expected: expectedModelID, actual: manifest.id) {
+                warnings.append("Resolved compatible manifest id: requested=\(expectedModelID) installed=\(manifest.id)")
+            } else {
+                errors.append("Manifest id mismatch: expected=\(expectedModelID) found=\(manifest.id)")
+            }
         }
 
         if manifest.schemaVersion > MereRunModelManifest.currentSchemaVersion {
@@ -502,6 +508,10 @@ public enum MereRunModelValidator {
         }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
+    }
+
+    private static func manifestIDIsCompatible(expected: String, actual: String) -> Bool {
+        ManagedModelCatalog.spec(for: expected)?.resolutionFallbackIDs.contains(actual) == true
     }
 
     private static func manifestRequiresInlineQuantization(_ manifest: MereRunModelManifest) -> Bool {

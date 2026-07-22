@@ -634,16 +634,12 @@ swift run mere.run sfx generate \
 # Generate a fast video-only draft
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4
 
 # Inspect the same render before loading MLX or writing an MP4
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4 \
   --preflight \
@@ -652,19 +648,25 @@ swift run mere.run video generate \
 # Anchor the first and last keyframes for directed image-to-video
 swift run mere.run video generate \
   "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --image ./car-start.png \
   --end-image ./car-end.png \
   --num-frames 65 \
   --output ./clip-directed.mp4
 
-# Generate synchronized LTX 2.3 audio/video
+# Generate final-quality video without an audio stream
+swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
+swift run mere.run video generate \
+  "a red fox runs across a snowy clearing, detailed winter fur, natural motion" \
+  --quality final \
+  --duration 4 \
+  --output ./clip-final.mp4
+
+# Generate synchronized final-quality LTX 2.3 audio/video
 swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \
   "dialogue with clean background music and subtle city ambience" \
-  --variant unified-av \
-  --model video-ltx23-full-mlx \
+  --quality final \
+  --output-mode audio-video \
   --duration 15 \
   --fps 24 \
   --output ./clip-av.mp4

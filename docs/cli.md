@@ -322,8 +322,7 @@ swift run mere.run sfx generate \
 ```bash
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant unified-av \
-  --model video-ltx23-full-mlx \
+  --quality final \
   --duration 5 \
   --output ./clip.mp4
 ```
@@ -1715,7 +1714,12 @@ swift run mere.run video generate "<prompt>" [options]
 
 Key options:
 
-- `--variant`: `distilled` or `unified-av`
+- `--quality`: `draft` selects the fast standalone-distilled checkpoint;
+  `final` selects the full dev + distilled-LoRA quality pipeline
+- `--output-mode`: `video-only` (default) or synchronized `audio-video`
+- `--variant`: compatibility selector; `distilled` defaults to draft
+  video-only and `unified-av` defaults to final audio-video; explicit `--model`
+  still wins
 - `--model-root`
 - `--output`
 - `--width`, `--height`
@@ -1739,7 +1743,8 @@ Key options:
 - `--end-image-strength`
 - `--preflight`
 - `--json`: only with `--preflight`
-- `--timings`: native LTX 2.3 unified-AV/A2Vid phase timings on stderr
+- `--timings`: native LTX 2.3 split-distilled, unified-AV, or A2Vid phase
+  timings on stderr; unavailable for legacy merged distilled roots
 - `--timings-output`: write those timings as JSON
 - `--quiet`
 
@@ -1750,13 +1755,20 @@ Environment:
   `mlx-community/gemma-3-12b-it-4bit` checkout used by `video-ltx23-av-mlx`,
   `video-ltx23-full-mlx`, and the legacy `video-ltx23-a2vid-mlx`
 
-For `--variant unified-av`, keep `--fps 24` unless you are deliberately making
+For `--output-mode audio-video`, keep `--fps 24` unless you are deliberately making
 a retimed clip. LTX 2.3 unified AV is trained around 24 fps; using 8 fps can
 make generated motion look slow while audio remains normal. Use `--duration`
 for clip length so the CLI can choose the nearest legal `8n+1` frame count.
-Use the default `distilled` lane for faster video-only drafts. Use
-`--variant unified-av --model video-ltx23-full-mlx` for the current high-quality
-synchronized audio/video lane.
+Use the default `--quality draft` lane for fast iterations. Use `--quality
+final` for the current high-quality two-stage checkpoint. Output is a separate
+choice: both qualities default to video-only, and `--output-mode audio-video`
+adds synchronized generated audio. Suppressing audio on the same checkpoint is
+an output contract, not the source of the draft lane's speed advantage.
+
+On `video-ltx23-av-mlx`, distilled generation uses the split-layout LTX 2.3
+transformer and preserves its joint audio/video denoising contract because
+audio-to-video cross attention contributes to the video result. It skips
+loading the audio VAE and vocoder, and the resulting MP4 has no audio stream.
 
 With `--audio`, the command resolves `video-ltx23-full-mlx` automatically.
 The full/dev transformer performs guided half-resolution denoising with frozen
@@ -1780,7 +1792,8 @@ Preflight mode:
   audio offset, seed, input mode, whether audio conditions generation, whether
   the source soundtrack is preserved, diagnostics, and declarative actions.
 - blockers such as a missing model root, missing image, invalid frame rate, or
-  `--end-image` without `--image` produce JSON and a nonzero exit.
+  `--end-image` without `--image` produce JSON and a nonzero exit. Requesting
+  phase timings on a legacy merged distilled root or Wan2.2 is also blocked.
 - notes such as dimension/frame snapping remain machine-readable so a UI can
   explain the exact render that will run.
 
@@ -1789,18 +1802,20 @@ Examples:
 ```bash
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --num-frames 65
 
 swift run mere.run video generate \
   "a cinematic drone flythrough over snowy mountains" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --num-frames 65 \
   --output ./clip.mp4 \
   --preflight \
   --json
+
+swift run mere.run video generate \
+  "a red fox runs across a snowy clearing, detailed winter fur, natural motion" \
+  --quality final \
+  --duration 4 \
+  --output ./fox-final.mp4
 
 swift run mere.run video generate \
   "the first-person camera walks straight forward through the same corridor" \
@@ -1814,8 +1829,8 @@ swift run mere.run video generate \
 
 swift run mere.run video generate \
   "two actors talking beside a window while a restrained orchestral score and distant city sirens play underneath" \
-  --variant unified-av \
-  --model video-ltx23-full-mlx \
+  --quality final \
+  --output-mode audio-video \
   --duration 15 \
   --fps 24 \
   --output ./dialogue-score-sfx.mp4
@@ -1830,8 +1845,6 @@ swift run mere.run video generate \
 
 swift run mere.run video generate \
   "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
-  --variant distilled \
-  --model video-ltx23-av-mlx \
   --image ./car-start.png \
   --end-image ./car-end.png \
   --num-frames 65 \

@@ -238,25 +238,25 @@ struct ModelInfo: ParsableCommand {
     }
 
     static func usesLTX23SplitLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
-        let id = manifest?.id ?? expectedModelID
+        let id = expectedModelID ?? manifest?.id
         guard let id else { return false }
         return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23MLX
     }
 
     static func usesLTX23A2VidLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
-        let id = manifest?.id ?? expectedModelID
+        let id = expectedModelID ?? manifest?.id
         guard let id else { return false }
         return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23A2VMLX
     }
 
     static func usesLTX23FullLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
-        let id = manifest?.id ?? expectedModelID
+        let id = expectedModelID ?? manifest?.id
         guard let id else { return false }
         return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23FullMLX
     }
 
     static func usesLTXMergedLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
-        let id = manifest?.id ?? expectedModelID
+        let id = expectedModelID ?? manifest?.id
         guard let id else { return false }
         return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo
     }

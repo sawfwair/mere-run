@@ -90,6 +90,26 @@ final class ModelInfoCommandTests: XCTestCase {
         XCTAssertFalse(lines.contains { $0.contains("(missing)") })
     }
 
+    func testLTX23FullRequestedIDTakesPrecedenceOverCompatibleLegacyManifest() {
+        let legacyManifest = MereRunModelManifest.template(
+            for: .ltxVideo23A2VMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertTrue(
+            ModelInfo.usesLTX23FullLayout(
+                manifest: legacyManifest,
+                expectedModelID: ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+            )
+        )
+        XCTAssertFalse(
+            ModelInfo.usesLTX23A2VidLayout(
+                manifest: legacyManifest,
+                expectedModelID: ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
+            )
+        )
+    }
+
     func testLTXMergedComponentLinesShowMergedModelFiles() throws {
         let root = try makeTempDirectory()
         try FileManager.default.createDirectory(
