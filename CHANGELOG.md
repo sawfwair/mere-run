@@ -4,6 +4,16 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Changed
+
+- refreshed the pinned MLX and mlx-swift forks to MLX 0.32.1 while preserving
+  native affine 1-bit Metal/CUDA execution, the generation-17 NAX correctness
+  gate, and the Linux/CUDA bridge. The runtime and local gate now reject Metal
+  libraries whose exact mlx-swift revision or generated-kernel hash does not
+  match the compiled binary.
+
 ## 0.26.0 - 2026-07-22
 
 This release contains every change merged since `v0.25.0`: the LTX 2.3

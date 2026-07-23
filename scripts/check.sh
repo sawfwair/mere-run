@@ -35,6 +35,8 @@ fi
 swiftlint --strict --cache-path .build/swiftlint.cache
 bash ./scripts/agent_readiness_check.sh
 swift build
+./scripts/build_mlx_metallib.sh \
+  --verify-only vendor/mlx-swift_Cmlx.bundle
 swift test
 mere_run_bin=".build/debug/mere.run"
 if [[ ! -x "$mere_run_bin" ]]; then

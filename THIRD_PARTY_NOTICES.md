@@ -342,9 +342,13 @@ SOFTWARE.
 ### `vendor/mlx-swift_Cmlx.bundle`
 
 - purpose: bundled MLX Metal shader resources used by MLX-backed runtime paths
-- upstream project: [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
-- pinned package version: `0.31.2`
-- pinned package revision: `2512c5bebfd801c817b5d07828cbfdc44c76fab4`
+- source project: [`sawfwair/mlx-swift`](https://github.com/sawfwair/mlx-swift),
+  based on upstream [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
+  0.32.1
+- pinned package revision: `73bfc40b98886b01fa7fe500f8a6d370c7179eda`
+- embedded MLX revision: `6a29a3f9684c94354203d796b28c08b4ec995b35`
+- generated-kernel source SHA-256:
+  `4e8781e7bbfd64810b7e23f870c647f561e9e7f1d1867183291778ef43b9d12e`
 - license: MIT
 
 ```
