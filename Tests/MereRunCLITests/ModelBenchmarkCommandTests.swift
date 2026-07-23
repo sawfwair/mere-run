@@ -41,6 +41,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         let cmd = try ModelBenchmarkCode.parse(["--dry-run"])
 
         XCTAssertNil(cmd.models)
+        XCTAssertNil(cmd.lagunaPath)
         XCTAssertEqual(cmd.suite, .humanEvalSlice)
         XCTAssertNil(cmd.tasks)
         XCTAssertNil(cmd.humanevalFile)
@@ -118,6 +119,15 @@ final class ModelBenchmarkCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.humanevalFile, url.path)
         XCTAssertEqual(cmd.tasks, "HumanEval/42")
+    }
+
+    func testCodeBenchmarkLagunaPathSelectsEvaluationModel() throws {
+        let cmd = try ModelBenchmarkCode.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--dry-run",
+        ])
+
+        XCTAssertEqual(cmd.lagunaPath, "/tmp/Laguna-S-2.1-NVFP4-mlx")
     }
 
     func testHumanEvalJSONLLoaderDecodesOfficialShape() throws {
@@ -494,6 +504,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         let cmd = try ModelBenchmarkToolCalls.parse([])
 
         XCTAssertNil(cmd.models)
+        XCTAssertNil(cmd.lagunaPath)
         XCTAssertNil(cmd.cases)
         XCTAssertEqual(cmd.maxTokens, 192)
         XCTAssertEqual(cmd.temperature, 0)
@@ -502,6 +513,17 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertFalse(cmd.dryRun)
         XCTAssertFalse(cmd.logResponses)
         XCTAssertFalse(cmd.json)
+    }
+
+    func testChatAndToolCallBenchmarksSelectLagunaEvaluationPath() throws {
+        let path = "/Volumes/model-store/Laguna-S-2.1-NVFP4-mlx"
+        let chat = try ModelBenchmarkChat.parse(["--laguna-path", path, "--dry-run"])
+        let tools = try ModelBenchmarkToolCalls.parse(["--laguna-path", path, "--dry-run"])
+
+        XCTAssertEqual(chat.lagunaPath, path)
+        XCTAssertEqual(try chat.selectedModelIDs(), [LagunaResources.modelID])
+        XCTAssertEqual(tools.lagunaPath, path)
+        XCTAssertEqual(try tools.selectedModelIDs(), [LagunaResources.modelID])
     }
 
     func testToolCallsBenchmarkParsesOverrides() throws {

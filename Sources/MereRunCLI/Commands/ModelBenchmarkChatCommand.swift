@@ -11,6 +11,12 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to the local chat comparison lane.")
     var models: String?
 
+    @Option(
+        name: [.long],
+        help: "Local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory for pre-integration evaluation."
+    )
+    var lagunaPath: String?
+
     @Option(name: [.long], help: "Benchmark suite.")
     var suite: ChatBenchmarkSuite = .mereChatSlice
 
@@ -103,7 +109,7 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     func selectedModelIDs() throws -> [String] {
         let rawModels = models?.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        } ?? Self.defaultModelIDs
+        } ?? (lagunaPath == nil ? Self.defaultModelIDs : [LagunaResources.modelID])
         let modelIDs = Self.deduplicated(rawModels.filter { !$0.isEmpty })
         guard !modelIDs.isEmpty else {
             throw ValidationError("--models must include at least one model id.")
@@ -135,6 +141,32 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     }
 
     private func runModel(_ modelID: String, cases: [ChatBenchmarkCase]) async throws -> ChatBenchmarkModelResult {
+        if modelID == LagunaResources.modelID {
+            guard let lagunaPath else {
+                return ChatBenchmarkModelResult.missing(
+                    model: modelID,
+                    reason: "Laguna evaluation requires --laguna-path."
+                )
+            }
+            let generator = LagunaGenerator()
+            do {
+                let result = try await runCases(
+                    modelID,
+                    engine: "laguna-mlx",
+                    modelPath: lagunaPath,
+                    cases: cases,
+                    generate: { request in
+                        try await generator.chat(request, modelPath: lagunaPath, progressHandler: nil)
+                    }
+                )
+                await generator.unload()
+                return result
+            } catch {
+                await generator.unload()
+                throw error
+            }
+        }
+
         guard let spec = ManagedModelCatalog.spec(for: modelID) else {
             return ChatBenchmarkModelResult.missing(model: modelID, reason: "Unknown model id.")
         }
