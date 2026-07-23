@@ -11,6 +11,12 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to the installed coding comparison lane.")
     var models: String?
 
+    @Option(
+        name: [.long],
+        help: "Local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory for pre-integration evaluation."
+    )
+    var lagunaPath: String?
+
     @Option(name: [.long], help: "Benchmark suite.")
     var suite: CodeBenchmarkSuite = .humanEvalSlice
 
@@ -120,7 +126,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     private func selectedModelIDs() throws -> [String] {
         let rawModels = models?.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        } ?? Self.defaultModelIDs()
+        } ?? (lagunaPath == nil ? Self.defaultModelIDs() : [LagunaResources.modelID])
         let modelIDs = rawModels.filter { !$0.isEmpty }
         guard !modelIDs.isEmpty else {
             throw ValidationError("--models must include at least one model id.")
@@ -168,6 +174,36 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     private func runModel(_ modelID: String, tasks: [CodeBenchmarkTask]) async throws -> CodeBenchmarkModelResult {
+        if modelID == LagunaResources.modelID {
+            guard let lagunaPath else {
+                return CodeBenchmarkModelResult.missing(
+                    model: modelID,
+                    reason: "Laguna evaluation requires --laguna-path."
+                )
+            }
+            let generator = LagunaGenerator()
+            do {
+                let result = try await runTasks(
+                    modelID,
+                    engine: "laguna-mlx",
+                    modelPath: lagunaPath,
+                    tasks: tasks,
+                    generate: { request in
+                        try await generator.chat(
+                            request,
+                            modelPath: lagunaPath,
+                            progressHandler: nil
+                        )
+                    }
+                )
+                await generator.unload()
+                return result
+            } catch {
+                await generator.unload()
+                throw error
+            }
+        }
+
         guard let spec = ManagedModelCatalog.spec(for: modelID) else {
             return CodeBenchmarkModelResult.missing(model: modelID, reason: "Unknown model id.")
         }
@@ -323,7 +359,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     private static func requiresMLXBundle(modelID: String) -> Bool {
-        ManagedModelCatalog.spec(for: modelID)?.validationKind == .q35
+        modelID == LagunaResources.modelID
+            || ManagedModelCatalog.spec(for: modelID)?.validationKind == .q35
     }
 
     private static let systemPrompt = """
