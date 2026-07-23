@@ -38,6 +38,11 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
+- refreshed the pinned MLX and mlx-swift forks to MLX 0.32.1 while preserving
+  native affine 1-bit Metal/CUDA execution, the generation-17 NAX correctness
+  gate, and the Linux/CUDA bridge. The runtime and local gate now reject Metal
+  libraries whose exact mlx-swift revision or generated-kernel hash does not
+  match the compiled binary.
 - changed `--non-cover` into a compatibility alias for the explicit
   `cover-nofsq` task instead of a boolean that could silently erase task
   semantics.

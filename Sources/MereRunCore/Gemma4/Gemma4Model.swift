@@ -8,9 +8,10 @@ import Cmlx
 @inline(__always)
 private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
     let noWeight = MLXArray.mlxNone
+    let stream = StreamOrDevice.default
     var result = mlx_array_new()
-    _ = withExtendedLifetime(noWeight) {
-        mlx_fast_rms_norm(&result, x.ctx, noWeight.ctx, eps, StreamOrDevice.default.ctx)
+    _ = withExtendedLifetime((noWeight, stream)) {
+        mlx_fast_rms_norm(&result, x.ctx, noWeight.ctx, eps, stream.ctx)
     }
     return MLXArray(result)
 }

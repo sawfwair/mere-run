@@ -113,6 +113,21 @@ else:
 EOF
 )
 
+if [[ "$swift_pin_revision" == "unknown" ]]; then
+  echo "error: could not resolve the pinned mlx-swift revision from $resolved" >&2
+  exit 1
+fi
+
+checkout_revision="$(git -C "$checkout" rev-parse HEAD)"
+if [[ "$checkout_revision" != "$swift_pin_revision" ]]; then
+  echo "error: mlx-swift checkout revision $checkout_revision != pinned $swift_pin_revision" >&2
+  exit 1
+fi
+if [[ -n "$(git -C "$checkout" status --porcelain --untracked-files=no)" ]]; then
+  echo "error: mlx-swift checkout has tracked modifications; refusing to build unverifiable Metal kernels" >&2
+  exit 1
+fi
+
 sources_hash="$(cd "$gen_dir" && find . -type f \( -name '*.metal' -o -name '*.h' \) -print0 \
   | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d' ' -f1)"
 
