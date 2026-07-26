@@ -40,6 +40,10 @@ Environment:
   MERERUN_LINUX_ACCEL           Passed through to prepare-linux-native.sh (cpu/cuda).
   MERERUN_NATIVE_BUILD_JOBS     Passed through to prepare-linux-native.sh.
   MERERUN_CUDA_ARCHITECTURES    Passed through to prepare-linux-native.sh.
+  MERERUN_MLX_CUDA_JIT_INCLUDE_DIR
+                                CUTLASS/CuTe header root to bundle for MLX
+                                NVRTC kernels. Defaults to the prepared
+                                mlx-swift CMake dependency checkout.
   CUDA_LIBRARY_PATH             Optional CUDA toolkit library directory for
                                 SwiftPM MLX CUDA linking. Linux SBSA and lib64
                                 defaults are detected when unset.
@@ -167,6 +171,7 @@ native_root="$repo_root/.build/native/linux-$platform_arch"
 llama_prefix="$native_root/llama"
 pkgconfig_dir="$native_root/pkgconfig"
 linux_accel="${MERERUN_LINUX_ACCEL:-cpu}"
+mlx_cuda_jit_include_dir="${MERERUN_MLX_CUDA_JIT_INCLUDE_DIR:-$native_root/build/mlx-swift-cuda-smoke/_deps/cutlass-src/include}"
 
 cuda_target_names=(sbsa-linux aarch64-linux x86_64-linux)
 
@@ -435,6 +440,13 @@ while [[ -L "$source_path" ]]; do
   fi
 done
 payload_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
+if [[ -d "$payload_dir/include/cute" && -d "$payload_dir/include/cutlass" ]]; then
+  export MERERUN_MLX_CUDA_JIT_INCLUDE_PATH="$payload_dir/include"
+  case ":${CPATH:-}:" in
+    *":$payload_dir/include:"*) ;;
+    *) export CPATH="$payload_dir/include${CPATH:+:$CPATH}" ;;
+  esac
+fi
 if [[ -f "$payload_dir/.mererun-linux-cuda" ]]; then
   export MERERUN_LINUX_ACCEL="${MERERUN_LINUX_ACCEL:-cuda}"
   if [[ -z "${CUDA_HOME:-}" && -z "${CUDA_PATH:-}" ]]; then
@@ -486,6 +498,16 @@ WRAPPER
 chmod +x "$payload_dir/mere.run"
 if [[ "$linux_accel" == "cuda" ]]; then
   touch "$payload_dir/.mererun-linux-cuda"
+  if [[ ! -d "$mlx_cuda_jit_include_dir/cute" ||
+        ! -d "$mlx_cuda_jit_include_dir/cutlass" ||
+        ! -f "$(dirname "$mlx_cuda_jit_include_dir")/LICENSE.txt" ]]; then
+    echo "[package-linux] error: prepared MLX CUDA CUTLASS/CuTe headers are incomplete at $mlx_cuda_jit_include_dir." >&2
+    exit 68
+  fi
+  mkdir -p "$payload_dir/include"
+  cp -a "$mlx_cuda_jit_include_dir/cute" "$payload_dir/include/cute"
+  cp -a "$mlx_cuda_jit_include_dir/cutlass" "$payload_dir/include/cutlass"
+  cp -a "$(dirname "$mlx_cuda_jit_include_dir")/LICENSE.txt" "$payload_dir/include/CUTLASS-LICENSE.txt"
 fi
 cp -a scripts/install.sh "$payload_dir/install.sh"
 chmod +x "$payload_dir/install.sh"

@@ -244,7 +244,7 @@ patch_mlx_cuda_jit_include_path() {
   if [[ ! -f "$mlx_jit_module" ]]; then
     return
   fi
-  if grep -Fq "MERERUN_CUDA_CCCL_INCLUDE_PATH" "$mlx_jit_module"; then
+  if grep -Fq "MERERUN_MLX_CUDA_JIT_INCLUDE_PATH" "$mlx_jit_module"; then
     return
   fi
 
@@ -252,6 +252,15 @@ patch_mlx_cuda_jit_include_path() {
   mlx_jit_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-jit.XXXXXX")"
   if ! awk '
     /return args;/ && !inserted {
+      print "      // MERERUN_MLX_CUDA_JIT_INCLUDE: packaged MLX CUDA kernels need"
+      print "      // their matching CUTLASS/CuTe headers at NVRTC compile time."
+      print "      if (auto mererun_mlx_cuda_jit = std::getenv(\"MERERUN_MLX_CUDA_JIT_INCLUDE_PATH\")) {"
+      print "        auto mererun_mlx_cuda_jit_path = std::filesystem::path(mererun_mlx_cuda_jit);"
+      print "        if (std::filesystem::exists(mererun_mlx_cuda_jit_path / \"cute\") &&"
+      print "            std::filesystem::exists(mererun_mlx_cuda_jit_path / \"cutlass\")) {"
+      print "          args.push_back(fmt::format(\"--include-path={}\", mererun_mlx_cuda_jit_path.string()));"
+      print "        }"
+      print "      }"
       print "      // MERERUN_CUDA_CCCL_INCLUDE: CUDA 13 installs cuda/std under include/cccl."
       print "      // Keep this explicit because NVRTC does not inherit the package launcher CPATH."
       print "      auto add_mererun_cuda_cccl_include = [&](const std::filesystem::path& cuda_cccl_path) {"
