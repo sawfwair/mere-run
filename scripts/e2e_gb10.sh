@@ -160,6 +160,7 @@ OCR_IMG="$ASSETS/ocr.png"
 
 # ---- text ----
 want text-chat && for m in text-chat-q36-nano text-chat-q36-nano-gguf \
+                           text-chat-bonsai-27b-1bit text-chat-bonsai-27b-2bit \
                            text-chat-gemma4-turbo text-chat-gemma4-nano \
                            text-chat-gemma4 text-chat-gemma4-max; do
   run_case text-chat "$m" text "" 900 \
