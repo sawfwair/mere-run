@@ -138,18 +138,26 @@ enum ACEStepCLIHelper {
         let trimmed = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
         let upstreamDefault = "acestep-v15-turbo"
         let compatibilityDefault = "music-acestep-v15-turbo"
-        let xlTurboDefault = "acestep-v15-xl-turbo"
+        let decoderDefaults = [
+            upstreamDefault,
+            compatibilityDefault,
+            "acestep-v15-xl-turbo",
+            "acestep-v15-xl-sft",
+            "acestep-v15-xl-base",
+            "acestep-v15-sft",
+            "acestep-v15-base",
+        ]
         let candidates = trimmed == upstreamDefault
-            ? [upstreamDefault, compatibilityDefault, xlTurboDefault]
+            ? decoderDefaults
             : [trimmed]
 
-        for candidate in candidates where isUsableTurboDirectory(
+        for candidate in candidates where isUsableDecoderDirectory(
             root.appendingPathComponent(candidate, isDirectory: true),
             fileManager: fm
         ) {
             return candidate
         }
-        throw ValidationError("--turbo-subdirectory not found: \(trimmed)")
+        throw ValidationError("--decoder-subdirectory not found: \(trimmed)")
     }
 
     static func resolveLMSubdirectory(at root: URL, explicit: String?) throws -> String? {
@@ -165,16 +173,16 @@ enum ACEStepCLIHelper {
         }
 
         let preferredCandidates = [
-            "acestep-5Hz-lm-1.7B",
-            "acestep-5hz-lm-1.7b",
             "acestep-5Hz-lm-4B",
             "acestep-5hz-lm-4b",
+            "acestep-5Hz-lm-1.7B",
+            "acestep-5hz-lm-1.7b",
             "acestep-5Hz-lm",
             "acestep-5hz-lm",
-            "music-acestep-5hz-lm-1.7b",
-            "music-acestep-5Hz-lm-1.7B",
             "music-acestep-5hz-lm-4b",
             "music-acestep-5Hz-lm-4B",
+            "music-acestep-5hz-lm-1.7b",
+            "music-acestep-5Hz-lm-1.7B",
             "music-acestep-5hz-lm",
             "music-acestep-5Hz-lm",
             "lm",
@@ -309,10 +317,18 @@ enum ACEStepCLIHelper {
             return false
         }
         let turboCandidates = turboSubdirectory == "acestep-v15-turbo"
-            ? ["acestep-v15-turbo", "music-acestep-v15-turbo", "acestep-v15-xl-turbo"]
+            ? [
+                "acestep-v15-turbo",
+                "music-acestep-v15-turbo",
+                "acestep-v15-xl-turbo",
+                "acestep-v15-xl-sft",
+                "acestep-v15-xl-base",
+                "acestep-v15-sft",
+                "acestep-v15-base",
+            ]
             : [turboSubdirectory]
         guard turboCandidates.contains(where: {
-            isUsableTurboDirectory(root.appendingPathComponent($0, isDirectory: true), fileManager: fm)
+            isUsableDecoderDirectory(root.appendingPathComponent($0, isDirectory: true), fileManager: fm)
         }) else {
             return false
         }
@@ -335,7 +351,7 @@ enum ACEStepCLIHelper {
         return true
     }
 
-    private static func isUsableTurboDirectory(_ url: URL, fileManager: FileManager) -> Bool {
+    private static func isUsableDecoderDirectory(_ url: URL, fileManager: FileManager) -> Bool {
         isDirectory(url, fileManager: fileManager)
             && ACEStepResources(rootURL: url).validate(fileManager: fileManager).isEmpty
     }

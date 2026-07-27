@@ -65,7 +65,56 @@ public struct ACEStepMusicUnderstandingResult: Sendable, Hashable {
     }
 }
 
+public struct ACEStepMusicPlan: Sendable, Hashable {
+    public var metadata: ACEStepMusicUnderstandingMetadata
+    public var lmResult: ACEStep5HzLMResult
+
+    public init(
+        metadata: ACEStepMusicUnderstandingMetadata,
+        lmResult: ACEStep5HzLMResult
+    ) {
+        self.metadata = metadata
+        self.lmResult = lmResult
+    }
+}
+
 extension ACEStepPipeline {
+    public func planMusic(
+        caption: String,
+        lyrics: String,
+        instruction: String = ACEStepLMInstructions.defaultInstruction,
+        userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
+        lmConfig: ACEStep5HzLMGenerationConfig = .init(
+            maxNewTokens: 1_024,
+            temperature: 0.85,
+            topP: 0.9
+        )
+    ) throws -> ACEStepMusicPlan {
+        guard let lm else {
+            throw PipelineError.lmNotConfigured
+        }
+        let sampler = lm.makeConstrainedSampler(
+            enabled: true,
+            skipCaption: false,
+            skipLanguage: false,
+            stopAtReasoning: true,
+            generationPhase: .codes,
+            userMetadata: userMetadata
+        )
+        let result = lm.generateConstrained(
+            caption: caption,
+            lyrics: lyrics,
+            instruction: instruction,
+            systemInstruction: instruction,
+            config: lmConfig,
+            sampler: sampler
+        )
+        return ACEStepMusicPlan(
+            metadata: Self.parseUnderstandingOutput(result.generatedText),
+            lmResult: result
+        )
+    }
+
     public func audioCodeString(
         sourceAudio48kHz: MLXArray,
         durationSeconds: Float
@@ -152,7 +201,7 @@ extension ACEStepPipeline {
             case .keyscale:
                 metadata.keyscale = cleanMetadataString(value)
             case .language:
-                metadata.language = cleanMetadataString(value)
+                metadata.language = normalizedVocalLanguage(value)
             case .timesignature:
                 metadata.timesignature = cleanMetadataString(value)
             case .genres:
@@ -222,6 +271,22 @@ extension ACEStepPipeline {
         }
         return trimmed
     }
+
+    private static func normalizedVocalLanguage(_ value: String) -> String? {
+        guard let cleaned = cleanMetadataString(value) else {
+            return nil
+        }
+        let normalized = cleaned.lowercased()
+        return validVocalLanguages.contains(normalized) ? normalized : nil
+    }
+
+    private static let validVocalLanguages: Set<String> = [
+        "ar", "az", "bg", "bn", "ca", "cs", "da", "de", "el", "en",
+        "es", "fa", "fi", "fr", "he", "hi", "hr", "ht", "hu", "id",
+        "is", "it", "ja", "ko", "la", "lt", "ms", "ne", "nl", "no",
+        "pa", "pl", "pt", "ro", "ru", "sa", "sk", "sr", "sv", "sw",
+        "ta", "te", "th", "tl", "tr", "uk", "ur", "vi", "yue", "zh",
+    ]
 
     private static func parseInt(_ value: String) -> Int? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)

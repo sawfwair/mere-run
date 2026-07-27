@@ -8,6 +8,7 @@ import MLXRandom
 // main file reads in the same order callers use the pipeline.
 
 public struct ACEStepConditionInputs {
+    public var task: ACEStepTask
     public var textHiddenStates: MLXArray
     public var textAttentionMask: MLXArray
     public var lyricHiddenStates: MLXArray
@@ -22,8 +23,13 @@ public struct ACEStepConditionInputs {
     public var silenceLatent: MLXArray?
     public var nonCoverTextHiddenStates: MLXArray?
     public var nonCoverTextAttentionMask: MLXArray?
+    public var repaintMask: MLXArray?
+    public var cleanSourceLatents: MLXArray?
+    public var repaintConfiguration: ACEStepRepaintConfiguration?
+    public var sourceAudio48kHz: MLXArray?
 
     public init(
+        task: ACEStepTask = .textToMusic,
         textHiddenStates: MLXArray,
         textAttentionMask: MLXArray,
         lyricHiddenStates: MLXArray,
@@ -37,8 +43,13 @@ public struct ACEStepConditionInputs {
         attentionMask: MLXArray? = nil,
         silenceLatent: MLXArray? = nil,
         nonCoverTextHiddenStates: MLXArray? = nil,
-        nonCoverTextAttentionMask: MLXArray? = nil
+        nonCoverTextAttentionMask: MLXArray? = nil,
+        repaintMask: MLXArray? = nil,
+        cleanSourceLatents: MLXArray? = nil,
+        repaintConfiguration: ACEStepRepaintConfiguration? = nil,
+        sourceAudio48kHz: MLXArray? = nil
     ) {
+        self.task = task
         self.textHiddenStates = textHiddenStates
         self.textAttentionMask = textAttentionMask
         self.lyricHiddenStates = lyricHiddenStates
@@ -53,6 +64,10 @@ public struct ACEStepConditionInputs {
         self.silenceLatent = silenceLatent
         self.nonCoverTextHiddenStates = nonCoverTextHiddenStates
         self.nonCoverTextAttentionMask = nonCoverTextAttentionMask
+        self.repaintMask = repaintMask
+        self.cleanSourceLatents = cleanSourceLatents
+        self.repaintConfiguration = repaintConfiguration
+        self.sourceAudio48kHz = sourceAudio48kHz
     }
 }
 
@@ -90,6 +105,7 @@ public final class ACEStepPipeline {
     }
 
     let decoderConfig: ACEStepConfig
+    public let checkpointVariant: ACEStepCheckpointVariant
     let decoder: ACEStepDiT
     let encoder: ACEStepConditionEncoder
     let tokenizer: ACEStepAudioTokenizer
@@ -131,7 +147,15 @@ public final class ACEStepPipeline {
             }
         }
 
-        self.decoderConfig = try ACEStepCheckpointLoader.loadConfig(resources: decoderResources, fileManager: fileManager)
+        let decoderConfig = try ACEStepCheckpointLoader.loadConfig(
+            resources: decoderResources,
+            fileManager: fileManager
+        )
+        self.decoderConfig = decoderConfig
+        self.checkpointVariant = ACEStepCheckpointVariant.detect(
+            modelRootURL: decoderResources.modelRootURL,
+            config: decoderConfig
+        )
         let bundle = try ACEStepCheckpointLoader.loadTurboBundle(
             resources: decoderResources,
             dtype: dtype,
@@ -215,13 +239,10 @@ public final class ACEStepPipeline {
         let B = 1
         let T = max(1, Int((Double(config.durationSeconds) * 25.0).rounded()))
 
-        let noise: MLXArray
-        if let seed = config.seed {
-            let key = MLXRandom.key(seed)
-            noise = MLXRandom.normal([B, T, decoderConfig.audioAcousticHiddenDim], key: key).asType(.float32)
-        } else {
-            noise = MLXRandom.normal([B, T, decoderConfig.audioAcousticHiddenDim]).asType(.float32)
-        }
+        let noise = prepareInitialNoise(
+            shape: [B, T, decoderConfig.audioAcousticHiddenDim],
+            config: config
+        )
 
         let encoderHiddenStates = MLX.broadcast(
             nullConditionEmbedding,
@@ -237,21 +258,24 @@ public final class ACEStepPipeline {
         let chunkChannels = contextChannels - srcChannels
         let srcLatents = defaultSourceLatents(targetFrames: T).asType(noise.dtype)
         precondition(srcLatents.dim(2) == srcChannels, "Expected source latent channels to match context layout.")
-        let chunkMask = MLXArray.ones([B, T, chunkChannels], dtype: noise.dtype) * MLXArray(Float(2.0)).asType(noise.dtype)
+        let chunkMask = MLXArray.ones([B, T, chunkChannels], dtype: noise.dtype)
         let contextLatents = MLX.concatenated([srcLatents, chunkMask], axis: -1)
 
-        let schedule = ACEStepTurboScheduler(fixNFE: config.fixNFE, shift: config.shift, timesteps: config.timesteps)
+        let timesteps = inferenceTimesteps(config)
         let latents = denoiseTurbo(
             noise: noise,
-            timesteps: schedule.timesteps,
+            timesteps: timesteps,
             inferMethod: config.inferMethod,
+            samplerMode: config.samplerMode,
             encoderHiddenStates: encoderHiddenStates,
             encoderAttentionMask: encoderAttentionMask,
             contextLatents: contextLatents,
             dcwEnabled: config.dcwEnabled,
             dcwMode: config.dcwMode,
             dcwScaler: config.dcwScaler,
-            dcwHighScaler: config.dcwHighScaler
+            dcwHighScaler: config.dcwHighScaler,
+            velocityNormThreshold: config.velocityNormThreshold,
+            velocityEMAFactor: config.velocityEMAFactor
         )
 
         if config.useTiledVaeDecode {
@@ -274,6 +298,7 @@ public final class ACEStepPipeline {
         guard let lm else {
             throw PipelineError.lmNotConfigured
         }
+        try checkpointVariant.validate(conditionInputs.task)
 
         let B = conditionInputs.srcLatents.dim(0)
         precondition(B == 1, "generateWithLM currently supports batch size 1.")
@@ -282,6 +307,8 @@ public final class ACEStepPipeline {
         let targetCodes = Int(ceil(Double(T) / Double(decoderConfig.poolWindowSize)))
         let targetDurationSeconds = Float(targetCodes) / 5.0
 
+        var effectiveLMConfig = lmConfig
+        effectiveLMConfig.seed = effectiveLMConfig.seed ?? config.seed
         let lmResult = try generateAudioCodesWithFallback(
             lm: lm,
             caption: caption,
@@ -290,7 +317,7 @@ public final class ACEStepPipeline {
             lmSystemInstruction: lmSystemInstruction,
             targetCodes: targetCodes,
             targetDurationSeconds: targetDurationSeconds,
-            lmConfig: lmConfig,
+            lmConfig: effectiveLMConfig,
             lmUserMetadata: lmUserMetadata
         )
 
@@ -322,24 +349,28 @@ public final class ACEStepPipeline {
             silenceLatent: conditionInputs.silenceLatent,
             srcLatents: conditionInputs.srcLatents,
             chunkMasks: conditionInputs.chunkMasks,
-            isCovers: conditionInputs.isCovers,
+            // Upstream promotes any request carrying semantic audio-code hints
+            // to cover conditioning. Otherwise the decoded 5 Hz LM plan is
+            // computed and then discarded for ordinary text-to-music requests.
+            isCovers: MLXArray.ones(
+                conditionInputs.isCovers.shape,
+                dtype: conditionInputs.isCovers.dtype
+            ),
             audioCodes: audioCodes
         )
         let nonCoverPrepared = prepareNonCoverConditionIfNeeded(conditionInputs: conditionInputs)
 
-        let noise: MLXArray
-        if let seed = config.seed {
-            let key = MLXRandom.key(seed)
-            noise = MLXRandom.normal([B, T, decoderConfig.audioAcousticHiddenDim], key: key).asType(.float32)
-        } else {
-            noise = MLXRandom.normal([B, T, decoderConfig.audioAcousticHiddenDim]).asType(.float32)
-        }
+        let noise = prepareInitialNoise(
+            shape: [B, T, decoderConfig.audioAcousticHiddenDim],
+            config: config
+        )
 
-        let schedule = ACEStepTurboScheduler(fixNFE: config.fixNFE, shift: config.shift, timesteps: config.timesteps)
+        let timesteps = inferenceTimesteps(config)
         let latents = denoiseTurbo(
             noise: noise,
-            timesteps: schedule.timesteps,
+            timesteps: timesteps,
             inferMethod: config.inferMethod,
+            samplerMode: config.samplerMode,
             encoderHiddenStates: prepared.encoderHiddenStates.asType(noise.dtype),
             encoderAttentionMask: prepared.encoderAttentionMask,
             contextLatents: prepared.contextLatents.asType(noise.dtype),
@@ -352,15 +383,25 @@ public final class ACEStepPipeline {
             dcwEnabled: config.dcwEnabled,
             dcwMode: config.dcwMode,
             dcwScaler: config.dcwScaler,
-            dcwHighScaler: config.dcwHighScaler
+            dcwHighScaler: config.dcwHighScaler,
+            guidanceScale: checkpointVariant.isTurbo ? 1 : config.guidanceScale,
+            guidanceMode: config.guidanceMode,
+            nullConditionEmbedding: nullConditionEmbedding,
+            cfgIntervalStart: config.cfgIntervalStart,
+            cfgIntervalEnd: config.cfgIntervalEnd,
+            velocityNormThreshold: config.velocityNormThreshold,
+            velocityEMAFactor: config.velocityEMAFactor,
+            repaintMask: conditionInputs.repaintMask,
+            cleanSourceLatents: conditionInputs.cleanSourceLatents,
+            repaintInjectionRatio: conditionInputs.repaintConfiguration?.injectionRatio ?? 0,
+            repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0
         )
 
-        let audio: MLXArray
-        if config.useTiledVaeDecode {
-            audio = vae.tiledDecode(latents, chunkSize: config.vaeChunkSize, overlap: config.vaeOverlap)
-        } else {
-            audio = vae.decode(latents)
-        }
+        let audio = try decodeAndApplyRepaintSplice(
+            latents: latents,
+            conditionInputs: conditionInputs,
+            config: config
+        )
 
         return (audio, lmResult)
     }
@@ -377,9 +418,23 @@ public final class ACEStepPipeline {
         referenceTimbreAudio48kHz: [MLXArray]? = nil,
         audioCoverStrength: Float = 1.0,
         vocalLanguage: String = "en",
-        instruction: String = "Fill the audio semantic mask based on the given conditions:",
-        isCover: Bool = false
+        instruction: String? = nil,
+        task: ACEStepTask = .textToMusic,
+        repaintConfiguration: ACEStepRepaintConfiguration? = nil
     ) throws -> MLXArray {
+        try checkpointVariant.validate(task)
+        if task.requiresSourceAudio,
+           sourceLatents25Hz == nil,
+           sourceAudio48kHz == nil
+        {
+            throw PipelineError.invalidConditioningInput(
+                "task '\(task.rawValue)' requires sourceLatents25Hz or sourceAudio48kHz."
+            )
+        }
+        let effectiveRepaintConfiguration = task == .repaint || task == .lego
+            ? repaintConfiguration ?? .init()
+            : nil
+        let effectiveInstruction = instruction ?? task.instruction()
         let T = max(1, Int((Double(config.durationSeconds) * 25.0).rounded()))
         let srcLatents = try normalizeSourceLatents(
             sourceLatents25Hz,
@@ -396,10 +451,12 @@ public final class ACEStepPipeline {
             lmUserMetadata: lmUserMetadata,
             referenceTimbreLatents25Hz: referenceTimbreLatents25Hz,
             referenceTimbreAudio48kHz: referenceTimbreAudio48kHz,
+            sourceAudio48kHz: sourceAudio48kHz,
             audioCoverStrength: audioCoverStrength,
             vocalLanguage: vocalLanguage,
-            instruction: instruction,
-            isCover: isCover
+            instruction: effectiveInstruction,
+            task: task,
+            repaintConfiguration: effectiveRepaintConfiguration
         )
 
         let B = conditionInputs.srcLatents.dim(0)
@@ -425,19 +482,17 @@ public final class ACEStepPipeline {
         )
         let nonCoverPrepared = prepareNonCoverConditionIfNeeded(conditionInputs: conditionInputs)
 
-        let noise: MLXArray
-        if let seed = config.seed {
-            let key = MLXRandom.key(seed)
-            noise = MLXRandom.normal([B, T, decoderConfig.audioAcousticHiddenDim], key: key).asType(.float32)
-        } else {
-            noise = MLXRandom.normal([B, T, decoderConfig.audioAcousticHiddenDim]).asType(.float32)
-        }
+        let noise = prepareInitialNoise(
+            shape: [B, T, decoderConfig.audioAcousticHiddenDim],
+            config: config
+        )
 
-        let schedule = ACEStepTurboScheduler(fixNFE: config.fixNFE, shift: config.shift, timesteps: config.timesteps)
+        let timesteps = inferenceTimesteps(config)
         let latents = denoiseTurbo(
             noise: noise,
-            timesteps: schedule.timesteps,
+            timesteps: timesteps,
             inferMethod: config.inferMethod,
+            samplerMode: config.samplerMode,
             encoderHiddenStates: prepared.encoderHiddenStates.asType(noise.dtype),
             encoderAttentionMask: prepared.encoderAttentionMask,
             contextLatents: prepared.contextLatents.asType(noise.dtype),
@@ -450,13 +505,25 @@ public final class ACEStepPipeline {
             dcwEnabled: config.dcwEnabled,
             dcwMode: config.dcwMode,
             dcwScaler: config.dcwScaler,
-            dcwHighScaler: config.dcwHighScaler
+            dcwHighScaler: config.dcwHighScaler,
+            guidanceScale: checkpointVariant.isTurbo ? 1 : config.guidanceScale,
+            guidanceMode: config.guidanceMode,
+            nullConditionEmbedding: nullConditionEmbedding,
+            cfgIntervalStart: config.cfgIntervalStart,
+            cfgIntervalEnd: config.cfgIntervalEnd,
+            velocityNormThreshold: config.velocityNormThreshold,
+            velocityEMAFactor: config.velocityEMAFactor,
+            repaintMask: conditionInputs.repaintMask,
+            cleanSourceLatents: conditionInputs.cleanSourceLatents,
+            repaintInjectionRatio: conditionInputs.repaintConfiguration?.injectionRatio ?? 0,
+            repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0
         )
 
-        if config.useTiledVaeDecode {
-            return vae.tiledDecode(latents, chunkSize: config.vaeChunkSize, overlap: config.vaeOverlap)
-        }
-        return vae.decode(latents)
+        return try decodeAndApplyRepaintSplice(
+            latents: latents,
+            conditionInputs: conditionInputs,
+            config: config
+        )
     }
 
     public func generatePromptToAudioWithLM(
@@ -471,10 +538,24 @@ public final class ACEStepPipeline {
         referenceTimbreAudio48kHz: [MLXArray]? = nil,
         audioCoverStrength: Float = 1.0,
         vocalLanguage: String = "en",
-        instruction: String = "Fill the audio semantic mask based on the given conditions:",
+        instruction: String? = nil,
         lmSystemInstruction: String = ACEStepLMInstructions.defaultInstruction,
-        isCover: Bool = false
+        task: ACEStepTask = .textToMusic,
+        repaintConfiguration: ACEStepRepaintConfiguration? = nil
     ) throws -> (audio: MLXArray, lmResult: ACEStep5HzLMResult) {
+        try checkpointVariant.validate(task)
+        if task.requiresSourceAudio,
+           sourceLatents25Hz == nil,
+           sourceAudio48kHz == nil
+        {
+            throw PipelineError.invalidConditioningInput(
+                "task '\(task.rawValue)' requires sourceLatents25Hz or sourceAudio48kHz."
+            )
+        }
+        let effectiveRepaintConfiguration = task == .repaint || task == .lego
+            ? repaintConfiguration ?? .init()
+            : nil
+        let effectiveInstruction = instruction ?? task.instruction()
         let T = max(1, Int((Double(config.durationSeconds) * 25.0).rounded()))
         let srcLatents = try normalizeSourceLatents(
             sourceLatents25Hz,
@@ -492,10 +573,12 @@ public final class ACEStepPipeline {
             lmUserMetadata: lmUserMetadata,
             referenceTimbreLatents25Hz: referenceTimbreLatents25Hz,
             referenceTimbreAudio48kHz: referenceTimbreAudio48kHz,
+            sourceAudio48kHz: sourceAudio48kHz,
             audioCoverStrength: audioCoverStrength,
             vocalLanguage: vocalLanguage,
-            instruction: instruction,
-            isCover: isCover
+            instruction: effectiveInstruction,
+            task: task,
+            repaintConfiguration: effectiveRepaintConfiguration
         )
 
         return try generateWithLM(
@@ -504,11 +587,26 @@ public final class ACEStepPipeline {
             conditionInputs: conditionInputs,
             config: config,
             lmConfig: lmConfig,
-            instruction: instruction,
+            instruction: effectiveInstruction,
             lmUserMetadata: lmUserMetadata,
             lmSystemInstruction: lmSystemInstruction,
             audioCoverStrength: audioCoverStrength
         )
+    }
+
+    func inferenceTimesteps(_ config: ACEStepInferenceConfig) -> [Float] {
+        if checkpointVariant.isTurbo {
+            return ACEStepTurboScheduler(
+                fixNFE: config.fixNFE,
+                shift: config.shift,
+                timesteps: config.timesteps
+            ).timesteps
+        }
+        return ACEStepContinuousScheduler(
+            inferenceSteps: config.fixNFE,
+            shift: config.shift,
+            timesteps: config.timesteps
+        ).timesteps
     }
 
 }

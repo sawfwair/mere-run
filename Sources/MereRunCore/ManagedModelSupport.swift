@@ -611,6 +611,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                ModelResolver.ModelID.aceStepXLBase.rawValue,
+                "ACE-Step XL Base",
+                "Runs the full ACE-Step 1.5 XL Base DiT with CFG and advanced source-audio tasks.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                ModelResolver.ModelID.aceStepXLSFT.rawValue,
+                "ACE-Step XL SFT",
+                "Runs the full ACE-Step 1.5 XL supervised checkpoint with CFG for highest-fidelity standard generation.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 ModelResolver.ModelID.aceStepXLTurbo.rawValue,
                 "ACE-Step XL Turbo",
                 "Generates higher-quality music with the ACE-Step 1.5 XL turbo DiT.",

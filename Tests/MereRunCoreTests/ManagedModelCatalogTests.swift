@@ -943,8 +943,13 @@ final class ManagedModelCatalogTests: XCTestCase {
     func testACEStepXLTurboUsesMountedXLLayout() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.aceStepXLTurbo.rawValue))
         XCTAssertEqual(spec.hubFallback?.repoId, "ACE-Step/Ace-Step1.5")
+        XCTAssertEqual(spec.hubFallback?.revision, "19671f406d603126926c1b7e2adc169acbcade22")
         XCTAssertEqual(spec.mountedHubFallbacks.map(\.destinationPath), ["acestep-v15-xl-turbo"])
         XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.repoId, "ACE-Step/acestep-v15-xl-turbo")
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.revision,
+            "d4a0b288b83ebb7e25a8c0b32c573c22e134e8ee"
+        )
 
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -957,6 +962,48 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(spec.isManagedRootComplete(standardRoot, fileManager: .default))
     }
 
+    func testACEStepXLBaseAndSFTUsePinnedMountedLayouts() throws {
+        let fixtures: [
+            (
+                modelID: ModelResolver.ModelID,
+                destination: String,
+                repoID: String,
+                revision: String
+            )
+        ] = [
+            (
+                .aceStepXLBase,
+                "acestep-v15-xl-base",
+                "ACE-Step/acestep-v15-xl-base",
+                "220c1166efbdd9583eafcb12eb160594bbfcb241"
+            ),
+            (
+                .aceStepXLSFT,
+                "acestep-v15-xl-sft",
+                "ACE-Step/acestep-v15-xl-sft",
+                "d06de46b4622f781cf07f4a013a67d591ca52819"
+            ),
+        ]
+
+        for fixture in fixtures {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: fixture.modelID.rawValue))
+            XCTAssertEqual(spec.hubFallback?.repoId, "ACE-Step/Ace-Step1.5")
+            XCTAssertEqual(spec.hubFallback?.revision, "19671f406d603126926c1b7e2adc169acbcade22")
+            XCTAssertEqual(spec.mountedHubFallbacks.map(\.destinationPath), [fixture.destination])
+            XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.repoId, fixture.repoID)
+            XCTAssertEqual(spec.mountedHubFallbacks.first?.hubFallback.revision, fixture.revision)
+            XCTAssertEqual(
+                spec.mountedHubFallbacks.first?.hubFallback.patterns.contains("apg_guidance.py"),
+                true
+            )
+
+            let root = try makeTemporaryDirectory()
+            defer { try? FileManager.default.removeItem(at: root) }
+            try writeMinimalACEStepRoot(at: root, turboSubdirectory: fixture.destination)
+            XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+        }
+    }
+
     func testACEStepXLTurboLM4BRequiresMountedLM() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue))
         XCTAssertEqual(
@@ -964,6 +1011,10 @@ final class ManagedModelCatalogTests: XCTestCase {
             ["acestep-v15-xl-turbo", "acestep-5Hz-lm-4B"]
         )
         XCTAssertEqual(spec.mountedHubFallbacks.last?.hubFallback.repoId, "ACE-Step/acestep-5Hz-lm-4B")
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.last?.hubFallback.revision,
+            "0a3ec94b557aea7d508da38b31cfe7341f6ff737"
+        )
 
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

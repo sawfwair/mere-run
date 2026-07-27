@@ -8,6 +8,8 @@ and `mere.run music transcribe`.
 
 - `mere.run music generate`
 - `mere.run music analyze`
+- `mere.run music serve`
+- `mere.run music train-adapter`
 - `mere.run music realtime`
 - `mere.run music transcribe`
 
@@ -16,6 +18,8 @@ and `mere.run music transcribe`.
 - `music-acestep`
 - `music-acestep-xl-turbo`
 - `music-acestep-xl-turbo-lm4b`
+- `music-acestep-xl-sft`
+- `music-acestep-xl-base`
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
 - `music-muscriptor-small`
@@ -144,6 +148,75 @@ optional 4B 5 Hz LM for `--use-lm` runs. ACE-Step cover/repaint/extract tasks
 follow upstream and skip the 5 Hz LM phase so source-audio conditioning stays
 faithful.
 
+ACE-Step task routing is typed and checkpoint-aware. Turbo/SFT support
+text-to-music, repaint, cover, and cover-nofsq; extract, lego, and complete are
+accepted only for Base checkpoints. Unknown task names fail in argument
+parsing, while incompatible checkpoint/task pairs fail before weight loading.
+XL-SFT and XL-Base use the native continuous flow schedule, real conditional
+and unconditional decoder batches, CFG/APG/ADG guidance intervals, velocity
+norm/EMA stabilization, and Euler or Heun ODE integration. Turbo remains the
+fast distilled path. Base uniquely enables extract, lego, and complete.
+
+`--quality draft|song|final|edit` is model-aware. It selects checkpoint-safe
+steps, sampler, guidance, velocity stabilization, LM planning policy, automatic
+duration behavior, and a warm best-of-N count. Explicit flags still override
+the preset. `final` prefers the 4B planner when it is installed. Best-of-N
+ranking checks finite samples, level, clipping, DC offset, crest factor,
+spectral flatness, frame-energy movement, periodicity, time-varying spectral
+structure, and tail continuity. This prevents loud stationary noise or a
+prematurely dead ending from winning on level statistics alone.
+
+Every ACE-Step generation writes 48 kHz stereo 24-bit WAV by default plus a
+schema 2 reproducible recipe JSON. The recipe records exact checkpoint
+repositories and immutable revisions, adapter hashes and scales,
+prompt/lyrics/instruction, the final effective BPM, duration, key/scale, vocal
+language and time signature, task/edit configuration, inference controls,
+candidate seeds and technical scores, export policy, and input/output hashes.
+When the 5 Hz LM is active, each candidate also records its semantic audio-code
+count. The generation seed drives both LM sampling and diffusion.
+`--export-format float32` preserves a floating-point master; `--daw-bundle`
+adds candidates, extracted stems, synchronized lyric markers, and a portable
+REAPER project.
+
+Retakes use exact spherical noise interpolation between `--seed` and
+`--retake-seed`. `--flow-edit` implements the upstream source/target velocity
+difference field over a configurable normalized window, including Monte Carlo
+forward-noise averaging and target-only finishing denoise. It is distinct from
+repaint: repaint preserves audio outside a time range, while flow edit morphs
+the whole source toward a new semantic target.
+
+PEFT LoRA and LyCORIS LoKr adapters load natively with `--adapter`; multiple
+files stack and may use one shared or per-adapter scale. LoKr uses factored
+Kronecker evaluation instead of materializing full decoder deltas. Train either
+format with `music train-adapter`; its objective matches ACE-Step flow
+matching, and its output is directly reloadable by `music generate` or the
+resident server.
+
+`music serve` holds the complete pipeline and its adapters in memory. It
+provides `GET /health`, `POST /v1/audio/music`, and serialized
+`POST /v1/audio/music/batches`, with JSON/base64 or raw WAV responses. Binding
+outside loopback requires a bearer token. The API mirrors the CLI controls for
+checkpoint-aware tasks, quality, steps and scheduler, CFG/APG/ADG, retakes,
+cover strength/noise, repaint, flow edit, reference audio, LM metadata and
+sampling, complete-track classes, and tiled VAE decode. Song/final requests
+without `duration_seconds` use the resident LM planner; every JSON result
+returns `conditioning_metadata` with the values actually used.
+
+Batch items may select independent `candidates` values. The server serializes
+them through the warm session, returns every ranked candidate and exactly one
+selected winner per item, and rejects a request whose `model` does not match
+the resident model. Batch responses are JSON; raw `response_format: "wav"` is
+available on the single-generation endpoint.
+
+Repaint is a real bounded edit, not a cover alias. `--repaint-start` and
+`--repaint-end` produce the upstream 25 Hz latent mask. The requested span is
+replaced by the checkpoint silence latent for conditioning, clean source
+latents outside it are re-injected at the appropriate noise level during early
+denoising, and latent crossfades soften both boundaries. After VAE decode the
+runtime splices the original pre-VAE waveform back outside the edit span, with
+a short waveform crossfade. `--repaint-mode` selects conservative, balanced,
+or aggressive preservation; `--repaint-strength` tunes balanced mode.
+
 For covers, `--analyze-source-audio` runs ACE-Step audio understanding before
 the direct DiT cover pass. It converts the source audio to 5 Hz audio codes,
 asks the LM for source BPM, key/scale, language, and time signature, and fills
@@ -214,6 +287,8 @@ notes and continuous controls.
 
 - `Sources/MereRunCLI/Commands/MusicAnalyzeCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicGenerateCommand.swift`
+- `Sources/MereRunCLI/Commands/MusicServeCommand.swift`
+- `Sources/MereRunCLI/Commands/MusicTrainAdapterCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicRealtimeCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicTranscribeCommand.swift`
 
@@ -222,6 +297,12 @@ notes and continuous controls.
 - `Sources/MereRunCore/ACEStep/ACEStepPipeline.swift`
 - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Prompting.swift`
 - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Generation.swift`
+- `Sources/MereRunCore/ACEStep/ACEStepTask.swift`
+- `Sources/MereRunCore/ACEStep/ACEStepRepaint.swift`
+- `Sources/MereRunCore/ACEStep/ACEStepFlowEdit.swift`
+- `Sources/MereRunCore/ACEStep/ACEStepGenerationSession.swift`
+- `Sources/MereRunCore/ACEStep/ACEStepAdapter.swift`
+- `Sources/MereRunCore/ACEStep/ACEStepAdapterTrainer.swift`
 - `Sources/MereRunCore/MagentaRT2/MagentaRT2Resources.swift`
 - `Sources/MereRunCore/MagentaRT2/MagentaRT2Renderer.swift`
 - `Sources/MereRunCore/MagentaRT2/MagentaRT2RealtimeSession.swift`
@@ -234,6 +315,10 @@ The ACEStep runtime now follows a clean phase split:
 1. `ACEStepPipeline.swift` for the public pipeline and orchestration
 2. `ACEStepPipeline+Prompting.swift` for prompt preparation and conditioning
 3. `ACEStepPipeline+Generation.swift` for the generation path itself
+
+See [ACE-Step validation](./acestep-validation.md) for immutable checkpoint
+pins, parity coverage, installed-model evidence, listening review fixtures,
+and measured performance.
 
 That makes it much easier to follow than a single pipeline monolith.
 

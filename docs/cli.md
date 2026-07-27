@@ -68,6 +68,8 @@ Public tree:
   - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
   - `mere.run music generate` — Generate audio from a music prompt.
   - `mere.run music realtime` — Run Magenta RealTime 2 music generation.
+  - `mere.run music serve` — Start a warm resident ACE-Step music generation API.
+  - `mere.run music train-adapter` — Train a native ACE-Step LoRA or LoKr adapter.
   - `mere.run music transcribe` — Transcribe a full music mix into instrument-separated MIDI with MuScriptor.
 - [`mere.run sfx`](/runtime/sfx) — Generate sound effects locally.
   - `mere.run sfx ae` — Encode or decode Woosh audio autoencoder latents.
@@ -212,7 +214,7 @@ are:
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Face detection and identity embeddings: `vision-face-buffalo-l`
-- Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
+- Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
 - Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 

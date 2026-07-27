@@ -1504,19 +1504,35 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "lightonai/LightOnOCR-2-1B",
                 createdAt: createdAt
             )
-        case .aceStep, .aceStepXLTurbo, .aceStepXLTurboLM4B:
-            let isXL = modelID == .aceStepXLTurbo || modelID == .aceStepXLTurboLM4B
+        case .aceStep, .aceStepXLBase, .aceStepXLSFT, .aceStepXLTurbo, .aceStepXLTurboLM4B:
+            let isBase = modelID == .aceStepXLBase
+            let isSFT = modelID == .aceStepXLSFT
+            let isXLTurbo = modelID == .aceStepXLTurbo || modelID == .aceStepXLTurboLM4B
+            let isXL = isBase || isSFT || isXLTurbo
+            let repoID: String
+            if isBase {
+                repoID = "ACE-Step/acestep-v15-xl-base"
+            } else if isSFT {
+                repoID = "ACE-Step/acestep-v15-xl-sft"
+            } else if isXLTurbo {
+                repoID = "ACE-Step/acestep-v15-xl-turbo"
+            } else {
+                repoID = "ACE-Step/Ace-Step1.5"
+            }
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .aceStep,
                 family: .music,
-                tier: isXL ? .turbo : .latest,
-                variant: isXL ? .distilled : .standard,
+                tier: isXLTurbo ? .turbo : (isXL ? .max : .latest),
+                variant: isXLTurbo ? .distilled : .standard,
                 precision: .bf16,
-                defaults: Defaults(steps: 8, cfg: 1.0),
+                defaults: Defaults(
+                    steps: isXLTurbo || !isXL ? 8 : 50,
+                    cfg: isXLTurbo || !isXL ? 1.0 : 7.0
+                ),
                 supports: [.musicGeneration],
                 components: nil,
-                upstreamRepoId: isXL ? "ACE-Step/acestep-v15-xl-turbo" : "ACE-Step/Ace-Step1.5",
+                upstreamRepoId: repoID,
                 createdAt: createdAt
             )
         case .magentaRT2Small, .magentaRT2Base:

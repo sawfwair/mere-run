@@ -1,6 +1,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXRandom
 
 public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
     public var maxNewTokens: Int
@@ -10,6 +11,7 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
     public var repetitionPenalty: Float?
     public var repetitionContextSize: Int
     public var stopTokenIds: Set<Int>
+    public var seed: UInt64?
 
     public init(
         maxNewTokens: Int = 4096,
@@ -18,7 +20,8 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
         topP: Float = 0.9,
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int = 64,
-        stopTokenIds: Set<Int> = []
+        stopTokenIds: Set<Int> = [],
+        seed: UInt64? = nil
     ) {
         self.maxNewTokens = maxNewTokens
         self.temperature = temperature
@@ -27,6 +30,7 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
         self.stopTokenIds = stopTokenIds
+        self.seed = seed
     }
 }
 
@@ -271,6 +275,9 @@ public final class ACEStep5HzLM {
             repetitionPenalty: config.repetitionPenalty,
             repetitionContextSize: config.repetitionContextSize
         )
+        if let seed = config.seed {
+            MLXRandom.seed(seed)
+        }
         let result = AutoregressiveDecodeEngine.decodeStateful(
             AutoregressiveDecodeRequest(
                 initialLogits: logits,
