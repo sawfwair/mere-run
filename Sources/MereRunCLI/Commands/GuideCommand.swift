@@ -412,6 +412,8 @@ enum GuideRegistry {
             commandPaths: [["music", "generate"]],
             models: [
                 "music-acestep",
+                "music-acestep-xl-base",
+                "music-acestep-xl-sft",
                 "music-acestep-xl-turbo",
                 "music-acestep-xl-turbo-lm4b",
                 "music-magenta-rt2-small",

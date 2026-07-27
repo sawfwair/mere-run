@@ -112,10 +112,12 @@ extension ACEStepPipeline {
         lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
         referenceTimbreLatents25Hz: [MLXArray]? = nil,
         referenceTimbreAudio48kHz: [MLXArray]? = nil,
+        sourceAudio48kHz: MLXArray? = nil,
         audioCoverStrength: Float = 1.0,
         vocalLanguage: String,
         instruction: String,
-        isCover: Bool
+        task: ACEStepTask,
+        repaintConfiguration: ACEStepRepaintConfiguration? = nil
     ) throws -> ACEStepConditionInputs {
         let B = srcLatents.dim(0)
         let T = srcLatents.dim(1)
@@ -210,22 +212,41 @@ extension ACEStepPipeline {
             referenceTimbreAudio48kHz: referenceTimbreAudio48kHz,
             fallbackLatents25Hz: srcLatents
         )
+        let repaintConditioning: ACEStepRepaint.Conditioning? = {
+            guard let repaintConfiguration else {
+                return nil
+            }
+            return ACEStepRepaint.prepareConditioning(
+                cleanSourceLatents: srcLatents,
+                silenceLatents: defaultSourceLatents(targetFrames: T, batchSize: B)
+                    .asType(srcLatents.dtype),
+                chunkChannels: chunkChannels,
+                configuration: repaintConfiguration,
+                task: task
+            )
+        }()
 
         return ACEStepConditionInputs(
+            task: task,
             textHiddenStates: textConditioning.textHiddenStates,
             textAttentionMask: textConditioning.textAttentionMask,
             lyricHiddenStates: textConditioning.lyricHiddenStates,
             lyricAttentionMask: textConditioning.lyricAttentionMask,
             referAudioAcousticHiddenStatesPacked: timbre.packed,
             referAudioOrderMask: timbre.orderMask,
-            srcLatents: srcLatents,
-            chunkMasks: MLXArray.ones([B, T, chunkChannels], dtype: .float32),
-            isCovers: MLXArray([isCover ? Int32(1) : Int32(0)]).asType(.int32),
+            srcLatents: repaintConditioning?.sourceLatents ?? srcLatents,
+            chunkMasks: repaintConditioning?.chunkMasks
+                ?? MLXArray.ones([B, T, chunkChannels], dtype: .float32),
+            isCovers: MLXArray([task.usesFSQCoverHints ? Int32(1) : Int32(0)]).asType(.int32),
             hiddenStates: srcLatents,
             attentionMask: MLXArray.ones([B, T], dtype: .int32),
             silenceLatent: silenceLatent,
             nonCoverTextHiddenStates: textConditioning.nonCoverTextHiddenStates,
-            nonCoverTextAttentionMask: textConditioning.nonCoverTextAttentionMask
+            nonCoverTextAttentionMask: textConditioning.nonCoverTextAttentionMask,
+            repaintMask: repaintConditioning?.repaintMask,
+            cleanSourceLatents: repaintConditioning == nil ? nil : srcLatents,
+            repaintConfiguration: repaintConfiguration,
+            sourceAudio48kHz: sourceAudio48kHz
         )
     }
 

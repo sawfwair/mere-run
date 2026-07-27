@@ -16,6 +16,10 @@ Managed ids:
   encoder.
 - `music-acestep-xl-turbo-lm4b`: ACE-Step 1.5 XL turbo plus the optional 4B
   5 Hz LM subdirectory.
+- `music-acestep-xl-sft`: ACE-Step 1.5 XL-SFT with full non-distilled
+  CFG/APG/ADG inference.
+- `music-acestep-xl-base`: ACE-Step 1.5 XL-Base, including extract, lego, and
+  complete tasks.
 - `music-magenta-rt2-small`: Magenta RealTime 2 small exported runtime assets.
 - `music-magenta-rt2-base`: Magenta RealTime 2 base exported runtime assets.
 
@@ -39,6 +43,21 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--lyrics`: inline lyrics.
 - `--lyrics-file`: lyrics file; cannot be used with `--lyrics`.
 - `--output`, `-o`: WAV path.
+- `--quality draft|song|final|edit`: model-aware steps, sampler, guidance, LM,
+  automatic-duration, and best-of-N policy.
+- `--candidates`, `--best-of`: warm-session candidate count; results are
+  technically scored and stably ranked.
+- `--retake-seed`, `--retake-variance`: reproducible spherical retake noise.
+- `--flow-edit`, `--source-caption`, `--source-lyrics`,
+  `--flow-edit-n-min`, `--flow-edit-n-max`, `--flow-edit-n-average`: semantic
+  source-to-target flow editing.
+- `--adapter`, `--adapter-kind`, `--adapter-scale`: stack PEFT LoRA and
+  LyCORIS LoKr adapters.
+- `--export-format pcm16|pcm24|float32`, `--normalize`, fades, and dither:
+  mastering/export controls.
+- `--recipe-output`, `--no-recipe`: exact reproducibility sidecar controls.
+- `--lrc-file`, `--lrc-output`: synchronized lyrics input/output.
+- `--daw-bundle`, `--stems`: portable DAW session and Base-only extraction.
 - `--model`, `-m`: managed id, model root, or checkpoints root.
 - `--checkpoints-root`: root containing ACE-Step subdirectories.
 - `--turbo-subdirectory`, `--vae-subdirectory`, `--lm-subdirectory`, `--text-subdirectory`: component layout overrides.
@@ -49,7 +68,8 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--steps`, `-s`: turbo denoise steps.
 - `--shift`: turbo scheduler shift; ACE-Step CLI default is `3.0`, matching upstream.
 - `--seed`: deterministic generation.
-- `--source-audio`: source song for ACE-Step cover conditioning; implies cover mode unless `--non-cover` is set.
+- `--source-audio`: source song for ACE-Step cover, repaint, extract, lego, or
+  complete conditioning. With the default task it implies `cover`.
 - `--analyze-source-audio`: run ACE-Step 5 Hz LM audio understanding before a
   cover and fill missing BPM, key/scale, language, and time signature metadata
   from the source audio. Explicit `--bpm`, `--keyscale`, `--timesignature`, and
@@ -61,10 +81,19 @@ mere.run guide music generate --model music-magenta-rt2-small
   start closer to the source song.
 - `--vocal-language`: language tag for lyric formatting.
 - `--instruction`: caption instruction prefix.
-- `--task-type`, `--task`: `text2music`, `cover`, `repaint`, `extract`, `lego`, or `complete`.
+- `--task-type`, `--task`: `text2music`, `repaint`, `cover`, `cover-nofsq`,
+  `extract`, `lego`, or `complete`. Unknown values are rejected during parsing.
 - `--track-name`: target track for extract/lego.
 - `--complete-track-classes`: comma-separated classes for complete.
-- `--non-cover`: set `isCover=false`.
+- `--non-cover`: compatibility alias for the explicit `cover-nofsq` task.
+- `--repaint-start`, `--repaint-end`: edit range in seconds; `-1` uses the
+  source end.
+- `--chunk-mask-mode auto|explicit`: use learned automatic masking or pass the
+  exact edit span into the DiT chunk-mask channels.
+- `--repaint-mode conservative|balanced|aggressive`: source-preservation
+  policy. Conservative injects the source throughout denoising and uses the
+  widest boundary fades; aggressive performs pure diffusion.
+- `--repaint-strength`: balanced-mode aggressiveness from `0` to `1`.
 - `--bpm`, `--keyscale`, `--timesignature`: musical metadata.
 - `--lm-top-k`, `--lm-top-p`: constrained LM sampling controls.
 - `--metadata-duration`, `--metadata-language`: metadata overrides for LM.
@@ -95,8 +124,38 @@ The default ACE-Step managed ID uses the smaller 1.5 turbo DiT. Use
 `music-acestep-xl-turbo` for the ACE-Step 1.5 XL turbo DiT on larger machines,
 or `music-acestep-xl-turbo-lm4b` with `--use-lm` and
 `--lm-subdirectory acestep-5Hz-lm-4B` when you want the optional 4B 5 Hz LM.
-ACE-Step cover/repaint/extract tasks skip the LM phase, matching upstream,
-because they use source-audio conditioning directly.
+ACE-Step cover, cover-nofsq, repaint, and extract tasks skip the LM phase,
+matching upstream. Turbo and SFT checkpoints support text-to-music, repaint,
+cover, and cover-nofsq. Extract, lego, and complete are Base-only; the CLI
+rejects those tasks on Turbo/SFT checkpoints before loading model weights.
+XL-SFT and XL-Base use native continuous scheduling, CFG/APG/ADG, velocity
+stabilization, and Euler or Heun integration.
+
+Use a warm resident server when generating repeatedly:
+
+```bash
+mere.run music serve \
+  --model music-acestep-xl-turbo-lm4b \
+  --adapter ./house-style.safetensors \
+  --port 8081
+
+curl http://127.0.0.1:8081/v1/audio/music \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"sleek nocturnal house","quality":"final","candidates":4}'
+```
+
+Train a directly reloadable adapter from a JSON/JSONL manifest containing
+`audio`, `caption`, and optional `lyrics`:
+
+```bash
+mere.run music train-adapter \
+  --model music-acestep-xl-turbo \
+  --dataset ./music-training.jsonl \
+  --kind lokr \
+  --rank 8 \
+  --alpha 16 \
+  --output ./my-style.safetensors
+```
 
 For realtime Magenta RT2 runs, use `mere.run music realtime`. It accepts the
 same Magenta controls plus `--play` or `--no-play` and optional `--output` WAV
@@ -118,9 +177,7 @@ mere.run guide music generate --model music-magenta-rt2-small
 ```
 
 For ACE-Step text-to-music, start with a direct caption and optional structured
-lyrics. Add `--use-lm` only when you want the 5 Hz LM planning phase for
-text-to-music; cover, repaint, extract, lego, and complete tasks use direct DiT
-conditioning instead.
+lyrics. Add `--use-lm` only when you want the 5 Hz LM planning phase.
 
 For ACE-Step covers, keep the source song in `--source-audio` and put the target
 arrangement in the caption. Add `--analyze-source-audio` when you want missing
@@ -131,6 +188,25 @@ For ACE-Step style-transfer covers or remixes, lower `--audio-cover-strength`
 so the caption can steer genre and arrangement. Start around `0.20`, keep
 `--cover-noise-strength 0.0`, and only raise source noise when the result needs
 more of the original song's contour.
+
+For a surgical edit, select `--task repaint`, pass the original song, and set
+the edit range. The runtime silences only that latent span for conditioning,
+re-injects appropriately noised clean source latents outside it during
+denoising, blends the latent boundaries, then restores the original pre-VAE
+waveform outside the range:
+
+```bash
+mere.run music generate \
+  "replace the bridge with a bigger live-drum chorus" \
+  --model music-acestep-xl-turbo \
+  --task repaint \
+  --source-audio ./song.wav \
+  --repaint-start 42.0 \
+  --repaint-end 58.5 \
+  --repaint-mode balanced \
+  --repaint-strength 0.4 \
+  --output ./song-repaint.wav
+```
 
 For analysis-first workflows, run `mere.run music analyze` separately, inspect
 the JSON, then pass explicit `--bpm`, `--keyscale`, `--timesignature`, or
@@ -267,7 +343,9 @@ mere.run music realtime \
 - `--lyrics` and `--lyrics-file` conflict: use only one.
 - Text encoder missing: set `--text-subdirectory` or keep the default layout.
 - `--use-lm` fails: ensure the LM subdirectory exists or pass `--lm-subdirectory`.
-  Cover/repaint/extract tasks skip LM even if the flag is present.
+  Cover, cover-nofsq, repaint, and extract skip LM even if the flag is present.
+- Base-only task rejected: extract, lego, and complete require
+  `music-acestep-xl-base`; Turbo and SFT intentionally reject them.
 - Audio decode memory pressure: keep tiled VAE enabled, reduce duration, or tune VAE chunk size.
 - Magenta RT2 unsupported runtime: build `vendor/magentart.xcframework` with
   `scripts/rebuild_magentart_xcframework.sh` on Apple Silicon macOS, then

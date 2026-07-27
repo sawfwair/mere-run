@@ -4,6 +4,66 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## Unreleased
+
+### Added
+
+- added typed ACE-Step task and checkpoint capability routing for text-to-music,
+  repaint, cover, cover-nofsq, extract, lego, and complete. Invalid tasks now
+  fail during CLI parsing, and Base-only operations fail before checkpoint
+  weights load on Turbo/SFT models.
+- added native ACE-Step repaint ranges with upstream-compatible chunk masks,
+  source-silence conditioning, per-step clean-source injection, latent boundary
+  blending, and post-VAE original-waveform splicing. New controls expose edit
+  start/end, chunk-mask mode, preservation mode, and balanced-mode strength.
+- added immutable XL-SFT and XL-Base managed checkpoints, native continuous
+  non-Turbo inference with CFG/APG/ADG and Euler/Heun integration, adaptive
+  draft/song/final/edit presets, 4B LM planning, and automatic duration.
+- added warm resident music sessions and API batching, deterministic best-of-N
+  seed fanout, technical candidate scoring/ranking, retake interpolation, and
+  upstream-style semantic flow editing.
+- added full resident API control parity for inference, guidance, cover,
+  repaint, flow edit, reference audio, LM planning, VAE tiling, and task
+  instructions. Batch items keep independent best-of-N counts and responses
+  include their final effective conditioning metadata.
+- added native stacked PEFT LoRA and LyCORIS LoKr inference plus ACE-Step
+  flow-matching training through `music train-adapter`. Both formats were
+  train-save-reload tested against the installed XL-Turbo checkpoint.
+- added synchronized LRC, exact checkpoint/adapter recipe provenance, PCM16,
+  PCM24 and Float32 export, normalization/fade/dither controls, extracted
+  stems, and portable DAW/REAPER bundles.
+- added generation recipe schema 2 with the final effective BPM, duration,
+  key/scale, vocal language, and time signature after LM planning and explicit
+  overrides.
+
+### Changed
+
+- changed `--non-cover` into a compatibility alias for the explicit
+  `cover-nofsq` task instead of a boolean that could silently erase task
+  semantics.
+- source-conditioned ACE-Step tasks now inherit source duration and require
+  source audio explicitly. Non-Turbo checkpoints now use their native
+  guidance and continuous schedule rather than the distilled Turbo sampler.
+- ACE-Step LM vocal-language metadata now accepts only the exact supported
+  upstream language codes, normalizes valid codes to lowercase, and discards
+  malformed multi-value or non-vocal planner output.
+- resident music API requests now reject a model other than the loaded model,
+  reject unsupported response formats with actionable JSON errors, and honor
+  per-item candidate counts in heterogeneous batches.
+
+### Fixed
+
+- fixed ACE-Step prompt, unconditional, and automatic repaint chunk masks to
+  match upstream boolean-mask semantics. The runtime previously supplied
+  `2.0` where upstream converts that value to boolean `true` (`1.0`), causing
+  stationary broadband-noise output from otherwise parity-matched components.
+- fixed text-to-music LM conditioning so generated 5 Hz audio codes reach the
+  diffusion model, and made `--seed` cover both LM planning/code sampling and
+  diffusion for repeatable recipes.
+- strengthened best-of-N ranking and the listening regression with spectral
+  structure and tail-continuity metrics, so non-silent broadband noise and
+  prematurely dead endings no longer pass as high-quality candidates.
+
 ## 0.26.0 - 2026-07-22
 
 This release contains every change merged since `v0.25.0`: the LTX 2.3

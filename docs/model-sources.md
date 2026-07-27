@@ -84,6 +84,8 @@ from the runtime catalog used by `mere.run model list`,
 | `image-3d` | `image-3d-instantmesh-base` |
 | `image-3d` | `image-3d-trellis2-4b` |
 | `music` | `music-acestep` |
+| `music` | `music-acestep-xl-base` |
+| `music` | `music-acestep-xl-sft` |
 | `music` | `music-acestep-xl-turbo` |
 | `music` | `music-acestep-xl-turbo-lm4b` |
 | `music` | `music-magenta-rt2-small` |
@@ -464,7 +466,7 @@ swift run mere.run model info image-klein-max
 
 Some retained surfaces have more structure than a flat model root.
 
-### `music-acestep`, `music-acestep-xl-turbo`, and `music-acestep-xl-turbo-lm4b`
+### ACE-Step 1.5 models
 
 The top-level model roots are:
 
@@ -472,12 +474,16 @@ The top-level model roots are:
 .../models/music-acestep
 .../models/music-acestep-xl-turbo
 .../models/music-acestep-xl-turbo-lm4b
+.../models/music-acestep-xl-sft
+.../models/music-acestep-xl-base
 ```
 
 Those roots may contain:
 
 - `acestep-v15-turbo/`
 - `acestep-v15-xl-turbo/`
+- `acestep-v15-xl-sft/`
+- `acestep-v15-xl-base/`
 - `acestep-5Hz-lm-1.7B/` or another supported LM subdirectory
 - `acestep-5Hz-lm-4B/`
 - `Qwen3-Embedding-0.6B/`
@@ -492,6 +498,11 @@ encoder components. `music-acestep-xl-turbo-lm4b` adds the optional
 `acestep-5Hz-lm-4B/` 5 Hz LM. The default ACE-Step LM component discovery
 continues to prefer the smaller `acestep-5Hz-lm-1.7B/` when both LM directories
 are present; pass `--lm-subdirectory acestep-5Hz-lm-4B` to force the 4B LM.
+`music-acestep-xl-sft` and `music-acestep-xl-base` install the non-distilled
+XL checkpoints and use continuous flow sampling with CFG, APG, or ADG. Base is
+also the checkpoint family for extract, lego, and complete tasks. Every
+component is downloaded at the immutable revision listed in
+[ACE-Step validation](./runtime/acestep-validation.md).
 
 `mere.run music generate` and `mere.run music analyze` auto-discover these
 layouts unless you override the root with `--checkpoints-root` or

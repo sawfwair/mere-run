@@ -178,6 +178,8 @@ final class GuideCommandTests: XCTestCase {
             payload.models,
             [
                 "music-acestep",
+                ModelResolver.ModelID.aceStepXLBase.rawValue,
+                ModelResolver.ModelID.aceStepXLSFT.rawValue,
                 ModelResolver.ModelID.aceStepXLTurbo.rawValue,
                 ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
                 ModelResolver.ModelID.magentaRT2Small.rawValue,

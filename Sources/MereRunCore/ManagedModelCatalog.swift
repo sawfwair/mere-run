@@ -255,6 +255,11 @@ public enum ManagedModelCatalog {
     private static let bonsaiTernaryUpstreamRepoId = "prism-ml/bonsai-image-ternary-4B-mlx-2bit"
     private static let magentaRT2UpstreamRepoId = "google/magenta-realtime-2"
     private static let magentaRT2UpstreamRevision = "010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc"
+    private static let aceStepSharedRevision = "19671f406d603126926c1b7e2adc169acbcade22"
+    private static let aceStepXLBaseRevision = "220c1166efbdd9583eafcb12eb160594bbfcb241"
+    private static let aceStepXLSFTRevision = "d06de46b4622f781cf07f4a013a67d591ca52819"
+    private static let aceStepXLTurboRevision = "d4a0b288b83ebb7e25a8c0b32c573c22e134e8ee"
+    private static let aceStepLM4BRevision = "0a3ec94b557aea7d508da38b31cfe7341f6ff737"
     private static let magentaRT2ResourcePatterns = [
         "resources/musiccoca/audio_preprocessor.tflite",
         "resources/musiccoca/mapper.tflite",
@@ -1594,7 +1599,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "ACE-Step/Ace-Step1.5",
-                revision: "main",
+                revision: aceStepSharedRevision,
                 patterns: [
                     "config.json",
                     "acestep-v15-turbo/*",
@@ -1604,11 +1609,85 @@ public enum ManagedModelCatalog {
                 ]
             ),
             upstreamRepoId: "ACE-Step/Ace-Step1.5",
-            upstreamRevision: "main",
+            upstreamRevision: aceStepSharedRevision,
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 10_092_095_357,
             defaultCLICommands: ["music generate", "music analyze"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.aceStepXLBase.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "ACE-Step/Ace-Step1.5",
+                revision: aceStepSharedRevision,
+                patterns: [
+                    "Qwen3-Embedding-0.6B/*",
+                    "vae/*",
+                ]
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "acestep-v15-xl-base",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "ACE-Step/acestep-v15-xl-base",
+                        revision: aceStepXLBaseRevision,
+                        patterns: [
+                            "apg_guidance.py",
+                            "config.json",
+                            "configuration_acestep_v15.py",
+                            "model*.safetensors",
+                            "model.safetensors.index.json",
+                            "modeling_acestep_v15_xl_base.py",
+                            "silence_latent.pt",
+                        ]
+                    )
+                ),
+            ],
+            upstreamRepoId: "ACE-Step/acestep-v15-xl-base",
+            upstreamRevision: aceStepXLBaseRevision,
+            validationKind: .aceStep,
+            normalizationKind: .musicACEStep,
+            estimatedDownloadBytes: 23 * 1_073_741_824,
+            defaultCLICommands: ["music generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.aceStepXLSFT.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "ACE-Step/Ace-Step1.5",
+                revision: aceStepSharedRevision,
+                patterns: [
+                    "Qwen3-Embedding-0.6B/*",
+                    "vae/*",
+                ]
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "acestep-v15-xl-sft",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "ACE-Step/acestep-v15-xl-sft",
+                        revision: aceStepXLSFTRevision,
+                        patterns: [
+                            "apg_guidance.py",
+                            "config.json",
+                            "configuration_acestep_v15.py",
+                            "model*.safetensors",
+                            "model.safetensors.index.json",
+                            "modeling_acestep_v15_xl_base.py",
+                            "silence_latent.pt",
+                        ]
+                    )
+                ),
+            ],
+            upstreamRepoId: "ACE-Step/acestep-v15-xl-sft",
+            upstreamRevision: aceStepXLSFTRevision,
+            validationKind: .aceStep,
+            normalizationKind: .musicACEStep,
+            estimatedDownloadBytes: 23 * 1_073_741_824,
+            defaultCLICommands: ["music generate"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLTurbo.rawValue,
@@ -1616,7 +1695,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "ACE-Step/Ace-Step1.5",
-                revision: "main",
+                revision: aceStepSharedRevision,
                 patterns: [
                     "Qwen3-Embedding-0.6B/*",
                     "vae/*",
@@ -1627,7 +1706,7 @@ public enum ManagedModelCatalog {
                     destinationPath: "acestep-v15-xl-turbo",
                     hubFallback: HubFallbackConfig(
                         repoId: "ACE-Step/acestep-v15-xl-turbo",
-                        revision: "main",
+                        revision: aceStepXLTurboRevision,
                         patterns: [
                             "config.json",
                             "configuration_acestep_v15.py",
@@ -1640,7 +1719,7 @@ public enum ManagedModelCatalog {
                 ),
             ],
             upstreamRepoId: "ACE-Step/acestep-v15-xl-turbo",
-            upstreamRevision: "main",
+            upstreamRevision: aceStepXLTurboRevision,
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
@@ -1652,7 +1731,7 @@ public enum ManagedModelCatalog {
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
                 repoId: "ACE-Step/Ace-Step1.5",
-                revision: "main",
+                revision: aceStepSharedRevision,
                 patterns: [
                     "Qwen3-Embedding-0.6B/*",
                     "vae/*",
@@ -1663,7 +1742,7 @@ public enum ManagedModelCatalog {
                     destinationPath: "acestep-v15-xl-turbo",
                     hubFallback: HubFallbackConfig(
                         repoId: "ACE-Step/acestep-v15-xl-turbo",
-                        revision: "main",
+                        revision: aceStepXLTurboRevision,
                         patterns: [
                             "config.json",
                             "configuration_acestep_v15.py",
@@ -1678,7 +1757,7 @@ public enum ManagedModelCatalog {
                     destinationPath: "acestep-5Hz-lm-4B",
                     hubFallback: HubFallbackConfig(
                         repoId: "ACE-Step/acestep-5Hz-lm-4B",
-                        revision: "main",
+                        revision: aceStepLM4BRevision,
                         patterns: [
                             "*.json",
                             "*.safetensors",
@@ -1690,7 +1769,7 @@ public enum ManagedModelCatalog {
                 ),
             ],
             upstreamRepoId: "ACE-Step/acestep-v15-xl-turbo + ACE-Step/acestep-5Hz-lm-4B",
-            upstreamRevision: "main",
+            upstreamRevision: "\(aceStepXLTurboRevision)+\(aceStepLM4BRevision)",
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 32 * 1_073_741_824,
@@ -2809,15 +2888,23 @@ public extension ManagedModelSpec {
 
     private static func missingACEStepPaths(modelID: String, in rootURL: URL, fileManager: FileManager) -> [URL] {
         var missing: [URL] = []
-        let turboSubdirectories = modelID == ModelResolver.ModelID.aceStep.rawValue
-            ? ["acestep-v15-turbo", "music-acestep-v15-turbo"]
-            : ["acestep-v15-xl-turbo"]
+        let decoderSubdirectories: [String]
+        switch modelID {
+        case ModelResolver.ModelID.aceStep.rawValue:
+            decoderSubdirectories = ["acestep-v15-turbo", "music-acestep-v15-turbo"]
+        case ModelResolver.ModelID.aceStepXLBase.rawValue:
+            decoderSubdirectories = ["acestep-v15-xl-base"]
+        case ModelResolver.ModelID.aceStepXLSFT.rawValue:
+            decoderSubdirectories = ["acestep-v15-xl-sft"]
+        default:
+            decoderSubdirectories = ["acestep-v15-xl-turbo"]
+        }
         let vaeDir = rootURL.appendingPathComponent("vae", isDirectory: true)
         let textDir = rootURL.appendingPathComponent("Qwen3-Embedding-0.6B", isDirectory: true)
-        if !turboSubdirectories.contains(where: {
+        if !decoderSubdirectories.contains(where: {
             fileManager.fileExists(atPath: rootURL.appendingPathComponent($0, isDirectory: true).path)
         }) {
-            missing.append(rootURL.appendingPathComponent(turboSubdirectories[0], isDirectory: true))
+            missing.append(rootURL.appendingPathComponent(decoderSubdirectories[0], isDirectory: true))
         }
         if !fileManager.fileExists(atPath: vaeDir.path) { missing.append(vaeDir) }
         if !fileManager.fileExists(atPath: textDir.path) { missing.append(textDir) }
