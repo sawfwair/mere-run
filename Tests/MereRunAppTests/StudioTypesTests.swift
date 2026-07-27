@@ -233,15 +233,189 @@ final class StudioTypesTests: XCTestCase {
             template.arguments(from: draft),
             [
                 "image", "train-lora",
-                "--data", "/tmp/krea-dataset",
                 "--output", "/tmp/krea-style.safetensors",
+                "--data", "/tmp/krea-dataset",
                 "--width", "768",
                 "--height", "768",
                 "--training-steps", "1200",
                 "--model", "image-krea2-raw",
+                "--learning-rate", "0.0001",
+                "--rank", "16",
+                "--batch-size", "1",
+                "--max-text-length", "512",
+                "--scheduler-steps", "1000",
                 "--seed", "7",
             ]
         )
+    }
+
+    func testImageTrainingRecipeIsNotSilentlyOverriddenByFormDefaults() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageTrainLoRA))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/style"
+        draft.trainingRecipe = "krea-fast-style"
+
+        let recipeArgs = template.arguments(from: draft)
+        assertPair(recipeArgs, "--recipe", "krea-fast-style")
+        XCTAssertFalse(recipeArgs.contains("--model"))
+        XCTAssertFalse(recipeArgs.contains("--width"))
+        XCTAssertFalse(recipeArgs.contains("--height"))
+        XCTAssertFalse(recipeArgs.contains("--training-steps"))
+        XCTAssertFalse(recipeArgs.contains("--learning-rate"))
+        XCTAssertFalse(recipeArgs.contains("--rank"))
+
+        draft.overrideTrainingRecipe = true
+        let overrideArgs = template.arguments(from: draft)
+        XCTAssertTrue(overrideArgs.contains("--model"))
+        XCTAssertTrue(overrideArgs.contains("--width"))
+        XCTAssertTrue(overrideArgs.contains("--training-steps"))
+        XCTAssertTrue(overrideArgs.contains("--learning-rate"))
+        XCTAssertTrue(overrideArgs.contains("--rank"))
+    }
+
+    func testImageGenerateBuildsMultiReferenceStructuredPromptLoRAAndKreaControls() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        var draft = template.defaultDraft()
+        draft.referenceImagePaths = "/tmp/face.png\n/tmp/style.png"
+        draft.keepOriginalAspect = true
+        draft.strength = 0.4
+        draft.structuredPrompt = true
+        draft.structuredPromptModel = "text-chat-q36-nano"
+        draft.structuredPromptModelRoot = "/tmp/q36"
+        draft.structuredPromptMaxTokens = 1024
+        draft.structuredPromptOutputPath = "/tmp/caption.json"
+        draft.loraPath = "adapter-portrait"
+        draft.loraScale = 0.75
+        draft.sigmaShift = 8
+        draft.kreaConditioningMultiplier = 1.25
+        draft.kreaConditioningLayerWeights = "1,1,2.5"
+        draft.kreaBaseQuantizationBits = "8"
+        draft.preflight = true
+        draft.json = true
+        draft.progressJSON = true
+
+        let args = template.arguments(from: draft)
+        XCTAssertEqual(args.filter { $0 == "--ref-image" }.count, 2)
+        assertPair(args, "--structured-prompt-model", "text-chat-q36-nano")
+        assertPair(args, "--structured-prompt-model-root", "/tmp/q36")
+        assertPair(args, "--structured-prompt-max-tokens", "1024")
+        assertPair(args, "--structured-prompt-output", "/tmp/caption.json")
+        assertPair(args, "--lora", "adapter-portrait")
+        assertPair(args, "--lora-scale", "0.75")
+        assertPair(args, "--sigma-shift", "8")
+        assertPair(args, "--krea-conditioning-multiplier", "1.25")
+        assertPair(args, "--krea-conditioning-layer-weights", "1,1,2.5")
+        assertPair(args, "--krea-base-quantization-bits", "8")
+        XCTAssertTrue(args.contains("--keep-original-aspect"))
+        XCTAssertTrue(args.contains("--structured-prompt"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--progress-json"))
+    }
+
+    func testImageStudioMapsReferenceLoRAStructuredPromptAndPreflightControls() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "editorial portrait"
+        draft.referenceImagePaths = "/tmp/person.png\n/tmp/wardrobe.png"
+        draft.keepOriginalAspect = true
+        draft.structuredPrompt = true
+        draft.structuredPromptModel = "text-chat-q36-nano"
+        draft.structuredPromptMaxTokens = 1024
+        draft.imageMaxSequenceLength = 768
+        draft.loraPath = "adapter-editorial"
+        draft.loraScale = 0.6
+        draft.sigmaShift = 8
+        draft.kreaConditioningMultiplier = 1.2
+        draft.kreaConditioningLayerWeights = "1,1,2"
+        draft.kreaBaseQuantizationBits = "4"
+        draft.preflight = true
+        draft.preflightJSON = true
+        draft.progressJSON = true
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        XCTAssertEqual(args.filter { $0 == "--ref-image" }.count, 2)
+        assertPair(args, "--structured-prompt-model", "text-chat-q36-nano")
+        assertPair(args, "--structured-prompt-max-tokens", "1024")
+        assertPair(args, "--max-sequence-length", "768")
+        assertPair(args, "--lora", "adapter-editorial")
+        assertPair(args, "--lora-scale", "0.6")
+        assertPair(args, "--sigma-shift", "8")
+        assertPair(args, "--krea-conditioning-multiplier", "1.2")
+        assertPair(args, "--krea-conditioning-layer-weights", "1,1,2")
+        assertPair(args, "--krea-base-quantization-bits", "4")
+        XCTAssertTrue(args.contains("--keep-original-aspect"))
+        XCTAssertTrue(args.contains("--structured-prompt"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--progress-json"))
+    }
+
+    func testImageAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.imageGenerate, "image.generate", {
+                $0.referenceImagePaths = "/tmp/a.png\n/tmp/b.png"
+                $0.structuredPrompt = true
+                $0.loraPath = "adapter-style"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.imageTrainLoRA, "image.train-lora", {
+                $0.inputPath = "/tmp/dataset"
+                $0.trainingRecipe = "klein-fast-style"
+                $0.sampleInterval = 100
+                $0.visualize = true
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.imageValidate, "image.validate", {
+                $0.all = true
+                $0.referenceDirectoryPath = "/tmp/reference"
+            }),
+            (.imageDatasetDiscover, "image.dataset.discover", {
+                $0.inputPath = "/tmp/datasets"
+                $0.trainingOutputRoot = "/tmp/runs"
+            }),
+            (.imageRunPlan, "image.run-plan", {
+                $0.inputPath = "/tmp/plan.json"
+                $0.preflight = true
+            }),
+            (.imageVisualizeRun, "image.visualize-run", {
+                $0.inputPath = "/tmp/run"
+            }),
+            (.imageReconstruct3D, "image.reconstruct-3d", {
+                $0.inputPath = "/tmp/object.png"
+                $0.dryRun = true
+                $0.json = true
+            }),
+            (.imageReconstruct3DTrellis2, "image.reconstruct-3d-trellis2", {
+                $0.inputPath = "/tmp/object.png"
+                $0.dryRun = true
+                $0.json = true
+            }),
+            (.imageReconstruct3DMultiview, "image.reconstruct-3d-multiview", {
+                $0.referenceImagePaths = [
+                    "/tmp/front.png", "/tmp/right.png", "/tmp/back.png", "/tmp/left.png"
+                ].joined(separator: "\n")
+                $0.dryRun = true
+                $0.json = true
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
     }
 
     func testReadImageVariantsResolveToDistinctTemplates() throws {

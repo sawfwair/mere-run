@@ -26,3 +26,10 @@ anonymization, and text-LoRA training. Chat exposes typed text/JSON response
 format, reasoning policy, context and KV controls, LoRA application, tool
 permissions, and preflight in both Studio and Advanced. Advanced also owns the
 full text-LoRA training form.
+
+Image uses the shared contract for generation/editing, LoRA training,
+validation, dataset discovery, durable plans and dashboards, TripoSR,
+TRELLIS.2, and InstantMesh. The primary Studio surface includes multi-reference
+editing, structured prompts, LoRA catalog IDs or local adapters, Krea tuning,
+preflight, and machine-readable progress; Advanced exposes every specialist
+workflow and training control.

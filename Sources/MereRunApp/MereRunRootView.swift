@@ -361,12 +361,24 @@ private struct CommandEditor: View {
         switch controller.selectedTemplate.id {
         case .imageGenerate:
             DimensionsGrid()
-            GenerationOptions()
+            ImageGenerationOptions()
         case .imageTrainLoRA:
             DimensionsGrid()
-            LoRATrainingOptions()
+            ImageLoRATrainingOptions()
         case .imageValidate:
             ImageValidationOptions()
+        case .imageDatasetDiscover:
+            ImageDatasetDiscoveryOptions()
+        case .imageRunPlan:
+            ImageRunPlanOptions()
+        case .imageVisualizeRun:
+            ImageRunViewerOptions()
+        case .imageReconstruct3D:
+            ImageReconstructionOptions(kind: .triposr)
+        case .imageReconstruct3DTrellis2:
+            ImageReconstructionOptions(kind: .trellis2)
+        case .imageReconstruct3DMultiview:
+            ImageReconstructionOptions(kind: .multiview)
         case .textChat, .textCode, .textEmbed, .textAnonymize, .visionInspect, .visionCaption, .visionOCR:
             TextGenerationOptions()
         case .textTrainLoRA:
@@ -496,7 +508,10 @@ private struct CommandEditor: View {
     private var showsModelField: Bool {
         ![
             .agentInstallPi,
+            .imageDatasetDiscover,
+            .imageRunPlan,
             .imageValidate,
+            .imageVisualizeRun,
             .modelList,
             .modelCapabilities,
             .modelRepairManifests,
@@ -720,6 +735,55 @@ private struct PathField: View {
     }
 }
 
+private struct MultiPathField: View {
+    @Binding var paths: String
+    let title: String
+    let allowedTypes: [UTType]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                Spacer()
+                Button {
+                    choosePaths()
+                } label: {
+                    Label("Choose", systemImage: "photo.on.rectangle.angled")
+                }
+                .buttonStyle(.borderless)
+            }
+            TextEditor(text: $paths)
+                .font(MereRunTheme.monoFont)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 72)
+                .padding(8)
+                .merePanel()
+                .overlay(alignment: .topLeading) {
+                    if paths.isBlank {
+                        Text("One path per line")
+                            .font(MereRunTheme.bodyFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .padding(18)
+                            .allowsHitTesting(false)
+                    }
+                }
+        }
+    }
+
+    private func choosePaths() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = allowedTypes
+        if panel.runModal() == .OK {
+            paths = panel.urls.map(\.path).joined(separator: "\n")
+        }
+    }
+}
+
 private struct AdaptiveControlRow<Content: View>: View {
     var spacing: CGFloat = 10
     @ViewBuilder var content: () -> Content
@@ -746,7 +810,7 @@ private struct DimensionsGrid: View {
     }
 }
 
-private struct GenerationOptions: View {
+private struct ImageGenerationOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
     var body: some View {
@@ -757,30 +821,333 @@ private struct GenerationOptions: View {
                     NumberField(title: "CFG", value: $controller.draft.cfgScale)
                     NumberField(title: "Strength", value: $controller.draft.strength)
                 }
+                AdaptiveControlRow {
+                    NumberField(title: "Sigma shift", value: $controller.draft.sigmaShift)
+                    NumberStepper(
+                        title: "Max sequence",
+                        value: $controller.draft.maxSequenceLength,
+                        range: 64...8_192,
+                        step: 64
+                    )
+                }
                 TextField("Seed", text: $controller.draft.seed)
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
                     .padding(10)
                     .merePanel()
-                Toggle("Quiet", isOn: $controller.draft.quiet)
+                MultiPathField(
+                    paths: $controller.draft.referenceImagePaths,
+                    title: "Reference images",
+                    allowedTypes: [.image]
+                )
+                Toggle("Keep original aspect for one HiDream reference", isOn: $controller.draft.keepOriginalAspect)
+                PathField(
+                    path: $controller.draft.loraPath,
+                    placeholder: "LoRA catalog id or .safetensors path",
+                    mode: .openFile([.data])
+                )
+                NumberField(title: "LoRA scale", value: $controller.draft.loraScale)
+                DisclosureGroup("Structured prompt") {
+                    VStack(spacing: 10) {
+                        Toggle("Expand prompt with a local text model", isOn: $controller.draft.structuredPrompt)
+                        if controller.draft.structuredPrompt {
+                            TextField("Prompt model id", text: $controller.draft.structuredPromptModel)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .merePanel()
+                            PathField(
+                                path: $controller.draft.structuredPromptModelRoot,
+                                placeholder: "Prompt model root (optional)",
+                                mode: .openDirectory
+                            )
+                            NumberStepper(
+                                title: "Prompt max tokens",
+                                value: $controller.draft.structuredPromptMaxTokens,
+                                range: 128...16_384,
+                                step: 128
+                            )
+                            PathField(
+                                path: $controller.draft.structuredPromptOutputPath,
+                                placeholder: "Save structured caption JSON (optional)",
+                                mode: .saveFile
+                            )
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                DisclosureGroup("Krea tuning") {
+                    VStack(spacing: 10) {
+                        NumberField(
+                            title: "Conditioning multiplier",
+                            value: $controller.draft.kreaConditioningMultiplier
+                        )
+                        TextField(
+                            "Layer weights, comma-separated",
+                            text: $controller.draft.kreaConditioningLayerWeights
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                        Picker("Base quantization", selection: $controller.draft.kreaBaseQuantizationBits) {
+                            Text("Automatic").tag("")
+                            Text("4-bit").tag("4")
+                            Text("8-bit").tag("8")
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                AdaptiveControlRow {
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON report", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                    Toggle("Progress JSON", isOn: $controller.draft.progressJSON)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
             }
         }
     }
 }
 
-private struct LoRATrainingOptions: View {
+private struct ImageLoRATrainingOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
     var body: some View {
         EditorSection("Training") {
             VStack(spacing: 10) {
-                NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...100_000, step: 100)
+                Picker("Recipe", selection: $controller.draft.trainingRecipe) {
+                    Text("Custom").tag("")
+                    Text("Krea fast style").tag("krea-fast-style")
+                    Text("Krea cinematic").tag("krea-cinematic-style")
+                    Text("Klein fast style").tag("klein-fast-style")
+                }
+                if !controller.draft.trainingRecipe.isBlank {
+                    Toggle(
+                        "Override recipe core parameters",
+                        isOn: $controller.draft.overrideTrainingRecipe
+                    )
+                }
+                AdaptiveControlRow {
+                    NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...100_000, step: 100)
+                    NumberStepper(title: "Batch", value: $controller.draft.batchSize, range: 1...128, step: 1)
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Learning rate", value: $controller.draft.learningRate)
+                    NumberStepper(title: "Rank", value: $controller.draft.rank, range: 1...512, step: 1)
+                    NumberField(title: "Alpha", value: $controller.draft.alpha)
+                }
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Max text",
+                        value: $controller.draft.maxSequenceLength,
+                        range: 64...8_192,
+                        step: 64
+                    )
+                    NumberStepper(
+                        title: "Scheduler steps",
+                        value: $controller.draft.schedulerSteps,
+                        range: 1...10_000,
+                        step: 100
+                    )
+                    NumberField(title: "Caption dropout", value: $controller.draft.captionDropout)
+                }
                 TextField("Seed", text: $controller.draft.seed)
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
                     .padding(10)
                     .merePanel()
-                Toggle("Quiet", isOn: $controller.draft.quiet)
+                DisclosureGroup("Memory and checkpoints") {
+                    VStack(spacing: 10) {
+                        Picker("Base quantization", selection: $controller.draft.baseQuantizationBits) {
+                            Text("Full precision").tag("")
+                            Text("4-bit").tag("4")
+                            Text("8-bit").tag("8")
+                        }
+                        AdaptiveControlRow {
+                            Toggle("Lite targets", isOn: $controller.draft.trainingLite)
+                            Toggle("Low RAM", isOn: $controller.draft.lowRAM)
+                            Toggle("Progressive", isOn: $controller.draft.progressive)
+                        }
+                        AdaptiveControlRow {
+                            Toggle("Disable compile", isOn: $controller.draft.disableCompile)
+                            Toggle(
+                                "Gradient checkpointing",
+                                isOn: $controller.draft.gradientCheckpointing
+                            )
+                            Toggle(
+                                "Exclude preview images",
+                                isOn: $controller.draft.excludePreviewImages
+                            )
+                        }
+                        AdaptiveControlRow {
+                            NumberStepper(
+                                title: "Checkpoint interval",
+                                value: $controller.draft.checkpointInterval,
+                                range: 0...100_000,
+                                step: 100
+                            )
+                            NumberStepper(
+                                title: "Max resolution",
+                                value: $controller.draft.maxResolution,
+                                range: 0...4_096,
+                                step: 64
+                            )
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                DisclosureGroup("Preview and benchmark") {
+                    VStack(spacing: 10) {
+                        AdaptiveControlRow {
+                            NumberStepper(
+                                title: "Sample interval",
+                                value: $controller.draft.sampleInterval,
+                                range: 0...100_000,
+                                step: 100
+                            )
+                            NumberStepper(
+                                title: "Benchmark steps",
+                                value: $controller.draft.benchmarkSteps,
+                                range: 0...10_000,
+                                step: 1
+                            )
+                            NumberStepper(
+                                title: "Warmup",
+                                value: $controller.draft.benchmarkWarmupSteps,
+                                range: 0...1_000,
+                                step: 1
+                            )
+                        }
+                        if controller.draft.sampleInterval > 0 {
+                            TextField("Preview prompt", text: $controller.draft.samplePrompt)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .merePanel()
+                            TextField("Preview model id", text: $controller.draft.sampleModel)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .merePanel()
+                            AdaptiveControlRow {
+                                NumberStepper(
+                                    title: "Preview steps",
+                                    value: $controller.draft.sampleSteps,
+                                    range: 1...100,
+                                    step: 1
+                                )
+                                NumberField(title: "Preview CFG", value: $controller.draft.sampleCFG)
+                                NumberField(
+                                    title: "Preview LoRA",
+                                    value: $controller.draft.sampleLoRAScale
+                                )
+                            }
+                            TextField("Preview seed (optional)", text: $controller.draft.sampleSeed)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .merePanel()
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                DisclosureGroup("Klein target and schedule") {
+                    VStack(spacing: 10) {
+                        TextField("Target ranks map", text: $controller.draft.loraTargetRanks)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        AdaptiveControlRow {
+                            Picker("Rank preset", selection: $controller.draft.loraRankPreset) {
+                                Text("None").tag("")
+                                Text("FLUX.2 style 128").tag("flux2-style-128")
+                            }
+                            Picker("Target preset", selection: $controller.draft.loraTargetPreset) {
+                                Text("None").tag("")
+                                Text("fal Klein fast").tag("fal-klein-fast")
+                            }
+                        }
+                        Picker("Target mode", selection: $controller.draft.loraTargetMode) {
+                            Text("Default").tag("")
+                            Text("Suffix").tag("suffix")
+                            Text("Transformer linear walk").tag("transformer-linear-walk")
+                        }
+                        Picker("Timestep sampling", selection: $controller.draft.timestepSampling) {
+                            Text("Default").tag("")
+                            ForEach(
+                                ["uniform", "bellCurve", "contentFocused", "styleFocused", "logitNormal", "shift"],
+                                id: \.self
+                            ) { Text($0).tag($0) }
+                        }
+                        AdaptiveControlRow {
+                            Picker(
+                                "Timestep weighting",
+                                selection: $controller.draft.timestepLossWeighting
+                            ) {
+                                Text("Default").tag("")
+                                Text("None").tag("none")
+                                Text("Weighted").tag("weighted")
+                            }
+                            Picker("Loss weighting", selection: $controller.draft.lossWeighting) {
+                                Text("Default").tag("")
+                                Text("None").tag("none")
+                                Text("SNR").tag("snr")
+                                Text("minSNR").tag("minSNR")
+                            }
+                        }
+                        AdaptiveControlRow {
+                            NumberStepper(
+                                title: "Timestep low",
+                                value: $controller.draft.timestepLow,
+                                range: 0...10_000,
+                                step: 1
+                            )
+                            NumberStepper(
+                                title: "Timestep high",
+                                value: $controller.draft.timestepHigh,
+                                range: 0...10_000,
+                                step: 1
+                            )
+                        }
+                        AdaptiveControlRow {
+                            NumberStepper(
+                                title: "LR warmup",
+                                value: $controller.draft.lrWarmupSteps,
+                                range: 0...100_000,
+                                step: 10
+                            )
+                            NumberField(title: "LR floor", value: $controller.draft.lrMinFactor)
+                            NumberField(
+                                title: "Weight decay",
+                                value: $controller.draft.adamWeightDecay
+                            )
+                        }
+                        AdaptiveControlRow {
+                            Toggle(
+                                "Disable cosine scheduler",
+                                isOn: $controller.draft.disableCosineScheduler
+                            )
+                            NumberStepper(
+                                title: "Synthetic samples",
+                                value: $controller.draft.syntheticSamples,
+                                range: 0...10_000,
+                                step: 1
+                            )
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                AdaptiveControlRow {
+                    Toggle("Dashboard", isOn: $controller.draft.visualize)
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON report", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+                if controller.draft.visualize {
+                    NumberStepper(
+                        title: "Dashboard port",
+                        value: $controller.draft.visualizePort,
+                        range: 1...65_535,
+                        step: 1
+                    )
+                }
             }
         }
     }
@@ -808,6 +1175,200 @@ private struct ImageValidationOptions: View {
                 AdaptiveControlRow {
                     Toggle("Save reference", isOn: $controller.draft.force)
                     Toggle("Compare", isOn: $controller.draft.all)
+                }
+                if controller.draft.all {
+                    PathField(
+                        path: $controller.draft.referenceDirectoryPath,
+                        placeholder: "Reference artifacts directory",
+                        mode: .openDirectory
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct ImageDatasetDiscoveryOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Discovery") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Max depth",
+                        value: $controller.draft.maxDepth,
+                        range: 0...32,
+                        step: 1
+                    )
+                    NumberStepper(
+                        title: "Minimum pairs",
+                        value: $controller.draft.minUsablePairs,
+                        range: 1...100_000,
+                        step: 1
+                    )
+                }
+                PathField(
+                    path: $controller.draft.trainingOutputRoot,
+                    placeholder: "Training output root (optional)",
+                    mode: .openDirectory
+                )
+                TextField("Training model id (optional)", text: $controller.draft.trainingModel)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Picker("Training recipe", selection: $controller.draft.trainingRecipe) {
+                    Text("None").tag("")
+                    Text("Krea fast style").tag("krea-fast-style")
+                    Text("Krea cinematic").tag("krea-cinematic-style")
+                    Text("Klein fast style").tag("klein-fast-style")
+                }
+                AdaptiveControlRow {
+                    Toggle(
+                        "Exclude preview images",
+                        isOn: $controller.draft.excludePreviewImages
+                    )
+                    Toggle("JSON report", isOn: $controller.draft.json)
+                }
+            }
+        }
+    }
+}
+
+private struct ImageRunPlanOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Plan") {
+            VStack(spacing: 10) {
+                Picker("Action", selection: planAction) {
+                    Text("Run").tag("run")
+                    Text("Preflight").tag("preflight")
+                    Text("Materialize").tag("materialize")
+                }
+                .pickerStyle(.segmented)
+                if !controller.draft.materializePath.isBlank {
+                    PathField(
+                        path: $controller.draft.materializePath,
+                        placeholder: "Durable run directory",
+                        mode: .openDirectory
+                    )
+                }
+                Toggle("JSON receipt", isOn: $controller.draft.json)
+            }
+        }
+    }
+
+    private var planAction: Binding<String> {
+        Binding(
+            get: {
+                if !controller.draft.materializePath.isBlank { return "materialize" }
+                return controller.draft.preflight ? "preflight" : "run"
+            },
+            set: { value in
+                switch value {
+                case "preflight":
+                    controller.draft.preflight = true
+                    controller.draft.materializePath = ""
+                case "materialize":
+                    controller.draft.preflight = false
+                    if controller.draft.materializePath.isBlank {
+                        controller.draft.materializePath = FileManager.default.temporaryDirectory
+                            .appendingPathComponent("mere-image-run", isDirectory: true)
+                            .path
+                    }
+                default:
+                    controller.draft.preflight = false
+                    controller.draft.materializePath = ""
+                }
+            }
+        )
+    }
+}
+
+private struct ImageRunViewerOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Dashboard") {
+            NumberStepper(
+                title: "Loopback port",
+                value: $controller.draft.port,
+                range: 1...65_535,
+                step: 1
+            )
+        }
+    }
+}
+
+private enum ImageReconstructionKind {
+    case triposr
+    case trellis2
+    case multiview
+}
+
+private struct ImageReconstructionOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+    let kind: ImageReconstructionKind
+
+    var body: some View {
+        EditorSection("Reconstruction") {
+            VStack(spacing: 10) {
+                if kind == .multiview {
+                    MultiPathField(
+                        paths: $controller.draft.referenceImagePaths,
+                        title: "Ordered views (exactly 4 or 6)",
+                        allowedTypes: [.image]
+                    )
+                    PathField(
+                        path: $controller.draft.camerasPath,
+                        placeholder: "Camera JSON (optional)",
+                        mode: .openFile([.json])
+                    )
+                }
+                if kind != .trellis2 {
+                    NumberStepper(
+                        title: "Grid resolution",
+                        value: $controller.draft.reconstructionResolution,
+                        range: 2...(kind == .triposr ? 512 : 256),
+                        step: 2
+                    )
+                }
+                if kind == .triposr {
+                    AdaptiveControlRow {
+                        NumberField(
+                            title: "Density threshold",
+                            value: $controller.draft.densityThreshold
+                        )
+                        NumberField(
+                            title: "Foreground ratio",
+                            value: $controller.draft.foregroundRatio
+                        )
+                    }
+                }
+                if kind == .trellis2 {
+                    AdaptiveControlRow {
+                        TextField("Seed", text: $controller.draft.seed)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        NumberStepper(
+                            title: "Maximum sparse tokens",
+                            value: $controller.draft.maxTokens,
+                            range: 1...8_388_608,
+                            step: 65_536
+                        )
+                    }
+                }
+                AdaptiveControlRow {
+                    if kind != .multiview {
+                        Toggle("Already framed", isOn: $controller.draft.alreadyFramed)
+                    }
+                    if kind != .trellis2 {
+                        Toggle("Geometry only", isOn: $controller.draft.noVertexColors)
+                    }
+                    Toggle("Dry run", isOn: $controller.draft.dryRun)
+                    Toggle("JSON receipt", isOn: $controller.draft.json)
                 }
             }
         }

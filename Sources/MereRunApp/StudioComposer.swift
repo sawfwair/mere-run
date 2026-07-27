@@ -467,6 +467,10 @@ struct StudioOptionsPanel: View {
                     chatOptions
                 }
 
+                if mode == .createImage {
+                    imageOptions
+                }
+
                 if [.createImage, .video].contains(mode) {
                     HStack(spacing: MereRunTheme.Spacing.sm) {
                         Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
@@ -739,6 +743,87 @@ struct StudioOptionsPanel: View {
             .font(MereRunTheme.captionFont)
     }
 
+    @ViewBuilder
+    private var imageOptions: some View {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Text(draft.referenceImagePaths.isBlank
+                ? "No extra references"
+                : "\(imageReferencePaths.count) reference image\(imageReferencePaths.count == 1 ? "" : "s")")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            Spacer()
+            Button("References…", action: chooseImageReferences)
+                .controlSize(.small)
+            if !draft.referenceImagePaths.isBlank {
+                Button {
+                    draft.referenceImagePaths = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Remove reference images")
+            }
+        }
+
+        Toggle("Keep original aspect for one HiDream reference", isOn: $draft.keepOriginalAspect)
+            .font(MereRunTheme.captionFont)
+
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Text(draft.loraPath.isBlank
+                ? "No LoRA adapter"
+                : URL(fileURLWithPath: draft.loraPath).lastPathComponent)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
+            Spacer()
+            Button("LoRA…", action: chooseImageLoRA)
+                .controlSize(.small)
+        }
+        TextField("LoRA catalog id or local path", text: $draft.loraPath)
+            .mereField()
+        numberField("LoRA scale", value: $draft.loraScale)
+
+        Toggle("Expand into a structured JSON prompt", isOn: $draft.structuredPrompt)
+            .font(MereRunTheme.captionFont)
+        if draft.structuredPrompt {
+            TextField("Structured prompt model", text: $draft.structuredPromptModel)
+                .mereField()
+            Stepper(
+                "Prompt max tokens \(draft.structuredPromptMaxTokens)",
+                value: $draft.structuredPromptMaxTokens,
+                in: 128...16_384,
+                step: 128
+            )
+            .font(MereRunTheme.captionFont)
+        }
+
+        DisclosureGroup("Krea tuning") {
+            VStack(spacing: MereRunTheme.Spacing.sm) {
+                numberField(
+                    "Conditioning multiplier",
+                    value: $draft.kreaConditioningMultiplier
+                )
+                TextField("Layer weights, comma-separated", text: $draft.kreaConditioningLayerWeights)
+                    .mereField()
+                Picker("Base quantization", selection: $draft.kreaBaseQuantizationBits) {
+                    Text("Automatic").tag("")
+                    Text("4-bit").tag("4")
+                    Text("8-bit").tag("8")
+                }
+            }
+            .padding(.top, MereRunTheme.Spacing.xs)
+        }
+
+        Toggle("Preflight only", isOn: $draft.preflight)
+            .font(MereRunTheme.captionFont)
+        if draft.preflight {
+            Toggle("JSON preflight report", isOn: $draft.preflightJSON)
+                .font(MereRunTheme.captionFont)
+        }
+        Toggle("Machine-readable progress", isOn: $draft.progressJSON)
+            .font(MereRunTheme.captionFont)
+    }
+
     private func numberField(_ label: String, value: Binding<Double>) -> some View {
         HStack {
             Text(label)
@@ -782,6 +867,33 @@ struct StudioOptionsPanel: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Remove \(title.lowercased())")
             }
+        }
+    }
+
+    private var imageReferencePaths: [String] {
+        draft.referenceImagePaths.components(separatedBy: .newlines)
+            .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func chooseImageReferences() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK {
+            draft.referenceImagePaths = panel.urls.map(\.path).joined(separator: "\n")
+        }
+    }
+
+    private func chooseImageLoRA() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.data]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            draft.loraPath = url.path
         }
     }
 

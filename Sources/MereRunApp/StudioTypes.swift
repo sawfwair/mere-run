@@ -316,6 +316,17 @@ struct StudioDraft: Codable, Equatable {
     var preflightJSON = false
     var cfgScale = 1.0
     var strength = 0.75
+    var sigmaShift = 0.0
+    var referenceImagePaths = ""
+    var keepOriginalAspect = false
+    var structuredPrompt = false
+    var structuredPromptModel = "text-chat-gemma4-12b-4bit"
+    var structuredPromptMaxTokens = 2048
+    var imageMaxSequenceLength = 512
+    var kreaConditioningMultiplier = 0.0
+    var kreaConditioningLayerWeights = ""
+    var kreaBaseQuantizationBits = ""
+    var progressJSON = false
     var language = "auto"
     var timestamps = true
     var backend = "auto"
@@ -378,6 +389,17 @@ struct StudioDraft: Codable, Equatable {
         preflightJSON = false
         cfgScale = base?.cfgScale ?? 1.0
         strength = base?.strength ?? 0.75
+        sigmaShift = base?.sigmaShift ?? 0
+        referenceImagePaths = ""
+        keepOriginalAspect = false
+        structuredPrompt = false
+        structuredPromptModel = base?.structuredPromptModel ?? "text-chat-gemma4-12b-4bit"
+        structuredPromptMaxTokens = base?.structuredPromptMaxTokens ?? 2048
+        imageMaxSequenceLength = base?.maxSequenceLength ?? 512
+        kreaConditioningMultiplier = 0
+        kreaConditioningLayerWeights = ""
+        kreaBaseQuantizationBits = ""
+        progressJSON = false
         language = base?.language ?? "auto"
         timestamps = base?.timestamps ?? true
         backend = base?.backend ?? "auto"
@@ -444,6 +466,12 @@ enum StudioOptionSchema {
             return [
                 StudioOptionField(id: "cfg", label: "CFG scale", control: .double(\.cfgScale)),
                 StudioOptionField(id: "strength", label: "Img2img strength", control: .double(\.strength)),
+                StudioOptionField(id: "sigmaShift", label: "Sigma shift", control: .double(\.sigmaShift)),
+                StudioOptionField(
+                    id: "maxSequence",
+                    label: "Max sequence",
+                    control: .int(\.imageMaxSequenceLength, range: 64...8_192, step: 64)
+                ),
             ]
         case .listen:
             return [
@@ -549,6 +577,21 @@ enum StudioCommandAdapter {
             draft.seed = studioDraft.seed
             draft.cfgScale = studioDraft.cfgScale
             draft.strength = studioDraft.strength
+            draft.sigmaShift = studioDraft.sigmaShift
+            draft.referenceImagePaths = studioDraft.referenceImagePaths
+            draft.keepOriginalAspect = studioDraft.keepOriginalAspect
+            draft.structuredPrompt = studioDraft.structuredPrompt
+            draft.structuredPromptModel = studioDraft.structuredPromptModel
+            draft.structuredPromptMaxTokens = studioDraft.structuredPromptMaxTokens
+            draft.maxSequenceLength = studioDraft.imageMaxSequenceLength
+            draft.loraPath = studioDraft.loraPath
+            draft.loraScale = studioDraft.loraScale
+            draft.kreaConditioningMultiplier = studioDraft.kreaConditioningMultiplier
+            draft.kreaConditioningLayerWeights = studioDraft.kreaConditioningLayerWeights
+            draft.kreaBaseQuantizationBits = studioDraft.kreaBaseQuantizationBits
+            draft.preflight = studioDraft.preflight
+            draft.json = studioDraft.preflightJSON
+            draft.progressJSON = studioDraft.progressJSON
 
         case .chat, .code:
             draft.prompt = prompt

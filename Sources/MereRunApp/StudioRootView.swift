@@ -907,6 +907,17 @@ struct StudioRootView: View {
         controller.draft.json = draft.preflightJSON
         controller.draft.cfgScale = draft.cfgScale
         controller.draft.strength = draft.strength
+        controller.draft.sigmaShift = draft.sigmaShift
+        controller.draft.referenceImagePaths = draft.referenceImagePaths
+        controller.draft.keepOriginalAspect = draft.keepOriginalAspect
+        controller.draft.structuredPrompt = draft.structuredPrompt
+        controller.draft.structuredPromptModel = draft.structuredPromptModel
+        controller.draft.structuredPromptMaxTokens = draft.structuredPromptMaxTokens
+        controller.draft.maxSequenceLength = draft.imageMaxSequenceLength
+        controller.draft.kreaConditioningMultiplier = draft.kreaConditioningMultiplier
+        controller.draft.kreaConditioningLayerWeights = draft.kreaConditioningLayerWeights
+        controller.draft.kreaBaseQuantizationBits = draft.kreaBaseQuantizationBits
+        controller.draft.progressJSON = draft.progressJSON
         controller.draft.language = draft.language
         controller.draft.backend = draft.backend
         controller.draft.timestamps = draft.timestamps

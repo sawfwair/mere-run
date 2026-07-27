@@ -15,6 +15,27 @@ model families are supported, and how the code is organized.
 - `mere.run image visualize-run`
 - `mere.run image validate`
 
+## macOS Studio
+
+The primary Create Image workspace covers text-to-image, image-to-image, and
+multi-reference editing. Its options include negative prompts, size and
+sampling, edit strength, HiDream aspect preservation, structured-prompt
+expansion, LoRA catalog IDs or local safetensors, Krea conditioning and
+quantization controls, preflight JSON, and JSON progress events.
+
+Advanced → Image exposes the entire public family as guided forms:
+
+- generation/editing with repeatable references, structured prompts, and LoRAs;
+- Krea 2 and FLUX.2 Klein LoRA training, recipes, memory controls, checkpoints,
+  preview samples, schedules, benchmarks, and the live dashboard;
+- dataset discovery, saved workflow preflight/materialization/execution, and
+  durable-run visualization;
+- deterministic image-stack validation; and
+- TripoSR, TRELLIS.2, and four/six-view InstantMesh reconstruction.
+
+The app launches the public CLI for all work. `mere.run catalog --json` and the
+shared contract tests keep every form flag aligned with ArgumentParser help.
+
 ## Model families
 
 The public image families are:

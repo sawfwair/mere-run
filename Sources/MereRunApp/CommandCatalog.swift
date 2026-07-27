@@ -31,6 +31,12 @@ enum CommandTemplateID: String, CaseIterable {
     case imageGenerate
     case imageTrainLoRA
     case imageValidate
+    case imageDatasetDiscover
+    case imageRunPlan
+    case imageVisualizeRun
+    case imageReconstruct3D
+    case imageReconstruct3DTrellis2
+    case imageReconstruct3DMultiview
     case textChat
     case textCode
     case textEmbed
@@ -201,6 +207,18 @@ struct CommandDraft: Equatable {
     var seed = ""
     var cfgScale = 1.0
     var strength = 0.75
+    var sigmaShift = 0.0
+    var referenceImagePaths = ""
+    var keepOriginalAspect = false
+    var structuredPrompt = false
+    var structuredPromptModel = "text-chat-gemma4-12b-4bit"
+    var structuredPromptModelRoot = ""
+    var structuredPromptMaxTokens = 2048
+    var structuredPromptOutputPath = ""
+    var kreaConditioningMultiplier = 0.0
+    var kreaConditioningLayerWeights = ""
+    var kreaBaseQuantizationBits = ""
+    var progressJSON = false
     var maxTokens = 2048
     var contextSize = 0
     var temperature = 0.7
@@ -226,6 +244,54 @@ struct CommandDraft: Equatable {
     var dryRun = false
     var visualize = false
     var visualizePort = 8787
+    var schedulerSteps = 1_000
+    var captionDropout = 0.0
+    var trainingLite = false
+    var baseQuantizationBits = ""
+    var excludePreviewImages = false
+    var checkpointInterval = 0
+    var maxResolution = 0
+    var progressive = false
+    var lowRAM = false
+    var disableCompile = false
+    var gradientCheckpointing = false
+    var trainingRecipe = ""
+    var overrideTrainingRecipe = false
+    var benchmarkSteps = 0
+    var benchmarkWarmupSteps = 5
+    var sampleInterval = 0
+    var samplePrompt = ""
+    var sampleModel = ""
+    var sampleSteps = 8
+    var sampleCFG = 1.0
+    var sampleLoRAScale = 1.0
+    var sampleSeed = ""
+    var loraTargetRanks = ""
+    var loraRankPreset = ""
+    var loraTargetPreset = ""
+    var loraTargetMode = ""
+    var timestepSampling = ""
+    var timestepLossWeighting = ""
+    var lossWeighting = ""
+    var timestepLow = 0
+    var timestepHigh = 0
+    var lrWarmupSteps = 0
+    var disableCosineScheduler = false
+    var lrMinFactor = 0.0
+    var adamWeightDecay = 0.0
+    var syntheticSamples = 0
+    var maxDepth = 4
+    var minUsablePairs = 1
+    var trainingOutputRoot = ""
+    var trainingModel = ""
+    var materializePath = ""
+    var referenceDirectoryPath = ""
+    var reconstructionResolution = 256
+    var densityThreshold = 25.0
+    var foregroundRatio = 0.85
+    var alreadyFramed = false
+    var noVertexColors = false
+    var camerasPath = ""
     var durationSeconds = 10.0
     var fps = 24
     var numFrames = 65
@@ -373,8 +439,25 @@ struct CommandTemplate: Identifiable, Equatable {
         case .imageValidate:
             draft.backend = "all"
             draft.variant = "zimage"
+        case .imageGenerate:
+            draft.maxSequenceLength = 512
         case .imageTrainLoRA:
             draft.steps = 1000
+            draft.maxSequenceLength = 512
+        case .imageDatasetDiscover:
+            draft.json = true
+        case .imageRunPlan:
+            draft.preflight = true
+            draft.json = true
+        case .imageVisualizeRun:
+            draft.port = 8787
+        case .imageReconstruct3D:
+            draft.reconstructionResolution = 256
+        case .imageReconstruct3DTrellis2:
+            draft.seed = "42"
+            draft.maxTokens = 2_097_152
+        case .imageReconstruct3DMultiview:
+            draft.reconstructionResolution = 128
         case .videoGenerate:
             draft.width = 768
             draft.height = 512
@@ -437,7 +520,7 @@ struct CommandTemplate: Identifiable, Equatable {
             return "\(promptLabel ?? "Prompt") is required."
         }
 
-        let optionalInputs: Set<CommandTemplateID> = [.imageGenerate, .videoGenerate]
+        let optionalInputs: Set<CommandTemplateID> = [.imageGenerate, .imageTrainLoRA, .videoGenerate]
         if inputKind != .none
             && !optionalInputs.contains(id)
             && draft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -445,6 +528,10 @@ struct CommandTemplate: Identifiable, Equatable {
         }
 
         switch id {
+        case .imageTrainLoRA:
+            if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
+                return "A dataset directory is required unless synthetic samples are enabled."
+            }
         case .modelPull:
             if !draft.all && draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Choose a model id, or enable All."
@@ -460,6 +547,11 @@ struct CommandTemplate: Identifiable, Equatable {
         case .videoGenerate:
             if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
                 return "A start image is required when an end keyframe is selected."
+            }
+        case .imageReconstruct3DMultiview:
+            let views = pathList(draft.referenceImagePaths)
+            if views.count != 4 && views.count != 6 {
+                return "Add exactly 4 or 6 ordered source views."
             }
         case .videoAnimate:
             if draft.referenceMaskPath.isBlank {
@@ -558,18 +650,128 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
             if draft.cfgScale != 1.0 { args += ["--cfg", format(draft.cfgScale)] }
+            if draft.sigmaShift > 0 { args += ["--sigma-shift", format(draft.sigmaShift)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if !draft.inputPath.isBlank {
                 args += ["--input", draft.inputPath, "--strength", format(draft.strength)]
             }
+            for path in pathList(draft.referenceImagePaths) {
+                args += ["--ref-image", path]
+            }
+            if draft.keepOriginalAspect { args.append("--keep-original-aspect") }
+            if draft.inputPath.isBlank, !draft.referenceImagePaths.isBlank, draft.strength != 0 {
+                args += ["--strength", format(draft.strength)]
+            }
+            if draft.maxSequenceLength != 512 {
+                args += ["--max-sequence-length", String(draft.maxSequenceLength)]
+            }
+            if draft.structuredPrompt {
+                args.append("--structured-prompt")
+                if !draft.structuredPromptModel.isBlank {
+                    args += ["--structured-prompt-model", draft.structuredPromptModel]
+                }
+                if !draft.structuredPromptModelRoot.isBlank {
+                    args += ["--structured-prompt-model-root", draft.structuredPromptModelRoot]
+                }
+                args += ["--structured-prompt-max-tokens", String(draft.structuredPromptMaxTokens)]
+                if !draft.structuredPromptOutputPath.isBlank {
+                    args += ["--structured-prompt-output", draft.structuredPromptOutputPath]
+                }
+            }
+            if !draft.loraPath.isBlank {
+                args += ["--lora", draft.loraPath, "--lora-scale", format(draft.loraScale)]
+            }
+            if draft.kreaConditioningMultiplier > 0 {
+                args += ["--krea-conditioning-multiplier", format(draft.kreaConditioningMultiplier)]
+            }
+            if !draft.kreaConditioningLayerWeights.isBlank {
+                args += ["--krea-conditioning-layer-weights", draft.kreaConditioningLayerWeights]
+            }
+            if !draft.kreaBaseQuantizationBits.isBlank {
+                args += ["--krea-base-quantization-bits", draft.kreaBaseQuantizationBits]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
+            if draft.progressJSON { args.append("--progress-json") }
             if draft.quiet { args.append("--quiet") }
 
         case .imageTrainLoRA:
-            args = ["image", "train-lora", "--data", draft.inputPath, "--output", draft.outputPath]
-            args += ["--width", String(draft.width), "--height", String(draft.height)]
-            args += ["--training-steps", String(draft.steps)]
-            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args = ["image", "train-lora", "--output", draft.outputPath]
+            if !draft.inputPath.isBlank { args += ["--data", draft.inputPath] }
+            if !draft.trainingRecipe.isBlank { args += ["--recipe", draft.trainingRecipe] }
+            let emitsRecipeOverrides = draft.trainingRecipe.isBlank || draft.overrideTrainingRecipe
+            if emitsRecipeOverrides {
+                args += ["--width", String(draft.width), "--height", String(draft.height)]
+                args += ["--training-steps", String(draft.steps)]
+                if !draft.model.isBlank { args += ["--model", draft.model] }
+                args += ["--learning-rate", format(draft.learningRate)]
+                args += ["--rank", String(draft.rank)]
+                if draft.alpha > 0 { args += ["--alpha", format(draft.alpha)] }
+                if draft.captionDropout > 0 {
+                    args += ["--caption-dropout", format(draft.captionDropout)]
+                }
+            }
+            args += ["--batch-size", String(draft.batchSize)]
+            args += ["--max-text-length", String(draft.maxSequenceLength)]
+            args += ["--scheduler-steps", String(draft.schedulerSteps)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.trainingLite { args.append("--lite") }
+            if !draft.baseQuantizationBits.isBlank {
+                args += ["--base-quantization-bits", draft.baseQuantizationBits]
+            }
+            if draft.excludePreviewImages { args.append("--exclude-preview-images") }
+            if emitsRecipeOverrides, draft.checkpointInterval > 0 {
+                args += ["--checkpoint-interval", String(draft.checkpointInterval)]
+            }
+            if emitsRecipeOverrides, draft.maxResolution > 0 {
+                args += ["--max-resolution", String(draft.maxResolution)]
+            }
+            if draft.progressive { args.append("--progressive") }
+            if emitsRecipeOverrides, draft.lowRAM { args.append("--low-ram") }
+            if emitsRecipeOverrides, draft.disableCompile { args.append("--no-compile") }
+            if draft.gradientCheckpointing { args.append("--gradient-checkpointing") }
+            if draft.benchmarkSteps > 0 { args += ["--benchmark-steps", String(draft.benchmarkSteps)] }
+            if draft.benchmarkSteps > 0 {
+                args += ["--benchmark-warmup-steps", String(draft.benchmarkWarmupSteps)]
+            }
+            if draft.sampleInterval > 0 {
+                args += ["--sample-interval", String(draft.sampleInterval)]
+                if !draft.samplePrompt.isBlank { args += ["--sample-prompt", draft.samplePrompt] }
+                if !draft.sampleModel.isBlank { args += ["--sample-model", draft.sampleModel] }
+                args += ["--sample-steps", String(draft.sampleSteps)]
+                args += ["--sample-cfg", format(draft.sampleCFG)]
+                args += ["--sample-lora-scale", format(draft.sampleLoRAScale)]
+                if !draft.sampleSeed.isBlank { args += ["--sample-seed", draft.sampleSeed] }
+            }
+            if draft.visualize {
+                args += ["--visualize", "--visualize-port", String(draft.visualizePort)]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
+            if !draft.loraTargetRanks.isBlank { args += ["--lora-target-ranks", draft.loraTargetRanks] }
+            if !draft.loraRankPreset.isBlank { args += ["--lora-rank-preset", draft.loraRankPreset] }
+            if emitsRecipeOverrides, !draft.loraTargetPreset.isBlank {
+                args += ["--lora-target-preset", draft.loraTargetPreset]
+            }
+            if !draft.loraTargetMode.isBlank { args += ["--lora-target-mode", draft.loraTargetMode] }
+            if !draft.timestepSampling.isBlank { args += ["--timestep-sampling", draft.timestepSampling] }
+            if !draft.timestepLossWeighting.isBlank {
+                args += ["--timestep-loss-weighting", draft.timestepLossWeighting]
+            }
+            if !draft.lossWeighting.isBlank { args += ["--loss-weighting", draft.lossWeighting] }
+            if draft.timestepLow > 0 { args += ["--timestep-low", String(draft.timestepLow)] }
+            if draft.timestepHigh > 0 { args += ["--timestep-high", String(draft.timestepHigh)] }
+            if emitsRecipeOverrides, draft.lrWarmupSteps > 0 {
+                args += ["--lr-warmup-steps", String(draft.lrWarmupSteps)]
+            }
+            if draft.disableCosineScheduler { args.append("--no-cosine-scheduler") }
+            if emitsRecipeOverrides, draft.lrMinFactor > 0 {
+                args += ["--lr-min-factor", format(draft.lrMinFactor)]
+            }
+            if draft.adamWeightDecay > 0 {
+                args += ["--adam-weight-decay", format(draft.adamWeightDecay)]
+            }
+            if draft.syntheticSamples > 0 { args += ["--synthetic-samples", String(draft.syntheticSamples)] }
             if draft.quiet { args.append("--quiet") }
 
         case .imageValidate:
@@ -577,6 +779,68 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if draft.force { args.append("--save-reference") }
             if draft.all { args.append("--compare") }
+            if !draft.referenceDirectoryPath.isBlank {
+                args += ["--reference-dir", draft.referenceDirectoryPath]
+            }
+
+        case .imageDatasetDiscover:
+            args = [
+                "image", "dataset", "discover",
+                "--root", draft.inputPath,
+                "--max-depth", String(draft.maxDepth),
+                "--min-usable-pairs", String(draft.minUsablePairs)
+            ]
+            if !draft.trainingOutputRoot.isBlank {
+                args += ["--training-output-root", draft.trainingOutputRoot]
+            }
+            if !draft.trainingModel.isBlank { args += ["--training-model", draft.trainingModel] }
+            if !draft.trainingRecipe.isBlank { args += ["--training-recipe", draft.trainingRecipe] }
+            if draft.excludePreviewImages { args.append("--exclude-preview-images") }
+            if draft.json { args.append("--json") }
+
+        case .imageRunPlan:
+            args = ["image", "run-plan", draft.inputPath]
+            if draft.preflight { args.append("--preflight") }
+            if !draft.materializePath.isBlank { args += ["--materialize", draft.materializePath] }
+            if draft.json { args.append("--json") }
+
+        case .imageVisualizeRun:
+            args = ["image", "visualize-run", draft.inputPath, "--port", String(draft.port)]
+
+        case .imageReconstruct3D:
+            args = ["image", "reconstruct-3d", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--resolution", String(draft.reconstructionResolution)]
+            args += ["--density-threshold", format(draft.densityThreshold)]
+            args += ["--foreground-ratio", format(draft.foregroundRatio)]
+            if draft.alreadyFramed { args.append("--already-framed") }
+            if draft.noVertexColors { args.append("--no-vertex-colors") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .imageReconstruct3DTrellis2:
+            args = ["image", "reconstruct-3d-trellis2", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            args += ["--max-tokens", String(draft.maxTokens)]
+            if draft.alreadyFramed { args.append("--already-framed") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .imageReconstruct3DMultiview:
+            args = ["image", "reconstruct-3d-multiview"]
+            for path in pathList(draft.referenceImagePaths) {
+                args += ["--view", path]
+            }
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.camerasPath.isBlank { args += ["--cameras", draft.camerasPath] }
+            args += ["--resolution", String(draft.reconstructionResolution)]
+            if draft.noVertexColors { args.append("--no-vertex-colors") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
 
         case .textChat:
             args = ["text", "chat", "--prompt", draft.prompt]
@@ -1022,6 +1286,13 @@ struct CommandTemplate: Identifiable, Equatable {
     private func format(_ value: Double) -> String {
         String(format: "%.4g", value)
     }
+
+    private func pathList(_ raw: String) -> [String] {
+        raw.components(separatedBy: .newlines)
+            .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 }
 
 enum CommandLaunchEnvironment {
@@ -1077,8 +1348,8 @@ enum CommandCatalog {
         CommandTemplate(
             id: .imageGenerate,
             category: .image,
-            title: "Generate image",
-            subtitle: "Text-to-image and image-to-image",
+            title: "Generate or edit",
+            subtitle: "Text, image, multi-reference, structured prompt, and LoRA",
             systemImage: "photo",
             promptLabel: "Prompt",
             secondaryLabel: "Negative prompt",
@@ -1091,7 +1362,7 @@ enum CommandCatalog {
             id: .imageTrainLoRA,
             category: .image,
             title: "Train LoRA",
-            subtitle: "Train Krea 2 Raw adapters",
+            subtitle: "Krea 2 and FLUX.2 Klein recipes, previews, and dashboards",
             systemImage: "slider.horizontal.3",
             inputKind: .directory,
             outputKind: .file("safetensors"),
@@ -1104,6 +1375,59 @@ enum CommandCatalog {
             subtitle: "Run deterministic image runtime checks",
             systemImage: "checkmark.seal",
             outputKind: .directory
+        ),
+        CommandTemplate(
+            id: .imageDatasetDiscover,
+            category: .image,
+            title: "Discover datasets",
+            subtitle: "Find trainable image-caption folders",
+            systemImage: "folder.badge.questionmark",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .imageRunPlan,
+            category: .image,
+            title: "Run workflow plan",
+            subtitle: "Preflight, materialize, or execute a saved image plan",
+            systemImage: "list.bullet.clipboard",
+            inputKind: .file([.json])
+        ),
+        CommandTemplate(
+            id: .imageVisualizeRun,
+            category: .image,
+            title: "Training dashboard",
+            subtitle: "Open a durable LoRA run viewer",
+            systemImage: "chart.xyaxis.line",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .imageReconstruct3D,
+            category: .image,
+            title: "TripoSR 3D",
+            subtitle: "Reconstruct a colored mesh from one image",
+            systemImage: "cube.transparent",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "image-3d-triposr"
+        ),
+        CommandTemplate(
+            id: .imageReconstruct3DTrellis2,
+            category: .image,
+            title: "TRELLIS.2 PBR 3D",
+            subtitle: "Build a 512-resolution PBR O-Voxel asset",
+            systemImage: "cube.fill",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "image-3d-trellis2-4b"
+        ),
+        CommandTemplate(
+            id: .imageReconstruct3DMultiview,
+            category: .image,
+            title: "InstantMesh multiview",
+            subtitle: "Reconstruct from four or six ordered views",
+            systemImage: "square.3.layers.3d",
+            outputKind: .directory,
+            defaultModel: "image-3d-instantmesh-base"
         ),
         CommandTemplate(
             id: .textChat,
