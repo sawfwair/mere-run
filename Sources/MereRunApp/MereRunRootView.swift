@@ -369,6 +369,8 @@ private struct CommandEditor: View {
             ImageValidationOptions()
         case .textChat, .textCode, .textEmbed, .textAnonymize, .visionInspect, .visionCaption, .visionOCR:
             TextGenerationOptions()
+        case .textTrainLoRA:
+            TextLoRATrainingOptions()
         case .speechSynthesize:
             SpeechOptions()
         case .speechTranscribe:
@@ -818,20 +820,31 @@ private struct TextGenerationOptions: View {
     var body: some View {
         EditorSection("Parameters") {
             VStack(spacing: 10) {
-                AdaptiveControlRow {
-                    NumberStepper(title: "Max tokens", value: $controller.draft.maxTokens, range: 1...32768, step: 64)
-                    NumberField(title: "Temp", value: $controller.draft.temperature)
-                    NumberField(title: "Top-p", value: $controller.draft.topP)
-                }
-                AdaptiveControlRow {
-                    if [.textChat].contains(controller.selectedTemplate.id) {
-                        Toggle("Thinking", isOn: $controller.draft.all)
+                if [.textChat, .textCode].contains(controller.selectedTemplate.id) {
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Max tokens",
+                            value: $controller.draft.maxTokens,
+                            range: 1...262_144,
+                            step: 64
+                        )
+                        NumberField(title: "Temp", value: $controller.draft.temperature)
+                        NumberField(title: "Top-p", value: $controller.draft.topP)
                     }
+                } else {
+                    NumberStepper(
+                        title: "Max tokens",
+                        value: $controller.draft.maxTokens,
+                        range: 1...262_144,
+                        step: 64
+                    )
+                }
+
+                AdaptiveControlRow {
                     if [.textChat, .textCode].contains(controller.selectedTemplate.id) {
                         Toggle("Stats", isOn: $controller.draft.force)
-                    }
-                    if controller.selectedTemplate.id == .textCode {
                         Toggle("Stream", isOn: $controller.draft.stream)
+                        Toggle("Quiet", isOn: $controller.draft.quiet)
                     }
                     if [.textEmbed, .textAnonymize].contains(controller.selectedTemplate.id) {
                         Toggle("Pretty", isOn: $controller.draft.force)
@@ -839,10 +852,82 @@ private struct TextGenerationOptions: View {
                     if controller.selectedTemplate.id == .textAnonymize {
                         Toggle("JSON", isOn: $controller.draft.all)
                     }
-                    Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
 
                 if controller.selectedTemplate.id == .textChat {
+                    Divider().overlay(MereRunTheme.border.opacity(0.4))
+                    Picker("Response", selection: $controller.draft.responseFormat) {
+                        Text("Text").tag(TextResponseFormat.text)
+                        Text("JSON object").tag(TextResponseFormat.jsonObject)
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Reasoning", selection: $controller.draft.thinkingMode) {
+                        Text("Model default").tag(TextThinkingMode.automatic)
+                        Text("Show").tag(TextThinkingMode.show)
+                        Text("Disable").tag(TextThinkingMode.hide)
+                    }
+                    .pickerStyle(.segmented)
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Context",
+                            value: $controller.draft.contextSize,
+                            range: 0...262_144,
+                            step: 1_024
+                        )
+                        NumberStepper(
+                            title: "Top-k",
+                            value: $controller.draft.topK,
+                            range: 0...512,
+                            step: 1
+                        )
+                    }
+                    PathField(
+                        path: $controller.draft.modelRoot,
+                        placeholder: "Local model root (optional)",
+                        mode: .openDirectory
+                    )
+                    PathField(
+                        path: $controller.draft.loraPath,
+                        placeholder: "Catalog adapter id or LoRA file (optional)",
+                        mode: .openFile([.data])
+                    )
+                    if !controller.draft.loraPath.isBlank {
+                        NumberField(title: "LoRA scale", value: $controller.draft.loraScale)
+                    }
+                    Picker("KV bits", selection: $controller.draft.kvBits) {
+                        Text("Automatic").tag(0)
+                        Text("4-bit").tag(4)
+                        Text("8-bit").tag(8)
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("KV scheme", selection: $controller.draft.kvQuantScheme) {
+                        Text("Automatic").tag("")
+                        Text("Uniform").tag("uniform")
+                        Text("Polar").tag("polar")
+                        Text("TurboQuant").tag("turboquant")
+                    }
+                    .pickerStyle(.segmented)
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "KV group",
+                            value: $controller.draft.kvGroupSize,
+                            range: 0...1_024,
+                            step: 8
+                        )
+                        NumberStepper(
+                            title: "KV starts",
+                            value: $controller.draft.quantizedKVStart,
+                            range: 0...262_144,
+                            step: 128
+                        )
+                    }
+                    AdaptiveControlRow {
+                        Toggle("Preflight", isOn: $controller.draft.preflight)
+                        Toggle("JSON report", isOn: $controller.draft.json)
+                            .disabled(!controller.draft.preflight)
+                        Toggle("Require installed", isOn: $controller.draft.requireInstalled)
+                    }
+
                     Divider().overlay(MereRunTheme.border.opacity(0.4))
                     TextField("Tools (comma-separated: write_file, shell_exec)", text: $controller.draft.tools)
                         .textFieldStyle(.plain)
@@ -851,6 +936,8 @@ private struct TextGenerationOptions: View {
                     AdaptiveControlRow {
                         Toggle("Tool loop", isOn: $controller.draft.toolLoop)
                         Toggle("Allow shell exec", isOn: $controller.draft.allowShellExec)
+                        Toggle("Absolute paths", isOn: $controller.draft.allowAbsoluteToolPaths)
+                        Toggle("Auto-approve", isOn: $controller.draft.autoApproveTools)
                     }
                     PathField(
                         path: $controller.draft.sandboxDir,
@@ -861,6 +948,89 @@ private struct TextGenerationOptions: View {
                         path: $controller.draft.imagePath,
                         placeholder: "Image for vision chat (optional)",
                         mode: .openFile([.image])
+                    )
+                }
+
+                if controller.selectedTemplate.id == .textAnonymize {
+                    TextField("Replacement template", text: $controller.draft.replacement)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+            }
+        }
+    }
+}
+
+private struct TextLoRATrainingOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Training") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.modelRoot,
+                    placeholder: "Explicit base model directory (optional)",
+                    mode: .openDirectory
+                )
+                PathField(
+                    path: $controller.draft.evalPath,
+                    placeholder: "Eval prompts JSONL (optional)",
+                    mode: .openFile([.json, .plainText])
+                )
+                TextField("Adapter name", text: $controller.draft.adapterName)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Steps",
+                        value: $controller.draft.steps,
+                        range: 1...100_000,
+                        step: 100
+                    )
+                    NumberStepper(
+                        title: "Batch",
+                        value: $controller.draft.batchSize,
+                        range: 1...128,
+                        step: 1
+                    )
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Learning rate", value: $controller.draft.learningRate)
+                    NumberStepper(
+                        title: "Rank",
+                        value: $controller.draft.rank,
+                        range: 1...512,
+                        step: 1
+                    )
+                    NumberField(title: "Alpha", value: $controller.draft.alpha)
+                }
+                NumberStepper(
+                    title: "Max sequence",
+                    value: $controller.draft.maxSequenceLength,
+                    range: 128...262_144,
+                    step: 128
+                )
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                TextField("Target modules", text: $controller.draft.targetModules)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                AdaptiveControlRow {
+                    Toggle("Dry run", isOn: $controller.draft.dryRun)
+                    Toggle("Visualize", isOn: $controller.draft.visualize)
+                    Toggle("JSON summary", isOn: $controller.draft.json)
+                }
+                if controller.draft.visualize {
+                    NumberStepper(
+                        title: "Dashboard port",
+                        value: $controller.draft.visualizePort,
+                        range: 1...65_535,
+                        step: 1
                     )
                 }
             }

@@ -463,6 +463,10 @@ struct StudioOptionsPanel: View {
                     videoOptions
                 }
 
+                if mode == .chat {
+                    chatOptions
+                }
+
                 if [.createImage, .video].contains(mode) {
                     HStack(spacing: MereRunTheme.Spacing.sm) {
                         Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
@@ -591,6 +595,100 @@ struct StudioOptionsPanel: View {
         if panel.runModal() == .OK, let url = panel.url {
             draft.refAudioPath = url.path
         }
+    }
+
+    @ViewBuilder
+    private var chatOptions: some View {
+        Picker("Response", selection: $draft.responseFormat) {
+            Text("Text").tag(TextResponseFormat.text)
+            Text("JSON").tag(TextResponseFormat.jsonObject)
+        }
+        .pickerStyle(.segmented)
+
+        Picker("Reasoning", selection: $draft.thinkingMode) {
+            Text("Default").tag(TextThinkingMode.automatic)
+            Text("Show").tag(TextThinkingMode.show)
+            Text("Disable").tag(TextThinkingMode.hide)
+        }
+        .pickerStyle(.segmented)
+
+        Stepper(
+            "Context: \(draft.contextSize == 0 ? "model default" : String(draft.contextSize))",
+            value: $draft.contextSize,
+            in: 0...262_144,
+            step: 1_024
+        )
+        .font(MereRunTheme.captionFont)
+        Stepper(
+            "Top-k: \(draft.topK == 0 ? "model default" : String(draft.topK))",
+            value: $draft.topK,
+            in: 0...512
+        )
+        .font(MereRunTheme.captionFont)
+
+        Picker("KV bits", selection: $draft.kvBits) {
+            Text("Auto").tag(0)
+            Text("4-bit").tag(4)
+            Text("8-bit").tag(8)
+        }
+        .pickerStyle(.segmented)
+        Picker("KV scheme", selection: $draft.kvQuantScheme) {
+            Text("Auto").tag("")
+            Text("Uniform").tag("uniform")
+            Text("Polar").tag("polar")
+            Text("Turbo").tag("turboquant")
+        }
+        .pickerStyle(.segmented)
+        Stepper("KV group: \(draft.kvGroupSize)", value: $draft.kvGroupSize, in: 0...1_024, step: 8)
+            .font(MereRunTheme.captionFont)
+        Stepper(
+            "Quantize after: \(draft.quantizedKVStart)",
+            value: $draft.quantizedKVStart,
+            in: 0...262_144,
+            step: 128
+        )
+        .font(MereRunTheme.captionFont)
+
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            TextField("Catalog LoRA id or file", text: $draft.loraPath)
+                .mereField()
+            Button("Browse…") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [.data]
+                panel.allowsMultipleSelection = false
+                panel.canChooseDirectories = false
+                if panel.runModal() == .OK, let url = panel.url {
+                    draft.loraPath = url.path
+                }
+            }
+            .controlSize(.small)
+        }
+        if !draft.loraPath.isBlank {
+            numberField("LoRA scale", value: $draft.loraScale)
+        }
+
+        TextField("Tools: write_file, shell_exec", text: $draft.tools)
+            .mereField()
+        TextField("Tool sandbox directory", text: $draft.sandboxDir)
+            .mereField()
+        Toggle("Tool loop", isOn: $draft.toolLoop)
+            .font(MereRunTheme.captionFont)
+        Toggle("Allow shell execution", isOn: $draft.allowShellExec)
+            .font(MereRunTheme.captionFont)
+        Toggle("Allow absolute tool paths", isOn: $draft.allowAbsoluteToolPaths)
+            .font(MereRunTheme.captionFont)
+        Toggle("Auto-approve tool calls", isOn: $draft.autoApproveTools)
+            .font(MereRunTheme.captionFont)
+        Toggle("Generation stats", isOn: $draft.stats)
+            .font(MereRunTheme.captionFont)
+        Toggle("Preflight only", isOn: $draft.preflight)
+            .font(MereRunTheme.captionFont)
+        if draft.preflight {
+            Toggle("JSON preflight report", isOn: $draft.preflightJSON)
+                .font(MereRunTheme.captionFont)
+        }
+        Toggle("Require installed model", isOn: $draft.requireInstalled)
+            .font(MereRunTheme.captionFont)
     }
 
     @ViewBuilder

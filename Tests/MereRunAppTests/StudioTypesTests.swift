@@ -60,6 +60,85 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--allow-shell-exec"))
     }
 
+    func testChatBuildsJSONLoRAKVPreflightAndToolPermissionFlags() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        var draft = template.defaultDraft()
+        draft.responseFormat = .jsonObject
+        draft.thinkingMode = .hide
+        draft.contextSize = 262_144
+        draft.topK = 20
+        draft.kvBits = 4
+        draft.kvQuantScheme = "polar"
+        draft.kvGroupSize = 64
+        draft.quantizedKVStart = 1_024
+        draft.modelRoot = "/tmp/model"
+        draft.loraPath = "adapter-assistant"
+        draft.loraScale = 0.75
+        draft.allowAbsoluteToolPaths = true
+        draft.autoApproveTools = true
+        draft.preflight = true
+        draft.json = true
+        draft.requireInstalled = true
+
+        let args = template.arguments(from: draft)
+        assertPair(args, "--response-format", "json_object")
+        assertPair(args, "--context-size", "262144")
+        assertPair(args, "--top-k", "20")
+        assertPair(args, "--kv-bits", "4")
+        assertPair(args, "--kv-quant-scheme", "polar")
+        assertPair(args, "--kv-group-size", "64")
+        assertPair(args, "--quantized-kv-start", "1024")
+        assertPair(args, "--model-root", "/tmp/model")
+        assertPair(args, "--lora", "adapter-assistant")
+        assertPair(args, "--lora-scale", "0.75")
+        XCTAssertTrue(args.contains("--no-thinking"))
+        XCTAssertTrue(args.contains("--allow-absolute-tool-paths"))
+        XCTAssertTrue(args.contains("--auto-approve-tools"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--require-installed"))
+        XCTAssertFalse(args.contains("--thinking"))
+    }
+
+    func testTextAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.textChat, "text.chat", {
+                $0.responseFormat = .jsonObject
+                $0.thinkingMode = .show
+                $0.loraPath = "/tmp/chat.safetensors"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.textCode, "text.code", { _ in }),
+            (.textEmbed, "text.embed", { _ in }),
+            (.textAnonymize, "text.anonymize", {
+                $0.replacement = "<{label}:{index}>"
+                $0.all = true
+            }),
+            (.textTrainLoRA, "text.train-lora", {
+                $0.inputPath = "/tmp/train.jsonl"
+                $0.evalPath = "/tmp/eval.jsonl"
+                $0.dryRun = true
+                $0.visualize = true
+                $0.json = true
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
     func testNewAdvancedTemplatesBuildExpectedCommands() throws {
         func args(_ id: CommandTemplateID, _ mutate: (inout CommandDraft) -> Void = { _ in }) throws -> [String] {
             let template = try XCTUnwrap(CommandCatalog.template(id: id))
@@ -395,6 +474,53 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--max-tokens", "1234")
     }
 
+    func testChatStudioMapsJSONLoRAKVAndPermissionControls() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "Return one JSON object."
+        draft.responseFormat = .jsonObject
+        draft.thinkingMode = .hide
+        draft.contextSize = 32_768
+        draft.topK = 20
+        draft.kvBits = 8
+        draft.kvQuantScheme = "turboquant"
+        draft.kvGroupSize = 64
+        draft.quantizedKVStart = 512
+        draft.loraPath = "adapter-assistant"
+        draft.loraScale = 0.5
+        draft.tools = "write_file,shell_exec"
+        draft.toolLoop = true
+        draft.allowShellExec = true
+        draft.allowAbsoluteToolPaths = true
+        draft.autoApproveTools = true
+        draft.sandboxDir = "/tmp/tools"
+        draft.stats = true
+        draft.preflight = true
+        draft.preflightJSON = true
+        draft.requireInstalled = true
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        assertPair(args, "--response-format", "json_object")
+        assertPair(args, "--context-size", "32768")
+        assertPair(args, "--top-k", "20")
+        assertPair(args, "--kv-bits", "8")
+        assertPair(args, "--kv-quant-scheme", "turboquant")
+        assertPair(args, "--lora", "adapter-assistant")
+        assertPair(args, "--lora-scale", "0.5")
+        assertPair(args, "--sandbox-dir", "/tmp/tools")
+        XCTAssertTrue(args.contains("--no-thinking"))
+        XCTAssertTrue(args.contains("--tool-loop"))
+        XCTAssertTrue(args.contains("--allow-shell-exec"))
+        XCTAssertTrue(args.contains("--allow-absolute-tool-paths"))
+        XCTAssertTrue(args.contains("--auto-approve-tools"))
+        XCTAssertTrue(args.contains("--stats"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--require-installed"))
+    }
+
     func testImageSchemaExposesCfgAndStrength() throws {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
@@ -551,7 +677,10 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .chat)
         let base = CommandCatalog.template(id: StudioMode.chat.defaultTemplateID)?.defaultDraft()
         XCTAssertEqual(draft.temperature, base?.temperature)
+        XCTAssertEqual(draft.topP, base?.topP)
         XCTAssertEqual(draft.maxTokens, base?.maxTokens)
+        XCTAssertEqual(draft.responseFormat, base?.responseFormat)
+        XCTAssertEqual(draft.thinkingMode, base?.thinkingMode)
     }
 
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {

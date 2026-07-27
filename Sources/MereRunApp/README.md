@@ -20,3 +20,9 @@ emit the legacy `--variant` compatibility selector. Its attachment workflow
 supports a start image, end keyframe, and source audio. Advanced Video contains
 guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
 workflows.
+
+Text uses the same contract for native/MLX chat, code, embeddings,
+anonymization, and text-LoRA training. Chat exposes typed text/JSON response
+format, reasoning policy, context and KV controls, LoRA application, tool
+permissions, and preflight in both Studio and Advanced. Advanced also owns the
+full text-LoRA training form.

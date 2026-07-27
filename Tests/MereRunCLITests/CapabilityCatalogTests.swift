@@ -3,8 +3,13 @@ import Testing
 
 @testable import MereRunCLI
 
-@Test func videoCapabilityFlagsMatchArgumentParserHelp() {
+@Test func capabilityFlagsMatchArgumentParserHelp() {
     let helpByID: [String: String] = [
+        "text.chat": TextChat.helpMessage(),
+        "text.code": TextCode.helpMessage(),
+        "text.embed": TextEmbed.helpMessage(),
+        "text.anonymize": TextAnonymize.helpMessage(),
+        "text.train-lora": TextTrainLoRA.helpMessage(),
         "video.generate": VideoGenerate.helpMessage(),
         "video.animate": VideoAnimate.helpMessage(),
         "video.cosmos3": VideoCosmos3.helpMessage(),

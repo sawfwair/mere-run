@@ -11,6 +11,17 @@ embeddings, PII anonymization, and native text LoRA preparation.
 - `mere.run text anonymize`
 - `mere.run text train-lora`
 
+## macOS Studio
+
+The macOS app compiles against the same `MereRunContract` emitted by
+`mere.run catalog --json`. Chat's Options panel exposes text versus constrained
+`json_object` output, model-default/show/disable reasoning, context and sampling
+controls, KV quantization, a catalog adapter id or local LoRA file, tool
+permissions, preflight, and installed-model enforcement. The Advanced surface
+adds guided Code, Embeddings, Anonymize, and native Text LoRA Training forms;
+the generated flags are checked against the public ArgumentParser command help
+in the repository gate.
+
 ## Model families
 
 ### Chat

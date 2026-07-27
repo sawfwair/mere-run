@@ -302,7 +302,10 @@ targets.append(contentsOf: [
   .target(
     name: "MereRunContract",
     dependencies: [],
-    path: "Sources/MereRunContract"
+    path: "Sources/MereRunContract",
+    exclude: [
+      "README.md"
+    ]
   ),
   .target(
     name: "MereRunCore",

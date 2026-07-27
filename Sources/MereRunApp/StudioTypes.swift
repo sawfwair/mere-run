@@ -293,7 +293,27 @@ struct StudioDraft: Codable, Equatable {
     // Advanced depth shared with the Advanced surface (see StudioOptionSchema). Defaults are
     // seeded from the matching template's CommandDraft so the two surfaces never drift.
     var temperature = 0.7
+    var topP = 0.9
     var maxTokens = 2048
+    var contextSize = 0
+    var topK = 0
+    var kvBits = 0
+    var kvQuantScheme = ""
+    var kvGroupSize = 0
+    var quantizedKVStart = 0
+    var responseFormat: TextResponseFormat = .text
+    var thinkingMode: TextThinkingMode = .automatic
+    var loraPath = ""
+    var loraScale = 1.0
+    var stats = false
+    var tools = ""
+    var toolLoop = false
+    var allowShellExec = false
+    var allowAbsoluteToolPaths = false
+    var autoApproveTools = false
+    var sandboxDir = ""
+    var requireInstalled = false
+    var preflightJSON = false
     var cfgScale = 1.0
     var strength = 0.75
     var language = "auto"
@@ -335,7 +355,27 @@ struct StudioDraft: Codable, Equatable {
         refAudioPath = ""
         saveProfileName = ""
         temperature = base?.temperature ?? 0.7
+        topP = base?.topP ?? 0.9
         maxTokens = base?.maxTokens ?? 2048
+        contextSize = base?.contextSize ?? 0
+        topK = base?.topK ?? 0
+        kvBits = base?.kvBits ?? 0
+        kvQuantScheme = base?.kvQuantScheme ?? ""
+        kvGroupSize = base?.kvGroupSize ?? 0
+        quantizedKVStart = base?.quantizedKVStart ?? 0
+        responseFormat = base?.responseFormat ?? .text
+        thinkingMode = base?.thinkingMode ?? .automatic
+        loraPath = ""
+        loraScale = base?.loraScale ?? 1
+        stats = false
+        tools = ""
+        toolLoop = false
+        allowShellExec = false
+        allowAbsoluteToolPaths = false
+        autoApproveTools = false
+        sandboxDir = ""
+        requireInstalled = false
+        preflightJSON = false
         cfgScale = base?.cfgScale ?? 1.0
         strength = base?.strength ?? 0.75
         language = base?.language ?? "auto"
@@ -397,6 +437,7 @@ enum StudioOptionSchema {
         case .chat, .code:
             return [
                 StudioOptionField(id: "temperature", label: "Temperature", control: .double(\.temperature)),
+                StudioOptionField(id: "topP", label: "Top-p", control: .double(\.topP)),
                 StudioOptionField(id: "maxTokens", label: "Max tokens", control: .int(\.maxTokens, range: 1...32_768, step: 64)),
             ]
         case .createImage:
@@ -514,7 +555,30 @@ enum StudioCommandAdapter {
             draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.temperature = studioDraft.temperature
+            draft.topP = studioDraft.topP
             draft.maxTokens = studioDraft.maxTokens
+            if mode == .chat {
+                draft.contextSize = studioDraft.contextSize
+                draft.topK = studioDraft.topK
+                draft.kvBits = studioDraft.kvBits
+                draft.kvQuantScheme = studioDraft.kvQuantScheme
+                draft.kvGroupSize = studioDraft.kvGroupSize
+                draft.quantizedKVStart = studioDraft.quantizedKVStart
+                draft.responseFormat = studioDraft.responseFormat
+                draft.thinkingMode = studioDraft.thinkingMode
+                draft.loraPath = studioDraft.loraPath
+                draft.loraScale = studioDraft.loraScale
+                draft.force = studioDraft.stats
+                draft.tools = studioDraft.tools
+                draft.toolLoop = studioDraft.toolLoop
+                draft.allowShellExec = studioDraft.allowShellExec
+                draft.allowAbsoluteToolPaths = studioDraft.allowAbsoluteToolPaths
+                draft.autoApproveTools = studioDraft.autoApproveTools
+                draft.sandboxDir = studioDraft.sandboxDir
+                draft.preflight = studioDraft.preflight
+                draft.json = studioDraft.preflightJSON
+                draft.requireInstalled = studioDraft.requireInstalled
+            }
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }

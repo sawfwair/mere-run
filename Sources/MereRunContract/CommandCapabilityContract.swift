@@ -23,6 +23,17 @@ public enum LTXVideoOutputMode: String, CaseIterable, Codable, Sendable {
     }
 }
 
+public enum TextResponseFormat: String, CaseIterable, Codable, Sendable {
+    case text
+    case jsonObject = "json_object"
+}
+
+public enum TextThinkingMode: String, CaseIterable, Codable, Sendable {
+    case automatic
+    case show
+    case hide
+}
+
 public enum MereRunCapabilityValueKind: String, Codable, Sendable {
     case string
     case integer
@@ -73,6 +84,7 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
 }
 
 public enum MereRunCapabilityOutputKind: String, Codable, Sendable {
+    case text
     case file
     case directory
     case service
@@ -142,6 +154,11 @@ public enum MereRunCapabilityCatalog {
     public static let document = MereRunCapabilityDocument(
         schemaVersion: schemaVersion,
         commands: [
+            textChat,
+            textCode,
+            textEmbed,
+            textAnonymize,
+            textTrainLoRA,
             videoGenerate,
             videoAnimate,
             videoCosmos3,
@@ -154,6 +171,140 @@ public enum MereRunCapabilityCatalog {
     public static func command(id: String) -> MereRunCommandCapability? {
         document.commands.first { $0.id == id }
     }
+
+    public static let textChat = MereRunCommandCapability(
+        id: "text.chat",
+        command: ["text", "chat"],
+        title: "Chat",
+        summary: "Run local chat, vision, JSON, LoRA, reasoning, and tool workflows.",
+        options: [
+            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true),
+            .init(flag: "--image", label: "Image", kind: .file),
+            .init(flag: "--system", label: "System prompt", kind: .string),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--context-size", label: "Context size", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--kv-bits", label: "KV bits", kind: .integer),
+            .init(
+                flag: "--kv-quant-scheme",
+                label: "KV quantization",
+                kind: .choice,
+                choices: ["uniform", "polar", "turboquant"]
+            ),
+            .init(flag: "--kv-group-size", label: "KV group size", kind: .integer),
+            .init(flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer),
+            .init(flag: "--model-root", label: "Model root", kind: .directory),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(
+                flag: "--response-format",
+                label: "Response format",
+                kind: .choice,
+                choices: TextResponseFormat.allCases.map(\.rawValue)
+            ),
+            .init(flag: "--lora", label: "LoRA", kind: .file),
+            .init(flag: "--lora-scale", label: "LoRA scale", kind: .number),
+            .init(flag: "--thinking", label: "Show thinking", kind: .boolean),
+            .init(flag: "--no-thinking", label: "Disable thinking", kind: .boolean),
+            .init(flag: "--stats", label: "Stats", kind: .boolean),
+            .init(flag: "--stream", label: "Stream", kind: .boolean),
+            .init(flag: "--tools", label: "Tools", kind: .string),
+            .init(flag: "--tool-loop", label: "Tool loop", kind: .boolean),
+            .init(flag: "--sandbox-dir", label: "Sandbox directory", kind: .directory),
+            .init(flag: "--allow-shell-exec", label: "Allow shell", kind: .boolean),
+            .init(flag: "--allow-absolute-tool-paths", label: "Allow absolute paths", kind: .boolean),
+            .init(flag: "--auto-approve-tools", label: "Auto-approve tools", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON preflight", kind: .boolean),
+            .init(flag: "--require-installed", label: "Require installed", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let textCode = MereRunCommandCapability(
+        id: "text.code",
+        command: ["text", "code"],
+        title: "Code",
+        summary: "Run local code generation with GGUF models through llama.cpp.",
+        options: [
+            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true),
+            .init(flag: "--system", label: "System prompt", kind: .string),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--model", label: "Model", kind: .file),
+            .init(flag: "--stats", label: "Stats", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
+            .init(flag: "--stream", label: "Stream", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let textEmbed = MereRunCommandCapability(
+        id: "text.embed",
+        command: ["text", "embed"],
+        title: "Embeddings",
+        summary: "Generate native Qwen3 text embeddings.",
+        arguments: [
+            .init(name: "texts", label: "Texts", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "json")
+    )
+
+    public static let textAnonymize = MereRunCommandCapability(
+        id: "text.anonymize",
+        command: ["text", "anonymize"],
+        title: "Anonymize",
+        summary: "Detect and redact PII with the native OpenAI Privacy Filter.",
+        arguments: [
+            .init(name: "texts", label: "Texts", kind: .string, required: false)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--replacement", label: "Replacement template", kind: .string),
+            .init(flag: "--json", label: "JSON", kind: .boolean),
+            .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
+            .init(flag: "--output", label: "Output", kind: .file)
+        ],
+        output: .init(kind: .file)
+    )
+
+    public static let textTrainLoRA = MereRunCommandCapability(
+        id: "text.train-lora",
+        command: ["text", "train-lora"],
+        title: "Train text LoRA",
+        summary: "Train a native text LoRA from OpenAI-style chat SFT JSONL.",
+        options: [
+            .init(flag: "--data", label: "Dataset", kind: .file, required: true),
+            .init(flag: "--output", label: "Output", kind: .file, required: true),
+            .init(flag: "--model", label: "Base model", kind: .string),
+            .init(flag: "--model-path", label: "Model path", kind: .directory),
+            .init(flag: "--eval", label: "Eval prompts", kind: .file),
+            .init(flag: "--adapter-name", label: "Adapter name", kind: .string),
+            .init(flag: "--training-steps", label: "Training steps", kind: .integer),
+            .init(flag: "--batch-size", label: "Batch size", kind: .integer),
+            .init(flag: "--learning-rate", label: "Learning rate", kind: .number),
+            .init(flag: "--rank", label: "Rank", kind: .integer),
+            .init(flag: "--alpha", label: "Alpha", kind: .number),
+            .init(flag: "--max-sequence-length", label: "Sequence length", kind: .integer),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--target-modules", label: "Target modules", kind: .string),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--visualize", label: "Visualize", kind: .boolean),
+            .init(flag: "--visualize-port", label: "Visualization port", kind: .integer),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
 
     public static let videoGenerate = MereRunCommandCapability(
         id: "video.generate",

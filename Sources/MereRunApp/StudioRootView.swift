@@ -884,7 +884,27 @@ struct StudioRootView: View {
         // Shared schema depth (WS-3.5): keep the two surfaces aligned after live edits, not only
         // at defaults.
         controller.draft.temperature = draft.temperature
+        controller.draft.topP = draft.topP
         controller.draft.maxTokens = draft.maxTokens
+        controller.draft.contextSize = draft.contextSize
+        controller.draft.topK = draft.topK
+        controller.draft.kvBits = draft.kvBits
+        controller.draft.kvQuantScheme = draft.kvQuantScheme
+        controller.draft.kvGroupSize = draft.kvGroupSize
+        controller.draft.quantizedKVStart = draft.quantizedKVStart
+        controller.draft.responseFormat = draft.responseFormat
+        controller.draft.thinkingMode = draft.thinkingMode
+        controller.draft.loraPath = draft.loraPath
+        controller.draft.loraScale = draft.loraScale
+        controller.draft.force = draft.stats
+        controller.draft.tools = draft.tools
+        controller.draft.toolLoop = draft.toolLoop
+        controller.draft.allowShellExec = draft.allowShellExec
+        controller.draft.allowAbsoluteToolPaths = draft.allowAbsoluteToolPaths
+        controller.draft.autoApproveTools = draft.autoApproveTools
+        controller.draft.sandboxDir = draft.sandboxDir
+        controller.draft.requireInstalled = draft.requireInstalled
+        controller.draft.json = draft.preflightJSON
         controller.draft.cfgScale = draft.cfgScale
         controller.draft.strength = draft.strength
         controller.draft.language = draft.language

@@ -2,10 +2,15 @@ import Foundation
 import MereRunContract
 import Testing
 
-@Test func videoCapabilityCatalogIsStableAndMachineReadable() throws {
+@Test func capabilityCatalogIsStableAndMachineReadable() throws {
     let document = MereRunCapabilityCatalog.document
     #expect(document.schemaVersion == 1)
     #expect(document.commands.map(\.id) == [
+        "text.chat",
+        "text.code",
+        "text.embed",
+        "text.anonymize",
+        "text.train-lora",
         "video.generate",
         "video.animate",
         "video.cosmos3",
@@ -18,6 +23,20 @@ import Testing
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
     #expect(decoded == document)
+}
+
+@Test func capabilityFlagsAreUniqueWithinCommands() {
+    for command in MereRunCapabilityCatalog.document.commands {
+        let flags = command.options.map(\.flag)
+        #expect(Set(flags).count == flags.count, "\(command.id) has duplicate option flags")
+    }
+}
+
+@Test func textChatChoicesComeFromTypedSharedEnums() {
+    let chat = MereRunCapabilityCatalog.textChat
+    let responseFormat = chat.options.first { $0.flag == "--response-format" }
+
+    #expect(responseFormat?.choices == TextResponseFormat.allCases.map(\.rawValue))
 }
 
 @Test func videoProductChoicesComeFromTypedSharedEnums() {

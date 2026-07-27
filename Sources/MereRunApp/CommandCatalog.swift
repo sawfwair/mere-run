@@ -35,6 +35,7 @@ enum CommandTemplateID: String, CaseIterable {
     case textCode
     case textEmbed
     case textAnonymize
+    case textTrainLoRA
     case speechSynthesize
     case speechTranscribe
     case speechProfileList
@@ -201,8 +202,30 @@ struct CommandDraft: Equatable {
     var cfgScale = 1.0
     var strength = 0.75
     var maxTokens = 2048
+    var contextSize = 0
     var temperature = 0.7
     var topP = 0.9
+    var topK = 0
+    var kvBits = 0
+    var kvQuantScheme = ""
+    var kvGroupSize = 0
+    var quantizedKVStart = 0
+    var responseFormat: TextResponseFormat = .text
+    var thinkingMode: TextThinkingMode = .automatic
+    var loraPath = ""
+    var loraScale = 1.0
+    var replacement = "[{label}]"
+    var evalPath = ""
+    var adapterName = "local-assistant"
+    var batchSize = 1
+    var learningRate = 0.0001
+    var rank = 16
+    var alpha = 0.0
+    var maxSequenceLength = 4096
+    var targetModules = "q_proj,k_proj,v_proj,o_proj"
+    var dryRun = false
+    var visualize = false
+    var visualizePort = 8787
     var durationSeconds = 10.0
     var fps = 24
     var numFrames = 65
@@ -257,6 +280,9 @@ struct CommandDraft: Equatable {
     var tools = ""
     var toolLoop = false
     var allowShellExec = false
+    var allowAbsoluteToolPaths = false
+    var autoApproveTools = false
+    var requireInstalled = false
     var sandboxDir = ""
     var setupMode = "agent"
     var agentModel = "tier"
@@ -329,6 +355,9 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.temperature = 1.0
             draft.topP = 0.95
             draft.stream = true
+        case .textTrainLoRA:
+            draft.steps = 600
+            draft.seed = "42"
         case .visionCaption, .visionOCR:
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
@@ -553,16 +582,47 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["text", "chat", "--prompt", draft.prompt]
             if !draft.secondaryText.isBlank { args += ["--system", draft.secondaryText] }
             if !draft.imagePath.isBlank { args += ["--image", draft.imagePath] }
-            args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
+            args += [
+                "--max-tokens", String(draft.maxTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP)
+            ]
+            if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
+            if draft.topK > 0 { args += ["--top-k", String(draft.topK)] }
+            if draft.kvBits > 0 { args += ["--kv-bits", String(draft.kvBits)] }
+            if !draft.kvQuantScheme.isBlank { args += ["--kv-quant-scheme", draft.kvQuantScheme] }
+            if draft.kvGroupSize > 0 { args += ["--kv-group-size", String(draft.kvGroupSize)] }
+            if draft.quantizedKVStart > 0 {
+                args += ["--quantized-kv-start", String(draft.quantizedKVStart)]
+            }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.responseFormat != .text {
+                args += ["--response-format", draft.responseFormat.rawValue]
+            }
+            if !draft.loraPath.isBlank {
+                args += ["--lora", draft.loraPath, "--lora-scale", format(draft.loraScale)]
+            }
+            switch draft.thinkingMode {
+            case .automatic:
+                break
+            case .show:
+                args.append("--thinking")
+            case .hide:
+                args.append("--no-thinking")
+            }
             if !draft.tools.isBlank { args += ["--tools", draft.tools] }
             if draft.toolLoop { args.append("--tool-loop") }
             if draft.allowShellExec { args.append("--allow-shell-exec") }
+            if draft.allowAbsoluteToolPaths { args.append("--allow-absolute-tool-paths") }
+            if draft.autoApproveTools { args.append("--auto-approve-tools") }
             if !draft.sandboxDir.isBlank { args += ["--sandbox-dir", draft.sandboxDir] }
             if draft.stream { args.append("--stream") }
-            if draft.all { args.append("--thinking") }
             if draft.force { args.append("--stats") }
             if draft.quiet { args.append("--quiet") }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
+            if draft.requireInstalled { args.append("--require-installed") }
 
         case .textCode:
             args = ["text", "code", "--prompt", draft.prompt]
@@ -584,9 +644,36 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["text", "anonymize", draft.prompt]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.replacement != "[{label}]" {
+                args += ["--replacement", draft.replacement]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if draft.all { args.append("--json") }
             if draft.force { args.append("--pretty") }
+
+        case .textTrainLoRA:
+            args = [
+                "text", "train-lora",
+                "--data", draft.inputPath,
+                "--output", draft.outputPath,
+                "--model", draft.model,
+                "--adapter-name", draft.adapterName,
+                "--training-steps", String(draft.steps),
+                "--batch-size", String(draft.batchSize),
+                "--learning-rate", format(draft.learningRate),
+                "--rank", String(draft.rank),
+                "--max-sequence-length", String(draft.maxSequenceLength),
+                "--seed", draft.seed,
+                "--target-modules", draft.targetModules
+            ]
+            if !draft.modelRoot.isBlank { args += ["--model-path", draft.modelRoot] }
+            if !draft.evalPath.isBlank { args += ["--eval", draft.evalPath] }
+            if draft.alpha > 0 { args += ["--alpha", format(draft.alpha)] }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.visualize {
+                args += ["--visualize", "--visualize-port", String(draft.visualizePort)]
+            }
+            if draft.json { args.append("--json") }
 
         case .speechSynthesize:
             args = ["speech", "synthesize", draft.prompt, "--output", draft.outputPath]
@@ -1061,6 +1148,16 @@ enum CommandCatalog {
             outputKind: .file("txt"),
             defaultPrompt: "My name is Alice Smith and my email is alice@example.com",
             defaultModel: "text-anonymize-privacy-filter"
+        ),
+        CommandTemplate(
+            id: .textTrainLoRA,
+            category: .text,
+            title: "Train text LoRA",
+            subtitle: "Fine-tune from chat SFT JSONL",
+            systemImage: "text.badge.plus",
+            inputKind: .file([.json, .plainText]),
+            outputKind: .file("safetensors"),
+            defaultModel: "text-chat-gemma4-12b-4bit"
         ),
         CommandTemplate(
             id: .speechSynthesize,
