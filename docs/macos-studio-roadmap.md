@@ -12,13 +12,24 @@ _Verified multi-agent review of `Sources/MereRunApp` (~6,500 LOC) against the CL
 > external boundaries. Structured receipts, file pickers, validation, retry and
 > resume controls are implemented. See
 > [`Sources/MereRunApp/README.md`](../Sources/MereRunApp/README.md) for the
-> current surface. Distribution validation is tracked separately and the
-> historical release blockers below remain applicable until an installed,
-> Developer ID-signed and notarized build is proven.
+> current surface. On 2026-07-27, the release pipeline produced a Developer
+> ID-signed and Apple-notarized app and DMG, both passed Gatekeeper and stapler
+> validation, and the installed app completed a real image-generation workflow
+> through its embedded CLI. The findings and phases below are retained as the
+> historical audit that motivated the implementation; they are not a statement
+> of current capability or release readiness.
 
-## Verdict
+## Historical verdict (superseded by the implementation update)
 
-The app is **not 5% finished — it's a solid ~45% v0 skeleton** with misleading breadth and shallow depth. The bones are real (a clean `@MainActor` controller, an injectable process layer, a 34-command catalog, a persisted library, a capable Models sheet, ~1,000 LOC of tests). What's missing is concentrated exactly where "finished" lives: it **can't ship** (ad-hoc signed, no notarization, a guaranteed camera-permission crash), and core modes **dead-end** (audio/video show an icon, chat is one-shot, downloads show a wall of logs).
+At the time of the original audit, the app was **not 5% finished — it was a
+solid ~45% v0 skeleton** with misleading breadth and shallow depth. The bones
+were real (a clean `@MainActor` controller, an injectable process layer, a
+34-command catalog, a persisted library, a capable Models sheet, and ~1,000 LOC
+of tests). The missing work was concentrated exactly where "finished" lives:
+it could not ship (ad-hoc signed, no notarization, a camera-permission crash),
+and core modes dead-ended (audio/video showed an icon, chat was one-shot, and
+downloads showed a wall of logs). Those claims are historical and superseded by
+the implementation update above.
 
 ### Dimension scorecard
 
@@ -33,7 +44,7 @@ The app is **not 5% finished — it's a solid ~45% v0 skeleton** with misleading
 
 ---
 
-## Ship-blockers (must fix before any distribution)
+## Historical ship-blockers (resolved)
 
 1. **Camera TCC crash.** `vision track-live` → `SAM31CameraCapture` opens `AVCaptureDevice`, but the generated `Info.plist` has no `NSCameraUsageDescription`. Because the CLI runs as a child of `MereRun.app`, TCC attributes camera access to the app bundle → process is terminated with no prompt. _(scripts/build_mere_run_app.sh, VisionTrackLiveCommand.swift:79)_
 2. **Gatekeeper rejection.** `codesign --force --sign -` (ad-hoc), no hardened runtime, no entitlements, no `notarytool`/`stapler`. Any downloaded copy gets the "damaged / can't be opened" error. _(scripts/build_mere_run_app.sh:94)_
@@ -43,7 +54,7 @@ The app is **not 5% finished — it's a solid ~45% v0 skeleton** with misleading
 
 ---
 
-## Quick wins (independent, low-risk, land immediately)
+## Historical quick wins
 
 - **Read Image default:** change `readImageAction` default/reset from `.inspect` to `.ocr`, or register the auto-download VLM in the capability catalog — the mode currently opens on a permanently blocked action. _(StudioTypes.swift:190,202)_
 - **Invalid SF Symbol:** `Image(systemName: "finder")` is not a real symbol; renders as a missing glyph in 3 places. Use `magnifyingglass`/`folder`. _(StudioRootView.swift:733, MereRunRootView.swift:382, StudioModelsView.swift:403)_
@@ -56,7 +67,7 @@ The app is **not 5% finished — it's a solid ~45% v0 skeleton** with misleading
 
 ---
 
-## Phased roadmap
+## Original phased roadmap
 
 ### Phase 0 — Platform correctness & releasable pipeline _(3–4 wk · foundational, non-negotiable first)_
 Make the bundle structurally valid, signable, notarizable, Gatekeeper-clean, crash-free on permissions, and CI-built.
@@ -109,7 +120,7 @@ Turn shallow modes into full experiences; surface the missing CLI families.
 
 ---
 
-## Key risks
+## Original key risks
 
 - **Camera permission is subtle:** the usage string must live in the *app* bundle (TCC blames the parent), and only reproduces on a fresh machine — easy to "fix" on the dev box and still ship broken.
 - **Bundle relocation** is coupled to `CLIResolver` paths and the framework search paths baked into the CLI/ds4 binaries; moving executables can break dylib loading. Test the relocated, signed bundle on a clean machine.

@@ -67,3 +67,12 @@ Hugging Face tokens, API keys, and the Open WebUI admin password cross the
 process boundary through environment variables instead of appearing in argv.
 The executable contract test requires every local Advanced template and every
 app-owned guide/config helper to resolve to a CLI help-verified capability.
+The inverse coverage test also requires every command in the shared contract to
+have an App-owned template or utility surface, so a newly cataloged CLI command
+cannot silently ship without a macOS path.
+
+`scripts/package-macos.sh` signs, notarizes, staples, and Gatekeeper-validates
+the app before placing that already-stapled app into the signed and notarized
+DMG. `LinuxNativeBridgeTests.testMacOSPackageEmbedsTheStapledAppBeforeCreatingTheDMG`
+guards that ordering. Release proof must validate the mounted/installed app and
+its embedded CLI, not only the outer DMG.

@@ -58,6 +58,31 @@ final class StudioTypesTests: XCTestCase {
         }
     }
 
+    func testEverySharedCLICapabilityHasAnAppOwnedSurface() {
+        let templateCapabilityIDs = Set(
+            CommandCatalog.templates.compactMap(\.id.capabilityID)
+        )
+        let appUtilityCapabilityIDs: Set<String> = [
+            "guide",
+            "config.set",
+            "config.get",
+            "config.unset",
+        ]
+        let appCapabilityIDs = templateCapabilityIDs.union(appUtilityCapabilityIDs)
+        let sharedCapabilityIDs = Set(
+            MereRunCapabilityCatalog.document.commands.map(\.id)
+        )
+
+        XCTAssertEqual(
+            appCapabilityIDs,
+            sharedCapabilityIDs,
+            """
+            The shared CLI/App contract drifted. Add a typed App surface for every new shared \
+            capability, and remove stale App mappings when a capability is retired.
+            """
+        )
+    }
+
     func testStudioModesMapToPublicTemplates() {
         XCTAssertEqual(StudioMode.createImage.defaultTemplateID, .imageGenerate)
         XCTAssertEqual(StudioMode.chat.defaultTemplateID, .textChat)

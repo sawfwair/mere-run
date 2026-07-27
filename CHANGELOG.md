@@ -8,6 +8,20 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added a machine-readable, shared 88-command CLI capability contract emitted by
+  `mere.run catalog --json`, plus executable CLI-help, App-to-contract, and
+  inverse contract-to-App drift tests.
+- expanded the macOS Studio into typed Text, Image, Video, Music, Speech, SFX,
+  Vision/VFX, adapter, durable-run, world, setup, model, plugin, Open WebUI, and
+  API workspaces. Graph Studio and Node remain explicit deep-linked product
+  boundaries rather than duplicated orchestration surfaces.
+- added first-class LTX text/image/audio-to-video and start/end-keyframe
+  conditioning, Wan TI2V, SCAIL-2, Cosmos3, mask preparation, latent export,
+  and resident video sessions to the macOS app.
+- added production ACE-Step cover/repaint/flow-edit/retake, candidate ranking,
+  stems, recipes, LRC/DAW export, adapter training, and resident serving controls
+  to the macOS app, alongside full image LoRA/edit/3D, text JSON/LoRA/KV, and
+  Vision/VFX workflows.
 - added typed ACE-Step task and checkpoint capability routing for text-to-music,
   repaint, cover, cover-nofsq, extract, lego, and complete. Invalid tasks now
   fail during CLI parsing, and Base-only operations fail before checkpoint
@@ -53,6 +67,12 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- fixed macOS packaging so the inner app is notarized, stapled, and
+  Gatekeeper-validated before the DMG is assembled; a notarized outer image can
+  no longer conceal an unstapled app.
+- fixed the open Advanced Studio surface so switching creation modes also
+  switches to the matching typed command and carries over its quick-composer
+  values.
 - fixed ACE-Step prompt, unconditional, and automatic repaint chunk masks to
   match upstream boolean-mask semantics. The runtime previously supplied
   `2.0` where upstream converts that value to boolean `true` (`1.0`), causing
