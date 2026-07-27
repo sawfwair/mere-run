@@ -1866,7 +1866,9 @@ extension Array where Element == String {
         var masked = self
         var index = masked.startIndex
         while index < masked.endIndex {
-            if masked[index] == "--api-key" || masked[index] == "hf-token" {
+            if masked[index] == "--api-key"
+                || masked[index] == "--infinity-api-key"
+                || masked[index] == "hf-token" {
                 let valueIndex = masked.index(after: index)
                 if valueIndex < masked.endIndex {
                     masked[valueIndex] = "••••••••"

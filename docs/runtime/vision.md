@@ -26,6 +26,12 @@ image-to-3D reconstruction, and OCR.
 - `mere.run vision image-to-3d-multiview`
 - `mere.run vision ocr`
 
+The macOS Studio app exposes the same surface through its shared capability
+contract. Read Image remains the fast caption/inspection entry point; Advanced
+provides typed forms for every VLM, OCR, grounding, segmentation, tracking,
+face, pose, flow, depth, and geometry command above. Image-to-3D commands live
+in the Image workspace so the app has one canonical reconstruction flow.
+
 ## Model family
 
 - `vision-ocr-lighton`

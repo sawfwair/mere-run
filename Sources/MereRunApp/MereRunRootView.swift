@@ -379,8 +379,16 @@ private struct CommandEditor: View {
             ImageReconstructionOptions(kind: .trellis2)
         case .imageReconstruct3DMultiview:
             ImageReconstructionOptions(kind: .multiview)
-        case .textChat, .textCode, .textEmbed, .textAnonymize, .visionInspect, .visionCaption, .visionOCR:
+        case .textChat, .textCode, .textEmbed, .textAnonymize:
             TextGenerationOptions()
+        case .visionInspect:
+            VisionLanguageOptions()
+        case .visionCaption:
+            VisionCaptionOptions()
+        case .visionOCR:
+            VisionOCROptions()
+        case .visionGround:
+            VisionGroundingOptions()
         case .textTrainLoRA:
             TextLoRATrainingOptions()
         case .speechSynthesize:
@@ -391,6 +399,18 @@ private struct CommandEditor: View {
             SpeechProfileCreateOptions()
         case .visionSegment, .visionTrack, .visionTrackLive:
             VisionTrackingOptions()
+        case .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionFaceBatch:
+            VisionFaceOptions()
+        case .visionPose:
+            VisionPoseOptions()
+        case .visionFlow:
+            VisionFlowOptions()
+        case .visionDepthVideo:
+            VisionDepthOptions()
+        case .visionGeometry:
+            VisionGeometryOptions()
+        case .visionGeometryMultiview:
+            VisionMultiviewOptions()
         case .musicGenerate:
             MusicGenerationOptions()
         case .musicAnalyze:
@@ -1699,16 +1719,502 @@ private struct SpeechProfileCreateOptions: View {
     }
 }
 
+private struct VisionLanguageOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Vision language model") {
+            AdaptiveControlRow {
+                NumberStepper(title: "Max tokens", value: $controller.draft.maxTokens, range: 1...32_768, step: 64)
+                NumberField(title: "Temperature", value: $controller.draft.temperature)
+                NumberField(title: "Top-p", value: $controller.draft.topP)
+            }
+        }
+    }
+}
+
+private struct VisionCaptionOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Captioning") {
+            VStack(spacing: 10) {
+                MultiPathField(
+                    paths: $controller.draft.visionAdditionalInputs,
+                    title: "Additional images",
+                    allowedTypes: [.image]
+                )
+                PathField(
+                    path: $controller.draft.visionPromptFile,
+                    placeholder: "Prompt file",
+                    mode: .openFile([.plainText])
+                )
+                TextField("Focus details, one per line", text: $controller.draft.visionFocus, axis: .vertical)
+                    .lineLimit(2...8)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                TextField("LoRA trigger token", text: $controller.draft.visionTriggerToken)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                AdaptiveControlRow {
+                    NumberStepper(title: "Max tokens", value: $controller.draft.maxTokens, range: 1...8_192, step: 32)
+                    NumberField(title: "Temperature", value: $controller.draft.temperature)
+                    NumberField(title: "Top-p", value: $controller.draft.topP)
+                }
+            }
+        }
+    }
+}
+
+private struct VisionOCROptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("OCR") {
+            VStack(spacing: 10) {
+                MultiPathField(
+                    paths: $controller.draft.visionAdditionalInputs,
+                    title: "Additional images",
+                    allowedTypes: [.image]
+                )
+                Picker("Backend", selection: $controller.draft.backend) {
+                    Text("LightOn").tag("lighton")
+                    Text("GLM").tag("glm")
+                    Text("Infinity").tag("infinity")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    Toggle("Compare backends", isOn: $controller.draft.all)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                    NumberStepper(title: "Max tokens", value: $controller.draft.maxTokens, range: 1...32_768, step: 64)
+                    NumberField(title: "Temperature", value: $controller.draft.temperature)
+                }
+                if controller.draft.backend == "glm" || controller.draft.all {
+                    TextField("glmocr executable", text: $controller.draft.visionGLMOCRCLI)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    PathField(
+                        path: $controller.draft.visionGLMConfig,
+                        placeholder: "GLM config YAML",
+                        mode: .openFile([.yaml])
+                    )
+                }
+                if controller.draft.backend == "infinity" || controller.draft.all {
+                    Picker("Infinity runtime", selection: $controller.draft.visionInfinityRuntime) {
+                        Text("Native").tag("native")
+                        Text("External").tag("external")
+                    }
+                    .pickerStyle(.segmented)
+                    TextField("Infinity model", text: $controller.draft.visionInfinityModel)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    Picker("Task", selection: $controller.draft.visionInfinityTask) {
+                        Text("Document JSON").tag("doc2json")
+                        Text("Document Markdown").tag("doc2md")
+                        Text("Custom").tag("custom")
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Output format", selection: $controller.draft.visionInfinityOutputFormat) {
+                        Text("Markdown").tag("md")
+                        Text("JSON").tag("json")
+                    }
+                    .pickerStyle(.segmented)
+                    if controller.draft.visionInfinityTask == "custom" {
+                        TextField("Custom Infinity prompt", text: $controller.draft.visionInfinityPrompt, axis: .vertical)
+                            .lineLimit(2...6)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                    }
+                    if controller.draft.visionInfinityRuntime == "external" {
+                        TextField("Parser executable", text: $controller.draft.visionInfinityParserCLI)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        Picker("External backend", selection: $controller.draft.visionInfinityBackend) {
+                            Text("Transformers").tag("transformers")
+                            Text("vLLM engine").tag("vllm-engine")
+                            Text("vLLM server").tag("vllm-server")
+                        }
+                        .pickerStyle(.segmented)
+                        TextField("Completions URL", text: $controller.draft.visionInfinityAPIURL)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        SecureField("Infinity API key", text: $controller.draft.visionInfinityAPIKey)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        PathField(
+                            path: $controller.draft.visionInfinityModelCacheDirectory,
+                            placeholder: "External model cache",
+                            mode: .openDirectory
+                        )
+                    }
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Batch",
+                            value: $controller.draft.visionInfinityBatchSize,
+                            range: 1...256,
+                            step: 1
+                        )
+                        NumberStepper(
+                            title: "Min pixels",
+                            value: $controller.draft.visionInfinityMinPixels,
+                            range: 1...16_777_216,
+                            step: 1_024
+                        )
+                        NumberStepper(
+                            title: "Max pixels",
+                            value: $controller.draft.visionInfinityMaxPixels,
+                            range: 2_048...134_217_728,
+                            step: 1_024
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct VisionGroundingOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Grounding exports") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.visionJSONOutputPath,
+                    placeholder: "Detection JSON",
+                    mode: .saveFile
+                )
+                PathField(
+                    path: $controller.draft.visionMaskOutputDirectory,
+                    placeholder: "Per-detection mask directory",
+                    mode: .openDirectory
+                )
+            }
+        }
+    }
+}
+
 private struct VisionTrackingOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
     var body: some View {
         EditorSection("Vision") {
-            AdaptiveControlRow {
+            VStack(spacing: 10) {
+                if controller.selectedTemplate.id != .visionTrackLive {
+                    TextField("Box prompts, one x1,y1,x2,y2,label per line", text: $controller.draft.visionBoxPrompts, axis: .vertical)
+                        .lineLimit(1...6)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Point prompts, one x,y,positive|negative,label per line", text: $controller.draft.visionPointPrompts, axis: .vertical)
+                        .lineLimit(1...6)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                PathField(
+                    path: $controller.draft.visionJSONOutputPath,
+                    placeholder: "Structured JSON output",
+                    mode: .saveFile
+                )
+                if controller.selectedTemplate.id != .visionTrackLive {
+                    PathField(
+                        path: $controller.draft.visionMaskOutputDirectory,
+                        placeholder: "Mask output directory",
+                        mode: .openDirectory
+                    )
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Threshold", value: $controller.draft.visionThreshold)
+                    NumberStepper(
+                        title: "Resolution",
+                        value: $controller.draft.visionResolution,
+                        range: 64...4_096,
+                        step: 16
+                    )
+                    NumberStepper(
+                        title: "Init frame",
+                        value: $controller.draft.visionInitFrame,
+                        range: 0...100_000,
+                        step: 1
+                    )
+                }
                 if controller.selectedTemplate.id == .visionTrackLive {
                     NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
+                    NumberStepper(title: "Camera", value: $controller.draft.visionCamera, range: 0...32, step: 1)
+                    NumberStepper(
+                        title: "Seed search",
+                        value: $controller.draft.visionSeedSearchFrames,
+                        range: 0...1_000,
+                        step: 1
+                    )
+                } else if controller.selectedTemplate.id == .visionTrack {
+                    TextField("End frame (optional)", text: $controller.draft.visionEndFrame)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
                 }
-                Toggle("Show boxes", isOn: $controller.draft.force)
+                AdaptiveControlRow {
+                    Toggle("Show boxes", isOn: $controller.draft.force)
+                    if controller.selectedTemplate.id == .visionSegment {
+                        Toggle("Multiple masks", isOn: $controller.draft.visionMultimask)
+                    } else {
+                        Toggle("Show labels", isOn: $controller.draft.visionShowLabels)
+                    }
+                    if controller.selectedTemplate.id == .visionTrack {
+                        Toggle("Preflight only", isOn: $controller.draft.preflight)
+                        if controller.draft.preflight {
+                            Toggle("JSON preflight", isOn: $controller.draft.json)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct VisionFaceOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Face analysis") {
+            VStack(spacing: 10) {
+                if controller.selectedTemplate.id == .visionFaceCompare {
+                    PathField(
+                        path: $controller.draft.visionSecondInputPath,
+                        placeholder: "Candidate image",
+                        mode: .openFile([.image])
+                    )
+                }
+                if controller.selectedTemplate.id == .visionFaceBatch {
+                    MultiPathField(
+                        paths: $controller.draft.visionAdditionalInputs,
+                        title: "Additional images",
+                        allowedTypes: [.image]
+                    )
+                    PathField(
+                        path: $controller.draft.visionInputList,
+                        placeholder: "Input-list file",
+                        mode: .openFile([.plainText])
+                    )
+                    PathField(
+                        path: $controller.draft.visionJSONLOutput,
+                        placeholder: "JSONL output",
+                        mode: .saveFile
+                    )
+                } else {
+                    PathField(
+                        path: $controller.draft.visionJSONOutputPath,
+                        placeholder: "JSON output",
+                        mode: .saveFile
+                    )
+                }
+                Picker("Provider", selection: $controller.draft.visionExecutionProvider) {
+                    Text("Auto").tag("auto")
+                    Text("Core ML").tag("coreml")
+                    Text("CPU").tag("cpu")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    NumberField(title: "Score threshold", value: $controller.draft.visionFaceScoreThreshold)
+                    if [.visionFaceDetect, .visionFaceBatch].contains(controller.selectedTemplate.id) {
+                        NumberStepper(
+                            title: "Max faces (0 = all)",
+                            value: $controller.draft.visionMaxFaces,
+                            range: 0...1_000,
+                            step: 1
+                        )
+                        Toggle("Embeddings", isOn: $controller.draft.visionIncludeEmbeddings)
+                    }
+                    Toggle("Print JSON", isOn: $controller.draft.json)
+                }
+                if controller.selectedTemplate.id == .visionFaceEmbed {
+                    TextField("Face index (largest by default)", text: $controller.draft.visionFaceIndex)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                if controller.selectedTemplate.id == .visionFaceCompare {
+                    AdaptiveControlRow {
+                        TextField("Reference face index", text: $controller.draft.visionReferenceFaceIndex)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        TextField("Candidate face index", text: $controller.draft.visionCandidateFaceIndex)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                    }
+                }
+                if controller.selectedTemplate.id == .visionFaceBatch {
+                    Toggle("Fail fast", isOn: $controller.draft.visionFailFast)
+                }
+            }
+        }
+    }
+}
+
+private struct VisionPoseOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Pose") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.visionJSONOutputPath,
+                    placeholder: "Landmark JSON output",
+                    mode: .saveFile
+                )
+                AdaptiveControlRow {
+                    Toggle("Body", isOn: $controller.draft.visionPoseBody)
+                    Toggle("Hands", isOn: $controller.draft.visionPoseHands)
+                    Toggle("Face", isOn: $controller.draft.visionPoseFace)
+                    Toggle("Print JSON", isOn: $controller.draft.json)
+                }
+                AdaptiveControlRow {
+                    NumberStepper(title: "Max hands", value: $controller.draft.visionMaxHands, range: 0...16, step: 1)
+                    NumberField(title: "Minimum confidence", value: $controller.draft.visionMinimumConfidence)
+                }
+            }
+        }
+    }
+}
+
+private struct VisionFlowOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Optical flow") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.visionSecondInputPath,
+                    placeholder: "Target image",
+                    mode: .openFile([.image])
+                )
+                PathField(
+                    path: $controller.draft.visionJSONOutputPath,
+                    placeholder: "Metadata JSON",
+                    mode: .saveFile
+                )
+                Picker("Accuracy", selection: $controller.draft.visionFlowAccuracy) {
+                    Text("Low").tag("low")
+                    Text("Medium").tag("medium")
+                    Text("High").tag("high")
+                    Text("Very high").tag("very-high")
+                }
+                .pickerStyle(.segmented)
+                Toggle("Print JSON", isOn: $controller.draft.json)
+            }
+        }
+    }
+}
+
+private struct VisionDepthOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Video depth") {
+            AdaptiveControlRow {
+                NumberStepper(
+                    title: "Input edge",
+                    value: $controller.draft.visionInputSize,
+                    range: 14...1_008,
+                    step: 14
+                )
+                NumberStepper(
+                    title: "Max frames",
+                    value: $controller.draft.visionMaxFrames,
+                    range: 1...2_400,
+                    step: 1
+                )
+                Toggle("Dry run", isOn: $controller.draft.dryRun)
+                Toggle("Print JSON", isOn: $controller.draft.json)
+            }
+        }
+    }
+}
+
+private struct VisionGeometryOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Metric geometry") {
+            AdaptiveControlRow {
+                NumberStepper(
+                    title: "Quality",
+                    value: $controller.draft.visionResolutionLevel,
+                    range: 0...9,
+                    step: 1
+                )
+                NumberStepper(
+                    title: "Token count",
+                    value: $controller.draft.visionTokenCount,
+                    range: 0...3_600,
+                    step: 1
+                )
+                NumberStepper(
+                    title: "Max points",
+                    value: $controller.draft.visionMaxPoints,
+                    range: 0...10_000_000,
+                    step: 10_000
+                )
+                Toggle("Dry run", isOn: $controller.draft.dryRun)
+                Toggle("Print JSON", isOn: $controller.draft.json)
+            }
+        }
+    }
+}
+
+private struct VisionMultiviewOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Multi-view geometry") {
+            VStack(spacing: 10) {
+                MultiPathField(
+                    paths: $controller.draft.visionAdditionalInputs,
+                    title: "Additional ordered views",
+                    allowedTypes: [.image]
+                )
+                PathField(
+                    path: $controller.draft.camerasPath,
+                    placeholder: "Optional W2C camera JSON",
+                    mode: .openFile([.json])
+                )
+                Picker("Reference view", selection: $controller.draft.visionReferenceView) {
+                    Text("First").tag("first")
+                    Text("Middle").tag("middle")
+                    Text("Saddle balanced").tag("saddle-balanced")
+                    Text("Similarity range").tag("saddle-similarity-range")
+                }
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Process edge",
+                        value: $controller.draft.visionProcessResolution,
+                        range: 64...4_096,
+                        step: 8
+                    )
+                    NumberField(
+                        title: "Confidence percentile",
+                        value: $controller.draft.visionConfidencePercentile
+                    )
+                    NumberStepper(
+                        title: "Max points",
+                        value: $controller.draft.visionMaxPoints,
+                        range: 0...10_000_000,
+                        step: 10_000
+                    )
+                    Toggle("Dry run", isOn: $controller.draft.dryRun)
+                    Toggle("Print JSON", isOn: $controller.draft.json)
+                }
             }
         }
     }

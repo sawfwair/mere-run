@@ -42,3 +42,12 @@ standalone audio understanding, MuScriptor MIDI/event transcription, Magenta
 RT2 playback and MIDI steering, LoRA/LoKr training, and the resident music API.
 The API key is injected through `MERERUN_API_KEY`, never placed in process
 arguments.
+
+Vision keeps the quick Read Image path in Studio while Advanced exposes the
+complete VLM/VFX family: multi-image captioning, LightOn/GLM/Infinity OCR,
+grounding, text/box/point segmentation and tracking, camera capture, Buffalo-L
+face analysis, native pose and optical flow, video depth, MoGe geometry, and
+DA3 ordered multiview reconstruction. Coordinates remain typed, ordered CLI
+arguments; machine-readable results and mask directories use explicit output
+pickers. Image-to-3D workflows share the Image workspace instead of being
+duplicated.

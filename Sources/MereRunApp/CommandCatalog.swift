@@ -54,6 +54,15 @@ enum CommandTemplateID: String, CaseIterable {
     case visionSegment
     case visionTrack
     case visionTrackLive
+    case visionFaceDetect
+    case visionFaceEmbed
+    case visionFaceCompare
+    case visionFaceBatch
+    case visionPose
+    case visionFlow
+    case visionDepthVideo
+    case visionGeometry
+    case visionGeometryMultiview
     case musicGenerate
     case musicAnalyze
     case musicTranscribe
@@ -409,6 +418,63 @@ struct CommandDraft: Equatable {
     var musicTrainingWeightDecay = 0.0001
     var musicTrainingMaxDuration = 30.0
     var musicTrainingLogEvery = 10
+    // Vision and VFX analysis controls.
+    var visionAdditionalInputs = ""
+    var visionSecondInputPath = ""
+    var visionPromptFile = ""
+    var visionFocus = ""
+    var visionTriggerToken = ""
+    var visionJSONOutputPath = ""
+    var visionMaskOutputDirectory = ""
+    var visionBoxPrompts = ""
+    var visionPointPrompts = ""
+    var visionThreshold = 0.05
+    var visionResolution = 1008
+    var visionMultimask = false
+    var visionInitFrame = 0
+    var visionEndFrame = ""
+    var visionShowLabels = false
+    var visionCamera = 0
+    var visionSeedSearchFrames = 30
+    var visionGLMOCRCLI = "glmocr"
+    var visionGLMConfig = ""
+    var visionInfinityRuntime = "native"
+    var visionInfinityParserCLI = "parser"
+    var visionInfinityModel = "vision-ocr-infinity-flash"
+    var visionInfinityBackend = "vllm-server"
+    var visionInfinityAPIURL = "http://localhost:8000/v1/chat/completions"
+    var visionInfinityAPIKey = "EMPTY"
+    var visionInfinityTask = "doc2json"
+    var visionInfinityPrompt = ""
+    var visionInfinityOutputFormat = "md"
+    var visionInfinityBatchSize = 1
+    var visionInfinityModelCacheDirectory = ""
+    var visionInfinityMinPixels = 2_048
+    var visionInfinityMaxPixels = 16_777_216
+    var visionPoseBody = true
+    var visionPoseHands = true
+    var visionPoseFace = true
+    var visionMaxHands = 2
+    var visionMinimumConfidence = 0.1
+    var visionFlowAccuracy = "high"
+    var visionInputSize = 518
+    var visionMaxFrames = 240
+    var visionResolutionLevel = 9
+    var visionTokenCount = 0
+    var visionMaxPoints = 0
+    var visionProcessResolution = 504
+    var visionReferenceView = "saddle-balanced"
+    var visionConfidencePercentile = 40.0
+    var visionFaceScoreThreshold = 0.65
+    var visionExecutionProvider = "auto"
+    var visionMaxFaces = 0
+    var visionIncludeEmbeddings = false
+    var visionFaceIndex = ""
+    var visionReferenceFaceIndex = ""
+    var visionCandidateFaceIndex = ""
+    var visionInputList = ""
+    var visionJSONLOutput = ""
+    var visionFailFast = false
     var fps = 24
     var numFrames = 65
     var useDuration = false
@@ -543,6 +609,13 @@ struct CommandTemplate: Identifiable, Equatable {
         case .visionCaption, .visionOCR:
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
+            if id == .visionOCR { draft.backend = "lighton" }
+        case .visionDepthVideo:
+            draft.dryRun = true
+        case .visionGeometry, .visionGeometryMultiview:
+            draft.dryRun = true
+        case .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionFaceBatch:
+            draft.json = true
         case .apiServe:
             draft.engine = StudioChatDefaults.fallbackServingEngine
             draft.port = 8080
@@ -652,6 +725,8 @@ struct CommandTemplate: Identifiable, Equatable {
         if promptLabel != nil
             && id != .custom
             && id != .musicRealtime
+            && id != .visionSegment
+            && id != .visionTrack
             && draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "\(promptLabel ?? "Prompt") is required."
         }
@@ -660,7 +735,8 @@ struct CommandTemplate: Identifiable, Equatable {
             .imageGenerate,
             .imageTrainLoRA,
             .videoGenerate,
-            .musicTranscribe
+            .musicTranscribe,
+            .visionFaceBatch
         ]
         if inputKind != .none
             && !optionalInputs.contains(id)
@@ -669,6 +745,26 @@ struct CommandTemplate: Identifiable, Equatable {
         }
 
         switch id {
+        case .visionSegment, .visionTrack:
+            if draft.prompt.isBlank && draft.visionBoxPrompts.isBlank
+                && draft.visionPointPrompts.isBlank {
+                return "Add a text, box, or point prompt."
+            }
+        case .visionFaceCompare, .visionFlow:
+            if draft.visionSecondInputPath.isBlank {
+                return "A second image is required."
+            }
+        case .visionFaceBatch:
+            if draft.inputPath.isBlank && draft.visionAdditionalInputs.isBlank
+                && draft.visionInputList.isBlank {
+                return "Choose images or an input-list file."
+            }
+        case .visionGeometryMultiview:
+            let images = ([draft.inputPath] + pathList(draft.visionAdditionalInputs))
+                .filter { !$0.isBlank }
+            if images.count < 2 {
+                return "Add at least two ordered views."
+            }
         case .musicGenerate:
             if !draft.musicLRCFile.isBlank
                 && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {
@@ -1151,47 +1247,240 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["speech", "profile", "delete", "--id", draft.prompt]
 
         case .visionInspect:
-            args = ["vision", "inspect", draft.inputPath, draft.prompt]
+            args = ["vision", "inspect", draft.inputPath, "--prompt", draft.prompt]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
 
         case .visionCaption:
-            args = ["vision", "caption", draft.inputPath]
+            args = ["vision", "caption"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output-dir", draft.outputPath] }
-            args += ["--prompt", draft.prompt, "--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature)]
+            if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
+            if !draft.visionPromptFile.isBlank { args += ["--prompt-file", draft.visionPromptFile] }
+            for focus in lineList(draft.visionFocus) { args += ["--focus", focus] }
+            if !draft.visionTriggerToken.isBlank {
+                args += ["--trigger-token", draft.visionTriggerToken]
+            }
+            args += [
+                "--max-tokens", String(draft.maxTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP)
+            ]
 
         case .visionOCR:
-            args = ["vision", "ocr", draft.inputPath, "--backend", draft.backend]
+            args = ["vision", "ocr"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
+            args += ["--backend", draft.backend]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.outputPath.isBlank { args += ["--output-dir", draft.outputPath] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature)]
             if draft.all { args.append("--compare") }
+            if !draft.visionGLMOCRCLI.isBlank { args += ["--glmocr-cli", draft.visionGLMOCRCLI] }
+            if !draft.visionGLMConfig.isBlank { args += ["--glm-config", draft.visionGLMConfig] }
+            args += [
+                "--infinity-runtime", draft.visionInfinityRuntime,
+                "--infinity-parser-cli", draft.visionInfinityParserCLI,
+                "--infinity-model", draft.visionInfinityModel,
+                "--infinity-backend", draft.visionInfinityBackend,
+                "--infinity-api-url", draft.visionInfinityAPIURL,
+                "--infinity-api-key", draft.visionInfinityAPIKey,
+                "--infinity-task", draft.visionInfinityTask,
+                "--infinity-output-format", draft.visionInfinityOutputFormat,
+                "--infinity-batch-size", String(draft.visionInfinityBatchSize),
+                "--infinity-min-pixels", String(draft.visionInfinityMinPixels),
+                "--infinity-max-pixels", String(draft.visionInfinityMaxPixels)
+            ]
+            if !draft.visionInfinityPrompt.isBlank {
+                args += ["--infinity-prompt", draft.visionInfinityPrompt]
+            }
+            if !draft.visionInfinityModelCacheDirectory.isBlank {
+                args += ["--infinity-model-cache-dir", draft.visionInfinityModelCacheDirectory]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .visionGround:
-            args = ["vision", "ground", draft.inputPath, "--query", draft.prompt]
+            args = ["vision", "ground", draft.inputPath]
+            for query in lineList(draft.prompt) { args += ["--query", query] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionMaskOutputDirectory.isBlank {
+                args += ["--mask-output-dir", draft.visionMaskOutputDirectory]
+            }
 
         case .visionSegment:
-            args = ["vision", "segment", draft.inputPath, "--prompt", draft.prompt]
+            args = ["vision", "segment", draft.inputPath]
+            for prompt in lineList(draft.prompt) { args += ["--prompt", prompt] }
+            for box in lineList(draft.visionBoxPrompts) { args += ["--box", box] }
+            for point in lineList(draft.visionPointPrompts) { args += ["--point", point] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionMaskOutputDirectory.isBlank {
+                args += ["--mask-output-dir", draft.visionMaskOutputDirectory]
+            }
+            args += [
+                "--threshold", format(draft.visionThreshold),
+                "--resolution", String(draft.visionResolution)
+            ]
             if draft.force { args.append("--show-boxes") }
+            if draft.visionMultimask { args.append("--multimask") }
 
         case .visionTrack:
-            args = ["vision", "track", draft.inputPath, "--prompt", draft.prompt]
+            args = ["vision", "track", draft.inputPath]
+            for prompt in lineList(draft.prompt) { args += ["--prompt", prompt] }
+            for box in lineList(draft.visionBoxPrompts) { args += ["--box", box] }
+            for point in lineList(draft.visionPointPrompts) { args += ["--point", point] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionMaskOutputDirectory.isBlank {
+                args += ["--mask-output-dir", draft.visionMaskOutputDirectory]
+            }
+            args += [
+                "--init-frame", String(draft.visionInitFrame),
+                "--threshold", format(draft.visionThreshold),
+                "--resolution", String(draft.visionResolution)
+            ]
+            if !draft.visionEndFrame.isBlank { args += ["--end-frame", draft.visionEndFrame] }
             if draft.force { args.append("--show-boxes") }
+            if draft.visionShowLabels { args.append("--show-labels") }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
 
         case .visionTrackLive:
-            args = ["vision", "track-live", "--prompt", draft.prompt]
+            args = ["vision", "track-live"]
+            for prompt in lineList(draft.prompt) { args += ["--prompt", prompt] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
-            args += ["--duration-seconds", format(draft.durationSeconds)]
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            args += [
+                "--camera", String(draft.visionCamera),
+                "--duration-seconds", format(draft.durationSeconds),
+                "--init-frame", String(draft.visionInitFrame),
+                "--seed-search-frames", String(draft.visionSeedSearchFrames),
+                "--threshold", format(draft.visionThreshold),
+                "--resolution", String(draft.visionResolution)
+            ]
             if draft.force { args.append("--show-boxes") }
+            if draft.visionShowLabels { args.append("--show-labels") }
+
+        case .visionFaceDetect:
+            args = ["vision", "face", "detect", draft.inputPath]
+            appendFaceOptions(to: &args, draft: draft)
+            if draft.visionMaxFaces > 0 { args += ["--max-faces", String(draft.visionMaxFaces)] }
+            if draft.visionIncludeEmbeddings { args.append("--include-embeddings") }
+
+        case .visionFaceEmbed:
+            args = ["vision", "face", "embed", draft.inputPath]
+            appendFaceOptions(to: &args, draft: draft)
+            if !draft.visionFaceIndex.isBlank { args += ["--face-index", draft.visionFaceIndex] }
+
+        case .visionFaceCompare:
+            args = ["vision", "face", "compare", draft.inputPath, draft.visionSecondInputPath]
+            appendFaceOptions(to: &args, draft: draft)
+            if !draft.visionReferenceFaceIndex.isBlank {
+                args += ["--reference-face-index", draft.visionReferenceFaceIndex]
+            }
+            if !draft.visionCandidateFaceIndex.isBlank {
+                args += ["--candidate-face-index", draft.visionCandidateFaceIndex]
+            }
+
+        case .visionFaceBatch:
+            args = ["vision", "face", "batch"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
+            if !draft.visionInputList.isBlank { args += ["--input-list", draft.visionInputList] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += [
+                "--score-threshold", format(draft.visionFaceScoreThreshold),
+                "--execution-provider", draft.visionExecutionProvider
+            ]
+            if draft.visionMaxFaces > 0 { args += ["--max-faces", String(draft.visionMaxFaces)] }
+            if draft.visionIncludeEmbeddings { args.append("--include-embeddings") }
+            if !draft.visionJSONLOutput.isBlank {
+                args += ["--jsonl-output", draft.visionJSONLOutput]
+            }
+            if draft.visionFailFast { args.append("--fail-fast") }
+
+        case .visionPose:
+            args = ["vision", "pose", draft.inputPath]
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionPoseBody { args.append("--no-body") }
+            if !draft.visionPoseHands { args.append("--no-hands") }
+            if !draft.visionPoseFace { args.append("--no-face") }
+            args += [
+                "--max-hands", String(draft.visionMaxHands),
+                "--minimum-confidence", format(draft.visionMinimumConfidence)
+            ]
+            if draft.json { args.append("--json") }
+
+        case .visionFlow:
+            args = ["vision", "flow", draft.inputPath, draft.visionSecondInputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            args += ["--accuracy", draft.visionFlowAccuracy]
+            if draft.json { args.append("--json") }
+
+        case .visionDepthVideo:
+            args = ["vision", "depth-video", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += [
+                "--input-size", String(draft.visionInputSize),
+                "--max-frames", String(draft.visionMaxFrames)
+            ]
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .visionGeometry:
+            args = ["vision", "geometry", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--resolution-level", String(draft.visionResolutionLevel)]
+            if draft.visionTokenCount > 0 {
+                args += ["--token-count", String(draft.visionTokenCount)]
+            }
+            if draft.visionMaxPoints > 0 {
+                args += ["--max-points", String(draft.visionMaxPoints)]
+            }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .visionGeometryMultiview:
+            args = ["vision", "geometry-multiview"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.camerasPath.isBlank { args += ["--cameras", draft.camerasPath] }
+            args += [
+                "--process-resolution", String(draft.visionProcessResolution),
+                "--reference-view", draft.visionReferenceView,
+                "--confidence-percentile", format(draft.visionConfidencePercentile)
+            ]
+            if draft.visionMaxPoints > 0 {
+                args += ["--max-points", String(draft.visionMaxPoints)]
+            }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
 
         case .musicGenerate:
             args = ["music", "generate", draft.prompt]
@@ -1726,6 +2015,24 @@ struct CommandTemplate: Identifiable, Equatable {
         String(format: "%.4g", value)
     }
 
+    private func appendFaceOptions(to args: inout [String], draft: CommandDraft) {
+        if !draft.model.isBlank { args += ["--model", draft.model] }
+        args += [
+            "--score-threshold", format(draft.visionFaceScoreThreshold),
+            "--execution-provider", draft.visionExecutionProvider
+        ]
+        if !draft.visionJSONOutputPath.isBlank {
+            args += ["--json-output", draft.visionJSONOutputPath]
+        }
+        if draft.json { args.append("--json") }
+    }
+
+    private func lineList(_ raw: String) -> [String] {
+        raw.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     private func pathList(_ raw: String) -> [String] {
         raw.components(separatedBy: .newlines)
             .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
@@ -2041,6 +2348,89 @@ enum CommandCatalog {
             outputKind: .file("mp4"),
             defaultPrompt: "a person",
             defaultModel: "vision-segment-sam31"
+        ),
+        CommandTemplate(
+            id: .visionFaceDetect,
+            category: .vision,
+            title: "Detect faces",
+            subtitle: "Buffalo-L boxes, landmarks, and optional embeddings",
+            systemImage: "face.dashed",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionFaceEmbed,
+            category: .vision,
+            title: "Embed face",
+            subtitle: "Create a normalized ArcFace identity vector",
+            systemImage: "person.crop.square",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionFaceCompare,
+            category: .vision,
+            title: "Compare faces",
+            subtitle: "Cosine similarity between two selected faces",
+            systemImage: "person.2",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionFaceBatch,
+            category: .vision,
+            title: "Batch face analysis",
+            subtitle: "Warm-session detection and embeddings to JSONL",
+            systemImage: "person.3.sequence",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionPose,
+            category: .vision,
+            title: "Pose landmarks",
+            subtitle: "Native body, hand, and face landmarks",
+            systemImage: "figure.stand",
+            inputKind: .image
+        ),
+        CommandTemplate(
+            id: .visionFlow,
+            category: .vision,
+            title: "Optical flow",
+            subtitle: "Dense motion between two equal-size images",
+            systemImage: "arrow.triangle.2.circlepath",
+            inputKind: .image,
+            outputKind: .file("flo")
+        ),
+        CommandTemplate(
+            id: .visionDepthVideo,
+            category: .vision,
+            title: "Video depth",
+            subtitle: "Temporally consistent native VDA-S depth",
+            systemImage: "square.3.layers.3d",
+            inputKind: .video,
+            outputKind: .directory,
+            defaultModel: "vision-depth-vda-small"
+        ),
+        CommandTemplate(
+            id: .visionGeometry,
+            category: .vision,
+            title: "Metric geometry",
+            subtitle: "MoGe-2 depth, normals, camera, and point cloud",
+            systemImage: "rotate.3d",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "vision-geometry-moge2-small"
+        ),
+        CommandTemplate(
+            id: .visionGeometryMultiview,
+            category: .vision,
+            title: "Multi-view geometry",
+            subtitle: "DA3 cameras, confidence, and colored point cloud",
+            systemImage: "view.3d",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "vision-geometry-da3-small"
         ),
         CommandTemplate(
             id: .musicGenerate,

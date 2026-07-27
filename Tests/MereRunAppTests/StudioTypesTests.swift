@@ -354,6 +354,112 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertNil(template.validationMessage(for: draft))
     }
 
+    func testVisionAndVFXArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.visionInspect, "vision.inspect", { $0.inputPath = "/tmp/a.png" }),
+            (.visionCaption, "vision.caption", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionAdditionalInputs = "/tmp/b.png"
+                $0.visionPromptFile = "/tmp/prompt.txt"
+                $0.visionFocus = "printed title\ncard border"
+            }),
+            (.visionOCR, "vision.ocr", {
+                $0.inputPath = "/tmp/a.png"
+                $0.backend = "infinity"
+                $0.visionInfinityTask = "custom"
+                $0.visionInfinityPrompt = "Return a table."
+            }),
+            (.visionGround, "vision.ground", { $0.inputPath = "/tmp/a.png" }),
+            (.visionSegment, "vision.segment", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionBoxPrompts = "1,2,30,40,person"
+                $0.visionPointPrompts = "10,20,positive,face"
+                $0.visionMultimask = true
+            }),
+            (.visionTrack, "vision.track", {
+                $0.inputPath = "/tmp/a.mp4"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.visionTrackLive, "vision.track-live", { _ in }),
+            (.visionFaceDetect, "vision.face.detect", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionIncludeEmbeddings = true
+            }),
+            (.visionFaceEmbed, "vision.face.embed", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionFaceIndex = "1"
+            }),
+            (.visionFaceCompare, "vision.face.compare", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionSecondInputPath = "/tmp/b.png"
+            }),
+            (.visionFaceBatch, "vision.face.batch", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionAdditionalInputs = "/tmp/b.png"
+                $0.visionIncludeEmbeddings = true
+            }),
+            (.visionPose, "vision.pose", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionPoseHands = false
+            }),
+            (.visionFlow, "vision.flow", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionSecondInputPath = "/tmp/b.png"
+            }),
+            (.visionDepthVideo, "vision.depth-video", { $0.inputPath = "/tmp/a.mp4" }),
+            (.visionGeometry, "vision.geometry", { $0.inputPath = "/tmp/a.png" }),
+            (.visionGeometryMultiview, "vision.geometry-multiview", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionAdditionalInputs = "/tmp/b.png"
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testVisionGeometryAndPromptBuildersPreserveOrderedInputsAndCommaCoordinates() throws {
+        let segment = try XCTUnwrap(CommandCatalog.template(id: .visionSegment))
+        var segmentDraft = segment.defaultDraft()
+        segmentDraft.inputPath = "/tmp/a.png"
+        segmentDraft.prompt = ""
+        segmentDraft.visionBoxPrompts = "1,2,30,40,person"
+        segmentDraft.visionPointPrompts = "10,20,positive,face"
+        let segmentArgs = segment.arguments(from: segmentDraft)
+        assertPair(segmentArgs, "--box", "1,2,30,40,person")
+        assertPair(segmentArgs, "--point", "10,20,positive,face")
+
+        let geometry = try XCTUnwrap(CommandCatalog.template(id: .visionGeometryMultiview))
+        var geometryDraft = geometry.defaultDraft()
+        geometryDraft.inputPath = "/tmp/front.png"
+        geometryDraft.visionAdditionalInputs = "/tmp/left.png\n/tmp/right.png"
+        let geometryArgs = geometry.arguments(from: geometryDraft)
+        XCTAssertEqual(
+            Array(geometryArgs.prefix(5)),
+            ["vision", "geometry-multiview", "/tmp/front.png", "/tmp/left.png", "/tmp/right.png"]
+        )
+    }
+
+    func testVisionOCRDefaultsToARealCLIBackend() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .visionOCR))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/page.png"
+        XCTAssertEqual(draft.backend, "lighton")
+        assertPair(template.arguments(from: draft), "--backend", "lighton")
+    }
+
     func testStudioServerStatusParsesSnapshot() {
         let json = """
         {"server":{"url":"http://127.0.0.1:8080","health":"ok","loadedModels":["text-chat-gemma4"]},\
