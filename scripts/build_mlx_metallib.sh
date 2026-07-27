@@ -128,8 +128,32 @@ if [[ -n "$(git -C "$checkout" status --porcelain --untracked-files=no)" ]]; the
   exit 1
 fi
 
-sources_hash="$(cd "$gen_dir" && find . -type f \( -name '*.metal' -o -name '*.h' \) -print0 \
-  | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d' ' -f1)"
+# Fingerprint the clean tracked blobs instead of the checked-out bytes. Git may
+# represent those bytes differently across fresh CI checkouts (for example,
+# through platform line-ending settings), while the blobs still identify the
+# exact sources that produced the library. Reconstructing the original
+# `shasum` listing from blob contents preserves existing stamp compatibility.
+# The clean-worktree check above ensures this cannot hide local source edits.
+sources_hash="$(
+  git -C "$checkout" ls-tree -r --full-tree HEAD -- Source/Cmlx/mlx-generated/metal \
+    | awk '$4 ~ /\.(metal|h)$/ { print $3, $4 }' \
+    | LC_ALL=C sort -k2 \
+    | while read -r object_id object_path; do
+        relative_path="${object_path#Source/Cmlx/mlx-generated/metal/}"
+        object_hash="$(
+          git -C "$checkout" cat-file blob "$object_id" \
+            | shasum -a 256 \
+            | cut -d' ' -f1
+        )"
+        printf '%s  ./%s\n' "$object_hash" "$relative_path"
+      done \
+    | shasum -a 256 \
+    | cut -d' ' -f1
+)"
+if [[ -z "$sources_hash" ]]; then
+  echo "error: could not fingerprint tracked MLX Metal kernel sources" >&2
+  exit 1
+fi
 
 # --- Verify mode ------------------------------------------------------------
 
