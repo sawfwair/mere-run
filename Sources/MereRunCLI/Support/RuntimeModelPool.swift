@@ -795,6 +795,7 @@ struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
     let maxTokens: Int?
     let temperature: Double?
     let topP: Double?
+    let minP: Double?
     let engineOverride: RuntimeServingEngine?
     let kvCacheMode: RuntimeKVCacheMode?
     let prefixKVCache: PrefixKVCacheStats?
@@ -1762,6 +1763,7 @@ actor RuntimeModelPool {
             maxTokens: modelSettings.maxTokens,
             temperature: modelSettings.temperature,
             topP: modelSettings.topP,
+            minP: modelSettings.minP,
             engineOverride: modelSettings.engineOverride,
             kvCacheMode: modelSettings.kvCacheMode,
             prefixKVCache: prefixKVCache,
@@ -1785,6 +1787,9 @@ actor RuntimeModelPool {
         }
         if request.top_p == nil {
             request.top_p = settings.topP
+        }
+        if request.min_p == nil {
+            request.min_p = settings.minP
         }
     }
 

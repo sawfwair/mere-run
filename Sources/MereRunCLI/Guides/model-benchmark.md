@@ -75,6 +75,12 @@ Run the small grounded-chat slice for local assistant behavior:
 mere.run model benchmark chat --json
 ```
 
+The chat, tool-call, and code lanes expose the same stochastic controls:
+`--temperature`, `--top-p`, `--top-k`, and `--min-p`. Min-p removes tokens
+whose probability is below the selected fraction of the most likely token's
+probability, after the configured top-k/top-p filters. It is disabled by
+default and has no effect on greedy generation.
+
 Run the small tool-call selection slice for Q36 vs Gemma 12B 4-bit:
 
 ```bash
@@ -257,6 +263,19 @@ Each case is prompted once with deterministic sampling by default
 required phrases, forbidden phrases, regexes, JSON keys, and bullet counts. The
 command never auto-pulls models during scoring; install missing models with
 `mere.run model pull` first.
+
+For a controlled stochastic comparison, keep the prompt suite and every other
+sampling control fixed and vary only `--min-p`:
+
+```bash
+mere.run model benchmark chat \
+  --temperature 1 \
+  --top-p 1 \
+  --top-k 20 \
+  --min-p 0.05 \
+  --log-responses \
+  --json
+```
 
 Narrow the run while iterating:
 

@@ -34,6 +34,7 @@ mere.run status --json
 - `--max-tokens` / `--clear-max-tokens`
 - `--temperature` / `--clear-temperature`
 - `--top-p` / `--clear-top-p`
+- `--min-p` / `--clear-min-p`
 - `--engine` / `--clear-engine`
 - `--kv-cache-mode` / `--clear-kv-cache-mode`
 - `--json`
@@ -86,6 +87,7 @@ mere.run model runtime set text-chat-gemma4 \
   --max-tokens 1024 \
   --temperature 0.6 \
   --top-p 0.9 \
+  --min-p 0.05 \
   --kv-cache-mode auto
 ```
 

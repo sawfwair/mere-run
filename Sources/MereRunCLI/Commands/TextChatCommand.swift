@@ -70,6 +70,9 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customLong("top-k")], help: "Top-k sampling cutoff. Default: no cutoff, or the model's published value where one exists (Bonsai/Ornith: 20).")
     var topK: Int?
 
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token. Default: 0 (disabled).")
+    var minP: Double?
+
     @Option(name: [.long], help: "Quantize the KV cache to this many bits. Qwen-family supports affine 4 or 8; Gemma4 also supports its model-specific schemes.")
     var kvBits: Double?
 
@@ -254,6 +257,7 @@ struct TextChat: AsyncParsableCommand {
             temperature: temperature ?? recommendedSampling?.temperature ?? 0.7,
             topP: topP ?? recommendedSampling?.topP ?? 0.9,
             topK: topK ?? recommendedSampling?.topK,
+            minP: minP ?? 0,
             showThinking: requiresJSON ? false : (thinking ?? Q35Resources.thinkingDefault(forModelId: model)),
             lora: lora,
             requiresJSON: requiresJSON,

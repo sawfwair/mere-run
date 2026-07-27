@@ -147,6 +147,9 @@ struct LlamaCLIProcess {
             "--temp", String(request.temperature),
             "--top-p", String(request.topP),
         ]
+        if request.minP > 0 {
+            arguments.append(contentsOf: ["--min-p", String(request.minP)])
+        }
         if let system = promptParts.system, !system.isEmpty {
             arguments.insert(contentsOf: ["-sys", system], at: 4)
         }

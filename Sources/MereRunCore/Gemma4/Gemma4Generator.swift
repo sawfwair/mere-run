@@ -480,6 +480,7 @@ public actor Gemma4Generator: ChatGenerator {
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
             topP: Float(request.topP),
+            minP: Float(request.minP),
             repetitionPenalty: 1.05,
             repetitionContextSize: 64
         )

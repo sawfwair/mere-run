@@ -77,6 +77,9 @@ mere.run text train-lora \
 - `--context-size`: maximum prompt plus generation context. Bonsai 27B defaults to 262,144.
 - `--temperature`: randomness. Lower for factual work, higher for brainstorming.
 - `--top-p`: nucleus sampling cutoff.
+- `--min-p`: discard tokens whose probability is below this fraction of the
+  most likely token's probability. `0` disables the filter; `0.05` means a
+  token must have at least 5% of the leading token's probability.
 - `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: KV cache quantization controls. Qwen-family models accept affine `--kv-bits 4` or `8`; the runtime chooses group size and start. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
 - `--model-root`, `-m`: explicit local model root.
 - `--model`: canonical model id.
@@ -164,6 +167,8 @@ mere.run text chat \
 
 - For deterministic summaries, lower temperature to `0.2` and keep top-p near default.
 - For brainstorming, try `--temperature 0.9 --top-p 0.95`.
+- Use min-p only with sampled generation. It does not change greedy
+  `--temperature 0` output.
 - Use `--stats` to decide whether a smaller model is better for interactive work.
 
 ## Troubleshooting

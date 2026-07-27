@@ -469,6 +469,7 @@ public actor Q35Generator: ChatGenerator {
             temperature: Float(request.temperature),
             topK: request.topK ?? 0,
             topP: Float(request.topP),
+            minP: Float(request.minP),
             repetitionPenalty: nil,
             repetitionContextSize: 64
         )

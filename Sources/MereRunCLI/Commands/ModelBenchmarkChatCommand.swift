@@ -53,6 +53,12 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Top-p for generation.")
     var topP: Double = 1
 
+    @Option(name: [.customLong("top-k")], help: "Top-k for generation; zero disables it.")
+    var topK: Int = 0
+
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token.")
+    var minP: Double?
+
     @Option(name: [.long], help: "Maximum context tokens passed to the runtime.")
     var contextSize: Int?
 
@@ -86,6 +92,12 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
         }
         guard (0...1).contains(topP), topP.isFinite else {
             throw ValidationError("--top-p must be finite and between 0 and 1.")
+        }
+        guard topK >= 0 else {
+            throw ValidationError("--top-k must be zero or greater.")
+        }
+        if let minP, !(0...1).contains(minP) || !minP.isFinite {
+            throw ValidationError("--min-p must be finite and between 0 and 1.")
         }
         if let contextSize {
             guard contextSize > 0 else {
@@ -121,6 +133,8 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
+            topK: topK,
+            minP: resolvedMinP,
             contextSize: contextSize,
             concurrency: concurrency
         )
@@ -365,6 +379,8 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
         let requestMaxTokens = maxTokens
         let requestTemperature = temperature
         let requestTopP = topP
+        let requestTopK = topK
+        let requestMinP = resolvedMinP
         let requestContextSize = contextSize
         let includeResponses = logResponses
         for startIndex in stride(from: 0, to: cases.count, by: concurrency) {
@@ -384,6 +400,8 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
                             maxTokens: requestMaxTokens,
                             temperature: requestTemperature,
                             topP: requestTopP,
+                            topK: requestTopK,
+                            minP: requestMinP,
                             showThinking: false,
                             stopOnEOS: true,
                             maxContextTokens: requestContextSize
@@ -456,6 +474,10 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
             error: nil,
             cases: caseResults
         )
+    }
+
+    var resolvedMinP: Double {
+        minP ?? (lagunaPath == nil ? 0 : LagunaResources.recommendedMinP)
     }
 
     private func printReport(_ report: ChatBenchmarkReport) throws {
@@ -1504,6 +1526,8 @@ private struct ChatBenchmarkPlan: Encodable {
     let maxTokens: Int
     let temperature: Double
     let topP: Double
+    let topK: Int
+    let minP: Double
     let contextSize: Int?
     let concurrency: Int
 }
@@ -1525,7 +1549,8 @@ private struct ChatBenchmarkReport: Encodable {
             "suite: \(plan.suite)",
             "cases: \(plan.cases.joined(separator: ", "))",
             "models: \(plan.models.joined(separator: ", "))",
-            "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) max_tokens=\(plan.maxTokens)",
+            "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) "
+                + "top_k=\(plan.topK) min_p=\(plan.minP) max_tokens=\(plan.maxTokens)",
             "concurrency: \(plan.concurrency)",
             plan.contextSize.map { "context_size: \($0)" },
             "",

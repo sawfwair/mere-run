@@ -98,6 +98,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
     public var maxTokens: Int?
     public var temperature: Double?
     public var topP: Double?
+    public var minP: Double?
     public var engineOverride: RuntimeServingEngine?
     public var kvCacheMode: RuntimeKVCacheMode?
 
@@ -109,6 +110,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         maxTokens: Int? = nil,
         temperature: Double? = nil,
         topP: Double? = nil,
+        minP: Double? = nil,
         engineOverride: RuntimeServingEngine? = nil,
         kvCacheMode: RuntimeKVCacheMode? = nil
     ) {
@@ -119,6 +121,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         self.maxTokens = maxTokens
         self.temperature = temperature
         self.topP = topP
+        self.minP = minP
         self.engineOverride = engineOverride
         self.kvCacheMode = kvCacheMode
     }
@@ -131,6 +134,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         case maxTokens
         case temperature
         case topP
+        case minP
         case engineOverride
         case kvCacheMode
         /// New cache modes are written under an additive key so older mere.run
@@ -148,6 +152,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
         topP = try container.decodeIfPresent(Double.self, forKey: .topP)
+        minP = try container.decodeIfPresent(Double.self, forKey: .minP)
         engineOverride = try container.decodeIfPresent(RuntimeServingEngine.self, forKey: .engineOverride)
         if let rawMode = try container.decodeIfPresent(String.self, forKey: .extendedKVCacheMode) {
             kvCacheMode = RuntimeKVCacheMode(rawValue: rawMode)
@@ -165,6 +170,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         try container.encodeIfPresent(maxTokens, forKey: .maxTokens)
         try container.encodeIfPresent(temperature, forKey: .temperature)
         try container.encodeIfPresent(topP, forKey: .topP)
+        try container.encodeIfPresent(minP, forKey: .minP)
         try container.encodeIfPresent(engineOverride, forKey: .engineOverride)
         if let kvCacheMode, kvCacheMode == .affine4 || kvCacheMode == .affine8 {
             try container.encode(kvCacheMode.rawValue, forKey: .extendedKVCacheMode)
@@ -207,6 +213,9 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
         if let topP = settings.topP, !(0...1).contains(topP) || !topP.isFinite {
             throw RuntimeModelSettingsError.invalidValue("topP must be between 0 and 1")
         }
+        if let minP = settings.minP, !(0...1).contains(minP) || !minP.isFinite {
+            throw RuntimeModelSettingsError.invalidValue("minP must be between 0 and 1")
+        }
         if let override = settings.engineOverride,
            let expected = spec.defaultRuntimeServingEngine,
            !override.isCompatible(with: expected) {
@@ -222,6 +231,7 @@ public struct RuntimeModelSettings: Codable, Hashable, Sendable {
                   settings.maxTokens == nil,
                   settings.temperature == nil,
                   settings.topP == nil,
+                  settings.minP == nil,
                   settings.engineOverride == nil,
                   settings.kvCacheMode == nil else {
                 throw RuntimeModelSettingsError.invalidValue(

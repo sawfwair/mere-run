@@ -57,6 +57,133 @@ final class SamplingPrefilterTests: MereRunCoreTestCase {
         XCTAssertEqual(Int(token.item(Int32.self)), 123)
     }
 
+    func testMinPFiltersRelativeToMostLikelyTokenAndRenormalizes() {
+        let probabilities: [Float] = [0.60, 0.20, 0.10, 0.061, 0.039]
+        let logits = MLXArray(probabilities.map(log))
+        let config = GenerationConfig(
+            temperature: 1,
+            topK: 0,
+            topP: 1,
+            minP: 0.1,
+            repetitionPenalty: nil
+        )
+
+        let filtered = samplingProbabilities(
+            logits: logits,
+            config: config,
+            previousTokens: []
+        )
+        MLX.eval(filtered)
+        let values = filtered.asArray(Float.self)
+
+        XCTAssertEqual(values[0], 0.60 / 0.961, accuracy: 0.0001)
+        XCTAssertEqual(values[1], 0.20 / 0.961, accuracy: 0.0001)
+        XCTAssertEqual(values[2], 0.10 / 0.961, accuracy: 0.0001)
+        XCTAssertEqual(values[3], 0.061 / 0.961, accuracy: 0.0001)
+        XCTAssertEqual(values[4], 0, accuracy: 0.0001)
+        XCTAssertEqual(filtered.sum().item(Float.self), 1, accuracy: 0.0001)
+    }
+
+    func testMinPComposesWithTopPWithoutReintroducingFilteredTokens() {
+        let probabilities: [Float] = [0.55, 0.25, 0.10, 0.06, 0.04]
+        let logits = MLXArray(probabilities.map(log))
+        let config = GenerationConfig(
+            temperature: 1,
+            topK: 0,
+            topP: 0.95,
+            minP: 0.2,
+            repetitionPenalty: nil,
+            topPPrefilter: 0
+        )
+
+        let filtered = samplingProbabilities(
+            logits: logits,
+            config: config,
+            previousTokens: []
+        )
+        MLX.eval(filtered)
+        let values = filtered.asArray(Float.self)
+
+        XCTAssertGreaterThan(values[0], 0)
+        XCTAssertGreaterThan(values[1], 0)
+        XCTAssertEqual(values[2], 0, accuracy: 0.0001)
+        XCTAssertEqual(values[3], 0, accuracy: 0.0001)
+        XCTAssertEqual(values[4], 0, accuracy: 0.0001)
+        XCTAssertEqual(filtered.sum().item(Float.self), 1, accuracy: 0.0001)
+    }
+
+    func testMinPDoesNotChangeGreedySampling() {
+        let logits = MLXArray([Float(0.1), 0.3, 4.0, 1.0])
+        let config = GenerationConfig(
+            temperature: 0,
+            topK: 1,
+            topP: 0.1,
+            minP: 1,
+            repetitionPenalty: nil
+        )
+
+        XCTAssertEqual(
+            sampleToken(logits: logits, config: config, previousTokens: []),
+            2
+        )
+        XCTAssertEqual(
+            sampledTokenArray(
+                logits: logits,
+                config: config,
+                previousTokenIndices: nil,
+                banMask: nil
+            ).item(Int.self),
+            2
+        )
+    }
+
+    func testGPUAndProbabilitySamplersRespectSameMinPSupport() {
+        let logits = MLXArray([Float(4), 2, 1, 0, -1])
+        let config = GenerationConfig(
+            temperature: 1,
+            topK: 0,
+            topP: 1,
+            minP: 0.1,
+            repetitionPenalty: nil
+        )
+        let probabilities = samplingProbabilities(
+            logits: logits,
+            config: config,
+            previousTokens: []
+        )
+        MLX.eval(probabilities)
+        let allowed = Set(probabilities.asArray(Float.self).enumerated().compactMap {
+            $0.element > 0 ? $0.offset : nil
+        })
+
+        MLXRandom.seed(97)
+        var sampled = Set<Int>()
+        for _ in 0..<64 {
+            sampled.insert(sampledTokenArray(
+                logits: logits,
+                config: config,
+                previousTokenIndices: nil,
+                banMask: nil
+            ).item(Int.self))
+        }
+
+        XCTAssertFalse(allowed.isEmpty)
+        XCTAssertTrue(sampled.isSubset(of: allowed))
+    }
+
+    func testCategoricalLogitsKeepFilteredTokensAtZeroMass() {
+        let logits = categoricalLogits(
+            probabilities: MLXArray([Float(0.75), 0, 0.25, 0])
+        )
+        MLX.eval(logits)
+        let values = logits.asArray(Float.self)
+
+        XCTAssertEqual(values[0], log(0.75), accuracy: 0.0001)
+        XCTAssertTrue(values[1].isInfinite && values[1] < 0)
+        XCTAssertEqual(values[2], log(0.25), accuracy: 0.0001)
+        XCTAssertTrue(values[3].isInfinite && values[3] < 0)
+    }
+
     func testTopKPartitionMatchesExactSortedThreshold() {
         let logits = MLXArray([Float(0.1), 7, -2, 3, 9, 2, 8, 1])
 

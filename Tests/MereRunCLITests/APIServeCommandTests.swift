@@ -1966,6 +1966,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.maxContextTokens, 4_096)
         XCTAssertEqual(chatRequest.temperature, 1.0)
         XCTAssertEqual(chatRequest.topP, 0.95)
+        XCTAssertEqual(chatRequest.minP, 0)
         XCTAssertFalse(chatRequest.showThinking)
         XCTAssertEqual(chatRequest.maxContextTokens, 4_096)
         XCTAssertEqual(chatRequest.messages, [ChatMessage(role: .user, content: "hello")])
@@ -2019,6 +2020,7 @@ final class APIServeCommandTests: XCTestCase {
           "parallel_tool_calls": true,
           "metadata": { "client": "test" },
           "reasoning_effort": "low",
+          "min_p": 0.05,
           "x-client-extra": { "kept": true }
         }
         """.data(using: .utf8)!
@@ -2030,6 +2032,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(request.parallel_tool_calls, true)
         XCTAssertEqual(request.metadata?["client"], "test")
         XCTAssertEqual(request.reasoning_effort, "low")
+        XCTAssertEqual(request.min_p, 0.05)
         XCTAssertEqual(request.unknownFields["x-client-extra"]?.objectValue?["kept"]?.boolValue, true)
     }
 
@@ -2516,6 +2519,11 @@ final class APIServeCommandTests: XCTestCase {
             messages: [OpenAIChatMessage(role: "user", content: "hello")],
             top_p: 1.5
         )
+        let badMinP = OpenAIChatRequest(
+            model: "mererun-test-model",
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            min_p: -0.01
+        )
 
         XCTAssertThrowsError(
             try APIServerContract.chatRequest(from: badTemperature, fallbackLoraPath: nil, contextSize: 4_096)
@@ -2526,6 +2534,11 @@ final class APIServeCommandTests: XCTestCase {
             try APIServerContract.chatRequest(from: badTopP, fallbackLoraPath: nil, contextSize: 4_096)
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("top_p"))
+        }
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(from: badMinP, fallbackLoraPath: nil, contextSize: 4_096)
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("min_p"))
         }
     }
 
@@ -2611,6 +2624,24 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(chatRequest.showThinking)
         XCTAssertNil(chatRequest.topK)
         XCTAssertEqual(chatRequest.temperature, 0.2)
+    }
+
+    func testChatRequestAcceptsMinPAsExplicitSampling() throws {
+        let request = OpenAIChatRequest(
+            model: Q35Resources.ornith35BMLXModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            min_p: 0.05
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            servedModelID: Q35Resources.ornith35BMLXModelId
+        )
+
+        XCTAssertEqual(chatRequest.minP, 0.05)
+        XCTAssertNil(chatRequest.topK)
     }
 
     func testChatRequestKeepsNoThinkDefaultForNonOrnithLanes() throws {

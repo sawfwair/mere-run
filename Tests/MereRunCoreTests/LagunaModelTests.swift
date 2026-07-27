@@ -374,6 +374,38 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(corrected.asArray(Float.self), [0.2, 0.3, 0.5])
     }
 
+    func testDFlashRejectionCorrectionConsumesMinPFilteredDistributions() {
+        let config = GenerationConfig(
+            temperature: 1,
+            topK: 20,
+            topP: 1,
+            minP: 0.15,
+            repetitionPenalty: nil
+        )
+        let target = samplingProbabilities(
+            logits: MLXArray([Float(0.7), 0.2, 0.07, 0.03].map(log)),
+            config: config,
+            previousTokens: []
+        )
+        let draft = samplingProbabilities(
+            logits: MLXArray([Float(0.5), 0.3, 0.15, 0.05].map(log)),
+            config: config,
+            previousTokens: []
+        )
+        let corrected = LagunaDFlashDecoder.rejectionDistribution(
+            target: target,
+            draft: draft
+        )
+        MLX.eval(target, draft, corrected)
+
+        XCTAssertEqual(target.sum().item(Float.self), 1, accuracy: 0.0001)
+        XCTAssertEqual(draft.sum().item(Float.self), 1, accuracy: 0.0001)
+        XCTAssertEqual(target[2].item(Float.self), 0, accuracy: 0.0001)
+        XCTAssertGreaterThan(draft[2].item(Float.self), 0)
+        XCTAssertEqual(corrected.sum().item(Float.self), 1, accuracy: 0.0001)
+        XCTAssertEqual(corrected[2].item(Float.self), 0, accuracy: 0.0001)
+    }
+
     func testDFlashRoutingUsesEffectiveOutputBudgetBoundary() {
         let minimum = LagunaDFlashRouting.defaultMinimumOutputTokens
 
@@ -393,6 +425,24 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(LagunaDFlashRouting.defaultSpeculativeTokens, 12)
         XCTAssertEqual(LagunaDFlashRouting.immediateFallbackAcceptanceRate, 0.25)
         XCTAssertEqual(LagunaDFlashRouting.defaultMinimumAcceptanceRate, 0.6)
+    }
+
+    func testLagunaEOSResolutionHonorsRequestStopPolicy() {
+        XCTAssertEqual(
+            LagunaGenerator.resolvedEOSTokens(
+                modelTokenIDs: [1, 2],
+                templateTokenIDs: [2, 3],
+                stopOnEOS: true
+            ),
+            Set([1, 2, 3])
+        )
+        XCTAssertTrue(
+            LagunaGenerator.resolvedEOSTokens(
+                modelTokenIDs: [1, 2],
+                templateTokenIDs: [2, 3],
+                stopOnEOS: false
+            ).isEmpty
+        )
     }
 
     func testModelParameterPathsMatchOfficialMLXCheckpoint() throws {

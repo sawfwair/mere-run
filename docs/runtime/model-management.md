@@ -192,12 +192,13 @@ mere.run model runtime set text-chat-gemma4 \
 `set` accepts `--alias` (request-facing alias), `--pinned`/`--unpinned` (keep
 the model loaded across automatic TTL/LRU eviction), `--ttl-seconds` (unload
 TTL), `--max-context-tokens`, `--max-tokens`, `--temperature`, `--top-p`,
-`--engine` (engine override, validated against catalog compatibility), and
+`--min-p`, `--engine` (engine override, validated against catalog
+compatibility), and
 `--kv-cache-mode` (`default`, `affine4`, `affine8` — `affine8` applies to
 Gemma4/Qwen/LFM2 — plus Gemma4-only `polar2`/`auto`). Each option has a
 matching clear flag (`--clear-alias`, `--clear-ttl`,
 `--clear-max-context-tokens`, `--clear-max-tokens`,
-`--clear-temperature`, `--clear-top-p`, `--clear-engine`,
+`--clear-temperature`, `--clear-top-p`, `--clear-min-p`, `--clear-engine`,
 `--clear-kv-cache-mode`) to remove the stored value. Both subcommands accept
 `--json`. Only models with configurable API residency are accepted.
 

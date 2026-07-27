@@ -33,6 +33,18 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
     @Option(name: [.long], help: "Laguna DFlash speculative tokens per round (1...15).")
     var lagunaDflashTokens: Int = LagunaDFlashRouting.defaultSpeculativeTokens
 
+    @Option(name: [.long], help: "Temperature for generation.")
+    var temperature: Double = 0
+
+    @Option(name: [.long], help: "Top-p for generation.")
+    var topP: Double = 1
+
+    @Option(name: [.customLong("top-k")], help: "Top-k for generation; zero disables it.")
+    var topK: Int = 0
+
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token.")
+    var minP: Double = LagunaResources.recommendedMinP
+
     @Option(name: [.customShort("p"), .long], help: "Benchmark prompt.")
     var prompt: String?
 
@@ -85,6 +97,18 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
         guard (1...15).contains(lagunaDflashTokens) else {
             throw ValidationError("--laguna-dflash-tokens must be between 1 and 15.")
         }
+        guard (0...2).contains(temperature), temperature.isFinite else {
+            throw ValidationError("--temperature must be finite and between 0 and 2.")
+        }
+        guard (0...1).contains(topP), topP.isFinite else {
+            throw ValidationError("--top-p must be finite and between 0 and 1.")
+        }
+        guard topK >= 0 else {
+            throw ValidationError("--top-k must be zero or greater.")
+        }
+        guard (0...1).contains(minP), minP.isFinite else {
+            throw ValidationError("--min-p must be finite and between 0 and 1.")
+        }
         guard contextSize > 0 else {
             throw ValidationError("--context-size must be greater than zero.")
         }
@@ -126,8 +150,10 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
                 let request = ChatRequest(
                     messages: messages,
                     maxTokens: decodeLength,
-                    temperature: 0,
-                    topP: 1,
+                    temperature: temperature,
+                    topP: topP,
+                    topK: topK,
+                    minP: minP,
                     showThinking: false,
                     stopOnEOS: false,
                     maxContextTokens: contextSize
@@ -178,6 +204,10 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
                 dflashPath: URL(fileURLWithPath: lagunaDflashPath).standardizedFileURL.path,
                 speculativeTokens: lagunaDflashTokens,
                 repetitions: repetitions,
+                temperature: temperature,
+                topP: topP,
+                topK: topK,
+                minP: minP,
                 promptCharacters: messages.map(\.content.count).reduce(0, +),
                 hardware: LagunaDFlashBenchmarkHardware(
                     architecture: device.architecture,
@@ -470,8 +500,10 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
                 request: ChatRequest(
                     messages: messages,
                     maxTokens: decodeTokens,
-                    temperature: 0,
-                    topP: 1,
+                    temperature: temperature,
+                    topP: topP,
+                    topK: topK,
+                    minP: minP,
                     showThinking: false,
                     stopOnEOS: false,
                     maxContextTokens: contextSize
@@ -725,6 +757,10 @@ private struct LagunaDFlashBenchmarkReport: Encodable {
     let dflashPath: String
     let speculativeTokens: Int
     let repetitions: Int
+    let temperature: Double
+    let topP: Double
+    let topK: Int
+    let minP: Double
     let promptCharacters: Int
     let hardware: LagunaDFlashBenchmarkHardware
     let samples: [LagunaDFlashBenchmarkSample]
@@ -742,6 +778,8 @@ private struct LagunaDFlashBenchmarkReport: Encodable {
             "Laguna DFlash resident A/B",
             "speculative_tokens: \(speculativeTokens)",
             "repetitions: \(repetitions)",
+            "sampling: temperature=\(temperature) top_p=\(topP) "
+                + "top_k=\(topK) min_p=\(minP)",
             "hardware: \(hardware.architecture)",
         ]
         for decodeTokens in Set(samples.map(\.decodeTokens)).sorted() {

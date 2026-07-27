@@ -53,6 +53,12 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     @Option(name: [.long], help: "Top-p for generation.")
     var topP: Double = 1
 
+    @Option(name: [.customLong("top-k")], help: "Top-k for generation; zero disables it.")
+    var topK: Int = 0
+
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token.")
+    var minP: Double?
+
     @Flag(
         name: [.long],
         help: "Enable model thinking before the answer. Reasoning is split from the scored code; HumanEval-specific stop sequences are disabled because they can fire inside the thinking block."
@@ -86,6 +92,12 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         }
         guard (0...1).contains(topP), topP.isFinite else {
             throw ValidationError("--top-p must be finite and between 0 and 1.")
+        }
+        guard topK >= 0 else {
+            throw ValidationError("--top-k must be zero or greater.")
+        }
+        if let minP, !(0...1).contains(minP) || !minP.isFinite {
+            throw ValidationError("--min-p must be finite and between 0 and 1.")
         }
         guard executionTimeout > 0, executionTimeout.isFinite else {
             throw ValidationError("--execution-timeout must be a positive finite number.")
@@ -121,6 +133,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
+            topK: topK,
+            minP: resolvedMinP,
             executionTimeout: executionTimeout,
             sandbox: sandbox.rawValue
         )
@@ -313,6 +327,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                 maxTokens: maxTokens,
                 temperature: temperature,
                 topP: topP,
+                topK: topK,
+                minP: resolvedMinP,
                 showThinking: thinking,
                 stopOnEOS: true,
                 stopSequences: thinking
@@ -379,6 +395,10 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
             error: nil,
             cases: caseResults
         )
+    }
+
+    var resolvedMinP: Double {
+        minP ?? (lagunaPath == nil ? 0 : LagunaResources.recommendedMinP)
     }
 
     private func printReport(_ report: CodeBenchmarkReport) throws {
@@ -637,6 +657,8 @@ private struct CodeBenchmarkPlan: Encodable {
     let maxTokens: Int
     let temperature: Double
     let topP: Double
+    let topK: Int
+    let minP: Double
     let executionTimeout: Double
     let sandbox: String
 }
@@ -658,7 +680,8 @@ private struct CodeBenchmarkReport: Encodable {
             "suite: \(plan.suite)",
             "tasks: \(plan.tasks.joined(separator: ", "))",
             "models: \(plan.models.joined(separator: ", "))",
-            "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) max_tokens=\(plan.maxTokens)",
+            "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) "
+                + "top_k=\(plan.topK) min_p=\(plan.minP) max_tokens=\(plan.maxTokens)",
             "sandbox: \(plan.sandbox)",
             "",
         ]

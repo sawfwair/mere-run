@@ -49,6 +49,10 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(command.decodeTokenValues, "8,12,16,24,32,48")
         XCTAssertEqual(command.repetitions, 3)
         XCTAssertEqual(command.lagunaDflashTokens, 12)
+        XCTAssertEqual(command.temperature, 0)
+        XCTAssertEqual(command.topP, 1)
+        XCTAssertEqual(command.topK, 0)
+        XCTAssertEqual(command.minP, LagunaResources.recommendedMinP)
         XCTAssertEqual(command.contextSize, 4_096)
         XCTAssertEqual(command.fixture, .deterministicProse)
         XCTAssertNil(command.prompt)
@@ -82,6 +86,22 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         ])
 
         XCTAssertEqual(command.fixture, .codeCompletion)
+    }
+
+    func testLagunaDFlashBenchmarkParsesSamplingRecipe() throws {
+        let command = try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--temperature", "1",
+            "--top-p", "0.95",
+            "--top-k", "20",
+            "--min-p", "0.05",
+        ])
+
+        XCTAssertEqual(command.temperature, 1)
+        XCTAssertEqual(command.topP, 0.95)
+        XCTAssertEqual(command.topK, 20)
+        XCTAssertEqual(command.minP, 0.05)
     }
 
     func testLagunaDFlashBenchmarkParsesResidentConcurrencyMatrix() throws {
@@ -137,6 +157,9 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 1024)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.topK, 0)
+        XCTAssertNil(cmd.minP)
+        XCTAssertEqual(cmd.resolvedMinP, 0)
         XCTAssertEqual(cmd.executionTimeout, 5)
         XCTAssertEqual(cmd.python, "python3")
         XCTAssertEqual(cmd.sandbox, .auto)
@@ -176,6 +199,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--max-tokens", "256",
             "--temperature", "0.2",
             "--top-p", "0.8",
+            "--top-k", "20",
+            "--min-p", "0.05",
             "--execution-timeout", "3.5",
             "--python", "/tmp/venv/bin/python",
             "--sandbox", "none",
@@ -190,6 +215,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 256)
         XCTAssertEqual(cmd.temperature, 0.2)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.topK, 20)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.executionTimeout, 3.5)
         XCTAssertEqual(cmd.python, "/tmp/venv/bin/python")
         XCTAssertEqual(cmd.sandbox, .none)
@@ -517,6 +544,9 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 96)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.topK, 0)
+        XCTAssertNil(cmd.minP)
+        XCTAssertEqual(cmd.resolvedMinP, 0)
         XCTAssertNil(cmd.contextSize)
         XCTAssertEqual(cmd.concurrency, 1)
         XCTAssertFalse(cmd.dryRun)
@@ -532,6 +562,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--max-tokens", "128",
             "--temperature", "0.1",
             "--top-p", "0.8",
+            "--top-k", "20",
+            "--min-p", "0.05",
             "--context-size", "4096",
             "--concurrency", "2",
             "--laguna-dflash-routing", "target-only",
@@ -546,6 +578,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 128)
         XCTAssertEqual(cmd.temperature, 0.1)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.topK, 20)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.contextSize, 4096)
         XCTAssertEqual(cmd.concurrency, 2)
         XCTAssertEqual(cmd.lagunaDflashRouting, .targetOnly)
@@ -617,6 +651,9 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 192)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.topK, 0)
+        XCTAssertNil(cmd.minP)
+        XCTAssertEqual(cmd.resolvedMinP, 0)
         XCTAssertNil(cmd.contextSize)
         XCTAssertFalse(cmd.dryRun)
         XCTAssertFalse(cmd.logResponses)
@@ -647,11 +684,13 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(chat.lagunaDflashTokens, 5)
         XCTAssertEqual(chat.lagunaDflashMinTokens, 24)
         XCTAssertEqual(chat.lagunaDflashRouting, .dflash)
+        XCTAssertEqual(chat.resolvedMinP, LagunaResources.recommendedMinP)
         XCTAssertEqual(try chat.selectedModelIDs(), [LagunaResources.modelID])
         XCTAssertEqual(tools.lagunaPath, path)
         XCTAssertEqual(tools.lagunaDflashPath, draftPath)
         XCTAssertEqual(tools.lagunaDflashTokens, 5)
         XCTAssertEqual(tools.lagunaDflashMinTokens, 24)
+        XCTAssertEqual(tools.resolvedMinP, LagunaResources.recommendedMinP)
         XCTAssertEqual(try tools.selectedModelIDs(), [LagunaResources.modelID])
     }
 
@@ -684,6 +723,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--max-tokens", "96",
             "--temperature", "0.1",
             "--top-p", "0.8",
+            "--top-k", "20",
+            "--min-p", "0.05",
             "--context-size", "4096",
             "--dry-run",
             "--log-responses",
@@ -695,6 +736,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 96)
         XCTAssertEqual(cmd.temperature, 0.1)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.topK, 20)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.contextSize, 4096)
         XCTAssertTrue(cmd.dryRun)
         XCTAssertTrue(cmd.logResponses)

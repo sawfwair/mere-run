@@ -2250,6 +2250,7 @@ enum APIServerContract {
         )
         let temperature = try validateTemperature(openaiRequest.temperature)
         let topP = try validateTopP(openaiRequest.top_p)
+        let minP = try validateMinP(openaiRequest.min_p)
         let tools = try toolDefinitions(from: openaiRequest, capabilities: capabilities)
         let requiresJSON = try requiresJSONResponseFormat(
             openaiRequest.response_format,
@@ -2272,7 +2273,9 @@ enum APIServerContract {
         // applies only when the client did not set explicit sampling.
         let laneModelID = servedModelID ?? ""
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
-        let usesExplicitSampling = openaiRequest.temperature != nil || openaiRequest.top_p != nil
+        let usesExplicitSampling = openaiRequest.temperature != nil
+            || openaiRequest.top_p != nil
+            || openaiRequest.min_p != nil
 
         return ChatRequest(
             messages: messages,
@@ -2284,6 +2287,7 @@ enum APIServerContract {
                 ? recommendedSampling?.topP ?? topP
                 : topP,
             topK: usesExplicitSampling ? nil : recommendedSampling?.topK,
+            minP: minP,
             showThinking: requiresJSON ? false : Q35Resources.thinkingDefault(forModelId: laneModelID),
             lora: lora,
             requiresJSON: requiresJSON,
@@ -2658,6 +2662,14 @@ enum APIServerContract {
         let value = rawValue ?? 0.95
         guard value.isFinite, (0...1).contains(value) else {
             throw APIRequestValidationError.invalidField("top_p", "must be between 0 and 1")
+        }
+        return value
+    }
+
+    private static func validateMinP(_ rawValue: Double?) throws -> Double {
+        let value = rawValue ?? 0
+        guard value.isFinite, (0...1).contains(value) else {
+            throw APIRequestValidationError.invalidField("min_p", "must be between 0 and 1")
         }
         return value
     }

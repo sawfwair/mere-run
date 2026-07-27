@@ -144,6 +144,13 @@ are not set explicitly, these lanes also use the model's published
 instead of the generic chat defaults. Other Qwen-family lanes such as
 `text-chat-q36-nano` keep the existing no-think default.
 
+Native and llama.cpp text generation also accept min-p sampling. A value such
+as `0.05` removes tokens with less than 5% of the most likely token's
+probability after top-k/top-p filtering, then renormalizes the remaining
+distribution. It is disabled by default, does not change temperature-zero
+greedy output, and is available as `--min-p` in text commands and `min_p` in
+OpenAI-compatible chat requests.
+
 Native MLX Gemma and Qwen-family chat models support
 `--response-format json_object`. The output must be one complete root object;
 the prefix grammar checks nested objects and arrays, strings and escapes,

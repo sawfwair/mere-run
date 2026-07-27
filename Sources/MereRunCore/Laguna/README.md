@@ -32,6 +32,12 @@ The CLI benchmark commands accept `--laguna-path` as an explicit local-only
 checkpoint override. Pass `--laguna-dflash-path` to evaluate the official
 companion checkpoint and `--laguna-dflash-tokens` to control the proposal
 length. The measured default is 12 proposals per round.
+The resident DFlash benchmark accepts `--temperature`, `--top-p`, `--top-k`,
+and `--min-p` so sampled target-only, forced-DFlash, and automatic-routing
+performance can be compared at an exact decode length in one process.
+Laguna evaluation lanes default to min-p `0.02`, the quality/richness winner on
+the M4 Max gate. Pass `--min-p 0` for the official Poolside control. This
+recommendation does not change sampling defaults for managed models.
 `--laguna-dflash-min-tokens` controls the length-aware router and defaults to
 32 effective output tokens. Requests below that budget use target-only prefill
 and decode, without building DFlash prompt context. Routed requests fall back

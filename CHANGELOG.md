@@ -35,6 +35,13 @@ The format is based on Keep a Changelog.
 - added generation recipe schema 2 with the final effective BPM, duration,
   key/scale, vocal language, and time signature after LM planning and explicit
   overrides.
+- added exact min-p sampling across native MLX and llama.cpp text generation,
+  OpenAI-compatible `min_p` requests, per-model runtime defaults, and the chat,
+  tool-call, and code benchmark lanes. Filtered tokens retain exactly zero
+  probability, greedy output is unchanged, and Laguna DFlash applies the same
+  normalized distribution to draft sampling and target rejection correction.
+  The isolated Laguna evaluation lanes use the measured `0.02` default while
+   retaining explicit `--min-p 0` control; managed-model defaults are unchanged.
 - added evaluation-only Laguna S 2.1 acceleration controls for the official
   DFlash companion checkpoint, lossless target verification, ragged
   continuous batching, and machine-readable acceptance, recovery, batching,

@@ -15,6 +15,7 @@ final class RuntimeModelSettingsTests: XCTestCase {
             maxTokens: 512,
             temperature: 0.4,
             topP: 0.8,
+            minP: 0.05,
             engineOverride: .textChatGemma4,
             kvCacheMode: .auto
         )
@@ -29,6 +30,7 @@ final class RuntimeModelSettingsTests: XCTestCase {
         XCTAssertEqual(loaded.maxTokens, 512)
         XCTAssertEqual(loaded.temperature, 0.4)
         XCTAssertEqual(loaded.topP, 0.8)
+        XCTAssertEqual(loaded.minP, 0.05)
         XCTAssertEqual(loaded.engineOverride, .textChatGemma4)
         XCTAssertEqual(loaded.kvCacheMode, .auto)
         XCTAssertEqual(
@@ -55,6 +57,21 @@ final class RuntimeModelSettingsTests: XCTestCase {
             try store.writeSettings(RuntimeModelSettings(alias: "image"), for: "image-zimage-nano")
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("sidecar models support only"))
+        }
+    }
+
+    func testSettingsRejectInvalidMinP() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RuntimeModelSettingsStore(modelsDir: root)
+
+        XCTAssertThrowsError(
+            try store.writeSettings(
+                RuntimeModelSettings(minP: 1.01),
+                for: Gemma4Resources.defaultModelId
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("minP"))
         }
     }
 

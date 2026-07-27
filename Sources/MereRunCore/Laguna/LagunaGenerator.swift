@@ -28,6 +28,7 @@ public enum LagunaResources {
     public static let modelID = "poolside/Laguna-S-2.1-NVFP4-mlx"
     public static let dflashModelID = "poolside/Laguna-S-2.1-DFlash"
     public static let defaultContextLength = 32_768
+    public static let recommendedMinP = 0.02
 
     static let requiredFiles = [
         "config.json",
@@ -583,10 +584,15 @@ public actor LagunaGenerator: ChatGenerator {
             temperature: Float(request.temperature),
             topK: request.topK ?? 0,
             topP: Float(request.topP),
+            minP: Float(request.minP),
             repetitionPenalty: nil,
             repetitionContextSize: 64
         )
-        let eosTokens = Set(config.eosTokenIDs + tokenizerAndTemplate.stopTokenIDs)
+        let eosTokens = Self.resolvedEOSTokens(
+            modelTokenIDs: config.eosTokenIDs,
+            templateTokenIDs: tokenizerAndTemplate.stopTokenIDs,
+            stopOnEOS: request.stopOnEOS
+        )
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
         let decode = try await decodeTokens(
@@ -639,6 +645,15 @@ public actor LagunaGenerator: ChatGenerator {
             promptTokens: promptTokens.count,
             finishReason: finishReason
         )
+    }
+
+    static func resolvedEOSTokens(
+        modelTokenIDs: [Int],
+        templateTokenIDs: [Int],
+        stopOnEOS: Bool
+    ) -> Set<Int> {
+        guard stopOnEOS else { return [] }
+        return Set(modelTokenIDs + templateTokenIDs)
     }
 
     private func decodeTokens(

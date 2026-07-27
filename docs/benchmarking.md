@@ -64,6 +64,12 @@ The default sampling is deterministic: `--temperature 0 --top-p 1`. Scoring uses
 deterministic checks such as required phrases, forbidden phrases, regexes, JSON
 keys, and bullet counts.
 
+For stochastic evaluation, the chat, tool-call, and code lanes expose
+`--top-k` and `--min-p` in addition to temperature and top-p. A positive min-p
+removes tokens below that fraction of the most likely token's probability and
+is recorded in the result plan. Keep all controls but min-p fixed when
+measuring its effect, and use repeated runs for quality or diversity claims.
+
 Use a narrow slice while debugging:
 
 ```bash
@@ -144,6 +150,10 @@ being qualified. Use an explicit target checkpoint directory with
 `--laguna-path` on the chat, tool-call, or code benchmark. Add the official
 DFlash companion with `--laguna-dflash-path`; `--laguna-dflash-tokens` controls
 the proposal length and defaults to the measured value of `12`.
+The Laguna-only benchmark default is `--min-p 0.02`, selected by the
+[M4 Max quality and richness gate](./benchmarks/laguna-min-p-m4-max.md).
+Pass `--min-p 0` to reproduce Poolside's published control. Managed-model
+benchmark defaults remain unchanged.
 `--laguna-dflash-min-tokens` controls the output-budget router and defaults to
 `32`. Requests below the threshold skip DFlash prompt-context projection and
 decode. Routed requests fall back losslessly when acceptance is below `0.25`
@@ -159,6 +169,7 @@ swift run mere.run model benchmark chat \
   --laguna-dflash-path /path/to/Laguna-S-2.1-DFlash \
   --laguna-dflash-tokens 12 \
   --laguna-dflash-min-tokens 32 \
+  --min-p 0.02 \
   --cases MereChat/0,MereChat/3 \
   --log-responses
 ```
@@ -176,6 +187,10 @@ swift build -c release
   --decode-token-values 32,48,64,96 \
   --repetitions 3 \
   --include-automatic \
+  --temperature 1 \
+  --top-p 1 \
+  --top-k 20 \
+  --min-p 0.02 \
   --json
 ```
 

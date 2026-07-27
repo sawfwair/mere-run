@@ -774,6 +774,9 @@ Key options:
   exists (Bonsai: 0.7; Ornith lanes: 1.0)
 - `--top-p`: defaults to 0.9, or the model's published value (Bonsai/Ornith: 0.95)
 - `--top-k`: defaults to no cutoff, or the model's published value (Bonsai/Ornith: 20)
+- `--min-p`: relative probability floor from 0 through 1; `0` disables it.
+  For example, `0.05` removes tokens below 5% of the leading token's
+  probability. It does not change greedy generation.
 - `--kv-bits`: native Qwen-family models accept affine 4-bit or 8-bit resident
   KV caches. Gemma4 also supports its model-specific cache schemes.
 - `--response-format text|json_object`: require a complete JSON object from a
@@ -827,6 +830,7 @@ Key options:
 - `--stats`
 - `--temperature`
 - `--top-p`
+- `--min-p`
 - `--max-tokens`
 
 Examples:
@@ -1986,10 +1990,12 @@ swift run mere.run model runtime set text-chat-gemma4 \
   --max-tokens 1024 \
   --temperature 0.6 \
   --top-p 0.9 \
+  --min-p 0.05 \
   --kv-cache-mode auto
 ```
 
-Use the matching `--clear-*` flags to remove optional values. Engine overrides
+Use the matching `--clear-*` flags, including `--clear-min-p`, to remove
+optional values. Engine overrides
 are validated against the curated catalog. Gemma4, Qwen-family, and LFM2 accept
 the explicit `affine8` resident-cache mode as a memory control relative to
 full-precision KV. Qwen-family and LFM2 dequantize the generic cache for
