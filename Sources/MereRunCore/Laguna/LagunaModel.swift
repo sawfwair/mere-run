@@ -13,6 +13,15 @@ enum LagunaMoEAccelerationPolicy {
         "MERERUN_LAGUNA_FUSED_NVFP4_MOE",
         default: true
     )
+    static let fastSortedInverseEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_FAST_SORTED_INVERSE",
+        default: true
+    )
+    static let fusedSortedNVFP4MoEEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE",
+        default: true
+    )
+    static let fusedSortedMinimumSequenceLength = 64
 
     static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
         guard let raw else { return defaultValue }
@@ -439,28 +448,56 @@ final class LagunaSwitchGLU: Module {
         let inputDimensions = x.dim(-1)
         let flatIndices = indices.reshaped([routeCount])
         let order = argSort(flatIndices, axis: 0)
-        let inverseOrder = argSort(order, axis: 0)
         let sortedIndices = flatIndices.take(order, axis: 0)
         let tokenOrder = order.floorDivide(topK)
         let flatInput = x.reshaped([tokenCount, inputDimensions])
             .take(tokenOrder, axis: 0)
             .reshaped([routeCount, 1, inputDimensions])
-        let gate = gateProj.applyFlat(
-            flatInput,
+        let activated: MLXArray
+        if LagunaMoEAccelerationPolicy.fusedSortedNVFP4MoEEnabled,
+           sequenceLength >= LagunaMoEAccelerationPolicy.fusedSortedMinimumSequenceLength,
+           gateProj.mode == .nvfp4,
+           upProj.mode == .nvfp4,
+           gateProj.groupSize == upProj.groupSize,
+           gateProj.bits == upProj.bits,
+           gateProj.biases == nil,
+           upProj.biases == nil,
+           let gateScales = gateProj.scales,
+           let upScales = upProj.scales,
+           let fused = RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+               flatInput,
+               gateWeight: gateProj.weight,
+               gateScales: gateScales,
+               upWeight: upProj.weight,
+               upScales: upScales,
+               sortedExpertIndices: sortedIndices,
+               groupSize: gateProj.groupSize,
+               bits: gateProj.bits
+           ) {
+            activated = fused
+        } else {
+            let gate = gateProj.applyFlat(
+                flatInput,
+                indices: sortedIndices,
+                sortedIndices: true
+            )
+            let up = upProj.applyFlat(
+                flatInput,
+                indices: sortedIndices,
+                sortedIndices: true
+            )
+            activated = MLXNN.silu(gate) * up
+        }
+        let sortedOutput = downProj.applyFlat(
+            activated,
             indices: sortedIndices,
             sortedIndices: true
         )
-        let up = upProj.applyFlat(
-            flatInput,
-            indices: sortedIndices,
-            sortedIndices: true
-        )
-        let output = downProj.applyFlat(
-            MLXNN.silu(gate) * up,
-            indices: sortedIndices,
-            sortedIndices: true
-        ).take(inverseOrder, axis: 0)
-        return output.reshaped([batch, sequenceLength, topK, output.dim(-1)])
+        let inverseOrder = LagunaMoEAccelerationPolicy.fastSortedInverseEnabled
+            ? RoutedMoERouting.invertPermutation(order) ?? argSort(order, axis: 0)
+            : argSort(order, axis: 0)
+        return sortedOutput.take(inverseOrder, axis: 0)
+            .reshaped([batch, sequenceLength, topK, sortedOutput.dim(-1)])
     }
 
     func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {

@@ -59,6 +59,10 @@ The format is based on Keep a Changelog.
   projection, fall back on incompatible shapes, and retain explicit
   environment rollback controls. The pinned MLX fork exposes the required
   quantized Metal helper headers only to custom kernels that request them.
+- fused Laguna's measured M4 Max sorted NVFP4 prefill gate/up projections and
+  SwiGLU with expert-aligned scheduling and linear permutation inversion.
+  Native down projection, weighting, and reduction remain unchanged, with
+  explicit rollback controls and portable fallback on every other layout.
 - established a task-local MLX default stream for LFM2 chat and preparation,
   matching the other native MLX engines and fixing first use from a new Swift
   task.

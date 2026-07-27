@@ -212,6 +212,13 @@ locality without changing the checkpoint or public benchmark contract. Set
 `MERERUN_LAGUNA_SORTED_MOE=0` to run the reference routing order during a
 controlled comparison or rollback.
 
+The measured M4 Max/macOS 26 BF16 NVFP4 prefill path additionally fuses sorted
+gate/up projection and SwiGLU behind
+`MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE`. It retains the native sorted down
+projection, weighting, and reduction. Set the flag to `0` for a portable-path
+A/B or rollback. `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` independently restores
+the reference second route sort.
+
 These flags are an evaluation boundary, not a pull or serving contract. Do not
 infer catalog support from a successful local checkpoint run.
 

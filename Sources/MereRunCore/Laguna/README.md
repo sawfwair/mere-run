@@ -56,6 +56,16 @@ for comparison or rollback. Do not lower the threshold without measuring
 short verification and concurrent decode: two route sorts can cost more than
 grouped expert locality saves on small batches.
 
+On macOS 26 and the measured M4 Max GPU, BF16 sorted NVFP4 forwards of at
+least 64 tokens fuse the gate and up projections with SwiGLU. An
+expert-aligned 16-row schedule avoids recomputing tiles that cross expert
+boundaries, while separate gate/up threadgroup tiles reduce synchronization.
+The native sorted down projection, route weighting, and top-k reduction remain
+unchanged. Set `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0` to restore the
+portable sorted gate/up path. Set `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` to
+restore the second route sort instead of the linear permutation inversion.
+Unsupported hardware, dtypes, quantization, or shapes fall back automatically.
+
 Single-token target decode fuses the NVFP4 gate and up gather-GEMVs with
 SwiGLU, then keeps the native down projection. The fused path is enabled by
 default and can be disabled with `MERERUN_LAGUNA_FUSED_NVFP4_MOE=0` for a

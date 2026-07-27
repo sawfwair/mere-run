@@ -528,6 +528,117 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(maximumDifference, 0)
     }
 
+    func testFusedSortedNVFP4SwiGLUMatchesNativeGathers() throws {
+        guard Device.defaultDevice().deviceType == .gpu,
+              GPU.deviceInfo().architecture == "applegpu_g16s" else {
+            throw XCTSkip("The fused sorted kernel requires an M4 Max GPU.")
+        }
+        MLXRandom.seed(56)
+        let expertCount = 4
+        let routeCount = 130
+        let inputDimensions = 512
+        let outputDimensions = 64
+        let groupSize = 16
+        let bits = 4
+        let input = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [routeCount, 1, inputDimensions]
+        ).asType(.bfloat16)
+        let gate = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        let up = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        let indices = MLXArray(
+            (0..<routeCount).map {
+                Int32(min(expertCount - 1, $0 / 33))
+            }
+        )
+        let gateOutput = portableGatherQuantizedMM(
+            input,
+            gate.wq,
+            scales: gate.scales,
+            biases: gate.biases,
+            rhsIndices: indices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4,
+            sortedIndices: true
+        )
+        let upOutput = portableGatherQuantizedMM(
+            input,
+            up.wq,
+            scales: up.scales,
+            biases: up.biases,
+            rhsIndices: indices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4,
+            sortedIndices: true
+        )
+        let reference = MLXNN.silu(gateOutput) * upOutput
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+                input,
+                gateWeight: gate.wq,
+                gateScales: gate.scales,
+                upWeight: up.wq,
+                upScales: up.scales,
+                sortedExpertIndices: indices,
+                groupSize: groupSize,
+                bits: bits
+            )
+        )
+        MLX.eval(reference, actual)
+
+        XCTAssertEqual(actual.shape, reference.shape)
+        let maximumDifference = MLX.max(
+            MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+        ).item(Float.self)
+        XCTAssertEqual(maximumDifference, 0)
+    }
+
+    func testPermutationInversionMatchesSecondSort() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The permutation inversion requires a GPU.")
+        }
+        let routeCount = 513
+        let order = MLXArray(
+            (0..<routeCount).map {
+                Int32(($0 * 17) % routeCount)
+            }
+        )
+        let reference = argSort(order, axis: 0).asType(.int32)
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.invertPermutation(order)
+        )
+        MLX.eval(reference, actual)
+
+        XCTAssertEqual(actual.shape, reference.shape)
+        let maximumDifference = MLX.max(
+            MLX.abs(reference - actual)
+        ).item(Int32.self)
+        XCTAssertEqual(maximumDifference, 0)
+    }
+
     func testSortedMoERoutingMatchesUnsortedRouting() throws {
         MLXRandom.seed(41)
         let switchGLU = LagunaSwitchGLU(config: try makeConfig())

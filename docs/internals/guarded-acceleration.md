@@ -15,15 +15,23 @@ measured decode layouts: Laguna NVFP4 (group 16, 4-bit) and LFM2 affine
 kernel avoids materializing the repeated top-k activation tensor. The down
 projection remains the native MLX gather operation.
 
-The path is enabled by default only when running on an Apple GPU with
+Laguna's separate prefill specialization first creates expert-aligned 16-row
+tiles, then runs both sorted NVFP4 projections and SwiGLU in one matrix kernel.
+Separate gate/up threadgroup tiles halve the projection synchronization
+barriers. The native sorted down projection, route weighting, and top-k
+reduction retain their original arithmetic and dispatches.
+
+The decode path is enabled by default only when running on an Apple GPU with
 BF16/FP16 activations, input width divisible by 512, output width divisible by
-8, matching gate/up shapes, and the exact quantization contract above. A
-failed guard returns to the portable path. Prefill and larger routed forwards
-are not redirected through this small-route kernel. The two explicit rollback
-controls are:
+8, matching gate/up shapes, and the exact quantization contract above. The
+prefill path is narrower: macOS 26, M4 Max `applegpu_g16s`, BF16, group-16
+NVFP4, aligned projection dimensions, and at least 64 sequence tokens. A
+failed guard returns to the portable path. The explicit rollback controls are:
 
 ```bash
 MERERUN_LAGUNA_FUSED_NVFP4_MOE=0
+MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0
+MERERUN_LAGUNA_FAST_SORTED_INVERSE=0
 MERERUN_LFM2_FUSED_AFFINE8_MOE=0
 ```
 
@@ -36,11 +44,19 @@ byte-identical greedy output; warmed 128-token release runs measured
 184.74-185.16 tok/s portable versus 188.27-189.54 tok/s fused. A 512-token
 control averaged about 185.2 versus 187.6 tok/s.
 
-The generic-tail NVFP4/GELU experiment on Gemma Turbo, custom route planners,
-weighted reduction, sorted gate/up fusion, and full fused-MoE kernel were
-removed after neutral or regressive real-checkpoint measurements. These
-results establish a runtime/checkpoint win, not a claim that shader ALUs or
-unified-memory bandwidth are at their physical limit.
+On the official 1,183-token Laguna fixture, the prefill specialization
+reproduced 515 and 505 tok/s warm target medians in separate complete release
+runs, versus about 430 tok/s before this kernel. Target and DFlash rows retained
+the exact `842e1f47e005b09c` fingerprint. Background display/GPU contention
+produced slower outliers, so these are controlled-run medians rather than a
+claim of continuous physical saturation.
+
+The generic-tail NVFP4/GELU experiment on Gemma Turbo, custom counting sort,
+fused down projection plus weighted reduction, schedule packing, alternate
+route/output tiles, and full fused-MoE kernel were removed after neutral or
+regressive real-checkpoint measurements. These results establish a measured
+runtime/checkpoint win, not a claim that shader ALUs or unified-memory
+bandwidth are at their physical limit.
 
 ### Shared autoregressive pipeline saturation
 
