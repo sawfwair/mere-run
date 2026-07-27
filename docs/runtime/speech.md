@@ -1,15 +1,20 @@
 # Speech Runtime
 
-This page covers speech synthesis, transcription, and voice-profile management.
+Read text aloud, clone a voice from a short reference clip and save it for
+reuse, and transcribe either a file or a live microphone. Two ASR backends are
+available and the CLI picks between them by task — none of the audio leaves the
+machine in either direction.
 
-## Public surface
+## Commands
 
-- `mere.run speech synthesize`
-- `mere.run speech transcribe`
-- `mere.run speech listen`
-- `mere.run speech profile list`
-- `mere.run speech profile create`
-- `mere.run speech profile delete`
+| Command | What it does |
+| --- | --- |
+| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS. |
+| `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
+| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen ASR. |
+| `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
+| `mere.run speech profile list` | List saved speech voice profiles. |
+| `mere.run speech profile delete` | Delete a speech profile by id. |
 
 ## Model families
 

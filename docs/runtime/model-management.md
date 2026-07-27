@@ -1,24 +1,28 @@
 # Model Management
 
-This page covers the shared model store, canonical model IDs, manifests, and
-the model-management commands.
+One store, canonical IDs, and honest accounting. `mere.run` checks whether this
+machine can run a model before it spends your bandwidth on it, reports what a
+model actually costs on disk once shared payloads are counted once, and shows
+exactly what is safe to delete.
 
-## Public surface
+## Commands
 
-- `mere.run model list`
-- `mere.run model capabilities`
-- `mere.run model info`
-- `mere.run model pull`
-- `mere.run model remove`
-- `mere.run model storage`
-- `mere.run model gc`
-- `mere.run model repair-manifests`
-- `mere.run model runtime`
-- `mere.run model benchmark`
-- `mere.run adapter list`
-- `mere.run adapter pull`
-- `mere.run status`
-- `mere.run setup`
+| Command | What it does |
+| --- | --- |
+| `mere.run model capabilities` | Show which managed models this machine can run. |
+| `mere.run model list` | List all known models with install status. |
+| `mere.run model pull` | Download a managed model into the local model store. |
+| `mere.run model info` | Print a model's manifest, validation status, and resolved component paths. |
+| `mere.run model remove` | Remove a model from the local model store. |
+| `mere.run model storage` | Inspect physical model storage, sharing, and reclaimable space. |
+| `mere.run model gc` | Find or delete unreferenced model payloads and partial downloads. |
+| `mere.run model repair-manifests` | Rewrite missing manifest metadata in the local store. |
+| `mere.run model runtime` | Read and update per-model API runtime settings. |
+| `mere.run model benchmark` | Run focused local model benchmarks. |
+| `mere.run adapter list` | List cataloged LoRA adapters and their install state. |
+| `mere.run adapter pull` | Download and verify a cataloged LoRA adapter. |
+| `mere.run status` | Show local server, loaded model, and installed model status. |
+| `mere.run setup` | Choose a guided, BYOA, or manual setup path. |
 
 ## Default model store
 

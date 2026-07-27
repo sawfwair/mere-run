@@ -1,14 +1,15 @@
 # Linux QuickStart
 
-This page is for installing or building the headless `mere.run` CLI on Linux.
-Linux package artifacts are CLI-only and must be validated on the host class
-they target. CUDA artifacts must be built and smoke-tested on matching CUDA
-hardware before being treated as supported.
+Installing or building the headless `mere.run` CLI on Linux.
 
-The macOS path remains the primary hands-on development and runtime validation
-environment for this repo. The Linux package path is real, but intentionally
-narrow: CLI-only packages, Ubuntu-style hosts, x86_64 CPU and CUDA package
-manifests, and CUDA-gated arm64 package work.
+Be clear about what you are getting. The Linux path is real but deliberately
+narrow: CLI only, Ubuntu-style hosts, x86_64 CPU and CUDA package manifests,
+and CUDA-gated arm64 work. There is no studio app here, and macOS remains the
+primary development and runtime-validation environment for this repo.
+
+Nothing is treated as supported until it has been built and smoke-tested on the
+host class it targets — CUDA artifacts on real CUDA hardware, never a
+cross-build taken on faith.
 
 ## Current validation boundary
 
