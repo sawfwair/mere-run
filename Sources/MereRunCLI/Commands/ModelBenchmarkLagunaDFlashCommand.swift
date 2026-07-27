@@ -194,7 +194,6 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
             } else {
                 concurrencyGroups = []
             }
-            let device = GPU.deviceInfo()
             let exactness = makeExactnessReport(
                 samples: samples,
                 concurrencyGroups: concurrencyGroups
@@ -209,11 +208,7 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
                 topK: topK,
                 minP: minP,
                 promptCharacters: messages.map(\.content.count).reduce(0, +),
-                hardware: LagunaDFlashBenchmarkHardware(
-                    architecture: device.architecture,
-                    physicalMemoryBytes: device.memorySize,
-                    recommendedWorkingSetBytes: device.maxRecommendedWorkingSetSize
-                ),
+                hardware: benchmarkHardware(),
                 samples: samples,
                 concurrencyGroups: concurrencyGroups,
                 exactness: exactness
@@ -332,7 +327,7 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
         mode: LagunaDFlashRoutingMode,
         workloadID: String
     ) async throws -> LagunaDFlashBenchmarkSample {
-        GPU.resetPeakMemory()
+        resetBenchmarkPeakMemory()
         let beforeMemory = Memory.snapshot()
         let beforeStats = await generator.dflashStats()
         let start = Date()
@@ -522,7 +517,7 @@ struct ModelBenchmarkLagunaDFlash: AsyncParsableCommand {
         groupIndex: Int,
         mode: LagunaDFlashRoutingMode
     ) async throws -> LagunaDFlashConcurrentGroup {
-        GPU.resetPeakMemory()
+        resetBenchmarkPeakMemory()
         let beforeMemory = Memory.snapshot()
         let beforeDFlash = await generator.dflashStats()
         let beforeBatching = await generator.continuousBatchingStats()
@@ -874,6 +869,36 @@ private struct LagunaDFlashBenchmarkReport: Encodable {
         }
         return sorted[middle]
     }
+}
+
+private func benchmarkHardware() -> LagunaDFlashBenchmarkHardware {
+    #if os(macOS)
+    let device = GPU.deviceInfo()
+    return LagunaDFlashBenchmarkHardware(
+        architecture: device.architecture,
+        physicalMemoryBytes: device.memorySize,
+        recommendedWorkingSetBytes: device.maxRecommendedWorkingSetSize
+    )
+    #else
+    #if arch(arm64)
+    let architecture = "linux-arm64"
+    #elseif arch(x86_64)
+    let architecture = "linux-x86_64"
+    #else
+    let architecture = "linux"
+    #endif
+    return LagunaDFlashBenchmarkHardware(
+        architecture: architecture,
+        physicalMemoryBytes: Int(ProcessInfo.processInfo.physicalMemory),
+        recommendedWorkingSetBytes: 0
+    )
+    #endif
+}
+
+private func resetBenchmarkPeakMemory() {
+    #if os(macOS)
+    GPU.resetPeakMemory()
+    #endif
 }
 
 private struct LagunaDFlashBenchmarkHardware: Encodable {
