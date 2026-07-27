@@ -1,5 +1,7 @@
 import AppKit
+import MereRunContract
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The floating command bar at the bottom of the canvas: one field, one run button, and the
 /// depth (attachment, model, options) folded into quiet affordances around it.
@@ -457,6 +459,10 @@ struct StudioOptionsPanel: View {
                     speakOptions
                 }
 
+                if mode == .video {
+                    videoOptions
+                }
+
                 if [.createImage, .video].contains(mode) {
                     HStack(spacing: MereRunTheme.Spacing.sm) {
                         Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
@@ -587,6 +593,100 @@ struct StudioOptionsPanel: View {
         }
     }
 
+    @ViewBuilder
+    private var videoOptions: some View {
+        Picker("Quality", selection: $draft.videoQuality) {
+            Text("Draft").tag(LTXVideoQuality.draft)
+            Text("Final").tag(LTXVideoQuality.final)
+        }
+        .pickerStyle(.segmented)
+
+        Picker("Output", selection: $draft.videoOutputMode) {
+            Text("Video").tag(LTXVideoOutputMode.videoOnly)
+            Text("Audio + Video").tag(LTXVideoOutputMode.audioVideo)
+        }
+        .pickerStyle(.segmented)
+
+        videoAssetRow(
+            title: "Source audio",
+            path: $draft.audioPath,
+            type: .audio
+        )
+        videoAssetRow(
+            title: "End keyframe",
+            path: $draft.endImagePath,
+            type: .image
+        )
+
+        Toggle("Use duration instead of frame count", isOn: $draft.useDuration)
+            .font(MereRunTheme.captionFont)
+        if draft.useDuration {
+            numberField("Duration seconds", value: $draft.durationSeconds)
+        }
+        if !draft.audioPath.isBlank {
+            numberField("Audio start seconds", value: $draft.audioStartTime)
+            Stepper("A2V steps \(draft.a2vSteps)", value: $draft.a2vSteps, in: 1...100)
+                .font(MereRunTheme.captionFont)
+            numberField("A2V guidance", value: $draft.a2vGuidanceScale)
+            numberField("Video CFG", value: $draft.videoCFGGuidanceScale)
+            numberField("Audio CFG", value: $draft.audioCFGGuidanceScale)
+            numberField("V2A guidance", value: $draft.v2aGuidanceScale)
+        }
+        if !draft.endImagePath.isBlank {
+            numberField("End image strength", value: $draft.endImageStrength)
+        }
+        Toggle("Preflight only", isOn: $draft.preflight)
+            .font(MereRunTheme.captionFont)
+        Toggle("Capture phase timings", isOn: $draft.timings)
+            .font(MereRunTheme.captionFont)
+    }
+
+    private func numberField(_ label: String, value: Binding<Double>) -> some View {
+        HStack {
+            Text(label)
+                .font(MereRunTheme.captionFont)
+            Spacer()
+            TextField(label, value: value, format: .number)
+                .frame(width: 90)
+                .mereField(cornerRadius: MereRunTheme.Radius.sm)
+        }
+    }
+
+    private func videoAssetRow(title: String, path: Binding<String>, type: UTType) -> some View {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Text(path.wrappedValue.isEmpty
+                ? "No \(title.lowercased())"
+                : URL(fileURLWithPath: path.wrappedValue).lastPathComponent)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
+            Spacer()
+            Button(title) {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [type]
+                panel.allowsMultipleSelection = false
+                panel.canChooseDirectories = false
+                if panel.runModal() == .OK, let url = panel.url {
+                    path.wrappedValue = url.path
+                    if type == .audio {
+                        draft.videoQuality = .final
+                        draft.videoOutputMode = .audioVideo
+                    }
+                }
+            }
+            .controlSize(.small)
+            if !path.wrappedValue.isEmpty {
+                Button {
+                    path.wrappedValue = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Remove \(title.lowercased())")
+            }
+        }
+    }
+
     private func readImageActionUnavailableMessage(_ action: StudioReadImageAction) -> String? {
         guard mode == .readImage else { return nil }
         var candidateDraft = draft
@@ -612,6 +712,7 @@ struct StudioOptionsPanel: View {
         case .chat, .code: return "System"
         case .speak: return "Voice"
         case .music: return "Lyrics"
+        case .video: return "Negative prompt"
         default: return nil
         }
     }

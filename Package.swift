@@ -129,6 +129,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
   : []
 
 var products: [Product] = [
+  .library(name: "MereRunContract", targets: ["MereRunContract"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
   .library(name: "AudioCodecs", targets: ["AudioCodecs"]),
@@ -259,6 +260,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunContract",
   "MereRunCore",
   "AudioCore",
   "AudioCodecs",
@@ -282,6 +284,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
+  "MereRunContract",
   "MereRunCore",
   "AudioCore",
   "AudioCodecs",
@@ -296,6 +299,11 @@ if hasMediaIOTarget {
 }
 
 targets.append(contentsOf: [
+  .target(
+    name: "MereRunContract",
+    dependencies: [],
+    path: "Sources/MereRunContract"
+  ),
   .target(
     name: "MereRunCore",
     dependencies: mereRunCoreDependencies,
@@ -417,6 +425,11 @@ targets.append(contentsOf: [
     linkerSettings: linuxNativeLinkerSettings
   ),
   .testTarget(
+    name: "MereRunContractTests",
+    dependencies: ["MereRunContract"],
+    path: "Tests/MereRunContractTests"
+  ),
+  .testTarget(
     name: "MereRunCoreTests",
     dependencies: mereRunCoreTestDependencies,
     path: "Tests/MereRunCoreTests",
@@ -449,7 +462,7 @@ if !isLinuxPackage {
   targets.append(
     .executableTarget(
       name: "MereRunApp",
-      dependencies: [],
+      dependencies: ["MereRunContract"],
       path: "Sources/MereRunApp",
       exclude: [
         "README.md"
@@ -459,7 +472,7 @@ if !isLinuxPackage {
   targets.append(
     .testTarget(
       name: "MereRunAppTests",
-      dependencies: ["MereRunApp"],
+      dependencies: ["MereRunApp", "MereRunContract"],
       path: "Tests/MereRunAppTests"
     )
   )

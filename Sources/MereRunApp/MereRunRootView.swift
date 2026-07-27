@@ -1,4 +1,5 @@
 import AppKit
+import MereRunContract
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -381,9 +382,19 @@ private struct CommandEditor: View {
         case .videoGenerate:
             DimensionsGrid()
             VideoOptions()
+        case .videoAnimate:
+            DimensionsGrid()
+            VideoAnimateOptions()
+        case .videoCosmos3:
+            DimensionsGrid()
+            VideoCosmos3Options()
+        case .videoPrepareMasks:
+            VideoPrepareMasksOptions()
         case .videoExportLatents:
             DimensionsGrid()
             VideoLatentsOptions()
+        case .videoSession:
+            VideoSessionOptions()
         case .sfxGenerate, .sfxVideo:
             SFXOptions()
         case .apiServe:
@@ -1009,21 +1020,68 @@ private struct VideoOptions: View {
     var body: some View {
         EditorSection("Video") {
             VStack(spacing: 10) {
-                Picker("Variant", selection: $controller.draft.variant) {
-                    Text("Distilled").tag("distilled")
-                    Text("Unified AV").tag("unified-av")
+                Picker("Quality", selection: $controller.draft.videoQuality) {
+                    Text("Draft").tag(LTXVideoQuality.draft)
+                    Text("Final").tag(LTXVideoQuality.final)
                 }
                 .pickerStyle(.segmented)
+                Picker("Output", selection: $controller.draft.videoOutputMode) {
+                    Text("Video").tag(LTXVideoOutputMode.videoOnly)
+                    Text("Audio + Video").tag(LTXVideoOutputMode.audioVideo)
+                }
+                .pickerStyle(.segmented)
+                PathField(
+                    path: $controller.draft.audioPath,
+                    placeholder: "Source audio for A2V (optional)",
+                    mode: .openFile([.audio])
+                )
+                PathField(
+                    path: $controller.draft.endImagePath,
+                    placeholder: "End keyframe (optional)",
+                    mode: .openFile([.image])
+                )
                 AdaptiveControlRow {
                     NumberStepper(title: "Frames", value: $controller.draft.numFrames, range: 9...257, step: 8)
                     NumberStepper(title: "FPS", value: $controller.draft.fps, range: 1...60, step: 1)
                     NumberField(title: "Image strength", value: $controller.draft.strength)
                 }
+                Toggle("Use duration instead of frame count", isOn: $controller.draft.useDuration)
+                if controller.draft.useDuration {
+                    NumberField(title: "Duration", value: $controller.draft.durationSeconds)
+                }
+                if !controller.draft.audioPath.isBlank {
+                    AdaptiveControlRow {
+                        NumberField(title: "Audio start", value: $controller.draft.audioStartTime)
+                        NumberStepper(title: "A2V steps", value: $controller.draft.a2vSteps, range: 1...100, step: 1)
+                    }
+                    AdaptiveControlRow {
+                        NumberField(title: "A2V", value: $controller.draft.a2vGuidanceScale)
+                        NumberField(title: "Video CFG", value: $controller.draft.videoCFGGuidanceScale)
+                        NumberField(title: "Audio CFG", value: $controller.draft.audioCFGGuidanceScale)
+                        NumberField(title: "V2A", value: $controller.draft.v2aGuidanceScale)
+                    }
+                }
+                if !controller.draft.endImagePath.isBlank {
+                    NumberField(title: "End image strength", value: $controller.draft.endImageStrength)
+                }
                 TextField("Seed", text: $controller.draft.seed)
                     .textFieldStyle(.plain)
                     .padding(10)
                     .merePanel()
-                Toggle("Quiet", isOn: $controller.draft.quiet)
+                AdaptiveControlRow {
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                    Toggle("Timings", isOn: $controller.draft.timings)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+                if controller.draft.timings {
+                    PathField(
+                        path: $controller.draft.timingsOutputPath,
+                        placeholder: "Timing report JSON (optional)",
+                        mode: .saveFile
+                    )
+                }
             }
         }
     }
@@ -1041,6 +1099,270 @@ private struct VideoLatentsOptions: View {
                     .padding(10)
                     .merePanel()
                 Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct VideoAnimateOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("SCAIL-2 inputs") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.referenceMaskPath,
+                    placeholder: "Seven-color reference mask",
+                    mode: .openFile([.image])
+                )
+                PathField(
+                    path: $controller.draft.drivingVideoPath,
+                    placeholder: "Driving video",
+                    mode: .openFile([.movie, .video])
+                )
+                PathField(
+                    path: $controller.draft.drivingMaskPath,
+                    placeholder: "Seven-color driving mask video",
+                    mode: .openFile([.movie, .video])
+                )
+                Picker("Task", selection: $controller.draft.videoTaskMode) {
+                    Text("Animation").tag("animation")
+                    Text("Replacement").tag("replacement")
+                }
+                .pickerStyle(.segmented)
+                Picker("Profile", selection: $controller.draft.renderProfile) {
+                    Text("Fast").tag("fast")
+                    Text("Quality").tag("quality")
+                }
+                .pickerStyle(.segmented)
+                if controller.draft.renderProfile == "quality" {
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Steps",
+                            value: $controller.draft.steps,
+                            range: 1...100,
+                            step: 1
+                        )
+                        NumberField(title: "CFG", value: $controller.draft.cfgScale)
+                        NumberField(title: "Shift", value: $controller.draft.scheduleShift)
+                    }
+                    Picker("Sampler", selection: $controller.draft.sampler) {
+                        Text("UniPC").tag("unipc")
+                        Text("Euler").tag("euler")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "FPS",
+                        value: $controller.draft.fps,
+                        range: 1...60,
+                        step: 1
+                    )
+                    NumberStepper(
+                        title: "Segment",
+                        value: $controller.draft.segmentLength,
+                        range: 5...401,
+                        step: 4
+                    )
+                    NumberStepper(
+                        title: "Overlap",
+                        value: $controller.draft.segmentOverlap,
+                        range: 1...81,
+                        step: 4
+                    )
+                }
+                Picker("Tail", selection: $controller.draft.tailPolicy) {
+                    Text("Drop").tag("drop")
+                    Text("Pad + trim").tag("pad-trim")
+                }
+                .pickerStyle(.segmented)
+                Picker("Audio", selection: $controller.draft.audioSource) {
+                    Text("None").tag("none")
+                    Text("Driving video").tag("driving")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+            }
+        }
+    }
+}
+
+private struct VideoCosmos3Options: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Cosmos3") {
+            VStack(spacing: 10) {
+                Picker("Mode", selection: $controller.draft.cosmosMode) {
+                    ForEach(
+                        MereRunCapabilityCatalog.videoCosmos3.options
+                            .first { $0.flag == "--mode" }?.choices ?? [],
+                        id: \.self
+                    ) { mode in
+                        Text(mode.replacingOccurrences(of: "-", with: " ").capitalized)
+                            .tag(mode)
+                    }
+                }
+                PathField(
+                    path: $controller.draft.cosmosImagePath,
+                    placeholder: "Conditioning image (optional)",
+                    mode: .openFile([.image])
+                )
+                PathField(
+                    path: $controller.draft.cosmosVideoPath,
+                    placeholder: "Conditioning video (optional)",
+                    mode: .openFile([.movie, .video])
+                )
+                PathField(
+                    path: $controller.draft.actionsOutputPath,
+                    placeholder: "Predicted actions JSON (optional)",
+                    mode: .saveFile
+                )
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Frames",
+                        value: $controller.draft.numFrames,
+                        range: 1...601,
+                        step: 4
+                    )
+                    NumberStepper(
+                        title: "Steps · 0 auto",
+                        value: $controller.draft.steps,
+                        range: 0...100,
+                        step: 1
+                    )
+                    NumberStepper(
+                        title: "FPS · 0 auto",
+                        value: $controller.draft.fps,
+                        range: 0...60,
+                        step: 1
+                    )
+                }
+                Picker("Schedule", selection: $controller.draft.schedule) {
+                    Text("NVIDIA").tag("nvidia")
+                    Text("Published Karras").tag("published-karras")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    NumberField(title: "CFG · 0 auto", value: $controller.draft.cfgScale)
+                    NumberField(title: "Shift · 0 auto", value: $controller.draft.scheduleShift)
+                }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct VideoPrepareMasksOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Mask preparation") {
+            VStack(spacing: 10) {
+                TextField("Preview frame (optional)", text: $controller.draft.previewFrame)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                AdaptiveControlRow {
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+            }
+        }
+    }
+}
+
+private struct VideoSessionOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Resident session") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.modelRoot,
+                    placeholder: "Local LTX model root (optional)",
+                    mode: .openDirectory
+                )
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+                Text("Run loads LTX once. When the status says ready, submit as many renders as you need.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        }
+
+        EditorSection("Resident render") {
+            VStack(spacing: 10) {
+                TextEditor(text: $controller.draft.prompt)
+                    .font(MereRunTheme.bodyFont)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 72)
+                    .padding(8)
+                    .merePanel()
+                    .overlay(alignment: .topLeading) {
+                        if controller.draft.prompt.isBlank {
+                            Text("Prompt")
+                                .font(MereRunTheme.bodyFont)
+                                .foregroundStyle(MereRunTheme.textMuted)
+                                .padding(12)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                PathField(
+                    path: $controller.draft.outputPath,
+                    placeholder: "Output MP4",
+                    mode: .saveFile
+                )
+                PathField(
+                    path: $controller.draft.imagePath,
+                    placeholder: "Start image (optional)",
+                    mode: .openFile([.image])
+                )
+                PathField(
+                    path: $controller.draft.endImagePath,
+                    placeholder: "End keyframe (optional)",
+                    mode: .openFile([.image])
+                )
+                AdaptiveControlRow {
+                    NumberStepper(title: "Width", value: $controller.draft.width, range: 64...4096, step: 64)
+                    NumberStepper(title: "Height", value: $controller.draft.height, range: 64...4096, step: 64)
+                }
+                AdaptiveControlRow {
+                    NumberStepper(title: "Frames", value: $controller.draft.numFrames, range: 9...257, step: 8)
+                    NumberStepper(title: "FPS", value: $controller.draft.fps, range: 1...60, step: 1)
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Start strength", value: $controller.draft.strength)
+                    NumberField(title: "End strength", value: $controller.draft.endImageStrength)
+                }
+                TextField("Seed (optional)", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Button {
+                    controller.submitVideoSessionRequest()
+                } label: {
+                    Label("Submit to resident session", systemImage: "bolt.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+                .disabled(
+                    !controller.canSubmitVideoSessionRequest
+                        || controller.draft.prompt.isBlank
+                        || controller.draft.outputPath.isBlank
+                )
             }
         }
     }

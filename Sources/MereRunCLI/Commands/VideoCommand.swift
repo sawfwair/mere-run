@@ -2,30 +2,8 @@ import ArgumentParser
 import Foundation
 import MediaIO
 import MLX
+import MereRunContract
 import MereRunCore
-
-enum LTXVideoVariant: String, CaseIterable, ExpressibleByArgument {
-    case unifiedAV = "unified-av"
-    case distilled = "distilled"
-}
-
-enum LTXVideoQuality: String, CaseIterable, ExpressibleByArgument {
-    case draft
-    case final
-}
-
-enum LTXVideoOutputMode: String, CaseIterable, ExpressibleByArgument {
-    case videoOnly = "video-only"
-    case audioVideo = "audio-video"
-
-    var writesAudio: Bool {
-        self == .audioVideo
-    }
-
-    var compatibilityVariant: LTXVideoVariant {
-        writesAudio ? .unifiedAV : .distilled
-    }
-}
 
 enum LTXVideoGenerationRoute: String, Equatable {
     case legacyDistilledVideo = "legacy-distilled-video"

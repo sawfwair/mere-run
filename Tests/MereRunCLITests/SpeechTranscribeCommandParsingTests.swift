@@ -112,6 +112,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         let commandNames = Set(MereRunCLI.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(commandNames, Set([
             "guide",
+            "catalog",
             "image",
             "text",
             "speech",

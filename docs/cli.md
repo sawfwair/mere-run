@@ -17,6 +17,7 @@ Public tree:
 
 <!-- BEGIN GENERATED: CLI TREE -->
 - [`mere.run guide`](/cookbooks) — Read offline mere.run command cookbooks.
+- [`mere.run catalog`](/cli) — Inspect the machine-readable command capability contract.
 - [`mere.run image`](/runtime/image) — Generate and validate image models.
   - `mere.run image dataset` — Inspect image training datasets.
     - `mere.run image dataset discover` — Find image-caption dataset candidates under a root directory.

@@ -11,6 +11,26 @@ This page covers the native video-generation path exposed through `mere.run vide
 - `mere.run video session`
 - `mere.run video export-latents`
 
+## macOS Studio
+
+The optional macOS app compiles against the same typed capability contract
+emitted by:
+
+```bash
+mere.run catalog video.generate --json
+```
+
+The primary Video composer exposes independent quality and output choices,
+text-to-video, a start image, an end keyframe, source-audio A2V with segment
+offset and modality guidance, duration or frame-count targeting, negative
+prompts, Wan controls, preflight, and timing receipts. Attaching source audio
+selects final quality plus synchronized audio-video output automatically.
+
+The Advanced Video category adds guided SCAIL-2 animation/replacement, Cosmos3
+generation and action modes, SAM 3.1 mask-plan preparation, LTX latent export,
+and resident LTX sessions. Raw arguments remain an escape hatch, not the
+capability contract.
+
 ## Model family
 
 - `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX checkpoint for fast

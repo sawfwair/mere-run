@@ -128,6 +128,7 @@ extensions. This inventory is generated from the CLI configuration:
 | Command | Purpose |
 | --- | --- |
 | [`mere.run guide`](/cookbooks) | Read offline mere.run command cookbooks. |
+| [`mere.run catalog`](/cli) | Inspect the machine-readable command capability contract. |
 | [`mere.run image`](/runtime/image) | Generate and validate image models. |
 | [`mere.run text`](/runtime/text) | Run local chat, code, embedding, and anonymization workflows. |
 | [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, and manage voice profiles. |

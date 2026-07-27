@@ -18,6 +18,7 @@ struct MereRunCLI: AsyncParsableCommand {
         version: MereRunCLIVersion.current,
         subcommands: [
             GuideCommand.self,
+            CatalogCommand.self,
             Image.self,
             Text.self,
             Speech.self,

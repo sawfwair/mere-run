@@ -9,3 +9,14 @@ Optional SwiftUI studio wrapper around the public `mere.run` CLI.
 
 Do not duplicate runtime logic here. The app should translate UI state into CLI
 arguments and let the public executable remain the behavioral source of truth.
+
+`MereRunContract` is the compile-time and machine-readable boundary between the
+two products. `mere.run catalog --json` emits that same contract. App forms must
+use its typed choices, and CLI/App tests must prove that every emitted option is
+both cataloged and accepted by ArgumentParser.
+
+The primary Video surface uses `--quality` and `--output-mode`; it must never
+emit the legacy `--variant` compatibility selector. Its attachment workflow
+supports a start image, end keyframe, and source audio. Advanced Video contains
+guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
+workflows.

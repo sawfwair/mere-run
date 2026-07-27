@@ -892,7 +892,23 @@ struct StudioRootView: View {
         controller.draft.timestamps = draft.timestamps
         controller.draft.fps = draft.fps
         controller.draft.numFrames = draft.numFrames
-        controller.draft.variant = draft.variant
+        controller.draft.useDuration = draft.useDuration
+        controller.draft.durationSeconds = draft.durationSeconds
+        controller.draft.videoQuality = draft.videoQuality
+        controller.draft.videoOutputMode = draft.videoOutputMode
+        controller.draft.audioPath = draft.audioPath
+        controller.draft.audioStartTime = draft.audioStartTime
+        controller.draft.endImagePath = draft.endImagePath
+        controller.draft.endImageStrength = draft.endImageStrength
+        controller.draft.scheduleShift = draft.scheduleShift
+        controller.draft.a2vGuidanceScale = draft.a2vGuidanceScale
+        controller.draft.videoCFGGuidanceScale = draft.videoCFGGuidanceScale
+        controller.draft.audioCFGGuidanceScale = draft.audioCFGGuidanceScale
+        controller.draft.v2aGuidanceScale = draft.v2aGuidanceScale
+        controller.draft.a2vSteps = draft.a2vSteps
+        controller.draft.preflight = draft.preflight
+        controller.draft.timings = draft.timings
+        controller.draft.timingsOutputPath = draft.timingsOutputPath
     }
 
     private func freshDraft(for mode: StudioMode) -> StudioDraft {

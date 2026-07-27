@@ -254,10 +254,26 @@ struct MereRunProcessConfiguration: Equatable {
     let arguments: [String]
     let currentDirectoryURL: URL
     let environment: [String: String]
+    let keepsStandardInputOpen: Bool
+}
+
+enum MereRunProcessInputError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        "This command does not accept interactive input."
+    }
 }
 
 protocol MereRunRunningProcess: AnyObject {
     func terminate()
+    func sendStandardInput(_ text: String) throws
+}
+
+extension MereRunRunningProcess {
+    func sendStandardInput(_ text: String) throws {
+        throw MereRunProcessInputError.unavailable
+    }
 }
 
 protocol MereRunProcessRunning: AnyObject {
@@ -279,20 +295,31 @@ extension FileManager: MereRunFileProbing {}
 
 private final class FoundationRunningProcess: MereRunRunningProcess, @unchecked Sendable {
     private let process: Process
+    private let stdinPipe: Pipe?
     private let stdoutPipe: Pipe
     private let stderrPipe: Pipe
 
-    init(process: Process, stdoutPipe: Pipe, stderrPipe: Pipe) {
+    init(process: Process, stdinPipe: Pipe?, stdoutPipe: Pipe, stderrPipe: Pipe) {
         self.process = process
+        self.stdinPipe = stdinPipe
         self.stdoutPipe = stdoutPipe
         self.stderrPipe = stderrPipe
     }
 
     func terminate() {
+        try? stdinPipe?.fileHandleForWriting.close()
         process.terminate()
     }
 
+    func sendStandardInput(_ text: String) throws {
+        guard let stdinPipe else {
+            throw MereRunProcessInputError.unavailable
+        }
+        try stdinPipe.fileHandleForWriting.write(contentsOf: Data(text.utf8))
+    }
+
     func cleanup() {
+        try? stdinPipe?.fileHandleForWriting.close()
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
     }
@@ -317,13 +344,16 @@ private final class FoundationMereRunProcessRunner: MereRunProcessRunning {
         process.currentDirectoryURL = configuration.currentDirectoryURL
         process.environment = configuration.environment
 
+        let stdinPipe = configuration.keepsStandardInputOpen ? Pipe() : nil
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
         let runningProcess = FoundationRunningProcess(
             process: process,
+            stdinPipe: stdinPipe,
             stdoutPipe: stdoutPipe,
             stderrPipe: stderrPipe
         )
@@ -425,6 +455,27 @@ struct MereRunUtilityCommandResult: Equatable {
         if trimmedStderr.isEmpty { return trimmedStdout }
         return "\(trimmedStdout)\n\nSTDERR\n\(trimmedStderr)"
     }
+}
+
+private struct StudioVideoSessionRequest: Encodable {
+    let id: String
+    let prompt: String
+    let output: String
+    let width: Int
+    let height: Int
+    let numFrames: Int
+    let fps: Int
+    let seed: Int?
+    let image: String?
+    let imageStrength: Double?
+    let endImage: String?
+    let endImageStrength: Double?
+}
+
+private struct StudioVideoSessionResponse: Decodable {
+    let status: String
+    let output: String?
+    let error: String?
 }
 
 @MainActor
@@ -557,6 +608,13 @@ final class MereRunController: ObservableObject {
 
     var advancedCommandPreview: String {
         commandPreview(template: selectedTemplate, draft: draft, masksSecrets: false)
+    }
+
+    var canSubmitVideoSessionRequest: Bool {
+        guard let session = foregroundSession else { return false }
+        return session.spec.template.id == .videoSession
+            && session.process != nil
+            && session.exitCode == nil
     }
 
     init(
@@ -878,6 +936,7 @@ final class MereRunController: ObservableObject {
         var lastOutputURL: URL?
         var exitCode: Int32?
         var status: String
+        var interactiveOutputBuffer = ""
         var outputWatchTask: Task<Void, Never>?
 
         init(spec: RunSpec, preview: String, expectedOutput: URL?, status: String) {
@@ -1156,6 +1215,70 @@ final class MereRunController: ObservableObject {
         guard let session = foregroundSession, session.process != nil else { return }
         session.process?.terminate()
         append("Termination requested.", stream: .system, to: session)
+    }
+
+    @discardableResult
+    func submitVideoSessionRequest() -> Bool {
+        guard let session = foregroundSession,
+              session.spec.template.id == .videoSession,
+              let process = session.process,
+              session.exitCode == nil else {
+            status = "Start the resident session first"
+            append("Start the resident LTX session before submitting a render.", stream: .stderr)
+            return false
+        }
+
+        let prompt = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            status = "Prompt required"
+            append("Enter a prompt for the resident render.", stream: .stderr, to: session)
+            return false
+        }
+        guard !draft.outputPath.isBlank else {
+            status = "Output required"
+            append("Choose an output MP4 path for the resident render.", stream: .stderr, to: session)
+            return false
+        }
+
+        let output = NSString(string: draft.outputPath).expandingTildeInPath
+        do {
+            try FileManager.default.createDirectory(
+                at: URL(fileURLWithPath: output).deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let request = StudioVideoSessionRequest(
+                id: UUID().uuidString,
+                prompt: prompt,
+                output: output,
+                width: draft.width,
+                height: draft.height,
+                numFrames: draft.numFrames,
+                fps: draft.fps,
+                seed: Int(draft.seed),
+                image: expandedOptionalPath(draft.imagePath),
+                imageStrength: draft.imagePath.isBlank ? nil : draft.strength,
+                endImage: expandedOptionalPath(draft.endImagePath),
+                endImageStrength: draft.endImagePath.isBlank ? nil : draft.endImageStrength
+            )
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(request)
+            guard let line = String(data: data, encoding: .utf8) else {
+                throw CocoaError(.fileWriteInapplicableStringEncoding)
+            }
+            try process.sendStandardInput(line + "\n")
+            session.status = "Rendering resident request"
+            session.lastOutputURL = nil
+            append("Submitted resident render → \(output)", stream: .system, to: session)
+            mirrorForeground(session)
+            return true
+        } catch {
+            session.status = "Session submission failed"
+            append(error.localizedDescription, stream: .stderr, to: session)
+            mirrorForeground(session)
+            return false
+        }
     }
 
     /// Resets the published console fields to reflect `session` as the run the single-pane
@@ -1466,6 +1589,9 @@ final class MereRunController: ObservableObject {
     /// that session is the foreground one.
     private func append(_ text: String, stream: LogStream, to session: RunSession) {
         if stream == .stdout {
+            if session.spec.template.id == .videoSession {
+                consumeVideoSessionOutput(text, session: session)
+            }
             session.stdoutBuffer += text
             session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
             session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
@@ -1491,6 +1617,10 @@ final class MereRunController: ObservableObject {
         } else if stream == .stderr {
             session.stderrBuffer += text
             session.stderrBuffer = Self.trimmed(session.stderrBuffer, toByteLimit: Self.stderrBufferByteLimit)
+            if session.spec.template.id == .videoSession,
+               text.localizedCaseInsensitiveContains("session ready") {
+                session.status = "Resident session ready"
+            }
         }
 
         let normalized = text
@@ -1513,6 +1643,42 @@ final class MereRunController: ObservableObject {
             session.logs.removeFirst(session.logs.count - Self.logLineLimit)
         }
         mirrorForeground(session)
+    }
+
+    private func consumeVideoSessionOutput(_ text: String, session: RunSession) {
+        session.interactiveOutputBuffer += text
+        let lines = session.interactiveOutputBuffer.components(separatedBy: .newlines)
+        session.interactiveOutputBuffer = lines.last ?? ""
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        for line in lines.dropLast() {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let data = trimmed.data(using: .utf8),
+                  let response = try? decoder.decode(StudioVideoSessionResponse.self, from: data) else {
+                continue
+            }
+
+            if response.status == "result", let output = response.output {
+                let url = URL(fileURLWithPath: output)
+                session.lastOutputURL = url
+                session.status = "Generated: \(url.lastPathComponent)"
+                if session.id == foregroundSessionID {
+                    lastOutputURL = url
+                }
+            } else if response.status == "error" {
+                session.status = "Resident render failed"
+                if let error = response.error, !error.isBlank {
+                    session.logs.append(LogLine(stream: .stderr, text: error))
+                }
+            }
+        }
+    }
+
+    private func expandedOptionalPath(_ path: String) -> String? {
+        guard !path.isBlank else { return nil }
+        return NSString(string: path).expandingTildeInPath
     }
 
     /// Appends a controller-level message (install, camera, queue notices) directly to the
@@ -1667,7 +1833,8 @@ final class MereRunController: ObservableObject {
             executableURL: launch.executableURL,
             arguments: processArgs,
             currentDirectoryURL: workingDirectoryURL(),
-            environment: processEnvironment(templateID: templateID, draft: environmentDraft)
+            environment: processEnvironment(templateID: templateID, draft: environmentDraft),
+            keepsStandardInputOpen: templateID == .videoSession
         )
     }
 

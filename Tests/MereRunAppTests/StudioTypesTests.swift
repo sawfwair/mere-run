@@ -1,4 +1,5 @@
 @testable import MereRunApp
+import MereRunContract
 import XCTest
 
 final class StudioTypesTests: XCTestCase {
@@ -421,18 +422,128 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(args.contains("--no-timestamps"))
     }
 
-    func testVideoSchemaExposesVariantFpsFrames() throws {
+    func testVideoSchemaUsesTypedProductSelectionAndNeverLegacyVariant() throws {
         var draft = StudioDraft()
         draft.reset(for: .video)
         draft.prompt = "a wave"
-        draft.variant = "full"
+        draft.videoQuality = .final
+        draft.videoOutputMode = .videoOnly
         draft.fps = 30
         draft.numFrames = 120
         let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
         let args = request.template.arguments(from: request.draft)
-        assertPair(args, "--variant", "full")
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--output-mode", "video-only")
         assertPair(args, "--fps", "30")
         assertPair(args, "--num-frames", "120")
+        XCTAssertFalse(args.contains("--variant"))
+    }
+
+    func testVideoStudioBuildsNativeAudioAndEndKeyframeConditioning() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a kinetic live performance"
+        draft.inputPath = "/tmp/start.png"
+        draft.endImagePath = "/tmp/end.png"
+        draft.endImageStrength = 0.8
+        draft.audioPath = "/tmp/song.wav"
+        draft.audioStartTime = 30
+        draft.useDuration = true
+        draft.durationSeconds = 5
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--output-mode", "audio-video")
+        assertPair(args, "--audio", "/tmp/song.wav")
+        assertPair(args, "--audio-start-time", "30")
+        assertPair(args, "--image", "/tmp/start.png")
+        assertPair(args, "--end-image", "/tmp/end.png")
+        assertPair(args, "--end-image-strength", "0.8")
+        assertPair(args, "--duration", "5")
+        XCTAssertFalse(args.contains("--num-frames"))
+    }
+
+    func testVideoWanRequestOmitsLTXProductSelectors() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "the camera walks forward"
+        draft.model = "video-wan22-ti2v-5b-mlx"
+        draft.inputPath = "/tmp/frame.png"
+        draft.steps = 40
+        draft.cfgScale = 5
+        draft.scheduleShift = 5
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        XCTAssertFalse(args.contains("--quality"))
+        XCTAssertFalse(args.contains("--output-mode"))
+        assertPair(args, "--steps", "40")
+        assertPair(args, "--guidance-scale", "5")
+        assertPair(args, "--shift", "5")
+    }
+
+    func testVideoAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a performance"
+        draft.inputPath = "/tmp/start.png"
+        draft.endImagePath = "/tmp/end.png"
+        draft.audioPath = "/tmp/song.wav"
+        draft.preflight = true
+        draft.timings = true
+        draft.timingsOutputPath = "/tmp/timings.json"
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        let declared = Set(MereRunCapabilityCatalog.videoGenerate.options.map(\.flag))
+
+        for flag in args where flag.hasPrefix("--") {
+            XCTAssertTrue(declared.contains(flag), "App emitted undeclared Video flag \(flag)")
+        }
+    }
+
+    func testGuidedAdvancedVideoWorkflowsBuildContractDeclaredCommands() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.videoAnimate, "video.animate", {
+                $0.prompt = "a dancer"
+                $0.inputPath = "/tmp/reference.png"
+                $0.referenceMaskPath = "/tmp/reference-mask.png"
+                $0.drivingVideoPath = "/tmp/driving.mp4"
+                $0.drivingMaskPath = "/tmp/driving-mask.mp4"
+            }),
+            (.videoCosmos3, "video.cosmos3", {
+                $0.prompt = "a rover"
+                $0.cosmosMode = "image-to-video"
+                $0.cosmosImagePath = "/tmp/rover.png"
+            }),
+            (.videoPrepareMasks, "video.prepare-masks", {
+                $0.inputPath = "/tmp/plan.json"
+            }),
+            (.videoExportLatents, "video.export-latents", {
+                $0.prompt = "a landscape"
+            }),
+            (.videoSession, "video.session", { _ in })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(
+                    declared.contains(flag),
+                    "\(templateID) emitted undeclared flag \(flag)"
+                )
+            }
+        }
     }
 
     func testSchemaDefaultsMatchTemplateDraftSoSurfacesDoNotDrift() {

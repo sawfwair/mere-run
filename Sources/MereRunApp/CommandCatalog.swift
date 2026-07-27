@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 import UniformTypeIdentifiers
 
 enum CommandCategory: String, CaseIterable, Identifiable {
@@ -51,7 +52,11 @@ enum CommandTemplateID: String, CaseIterable {
     case musicTranscribe
     case musicRealtime
     case videoGenerate
+    case videoAnimate
+    case videoCosmos3
+    case videoPrepareMasks
     case videoExportLatents
+    case videoSession
     case sfxGenerate
     case sfxVideo
     case sfxAEEncode
@@ -201,11 +206,43 @@ struct CommandDraft: Equatable {
     var durationSeconds = 10.0
     var fps = 24
     var numFrames = 65
+    var useDuration = false
     var host = "127.0.0.1"
     var port = 8080
     var apiKey = ""
     var engine = StudioChatDefaults.fallbackServingEngine
-    var variant = "distilled"
+    var videoQuality: LTXVideoQuality = .final
+    var videoOutputMode: LTXVideoOutputMode = .videoOnly
+    var audioPath = ""
+    var audioStartTime = 0.0
+    var endImagePath = ""
+    var endImageStrength = 1.0
+    var scheduleShift = 5.0
+    var a2vGuidanceScale = 3.0
+    var videoCFGGuidanceScale = 3.0
+    var audioCFGGuidanceScale = 7.0
+    var v2aGuidanceScale = 3.0
+    var a2vSteps = 30
+    var preflight = false
+    var timings = false
+    var timingsOutputPath = ""
+    var modelRoot = ""
+    var referenceMaskPath = ""
+    var drivingVideoPath = ""
+    var drivingMaskPath = ""
+    var videoTaskMode = "animation"
+    var renderProfile = "fast"
+    var sampler = "unipc"
+    var segmentLength = 81
+    var segmentOverlap = 5
+    var tailPolicy = "drop"
+    var audioSource = "none"
+    var cosmosMode = "text-to-video"
+    var cosmosImagePath = ""
+    var cosmosVideoPath = ""
+    var actionsOutputPath = ""
+    var schedule = "nvidia"
+    var previewFrame = ""
     var backend = "auto"
     var task = "transcribe"
     var language = "auto"
@@ -223,6 +260,7 @@ struct CommandDraft: Equatable {
     var sandboxDir = ""
     var setupMode = "agent"
     var agentModel = "tier"
+    var variant = "zimage"
     var quiet = false
     var force = false
     var all = false
@@ -311,7 +349,27 @@ struct CommandTemplate: Identifiable, Equatable {
         case .videoGenerate:
             draft.width = 768
             draft.height = 512
+            draft.steps = 40
+            draft.cfgScale = 5
+            draft.videoQuality = .final
+            draft.videoOutputMode = .videoOnly
+        case .videoAnimate:
+            draft.width = 832
+            draft.height = 480
+            draft.steps = 40
+            draft.cfgScale = 5
+            draft.scheduleShift = 3
+            draft.fps = 16
+            draft.seed = "42"
+        case .videoCosmos3:
+            draft.width = 1280
+            draft.height = 720
+            draft.numFrames = 189
             draft.steps = 0
+            draft.cfgScale = 0
+            draft.scheduleShift = 0
+            draft.fps = 0
+            draft.seed = "0"
         case .videoExportLatents:
             draft.width = 768
             draft.height = 512
@@ -369,6 +427,24 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelInfo:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Model id or local model path is required."
+            }
+        case .videoGenerate:
+            if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
+                return "A start image is required when an end keyframe is selected."
+            }
+        case .videoAnimate:
+            if draft.referenceMaskPath.isBlank {
+                return "Reference mask path is required."
+            }
+            if draft.drivingVideoPath.isBlank {
+                return "Driving video path is required."
+            }
+            if draft.drivingMaskPath.isBlank {
+                return "Driving mask path is required."
+            }
+        case .videoPrepareMasks:
+            if draft.outputPath.isBlank {
+                return "Output directory is required."
             }
         case .custom:
             if ShellWords.split(draft.extraArguments).isEmpty {
@@ -604,10 +680,126 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["video", "generate", draft.prompt]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            args += ["--variant", draft.variant, "--width", String(draft.width), "--height", String(draft.height)]
-            args += ["--num-frames", String(draft.numFrames), "--fps", String(draft.fps)]
+            let isWan = draft.model.localizedCaseInsensitiveContains("wan")
+            if !isWan {
+                let quality = draft.audioPath.isBlank ? draft.videoQuality : .final
+                let outputMode = draft.audioPath.isBlank ? draft.videoOutputMode : .audioVideo
+                args += ["--quality", quality.rawValue, "--output-mode", outputMode.rawValue]
+            }
+            args += ["--width", String(draft.width), "--height", String(draft.height)]
+            if draft.useDuration {
+                args += ["--duration", format(draft.durationSeconds)]
+            } else {
+                args += ["--num-frames", String(draft.numFrames)]
+            }
+            args += ["--fps", String(draft.fps)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
+            if isWan {
+                args += [
+                    "--steps", String(draft.steps),
+                    "--guidance-scale", format(draft.cfgScale),
+                    "--shift", format(draft.scheduleShift)
+                ]
+            }
+            if !draft.audioPath.isBlank {
+                args += [
+                    "--audio", draft.audioPath,
+                    "--audio-start-time", format(draft.audioStartTime),
+                    "--a2v-guidance-scale", format(draft.a2vGuidanceScale),
+                    "--video-cfg-guidance-scale", format(draft.videoCFGGuidanceScale),
+                    "--audio-cfg-guidance-scale", format(draft.audioCFGGuidanceScale),
+                    "--v2a-guidance-scale", format(draft.v2aGuidanceScale),
+                    "--a2v-steps", String(draft.a2vSteps)
+                ]
+            }
             if !draft.inputPath.isBlank { args += ["--image", draft.inputPath, "--image-strength", format(draft.strength)] }
+            if !draft.endImagePath.isBlank {
+                args += [
+                    "--end-image", draft.endImagePath,
+                    "--end-image-strength", format(draft.endImageStrength)
+                ]
+            }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
+            if draft.timings { args.append("--timings") }
+            if !draft.timingsOutputPath.isBlank {
+                args += ["--timings-output", draft.timingsOutputPath]
+            }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoAnimate:
+            args = [
+                "video", "animate", draft.prompt,
+                "--reference", draft.inputPath,
+                "--reference-mask", draft.referenceMaskPath,
+                "--driving-video", draft.drivingVideoPath,
+                "--driving-mask", draft.drivingMaskPath,
+                "--output", draft.outputPath,
+                "--mode", draft.videoTaskMode,
+                "--profile", draft.renderProfile,
+                "--width", String(draft.width),
+                "--height", String(draft.height),
+                "--fps", String(draft.fps),
+                "--segment-length", String(draft.segmentLength),
+                "--segment-overlap", String(draft.segmentOverlap),
+                "--tail-policy", draft.tailPolicy,
+                "--audio-source", draft.audioSource
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
+            if draft.renderProfile == "quality" {
+                args += [
+                    "--steps", String(draft.steps),
+                    "--guidance-scale", format(draft.cfgScale),
+                    "--shift", format(draft.scheduleShift),
+                    "--sampler", draft.sampler
+                ]
+            }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoCosmos3:
+            args = [
+                "video", "cosmos3", draft.prompt,
+                "--mode", draft.cosmosMode,
+                "--output", draft.outputPath,
+                "--width", String(draft.width),
+                "--height", String(draft.height),
+                "--num-frames", String(draft.numFrames),
+                "--schedule", draft.schedule
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.cosmosImagePath.isBlank { args += ["--image", draft.cosmosImagePath] }
+            if !draft.cosmosVideoPath.isBlank { args += ["--video", draft.cosmosVideoPath] }
+            if !draft.actionsOutputPath.isBlank { args += ["--actions-output", draft.actionsOutputPath] }
+            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
+            if draft.steps > 0 { args += ["--steps", String(draft.steps)] }
+            if draft.cfgScale > 0 { args += ["--guidance-scale", format(draft.cfgScale)] }
+            if draft.scheduleShift > 0 { args += ["--shift", format(draft.scheduleShift)] }
+            if draft.fps > 0 { args += ["--fps", String(draft.fps)] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoPrepareMasks:
+            args = [
+                "video", "prepare-masks",
+                "--plan", draft.inputPath,
+                "--output-dir", draft.outputPath
+            ]
+            if !draft.previewFrame.isBlank { args += ["--preview-frame", draft.previewFrame] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .videoExportLatents:
@@ -617,6 +809,12 @@ struct CommandTemplate: Identifiable, Equatable {
             args += ["--width", String(draft.width), "--height", String(draft.height)]
             args += ["--num-frames", String(draft.numFrames)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoSession:
+            args = ["video", "session"]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
             if draft.quiet { args.append("--quiet") }
 
         case .sfxGenerate:
@@ -1000,13 +1198,49 @@ enum CommandCatalog {
             id: .videoGenerate,
             category: .media,
             title: "Generate video",
-            subtitle: "Native LTX draft or unified AV generation",
+            subtitle: "LTX or Wan text, image, keyframe, and audio generation",
             systemImage: "film",
             promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
             inputKind: .image,
             outputKind: .file("mp4"),
             defaultPrompt: "a cinematic drone flythrough over snowy mountains",
-            defaultModel: "video-ltx23-av-mlx"
+            defaultModel: "video-ltx23-full-mlx"
+        ),
+        CommandTemplate(
+            id: .videoAnimate,
+            category: .media,
+            title: "Animate subject",
+            subtitle: "SCAIL-2 animation and replacement",
+            systemImage: "figure.walk.motion",
+            promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
+            inputKind: .image,
+            outputKind: .file("mp4"),
+            defaultPrompt: "a dancer in a red silk dress",
+            defaultModel: "video-scail2-14b-mlx"
+        ),
+        CommandTemplate(
+            id: .videoCosmos3,
+            category: .media,
+            title: "Cosmos3",
+            subtitle: "Generation, dynamics, policy, and reasoning",
+            systemImage: "sparkles.tv",
+            promptLabel: "Prompt or action task",
+            secondaryLabel: "Negative prompt",
+            outputKind: .file("mp4"),
+            defaultPrompt: "a cinematic rover crossing a windswept alien plain",
+            defaultModel: "video-cosmos3-edge-mlx"
+        ),
+        CommandTemplate(
+            id: .videoPrepareMasks,
+            category: .media,
+            title: "Prepare SCAIL-2 masks",
+            subtitle: "SAM 3.1 mask-plan preparation",
+            systemImage: "square.stack.3d.up",
+            inputKind: .file([.json]),
+            outputKind: .directory,
+            defaultModel: "vision-segment-sam31"
         ),
         CommandTemplate(
             id: .videoExportLatents,
@@ -1018,6 +1252,14 @@ enum CommandCatalog {
             outputKind: .file("safetensors"),
             defaultPrompt: "a cinematic drone flythrough over snowy mountains",
             defaultModel: "video-ltx-av"
+        ),
+        CommandTemplate(
+            id: .videoSession,
+            category: .media,
+            title: "Resident LTX session",
+            subtitle: "Keep LTX 2.3 warm for JSONL requests",
+            systemImage: "bolt.horizontal.circle",
+            defaultModel: "video-ltx23-full-mlx"
         ),
         CommandTemplate(
             id: .sfxGenerate,

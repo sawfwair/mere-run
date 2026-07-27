@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 import UniformTypeIdentifiers
 
 enum StudioMode: String, CaseIterable, Codable, Identifiable {
@@ -300,7 +301,22 @@ struct StudioDraft: Codable, Equatable {
     var backend = "auto"
     var fps = 24
     var numFrames = 65
-    var variant = "distilled"
+    var useDuration = false
+    var videoQuality: LTXVideoQuality = .final
+    var videoOutputMode: LTXVideoOutputMode = .videoOnly
+    var audioPath = ""
+    var audioStartTime = 0.0
+    var endImagePath = ""
+    var endImageStrength = 1.0
+    var scheduleShift = 5.0
+    var a2vGuidanceScale = 3.0
+    var videoCFGGuidanceScale = 3.0
+    var audioCFGGuidanceScale = 7.0
+    var v2aGuidanceScale = 3.0
+    var a2vSteps = 30
+    var preflight = false
+    var timings = false
+    var timingsOutputPath = ""
 
     mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
@@ -310,7 +326,7 @@ struct StudioDraft: Codable, Equatable {
         model = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
         width = mode == .video ? 768 : 1024
         height = mode == .video ? 512 : 1024
-        steps = mode == .music ? 8 : 4
+        steps = mode == .music ? 8 : mode == .video ? 40 : 4
         seed = ""
         durationSeconds = 10
         readImageAction = .inspect
@@ -327,7 +343,22 @@ struct StudioDraft: Codable, Equatable {
         backend = base?.backend ?? "auto"
         fps = base?.fps ?? 24
         numFrames = base?.numFrames ?? 65
-        variant = base?.variant ?? "distilled"
+        useDuration = base?.useDuration ?? false
+        videoQuality = base?.videoQuality ?? .final
+        videoOutputMode = base?.videoOutputMode ?? .videoOnly
+        audioPath = ""
+        audioStartTime = base?.audioStartTime ?? 0
+        endImagePath = ""
+        endImageStrength = base?.endImageStrength ?? 1
+        scheduleShift = base?.scheduleShift ?? 5
+        a2vGuidanceScale = base?.a2vGuidanceScale ?? 3
+        videoCFGGuidanceScale = base?.videoCFGGuidanceScale ?? 3
+        audioCFGGuidanceScale = base?.audioCFGGuidanceScale ?? 7
+        v2aGuidanceScale = base?.v2aGuidanceScale ?? 3
+        a2vSteps = base?.a2vSteps ?? 30
+        preflight = false
+        timings = false
+        timingsOutputPath = ""
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -381,7 +412,6 @@ enum StudioOptionSchema {
             ]
         case .video:
             return [
-                StudioOptionField(id: "variant", label: "Variant", control: .text(\.variant, placeholder: "distilled")),
                 StudioOptionField(id: "fps", label: "Frames per second", control: .int(\.fps, range: 1...60, step: 1)),
                 StudioOptionField(id: "numFrames", label: "Frames", control: .int(\.numFrames, range: 1...600, step: 1)),
                 StudioOptionField(id: "strength", label: "Image strength", control: .double(\.strength)),
@@ -529,15 +559,32 @@ enum StudioCommandAdapter {
 
         case .video:
             draft.prompt = prompt
+            draft.secondaryText = secondary
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.width = studioDraft.width
             draft.height = studioDraft.height
             draft.seed = studioDraft.seed
-            draft.variant = studioDraft.variant
             draft.fps = studioDraft.fps
             draft.numFrames = studioDraft.numFrames
+            draft.useDuration = studioDraft.useDuration
+            draft.durationSeconds = studioDraft.durationSeconds
             draft.strength = studioDraft.strength
+            draft.videoQuality = studioDraft.videoQuality
+            draft.videoOutputMode = studioDraft.videoOutputMode
+            draft.audioPath = studioDraft.audioPath
+            draft.audioStartTime = studioDraft.audioStartTime
+            draft.endImagePath = studioDraft.endImagePath
+            draft.endImageStrength = studioDraft.endImageStrength
+            draft.scheduleShift = studioDraft.scheduleShift
+            draft.a2vGuidanceScale = studioDraft.a2vGuidanceScale
+            draft.videoCFGGuidanceScale = studioDraft.videoCFGGuidanceScale
+            draft.audioCFGGuidanceScale = studioDraft.audioCFGGuidanceScale
+            draft.v2aGuidanceScale = studioDraft.v2aGuidanceScale
+            draft.a2vSteps = studioDraft.a2vSteps
+            draft.preflight = studioDraft.preflight
+            draft.timings = studioDraft.timings
+            draft.timingsOutputPath = studioDraft.timingsOutputPath
 
         case .sfx:
             draft.prompt = prompt
