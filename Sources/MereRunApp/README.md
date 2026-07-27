@@ -59,3 +59,11 @@ typed per-model runtime policy. Server credentials are passed through
 `MERERUN_API_KEY`, not process arguments. Visual Graph v2 authoring and fleet
 policy stay in their canonical products: the app links directly to Graph
 Studio and the Node/Relay console instead of reimplementing those surfaces.
+
+Models, Setup, Speech, SFX, plugins, the Qwen3.6 benchmark, API serving, and
+Open WebUI also use contract-backed typed forms. The run console recognizes
+adapter catalogs and structured JSON receipts, and can copy or save a receipt.
+Hugging Face tokens, API keys, and the Open WebUI admin password cross the
+process boundary through environment variables instead of appearing in argv.
+The executable contract test requires every local Advanced template and every
+app-owned guide/config helper to resolve to a CLI help-verified capability.

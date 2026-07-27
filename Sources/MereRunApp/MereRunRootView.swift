@@ -461,6 +461,12 @@ private struct CommandEditor: View {
             ModelRuntimePolicyOptions()
         case .sfxGenerate, .sfxVideo:
             SFXOptions()
+        case .modelBenchmark:
+            ModelBenchmarkOptions()
+        case .pluginList, .pluginInstall, .pluginDoctor:
+            PluginOptions()
+        case .openWebui:
+            OpenWebUIOptions()
         case .apiServe:
             APIOptions()
         case .setup:
@@ -624,6 +630,25 @@ private struct RunConsole: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+                if !controller.logs.isEmpty {
+                    Button {
+                        copyConsole()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Copy run output")
+                    .accessibilityLabel("Copy run output")
+
+                    Button {
+                        saveConsole()
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Save run receipt")
+                    .accessibilityLabel("Save run receipt")
+                }
             }
             .padding(18)
 
@@ -669,6 +694,18 @@ private struct RunConsole: View {
                 }
             }
 
+            if let catalog = adapterCatalog {
+                Divider()
+                    .overlay(MereRunTheme.border.opacity(0.6))
+                AdapterCatalogPreview(catalog: catalog)
+                    .padding(14)
+            } else if let json = prettyJSON {
+                Divider()
+                    .overlay(MereRunTheme.border.opacity(0.6))
+                StructuredReceiptPreview(json: json)
+                    .padding(14)
+            }
+
             if let output = controller.lastOutputURL {
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.6))
@@ -685,6 +722,190 @@ private struct RunConsole: View {
         case .stdout: return MereRunTheme.green
         case .stderr: return MereRunTheme.yellow
         }
+    }
+
+    private var consoleText: String {
+        controller.logs.map { "[\($0.stream.label)] \($0.text)" }.joined(separator: "\n")
+    }
+
+    private var resultText: String? {
+        controller.lastRunResult?.outputText?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var prettyJSON: String? {
+        guard let resultText, let data = resultText.data(using: .utf8),
+              let value = try? JSONDecoder().decode(StudioJSONValue.self, from: data) else {
+            return nil
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        guard let pretty = try? encoder.encode(value) else { return nil }
+        return String(decoding: pretty, as: UTF8.self)
+    }
+
+    private var adapterCatalog: StudioAdapterCatalog? {
+        guard controller.lastRunResult?.templateID == .adapterList,
+              let resultText,
+              let data = resultText.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(StudioAdapterCatalog.self, from: data)
+    }
+
+    private func copyConsole() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prettyJSON ?? resultText ?? consoleText, forType: .string)
+    }
+
+    private func saveConsole() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = prettyJSON == nil ? "mere-run-receipt.txt" : "mere-run-receipt.json"
+        panel.allowedContentTypes = prettyJSON == nil ? [.plainText] : [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? (prettyJSON ?? resultText ?? consoleText).write(to: url, atomically: true, encoding: .utf8)
+    }
+}
+
+private enum StudioJSONValue: Codable {
+    case object([String: StudioJSONValue])
+    case array([StudioJSONValue])
+    case string(String)
+    case number(Double)
+    case boolean(Bool)
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .boolean(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([String: StudioJSONValue].self) {
+            self = .object(value)
+        } else if let value = try? container.decode([StudioJSONValue].self) {
+            self = .array(value)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unsupported JSON value."
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .object(let value): try container.encode(value)
+        case .array(let value): try container.encode(value)
+        case .string(let value): try container.encode(value)
+        case .number(let value): try container.encode(value)
+        case .boolean(let value): try container.encode(value)
+        case .null: try container.encodeNil()
+        }
+    }
+}
+
+private struct StudioAdapterCatalog: Decodable {
+    let adapterStore: String
+    let adapters: [StudioAdapterCatalogItem]
+}
+
+private struct StudioAdapterCatalogItem: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let version: String
+    let summary: String
+    let baseModelID: String
+    let license: String
+    let byteCount: Int64
+    let installed: Bool
+    let path: String?
+}
+
+private struct AdapterCatalogPreview: View {
+    let catalog: StudioAdapterCatalog
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Verified adapters", systemImage: "slider.horizontal.3")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Text("\(catalog.adapters.count)")
+                    .font(MereRunTheme.monoFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(catalog.adapters) { adapter in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(adapter.title)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(adapter.version)
+                                    .font(MereRunTheme.captionFont)
+                                    .foregroundStyle(MereRunTheme.textMuted)
+                                Spacer()
+                                Label(
+                                    adapter.installed ? "Installed" : "Available",
+                                    systemImage: adapter.installed
+                                        ? "checkmark.circle.fill"
+                                        : "arrow.down.circle"
+                                )
+                                .font(MereRunTheme.captionFont)
+                                .foregroundStyle(adapter.installed ? MereRunTheme.green : MereRunTheme.accent)
+                            }
+                            Text(adapter.id)
+                                .font(MereRunTheme.monoFont)
+                                .textSelection(.enabled)
+                            Text(adapter.summary)
+                                .font(MereRunTheme.captionFont)
+                                .foregroundStyle(MereRunTheme.textSecondary)
+                            Text("\(adapter.baseModelID) · \(adapter.license) · \(ByteCountFormatter.string(fromByteCount: adapter.byteCount, countStyle: .file))")
+                                .font(MereRunTheme.captionFont)
+                                .foregroundStyle(MereRunTheme.textMuted)
+                            if let path = adapter.path {
+                                Text(path)
+                                    .font(MereRunTheme.monoFont)
+                                    .foregroundStyle(MereRunTheme.textMuted)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .padding(10)
+                        .merePanel()
+                    }
+                }
+            }
+            .frame(maxHeight: 260)
+            Text(catalog.adapterStore)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+private struct StructuredReceiptPreview: View {
+    let json: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Structured receipt", systemImage: "curlybraces")
+                .font(.system(size: 13, weight: .semibold))
+            ScrollView([.horizontal, .vertical]) {
+                Text(json)
+                    .font(MereRunTheme.monoFont)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 260)
+        }
+        .padding(10)
+        .merePanel()
     }
 }
 
@@ -1714,6 +1935,14 @@ private struct SpeechOptions: View {
                     Toggle("Stream", isOn: $controller.draft.stream)
                     Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
+                if controller.draft.stream {
+                    NumberStepper(
+                        title: "Chunk tokens",
+                        value: $controller.draft.speechStreamChunkTokens,
+                        range: 1...4_096,
+                        step: 1
+                    )
+                }
             }
         }
     }
@@ -1745,6 +1974,35 @@ private struct SpeechTranscribeOptions: View {
                     Toggle("Stream", isOn: $controller.draft.stream)
                     Toggle("Timestamps", isOn: $controller.draft.timestamps)
                     Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+                if controller.draft.stream {
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Feed ms",
+                            value: $controller.draft.speechStreamChunkMS,
+                            range: 1...60_000,
+                            step: 50
+                        )
+                        NumberStepper(
+                            title: "Decode ms",
+                            value: $controller.draft.speechStreamDecodeMS,
+                            range: 1...60_000,
+                            step: 100
+                        )
+                        Toggle("JSON Lines events", isOn: $controller.draft.speechJSONL)
+                    }
+                    AdaptiveControlRow {
+                        TextField("Raw stdin format (optional)", text: $controller.draft.speechInputFormat)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        NumberStepper(
+                            title: "Sample rate",
+                            value: $controller.draft.speechSampleRate,
+                            range: 1...192_000,
+                            step: 1_000
+                        )
+                    }
                 }
             }
         }
@@ -2908,6 +3166,38 @@ private struct SFXOptions: View {
                     .textFieldStyle(.plain)
                     .padding(10)
                     .merePanel()
+                TextField("Renoise amount or schedule (optional)", text: $controller.draft.sfxRenoise)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                if controller.selectedTemplate.id == .sfxVideo {
+                    TextField(
+                        "Synchformer model id or path",
+                        text: $controller.draft.sfxSynchformerModel
+                    )
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Sync batch",
+                            value: $controller.draft.sfxSyncBatchSize,
+                            range: 1...256,
+                            step: 1
+                        )
+                        NumberStepper(
+                            title: "CLIP batch",
+                            value: $controller.draft.sfxClipBatchSize,
+                            range: 1...256,
+                            step: 1
+                        )
+                    }
+                    AdaptiveControlRow {
+                        Toggle("Preflight", isOn: $controller.draft.preflight)
+                        Toggle("JSON", isOn: $controller.draft.json)
+                            .disabled(!controller.draft.preflight)
+                    }
+                }
                 Toggle("Quiet", isOn: $controller.draft.quiet)
             }
         }
@@ -3651,6 +3941,233 @@ private struct ModelRuntimePolicyOptions: View {
     }
 }
 
+private struct ModelBenchmarkOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        VStack(spacing: 14) {
+            EditorSection("Prompt matrix") {
+                VStack(spacing: 10) {
+                    TextEditor(text: $controller.draft.prompt)
+                        .font(MereRunTheme.bodyFont)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 72)
+                        .padding(8)
+                        .merePanel()
+                    PathField(
+                        path: $controller.draft.modelRoot,
+                        placeholder: "Model root override (optional)",
+                        mode: .openDirectory
+                    )
+                    PathField(
+                        path: $controller.draft.benchmarkPromptFile,
+                        placeholder: "Prompt file (optional)",
+                        mode: .openFile([.plainText])
+                    )
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Prompt repeats",
+                            value: $controller.draft.benchmarkPromptRepeat,
+                            range: 1...100_000,
+                            step: 1
+                        )
+                        TextField(
+                            "Repeat matrix (comma-separated)",
+                            text: $controller.draft.benchmarkPromptRepeatValues
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    }
+                }
+            }
+            EditorSection("Decode matrix") {
+                VStack(spacing: 10) {
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Decode tokens",
+                            value: $controller.draft.benchmarkDecodeTokens,
+                            range: 1...1_048_576,
+                            step: 1
+                        )
+                        TextField(
+                            "Decode matrix (comma-separated)",
+                            text: $controller.draft.benchmarkDecodeTokenValues
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    }
+                    AdaptiveControlRow {
+                        NumberField(title: "Temperature", value: $controller.draft.temperature)
+                        TextField(
+                            "Temperature matrix (comma-separated)",
+                            text: $controller.draft.benchmarkTemperatureValues
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                        NumberField(title: "Top-p", value: $controller.draft.topP)
+                    }
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Context",
+                            value: $controller.draft.contextSize,
+                            range: 1_024...1_048_576,
+                            step: 1_024
+                        )
+                        TextField(
+                            "MTP block size override",
+                            text: $controller.draft.benchmarkMTPBlockSize
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                        NumberStepper(
+                            title: "Forced MTP min prompt",
+                            value: $controller.draft.benchmarkForcedMTPMinPromptTokens,
+                            range: 1...1_048_576,
+                            step: 1
+                        )
+                    }
+                    Toggle("Structured JSON", isOn: $controller.draft.json)
+                }
+            }
+        }
+    }
+}
+
+private struct PluginOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Plugin catalog") {
+            VStack(spacing: 10) {
+                TextField("Catalog URL or local JSON (optional)", text: $controller.draft.pluginCatalogURL)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                if controller.selectedTemplate.id == .pluginInstall {
+                    TextField("Install channel (optional)", text: $controller.draft.pluginChannel)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    AdaptiveControlRow {
+                        Toggle("Execute install", isOn: $controller.draft.all)
+                        Toggle("Force pipx install", isOn: $controller.draft.force)
+                    }
+                } else if controller.selectedTemplate.id == .pluginList {
+                    Toggle("Structured JSON", isOn: $controller.draft.json)
+                }
+            }
+        }
+    }
+}
+
+private struct OpenWebUIOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        VStack(spacing: 14) {
+            EditorSection("Services") {
+                VStack(spacing: 10) {
+                    Picker("API engine", selection: $controller.draft.engine) {
+                        Text("Automatic").tag("")
+                        Text("Gemma4").tag("text-chat-gemma4")
+                        Text("Qwen 3.6").tag("text-chat-q36")
+                        Text("Klein").tag("text-chat-klein")
+                        Text("LFM2").tag("text-chat-lfm2")
+                        Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
+                    }
+                    AdaptiveControlRow {
+                        TextField("API host", text: $controller.draft.host)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        NumberStepper(
+                            title: "API port",
+                            value: $controller.draft.port,
+                            range: 1...65_535,
+                            step: 1
+                        )
+                    }
+                    AdaptiveControlRow {
+                        TextField("WebUI host", text: $controller.draft.openWebUIHost)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        NumberStepper(
+                            title: "WebUI port",
+                            value: $controller.draft.openWebUIPort,
+                            range: 1...65_535,
+                            step: 1
+                        )
+                    }
+                    SecureField("API key", text: $controller.draft.apiKey)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+            }
+            EditorSection("Model suite") {
+                VStack(spacing: 10) {
+                    TextField("Vision model", text: $controller.draft.openWebUIVisionModel)
+                    TextField("Embedding model", text: $controller.draft.openWebUIEmbeddingModel)
+                    TextField("Image model", text: $controller.draft.openWebUIImageModel)
+                    TextField("TTS model", text: $controller.draft.openWebUITTSModel)
+                    TextField("STT model", text: $controller.draft.openWebUISTTModel)
+                    Picker("TTS format", selection: $controller.draft.openWebUITTSFormat) {
+                        ForEach(["wav", "mp3", "flac", "opus", "aac", "pcm"], id: \.self) {
+                            Text($0.uppercased()).tag($0)
+                        }
+                    }
+                }
+                .textFieldStyle(.plain)
+                .padding(10)
+                .merePanel()
+            }
+            EditorSection("Container") {
+                VStack(spacing: 10) {
+                    TextField("Container name", text: $controller.draft.openWebUIContainerName)
+                    TextField("Volume name", text: $controller.draft.openWebUIVolumeName)
+                    TextField("Docker image", text: $controller.draft.openWebUIImage)
+                    TextField("Admin email", text: $controller.draft.openWebUIAdminEmail)
+                    SecureField("Admin password", text: $controller.draft.openWebUIAdminPassword)
+                }
+                .textFieldStyle(.plain)
+                .padding(10)
+                .merePanel()
+                NumberStepper(
+                    title: "Health wait seconds",
+                    value: $controller.draft.openWebUIWaitSeconds,
+                    range: 1...3_600,
+                    step: 5
+                )
+            }
+            EditorSection("Launch policy") {
+                VStack(alignment: .leading, spacing: 10) {
+                    AdaptiveControlRow {
+                        Toggle("Pull models", isOn: $controller.draft.openWebUIPull)
+                        Toggle("Skip API server", isOn: $controller.draft.openWebUISkipServer)
+                        Toggle("Skip Docker", isOn: $controller.draft.openWebUISkipDocker)
+                        Toggle("Skip configure", isOn: $controller.draft.openWebUISkipConfigure)
+                    }
+                    AdaptiveControlRow {
+                        Toggle("Reset container & volume", isOn: $controller.draft.openWebUIReset)
+                        Toggle("Dry run", isOn: $controller.draft.dryRun)
+                        Toggle("Quiet", isOn: $controller.draft.quiet)
+                    }
+                    Toggle(
+                        "Acknowledge third-party model terms",
+                        isOn: $controller.draft.acceptModelLicense
+                    )
+                    .toggleStyle(.checkbox)
+                }
+            }
+        }
+    }
+}
+
 private struct APIOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
@@ -3662,6 +4179,8 @@ private struct APIOptions: View {
                     Text("Chat Qwen 3.6").tag("text-chat-q36")
                     Text("Chat Klein").tag("text-chat-klein")
                     Text("Code").tag("text-code")
+                    Text("LFM2").tag("text-chat-lfm2")
+                    Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
                 }
                 .pickerStyle(.segmented)
                 AdaptiveControlRow {
@@ -3675,6 +4194,68 @@ private struct APIOptions: View {
                     .textFieldStyle(.plain)
                     .padding(10)
                     .merePanel()
+                TextField("Default adapter id or LoRA path", text: $controller.draft.apiLoRA)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Requests/min",
+                        value: $controller.draft.apiRateLimitPerMinute,
+                        range: 1...100_000,
+                        step: 1
+                    )
+                    NumberStepper(
+                        title: "Active requests",
+                        value: $controller.draft.apiMaxActiveRequests,
+                        range: 1...1_024,
+                        step: 1
+                    )
+                    NumberStepper(
+                        title: "Context",
+                        value: $controller.draft.contextSize,
+                        range: 1_024...1_048_576,
+                        step: 1_024
+                    )
+                }
+                Picker("Memory guard", selection: $controller.draft.apiMemoryGuard) {
+                    ForEach(["off", "safe", "balanced", "aggressive", "custom"], id: \.self) {
+                        Text($0.capitalized).tag($0)
+                    }
+                }
+                if controller.draft.apiMemoryGuard == "custom" {
+                    TextField(
+                        "Custom memory ceiling (GiB)",
+                        text: $controller.draft.apiMemoryGuardCustomCeilingGB
+                    )
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                }
+                AdaptiveControlRow {
+                    NumberStepper(title: "KV bits", value: $controller.draft.kvBits, range: 0...16, step: 1)
+                    TextField("KV scheme", text: $controller.draft.kvQuantScheme)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    NumberStepper(
+                        title: "KV group",
+                        value: $controller.draft.kvGroupSize,
+                        range: 0...4_096,
+                        step: 8
+                    )
+                    NumberStepper(
+                        title: "KV start",
+                        value: $controller.draft.quantizedKVStart,
+                        range: 0...1_048_576,
+                        step: 128
+                    )
+                }
+                AdaptiveControlRow {
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                }
             }
         }
     }
@@ -3706,7 +4287,14 @@ private struct AgentStartOptions: View {
                 AdaptiveControlRow {
                     Toggle("Skip server", isOn: $controller.draft.stream)
                     Toggle("Allow unsupported", isOn: $controller.draft.force)
+                    Toggle("No bootstrap", isOn: $controller.draft.noBootstrap)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
+                PathField(
+                    path: $controller.draft.piPath,
+                    placeholder: "Pi executable override (optional)",
+                    mode: .openFile([.executable])
+                )
             }
         }
     }
@@ -3733,8 +4321,26 @@ private struct SetupOptions: View {
                 AdaptiveControlRow {
                     Toggle("Install", isOn: $controller.draft.force)
                     Toggle("Start", isOn: $controller.draft.stream)
+                    Toggle("Dry run", isOn: $controller.draft.dryRun)
                     Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
+                AdaptiveControlRow {
+                    TextField("API host", text: $controller.draft.host)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    NumberStepper(
+                        title: "API port",
+                        value: $controller.draft.port,
+                        range: 1...65_535,
+                        step: 1
+                    )
+                }
+                PathField(
+                    path: $controller.draft.piPath,
+                    placeholder: "Pi executable override (optional)",
+                    mode: .openFile([.executable])
+                )
             }
         }
     }
@@ -3779,6 +4385,11 @@ private struct ModelPullOptions: View {
                 }
                 Toggle("Acknowledge third-party model terms", isOn: $controller.draft.acceptModelLicense)
                     .toggleStyle(.checkbox)
+                AdaptiveControlRow {
+                    Toggle("Preflight", isOn: $controller.draft.preflight)
+                    Toggle("JSON", isOn: $controller.draft.json)
+                        .disabled(!controller.draft.preflight)
+                }
                 Text("Required for new downloads whose owners publish non-commercial, research-only, gated, revenue-limited, or custom acceptable-use terms. The command output lists the exact model/component terms. Mere does not determine whether your intended use is permitted; you are responsible for compliance.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
@@ -3793,7 +4404,12 @@ private struct ModelMaintenanceOptions: View {
     var body: some View {
         EditorSection("Maintenance") {
             if controller.selectedTemplate.id == .modelRemove {
-                Toggle("Force", isOn: $controller.draft.force)
+                AdaptiveControlRow {
+                    Toggle("Force", isOn: $controller.draft.force)
+                    Toggle("Keep shared cache", isOn: $controller.draft.modelKeepCache)
+                    Toggle("JSON receipt", isOn: $controller.draft.modelRemovalJSON)
+                        .disabled(!controller.draft.force)
+                }
             } else {
                 Toggle("Dry run", isOn: $controller.draft.force)
             }

@@ -210,7 +210,38 @@ public enum MereRunCapabilityCatalog {
             modelStorage,
             modelGarbageCollect,
             modelRuntimeGet,
-            modelRuntimeSet
+            modelRuntimeSet,
+            setup,
+            agentOnboard,
+            agentInstallPi,
+            agentStart,
+            modelList,
+            modelCapabilities,
+            modelPull,
+            modelInfo,
+            modelRemove,
+            modelRepairManifests,
+            modelBenchmarkQ36MTP,
+            speechSynthesize,
+            speechTranscribe,
+            speechProfileList,
+            speechProfileCreate,
+            speechProfileDelete,
+            sfxGenerate,
+            sfxVideoGenerate,
+            sfxAEEncode,
+            sfxAEDecode,
+            sfxCLAPScore,
+            sfxConditionText,
+            pluginList,
+            pluginInstall,
+            pluginDoctor,
+            openWebUIQuickstart,
+            apiServe,
+            guide,
+            configSet,
+            configGet,
+            configUnset
         ]
     )
 
@@ -1613,6 +1644,539 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--clear-kv-cache-mode", label: "Clear KV cache", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
+        output: .init(kind: .text)
+    )
+
+    public static let setup = MereRunCommandCapability(
+        id: "setup",
+        command: ["setup"],
+        title: "Setup path",
+        summary: "Plan or run guided, BYOA, or manual local setup.",
+        options: [
+            .init(flag: "--mode", label: "Mode", kind: .choice, choices: ["agent", "byoa", "manual"]),
+            .init(flag: "--agent-model", label: "Agent tier", kind: .choice, choices: ["small", "tier", "premier"]),
+            .init(flag: "--install", label: "Install", kind: .boolean),
+            .init(flag: "--start", label: "Start", kind: .boolean),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--host", label: "API host", kind: .string),
+            .init(flag: "--port", label: "API port", kind: .integer),
+            .init(flag: "--pi-path", label: "Pi executable", kind: .file),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let agentOnboard = MereRunCommandCapability(
+        id: "agent.onboard",
+        command: ["agent", "onboard"],
+        title: "Agent onboarding",
+        summary: "Check readiness and prepare the optional Pi integration.",
+        options: [
+            .init(flag: "--pull-recommended", label: "Pull recommended", kind: .boolean),
+            .init(flag: "--accept-model-license", label: "Accept model terms", kind: .boolean),
+            .init(flag: "--install-pi", label: "Install Pi", kind: .boolean),
+            .init(flag: "--configure-pi", label: "Configure Pi", kind: .boolean),
+            .init(flag: "--host", label: "API host", kind: .string),
+            .init(flag: "--port", label: "API port", kind: .integer),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let agentInstallPi = MereRunCommandCapability(
+        id: "agent.install-pi",
+        command: ["agent", "install-pi"],
+        title: "Install Pi",
+        summary: "Install or replace the optional Pi setup agent.",
+        options: [
+            .init(flag: "--force", label: "Force reinstall", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let agentStart = MereRunCommandCapability(
+        id: "agent.start",
+        command: ["agent", "start"],
+        title: "Start setup agent",
+        summary: "Start a guided Pi session against the local API.",
+        options: [
+            .init(flag: "--host", label: "API host", kind: .string),
+            .init(flag: "--port", label: "API port", kind: .integer),
+            .init(flag: "--pi-path", label: "Pi executable", kind: .file),
+            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--skip-server", label: "Skip server", kind: .boolean),
+            .init(flag: "--allow-unsupported", label: "Allow unsupported", kind: .boolean),
+            .init(flag: "--no-bootstrap", label: "No bootstrap", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .service)
+    )
+
+    public static let modelList = MereRunCommandCapability(
+        id: "model.list",
+        command: ["model", "list"],
+        title: "List models",
+        summary: "List managed model install state.",
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let modelCapabilities = MereRunCommandCapability(
+        id: "model.capabilities",
+        command: ["model", "capabilities"],
+        title: "Model capabilities",
+        summary: "Inspect hardware support and setup recommendations.",
+        options: [
+            .init(flag: "--all", label: "Include unsupported", kind: .boolean),
+            .init(flag: "--recommended", label: "Recommended only", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelPull = MereRunCommandCapability(
+        id: "model.pull",
+        command: ["model", "pull"],
+        title: "Pull model",
+        summary: "Preflight or install one or all managed models.",
+        arguments: [
+            .init(name: "target", label: "Model", kind: .string, required: false)
+        ],
+        options: [
+            .init(flag: "--all", label: "All models", kind: .boolean),
+            .init(flag: "--force", label: "Force download", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
+            .init(flag: "--allow-unsupported", label: "Allow unsupported", kind: .boolean),
+            .init(flag: "--accept-model-license", label: "Accept model terms", kind: .boolean),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelInfo = MereRunCommandCapability(
+        id: "model.info",
+        command: ["model", "info"],
+        title: "Model info",
+        summary: "Inspect a model manifest and resolved components.",
+        arguments: [
+            .init(name: "target", label: "Model", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean),
+            .init(flag: "--components", label: "Components", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelRemove = MereRunCommandCapability(
+        id: "model.remove",
+        command: ["model", "remove"],
+        title: "Remove model",
+        summary: "Remove a managed model with optional cache preservation and receipt.",
+        arguments: [
+            .init(name: "target", label: "Model", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--force", label: "Force", kind: .boolean),
+            .init(flag: "--keep-cache", label: "Keep cache", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelRepairManifests = MereRunCommandCapability(
+        id: "model.repair-manifests",
+        command: ["model", "repair-manifests"],
+        title: "Repair manifests",
+        summary: "Restore missing manifests for known local models.",
+        options: [
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkQ36MTP = MereRunCommandCapability(
+        id: "model.benchmark.q36-mtp",
+        command: ["model", "benchmark", "q36-mtp"],
+        title: "Qwen3.6 MTP benchmark",
+        summary: "Run prompt, decode-length, and temperature matrices for Qwen3.6 MTP.",
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-root", label: "Model root", kind: .directory),
+            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
+            .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
+            .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),
+            .init(flag: "--decode-tokens", label: "Decode tokens", kind: .integer),
+            .init(flag: "--decode-token-values", label: "Decode matrix", kind: .string),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--temperature-values", label: "Temperature matrix", kind: .string),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--mtp-block-size", label: "MTP block", kind: .integer),
+            .init(flag: "--forced-mtp-min-prompt-tokens", label: "Forced MTP threshold", kind: .integer),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let speechSynthesize = MereRunCommandCapability(
+        id: "speech.synthesize",
+        command: ["speech", "synthesize"],
+        title: "Synthesize speech",
+        summary: "Create styled or cloned speech, including streaming output.",
+        arguments: [
+            .init(name: "text", label: "Text", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--output", label: "Output", kind: .file, required: true),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--voice", label: "Voice", kind: .string),
+            .init(flag: "--mode", label: "Mode", kind: .choice, choices: ["style", "clone"]),
+            .init(flag: "--profile", label: "Profile", kind: .string),
+            .init(flag: "--ref-audio", label: "Reference audio", kind: .file),
+            .init(flag: "--ref-text", label: "Reference text", kind: .string),
+            .init(flag: "--language", label: "Language", kind: .string),
+            .init(flag: "--save-profile", label: "Save profile", kind: .string),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--stream", label: "Stream", kind: .boolean),
+            .init(flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "wav")
+    )
+
+    public static let speechTranscribe = MereRunCommandCapability(
+        id: "speech.transcribe",
+        command: ["speech", "transcribe"],
+        title: "Transcribe speech",
+        summary: "Transcribe files or raw streaming audio with optional JSONL events.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"]),
+            .init(flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"]),
+            .init(flag: "--language", label: "Language", kind: .string),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--stream", label: "Stream", kind: .boolean),
+            .init(flag: "--stream-chunk-ms", label: "Feed interval", kind: .integer),
+            .init(flag: "--stream-decode-ms", label: "Decode interval", kind: .integer),
+            .init(flag: "--input-format", label: "Input format", kind: .string),
+            .init(flag: "--sample-rate", label: "Sample rate", kind: .integer),
+            .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean),
+            .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file)
+    )
+
+    public static let speechProfileList = MereRunCommandCapability(
+        id: "speech.profile.list",
+        command: ["speech", "profile", "list"],
+        title: "Voice profiles",
+        summary: "List saved voice-cloning profiles.",
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let speechProfileCreate = MereRunCommandCapability(
+        id: "speech.profile.create",
+        command: ["speech", "profile", "create"],
+        title: "Create voice profile",
+        summary: "Create a reusable voice-cloning profile.",
+        options: [
+            .init(flag: "--name", label: "Name", kind: .string, required: true),
+            .init(flag: "--audio", label: "Audio", kind: .file, required: true),
+            .init(flag: "--text", label: "Transcript", kind: .string),
+            .init(flag: "--language", label: "Language", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let speechProfileDelete = MereRunCommandCapability(
+        id: "speech.profile.delete",
+        command: ["speech", "profile", "delete"],
+        title: "Delete voice profile",
+        summary: "Delete one saved voice profile.",
+        options: [
+            .init(flag: "--id", label: "Profile id", kind: .string, required: true)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let sfxGenerate = MereRunCommandCapability(
+        id: "sfx.generate",
+        command: ["sfx", "generate"],
+        title: "Generate sound effect",
+        summary: "Generate a Woosh or MMAudio sound effect from text.",
+        arguments: [
+            .init(name: "prompt", label: "Prompt", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--steps", label: "Steps", kind: .integer),
+            .init(flag: "--cfg", label: "CFG", kind: .number),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--renoise", label: "Renoise", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "wav")
+    )
+
+    public static let sfxVideoGenerate = MereRunCommandCapability(
+        id: "sfx.video.generate",
+        command: ["sfx", "video", "generate"],
+        title: "Video foley",
+        summary: "Generate synchronized sound effects from video conditioning.",
+        arguments: [
+            .init(name: "prompt", label: "Prompt", kind: .string, required: true),
+            .init(name: "input", label: "Video or features", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--synchformer-model", label: "Synchformer", kind: .string),
+            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--steps", label: "Steps", kind: .integer),
+            .init(flag: "--cfg", label: "CFG", kind: .number),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--renoise", label: "Renoise", kind: .string),
+            .init(flag: "--sync-batch-size", label: "Sync batch", kind: .integer),
+            .init(flag: "--clip-batch-size", label: "CLIP batch", kind: .integer),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "wav")
+    )
+
+    public static let sfxAEEncode = MereRunCommandCapability(
+        id: "sfx.ae.encode",
+        command: ["sfx", "ae", "encode"],
+        title: "Encode SFX latents",
+        summary: "Encode audio into Woosh latent arrays.",
+        arguments: [.init(name: "input", label: "Audio", kind: .file, required: true)],
+        options: [
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "npy")
+    )
+
+    public static let sfxAEDecode = MereRunCommandCapability(
+        id: "sfx.ae.decode",
+        command: ["sfx", "ae", "decode"],
+        title: "Decode SFX latents",
+        summary: "Decode Woosh latent arrays into audio.",
+        arguments: [.init(name: "input", label: "Latents", kind: .file, required: true)],
+        options: [
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "wav")
+    )
+
+    public static let sfxCLAPScore = MereRunCommandCapability(
+        id: "sfx.clap.score",
+        command: ["sfx", "clap", "score"],
+        title: "CLAP score",
+        summary: "Score semantic alignment between a prompt and audio.",
+        arguments: [
+            .init(name: "prompt", label: "Prompt", kind: .string, required: true),
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let sfxConditionText = MereRunCommandCapability(
+        id: "sfx.condition.text",
+        command: ["sfx", "condition", "text"],
+        title: "SFX text conditioning",
+        summary: "Export text-conditioning tensors for Woosh.",
+        arguments: [.init(name: "prompt", label: "Prompt", kind: .string, required: true)],
+        options: [
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    public static let pluginList = MereRunCommandCapability(
+        id: "plugin.list",
+        command: ["plugin", "list"],
+        title: "List plugins",
+        summary: "Inspect the official or an overridden plugin catalog.",
+        options: [
+            .init(flag: "--catalog-url", label: "Catalog", kind: .string),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let pluginInstall = MereRunCommandCapability(
+        id: "plugin.install",
+        command: ["plugin", "install"],
+        title: "Install plugin",
+        summary: "Plan or execute an official plugin installation.",
+        arguments: [.init(name: "id", label: "Plugin id", kind: .string, required: true)],
+        options: [
+            .init(flag: "--catalog-url", label: "Catalog", kind: .string),
+            .init(flag: "--channel", label: "Channel", kind: .string),
+            .init(flag: "--yes", label: "Execute", kind: .boolean),
+            .init(flag: "--force", label: "Force", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let pluginDoctor = MereRunCommandCapability(
+        id: "plugin.doctor",
+        command: ["plugin", "doctor"],
+        title: "Plugin doctor",
+        summary: "Run a companion plugin's health check.",
+        arguments: [.init(name: "id", label: "Plugin id", kind: .string, required: true)],
+        options: [
+            .init(flag: "--catalog-url", label: "Catalog", kind: .string)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let openWebUIQuickstart = MereRunCommandCapability(
+        id: "open-webui.quickstart",
+        command: ["open-webui", "quickstart"],
+        title: "Open WebUI quickstart",
+        summary: "Launch and configure Open WebUI against the local API and model suite.",
+        options: [
+            .init(flag: "--host", label: "API host", kind: .string),
+            .init(flag: "--port", label: "API port", kind: .integer),
+            .init(flag: "--engine", label: "Engine", kind: .string),
+            .init(flag: "--webui-host", label: "WebUI host", kind: .string),
+            .init(flag: "--webui-port", label: "WebUI port", kind: .integer),
+            .init(flag: "--container-name", label: "Container", kind: .string),
+            .init(flag: "--volume-name", label: "Volume", kind: .string),
+            .init(flag: "--image", label: "Docker image", kind: .string),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--text-model", label: "Text model", kind: .string),
+            .init(flag: "--vision-model", label: "Vision model", kind: .string),
+            .init(flag: "--embedding-model", label: "Embedding model", kind: .string),
+            .init(flag: "--image-model", label: "Image model", kind: .string),
+            .init(flag: "--tts-model", label: "TTS model", kind: .string),
+            .init(flag: "--stt-model", label: "STT model", kind: .string),
+            .init(flag: "--tts-format", label: "TTS format", kind: .string),
+            .init(flag: "--admin-email", label: "Admin email", kind: .string),
+            .init(flag: "--admin-password", label: "Admin password", kind: .string),
+            .init(flag: "--wait-seconds", label: "Health wait", kind: .integer),
+            .init(flag: "--pull", label: "Pull models", kind: .boolean),
+            .init(flag: "--accept-model-license", label: "Accept model terms", kind: .boolean),
+            .init(flag: "--skip-server", label: "Skip API server", kind: .boolean),
+            .init(flag: "--skip-docker", label: "Skip Docker", kind: .boolean),
+            .init(flag: "--skip-configure", label: "Skip configure", kind: .boolean),
+            .init(flag: "--reset", label: "Reset", kind: .boolean),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .service)
+    )
+
+    public static let apiServe = MereRunCommandCapability(
+        id: "api.serve",
+        command: ["api", "serve"],
+        title: "API server",
+        summary: "Serve installed models through OpenAI-compatible local APIs.",
+        options: [
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--engine", label: "Engine", kind: .string),
+            .init(flag: "--lora", label: "Adapter", kind: .string),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--rate-limit-per-minute", label: "Rate limit", kind: .integer),
+            .init(flag: "--max-active-requests", label: "Active requests", kind: .integer),
+            .init(flag: "--memory-guard", label: "Memory guard", kind: .choice, choices: ["off", "safe", "balanced", "aggressive", "custom"]),
+            .init(flag: "--memory-guard-custom-ceiling-gb", label: "Memory ceiling", kind: .number),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--kv-bits", label: "KV bits", kind: .number),
+            .init(flag: "--kv-quant-scheme", label: "KV scheme", kind: .string),
+            .init(flag: "--kv-group-size", label: "KV group", kind: .integer),
+            .init(flag: "--quantized-kv-start", label: "KV start", kind: .integer),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .service)
+    )
+
+    public static let guide = MereRunCommandCapability(
+        id: "guide",
+        command: ["guide"],
+        title: "Offline guides",
+        summary: "List or read CLI-owned offline workflow guides.",
+        arguments: [
+            .init(name: "command-path", label: "Command path", kind: .string, required: false)
+        ],
+        options: [
+            .init(flag: "--list", label: "List topics", kind: .boolean),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--json", label: "JSON", kind: .boolean),
+            .init(flag: "--markdown", label: "Markdown index", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let configSet = MereRunCommandCapability(
+        id: "config.set",
+        command: ["config", "set"],
+        title: "Set configuration",
+        summary: "Persist a supported configuration value, including a secret-safe environment source.",
+        arguments: [
+            .init(name: "key", label: "Key", kind: .string, required: true),
+            .init(name: "value", label: "Value", kind: .string, required: false)
+        ],
+        options: [
+            .init(flag: "--from-env", label: "Environment variable", kind: .string)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let configGet = MereRunCommandCapability(
+        id: "config.get",
+        command: ["config", "get"],
+        title: "Read configuration",
+        summary: "Read a persisted configuration value with secrets masked by default.",
+        arguments: [
+            .init(name: "key", label: "Key", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--reveal", label: "Reveal secret", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let configUnset = MereRunCommandCapability(
+        id: "config.unset",
+        command: ["config", "unset"],
+        title: "Unset configuration",
+        summary: "Remove a persisted configuration value.",
+        arguments: [
+            .init(name: "key", label: "Key", kind: .string, required: true)
+        ],
+        options: [],
         output: .init(kind: .text)
     )
 }

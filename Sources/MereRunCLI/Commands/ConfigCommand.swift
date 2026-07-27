@@ -16,7 +16,7 @@ struct Config: ParsableCommand {
         Keys: hf-token, hf-endpoint
 
         Examples:
-          mere.run config set hf-token hf_xxxxxxxx
+          MERERUN_CONFIG_VALUE=hf_xxxxxxxx mere.run config set hf-token --from-env MERERUN_CONFIG_VALUE
           mere.run config get hf-token
           mere.run config list
           mere.run config unset hf-token
@@ -34,17 +34,48 @@ struct Config: ParsableCommand {
     }
 
     struct SetCmd: ParsableCommand {
+        static let valueEnvironmentKey = "MERERUN_CONFIG_VALUE"
+
         static let configuration = CommandConfiguration(commandName: "set", abstract: "Set a config value.")
         @Argument(help: "Config key (hf-token, hf-endpoint).") var key: String
-        @Argument(help: "Value to store.") var value: String
+        @Argument(help: "Value to store. Omit when using --from-env.") var value: String?
+        @Option(name: [.customLong("from-env")], help: "Read the value from this environment variable.")
+        var fromEnvironment: String?
+
         func run() throws {
             let k = try Config.resolveKey(key)
+            let resolvedValue = try Self.resolvedValue(
+                explicit: value,
+                environmentKey: fromEnvironment
+            )
             var cfg = MereRunConfig.load()
-            cfg.set(k, value)
+            cfg.set(k, resolvedValue)
             try cfg.save()
-            let shown = k.isSecret ? MereRunConfig.masked(value) : value
+            let shown = k.isSecret ? MereRunConfig.masked(resolvedValue) : resolvedValue
             print("Set \(k.rawValue) = \(shown)")
             print("Saved to \(MereRunConfig.fileURL.path)")
+        }
+
+        static func resolvedValue(
+            explicit: String?,
+            environmentKey: String?,
+            environment: [String: String] = ProcessInfo.processInfo.environment
+        ) throws -> String {
+            let explicitValue = explicit?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = environmentKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if explicitValue?.isEmpty == false, key?.isEmpty == false {
+                throw ValidationError("Pass a value or --from-env, not both.")
+            }
+            if let explicitValue, !explicitValue.isEmpty {
+                return explicitValue
+            }
+            if let key, !key.isEmpty {
+                guard let value = environment[key], !value.isEmpty else {
+                    throw ValidationError("Environment variable \(key) is empty or unset.")
+                }
+                return value
+            }
+            throw ValidationError("Pass a value or --from-env.")
         }
     }
 

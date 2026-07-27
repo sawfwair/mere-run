@@ -106,6 +106,96 @@ enum CommandTemplateID: String, CaseIterable {
     case openWebui
     case apiServe
     case custom
+
+    var capabilityID: String? {
+        switch self {
+        case .setup: return "setup"
+        case .agentOnboard: return "agent.onboard"
+        case .agentInstallPi: return "agent.install-pi"
+        case .agentStart: return "agent.start"
+        case .modelList: return "model.list"
+        case .modelCapabilities: return "model.capabilities"
+        case .modelPull: return "model.pull"
+        case .modelInfo: return "model.info"
+        case .modelRemove: return "model.remove"
+        case .modelRepairManifests: return "model.repair-manifests"
+        case .imageGenerate: return "image.generate"
+        case .imageTrainLoRA: return "image.train-lora"
+        case .imageValidate: return "image.validate"
+        case .imageDatasetDiscover: return "image.dataset.discover"
+        case .imageRunPlan: return "image.run-plan"
+        case .imageVisualizeRun: return "image.visualize-run"
+        case .imageReconstruct3D: return "image.reconstruct-3d"
+        case .imageReconstruct3DTrellis2: return "image.reconstruct-3d-trellis2"
+        case .imageReconstruct3DMultiview: return "image.reconstruct-3d-multiview"
+        case .textChat: return "text.chat"
+        case .textCode: return "text.code"
+        case .textEmbed: return "text.embed"
+        case .textAnonymize: return "text.anonymize"
+        case .textTrainLoRA: return "text.train-lora"
+        case .speechSynthesize: return "speech.synthesize"
+        case .speechTranscribe: return "speech.transcribe"
+        case .speechProfileList: return "speech.profile.list"
+        case .speechProfileCreate: return "speech.profile.create"
+        case .speechProfileDelete: return "speech.profile.delete"
+        case .visionInspect: return "vision.inspect"
+        case .visionCaption: return "vision.caption"
+        case .visionOCR: return "vision.ocr"
+        case .visionGround: return "vision.ground"
+        case .visionSegment: return "vision.segment"
+        case .visionTrack: return "vision.track"
+        case .visionTrackLive: return "vision.track-live"
+        case .visionFaceDetect: return "vision.face.detect"
+        case .visionFaceEmbed: return "vision.face.embed"
+        case .visionFaceCompare: return "vision.face.compare"
+        case .visionFaceBatch: return "vision.face.batch"
+        case .visionPose: return "vision.pose"
+        case .visionFlow: return "vision.flow"
+        case .visionDepthVideo: return "vision.depth-video"
+        case .visionGeometry: return "vision.geometry"
+        case .visionGeometryMultiview: return "vision.geometry-multiview"
+        case .musicGenerate: return "music.generate"
+        case .musicAnalyze: return "music.analyze"
+        case .musicTranscribe: return "music.transcribe"
+        case .musicRealtime: return "music.realtime"
+        case .musicTrainAdapter: return "music.train-adapter"
+        case .musicServe: return "music.serve"
+        case .videoGenerate: return "video.generate"
+        case .videoAnimate: return "video.animate"
+        case .videoCosmos3: return "video.cosmos3"
+        case .videoPrepareMasks: return "video.prepare-masks"
+        case .videoExportLatents: return "video.export-latents"
+        case .videoSession: return "video.session"
+        case .adapterList: return "adapter.list"
+        case .adapterPull: return "adapter.pull"
+        case .runList: return "run.list"
+        case .runInspect: return "run.inspect"
+        case .runWatch: return "run.watch"
+        case .runFetch: return "run.fetch"
+        case .runCancel: return "run.cancel"
+        case .runRetry: return "run.retry"
+        case .worldServe: return "world.serve"
+        case .statusSnapshot: return "status"
+        case .qualityGate: return "gate"
+        case .modelStorage: return "model.storage"
+        case .modelGarbageCollect: return "model.gc"
+        case .modelRuntimeGet: return "model.runtime.get"
+        case .modelRuntimeSet: return "model.runtime.set"
+        case .graphStudio, .nodeConsole, .custom: return nil
+        case .sfxGenerate: return "sfx.generate"
+        case .sfxVideo: return "sfx.video.generate"
+        case .sfxAEEncode: return "sfx.ae.encode"
+        case .sfxAEDecode: return "sfx.ae.decode"
+        case .sfxClapScore: return "sfx.clap.score"
+        case .sfxConditionText: return "sfx.condition.text"
+        case .modelBenchmark: return "model.benchmark.q36-mtp"
+        case .pluginList: return "plugin.list"
+        case .pluginInstall: return "plugin.install"
+        case .pluginDoctor: return "plugin.doctor"
+        case .openWebui: return "open-webui.quickstart"
+        case .apiServe: return "api.serve"
+        }
+    }
 }
 
 enum CommandInputKind: Equatable {
@@ -577,6 +667,12 @@ struct CommandDraft: Equatable {
     var refAudioPath = ""
     var refText = ""
     var saveProfileName = ""
+    var speechStreamChunkTokens = 25
+    var speechStreamChunkMS = 200
+    var speechStreamDecodeMS = 2_000
+    var speechInputFormat = ""
+    var speechSampleRate = 16_000
+    var speechJSONL = false
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     var imagePath = ""
     var tools = ""
@@ -588,6 +684,48 @@ struct CommandDraft: Equatable {
     var sandboxDir = ""
     var setupMode = "agent"
     var agentModel = "tier"
+    var piPath = ""
+    var noBootstrap = false
+    var modelKeepCache = false
+    var modelRemovalJSON = false
+    var benchmarkPromptFile = ""
+    var benchmarkPromptRepeat = 150
+    var benchmarkPromptRepeatValues = ""
+    var benchmarkDecodeTokens = 32
+    var benchmarkDecodeTokenValues = ""
+    var benchmarkTemperatureValues = ""
+    var benchmarkMTPBlockSize = ""
+    var benchmarkForcedMTPMinPromptTokens = 1
+    var sfxRenoise = ""
+    var sfxSynchformerModel = "sfx-woosh-synchformer"
+    var sfxSyncBatchSize = 1
+    var sfxClipBatchSize = 4
+    var pluginCatalogURL = ""
+    var pluginChannel = ""
+    var openWebUIHost = "127.0.0.1"
+    var openWebUIPort = 3_000
+    var openWebUIContainerName = "open-webui-mere-run"
+    var openWebUIVolumeName = "open-webui-mere-run"
+    var openWebUIImage = "ghcr.io/open-webui/open-webui:main"
+    var openWebUIVisionModel = "vision-chat-gemma4-12b"
+    var openWebUIEmbeddingModel = "text-embed-qwen3-0.6b"
+    var openWebUIImageModel = "image-zimage-nano"
+    var openWebUITTSModel = "speech-tts-qwen3-nano"
+    var openWebUISTTModel = "speech-asr-parakeet"
+    var openWebUITTSFormat = "wav"
+    var openWebUIAdminEmail = "admin@localhost"
+    var openWebUIAdminPassword = "admin"
+    var openWebUIWaitSeconds = 180
+    var openWebUIPull = false
+    var openWebUISkipServer = false
+    var openWebUISkipDocker = false
+    var openWebUISkipConfigure = false
+    var openWebUIReset = false
+    var apiLoRA = ""
+    var apiRateLimitPerMinute = 60
+    var apiMaxActiveRequests = 1
+    var apiMemoryGuard = "balanced"
+    var apiMemoryGuardCustomCeilingGB = ""
     var variant = "zimage"
     var quiet = false
     var force = false
@@ -675,6 +813,10 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.json = true
         case .apiServe:
             draft.engine = StudioChatDefaults.fallbackServingEngine
+            draft.port = 8080
+            draft.contextSize = 32_768
+        case .openWebui:
+            draft.host = "0.0.0.0"
             draft.port = 8080
         case .setup:
             draft.setupMode = "agent"
@@ -770,12 +912,17 @@ struct CommandTemplate: Identifiable, Equatable {
         case .sfxGenerate, .sfxVideo:
             draft.steps = 4
             draft.durationSeconds = 8
+            draft.cfgScale = id == .sfxVideo ? 3 : 4.5
         case .speechTranscribe:
             draft.backend = "auto"
             draft.maxTokens = 448
             draft.task = "transcribe"
             draft.language = "auto"
             draft.timestamps = true
+        case .modelBenchmark:
+            draft.temperature = 0
+            draft.topP = 0.9
+            draft.contextSize = 16_384
         default:
             break
         }
@@ -961,6 +1108,25 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.all && draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Choose a model id, or enable All."
             }
+        case .setup, .agentOnboard, .agentStart, .apiServe, .openWebui:
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if id == .openWebui && !(1...65_535).contains(draft.openWebUIPort) {
+                return "Open WebUI port must be between 1 and 65535."
+            }
+            if id == .apiServe && draft.apiMemoryGuard == "custom"
+                && draft.apiMemoryGuardCustomCeilingGB.isBlank {
+                return "A custom memory ceiling is required for the custom guard."
+            }
+        case .speechSynthesize:
+            if draft.stream && draft.speechStreamChunkTokens < 1 {
+                return "Streaming chunk tokens must be greater than zero."
+            }
+        case .speechTranscribe:
+            if draft.stream && (draft.speechStreamChunkMS < 1 || draft.speechStreamDecodeMS < 1) {
+                return "Streaming feed and decode intervals must be greater than zero."
+            }
         case .modelRemove:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Model id is required."
@@ -1011,6 +1177,9 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["setup", "--mode", draft.setupMode, "--agent-model", draft.agentModel]
             if draft.force { args.append("--install") }
             if draft.stream { args.append("--start") }
+            if draft.dryRun { args.append("--dry-run") }
+            args += ["--host", draft.host, "--port", String(draft.port)]
+            if !draft.piPath.isBlank { args += ["--pi-path", draft.piPath] }
             if draft.quiet { args.append("--quiet") }
 
         case .agentOnboard:
@@ -1029,10 +1198,13 @@ struct CommandTemplate: Identifiable, Equatable {
 
         case .agentStart:
             args = ["agent", "start", "--host", draft.host, "--port", String(draft.port)]
+            if !draft.piPath.isBlank { args += ["--pi-path", draft.piPath] }
             if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.stream { args.append("--skip-server") }
             if draft.force { args.append("--allow-unsupported") }
+            if draft.noBootstrap { args.append("--no-bootstrap") }
+            if draft.quiet { args.append("--quiet") }
 
         case .modelList:
             args = ["model", "list"]
@@ -1054,6 +1226,8 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.stream { args.append("--allow-unsupported") }
             if draft.quiet { args.append("--quiet") }
             if draft.acceptModelLicense { args.append("--accept-model-license") }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
 
         case .modelInfo:
             args = ["model", "info", draft.model]
@@ -1063,6 +1237,8 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelRemove:
             args = ["model", "remove", draft.model]
             if draft.force { args.append("--force") }
+            if draft.modelKeepCache { args.append("--keep-cache") }
+            if draft.modelRemovalJSON { args.append("--json") }
 
         case .modelRepairManifests:
             args = ["model", "repair-manifests"]
@@ -1375,7 +1551,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.saveProfileName.isBlank { args += ["--save-profile", draft.saveProfileName] }
             if !draft.language.isBlank, draft.language != "auto" { args += ["--language", draft.language] }
             args += ["--temperature", format(draft.temperature)]
-            if draft.stream { args.append("--stream") }
+            if draft.stream {
+                args += ["--stream", "--stream-chunk-tokens", String(draft.speechStreamChunkTokens)]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .speechTranscribe:
@@ -1384,7 +1562,20 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--backend", draft.backend, "--task", draft.task, "--max-tokens", String(draft.maxTokens)]
             if !draft.language.isBlank, draft.language != "auto" { args += ["--language", draft.language] }
-            if draft.stream { args.append("--stream") }
+            if draft.stream {
+                args += [
+                    "--stream",
+                    "--stream-chunk-ms", String(draft.speechStreamChunkMS),
+                    "--stream-decode-ms", String(draft.speechStreamDecodeMS)
+                ]
+            }
+            if !draft.speechInputFormat.isBlank {
+                args += ["--input-format", draft.speechInputFormat]
+            }
+            if draft.speechSampleRate != 16_000 {
+                args += ["--sample-rate", String(draft.speechSampleRate)]
+            }
+            if draft.speechJSONL { args.append("--jsonl") }
             if !draft.timestamps { args.append("--no-timestamps") }
             if draft.quiet { args.append("--quiet") }
 
@@ -1927,19 +2118,37 @@ struct CommandTemplate: Identifiable, Equatable {
 
         case .sfxGenerate:
             args = ["sfx", "generate", draft.prompt]
+            if !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
             if draft.cfgScale != 1.0 { args += ["--cfg", format(draft.cfgScale)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if !draft.sfxRenoise.isBlank { args += ["--renoise", draft.sfxRenoise] }
             if draft.quiet { args.append("--quiet") }
 
         case .sfxVideo:
             args = ["sfx", "video", "generate", draft.prompt, draft.inputPath]
+            if !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
+            if draft.cfgScale > 0 { args += ["--cfg", format(draft.cfgScale)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if !draft.sfxRenoise.isBlank { args += ["--renoise", draft.sfxRenoise] }
+            if !draft.sfxSynchformerModel.isBlank {
+                args += ["--synchformer-model", draft.sfxSynchformerModel]
+            }
+            args += [
+                "--sync-batch-size", String(draft.sfxSyncBatchSize),
+                "--clip-batch-size", String(draft.sfxClipBatchSize)
+            ]
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
             if draft.quiet { args.append("--quiet") }
 
         case .musicAnalyze:
@@ -2247,27 +2456,114 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelBenchmark:
             args = ["model", "benchmark", "q36-mtp"]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if draft.all { args.append("--json") }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
+            if !draft.benchmarkPromptFile.isBlank {
+                args += ["--prompt-file", draft.benchmarkPromptFile]
+            }
+            args += [
+                "--prompt-repeat", String(draft.benchmarkPromptRepeat),
+                "--decode-tokens", String(draft.benchmarkDecodeTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP),
+                "--context-size", String(draft.contextSize),
+                "--forced-mtp-min-prompt-tokens",
+                String(draft.benchmarkForcedMTPMinPromptTokens)
+            ]
+            if !draft.benchmarkPromptRepeatValues.isBlank {
+                args += ["--prompt-repeat-values", draft.benchmarkPromptRepeatValues]
+            }
+            if !draft.benchmarkDecodeTokenValues.isBlank {
+                args += ["--decode-token-values", draft.benchmarkDecodeTokenValues]
+            }
+            if !draft.benchmarkTemperatureValues.isBlank {
+                args += ["--temperature-values", draft.benchmarkTemperatureValues]
+            }
+            if !draft.benchmarkMTPBlockSize.isBlank {
+                args += ["--mtp-block-size", draft.benchmarkMTPBlockSize]
+            }
+            if draft.json { args.append("--json") }
 
         case .pluginList:
             args = ["plugin", "list"]
-            if draft.all { args.append("--json") }
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
+            if draft.json { args.append("--json") }
 
         case .pluginInstall:
             args = ["plugin", "install", draft.prompt]
-            if draft.force { args.append("--yes") }
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
+            if !draft.pluginChannel.isBlank { args += ["--channel", draft.pluginChannel] }
+            if draft.all { args.append("--yes") }
+            if draft.force { args.append("--force") }
 
         case .pluginDoctor:
             args = ["plugin", "doctor", draft.prompt]
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
 
         case .openWebui:
             args = ["open-webui", "quickstart", "--host", draft.host, "--port", String(draft.port)]
+            if !draft.engine.isBlank { args += ["--engine", draft.engine] }
+            args += [
+                "--webui-host", draft.openWebUIHost,
+                "--webui-port", String(draft.openWebUIPort),
+                "--container-name", draft.openWebUIContainerName,
+                "--volume-name", draft.openWebUIVolumeName,
+                "--image", draft.openWebUIImage
+            ]
             if !draft.model.isBlank { args += ["--text-model", draft.model] }
-            if !draft.apiKey.isBlank { args += ["--api-key", draft.apiKey] }
+            args += [
+                "--vision-model", draft.openWebUIVisionModel,
+                "--embedding-model", draft.openWebUIEmbeddingModel,
+                "--image-model", draft.openWebUIImageModel,
+                "--tts-model", draft.openWebUITTSModel,
+                "--stt-model", draft.openWebUISTTModel,
+                "--tts-format", draft.openWebUITTSFormat,
+                "--admin-email", draft.openWebUIAdminEmail,
+                "--wait-seconds", String(draft.openWebUIWaitSeconds)
+            ]
+            if draft.openWebUIPull { args.append("--pull") }
+            if draft.acceptModelLicense { args.append("--accept-model-license") }
+            if draft.openWebUISkipServer { args.append("--skip-server") }
+            if draft.openWebUISkipDocker { args.append("--skip-docker") }
+            if draft.openWebUISkipConfigure { args.append("--skip-configure") }
+            if draft.openWebUIReset { args.append("--reset") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.quiet { args.append("--quiet") }
 
         case .apiServe:
             args = ["api", "serve", "--host", draft.host, "--port", String(draft.port), "--engine", draft.engine]
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.apiLoRA.isBlank { args += ["--lora", draft.apiLoRA] }
+            args += [
+                "--rate-limit-per-minute", String(draft.apiRateLimitPerMinute),
+                "--max-active-requests", String(draft.apiMaxActiveRequests),
+                "--memory-guard", draft.apiMemoryGuard,
+                "--context-size", String(draft.contextSize)
+            ]
+            if !draft.apiMemoryGuardCustomCeilingGB.isBlank {
+                args += [
+                    "--memory-guard-custom-ceiling-gb",
+                    draft.apiMemoryGuardCustomCeilingGB
+                ]
+            }
+            if draft.kvBits > 0 { args += ["--kv-bits", String(draft.kvBits)] }
+            if !draft.kvQuantScheme.isBlank {
+                args += ["--kv-quant-scheme", draft.kvQuantScheme]
+            }
+            if draft.kvGroupSize > 0 {
+                args += ["--kv-group-size", String(draft.kvGroupSize)]
+            }
+            if draft.quantizedKVStart > 0 {
+                args += ["--quantized-kv-start", String(draft.quantizedKVStart)]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
 
         case .custom:
             return ShellWords.split(draft.extraArguments)
@@ -2329,15 +2625,27 @@ struct CommandTemplate: Identifiable, Equatable {
 
 enum CommandLaunchEnvironment {
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+    static let openWebUIAdminPasswordEnvironmentKey = "MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"
 
     static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
         guard templateID == .apiServe
+            || templateID == .openWebui
             || templateID == .musicServe
             || templateID == .worldServe
             || templateID == .statusSnapshot else { return [:] }
+        var overrides: [String: String] = [:]
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else { return [:] }
-        return [apiKeyEnvironmentKey: apiKey]
+        if !apiKey.isEmpty {
+            overrides[apiKeyEnvironmentKey] = apiKey
+        }
+        if templateID == .openWebui {
+            let adminPassword = draft.openWebUIAdminPassword
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !adminPassword.isEmpty {
+                overrides[openWebUIAdminPasswordEnvironmentKey] = adminPassword
+            }
+        }
+        return overrides
     }
 }
 
@@ -2932,11 +3240,13 @@ enum CommandCatalog {
             id: .sfxGenerate,
             category: .sfx,
             title: "Generate sound effect",
-            subtitle: "Woosh text-to-audio sound effects",
+            subtitle: "Woosh or MMAudio text-to-audio",
             systemImage: "speaker.wave.2",
             promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
             outputKind: .file("wav"),
-            defaultPrompt: "a heavy wooden door creaking open"
+            defaultPrompt: "a heavy wooden door creaking open",
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .sfxVideo,
@@ -2945,9 +3255,11 @@ enum CommandCatalog {
             subtitle: "Generate sound effects from a video",
             systemImage: "video.badge.waveform",
             promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
             inputKind: .video,
             outputKind: .file("wav"),
-            defaultPrompt: "footsteps on gravel"
+            defaultPrompt: "footsteps on gravel",
+            defaultModel: "sfx-woosh-dvflow-8s"
         ),
         CommandTemplate(
             id: .musicAnalyze,
@@ -3004,7 +3316,8 @@ enum CommandCatalog {
             subtitle: "Audio → Woosh latents (.npy)",
             systemImage: "arrow.down.doc",
             inputKind: .audio,
-            outputKind: .file("npy")
+            outputKind: .file("npy"),
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .sfxAEDecode,
@@ -3013,7 +3326,8 @@ enum CommandCatalog {
             subtitle: "Woosh latents (.npy) → audio",
             systemImage: "arrow.up.doc",
             inputKind: .file([.data]),
-            outputKind: .file("wav")
+            outputKind: .file("wav"),
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .sfxClapScore,
@@ -3023,7 +3337,8 @@ enum CommandCatalog {
             systemImage: "checkmark.seal",
             promptLabel: "Prompt",
             inputKind: .audio,
-            defaultPrompt: "a heavy wooden door creaking open"
+            defaultPrompt: "a heavy wooden door creaking open",
+            defaultModel: "sfx-woosh-clap"
         ),
         CommandTemplate(
             id: .sfxConditionText,
@@ -3033,7 +3348,8 @@ enum CommandCatalog {
             systemImage: "function",
             promptLabel: "Prompt",
             outputKind: .file("safetensors"),
-            defaultPrompt: "a heavy wooden door creaking open"
+            defaultPrompt: "a heavy wooden door creaking open",
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .modelBenchmark,

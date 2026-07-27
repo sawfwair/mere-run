@@ -2,6 +2,20 @@
 
 _Verified multi-agent review of `Sources/MereRunApp` (~6,500 LOC) against the CLI source of truth (`Sources/MereRunCLI`) and the bundling pipeline. Findings below were adversarially re-checked against source; refuted/adjusted claims were dropped or down-graded._
 
+> **Implementation update (2026-07-27):** This document preserves the original
+> pre-parity audit and sequencing rationale. The capability gaps described below
+> are no longer the current product state. The app now consumes the shared
+> machine-readable 88-command capability contract and has executable drift tests
+> for every local Advanced template. Studio provides typed Text, Image, Video,
+> Music, Speech, SFX, Vision/VFX, adapter, run, world, setup, model, plugin,
+> benchmark, Open WebUI, and API workflows; Graph Studio and Node remain explicit
+> external boundaries. Structured receipts, file pickers, validation, retry and
+> resume controls are implemented. See
+> [`Sources/MereRunApp/README.md`](../Sources/MereRunApp/README.md) for the
+> current surface. Distribution validation is tracked separately and the
+> historical release blockers below remain applicable until an installed,
+> Developer ID-signed and notarized build is proven.
+
 ## Verdict
 
 The app is **not 5% finished — it's a solid ~45% v0 skeleton** with misleading breadth and shallow depth. The bones are real (a clean `@MainActor` controller, an injectable process layer, a 34-command catalog, a persisted library, a capable Models sheet, ~1,000 LOC of tests). What's missing is concentrated exactly where "finished" lives: it **can't ship** (ad-hoc signed, no notarization, a guaranteed camera-permission crash), and core modes **dead-end** (audio/video show an icon, chat is one-shot, downloads show a wall of logs).

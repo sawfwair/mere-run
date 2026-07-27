@@ -23,6 +23,16 @@ swift run mere.run config get hf-token --reveal
 swift run mere.run config list
 ```
 
+For scripts and GUI launchers, keep the token out of process arguments:
+
+```bash
+export MERERUN_CONFIG_VALUE=hf_xxxxxxxx
+swift run mere.run config set hf-token --from-env MERERUN_CONFIG_VALUE
+unset MERERUN_CONFIG_VALUE
+```
+
+The macOS Studio Settings screen uses this environment-backed path.
+
 Environment variables take precedence over the config file: the HF token
 resolves from `HF_TOKEN` (then `HUGGING_FACE_HUB_TOKEN`) before falling back to
 the stored `hf-token`, and the endpoint resolves from `HF_ENDPOINT` before the

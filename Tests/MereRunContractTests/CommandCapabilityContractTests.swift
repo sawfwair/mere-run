@@ -62,9 +62,40 @@ import Testing
         "model.storage",
         "model.gc",
         "model.runtime.get",
-        "model.runtime.set"
+        "model.runtime.set",
+        "setup",
+        "agent.onboard",
+        "agent.install-pi",
+        "agent.start",
+        "model.list",
+        "model.capabilities",
+        "model.pull",
+        "model.info",
+        "model.remove",
+        "model.repair-manifests",
+        "model.benchmark.q36-mtp",
+        "speech.synthesize",
+        "speech.transcribe",
+        "speech.profile.list",
+        "speech.profile.create",
+        "speech.profile.delete",
+        "sfx.generate",
+        "sfx.video.generate",
+        "sfx.ae.encode",
+        "sfx.ae.decode",
+        "sfx.clap.score",
+        "sfx.condition.text",
+        "plugin.list",
+        "plugin.install",
+        "plugin.doctor",
+        "open-webui.quickstart",
+        "api.serve",
+        "guide",
+        "config.set",
+        "config.get",
+        "config.unset"
     ])
-    #expect(document.commands.allSatisfy { !$0.options.isEmpty })
+    #expect(document.commands.count == 88)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

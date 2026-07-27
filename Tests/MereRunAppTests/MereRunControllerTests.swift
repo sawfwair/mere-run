@@ -162,6 +162,28 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.readinessByMode[.readImage], .ready)
     }
 
+    func testSavingHuggingFaceTokenKeepsSecretOutOfProcessArguments() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+
+        let task = Task { await controller.saveHuggingFaceToken(" hf_secret ") }
+        await Task.yield()
+
+        XCTAssertEqual(runner.starts.count, 1)
+        let configuration = runner.starts[0].configuration
+        XCTAssertEqual(
+            Array(configuration.arguments.suffix(5)),
+            ["config", "set", "hf-token", "--from-env", "MERERUN_CONFIG_VALUE"]
+        )
+        XCTAssertFalse(configuration.arguments.contains("hf_secret"))
+        XCTAssertEqual(configuration.environment["MERERUN_CONFIG_VALUE"], "hf_secret")
+
+        runner.starts[0].termination(0)
+        let didSave = await task.value
+        XCTAssertTrue(didSave)
+    }
+
     func testFailedRunResultIncludesStderrWhenStdoutIsEmpty() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

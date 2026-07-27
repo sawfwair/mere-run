@@ -782,8 +782,11 @@ final class MereRunController: ObservableObject {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let args = trimmed.isEmpty
             ? ["config", "unset", "hf-token"]
-            : ["config", "set", "hf-token", trimmed]
-        let result = await utilityCommandResult(args: args)
+            : ["config", "set", "hf-token", "--from-env", "MERERUN_CONFIG_VALUE"]
+        let result = await utilityCommandResult(
+            args: args,
+            environmentOverrides: trimmed.isEmpty ? [:] : ["MERERUN_CONFIG_VALUE": trimmed]
+        )
         return result.exitCode == 0
     }
 
@@ -851,7 +854,11 @@ final class MereRunController: ObservableObject {
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
     }
 
-    func utilityCommandResult(args: [String], masksSecrets: Bool = true) async -> MereRunUtilityCommandResult {
+    func utilityCommandResult(
+        args: [String],
+        masksSecrets: Bool = true,
+        environmentOverrides: [String: String] = [:]
+    ) async -> MereRunUtilityCommandResult {
         let launch = cliResolve(cliPath)
         let cliArgs: [String]
         if !modelsRoot.isBlank {
@@ -871,7 +878,8 @@ final class MereRunController: ObservableObject {
                         launch: launch,
                         args: cliArgs,
                         environmentTemplateID: .custom,
-                        environmentDraft: CommandDraft()
+                        environmentDraft: CommandDraft(),
+                        environmentOverrides: environmentOverrides
                     ),
                     stdout: { text in output.append(text) },
                     stderr: { text in errors.append(text) },
@@ -1818,7 +1826,8 @@ final class MereRunController: ObservableObject {
         launch: MereRunLaunch,
         args: [String],
         environmentTemplateID: CommandTemplateID? = nil,
-        environmentDraft: CommandDraft? = nil
+        environmentDraft: CommandDraft? = nil,
+        environmentOverrides: [String: String] = [:]
     ) -> MereRunProcessConfiguration {
         let processArgs: [String]
         if case .executable(let url) = launch, url.path == "/usr/bin/env" {
@@ -1829,11 +1838,15 @@ final class MereRunController: ObservableObject {
         let templateID = environmentTemplateID ?? selectedTemplate.id
         let environmentDraft = environmentDraft ?? draft
 
+        var environment = processEnvironment(templateID: templateID, draft: environmentDraft)
+        for (key, value) in environmentOverrides {
+            environment[key] = value
+        }
         return MereRunProcessConfiguration(
             executableURL: launch.executableURL,
             arguments: processArgs,
             currentDirectoryURL: workingDirectoryURL(),
-            environment: processEnvironment(templateID: templateID, draft: environmentDraft),
+            environment: environment,
             keepsStandardInputOpen: templateID == .videoSession
         )
     }

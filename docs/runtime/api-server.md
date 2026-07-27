@@ -558,6 +558,11 @@ live-smoke path. Preview the exact commands with:
 mere.run open-webui quickstart --dry-run
 ```
 
+The macOS Studio passes `MERERUN_API_KEY` and
+`MERERUN_OPEN_WEBUI_ADMIN_PASSWORD` in the child environment so neither secret
+appears in the process argument list. CLI users may use the same variables;
+explicit `--api-key` and `--admin-password` values still take precedence.
+
 Repeatable smoke harness:
 
 ```bash

@@ -3,6 +3,61 @@ import MereRunContract
 import XCTest
 
 final class StudioTypesTests: XCTestCase {
+    func testEveryLocalAdvancedTemplateIsBackedByTheSharedCLIContract() throws {
+        for template in CommandCatalog.templates {
+            if template.externalURL != nil || template.id == .custom {
+                XCTAssertNil(template.id.capabilityID)
+                continue
+            }
+            let capabilityID = try XCTUnwrap(
+                template.id.capabilityID,
+                "\(template.id) must declare a shared capability id"
+            )
+            let capability = try XCTUnwrap(
+                MereRunCapabilityCatalog.command(id: capabilityID),
+                "\(template.id) references missing capability \(capabilityID)"
+            )
+            let arguments = template.arguments(from: template.defaultDraft())
+            XCTAssertEqual(
+                Array(arguments.prefix(capability.command.count)),
+                capability.command,
+                "\(template.id) command path drifted"
+            )
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(
+                    declared.contains(flag),
+                    "\(template.id) emits undeclared default flag \(flag)"
+                )
+            }
+        }
+    }
+
+    func testAppUtilityCommandsAreBackedByTheSharedCLIContract() throws {
+        let fixtures: [(String, [String])] = [
+            ("guide", ["guide", "--list", "--json"]),
+            ("guide", ["guide", "music", "generate", "--json"]),
+            (
+                "config.set",
+                ["config", "set", "hf-token", "--from-env", "MERERUN_CONFIG_VALUE"]
+            ),
+            ("config.get", ["config", "get", "hf-endpoint", "--reveal"]),
+            ("config.unset", ["config", "unset", "hf-token"]),
+        ]
+
+        for (capabilityID, arguments) in fixtures {
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(
+                    declared.contains(flag),
+                    "\(capabilityID) app utility emits undeclared flag \(flag)"
+                )
+            }
+        }
+    }
+
     func testStudioModesMapToPublicTemplates() {
         XCTAssertEqual(StudioMode.createImage.defaultTemplateID, .imageGenerate)
         XCTAssertEqual(StudioMode.chat.defaultTemplateID, .textChat)
@@ -165,9 +220,152 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.sfxConditionText) { $0.prompt = "door" }.prefix(3).map { $0 }, ["sfx", "condition", "text"])
         XCTAssertEqual(try args(.modelBenchmark).prefix(3).map { $0 }, ["model", "benchmark", "q36-mtp"])
         XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
-        XCTAssertEqual(try args(.pluginInstall) { $0.prompt = "mere-runpod"; $0.force = true }, ["plugin", "install", "mere-runpod", "--yes"])
+        XCTAssertEqual(
+            try args(.pluginInstall) {
+                $0.prompt = "mere-runpod"
+                $0.all = true
+                $0.force = true
+            },
+            ["plugin", "install", "mere-runpod", "--yes", "--force"]
+        )
         XCTAssertEqual(try args(.pluginDoctor) { $0.prompt = "mere-runpod" }, ["plugin", "doctor", "mere-runpod"])
         XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
+    }
+
+    func testSetupModelsSpeechSFXAndServerArgumentsAreContractDeclared() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.setup, "setup", {
+                $0.dryRun = true
+                $0.piPath = "/tmp/pi"
+            }),
+            (.agentOnboard, "agent.onboard", {
+                $0.force = true
+                $0.all = true
+                $0.stream = true
+                $0.quiet = true
+            }),
+            (.agentInstallPi, "agent.install-pi", { $0.force = true }),
+            (.agentStart, "agent.start", {
+                $0.piPath = "/tmp/pi"
+                $0.stream = true
+                $0.force = true
+                $0.noBootstrap = true
+                $0.quiet = true
+            }),
+            (.modelList, "model.list", { _ in }),
+            (.modelCapabilities, "model.capabilities", {
+                $0.all = true
+                $0.force = true
+                $0.json = true
+            }),
+            (.modelPull, "model.pull", {
+                $0.preflight = true
+                $0.json = true
+                $0.acceptModelLicense = true
+            }),
+            (.modelInfo, "model.info", {
+                $0.all = true
+                $0.force = true
+            }),
+            (.modelRemove, "model.remove", {
+                $0.force = true
+                $0.modelKeepCache = true
+                $0.modelRemovalJSON = true
+            }),
+            (.modelRepairManifests, "model.repair-manifests", { $0.force = true }),
+            (.modelBenchmark, "model.benchmark.q36-mtp", {
+                $0.modelRoot = "/tmp/model"
+                $0.prompt = "Benchmark"
+                $0.benchmarkPromptFile = "/tmp/prompt.txt"
+                $0.benchmarkPromptRepeatValues = "50,150"
+                $0.benchmarkDecodeTokenValues = "32,128"
+                $0.benchmarkTemperatureValues = "0,0.7"
+                $0.benchmarkMTPBlockSize = "4"
+                $0.json = true
+            }),
+            (.speechSynthesize, "speech.synthesize", {
+                $0.stream = true
+                $0.voiceMode = "clone"
+                $0.voiceProfile = "narrator"
+            }),
+            (.speechTranscribe, "speech.transcribe", {
+                $0.inputPath = "/tmp/voice.wav"
+                $0.stream = true
+                $0.speechInputFormat = "pcm-s16le"
+                $0.speechSampleRate = 22_050
+                $0.speechJSONL = true
+            }),
+            (.speechProfileList, "speech.profile.list", { _ in }),
+            (.speechProfileCreate, "speech.profile.create", {
+                $0.inputPath = "/tmp/voice.wav"
+                $0.secondaryText = "Transcript"
+                $0.quiet = true
+            }),
+            (.speechProfileDelete, "speech.profile.delete", {
+                $0.prompt = "00000000-0000-0000-0000-000000000001"
+            }),
+            (.sfxGenerate, "sfx.generate", {
+                $0.secondaryText = "speech"
+                $0.sfxRenoise = "0.2,0.1"
+            }),
+            (.sfxVideo, "sfx.video.generate", {
+                $0.inputPath = "/tmp/video.mp4"
+                $0.secondaryText = "music"
+                $0.sfxRenoise = "0.15"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.sfxAEEncode, "sfx.ae.encode", { $0.inputPath = "/tmp/audio.wav" }),
+            (.sfxAEDecode, "sfx.ae.decode", { $0.inputPath = "/tmp/latents.npy" }),
+            (.sfxClapScore, "sfx.clap.score", { $0.inputPath = "/tmp/audio.wav" }),
+            (.sfxConditionText, "sfx.condition.text", { _ in }),
+            (.pluginList, "plugin.list", {
+                $0.pluginCatalogURL = "/tmp/catalog.json"
+                $0.json = true
+            }),
+            (.pluginInstall, "plugin.install", {
+                $0.pluginCatalogURL = "/tmp/catalog.json"
+                $0.pluginChannel = "stable"
+                $0.all = true
+                $0.force = true
+            }),
+            (.pluginDoctor, "plugin.doctor", {
+                $0.pluginCatalogURL = "/tmp/catalog.json"
+            }),
+            (.openWebui, "open-webui.quickstart", {
+                $0.openWebUIPull = true
+                $0.acceptModelLicense = true
+                $0.openWebUISkipServer = true
+                $0.openWebUISkipDocker = true
+                $0.openWebUISkipConfigure = true
+                $0.openWebUIReset = true
+                $0.dryRun = true
+                $0.quiet = true
+            }),
+            (.apiServe, "api.serve", {
+                $0.apiLoRA = "adapter-assistant"
+                $0.kvBits = 4
+                $0.kvQuantScheme = "polar"
+                $0.kvGroupSize = 64
+                $0.quantizedKVStart = 1_024
+                $0.preflight = true
+                $0.json = true
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
     }
 
     func testMusicAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
@@ -1553,5 +1751,22 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--api-key"))
         XCTAssertFalse(args.contains("secret-token"))
         XCTAssertEqual(env["MERERUN_API_KEY"], "secret-token")
+    }
+
+    func testOpenWebUISecretsUseEnvironmentInsteadOfArguments() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .openWebui))
+        var draft = template.defaultDraft()
+        draft.apiKey = " secret-token "
+        draft.openWebUIAdminPassword = " admin-secret "
+
+        let args = template.arguments(from: draft)
+        let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
+
+        XCTAssertFalse(args.contains("--api-key"))
+        XCTAssertFalse(args.contains("--admin-password"))
+        XCTAssertFalse(args.contains("secret-token"))
+        XCTAssertFalse(args.contains("admin-secret"))
+        XCTAssertEqual(env["MERERUN_API_KEY"], "secret-token")
+        XCTAssertEqual(env["MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"], "admin-secret")
     }
 }
