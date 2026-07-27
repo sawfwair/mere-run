@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "model": "music-acestep-xl-turbo-lm4b",
+  "duration_seconds": 12,
+  "quality": "song",
+  "candidates": 2,
+  "cases": [
+    {
+      "id": "transient-electronic",
+      "seed": 1101,
+      "caption": "tight electronic club groove, crisp kick and snare transients, elastic sub bass, polished stereo synth stabs, instrumental",
+      "listen_for": "clean transients, stable low end, no clipping, coherent four-bar motion"
+    },
+    {
+      "id": "acoustic-space",
+      "seed": 1102,
+      "caption": "intimate fingerpicked acoustic guitar and warm cello in a small wooden room, natural dynamics, instrumental",
+      "listen_for": "credible attacks, room continuity, low metallic fizz, stable instrument identity"
+    },
+    {
+      "id": "vocal-alignment",
+      "seed": 1103,
+      "caption": "dream-pop song with a clear close lead vocal, soft live drums, chiming guitars, uplifting chorus",
+      "lyrics": "[verse]\nCity lights are folding into blue\n[chorus]\nStay awake, I am coming home to you",
+      "listen_for": "intelligible words, section transition, phrasing aligned to the lyric structure"
+    },
+    {
+      "id": "dense-arrangement",
+      "seed": 1104,
+      "caption": "cinematic progressive metal with double-kick drums, wide rhythm guitars, orchestral brass, and a memorable lead theme, instrumental",
+      "listen_for": "separation under density, rhythmic stability, theme continuity, controlled high frequencies"
+    },
+    {
+      "id": "ambient-continuity",
+      "seed": 1105,
+      "caption": "slowly evolving ambient modular synthesizers, distant bowed glass, deep soft drones, no percussion, instrumental",
+      "listen_for": "continuous tails, no abrupt seams, evolving harmony, low noise-floor modulation"
+    }
+  ]
+}

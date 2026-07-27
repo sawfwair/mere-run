@@ -69,6 +69,8 @@ public struct ModelResolver {
         case image3DInstantMeshBase = "image-3d-instantmesh-base"
         case image3DTrellis2 = "image-3d-trellis2-4b"
         case aceStep = "music-acestep"
+        case aceStepXLBase = "music-acestep-xl-base"
+        case aceStepXLSFT = "music-acestep-xl-sft"
         case aceStepXLTurbo = "music-acestep-xl-turbo"
         case aceStepXLTurboLM4B = "music-acestep-xl-turbo-lm4b"
         case magentaRT2Small = "music-magenta-rt2-small"

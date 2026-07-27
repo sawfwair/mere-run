@@ -1,18 +1,29 @@
 import Foundation
 
-public enum ACEStepInferenceMethod: String, Sendable, Hashable {
+public enum ACEStepInferenceMethod: String, CaseIterable, Codable, Sendable, Hashable {
     case ode
     case sde
 }
 
-public enum ACEStepDCWMode: String, Sendable, Hashable {
+public enum ACEStepDCWMode: String, CaseIterable, Codable, Sendable, Hashable {
     case low
     case high
     case double
     case pix
 }
 
-public struct ACEStepInferenceConfig: Sendable, Hashable {
+public enum ACEStepSamplerMode: String, CaseIterable, Codable, Sendable, Hashable {
+    case euler
+    case heun
+}
+
+public enum ACEStepGuidanceMode: String, CaseIterable, Codable, Sendable, Hashable {
+    case apg
+    case adg
+    case cfg
+}
+
+public struct ACEStepInferenceConfig: Codable, Sendable, Hashable {
     /// Seconds of audio to synthesize.
     public var durationSeconds: Float
 
@@ -30,8 +41,24 @@ public struct ACEStepInferenceConfig: Sendable, Hashable {
     /// starts closest to the source latents at the nearest schedule step.
     public var coverNoiseStrength: Float
 
+    /// Optional second deterministic noise source for retakes. Variance uses
+    /// upstream spherical interpolation: 0 keeps the main seed, 1 uses only
+    /// the retake seed.
+    public var retakeSeed: UInt64?
+    public var retakeVariance: Float
+
     /// ODE is deterministic and matches the default turbo inference path.
     public var inferMethod: ACEStepInferenceMethod
+    public var samplerMode: ACEStepSamplerMode
+
+    /// Non-Turbo classifier-free guidance. Turbo checkpoints are distilled
+    /// and force this to 1 regardless of the configured value.
+    public var guidanceScale: Float
+    public var guidanceMode: ACEStepGuidanceMode
+    public var cfgIntervalStart: Float
+    public var cfgIntervalEnd: Float
+    public var velocityNormThreshold: Float
+    public var velocityEMAFactor: Float
 
     public var useTiledVaeDecode: Bool
     public var vaeChunkSize: Int
@@ -52,7 +79,16 @@ public struct ACEStepInferenceConfig: Sendable, Hashable {
         shift: Float = 1.0,
         timesteps: [Float]? = nil,
         coverNoiseStrength: Float = 0.0,
+        retakeSeed: UInt64? = nil,
+        retakeVariance: Float = 0.0,
         inferMethod: ACEStepInferenceMethod = .ode,
+        samplerMode: ACEStepSamplerMode = .euler,
+        guidanceScale: Float = 7.0,
+        guidanceMode: ACEStepGuidanceMode = .apg,
+        cfgIntervalStart: Float = 0.0,
+        cfgIntervalEnd: Float = 1.0,
+        velocityNormThreshold: Float = 0.0,
+        velocityEMAFactor: Float = 0.0,
         useTiledVaeDecode: Bool = true,
         vaeChunkSize: Int = 512,
         vaeOverlap: Int = 64,
@@ -67,7 +103,16 @@ public struct ACEStepInferenceConfig: Sendable, Hashable {
         self.shift = shift
         self.timesteps = timesteps
         self.coverNoiseStrength = coverNoiseStrength
+        self.retakeSeed = retakeSeed
+        self.retakeVariance = retakeVariance
         self.inferMethod = inferMethod
+        self.samplerMode = samplerMode
+        self.guidanceScale = guidanceScale
+        self.guidanceMode = guidanceMode
+        self.cfgIntervalStart = cfgIntervalStart
+        self.cfgIntervalEnd = cfgIntervalEnd
+        self.velocityNormThreshold = velocityNormThreshold
+        self.velocityEMAFactor = velocityEMAFactor
         self.useTiledVaeDecode = useTiledVaeDecode
         self.vaeChunkSize = vaeChunkSize
         self.vaeOverlap = vaeOverlap

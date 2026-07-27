@@ -27,7 +27,10 @@ struct MusicAnalyze: AsyncParsableCommand {
     @Option(name: [.customLong("checkpoints-root")], help: "Root directory containing ACE-Step checkpoint subdirectories. Auto-discovered if not set.")
     var checkpointsRoot: String?
 
-    @Option(name: [.customLong("turbo-subdirectory")], help: "Turbo decoder subdirectory under checkpoints root.")
+    @Option(
+        name: [.customLong("decoder-subdirectory"), .customLong("turbo-subdirectory")],
+        help: "ACE-Step decoder subdirectory under checkpoints root."
+    )
     var turboSubdirectory: String = "acestep-v15-turbo"
 
     @Option(name: [.customLong("vae-subdirectory")], help: "VAE subdirectory under checkpoints root.")

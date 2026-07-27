@@ -4,6 +4,47 @@ import MLX
 @testable import MereRunCore
 
 final class MusicGenerateCommandParsingTests: XCTestCase {
+    func testMusicGenerateParsesStackedAdaptersAndScales() throws {
+        let command = try MusicGenerate.parse([
+            "cinematic synth anthem",
+            "--adapter", "/tmp/a.safetensors", "/tmp/b.safetensors",
+            "--adapter-kind", "auto",
+            "--adapter-scale", "0.75", "0.4",
+        ])
+
+        XCTAssertEqual(
+            command.adapters,
+            ["/tmp/a.safetensors", "/tmp/b.safetensors"]
+        )
+        XCTAssertEqual(command.adapterKind, .auto)
+        XCTAssertEqual(command.adapterScales, [0.75, 0.4])
+    }
+
+    func testMusicGenerateParsesRetakeAndFlowEditControls() throws {
+        let command = try MusicGenerate.parse([
+            "polished synthwave remix",
+            "--source-audio", "/tmp/source.wav",
+            "--flow-edit",
+            "--source-caption", "rough acoustic demo",
+            "--source-lyrics", "old words",
+            "--flow-edit-n-min", "0.1",
+            "--flow-edit-n-max", "0.9",
+            "--flow-edit-n-average", "4",
+            "--retake-seed", "99",
+            "--retake-variance", "0.35",
+        ])
+
+        XCTAssertTrue(command.flowEdit)
+        XCTAssertEqual(command.resolvedACEStepTask, .textToMusic)
+        XCTAssertEqual(command.sourceCaption, "rough acoustic demo")
+        XCTAssertEqual(command.sourceLyrics, "old words")
+        XCTAssertEqual(command.flowEditNMin, 0.1)
+        XCTAssertEqual(command.flowEditNMax, 0.9)
+        XCTAssertEqual(command.flowEditNAverage, 4)
+        XCTAssertEqual(command.retakeSeed, 99)
+        XCTAssertEqual(command.retakeVariance, 0.35)
+    }
+
     func testMusicGenerateParsesManagedDefaultModel() throws {
         let cmd = try MusicGenerate.parse([
             "warm synthwave groove",
@@ -15,8 +56,11 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.turboSubdirectory, "acestep-v15-turbo")
         XCTAssertEqual(cmd.vaeSubdirectory, "vae")
         XCTAssertFalse(cmd.useLM)
-        XCTAssertEqual(cmd.durationSeconds, 10.0, accuracy: 0.0001)
-        XCTAssertEqual(cmd.shift, 3.0, accuracy: 0.0001)
+        XCTAssertNil(cmd.durationSeconds)
+        XCTAssertEqual(cmd.quality, .song)
+        XCTAssertNil(cmd.steps)
+        XCTAssertNil(cmd.shift)
+        XCTAssertNil(cmd.guidanceScale)
         XCTAssertEqual(cmd.coverNoiseStrength, 0.0, accuracy: 0.0001)
         XCTAssertFalse(cmd.resolvedACEStepIsCover)
     }
@@ -33,6 +77,15 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--use-lm",
             "--duration", "18",
             "--steps", "12",
+            "--shift", "1.5",
+            "--infer-method", "ode",
+            "--sampler", "heun",
+            "--guidance-scale", "6.5",
+            "--guidance-mode", "adg",
+            "--cfg-interval-start", "0.1",
+            "--cfg-interval-end", "0.9",
+            "--velocity-norm-threshold", "2.5",
+            "--velocity-ema-factor", "0.1",
         ])
 
         XCTAssertEqual(cmd.model, "/tmp/acestep")
@@ -42,8 +95,17 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.lmSubdirectory, "custom-lm")
         XCTAssertEqual(cmd.textSubdirectory, "text-encoder")
         XCTAssertTrue(cmd.useLM)
-        XCTAssertEqual(cmd.durationSeconds, 18.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.durationSeconds, 18.0)
         XCTAssertEqual(cmd.steps, 12)
+        XCTAssertEqual(cmd.shift, 1.5)
+        XCTAssertEqual(cmd.inferMethod, .ode)
+        XCTAssertEqual(cmd.samplerMode, .heun)
+        XCTAssertEqual(cmd.guidanceScale, 6.5)
+        XCTAssertEqual(cmd.guidanceMode, .adg)
+        XCTAssertEqual(cmd.cfgIntervalStart, 0.1)
+        XCTAssertEqual(cmd.cfgIntervalEnd, 0.9)
+        XCTAssertEqual(cmd.velocityNormThreshold, 2.5)
+        XCTAssertEqual(cmd.velocityEMAFactor, 0.1)
     }
 
     func testMusicGenerateCheckpointCandidatesHonorRequestedManagedModel() throws {
@@ -72,6 +134,7 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--task-type", "cover",
         ])
         XCTAssertTrue(cover.resolvedACEStepIsCover)
+        XCTAssertEqual(cover.resolvedACEStepTask, .cover)
 
         let forcedNonCover = try MusicGenerate.parse([
             "cover this",
@@ -79,6 +142,7 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--non-cover",
         ])
         XCTAssertFalse(forcedNonCover.resolvedACEStepIsCover)
+        XCTAssertEqual(forcedNonCover.resolvedACEStepTask, .coverNoFSQ)
 
         let textToMusic = try MusicGenerate.parse([
             "new song",
@@ -103,7 +167,36 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.audioCoverStrength, 0.75, accuracy: 0.0001)
         XCTAssertEqual(cmd.coverNoiseStrength, 0.45, accuracy: 0.0001)
         XCTAssertTrue(cmd.resolvedACEStepIsCover)
-        XCTAssertEqual(cmd.resolvedACEStepTaskType(isCover: cmd.resolvedACEStepIsCover), "cover")
+        XCTAssertEqual(cmd.resolvedACEStepTask, .cover)
+    }
+
+    func testMusicGenerateParsesRepaintControls() throws {
+        let cmd = try MusicGenerate.parse([
+            "replace the bridge with a bigger chorus",
+            "--task", "repaint",
+            "--source-audio", "/tmp/source.wav",
+            "--repaint-start", "12.5",
+            "--repaint-end", "20",
+            "--chunk-mask-mode", "explicit",
+            "--repaint-mode", "conservative",
+            "--repaint-strength", "0.2",
+        ])
+
+        XCTAssertEqual(cmd.resolvedACEStepTask, .repaint)
+        XCTAssertEqual(cmd.repaintStartSeconds, 12.5)
+        XCTAssertEqual(cmd.repaintEndSeconds, 20)
+        XCTAssertEqual(cmd.chunkMaskMode, .explicit)
+        XCTAssertEqual(cmd.repaintMode, .conservative)
+        XCTAssertEqual(cmd.repaintStrength, 0.2)
+    }
+
+    func testMusicGenerateRejectsUnknownTaskDuringParsing() {
+        XCTAssertThrowsError(
+            try MusicGenerate.parse([
+                "bad task",
+                "--task", "remxi",
+            ])
+        )
     }
 
     func testMusicGenerateSkipsLMForCoverParity() throws {
@@ -113,10 +206,10 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--use-lm",
             "--lm-subdirectory", "acestep-5Hz-lm-4B",
         ])
-        let taskType = cover.resolvedACEStepTaskType(isCover: cover.resolvedACEStepIsCover)
+        let task = cover.resolvedACEStepTask
 
-        XCTAssertEqual(taskType, "cover")
-        XCTAssertFalse(cover.resolvedACEStepUsesLM(taskType: taskType))
+        XCTAssertEqual(task, .cover)
+        XCTAssertFalse(cover.resolvedACEStepUsesLM(task: task))
 
         let textToMusic = try MusicGenerate.parse([
             "fresh song",
@@ -124,7 +217,19 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--lm-subdirectory", "acestep-5Hz-lm-4B",
         ])
 
-        XCTAssertTrue(textToMusic.resolvedACEStepUsesLM(taskType: "text2music"))
+        XCTAssertTrue(textToMusic.resolvedACEStepUsesLM(task: .textToMusic))
+
+        let draft = try MusicGenerate.parse([
+            "fast idea",
+            "--quality", "draft",
+        ])
+        XCTAssertFalse(draft.resolvedACEStepUsesLM(task: .textToMusic))
+
+        let noLM = try MusicGenerate.parse([
+            "manual plan",
+            "--no-lm",
+        ])
+        XCTAssertFalse(noLM.resolvedACEStepUsesLM(task: .textToMusic))
     }
 
     func testMusicGenerateCoverDurationUsesSourceAudioLength() throws {
@@ -136,12 +241,34 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         let sourceAudio = MLXArray(Array(repeating: Float(0), count: 48_000 * 2 * 2), [1, 48_000 * 2, 2])
 
         let duration = cmd.resolvedACEStepDurationSeconds(
-            isCover: cmd.resolvedACEStepIsCover,
+            task: cmd.resolvedACEStepTask,
             sourceAudio48kHz: sourceAudio
         )
 
         XCTAssertEqual(duration, 2.0, accuracy: 0.0001)
         XCTAssertEqual(cmd.resolvedMetadataDuration(effectiveDurationSeconds: duration), "2 seconds")
+    }
+
+    func testMusicGenerateCompleteKeepsRequestedDuration() throws {
+        let cmd = try MusicGenerate.parse([
+            "finish this arrangement",
+            "--task", "complete",
+            "--source-audio", "/tmp/partial.wav",
+            "--duration", "30",
+        ])
+        let sourceAudio = MLXArray(
+            Array(repeating: Float(0), count: 48_000 * 2 * 2),
+            [1, 48_000 * 2, 2]
+        )
+
+        XCTAssertEqual(
+            cmd.resolvedACEStepDurationSeconds(
+                task: .complete,
+                sourceAudio48kHz: sourceAudio
+            ),
+            30,
+            accuracy: 0.0001
+        )
     }
 
     func testMusicGenerateSourceAnalysisFillsOnlyMissingMetadata() throws {
@@ -195,7 +322,7 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(cmd.model, ModelResolver.ModelID.magentaRT2Small.rawValue)
-        XCTAssertEqual(cmd.durationSeconds, 4.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.durationSeconds, 4.0)
         XCTAssertEqual(cmd.magentaStyleConditioning, .full)
         XCTAssertEqual(cmd.magentaTemperature, 0.8, accuracy: 0.0001)
         XCTAssertEqual(cmd.magentaTopK, 64)

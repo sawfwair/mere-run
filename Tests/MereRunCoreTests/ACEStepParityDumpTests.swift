@@ -89,7 +89,7 @@ final class ACEStepParityDumpTests: MereRunCoreTestCase {
             audioCoverStrength: 0.85,
             vocalLanguage: ACEStepPipeline.defaultVocalLanguage,
             instruction: instruction,
-            isCover: true
+            task: .cover
         )
         try dumpTensor(inputs.textHiddenStates, name: "swift_condition_text_hidden_bld_f32", to: outputURL)
         try dumpTensor(inputs.textAttentionMask.asType(DType.float32), name: "swift_condition_text_mask_f32", to: outputURL)
@@ -285,6 +285,141 @@ final class ACEStepParityDumpTests: MereRunCoreTestCase {
         ).asType(.float32)
 
         try dumpTensor(output, name: "swift_dit_fixture_output_btc_f32", to: outputURL)
+    }
+
+    func testDumpConditionEncoderFixture() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let outputRoot = env["MERERUN_PARITY_DUMP_DIR"], !outputRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_PARITY_DUMP_DIR=/tmp/acestep-condition-parity.")
+        }
+        guard let decoderRoot = env["MERERUN_TEST_ACESTEP_DECODER_ROOT"], !decoderRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_ACESTEP_DECODER_ROOT=/path/to/acestep-v15-turbo.")
+        }
+
+        let outputURL = URL(fileURLWithPath: outputRoot)
+        let textURL = outputURL.appendingPathComponent("condition_text_f32.raw")
+        let lyricsURL = outputURL.appendingPathComponent("condition_lyrics_f32.raw")
+        let referenceURL = outputURL.appendingPathComponent("condition_refer_f32.raw")
+        for fixtureURL in [textURL, lyricsURL, referenceURL] {
+            guard FileManager.default.fileExists(atPath: fixtureURL.path) else {
+                throw XCTSkip("Missing condition fixture: \(fixtureURL.path)")
+            }
+        }
+
+        let resources = ACEStepResources(rootURL: URL(fileURLWithPath: decoderRoot))
+        let config = try ACEStepCheckpointLoader.loadConfig(resources: resources)
+        let bundle = try ACEStepCheckpointLoader.loadTurboBundle(resources: resources, dtype: .float32)
+
+        let text = MLXArray(
+            try readFloats(from: textURL),
+            [1, 3, config.textHiddenDim]
+        ).asType(.float32)
+        let lyrics = MLXArray(
+            try readFloats(from: lyricsURL),
+            [1, 4, config.textHiddenDim]
+        ).asType(.float32)
+        let reference = MLXArray(
+            try readFloats(from: referenceURL),
+            [1, 5, config.timbreHiddenDim]
+        ).asType(.float32)
+
+        let result = bundle.encoder(
+            textHiddenStates: text,
+            textAttentionMask: MLXArray([Int32(1), 1, 0], [1, 3]),
+            lyricHiddenStates: lyrics,
+            lyricAttentionMask: MLXArray([Int32(1), 1, 1, 0], [1, 4]),
+            referAudioAcousticHiddenStatesPacked: reference,
+            referAudioOrderMask: MLXArray([Int32(0)])
+        )
+        try dumpTensor(result.hiddenStates, name: "swift_condition_hidden_f32", to: outputURL)
+        try writeInt32(
+            result.attentionMask.asType(.int32).reshaped(-1).asArray(Int32.self),
+            to: outputURL.appendingPathComponent("swift_condition_mask_i32.raw")
+        )
+    }
+
+    func testDumpQwenTextEncoderFixture() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let outputRoot = env["MERERUN_PARITY_DUMP_DIR"], !outputRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_PARITY_DUMP_DIR=/tmp/acestep-qwen-parity.")
+        }
+        guard let textRoot = env["MERERUN_TEST_ACESTEP_TEXT_ROOT"], !textRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_ACESTEP_TEXT_ROOT=/path/to/Qwen3-Embedding-0.6B.")
+        }
+
+        let resources = ACEStep5HzLMResources(rootURL: URL(fileURLWithPath: textRoot))
+        let data = try Data(contentsOf: resources.configURL)
+        let textConfig = try JSONDecoder().decode(ACEStep5HzLMConfig.self, from: data)
+        let qwenConfig = QwenTextEncoderConfiguration(
+            vocabSize: textConfig.vocabSize,
+            hiddenSize: textConfig.hiddenSize,
+            numHiddenLayers: textConfig.numHiddenLayers,
+            numAttentionHeads: textConfig.numAttentionHeads,
+            numKeyValueHeads: textConfig.numKeyValueHeads,
+            intermediateSize: textConfig.intermediateSize,
+            ropeTheta: textConfig.ropeTheta,
+            maxPositionEmbeddings: textConfig.maxPositionEmbeddings,
+            rmsNormEps: textConfig.rmsNormEps,
+            promptDropIndex: 0,
+            headDim: textConfig.headDim,
+            mropeSection: nil,
+            mropeInterleaved: false,
+            useFloat32Activations: true
+        )
+        let encoder = QwenEncoder(configuration: qwenConfig)
+        try ModelWeightsLoader.applyHFSafetensors(
+            indexURL: resources.weightsIndexURL,
+            singleURL: resources.weightsURL,
+            to: encoder,
+            dtype: .float32,
+            verify: .noUnusedKeys,
+            mapper: QwenEncoder.mapHFSafetensorWeight
+        )
+
+        let inputIDs = MLXArray(
+            [Int32(151_643), 9_707, 374, 264, 1_296, 13, 151_645, 151_643],
+            [1, 8]
+        )
+        let attentionMask = MLXArray(
+            [Int32(1), 1, 1, 1, 1, 1, 1, 0],
+            [1, 8]
+        )
+        let hidden = encoder.forward(
+            inputIds: inputIDs,
+            attentionMask: attentionMask
+        ).lastHiddenState
+        let embedding = encoder.embed(inputIds: inputIDs)
+        let outputURL = URL(fileURLWithPath: outputRoot)
+        try dumpTensor(hidden, name: "swift_qwen_hidden_f32", to: outputURL)
+        try dumpTensor(embedding, name: "swift_qwen_embed_f32", to: outputURL)
+    }
+
+    func testDumpFSQDetokenizerFixture() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let outputRoot = env["MERERUN_PARITY_DUMP_DIR"], !outputRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_PARITY_DUMP_DIR=/tmp/acestep-fsq-parity.")
+        }
+        guard let decoderRoot = env["MERERUN_TEST_ACESTEP_DECODER_ROOT"], !decoderRoot.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_ACESTEP_DECODER_ROOT=/path/to/acestep-v15-turbo.")
+        }
+
+        let resources = ACEStepResources(rootURL: URL(fileURLWithPath: decoderRoot))
+        let bundle = try ACEStepCheckpointLoader.loadTurboBundle(
+            resources: resources,
+            dtype: .float32
+        )
+        let codes = MLXArray(
+            [Int32(100), 1_234, 50_000, 63_999],
+            [1, 4, 1]
+        )
+        let quantized = bundle.tokenizer.quantizer.getOutputFromIndices(
+            codes,
+            dtype: .float32
+        )
+        let detokenized = bundle.detokenizer(quantized)
+        let outputURL = URL(fileURLWithPath: outputRoot)
+        try dumpTensor(quantized, name: "swift_fsq_quantized_f32", to: outputURL)
+        try dumpTensor(detokenized, name: "swift_fsq_detokenized_f32", to: outputURL)
     }
 
     func testDumpSourceAudioAndVAELatents() throws {

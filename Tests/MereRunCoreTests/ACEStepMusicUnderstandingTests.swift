@@ -60,4 +60,20 @@ final class ACEStepMusicUnderstandingTests: MereRunCoreTestCase {
         XCTAssertNil(metadata.language)
         XCTAssertNil(metadata.timesignature)
     }
+
+    func testParseUnderstandingOutputAcceptsOnlyOneUpstreamLanguageCode() {
+        let valid = ACEStepPipeline.parseUnderstandingOutput(
+            "<think>\nlanguage: EN\n</think>"
+        )
+        let multiple = ACEStepPipeline.parseUnderstandingOutput(
+            "<think>\nlanguage: en, ja, ko\n</think>"
+        )
+        let unsupported = ACEStepPipeline.parseUnderstandingOutput(
+            "<think>\nlanguage: zxx\n</think>"
+        )
+
+        XCTAssertEqual(valid.language, "en")
+        XCTAssertNil(multiple.language)
+        XCTAssertNil(unsupported.language)
+    }
 }

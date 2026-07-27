@@ -93,6 +93,7 @@ export default defineConfig({
           { text: 'Speech Runtime', link: '/runtime/speech' },
           { text: 'Vision Runtime', link: '/runtime/vision' },
           { text: 'Music Runtime', link: '/runtime/music' },
+          { text: 'ACE-Step Validation', link: '/runtime/acestep-validation' },
           { text: 'SFX Runtime', link: '/runtime/sfx' },
           { text: 'Video Runtime', link: '/runtime/video' },
           { text: 'Persistent Worlds', link: '/runtime/world' },

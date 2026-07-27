@@ -41,8 +41,64 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("lyrics-file")], help: "Path to lyrics text file. Cannot be used with --lyrics.")
     var lyricsFile: String?
 
+    @Option(name: [.customLong("lrc-file")], help: "Synchronized LRC lyrics input. Cannot be combined with plain lyrics options.")
+    var lrcFile: String?
+
+    @Option(name: [.customLong("lrc-output")], help: "Write synchronized LRC; plain lyrics receive clearly marked approximate line timing.")
+    var lrcOutput: String?
+
     @Option(name: [.customShort("o"), .long], help: "Output WAV path (default: ./mererun-music-<timestamp>.wav).")
     var output: String?
+
+    @Option(name: [.customLong("export-format")], help: "WAV encoding: pcm16, pcm24, or float32.")
+    var exportFormat: ACEStepAudioFormat = .pcm24
+
+    @Option(name: [.customLong("normalize")], help: "Output normalization: none or peak.")
+    var normalization: ACEStepNormalizationMode = .peak
+
+    @Option(name: [.customLong("target-peak-db")], help: "Peak-normalization target in dBFS.")
+    var targetPeakDB: Float = -1
+
+    @Option(name: [.customLong("fade-in-ms")], help: "Output fade-in in milliseconds.")
+    var fadeInMilliseconds: Float = 5
+
+    @Option(name: [.customLong("fade-out-ms")], help: "Output fade-out in milliseconds.")
+    var fadeOutMilliseconds: Float = 20
+
+    @Flag(name: [.customLong("no-dither")], help: "Disable deterministic TPDF dither for integer PCM export.")
+    var noDither: Bool = false
+
+    @Option(name: [.customLong("recipe-output")], help: "Generation recipe JSON path (default: <output>.recipe.json).")
+    var recipeOutput: String?
+
+    @Flag(name: [.customLong("no-recipe")], help: "Do not write the reproducible generation recipe sidecar.")
+    var noRecipe: Bool = false
+
+    @Option(name: [.customLong("daw-bundle")], help: "Write a portable DAW bundle with WAVs, recipe, LRC markers, and a REAPER project.")
+    var dawBundle: String?
+
+    @Option(name: [.customLong("stems")], help: "Comma-separated stems to extract after generation (Base checkpoints only).")
+    var stems: String?
+
+    @Option(
+        name: [.customLong("adapter")],
+        parsing: .upToNextOption,
+        help: "PEFT LoRA or LyCORIS LoKr safetensors file(s) to stack on the ACE-Step decoder."
+    )
+    var adapters: [String] = []
+
+    @Option(
+        name: [.customLong("adapter-kind")],
+        help: "Adapter format: auto, lora, or lokr."
+    )
+    var adapterKind: ACEStepAdapterKind = .auto
+
+    @Option(
+        name: [.customLong("adapter-scale")],
+        parsing: .upToNextOption,
+        help: "Adapter scale(s): one value for all adapters, or one per --adapter path."
+    )
+    var adapterScales: [Float] = []
 
     @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the ACE-Step model root/checkpoints root.")
     var model: String = ModelResolver.ModelID.aceStep.rawValue
@@ -50,7 +106,10 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("checkpoints-root")], help: "Root directory containing ACE-Step checkpoint subdirectories. Auto-discovered if not set.")
     var checkpointsRoot: String?
 
-    @Option(name: [.customLong("turbo-subdirectory")], help: "Turbo decoder subdirectory under checkpoints root.")
+    @Option(
+        name: [.customLong("decoder-subdirectory"), .customLong("turbo-subdirectory")],
+        help: "ACE-Step decoder subdirectory under checkpoints root."
+    )
     var turboSubdirectory: String = "acestep-v15-turbo"
 
     @Option(name: [.customLong("vae-subdirectory")], help: "VAE subdirectory under checkpoints root.")
@@ -65,23 +124,65 @@ struct MusicGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong("use-lm")], help: "Use 5Hz LM constrained decoding for supported ACE-Step tasks.")
     var useLM: Bool = false
 
+    @Flag(name: [.customLong("no-lm")], help: "Disable ACE-Step LM planning and semantic-code generation selected by a quality preset.")
+    var noLM: Bool = false
+
     @Flag(
         name: [.customLong("analyze-source-audio")],
         help: "Use ACE-Step 5Hz LM audio understanding to fill missing cover metadata from --source-audio."
     )
     var analyzeSourceAudio: Bool = false
 
-    @Option(name: [.customLong("duration")], help: "Output duration in seconds.")
-    var durationSeconds: Float = 10.0
+    @Option(name: [.customLong("duration")], help: "Output duration in seconds (omitting it lets song/final quality plan duration).")
+    var durationSeconds: Float?
 
-    @Option(name: [.customShort("s"), .long], help: "Number of turbo denoise steps.")
-    var steps: Int = 8
+    @Option(name: [.customLong("quality")], help: "Adaptive ACE-Step quality: draft, song, final, or edit.")
+    var quality: ACEStepQualityPreset = .song
 
-    @Option(name: [.customLong("shift")], help: "Turbo scheduler shift.")
-    var shift: Float = Self.defaultACEStepShift
+    @Option(name: [.customShort("s"), .long], help: "Denoise steps (default: Turbo 8; Base/SFT 50).")
+    var steps: Int?
+
+    @Option(name: [.customLong("shift")], help: "Flow scheduler shift (default: Turbo 3; Base/SFT 1).")
+    var shift: Float?
+
+    @Option(name: [.customLong("infer-method")], help: "Diffusion method: ode or sde (default: ode).")
+    var inferMethod: ACEStepInferenceMethod?
+
+    @Option(name: [.customLong("sampler")], help: "ODE sampler: euler or heun (default: euler).")
+    var samplerMode: ACEStepSamplerMode?
+
+    @Option(name: [.customLong("guidance-scale")], help: "Base/SFT diffusion guidance (default: 7; Turbo always uses 1).")
+    var guidanceScale: Float?
+
+    @Option(name: [.customLong("guidance-mode")], help: "Base/SFT guidance: apg, adg, or cfg (default: apg).")
+    var guidanceMode: ACEStepGuidanceMode?
+
+    @Option(name: [.customLong("cfg-interval-start")], help: "Enable guidance at or above this timestep in [0, 1].")
+    var cfgIntervalStart: Float?
+
+    @Option(name: [.customLong("cfg-interval-end")], help: "Enable guidance at or below this timestep in [0, 1].")
+    var cfgIntervalEnd: Float?
+
+    @Option(name: [.customLong("velocity-norm-threshold")], help: "Clamp velocity norm relative to the latent norm (0 disables).")
+    var velocityNormThreshold: Float?
+
+    @Option(name: [.customLong("velocity-ema-factor")], help: "Blend each velocity with its predecessor in [0, 1) (0 disables).")
+    var velocityEMAFactor: Float?
 
     @Option(name: [.long], help: "Seed for deterministic generation.")
     var seed: UInt64?
+
+    @Option(
+        name: [.customLong("candidates"), .customLong("best-of")],
+        help: "Generate and rank this many warm-session candidates (preset default: draft 1, song/edit 2, final 4)."
+    )
+    var candidateCount: Int?
+
+    @Flag(
+        name: [.customLong("keep-candidates")],
+        help: "Save every ranked candidate next to the selected output."
+    )
+    var keepCandidates: Bool = false
 
     @Option(name: [.customLong("audio-cover-strength")], help: "Cover-conditioning strength in [0, 1].")
     var audioCoverStrength: Float = 1.0
@@ -89,16 +190,25 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("cover-noise-strength")], help: "Source-latent noise initialization strength in [0, 1] for ACE-Step covers.")
     var coverNoiseStrength: Float = 0.0
 
+    @Option(name: [.customLong("retake-seed")], help: "Independent seed used to vary a reproducible retake.")
+    var retakeSeed: UInt64?
+
+    @Option(name: [.customLong("retake-variance")], help: "Retake interpolation in [0, 1]; 0 keeps --seed and 1 uses --retake-seed.")
+    var retakeVariance: Float = 0
+
     @Option(name: [.customLong("vocal-language")], help: "Language tag used in lyric prompt formatting.")
     var vocalLanguage: String = "en"
 
     @Option(name: [.customLong("instruction")], help: "Caption instruction prefix.")
     var instruction: String = "Fill the audio semantic mask based on the given conditions:"
 
-    @Option(name: [.customLong("task-type"), .customLong("task")], help: "Task type: text2music, cover, repaint, extract, lego, complete.")
-    var taskType: String = "text2music"
+    @Option(
+        name: [.customLong("task-type"), .customLong("task")],
+        help: "ACE-Step task: text2music, repaint, cover, cover-nofsq, extract, lego, or complete."
+    )
+    var taskType: ACEStepTask = .textToMusic
 
-    @Option(name: [.customLong("source-audio")], help: "Source audio file for ACE-Step cover conditioning. Implies cover mode unless --non-cover is set.")
+    @Option(name: [.customLong("source-audio")], help: "Source audio for ACE-Step cover, repaint, extract, lego, or complete. With the default task, implies cover.")
     var sourceAudio: String?
 
     @Option(name: [.customLong("reference-audio")], parsing: .upToNextOption, help: "Optional reference audio file(s) for ACE-Step timbre conditioning.")
@@ -110,8 +220,41 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("complete-track-classes")], help: "Comma-separated track classes for complete task (e.g. Drums,Bass).")
     var completeTrackClasses: String?
 
-    @Flag(name: [.customLong("non-cover")], help: "Force non-cover conditioning for cover-style tasks.")
+    @Flag(name: [.customLong("non-cover")], help: "Compatibility alias that selects cover-nofsq instead of FSQ cover conditioning.")
     var nonCover: Bool = false
+
+    @Option(name: [.customLong("repaint-start")], help: "Repaint/lego range start in seconds.")
+    var repaintStartSeconds: Float = 0
+
+    @Option(name: [.customLong("repaint-end")], help: "Repaint/lego range end in seconds (-1 uses the source end).")
+    var repaintEndSeconds: Float = -1
+
+    @Option(name: [.customLong("chunk-mask-mode")], help: "Repaint chunk-mask mode: auto or explicit.")
+    var chunkMaskMode: ACEStepChunkMaskMode = .auto
+
+    @Option(name: [.customLong("repaint-mode")], help: "Source preservation: conservative, balanced, or aggressive.")
+    var repaintMode: ACEStepRepaintMode = .balanced
+
+    @Option(name: [.customLong("repaint-strength")], help: "Balanced repaint aggressiveness in [0, 1].")
+    var repaintStrength: Float = 0.5
+
+    @Flag(name: [.customLong("flow-edit")], help: "Morph --source-audio from its source caption/lyrics toward the target prompt.")
+    var flowEdit: Bool = false
+
+    @Option(name: [.customLong("source-caption")], help: "Caption describing --source-audio before flow edit.")
+    var sourceCaption: String?
+
+    @Option(name: [.customLong("source-lyrics")], help: "Original lyrics used by flow edit.")
+    var sourceLyrics: String = ""
+
+    @Option(name: [.customLong("flow-edit-n-min")], help: "Normalized flow-edit integration window start.")
+    var flowEditNMin: Float = 0
+
+    @Option(name: [.customLong("flow-edit-n-max")], help: "Normalized flow-edit integration window end.")
+    var flowEditNMax: Float = 1
+
+    @Option(name: [.customLong("flow-edit-n-average")], help: "Monte Carlo forward-noise draws per flow-edit step.")
+    var flowEditNAverage: Int = 1
 
     @Option(name: [.customLong("bpm")], help: "Optional BPM metadata for constrained LM / prompt metadata.")
     var bpm: Int?
@@ -182,17 +325,79 @@ struct MusicGenerate: AsyncParsableCommand {
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
-        guard durationSeconds > 0 else {
+        if let durationSeconds, durationSeconds <= 0 {
             throw ValidationError("--duration must be > 0")
         }
-        guard steps > 0 else {
+        if useLM && noLM {
+            throw ValidationError("Pass either --use-lm or --no-lm, not both.")
+        }
+        if let steps, steps < 1 {
             throw ValidationError("--steps must be >= 1")
+        }
+        if let shift, shift <= 0 {
+            throw ValidationError("--shift must be > 0")
+        }
+        if let guidanceScale, guidanceScale < 1 {
+            throw ValidationError("--guidance-scale must be >= 1")
+        }
+        if let cfgIntervalStart, !(0...1).contains(cfgIntervalStart) {
+            throw ValidationError("--cfg-interval-start must be between 0 and 1")
+        }
+        if let cfgIntervalEnd, !(0...1).contains(cfgIntervalEnd) {
+            throw ValidationError("--cfg-interval-end must be between 0 and 1")
+        }
+        let resolvedCFGStart = cfgIntervalStart ?? 0
+        let resolvedCFGEnd = cfgIntervalEnd ?? 1
+        guard resolvedCFGStart <= resolvedCFGEnd else {
+            throw ValidationError("--cfg-interval-start must be <= --cfg-interval-end")
+        }
+        if let velocityNormThreshold, velocityNormThreshold < 0 {
+            throw ValidationError("--velocity-norm-threshold must be >= 0")
+        }
+        if let velocityEMAFactor, !(0..<1).contains(velocityEMAFactor) {
+            throw ValidationError("--velocity-ema-factor must be between 0 (inclusive) and 1 (exclusive)")
         }
         guard (0.0...1.0).contains(audioCoverStrength) else {
             throw ValidationError("--audio-cover-strength must be between 0.0 and 1.0")
         }
+        if let candidateCount, !(1...16).contains(candidateCount) {
+            throw ValidationError("--candidates must be between 1 and 16")
+        }
         guard (0.0...1.0).contains(coverNoiseStrength) else {
             throw ValidationError("--cover-noise-strength must be between 0.0 and 1.0")
+        }
+        guard (0.0...1.0).contains(retakeVariance) else {
+            throw ValidationError("--retake-variance must be between 0.0 and 1.0")
+        }
+        guard repaintStartSeconds >= 0 else {
+            throw ValidationError("--repaint-start must be >= 0")
+        }
+        guard repaintEndSeconds == -1 || repaintEndSeconds > repaintStartSeconds else {
+            throw ValidationError("--repaint-end must be -1 or greater than --repaint-start")
+        }
+        guard (0.0...1.0).contains(repaintStrength) else {
+            throw ValidationError("--repaint-strength must be between 0.0 and 1.0")
+        }
+        if flowEdit {
+            guard sourceAudio != nil else {
+                throw ValidationError("--flow-edit requires --source-audio")
+            }
+            guard sourceCaption?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty == false else {
+                throw ValidationError("--flow-edit requires --source-caption")
+            }
+            guard 0 <= flowEditNMin,
+                  flowEditNMin <= flowEditNMax,
+                  flowEditNMax <= 1
+            else {
+                throw ValidationError(
+                    "--flow-edit requires 0 <= n-min <= n-max <= 1"
+                )
+            }
+            guard flowEditNAverage >= 1 else {
+                throw ValidationError("--flow-edit-n-average must be >= 1")
+            }
         }
         guard lmTopK >= 0 else {
             throw ValidationError("--lm-top-k must be >= 0")
@@ -209,66 +414,140 @@ struct MusicGenerate: AsyncParsableCommand {
         if lyricsFile != nil, !lyrics.isEmpty {
             throw ValidationError("Pass either --lyrics or --lyrics-file, not both.")
         }
+        if lrcFile != nil, lyricsFile != nil || !lyrics.isEmpty {
+            throw ValidationError(
+                "Pass --lrc-file or plain --lyrics/--lyrics-file, not both."
+            )
+        }
+        guard targetPeakDB <= 0 else {
+            throw ValidationError("--target-peak-db must be <= 0")
+        }
+        guard fadeInMilliseconds >= 0, fadeOutMilliseconds >= 0 else {
+            throw ValidationError("Output fades must be >= 0")
+        }
+        if dawBundle != nil, noRecipe {
+            throw ValidationError(
+                "--daw-bundle requires recipe metadata; remove --no-recipe"
+            )
+        }
 
         if isMagentaRT2Request {
             try await runMagentaRT2()
             return
         }
 
-        let isCover = resolvedACEStepIsCover
-        let effectiveTaskType = resolvedACEStepTaskType(isCover: isCover)
-        let effectiveUseLM = resolvedACEStepUsesLM(taskType: effectiveTaskType)
-        if analyzeSourceAudio && !isCover {
+        let effectiveTask = resolvedACEStepTask
+        var effectiveUseLM = flowEdit
+            ? false
+            : resolvedACEStepUsesLM(task: effectiveTask)
+        if analyzeSourceAudio && effectiveTask != .cover && effectiveTask != .coverNoFSQ {
             throw ValidationError("--analyze-source-audio requires ACE-Step cover mode with --source-audio.")
         }
-        let needsLMResources = effectiveUseLM || analyzeSourceAudio
+        let wantsLMResources = effectiveUseLM || analyzeSourceAudio
 
         let checkpointsRootURL = try await resolveACEStepCheckpointsRoot()
         let resolvedTurboSubdirectory = try resolveACEStepTurboSubdirectory(
             at: checkpointsRootURL,
             explicit: turboSubdirectory
         )
-        let resolvedLMSubdirectory = try needsLMResources
+        let checkpointVariant = try ACEStepCheckpointVariant.load(
+            modelRootURL: checkpointsRootURL.appendingPathComponent(
+                resolvedTurboSubdirectory,
+                isDirectory: true
+            )
+        )
+        do {
+            try checkpointVariant.validate(effectiveTask)
+        } catch {
+            throw ValidationError(error.localizedDescription)
+        }
+        let stemNames = parsedStemNames()
+        if !stemNames.isEmpty {
+            do {
+                try checkpointVariant.validate(.extract)
+            } catch {
+                throw ValidationError(
+                    "--stems requires an ACE-Step Base checkpoint: "
+                        + error.localizedDescription
+                )
+            }
+        }
+        let qualityDefaults = quality.defaults(
+            for: checkpointVariant,
+            task: effectiveTask
+        )
+        let resolvedLMSubdirectory = try wantsLMResources
             ? resolveACEStepLMSubdirectory(at: checkpointsRootURL, explicit: lmSubdirectory)
             : nil
         let resolvedTextSubdirectory = try resolveACEStepTextSubdirectory(
             at: checkpointsRootURL,
             explicit: textSubdirectory
         )
-        if needsLMResources && resolvedLMSubdirectory == nil {
-            throw ValidationError(
-                "--use-lm and --analyze-source-audio require --lm-subdirectory. "
-                    + "Set --lm-subdirectory or keep a default layout like 'acestep-5Hz-lm-1.7B'."
-            )
+        if wantsLMResources && resolvedLMSubdirectory == nil {
+            if useLM || analyzeSourceAudio || lmSubdirectory != nil {
+                throw ValidationError(
+                    "ACE-Step LM planning/generation and --analyze-source-audio require --lm-subdirectory. "
+                        + "Set --lm-subdirectory or use a managed model that includes a 5Hz LM."
+                )
+            }
+            effectiveUseLM = false
+            if !quiet {
+                CLIStderr.write(
+                    "No 5Hz LM is installed with this checkpoint; "
+                        + "continuing with direct DiT generation. Use --no-lm to make this choice explicit.\n"
+                )
+            }
         }
+        let needsLMResources = effectiveUseLM || analyzeSourceAudio
         if resolvedTextSubdirectory == nil {
             throw ValidationError("ACE-Step text encoder not found. Set --text-subdirectory or keep a default layout like 'Qwen3-Embedding-0.6B'.")
+        }
+        if quality == .final,
+           let resolvedLMSubdirectory,
+           !resolvedLMSubdirectory.lowercased().contains("4b"),
+           !quiet
+        {
+            CLIStderr.write(
+                "Final quality is using \(resolvedLMSubdirectory); "
+                    + "use music-acestep-xl-turbo-lm4b or --lm-subdirectory with the 4B LM for the strongest planning.\n"
+            )
         }
 
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-music", defaultExtension: "wav")
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        let resolvedLyrics = try loadLyrics()
+        let inputLRC = try loadLRC()
+        let resolvedLyrics = try inputLRC?.lyrics ?? loadLyrics()
         let sourceAudio48kHz = try loadACEStepSourceAudio48kHz()
         let referenceAudio48kHz = try loadACEStepReferenceAudio48kHz()
-        if isCover && sourceAudio48kHz == nil {
-            throw ValidationError("--source-audio is required for ACE-Step cover mode.")
+        if effectiveTask.requiresSourceAudio && sourceAudio48kHz == nil {
+            throw ValidationError("--source-audio is required for ACE-Step \(effectiveTask.rawValue).")
         }
-        let effectiveDurationSeconds = resolvedACEStepDurationSeconds(
-            isCover: isCover,
-            sourceAudio48kHz: sourceAudio48kHz
+        var effectiveDurationSeconds = resolvedACEStepDurationSeconds(
+            task: effectiveTask,
+            sourceAudio48kHz: sourceAudio48kHz,
+            fallback: durationSeconds ?? qualityDefaults.fallbackDurationSeconds
         )
         let resolvedInstruction = resolveInstruction(
-            taskType: effectiveTaskType,
+            task: effectiveTask,
             explicitInstruction: instruction,
             trackName: trackName,
             completeTrackClasses: completeTrackClasses
         )
 
+        let shouldPlanDuration = effectiveUseLM
+            && durationSeconds == nil
+            && qualityDefaults.automaticDuration
+            && !effectiveTask.locksDurationToSource
+        var effectiveCaption = caption
         var userMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
             bpm: bpm.map(String.init),
             caption: caption,
-            duration: resolvedMetadataDuration(effectiveDurationSeconds: effectiveDurationSeconds),
+            duration: shouldPlanDuration
+                ? nil
+                : resolvedLMMetadataDuration(
+                    effectiveDurationSeconds: effectiveDurationSeconds
+                ),
             keyscale: keyscale,
             language: metadataLanguage,
             timesignature: timesignature
@@ -277,7 +556,7 @@ struct MusicGenerate: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("Loading ACE-Step checkpoints from \(checkpointsRootURL.path)\n")
             if useLM && !effectiveUseLM {
-                CLIStderr.write("Skipping 5Hz LM for ACE-Step \(effectiveTaskType) task; upstream uses direct DiT conditioning for this task.\n")
+                CLIStderr.write("Skipping 5Hz LM for ACE-Step \(effectiveTask.rawValue) task; upstream uses direct DiT conditioning for this task.\n")
             }
         }
 
@@ -295,6 +574,7 @@ struct MusicGenerate: AsyncParsableCommand {
             lmResources: resources.lmResources,
             textEncoderResources: resources.textEncoderResources
         )
+        let loadedAdapters = try loadAdapters(into: pipeline)
 
         if analyzeSourceAudio {
             guard let sourceAudio48kHz else {
@@ -321,69 +601,370 @@ struct MusicGenerate: AsyncParsableCommand {
             }
         }
 
+        if effectiveUseLM && qualityDefaults.plansMetadata {
+            if !quiet {
+                CLIStderr.write("Planning ACE-Step \(quality.rawValue) metadata with the 5Hz LM\n")
+            }
+            let planningMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
+                bpm: userMetadata.bpm,
+                caption: nil,
+                duration: shouldPlanDuration ? nil : userMetadata.duration,
+                keyscale: userMetadata.keyscale,
+                language: userMetadata.language,
+                timesignature: userMetadata.timesignature
+            )
+            let plan = try pipeline.planMusic(
+                caption: caption,
+                lyrics: resolvedLyrics,
+                instruction: resolvedInstruction,
+                userMetadata: planningMetadata,
+                lmConfig: .init(
+                    maxNewTokens: 1_024,
+                    temperature: 0.85,
+                    topK: lmTopK,
+                    topP: lmTopP,
+                    seed: seed
+                )
+            )
+            if let plannedCaption = nonEmpty(plan.metadata.caption) {
+                effectiveCaption = plannedCaption
+            }
+            if shouldPlanDuration, let plannedDuration = plan.metadata.durationSeconds {
+                effectiveDurationSeconds = clampedAutomaticDuration(plannedDuration)
+            }
+            userMetadata = mergePlanMetadata(
+                existing: userMetadata,
+                plan: plan.metadata,
+                caption: effectiveCaption,
+                durationSeconds: effectiveDurationSeconds
+            )
+            if !quiet {
+                CLIStderr.write(
+                    "ACE-Step plan: \(plan.metadata.understandingSummary); "
+                        + "duration=\(Int(effectiveDurationSeconds))s\n"
+                )
+            }
+        }
+
         let inference = ACEStepInferenceConfig(
             durationSeconds: effectiveDurationSeconds,
-            fixNFE: steps,
-            shift: shift,
+            fixNFE: steps ?? qualityDefaults.inferenceSteps,
+            shift: shift ?? qualityDefaults.shift,
             timesteps: nil,
             coverNoiseStrength: coverNoiseStrength,
-            inferMethod: .ode,
+            retakeSeed: retakeSeed,
+            retakeVariance: retakeVariance,
+            inferMethod: inferMethod ?? .ode,
+            samplerMode: samplerMode ?? qualityDefaults.samplerMode,
+            guidanceScale: guidanceScale ?? qualityDefaults.guidanceScale,
+            guidanceMode: guidanceMode ?? .apg,
+            cfgIntervalStart: resolvedCFGStart,
+            cfgIntervalEnd: resolvedCFGEnd,
+            velocityNormThreshold: velocityNormThreshold
+                ?? qualityDefaults.velocityNormThreshold,
+            velocityEMAFactor: velocityEMAFactor
+                ?? qualityDefaults.velocityEMAFactor,
             useTiledVaeDecode: !noTiledVAE,
             vaeChunkSize: vaeChunkSize,
             vaeOverlap: vaeOverlap,
             seed: seed
         )
-
-        let audio: MLXArray
-        if effectiveUseLM {
-            if !quiet {
-                CLIStderr.write("Running constrained 5Hz LM + diffusion\n")
-            }
-            let result = try pipeline.generatePromptToAudioWithLM(
-                caption: caption,
-                lyrics: resolvedLyrics,
-                config: inference,
-                lmConfig: .init(maxNewTokens: 4096, temperature: 0.85, topK: lmTopK, topP: lmTopP),
-                lmUserMetadata: userMetadata,
-                sourceLatents25Hz: nil,
-                sourceAudio48kHz: sourceAudio48kHz,
-                referenceTimbreLatents25Hz: nil,
-                referenceTimbreAudio48kHz: referenceAudio48kHz,
-                audioCoverStrength: audioCoverStrength,
-                vocalLanguage: vocalLanguage,
-                instruction: resolvedInstruction,
-                isCover: isCover
+        let repaintConfiguration = effectiveTask == .repaint || effectiveTask == .lego
+            ? ACEStepRepaintConfiguration(
+                startSeconds: repaintStartSeconds,
+                endSeconds: repaintEndSeconds,
+                chunkMaskMode: chunkMaskMode,
+                mode: repaintMode,
+                strength: repaintStrength
             )
-            if !quiet {
-                CLIStderr.write("Generated \(result.lmResult.audioCodeValues.count) audio code tokens\n")
-            }
-            audio = result.audio
-        } else {
-            if !quiet {
-                CLIStderr.write("Running direct prompt-to-audio diffusion\n")
-            }
-            audio = try pipeline.generatePromptToAudio(
-                caption: caption,
+            : nil
+        let flowEditConfiguration = flowEdit
+            ? ACEStepFlowEditConfiguration(
+                sourceCaption: sourceCaption ?? "",
+                sourceLyrics: sourceLyrics,
+                nMin: flowEditNMin,
+                nMax: flowEditNMax,
+                nAverage: flowEditNAverage,
+                retakeSeed: retakeSeed
+            )
+            : nil
+
+        let resolvedCandidateCount = candidateCount ?? qualityDefaults.candidateCount
+        if !quiet {
+            let mode = effectiveUseLM ? "constrained 5Hz LM + diffusion" : "direct prompt-to-audio diffusion"
+            CLIStderr.write(
+                "Running \(mode) in one warm session; candidates=\(resolvedCandidateCount)\n"
+            )
+        }
+        let session = ACEStepGenerationSession(pipeline: pipeline)
+        let ranked = try session.generateBest(
+            ACEStepSessionRequest(
+                caption: effectiveCaption,
                 lyrics: resolvedLyrics,
                 config: inference,
+                lmConfig: .init(
+                    maxNewTokens: 4_096,
+                    temperature: 0.85,
+                    topK: lmTopK,
+                    topP: lmTopP
+                ),
                 lmUserMetadata: userMetadata,
-                sourceLatents25Hz: nil,
                 sourceAudio48kHz: sourceAudio48kHz,
-                referenceTimbreLatents25Hz: nil,
                 referenceTimbreAudio48kHz: referenceAudio48kHz,
                 audioCoverStrength: audioCoverStrength,
                 vocalLanguage: vocalLanguage,
                 instruction: resolvedInstruction,
-                isCover: isCover
+                task: effectiveTask,
+                repaintConfiguration: repaintConfiguration,
+                flowEditConfiguration: flowEditConfiguration,
+                useLanguageModel: effectiveUseLM
+            ),
+            candidateCount: resolvedCandidateCount
+        )
+
+        let exportOptions = ACEStepAudioExportOptions(
+            format: exportFormat,
+            normalization: normalization,
+            targetPeakDB: targetPeakDB,
+            fadeInMilliseconds: fadeInMilliseconds,
+            fadeOutMilliseconds: fadeOutMilliseconds,
+            dither: !noDither
+        )
+        try ACEStepWAVWriter.writeWAV(
+            ranked.best.audio,
+            to: outputURL,
+            sampleRate: 48_000,
+            options: exportOptions
+        )
+        if keepCandidates {
+            for candidate in ranked.candidates {
+                let candidateURL = candidateOutputURL(
+                    selectedOutputURL: outputURL,
+                    rank: ranked.candidates.firstIndex { $0.index == candidate.index } ?? 0,
+                    candidate: candidate
+                )
+                try ACEStepWAVWriter.writeWAV(
+                    candidate.audio,
+                    to: candidateURL,
+                    sampleRate: 48_000,
+                    options: exportOptions
+                )
+            }
+        }
+
+        var stemTracks: [ACEStepDAWBundleWriter.Track] = []
+        for stemName in stemNames {
+            if !quiet {
+                CLIStderr.write("Extracting ACE-Step stem: \(stemName)\n")
+            }
+            var stemConfig = inference
+            stemConfig.seed = ranked.best.seed
+            let extracted = try session.generateBest(
+                ACEStepSessionRequest(
+                    caption: effectiveCaption,
+                    lyrics: "",
+                    config: stemConfig,
+                    lmUserMetadata: userMetadata,
+                    sourceAudio48kHz: ranked.best.audio,
+                    vocalLanguage: vocalLanguage,
+                    instruction: ACEStepTask.extract.instruction(
+                        trackName: stemName
+                    ),
+                    task: .extract,
+                    useLanguageModel: false
+                ),
+                candidateCount: 1
+            ).best
+            let stemURL = stemOutputURL(
+                selectedOutputURL: outputURL,
+                stemName: stemName
+            )
+            try ACEStepWAVWriter.writeWAV(
+                extracted.audio,
+                to: stemURL,
+                sampleRate: 48_000,
+                options: exportOptions
+            )
+            stemTracks.append(
+                ACEStepDAWBundleWriter.Track(
+                    name: stemName,
+                    audio: extracted.audio
+                )
             )
         }
 
-        try ACEStepWAVWriter.writeWAV(audio, to: outputURL, sampleRate: 48_000)
+        let synchronizedLyrics: ACEStepLRCDocument? = {
+            if let inputLRC {
+                return inputLRC
+            }
+            if lrcOutput != nil || dawBundle != nil, !resolvedLyrics.isEmpty {
+                return .approximate(
+                    lyrics: resolvedLyrics,
+                    durationSeconds: Double(effectiveDurationSeconds)
+                )
+            }
+            return nil
+        }()
+        let synchronizedLyricsURL: URL? = try {
+            guard let synchronizedLyrics else {
+                return nil
+            }
+            let url = lrcOutput.map(resolveUserPath)
+                ?? outputURL.deletingPathExtension().appendingPathExtension("lrc")
+            try synchronizedLyrics.rendered().write(
+                to: url,
+                atomically: true,
+                encoding: .utf8
+            )
+            return url
+        }()
+
+        let recipeURL: URL? = try {
+            guard !noRecipe else {
+                return nil
+            }
+            let url = recipeOutput.map(resolveUserPath)
+                ?? outputURL.deletingPathExtension()
+                    .appendingPathExtension("recipe.json")
+            let manifest = try MereRunModelManifest.loadIfPresent(
+                from: checkpointsRootURL
+            )
+            let sourceSHA256 = try sourceAudio.map {
+                try ModelArtifactPin.fileSHA256(resolveUserPath($0))
+            }
+            let recipe = ACEStepGenerationRecipe(
+                schemaVersion: ACEStepGenerationRecipe.currentSchemaVersion,
+                createdAt: Date(),
+                modelID: model,
+                checkpointVariant: checkpointVariant,
+                decoderSubdirectory: resolvedTurboSubdirectory,
+                checkpointSources:
+                    ACEStepGenerationRecipe.checkpointProvenance(
+                        modelID: model,
+                        manifest: manifest
+                    ),
+                languageModelSubdirectory: resolvedLMSubdirectory,
+                textEncoderSubdirectory: resolvedTextSubdirectory ?? "",
+                adapters: loadedAdapters,
+                task: effectiveTask,
+                quality: quality,
+                caption: effectiveCaption,
+                lyrics: resolvedLyrics,
+                instruction: resolvedInstruction,
+                conditioningMetadata:
+                    ACEStepRecipeConditioningMetadata(userMetadata),
+                inference: inference,
+                repaint: repaintConfiguration,
+                flowEdit: flowEditConfiguration,
+                languageModelUsed: effectiveUseLM,
+                candidates: ranked.candidates.enumerated().map {
+                    rank,
+                    candidate in
+                    ACEStepRecipeCandidate(
+                        rank: rank + 1,
+                        index: candidate.index,
+                        seed: candidate.seed,
+                        score: candidate.score,
+                        metrics: candidate.metrics,
+                        lmAudioCodeCount: candidate.lmAudioCodeCount,
+                        selected: candidate.index == ranked.best.index
+                    )
+                },
+                export: exportOptions,
+                sourceAudioSHA256: sourceSHA256,
+                outputFilename: outputURL.lastPathComponent,
+                outputSHA256: try ModelArtifactPin.fileSHA256(outputURL),
+                lrcFilename: synchronizedLyricsURL?.lastPathComponent,
+                lrcTimingIsApproximate:
+                    synchronizedLyrics?.timingIsApproximate
+            )
+            try recipe.write(to: url)
+            return url
+        }()
+
+        if let dawBundle {
+            guard let recipeURL else {
+                throw ValidationError("DAW bundle requires a recipe.")
+            }
+            let directory = resolveUserPath(dawBundle)
+            try ACEStepDAWBundleWriter.write(
+                directory: directory,
+                mixURL: outputURL,
+                recipeURL: recipeURL,
+                lrcURL: synchronizedLyricsURL,
+                candidates: ranked.candidates.enumerated().map {
+                    rank,
+                    candidate in
+                    ACEStepDAWBundleWriter.Track(
+                        name: "Candidate \(rank + 1) seed \(candidate.seed)",
+                        audio: candidate.audio
+                    )
+                },
+                stems: stemTracks,
+                lrc: synchronizedLyrics,
+                exportOptions: exportOptions
+            )
+            if !quiet {
+                CLIStderr.write("Saved DAW bundle: \(directory.path)\n")
+            }
+        }
 
         if !quiet {
+            for (rank, candidate) in ranked.candidates.enumerated() {
+                let selected = candidate.index == ranked.best.index ? " selected" : ""
+                CLIStderr.write(
+                    String(
+                        format: "Candidate %d: seed=%llu score=%.2f%@\n",
+                        rank + 1,
+                        candidate.seed,
+                        candidate.score,
+                        selected
+                    )
+                )
+            }
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+    }
+
+    private func loadAdapters(
+        into pipeline: ACEStepPipeline
+    ) throws -> [ACEStepAdapterDescriptor] {
+        guard !adapters.isEmpty else {
+            if !adapterScales.isEmpty {
+                throw ValidationError("--adapter-scale requires --adapter.")
+            }
+            return []
+        }
+        guard adapterScales.isEmpty
+            || adapterScales.count == 1
+            || adapterScales.count == adapters.count
+        else {
+            throw ValidationError(
+                "--adapter-scale accepts one value for every adapter or one value per adapter."
+            )
+        }
+
+        return try adapters.enumerated().map { index, path in
+            let scale = adapterScales.isEmpty
+                ? 1
+                : adapterScales.count == 1
+                    ? adapterScales[0]
+                    : adapterScales[index]
+            let report = try pipeline.loadAdapter(
+                from: resolveUserPath(path),
+                kind: adapterKind,
+                scale: scale
+            )
+            if !quiet {
+                CLIStderr.write(
+                    "Loaded ACE-Step \(report.kind.rawValue) adapter "
+                        + "\(report.filename) at scale \(report.scale) "
+                        + "on \(report.matchedLayerCount) layers\n"
+                )
+            }
+            return report
+        }
     }
 
     private var isMagentaRT2Request: Bool {
@@ -394,38 +975,43 @@ struct MusicGenerate: AsyncParsableCommand {
         return MagentaRT2Resources.looksLikeMagentaRT2Root(url)
     }
 
+    private func candidateOutputURL(
+        selectedOutputURL: URL,
+        rank: Int,
+        candidate: ACEStepGeneratedCandidate
+    ) -> URL {
+        let stem = selectedOutputURL.deletingPathExtension().lastPathComponent
+        let filename = "\(stem).candidate-\(rank + 1).seed-\(candidate.seed).wav"
+        return selectedOutputURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(filename)
+    }
+
+    var resolvedACEStepTask: ACEStepTask {
+        if flowEdit {
+            return .textToMusic
+        }
+        if nonCover && (taskType == .cover || taskType == .textToMusic) {
+            return .coverNoFSQ
+        }
+        if taskType == .textToMusic,
+           sourceAudio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        {
+            return .cover
+        }
+        return taskType
+    }
+
     var resolvedACEStepIsCover: Bool {
-        guard !nonCover else {
+        resolvedACEStepTask.usesFSQCoverHints
+    }
+
+    func resolvedACEStepUsesLM(task: ACEStepTask) -> Bool {
+        guard !noLM, !task.skipsLanguageModel else {
             return false
         }
-        if sourceAudio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            return true
-        }
-        return taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "cover"
+        return useLM || quality.defaults(for: .turbo, task: task).usesLanguageModel
     }
-
-    func resolvedACEStepTaskType(isCover: Bool) -> String {
-        let normalized = taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if isCover && normalized == "text2music" {
-            return "cover"
-        }
-        return normalized
-    }
-
-    func resolvedACEStepUsesLM(taskType: String) -> Bool {
-        guard useLM else {
-            return false
-        }
-        let normalized = taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return !Self.aceStepTasksSkippingLM.contains(normalized)
-    }
-
-    private static let aceStepTasksSkippingLM: Set<String> = [
-        "cover",
-        "cover-nofsq",
-        "repaint",
-        "extract"
-    ]
 
     private func runMagentaRT2() async throws {
         try validateMagentaRT2Options()
@@ -453,7 +1039,7 @@ struct MusicGenerate: AsyncParsableCommand {
             MagentaRT2RenderRequest(
                 prompt: caption,
                 resources: resources,
-                durationSeconds: durationSeconds,
+                durationSeconds: durationSeconds ?? 10,
                 controls: controls
             ),
             progress: { frame, total in
@@ -481,7 +1067,10 @@ struct MusicGenerate: AsyncParsableCommand {
         if useLM {
             throw ValidationError("Magenta RT2 does not support --use-lm; that option is ACE-Step only.")
         }
-        if taskType != "text2music" {
+        if noLM {
+            throw ValidationError("Magenta RT2 does not support --no-lm; that option is ACE-Step only.")
+        }
+        if taskType != .textToMusic {
             throw ValidationError("Magenta RT2 does not support --task-type; that option is ACE-Step only.")
         }
         if trackName != nil
@@ -496,8 +1085,18 @@ struct MusicGenerate: AsyncParsableCommand {
         if seed != nil {
             throw ValidationError("Magenta RT2 uses --seed-rotation instead of --seed.")
         }
-        if steps != 8 || shift != Self.defaultACEStepShift {
-            throw ValidationError("Magenta RT2 does not use ACE-Step --steps or --shift.")
+        if steps != nil
+            || shift != nil
+            || inferMethod != nil
+            || samplerMode != nil
+            || guidanceScale != nil
+            || guidanceMode != nil
+            || cfgIntervalStart != nil
+            || cfgIntervalEnd != nil
+            || velocityNormThreshold != nil
+            || velocityEMAFactor != nil
+        {
+            throw ValidationError("Magenta RT2 does not use ACE-Step diffusion or guidance options.")
         }
         _ = try magentaControls()
     }
@@ -538,6 +1137,45 @@ struct MusicGenerate: AsyncParsableCommand {
         return lyrics
     }
 
+    private func loadLRC() throws -> ACEStepLRCDocument? {
+        guard let lrcFile else {
+            return nil
+        }
+        let url = resolveUserPath(lrcFile)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ValidationError("LRC file not found: \(url.path)")
+        }
+        do {
+            return try ACEStepLRCDocument.parse(
+                String(contentsOf: url, encoding: .utf8)
+            )
+        } catch {
+            throw ValidationError(
+                "Invalid LRC file \(url.path): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func parsedStemNames() -> [String] {
+        stems?
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            ?? []
+    }
+
+    private func stemOutputURL(
+        selectedOutputURL: URL,
+        stemName: String
+    ) -> URL {
+        let safe = stemName.lowercased().map { character -> Character in
+            character.isLetter || character.isNumber ? character : "-"
+        }
+        let stem = selectedOutputURL.deletingPathExtension().lastPathComponent
+        return selectedOutputURL.deletingLastPathComponent()
+            .appendingPathComponent("\(stem).stem-\(String(safe)).wav")
+    }
+
     private func loadACEStepSourceAudio48kHz() throws -> MLXArray? {
         guard let sourceAudio,
               !sourceAudio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -573,13 +1211,22 @@ struct MusicGenerate: AsyncParsableCommand {
         ACEStepCLIHelper.resolveUserPath(path)
     }
 
-    func resolvedACEStepDurationSeconds(isCover: Bool, sourceAudio48kHz: MLXArray?) -> Float {
-        guard isCover, let sourceAudio48kHz, sourceAudio48kHz.ndim >= 2 else {
-            return durationSeconds
+    func resolvedACEStepDurationSeconds(
+        task: ACEStepTask,
+        sourceAudio48kHz: MLXArray?,
+        fallback: Float? = nil
+    ) -> Float {
+        let requestedDuration = fallback ?? durationSeconds
+            ?? quality.defaults(for: .turbo, task: task).fallbackDurationSeconds
+        guard task.locksDurationToSource,
+              let sourceAudio48kHz,
+              sourceAudio48kHz.ndim >= 2
+        else {
+            return requestedDuration
         }
         let sourceFrames = sourceAudio48kHz.dim(1)
         guard sourceFrames > 0 else {
-            return durationSeconds
+            return requestedDuration
         }
         return Float(sourceFrames) / 48_000.0
     }
@@ -590,6 +1237,42 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         let seconds = max(1, Int(effectiveDurationSeconds))
         return "\(seconds) seconds"
+    }
+
+    func resolvedLMMetadataDuration(effectiveDurationSeconds: Float) -> String {
+        if let metadataDuration, !metadataDuration.isEmpty {
+            return metadataDuration
+        }
+        return String(max(1, Int(effectiveDurationSeconds)))
+    }
+
+    func clampedAutomaticDuration(_ duration: Float) -> Float {
+        let upperBound: Float = quality == .song ? 240 : 600
+        return min(max(duration, 10), upperBound)
+    }
+
+    private func mergePlanMetadata(
+        existing: ACEStep5HzLMConstrainedSampler.UserMetadata,
+        plan: ACEStepMusicUnderstandingMetadata,
+        caption: String,
+        durationSeconds: Float
+    ) -> ACEStep5HzLMConstrainedSampler.UserMetadata {
+        ACEStep5HzLMConstrainedSampler.UserMetadata(
+            bpm: nonEmpty(existing.bpm) ?? plan.bpm.map(String.init),
+            caption: caption,
+            duration: resolvedLMMetadataDuration(
+                effectiveDurationSeconds: durationSeconds
+            ),
+            keyscale: nonEmpty(existing.keyscale) ?? nonEmpty(plan.keyscale),
+            language: nonEmpty(existing.language) ?? nonEmpty(plan.language),
+            timesignature: nonEmpty(existing.timesignature)
+                ?? nonEmpty(plan.timesignature)
+        )
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     func mergedMetadataWithSourceAnalysis(
@@ -641,45 +1324,17 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     private func resolveInstruction(
-        taskType: String,
+        task: ACEStepTask,
         explicitInstruction: String,
         trackName: String?,
         completeTrackClasses: String?
     ) -> String {
         let defaultInstruction = "Fill the audio semantic mask based on the given conditions:"
         let trimmed = explicitInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedTask = taskType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        let taskInstruction: String
-        switch normalizedTask {
-        case "text2music", "":
-            taskInstruction = "Fill the audio semantic mask based on the given conditions:"
-        case "repaint":
-            taskInstruction = "Repaint the mask area based on the given conditions:"
-        case "cover":
-            taskInstruction = "Generate audio semantic tokens based on the given conditions:"
-        case "extract":
-            if let trackName, !trackName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                taskInstruction = "Extract the \(trackName.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()) track from the audio:"
-            } else {
-                taskInstruction = "Extract the track from the audio:"
-            }
-        case "lego":
-            if let trackName, !trackName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                taskInstruction = "Generate the \(trackName.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()) track based on the audio context:"
-            } else {
-                taskInstruction = "Generate the track based on the audio context:"
-            }
-        case "complete":
-            let classes = parseCompleteTrackClasses(completeTrackClasses)
-            if !classes.isEmpty {
-                taskInstruction = "Complete the input track with \(classes.map { $0.uppercased() }.joined(separator: " | ")):"
-            } else {
-                taskInstruction = "Complete the input track:"
-            }
-        default:
-            taskInstruction = "Fill the audio semantic mask based on the given conditions:"
-        }
+        let taskInstruction = task.instruction(
+            trackName: trackName,
+            completeTrackClasses: parseCompleteTrackClasses(completeTrackClasses)
+        )
 
         let shouldAutoMapInstruction = trimmed.isEmpty || trimmed == defaultInstruction
         return shouldAutoMapInstruction ? taskInstruction : trimmed
@@ -718,120 +1373,5 @@ struct MusicGenerate: AsyncParsableCommand {
 
     private func resolveACEStepTurboSubdirectory(at root: URL, explicit: String) throws -> String {
         try ACEStepCLIHelper.resolveTurboSubdirectory(at: root, explicit: explicit)
-    }
-
-    private static let defaultACEStepShift: Float = 3.0
-}
-
-private enum ACEStepWAVWriter {
-    enum WriterError: LocalizedError {
-        case invalidShape([Int])
-        case invalidChannels(Int)
-
-        var errorDescription: String? {
-            switch self {
-            case .invalidShape(let shape):
-                return "Unsupported ACE-Step audio tensor shape: \(shape). Expected [1,S,C], [S,C], [1,S], or [S]."
-            case .invalidChannels(let channels):
-                return "Invalid channel count \(channels). Expected 1...8."
-            }
-        }
-    }
-
-    static func writeWAV(_ audio: MLXArray, to url: URL, sampleRate: Int) throws {
-        let (interleaved, channels) = try flattenToInterleaved(audio)
-        guard (1...8).contains(channels) else {
-            throw WriterError.invalidChannels(channels)
-        }
-
-        let int16Samples = peakNormalized(interleaved).map { sample -> Int16 in
-            let finiteSample = sample.isFinite ? sample : 0.0
-            let clamped = max(-1.0, min(1.0, finiteSample))
-            return Int16(clamped * 32767.0)
-        }
-
-        let dataSize = UInt32(int16Samples.count * MemoryLayout<Int16>.size)
-        let fileSize = UInt32(36) + dataSize
-        let channelsU16 = UInt16(channels)
-        let sampleRateU32 = UInt32(sampleRate)
-        let bitsPerSample = UInt16(16)
-        let blockAlign = UInt16(channels) * (bitsPerSample / 8)
-        let byteRate = sampleRateU32 * UInt32(blockAlign)
-
-        var data = Data()
-        data.append("RIFF".data(using: .utf8)!)
-        append(fileSize, to: &data)
-        data.append("WAVE".data(using: .utf8)!)
-
-        data.append("fmt ".data(using: .utf8)!)
-        append(UInt32(16), to: &data)  // PCM fmt chunk length
-        append(UInt16(1), to: &data)  // PCM format
-        append(channelsU16, to: &data)
-        append(sampleRateU32, to: &data)
-        append(byteRate, to: &data)
-        append(blockAlign, to: &data)
-        append(bitsPerSample, to: &data)
-
-        data.append("data".data(using: .utf8)!)
-        append(dataSize, to: &data)
-        for sample in int16Samples {
-            append(sample, to: &data)
-        }
-
-        try data.write(to: url)
-    }
-
-    private static func flattenToInterleaved(_ audio: MLXArray) throws -> ([Float], Int) {
-        let sampleChannel: MLXArray
-        if audio.ndim == 1 {
-            sampleChannel = audio.reshaped(audio.dim(0), 1)
-        } else if audio.ndim == 2 {
-            if audio.dim(1) <= 8 {
-                sampleChannel = audio
-            } else if audio.dim(0) <= 8 {
-                sampleChannel = audio.transposed(1, 0)
-            } else {
-                throw WriterError.invalidShape(audio.shape)
-            }
-        } else if audio.ndim == 3 {
-            guard audio.dim(0) == 1 else {
-                throw WriterError.invalidShape(audio.shape)
-            }
-            let squeezed = audio[0, 0..., 0...]
-            if squeezed.dim(1) <= 8 {
-                sampleChannel = squeezed
-            } else if squeezed.dim(0) <= 8 {
-                sampleChannel = squeezed.transposed(1, 0)
-            } else {
-                throw WriterError.invalidShape(audio.shape)
-            }
-        } else {
-            throw WriterError.invalidShape(audio.shape)
-        }
-
-        MLX.eval(sampleChannel)
-        let channels = sampleChannel.dim(1)
-        let interleaved = sampleChannel.asType(.float32).reshaped(-1).asArray(Float.self)
-        return (interleaved, channels)
-    }
-
-    private static func peakNormalized(_ samples: [Float]) -> [Float] {
-        var peak: Float = 0
-        for sample in samples where sample.isFinite {
-            peak = max(peak, abs(sample))
-        }
-        guard peak > 1 else {
-            return samples
-        }
-        return samples.map { sample in
-            sample.isFinite ? sample / peak : 0.0
-        }
-    }
-
-    private static func append<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
-        var littleEndian = value.littleEndian
-        withUnsafeBytes(of: &littleEndian) { bytes in
-            data.append(bytes.bindMemory(to: UInt8.self))
-        }
     }
 }
