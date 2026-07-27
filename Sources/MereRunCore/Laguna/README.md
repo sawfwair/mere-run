@@ -48,6 +48,14 @@ not part of public pull or serving behavior. Keep it behind this boundary until
 official weights have passed load, deterministic decode, quality, memory, and
 performance evaluation on Apple Silicon.
 
+Laguna's routed experts sort prefill and multi-token verification routes by
+expert before issuing the NVFP4 gather matmuls. This is enabled by default for
+64 or more routes; single-token target decode keeps the lower-overhead unsorted
+path. Set `MERERUN_LAGUNA_SORTED_MOE=0` to restore the reference routing order
+for comparison or rollback. Do not lower the threshold without measuring
+short verification and concurrent decode: two route sorts can cost more than
+grouped expert locality saves on small batches.
+
 Example:
 
 ```bash

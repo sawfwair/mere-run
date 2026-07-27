@@ -423,6 +423,45 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(projection.scales?.shape, [256, 1_024, 192])
     }
 
+    func testMoEAccelerationBooleanParsing() {
+        XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean("on", default: false))
+        XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean(" YES ", default: false))
+        XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("off", default: true))
+        XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("0", default: true))
+        XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean(nil, default: true))
+        XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("unexpected", default: false))
+    }
+
+    func testSortedMoERoutingMatchesUnsortedRouting() throws {
+        MLXRandom.seed(41)
+        let switchGLU = LagunaSwitchGLU(config: try makeConfig())
+        let sequenceLength = 32
+        let hiddenSize = 8
+        let topK = 2
+        let input = MLXArray(
+            (0..<(sequenceLength * hiddenSize)).map {
+                Float(($0 % 29) - 14) / 17
+            },
+            [1, sequenceLength, hiddenSize]
+        )
+        let indices = MLXArray(
+            (0..<(sequenceLength * topK)).map {
+                Int32(($0 * 2 + 1) % 3)
+            },
+            [1, sequenceLength, topK]
+        )
+
+        let unsorted = switchGLU.unsorted(input, indices: indices)
+        let sorted = switchGLU.sorted(input, indices: indices)
+        MLX.eval(unsorted, sorted)
+
+        XCTAssertEqual(sorted.shape, unsorted.shape)
+        let maximumDifference = MLX.max(
+            MLX.abs(sorted.asType(.float32) - unsorted.asType(.float32))
+        ).item(Float.self)
+        XCTAssertLessThan(maximumDifference, 0.0001)
+    }
+
     func testTinyMixedAttentionMoEModelProducesFiniteLogits() throws {
         MLXRandom.seed(42)
         let config = try makeConfig()

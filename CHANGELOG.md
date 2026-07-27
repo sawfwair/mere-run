@@ -50,6 +50,10 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
+- sorted Laguna routed-expert prefill and multi-token verification work by
+  expert before the NVFP4 gather matmuls, with the reference routing order
+  retained for small decode forwards and as a
+  `MERERUN_LAGUNA_SORTED_MOE=0` rollback path.
 - refreshed the pinned MLX and mlx-swift forks to MLX 0.32.1 while preserving
   native affine 1-bit Metal/CUDA execution, the generation-17 NAX correctness
   gate, and the Linux/CUDA bridge. The runtime and local gate now reject Metal

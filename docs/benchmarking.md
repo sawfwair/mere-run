@@ -205,6 +205,13 @@ recovery, and fallback forward counts. Compare concurrency on identical
 fixtures; fewer physical forwards do not by themselves establish a wall-time
 speedup.
 
+The Laguna target sorts routed-expert work by expert for prompt prefill and
+multi-token DFlash verification when a forward contains at least 64 routes.
+Single-token target decode remains unsorted. This improves NVFP4 grouped-matmul
+locality without changing the checkpoint or public benchmark contract. Set
+`MERERUN_LAGUNA_SORTED_MOE=0` to run the reference routing order during a
+controlled comparison or rollback.
+
 These flags are an evaluation boundary, not a pull or serving contract. Do not
 infer catalog support from a successful local checkpoint run.
 

@@ -4,6 +4,32 @@ import MLXFast
 import MLXNN
 import MLXRandom
 
+enum LagunaMoEAccelerationPolicy {
+    static let sortedRoutingEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_SORTED_MOE",
+        default: true
+    )
+
+    static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
+        guard let raw else { return defaultValue }
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "1", "true", "yes", "on":
+            return true
+        case "0", "false", "no", "off":
+            return false
+        default:
+            return defaultValue
+        }
+    }
+
+    private static func booleanEnvironment(
+        _ name: String,
+        default defaultValue: Bool
+    ) -> Bool {
+        parseBoolean(ProcessInfo.processInfo.environment[name], default: defaultValue)
+    }
+}
+
 final class LagunaRoPE: Module, OffsetLayer {
     private let dimensions: Int
     private let traditional: Bool
@@ -326,31 +352,42 @@ final class LagunaSwitchLinear: Module {
             flatInput = expanded.reshaped([tokenCount * topK, 1, inputDimensions])
         }
 
-        let flatIndices = indices.reshaped([tokenCount * topK])
+        let output = applyFlat(
+            flatInput,
+            indices: indices.reshaped([tokenCount * topK]),
+            sortedIndices: false
+        )
+        return output.reshaped([batch, sequenceLength, topK, output.dim(-1)])
+    }
+
+    func applyFlat(
+        _ x: MLXArray,
+        indices: MLXArray,
+        sortedIndices: Bool
+    ) -> MLXArray {
         let output: MLXArray
         if let scales {
             output = portableGatherQuantizedMM(
-                flatInput,
+                x,
                 weight,
                 scales: scales,
                 biases: biases,
-                rhsIndices: flatIndices,
+                rhsIndices: indices,
                 transpose: true,
                 groupSize: groupSize,
                 bits: bits,
                 mode: mode,
-                sortedIndices: false
+                sortedIndices: sortedIndices
             )
         } else {
             output = gatherMM(
-                flatInput,
+                x,
                 weight.swappedAxes(-1, -2),
-                rhsIndices: flatIndices,
-                sortedIndices: false
+                rhsIndices: indices,
+                sortedIndices: sortedIndices
             )
         }
-
-        return output.reshaped([batch, sequenceLength, topK, output.dim(-1)])
+        return output
     }
 }
 
@@ -382,6 +419,47 @@ final class LagunaSwitchGLU: Module {
     }
 
     func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let routeCount = x.dim(0) * x.dim(1) * indices.dim(2)
+        if LagunaMoEAccelerationPolicy.sortedRoutingEnabled, routeCount >= 64 {
+            return sorted(x, indices: indices)
+        }
+        return unsorted(x, indices: indices)
+    }
+
+    func sorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let batch = x.dim(0)
+        let sequenceLength = x.dim(1)
+        let tokenCount = batch * sequenceLength
+        let topK = indices.dim(2)
+        let routeCount = tokenCount * topK
+        let inputDimensions = x.dim(-1)
+        let flatIndices = indices.reshaped([routeCount])
+        let order = argSort(flatIndices, axis: 0)
+        let inverseOrder = argSort(order, axis: 0)
+        let sortedIndices = flatIndices.take(order, axis: 0)
+        let tokenOrder = order.floorDivide(topK)
+        let flatInput = x.reshaped([tokenCount, inputDimensions])
+            .take(tokenOrder, axis: 0)
+            .reshaped([routeCount, 1, inputDimensions])
+        let gate = gateProj.applyFlat(
+            flatInput,
+            indices: sortedIndices,
+            sortedIndices: true
+        )
+        let up = upProj.applyFlat(
+            flatInput,
+            indices: sortedIndices,
+            sortedIndices: true
+        )
+        let output = downProj.applyFlat(
+            MLXNN.silu(gate) * up,
+            indices: sortedIndices,
+            sortedIndices: true
+        ).take(inverseOrder, axis: 0)
+        return output.reshaped([batch, sequenceLength, topK, output.dim(-1)])
+    }
+
+    func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
         let gate = gateProj(x, indices: indices)
         let up = upProj(x, indices: indices)
         return downProj(MLXNN.silu(gate) * up, indices: indices)
