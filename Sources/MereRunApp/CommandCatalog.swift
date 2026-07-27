@@ -11,6 +11,7 @@ enum CommandCategory: String, CaseIterable, Identifiable {
     case vision = "Vision"
     case media = "Music & Video"
     case sfx = "Sound FX"
+    case operations = "Operations"
     case server = "Server"
     case custom = "Custom"
 
@@ -75,6 +76,23 @@ enum CommandTemplateID: String, CaseIterable {
     case videoPrepareMasks
     case videoExportLatents
     case videoSession
+    case adapterList
+    case adapterPull
+    case runList
+    case runInspect
+    case runWatch
+    case runFetch
+    case runCancel
+    case runRetry
+    case worldServe
+    case statusSnapshot
+    case qualityGate
+    case modelStorage
+    case modelGarbageCollect
+    case modelRuntimeGet
+    case modelRuntimeSet
+    case graphStudio
+    case nodeConsole
     case sfxGenerate
     case sfxVideo
     case sfxAEEncode
@@ -475,6 +493,42 @@ struct CommandDraft: Equatable {
     var visionInputList = ""
     var visionJSONLOutput = ""
     var visionFailFast = false
+    // Operations, durable workflow runs, runtime diagnostics, and world sessions.
+    var operationsReference = ""
+    var operationsRoot = ""
+    var operationsExecutor = ""
+    var operationsArtifacts = ""
+    var operationsLimit = 50
+    var operationsPollInterval = 2.0
+    var operationsTimeoutSeconds = 1.0
+    var operationsAllArtifacts = false
+    var operationsJSONStream = false
+    var operationsGateSuite = "all"
+    var operationsUpdateBaselines = false
+    var operationsStrictPerformance = false
+    var operationsListOnly = false
+    var operationsWorldBackend = "dreamx"
+    var operationsBaseModel = "video-wan22-ti2v-5b-mlx"
+    var operationsStateDirectory = ""
+    var operationsPrepare = false
+    var operationsRuntimeAlias = ""
+    var operationsRuntimeTTL = ""
+    var operationsRuntimeContext = ""
+    var operationsRuntimeMaxTokens = ""
+    var operationsRuntimeTemperature = ""
+    var operationsRuntimeTopP = ""
+    var operationsRuntimeEngine = ""
+    var operationsRuntimeKVCacheMode = ""
+    var operationsClearAlias = false
+    var operationsPinned = false
+    var operationsUnpinned = false
+    var operationsClearTTL = false
+    var operationsClearContext = false
+    var operationsClearMaxTokens = false
+    var operationsClearTemperature = false
+    var operationsClearTopP = false
+    var operationsClearEngine = false
+    var operationsClearKVCacheMode = false
     var fps = 24
     var numFrames = 65
     var useDuration = false
@@ -558,6 +612,7 @@ struct CommandTemplate: Identifiable, Equatable {
     let defaultSecondaryText: String
     let defaultModel: String
     let defaultExtraArguments: String
+    let externalURL: URL?
 
     init(
         id: CommandTemplateID,
@@ -572,7 +627,8 @@ struct CommandTemplate: Identifiable, Equatable {
         defaultPrompt: String = "",
         defaultSecondaryText: String = "",
         defaultModel: String = "",
-        defaultExtraArguments: String = ""
+        defaultExtraArguments: String = "",
+        externalURL: URL? = nil
     ) {
         self.id = id
         self.category = category
@@ -587,6 +643,7 @@ struct CommandTemplate: Identifiable, Equatable {
         self.defaultSecondaryText = defaultSecondaryText
         self.defaultModel = defaultModel
         self.defaultExtraArguments = defaultExtraArguments
+        self.externalURL = externalURL
     }
 
     func defaultDraft() -> CommandDraft {
@@ -696,6 +753,20 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.seed = "42"
         case .musicServe:
             draft.port = 8081
+        case .adapterList:
+            draft.json = true
+        case .runList:
+            draft.json = true
+        case .runInspect, .runFetch, .runCancel, .runRetry:
+            draft.json = true
+        case .worldServe:
+            draft.port = 8791
+            draft.model = "video-dreamx-world-5b-ar-mlx"
+        case .statusSnapshot, .modelStorage, .modelGarbageCollect,
+             .modelRuntimeGet, .modelRuntimeSet:
+            draft.json = true
+        case .qualityGate:
+            draft.operationsGateSuite = "all"
         case .sfxGenerate, .sfxVideo:
             draft.steps = 4
             draft.durationSeconds = 8
@@ -798,6 +869,89 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.host != "127.0.0.1" && draft.host != "localhost"
                 && draft.host != "::1" && draft.apiKey.isBlank {
                 return "An API key is required for non-loopback music servers."
+            }
+        case .adapterPull:
+            if draft.prompt.isBlank {
+                return "Adapter id is required."
+            }
+        case .runList:
+            if draft.operationsRoot.isBlank == draft.operationsExecutor.isBlank {
+                return "Choose exactly one local root or remote executor."
+            }
+            if !draft.operationsExecutor.isBlank && !(1...500).contains(draft.operationsLimit) {
+                return "Remote result limit must be between 1 and 500."
+            }
+            if draft.operationsExecutor.isBlank && draft.maxDepth < 0 {
+                return "Scan depth must be zero or greater."
+            }
+        case .runInspect, .runWatch, .runCancel, .runRetry:
+            if draft.operationsReference.isBlank {
+                return "Run path or remote reference is required."
+            }
+            if id == .runWatch && draft.operationsPollInterval < 0.25 {
+                return "Polling interval must be at least 0.25 seconds."
+            }
+            if id == .runWatch && draft.operationsJSONStream && draft.json {
+                return "Choose streaming events or one final JSON object, not both."
+            }
+        case .runFetch:
+            if draft.operationsReference.isBlank {
+                return "Remote run reference is required."
+            }
+            if draft.outputPath.isBlank {
+                return "Destination run directory is required."
+            }
+            if draft.operationsAllArtifacts && !lineList(draft.operationsArtifacts).isEmpty {
+                return "Choose all artifacts or named artifacts, not both."
+            }
+        case .worldServe:
+            if draft.model.isBlank || draft.operationsBaseModel.isBlank {
+                return "Base and world model ids are required."
+            }
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if draft.host != "127.0.0.1" && draft.host != "localhost"
+                && draft.host != "::1" && draft.apiKey.isBlank {
+                return "An API key is required for non-loopback world servers."
+            }
+        case .statusSnapshot:
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if draft.operationsTimeoutSeconds <= 0 {
+                return "Probe timeout must be greater than zero."
+            }
+        case .qualityGate:
+            let validSuites = Set(["text", "speech", "vision", "image", "embed"])
+            let selectedSuites = Set(
+                draft.operationsGateSuite
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            )
+            if draft.operationsGateSuite.lowercased() != "all"
+                && (selectedSuites.isEmpty || !selectedSuites.isSubset(of: validSuites)) {
+                return "Suites must be all or a comma-separated set of text, speech, vision, image, and embed."
+            }
+        case .modelRuntimeGet, .modelRuntimeSet:
+            if draft.model.isBlank {
+                return "Managed model id or alias is required."
+            }
+            if draft.operationsPinned && draft.operationsUnpinned {
+                return "Choose pinned or unpinned, not both."
+            }
+            let conflictingRuntimeValues = [
+                (!draft.operationsRuntimeAlias.isBlank, draft.operationsClearAlias, "alias"),
+                (!draft.operationsRuntimeTTL.isBlank, draft.operationsClearTTL, "TTL"),
+                (!draft.operationsRuntimeContext.isBlank, draft.operationsClearContext, "context"),
+                (!draft.operationsRuntimeMaxTokens.isBlank, draft.operationsClearMaxTokens, "max tokens"),
+                (!draft.operationsRuntimeTemperature.isBlank, draft.operationsClearTemperature, "temperature"),
+                (!draft.operationsRuntimeTopP.isBlank, draft.operationsClearTopP, "top-p"),
+                (!draft.operationsRuntimeEngine.isBlank, draft.operationsClearEngine, "engine"),
+                (!draft.operationsRuntimeKVCacheMode.isBlank, draft.operationsClearKVCacheMode, "KV cache")
+            ]
+            if let conflict = conflictingRuntimeValues.first(where: { $0.0 && $0.1 }) {
+                return "Set or clear \(conflict.2), not both."
             }
         case .imageTrainLoRA:
             if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
@@ -1935,6 +2089,138 @@ struct CommandTemplate: Identifiable, Equatable {
                     args += ["--adapter-scale", scale]
                 }
             }
+
+        case .adapterList:
+            args = ["adapter", "list"]
+            if draft.json { args.append("--json") }
+
+        case .adapterPull:
+            args = ["adapter", "pull", draft.prompt]
+            if draft.force { args.append("--force") }
+            if draft.quiet { args.append("--quiet") }
+
+        case .runList:
+            args = ["run", "list"]
+            if !draft.operationsRoot.isBlank { args += ["--root", draft.operationsRoot] }
+            if !draft.operationsExecutor.isBlank {
+                args += ["--executor", draft.operationsExecutor]
+                args += ["--limit", String(draft.operationsLimit)]
+            } else {
+                args += ["--max-depth", String(draft.maxDepth)]
+            }
+            if draft.json { args.append("--json") }
+
+        case .runInspect:
+            args = ["run", "inspect", draft.operationsReference]
+            if draft.json { args.append("--json") }
+
+        case .runWatch:
+            args = [
+                "run", "watch", draft.operationsReference,
+                "--poll-interval", format(draft.operationsPollInterval)
+            ]
+            if draft.operationsJSONStream { args.append("--json-stream") }
+            if draft.json { args.append("--json") }
+
+        case .runFetch:
+            args = ["run", "fetch", draft.operationsReference, "--into", draft.outputPath]
+            if draft.operationsAllArtifacts { args.append("--all-artifacts") }
+            for artifact in lineList(draft.operationsArtifacts) {
+                args += ["--artifact", artifact]
+            }
+            if draft.json { args.append("--json") }
+
+        case .runCancel:
+            args = ["run", "cancel", draft.operationsReference]
+            if draft.json { args.append("--json") }
+
+        case .runRetry:
+            args = ["run", "retry", draft.operationsReference]
+            if draft.json { args.append("--json") }
+
+        case .worldServe:
+            args = [
+                "world", "serve",
+                "--host", draft.host,
+                "--port", String(draft.port),
+                "--backend", draft.operationsWorldBackend,
+                "--base-model", draft.operationsBaseModel,
+                "--model", draft.model
+            ]
+            if !draft.operationsStateDirectory.isBlank {
+                args += ["--state-directory", draft.operationsStateDirectory]
+            }
+            if draft.operationsPrepare { args.append("--prepare") }
+
+        case .statusSnapshot:
+            args = [
+                "status",
+                "--host", draft.host,
+                "--port", String(draft.port),
+                "--timeout-seconds", format(draft.operationsTimeoutSeconds)
+            ]
+            if draft.json { args.append("--json") }
+
+        case .qualityGate:
+            args = ["gate", "--suite", draft.operationsGateSuite]
+            if draft.operationsUpdateBaselines { args.append("--update-baselines") }
+            if draft.operationsStrictPerformance { args.append("--strict-perf") }
+            if !draft.outputPath.isBlank { args += ["--json-output", draft.outputPath] }
+            if draft.operationsListOnly { args.append("--list") }
+
+        case .modelStorage:
+            args = ["model", "storage"]
+            if draft.json { args.append("--json") }
+
+        case .modelGarbageCollect:
+            args = ["model", "gc"]
+            if draft.force { args.append("--force") }
+            if draft.json { args.append("--json") }
+
+        case .modelRuntimeGet:
+            args = ["model", "runtime", "get", draft.model]
+            if draft.json { args.append("--json") }
+
+        case .modelRuntimeSet:
+            args = ["model", "runtime", "set", draft.model]
+            if !draft.operationsRuntimeAlias.isBlank {
+                args += ["--alias", draft.operationsRuntimeAlias]
+            }
+            if draft.operationsClearAlias { args.append("--clear-alias") }
+            if draft.operationsPinned { args.append("--pinned") }
+            if draft.operationsUnpinned { args.append("--unpinned") }
+            if !draft.operationsRuntimeTTL.isBlank {
+                args += ["--ttl-seconds", draft.operationsRuntimeTTL]
+            }
+            if draft.operationsClearTTL { args.append("--clear-ttl") }
+            if !draft.operationsRuntimeContext.isBlank {
+                args += ["--max-context-tokens", draft.operationsRuntimeContext]
+            }
+            if draft.operationsClearContext { args.append("--clear-max-context-tokens") }
+            if !draft.operationsRuntimeMaxTokens.isBlank {
+                args += ["--max-tokens", draft.operationsRuntimeMaxTokens]
+            }
+            if draft.operationsClearMaxTokens { args.append("--clear-max-tokens") }
+            if !draft.operationsRuntimeTemperature.isBlank {
+                args += ["--temperature", draft.operationsRuntimeTemperature]
+            }
+            if draft.operationsClearTemperature { args.append("--clear-temperature") }
+            if !draft.operationsRuntimeTopP.isBlank {
+                args += ["--top-p", draft.operationsRuntimeTopP]
+            }
+            if draft.operationsClearTopP { args.append("--clear-top-p") }
+            if !draft.operationsRuntimeEngine.isBlank {
+                args += ["--engine", draft.operationsRuntimeEngine]
+            }
+            if draft.operationsClearEngine { args.append("--clear-engine") }
+            if !draft.operationsRuntimeKVCacheMode.isBlank {
+                args += ["--kv-cache-mode", draft.operationsRuntimeKVCacheMode]
+            }
+            if draft.operationsClearKVCacheMode { args.append("--clear-kv-cache-mode") }
+            if draft.json { args.append("--json") }
+
+        case .graphStudio, .nodeConsole:
+            return []
         case .sfxAEEncode:
             args = ["sfx", "ae", "encode", draft.inputPath]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
@@ -2045,7 +2331,10 @@ enum CommandLaunchEnvironment {
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
 
     static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
-        guard templateID == .apiServe || templateID == .musicServe else { return [:] }
+        guard templateID == .apiServe
+            || templateID == .musicServe
+            || templateID == .worldServe
+            || templateID == .statusSnapshot else { return [:] }
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else { return [:] }
         return [apiKeyEnvironmentKey: apiKey]
@@ -2510,6 +2799,134 @@ enum CommandCatalog {
             subtitle: "Keep LTX 2.3 warm for JSONL requests",
             systemImage: "bolt.horizontal.circle",
             defaultModel: "video-ltx23-full-mlx"
+        ),
+        CommandTemplate(
+            id: .adapterList,
+            category: .operations,
+            title: "Browse adapters",
+            subtitle: "Verified LoRA catalog and install state",
+            systemImage: "square.stack.3d.up"
+        ),
+        CommandTemplate(
+            id: .adapterPull,
+            category: .operations,
+            title: "Pull adapter",
+            subtitle: "Download and verify a cataloged LoRA",
+            systemImage: "arrow.down.circle",
+            promptLabel: "Adapter ID",
+            defaultPrompt: "mere-platform-assistant"
+        ),
+        CommandTemplate(
+            id: .runList,
+            category: .operations,
+            title: "Browse runs",
+            subtitle: "Find local reports or remote jobs",
+            systemImage: "clock.arrow.circlepath"
+        ),
+        CommandTemplate(
+            id: .runInspect,
+            category: .operations,
+            title: "Inspect run",
+            subtitle: "Read a durable run, report, plan, or remote job",
+            systemImage: "doc.text.magnifyingglass"
+        ),
+        CommandTemplate(
+            id: .runWatch,
+            category: .operations,
+            title: "Watch remote run",
+            subtitle: "Stream SSH or Relay worker events",
+            systemImage: "dot.radiowaves.left.and.right"
+        ),
+        CommandTemplate(
+            id: .runFetch,
+            category: .operations,
+            title: "Fetch remote run",
+            subtitle: "Verify and materialize remote artifacts locally",
+            systemImage: "square.and.arrow.down",
+            outputKind: .directory
+        ),
+        CommandTemplate(
+            id: .runCancel,
+            category: .operations,
+            title: "Cancel run",
+            subtitle: "Request local or remote cancellation",
+            systemImage: "stop.circle"
+        ),
+        CommandTemplate(
+            id: .runRetry,
+            category: .operations,
+            title: "Retry Relay run",
+            subtitle: "Retry the same immutable job bundle",
+            systemImage: "arrow.clockwise.circle"
+        ),
+        CommandTemplate(
+            id: .worldServe,
+            category: .operations,
+            title: "World session",
+            subtitle: "Serve a warm DreamX or Cosmos3 world",
+            systemImage: "globe.americas.fill",
+            defaultModel: "video-dreamx-world-5b-ar-mlx"
+        ),
+        CommandTemplate(
+            id: .statusSnapshot,
+            category: .operations,
+            title: "Status snapshot",
+            subtitle: "Server, loaded models, and local inventory",
+            systemImage: "waveform.path.ecg"
+        ),
+        CommandTemplate(
+            id: .qualityGate,
+            category: .operations,
+            title: "Quality gate",
+            subtitle: "Installed-model correctness and performance",
+            systemImage: "checkmark.shield",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelStorage,
+            category: .operations,
+            title: "Model storage",
+            subtitle: "Physical storage, sharing, and reclaimable bytes",
+            systemImage: "internaldrive"
+        ),
+        CommandTemplate(
+            id: .modelGarbageCollect,
+            category: .operations,
+            title: "Storage cleanup",
+            subtitle: "Dry-run or execute safe garbage collection",
+            systemImage: "trash.slash"
+        ),
+        CommandTemplate(
+            id: .modelRuntimeGet,
+            category: .operations,
+            title: "Read runtime policy",
+            subtitle: "Inspect API residency and generation defaults",
+            systemImage: "gearshape.2",
+            defaultModel: StudioChatDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .modelRuntimeSet,
+            category: .operations,
+            title: "Set runtime policy",
+            subtitle: "Pin, expire, alias, and tune resident models",
+            systemImage: "slider.horizontal.3",
+            defaultModel: StudioChatDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .graphStudio,
+            category: .operations,
+            title: "Open Graph Studio",
+            subtitle: "Author and execute portable Graph v2 workflows",
+            systemImage: "point.3.connected.trianglepath.dotted",
+            externalURL: URL(string: "https://studio.mere.run/app")
+        ),
+        CommandTemplate(
+            id: .nodeConsole,
+            category: .operations,
+            title: "Manage Nodes & Relay",
+            subtitle: "Pair GPUs, schedule fleet work, and inspect nodes",
+            systemImage: "server.rack",
+            externalURL: URL(string: "https://relay.mere.run")
         ),
         CommandTemplate(
             id: .sfxGenerate,

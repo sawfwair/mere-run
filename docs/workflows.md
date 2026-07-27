@@ -403,6 +403,13 @@ It identifies every connected device and reports concrete blockers such as a
 legacy worker, fleet policy, busy state, contract or worker version, missing
 node kind or model, accelerator backend or memory, and available disk.
 
+The macOS Studio app exposes these durable run controls in Advanced →
+Operations, including local/remote listing, inspection, event watching,
+verified fetch, cancellation, and immutable Relay retry. Graph authoring opens
+the canonical Graph Studio product, while device pairing and fleet policy open
+the Node/Relay console; the macOS inference app does not keep parallel graph or
+fleet schemas.
+
 ## Schemas
 
 - [Workflow Graph V1](/schemas/workflow-graph-v1.schema.json)

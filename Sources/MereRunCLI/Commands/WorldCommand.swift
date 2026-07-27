@@ -19,6 +19,8 @@ struct World: AsyncParsableCommand {
 }
 
 struct WorldServe: AsyncParsableCommand {
+    private static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+
     static let configuration = CommandConfiguration(
         commandName: "serve",
         abstract: "Serve one warm native world-model session over HTTP."
@@ -30,7 +32,7 @@ struct WorldServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Port to listen on.")
     var port = 8791
 
-    @Option(name: [.long], help: "Bearer token required by world endpoints.")
+    @Option(name: [.long], help: "Bearer token required by world endpoints. Also read from MERERUN_API_KEY.")
     var apiKey: String?
 
     @Option(name: [.long], help: "World runtime backend: dreamx or cosmos3.")
@@ -50,9 +52,9 @@ struct WorldServe: AsyncParsableCommand {
 
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: false)
-        let resolvedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedKey = resolvedAPIKey()
         if !Self.isLoopback(host), resolvedKey?.isEmpty != false {
-            throw ValidationError("Non-loopback world servers require --api-key.")
+            throw ValidationError("Non-loopback world servers require --api-key or MERERUN_API_KEY.")
         }
         let stateURL = stateDirectory.map { URL(fileURLWithPath: $0).standardizedFileURL }
             ?? Self.defaultStateDirectory()
@@ -106,6 +108,21 @@ struct WorldServe: AsyncParsableCommand {
         }
         let server = WorldHTTPServer(runtime: runtime, apiKey: resolvedKey)
         try await server.run(host: host, port: port)
+    }
+
+    func resolvedAPIKey(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String? {
+        if let apiKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !apiKey.isEmpty {
+            return apiKey
+        }
+        if let apiKey = environment[Self.apiKeyEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !apiKey.isEmpty {
+            return apiKey
+        }
+        return nil
     }
 
     private func resolveRoot(_ value: String) throws -> URL {

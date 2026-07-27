@@ -1,5 +1,10 @@
 # Persistent World Runtime
 
+The macOS Studio app exposes the same resident server in Advanced → Operations
+with typed backend, model, state-directory, warmup, host, port, and
+authentication controls. API keys are injected with `MERERUN_API_KEY` so they
+do not appear in the child process argument list.
+
 `mere.run world` runs a long-lived, local conditioned-video session. The
 loopback-first HTTP server supports two native Swift/MLX backends:
 

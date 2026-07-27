@@ -51,3 +51,11 @@ DA3 ordered multiview reconstruction. Coordinates remain typed, ordered CLI
 arguments; machine-readable results and mask directories use explicit output
 pickers. Image-to-3D workflows share the Image workspace instead of being
 duplicated.
+
+Operations covers the verified adapter catalog, durable local/SSH/Relay run
+listing and lifecycle, DreamX/Cosmos3 world sessions, server status, installed
+model quality gates, physical model storage and safe garbage collection, and
+typed per-model runtime policy. Server credentials are passed through
+`MERERUN_API_KEY`, not process arguments. Visual Graph v2 authoring and fleet
+policy stay in their canonical products: the app links directly to Graph
+Studio and the Node/Relay console instead of reimplementing those surfaces.

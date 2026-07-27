@@ -47,7 +47,22 @@ import Testing
         "video.cosmos3",
         "video.prepare-masks",
         "video.export-latents",
-        "video.session"
+        "video.session",
+        "adapter.list",
+        "adapter.pull",
+        "run.list",
+        "run.inspect",
+        "run.watch",
+        "run.fetch",
+        "run.cancel",
+        "run.retry",
+        "world.serve",
+        "status",
+        "gate",
+        "model.storage",
+        "model.gc",
+        "model.runtime.get",
+        "model.runtime.set"
     ])
     #expect(document.commands.allSatisfy { !$0.options.isEmpty })
 

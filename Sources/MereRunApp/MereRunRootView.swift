@@ -248,7 +248,9 @@ private struct CommandEditor: View {
                 header
                 commandPreview
                 templateFields
-                runtimeFields
+                if controller.selectedTemplate.externalURL == nil {
+                    runtimeFields
+                }
                 actionRow
             }
             .padding(22)
@@ -282,10 +284,10 @@ private struct CommandEditor: View {
 
     private var commandPreview: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("COMMAND")
+            Text(controller.selectedTemplate.externalURL == nil ? "COMMAND" : "DESTINATION")
                 .font(MereRunTheme.sectionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
-            Text(controller.advancedCommandPreview)
+            Text(controller.selectedTemplate.externalURL?.absoluteString ?? controller.advancedCommandPreview)
                 .font(MereRunTheme.monoFont)
                 .textSelection(.enabled)
                 .lineLimit(5)
@@ -298,61 +300,65 @@ private struct CommandEditor: View {
     @ViewBuilder
     private var templateFields: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let promptLabel = controller.selectedTemplate.promptLabel {
-                EditorSection(promptLabel) {
-                    TextEditor(text: $controller.draft.prompt)
-                        .font(MereRunTheme.bodyFont)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 88)
-                        .padding(8)
-                        .merePanel()
+            if let url = controller.selectedTemplate.externalURL {
+                ExternalProductOptions(template: controller.selectedTemplate, url: url)
+            } else {
+                if let promptLabel = controller.selectedTemplate.promptLabel {
+                    EditorSection(promptLabel) {
+                        TextEditor(text: $controller.draft.prompt)
+                            .font(MereRunTheme.bodyFont)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 88)
+                            .padding(8)
+                            .merePanel()
+                    }
                 }
-            }
 
-            if let secondaryLabel = controller.selectedTemplate.secondaryLabel {
-                EditorSection(secondaryLabel) {
-                    TextEditor(text: $controller.draft.secondaryText)
-                        .font(MereRunTheme.bodyFont)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: secondaryLabel == "Lyrics" ? 88 : 58)
-                        .padding(8)
-                        .merePanel()
+                if let secondaryLabel = controller.selectedTemplate.secondaryLabel {
+                    EditorSection(secondaryLabel) {
+                        TextEditor(text: $controller.draft.secondaryText)
+                            .font(MereRunTheme.bodyFont)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: secondaryLabel == "Lyrics" ? 88 : 58)
+                            .padding(8)
+                            .merePanel()
+                    }
                 }
-            }
 
-            if controller.selectedTemplate.inputKind != .none {
-                EditorSection(controller.selectedTemplate.inputKind.title) {
-                    PathField(
-                        path: $controller.draft.inputPath,
-                        placeholder: "Choose \(controller.selectedTemplate.inputKind.title.lowercased())",
-                        mode: controller.selectedTemplate.inputKind == .directory
-                            ? .openDirectory
-                            : .openFile(controller.selectedTemplate.inputKind.allowedTypes)
-                    )
+                if controller.selectedTemplate.inputKind != .none {
+                    EditorSection(controller.selectedTemplate.inputKind.title) {
+                        PathField(
+                            path: $controller.draft.inputPath,
+                            placeholder: "Choose \(controller.selectedTemplate.inputKind.title.lowercased())",
+                            mode: controller.selectedTemplate.inputKind == .directory
+                                ? .openDirectory
+                                : .openFile(controller.selectedTemplate.inputKind.allowedTypes)
+                        )
+                    }
                 }
-            }
 
-            if controller.selectedTemplate.outputKind != .none {
-                EditorSection(outputLabel) {
-                    PathField(
-                        path: $controller.draft.outputPath,
-                        placeholder: outputLabel,
-                        mode: controller.selectedTemplate.outputKind == .directory ? .openDirectory : .saveFile
-                    )
+                if controller.selectedTemplate.outputKind != .none {
+                    EditorSection(outputLabel) {
+                        PathField(
+                            path: $controller.draft.outputPath,
+                            placeholder: outputLabel,
+                            mode: controller.selectedTemplate.outputKind == .directory ? .openDirectory : .saveFile
+                        )
+                    }
                 }
-            }
 
-            if showsModelField {
-                EditorSection("Model") {
-                    TextField("Managed model id or local path", text: $controller.draft.model)
-                        .textFieldStyle(.plain)
-                        .font(MereRunTheme.bodyFont)
-                        .padding(10)
-                        .merePanel()
+                if showsModelField {
+                    EditorSection("Model") {
+                        TextField("Managed model id or local path", text: $controller.draft.model)
+                            .textFieldStyle(.plain)
+                            .font(MereRunTheme.bodyFont)
+                            .padding(10)
+                            .merePanel()
+                    }
                 }
-            }
 
-            parameterFields
+                parameterFields
+            }
         }
     }
 
@@ -439,6 +445,20 @@ private struct CommandEditor: View {
             VideoLatentsOptions()
         case .videoSession:
             VideoSessionOptions()
+        case .adapterList, .adapterPull:
+            AdapterOperationsOptions()
+        case .runList, .runInspect, .runWatch, .runFetch, .runCancel, .runRetry:
+            DurableRunOptions()
+        case .worldServe:
+            WorldServeOptions()
+        case .statusSnapshot:
+            StatusSnapshotOptions()
+        case .qualityGate:
+            QualityGateOptions()
+        case .modelStorage, .modelGarbageCollect:
+            ModelStorageOptions()
+        case .modelRuntimeGet, .modelRuntimeSet:
+            ModelRuntimePolicyOptions()
         case .sfxGenerate, .sfxVideo:
             SFXOptions()
         case .apiServe:
@@ -461,7 +481,9 @@ private struct CommandEditor: View {
             EmptyView()
         }
 
-        if controller.selectedTemplate.id != .custom {
+        if controller.selectedTemplate.externalURL != nil {
+            EmptyView()
+        } else if controller.selectedTemplate.id != .custom {
             EditorSection("Extra arguments") {
                 TextField("--flag value", text: $controller.draft.extraArguments)
                     .textFieldStyle(.plain)
@@ -493,25 +515,37 @@ private struct CommandEditor: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            Button {
-                controller.run()
-            } label: {
-                Label("Run", systemImage: "play.fill")
-                    .frame(minWidth: 86)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(MereRunTheme.accent)
-            .keyboardShortcut(.return, modifiers: .command)
-            .disabled(controller.isRunning)
+            if let url = controller.selectedTemplate.externalURL {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label("Open", systemImage: "arrow.up.right.square")
+                        .frame(minWidth: 100)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+                .keyboardShortcut(.return, modifiers: .command)
+            } else {
+                Button {
+                    controller.run()
+                } label: {
+                    Label("Run", systemImage: "play.fill")
+                        .frame(minWidth: 86)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(controller.isRunning)
 
-            Button {
-                controller.cancel()
-            } label: {
-                Label("Stop", systemImage: "stop.fill")
-                    .frame(minWidth: 76)
+                Button {
+                    controller.cancel()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .frame(minWidth: 76)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!controller.isRunning)
             }
-            .buttonStyle(.bordered)
-            .disabled(!controller.isRunning)
 
             Spacer()
 
@@ -545,6 +579,20 @@ private struct CommandEditor: View {
             .modelList,
             .modelCapabilities,
             .modelRepairManifests,
+            .adapterList,
+            .adapterPull,
+            .runList,
+            .runInspect,
+            .runWatch,
+            .runFetch,
+            .runCancel,
+            .runRetry,
+            .statusSnapshot,
+            .qualityGate,
+            .modelStorage,
+            .modelGarbageCollect,
+            .graphStudio,
+            .nodeConsole,
             .setup,
             .custom,
             .speechProfileList,
@@ -3216,6 +3264,389 @@ private struct VideoSessionOptions: View {
                         || controller.draft.outputPath.isBlank
                 )
             }
+        }
+    }
+}
+
+private struct ExternalProductOptions: View {
+    let template: CommandTemplate
+    let url: URL
+
+    var body: some View {
+        EditorSection("Product boundary") {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(message, systemImage: template.systemImage)
+                    .font(MereRunTheme.bodyFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                Link(destination: url) {
+                    Label(url.host ?? url.absoluteString, systemImage: "arrow.up.right.square")
+                }
+                .font(MereRunTheme.bodyFont)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .merePanel()
+        }
+    }
+
+    private var message: String {
+        switch template.id {
+        case .graphStudio:
+            return "Graph Studio owns visual Graph v2 authoring, preflight, submission, and project files. It executes the same catalog and immutable bundles as this CLI."
+        case .nodeConsole:
+            return "Node and Relay own device pairing, fleet eligibility, scheduling policy, leases, and remote execution. Durable run controls remain available here."
+        default:
+            return template.subtitle
+        }
+    }
+}
+
+private struct AdapterOperationsOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Adapter catalog") {
+            VStack(alignment: .leading, spacing: 10) {
+                if controller.selectedTemplate.id == .adapterList {
+                    Toggle("Machine-readable catalog with install paths", isOn: $controller.draft.json)
+                    Text("The result includes title, summary, compatible base model, format, license, immutable revision, size, checksum, and install state.")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                } else {
+                    Toggle("Replace an existing verified install", isOn: $controller.draft.force)
+                    Toggle("Suppress download progress", isOn: $controller.draft.quiet)
+                }
+            }
+        }
+    }
+}
+
+private struct DurableRunOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Durable run") {
+            VStack(alignment: .leading, spacing: 10) {
+                switch controller.selectedTemplate.id {
+                case .runList:
+                    PathField(
+                        path: $controller.draft.operationsRoot,
+                        placeholder: "Local root to scan",
+                        mode: .openDirectory
+                    )
+                    TextField("Or executor, e.g. relay:fleet", text: $controller.draft.operationsExecutor)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    if controller.draft.operationsExecutor.isBlank {
+                        NumberStepper(
+                            title: "Scan depth",
+                            value: $controller.draft.maxDepth,
+                            range: 0...32,
+                            step: 1
+                        )
+                    } else {
+                        NumberStepper(
+                            title: "Remote limit",
+                            value: $controller.draft.operationsLimit,
+                            range: 1...500,
+                            step: 1
+                        )
+                    }
+                    Toggle("Structured JSON", isOn: $controller.draft.json)
+                case .runInspect:
+                    runReferenceField("Run directory, report, plan, ssh://, or relay://")
+                    Toggle("Structured JSON", isOn: $controller.draft.json)
+                case .runWatch:
+                    runReferenceField("ssh://profile/job or relay://profile/job")
+                    NumberField(
+                        title: "Poll seconds",
+                        value: $controller.draft.operationsPollInterval
+                    )
+                    Toggle("Stream NDJSON events", isOn: $controller.draft.operationsJSONStream)
+                        .onChange(of: controller.draft.operationsJSONStream) { _, enabled in
+                            if enabled { controller.draft.json = false }
+                        }
+                    Toggle("Emit final job JSON", isOn: $controller.draft.json)
+                        .onChange(of: controller.draft.json) { _, enabled in
+                            if enabled { controller.draft.operationsJSONStream = false }
+                        }
+                case .runFetch:
+                    runReferenceField("ssh://profile/job or relay://profile/job")
+                    Toggle("Fetch every intermediate artifact", isOn: $controller.draft.operationsAllArtifacts)
+                    if !controller.draft.operationsAllArtifacts {
+                        TextEditor(text: $controller.draft.operationsArtifacts)
+                            .font(MereRunTheme.monoFont)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 72)
+                            .padding(8)
+                            .merePanel()
+                            .overlay(alignment: .topLeading) {
+                                if controller.draft.operationsArtifacts.isBlank {
+                                    Text("Named artifacts, one per line (optional)")
+                                        .font(MereRunTheme.bodyFont)
+                                        .foregroundStyle(MereRunTheme.textMuted)
+                                        .padding(18)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                    }
+                    Toggle("Structured JSON receipt", isOn: $controller.draft.json)
+                case .runCancel:
+                    runReferenceField("Local run directory, ssh://, or relay://")
+                    Toggle("Structured JSON receipt", isOn: $controller.draft.json)
+                case .runRetry:
+                    runReferenceField("relay://profile/job")
+                    Toggle("Structured JSON receipt", isOn: $controller.draft.json)
+                default:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private func runReferenceField(_ placeholder: String) -> some View {
+        TextField(placeholder, text: $controller.draft.operationsReference)
+            .textFieldStyle(.plain)
+            .font(MereRunTheme.monoFont)
+            .padding(10)
+            .merePanel()
+    }
+}
+
+private struct WorldServeOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        Group {
+            EditorSection("World runtime") {
+                VStack(spacing: 10) {
+                    AdaptiveControlRow {
+                        TextField("Host", text: $controller.draft.host)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        NumberStepper(
+                            title: "Port",
+                            value: $controller.draft.port,
+                            range: 1...65_535,
+                            step: 1
+                        )
+                    }
+                    Picker("Backend", selection: $controller.draft.operationsWorldBackend) {
+                        Text("DreamX").tag("dreamx")
+                        Text("Cosmos3").tag("cosmos3")
+                    }
+                    .pickerStyle(.segmented)
+                    TextField("Wan TI2V base model id or path", text: $controller.draft.operationsBaseModel)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    PathField(
+                        path: $controller.draft.operationsStateDirectory,
+                        placeholder: "State directory (optional)",
+                        mode: .openDirectory
+                    )
+                    Toggle("Warm every model before accepting requests", isOn: $controller.draft.operationsPrepare)
+                }
+            }
+            EditorSection("Authentication") {
+                SecureField("API key (required off loopback)", text: $controller.draft.apiKey)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+            }
+        }
+    }
+}
+
+private struct StatusSnapshotOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Probe") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    TextField("Host", text: $controller.draft.host)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    NumberStepper(
+                        title: "Port",
+                        value: $controller.draft.port,
+                        range: 1...65_535,
+                        step: 1
+                    )
+                }
+                NumberField(
+                    title: "Timeout seconds",
+                    value: $controller.draft.operationsTimeoutSeconds
+                )
+                SecureField("API key (optional)", text: $controller.draft.apiKey)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Structured JSON", isOn: $controller.draft.json)
+            }
+        }
+    }
+}
+
+private struct QualityGateOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Installed-model gate") {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField(
+                    "Suites: all or text,speech,vision,image,embed",
+                    text: $controller.draft.operationsGateSuite
+                )
+                .textFieldStyle(.plain)
+                .padding(10)
+                .merePanel()
+                Toggle("List checks without running", isOn: $controller.draft.operationsListOnly)
+                Toggle("Record new local baselines", isOn: $controller.draft.operationsUpdateBaselines)
+                Toggle(
+                    "Fail performance regressions",
+                    isOn: $controller.draft.operationsStrictPerformance
+                )
+                Text("Baseline updates intentionally change machine-local quality evidence.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        }
+    }
+}
+
+private struct ModelStorageOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Storage") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Structured JSON", isOn: $controller.draft.json)
+                if controller.selectedTemplate.id == .modelGarbageCollect {
+                    Toggle("Delete the freshly recomputed safe plan", isOn: $controller.draft.force)
+                        .tint(MereRunTheme.red)
+                    Text(
+                        controller.draft.force
+                            ? "Execution deletes only unreferenced payloads and partial downloads in a freshly computed plan."
+                            : "Dry run only. No files will be removed."
+                    )
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(controller.draft.force ? MereRunTheme.yellow : MereRunTheme.textMuted)
+                }
+            }
+        }
+    }
+}
+
+private struct ModelRuntimePolicyOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        if controller.selectedTemplate.id == .modelRuntimeGet {
+            EditorSection("Output") {
+                Toggle("Structured JSON", isOn: $controller.draft.json)
+            }
+        } else {
+            Group {
+                EditorSection("Residency") {
+                    VStack(spacing: 10) {
+                        TextField("Alias (leave empty to preserve)", text: $controller.draft.operationsRuntimeAlias)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        Toggle("Clear alias", isOn: $controller.draft.operationsClearAlias)
+                        Picker("Pin policy", selection: pinPolicy) {
+                            Text("Preserve").tag("preserve")
+                            Text("Pinned").tag("pinned")
+                            Text("Unpinned").tag("unpinned")
+                        }
+                        TextField("TTL seconds", text: $controller.draft.operationsRuntimeTTL)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .merePanel()
+                        Toggle("Clear TTL", isOn: $controller.draft.operationsClearTTL)
+                    }
+                }
+                EditorSection("Generation defaults") {
+                    VStack(spacing: 10) {
+                        optionalPolicyField(
+                            "Max context tokens",
+                            value: $controller.draft.operationsRuntimeContext,
+                            clear: $controller.draft.operationsClearContext
+                        )
+                        optionalPolicyField(
+                            "Max output tokens",
+                            value: $controller.draft.operationsRuntimeMaxTokens,
+                            clear: $controller.draft.operationsClearMaxTokens
+                        )
+                        optionalPolicyField(
+                            "Temperature",
+                            value: $controller.draft.operationsRuntimeTemperature,
+                            clear: $controller.draft.operationsClearTemperature
+                        )
+                        optionalPolicyField(
+                            "Top-p",
+                            value: $controller.draft.operationsRuntimeTopP,
+                            clear: $controller.draft.operationsClearTopP
+                        )
+                    }
+                }
+                EditorSection("Engine & KV") {
+                    VStack(spacing: 10) {
+                        TextField(
+                            "Engine override (optional)",
+                            text: $controller.draft.operationsRuntimeEngine
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                        Toggle("Clear engine override", isOn: $controller.draft.operationsClearEngine)
+                        Picker("KV cache", selection: $controller.draft.operationsRuntimeKVCacheMode) {
+                            Text("Preserve").tag("")
+                            ForEach(["default", "affine4", "affine8", "polar2", "auto"], id: \.self) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        Toggle(
+                            "Clear KV cache override",
+                            isOn: $controller.draft.operationsClearKVCacheMode
+                        )
+                        Toggle("Structured JSON receipt", isOn: $controller.draft.json)
+                    }
+                }
+            }
+        }
+    }
+
+    private var pinPolicy: Binding<String> {
+        Binding(
+            get: {
+                if controller.draft.operationsPinned { return "pinned" }
+                if controller.draft.operationsUnpinned { return "unpinned" }
+                return "preserve"
+            },
+            set: { value in
+                controller.draft.operationsPinned = value == "pinned"
+                controller.draft.operationsUnpinned = value == "unpinned"
+            }
+        )
+    }
+
+    private func optionalPolicyField(
+        _ title: String,
+        value: Binding<String>,
+        clear: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField(title, text: value)
+                .textFieldStyle(.plain)
+                .padding(10)
+                .merePanel()
+            Toggle("Clear \(title.lowercased())", isOn: clear)
         }
     }
 }

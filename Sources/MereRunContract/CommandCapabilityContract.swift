@@ -195,7 +195,22 @@ public enum MereRunCapabilityCatalog {
             videoCosmos3,
             videoPrepareMasks,
             videoExportLatents,
-            videoSession
+            videoSession,
+            adapterList,
+            adapterPull,
+            runList,
+            runInspect,
+            runWatch,
+            runFetch,
+            runCancel,
+            runRetry,
+            worldServe,
+            status,
+            gate,
+            modelStorage,
+            modelGarbageCollect,
+            modelRuntimeGet,
+            modelRuntimeSet
         ]
     )
 
@@ -1353,5 +1368,251 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .service)
+    )
+
+    public static let adapterList = MereRunCommandCapability(
+        id: "adapter.list",
+        command: ["adapter", "list"],
+        title: "Browse adapters",
+        summary: "List verified LoRA adapters, compatibility, provenance, and install state.",
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let adapterPull = MereRunCommandCapability(
+        id: "adapter.pull",
+        command: ["adapter", "pull"],
+        title: "Pull adapter",
+        summary: "Download and checksum-verify one cataloged LoRA adapter.",
+        arguments: [
+            .init(name: "target", label: "Adapter id", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--force", label: "Replace install", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    public static let runList = MereRunCommandCapability(
+        id: "run.list",
+        command: ["run", "list"],
+        title: "Browse durable runs",
+        summary: "Find local run directories and reports or list remote Relay jobs.",
+        options: [
+            .init(flag: "--root", label: "Local root", kind: .directory),
+            .init(flag: "--executor", label: "Remote executor", kind: .string),
+            .init(flag: "--limit", label: "Remote limit", kind: .integer),
+            .init(flag: "--max-depth", label: "Scan depth", kind: .integer),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let runInspect = MereRunCommandCapability(
+        id: "run.inspect",
+        command: ["run", "inspect"],
+        title: "Inspect durable run",
+        summary: "Inspect a run directory, report, plan, or remote job reference.",
+        arguments: [
+            .init(name: "path", label: "Run path or reference", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let runWatch = MereRunCommandCapability(
+        id: "run.watch",
+        command: ["run", "watch"],
+        title: "Watch remote run",
+        summary: "Poll a remote graph job and stream worker events until completion.",
+        arguments: [
+            .init(name: "reference", label: "Remote run reference", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--poll-interval", label: "Poll interval", kind: .number),
+            .init(flag: "--json-stream", label: "NDJSON events", kind: .boolean),
+            .init(flag: "--json", label: "Final JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let runFetch = MereRunCommandCapability(
+        id: "run.fetch",
+        command: ["run", "fetch"],
+        title: "Fetch remote run",
+        summary: "Verify and materialize a remote run and selected artifacts locally.",
+        arguments: [
+            .init(name: "reference", label: "Remote run reference", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--into", label: "Destination", kind: .directory, required: true),
+            .init(flag: "--all-artifacts", label: "All artifacts", kind: .boolean),
+            .init(flag: "--artifact", label: "Named artifact", kind: .string, repeatable: true),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .directory)
+    )
+
+    public static let runCancel = MereRunCommandCapability(
+        id: "run.cancel",
+        command: ["run", "cancel"],
+        title: "Cancel run",
+        summary: "Request cooperative cancellation for a local or remote graph run.",
+        arguments: [
+            .init(name: "reference", label: "Run reference", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let runRetry = MereRunCommandCapability(
+        id: "run.retry",
+        command: ["run", "retry"],
+        title: "Retry Relay run",
+        summary: "Retry one immutable Relay graph job with the same bundle.",
+        arguments: [
+            .init(name: "reference", label: "Relay run reference", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let worldServe = MereRunCommandCapability(
+        id: "world.serve",
+        command: ["world", "serve"],
+        title: "World session",
+        summary: "Serve one warm DreamX or Cosmos3 conditioned-video world session.",
+        options: [
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--backend", label: "Backend", kind: .choice, choices: ["dreamx", "cosmos3"]),
+            .init(flag: "--base-model", label: "Base model", kind: .string),
+            .init(flag: "--model", label: "World model", kind: .string),
+            .init(flag: "--state-directory", label: "State directory", kind: .directory),
+            .init(flag: "--prepare", label: "Warm models", kind: .boolean)
+        ],
+        output: .init(kind: .service)
+    )
+
+    public static let status = MereRunCommandCapability(
+        id: "status",
+        command: ["status"],
+        title: "Status snapshot",
+        summary: "Inspect the API server, loaded models, model store, and local inventory.",
+        options: [
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--timeout-seconds", label: "Timeout", kind: .number),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let gate = MereRunCommandCapability(
+        id: "gate",
+        command: ["gate"],
+        title: "Quality gate",
+        summary: "Run installed-model correctness, determinism, and performance checks.",
+        options: [
+            .init(flag: "--suite", label: "Suites", kind: .string),
+            .init(flag: "--update-baselines", label: "Update baselines", kind: .boolean),
+            .init(flag: "--strict-perf", label: "Strict performance", kind: .boolean),
+            .init(flag: "--json-output", label: "JSON report", kind: .file),
+            .init(flag: "--list", label: "List checks", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "json")
+    )
+
+    public static let modelStorage = MereRunCommandCapability(
+        id: "model.storage",
+        command: ["model", "storage"],
+        title: "Model storage",
+        summary: "Inspect physical storage, sharing, and reclaimable bytes.",
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelGarbageCollect = MereRunCommandCapability(
+        id: "model.gc",
+        command: ["model", "gc"],
+        title: "Model storage cleanup",
+        summary: "Plan or execute safe cleanup of unreferenced payloads and partial downloads.",
+        options: [
+            .init(flag: "--force", label: "Execute", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelRuntimeGet = MereRunCommandCapability(
+        id: "model.runtime.get",
+        command: ["model", "runtime", "get"],
+        title: "Read runtime policy",
+        summary: "Read typed API residency and default generation settings.",
+        arguments: [
+            .init(name: "model", label: "Model or alias", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelRuntimeSet = MereRunCommandCapability(
+        id: "model.runtime.set",
+        command: ["model", "runtime", "set"],
+        title: "Set runtime policy",
+        summary: "Update typed API residency and default generation settings.",
+        arguments: [
+            .init(name: "model", label: "Model or alias", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--alias", label: "Alias", kind: .string),
+            .init(flag: "--clear-alias", label: "Clear alias", kind: .boolean),
+            .init(flag: "--pinned", label: "Pin model", kind: .boolean),
+            .init(flag: "--unpinned", label: "Unpin model", kind: .boolean),
+            .init(flag: "--ttl-seconds", label: "TTL", kind: .integer),
+            .init(flag: "--clear-ttl", label: "Clear TTL", kind: .boolean),
+            .init(flag: "--max-context-tokens", label: "Max context", kind: .integer),
+            .init(flag: "--clear-max-context-tokens", label: "Clear max context", kind: .boolean),
+            .init(flag: "--max-tokens", label: "Max output", kind: .integer),
+            .init(flag: "--clear-max-tokens", label: "Clear max output", kind: .boolean),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--clear-temperature", label: "Clear temperature", kind: .boolean),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--clear-top-p", label: "Clear top-p", kind: .boolean),
+            .init(
+                flag: "--engine",
+                label: "Engine",
+                kind: .choice,
+                choices: [
+                    "text-code", "text-chat-klein", "text-chat-gemma4", "text-chat-q36",
+                    "text-chat-q35", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
+                ]
+            ),
+            .init(flag: "--clear-engine", label: "Clear engine", kind: .boolean),
+            .init(
+                flag: "--kv-cache-mode",
+                label: "KV cache",
+                kind: .choice,
+                choices: ["default", "affine4", "affine8", "polar2", "auto"]
+            ),
+            .init(flag: "--clear-kv-cache-mode", label: "Clear KV cache", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
     )
 }

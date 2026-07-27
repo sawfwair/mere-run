@@ -46,7 +46,22 @@ import Testing
         "video.cosmos3": VideoCosmos3.helpMessage(),
         "video.prepare-masks": VideoPrepareMasks.helpMessage(),
         "video.export-latents": VideoExportLatents.helpMessage(),
-        "video.session": VideoSession.helpMessage()
+        "video.session": VideoSession.helpMessage(),
+        "adapter.list": AdapterList.helpMessage(),
+        "adapter.pull": AdapterPull.helpMessage(),
+        "run.list": RunList.helpMessage(),
+        "run.inspect": RunInspect.helpMessage(),
+        "run.watch": RunWatch.helpMessage(),
+        "run.fetch": RunFetch.helpMessage(),
+        "run.cancel": RunCancel.helpMessage(),
+        "run.retry": RunRetry.helpMessage(),
+        "world.serve": WorldServe.helpMessage(),
+        "status": Status.helpMessage(),
+        "gate": Gate.helpMessage(),
+        "model.storage": ModelStorage.helpMessage(),
+        "model.gc": ModelGarbageCollect.helpMessage(),
+        "model.runtime.get": ModelRuntimeGet.helpMessage(),
+        "model.runtime.set": ModelRuntimeSet.helpMessage()
     ]
 
     for capability in MereRunCapabilityCatalog.document.commands {

@@ -460,6 +460,110 @@ final class StudioTypesTests: XCTestCase {
         assertPair(template.arguments(from: draft), "--backend", "lighton")
     }
 
+    func testOperationsArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.adapterList, "adapter.list", { _ in }),
+            (.adapterPull, "adapter.pull", {
+                $0.prompt = "mere-platform-assistant"
+                $0.force = true
+            }),
+            (.runList, "run.list", {
+                $0.operationsExecutor = "relay:fleet"
+                $0.operationsLimit = 25
+            }),
+            (.runInspect, "run.inspect", {
+                $0.operationsReference = "relay://fleet/job-1"
+            }),
+            (.runWatch, "run.watch", {
+                $0.operationsReference = "relay://fleet/job-1"
+                $0.operationsJSONStream = true
+            }),
+            (.runFetch, "run.fetch", {
+                $0.operationsReference = "relay://fleet/job-1"
+                $0.operationsArtifacts = "preview\nfinal"
+            }),
+            (.runCancel, "run.cancel", {
+                $0.operationsReference = "/tmp/runs/job-1"
+            }),
+            (.runRetry, "run.retry", {
+                $0.operationsReference = "relay://fleet/job-1"
+            }),
+            (.worldServe, "world.serve", {
+                $0.operationsPrepare = true
+                $0.operationsStateDirectory = "/tmp/world"
+            }),
+            (.statusSnapshot, "status", { _ in }),
+            (.qualityGate, "gate", {
+                $0.operationsGateSuite = "text,vision"
+                $0.operationsStrictPerformance = true
+            }),
+            (.modelStorage, "model.storage", { _ in }),
+            (.modelGarbageCollect, "model.gc", { $0.force = true }),
+            (.modelRuntimeGet, "model.runtime.get", { _ in }),
+            (.modelRuntimeSet, "model.runtime.set", {
+                $0.operationsRuntimeAlias = "assistant"
+                $0.operationsPinned = true
+                $0.operationsRuntimeTTL = "900"
+                $0.operationsRuntimeContext = "32768"
+                $0.operationsRuntimeMaxTokens = "2048"
+                $0.operationsRuntimeTemperature = "0.4"
+                $0.operationsRuntimeTopP = "0.9"
+                $0.operationsRuntimeEngine = "text-chat-gemma4"
+                $0.operationsRuntimeKVCacheMode = "auto"
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testRunFetchRejectsConflictingArtifactSelections() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .runFetch))
+        var draft = template.defaultDraft()
+        draft.operationsReference = "relay://fleet/job-1"
+        draft.operationsAllArtifacts = true
+        draft.operationsArtifacts = "preview"
+
+        XCTAssertNotNil(template.validationMessage(for: draft))
+    }
+
+    func testWorldAndStatusAPIKeysUseEnvironmentNotProcessArguments() throws {
+        for id in [CommandTemplateID.worldServe, .statusSnapshot] {
+            let template = try XCTUnwrap(CommandCatalog.template(id: id))
+            var draft = template.defaultDraft()
+            draft.host = "0.0.0.0"
+            draft.apiKey = " operator-secret "
+
+            XCTAssertFalse(template.arguments(from: draft).contains("operator-secret"))
+            XCTAssertEqual(
+                CommandLaunchEnvironment.overrides(templateID: id, draft: draft),
+                ["MERERUN_API_KEY": "operator-secret"]
+            )
+            XCTAssertNil(template.validationMessage(for: draft))
+        }
+    }
+
+    func testGraphAndFleetStayExternalProductBoundaries() throws {
+        let graph = try XCTUnwrap(CommandCatalog.template(id: .graphStudio))
+        let node = try XCTUnwrap(CommandCatalog.template(id: .nodeConsole))
+
+        XCTAssertEqual(graph.externalURL?.absoluteString, "https://studio.mere.run/app")
+        XCTAssertEqual(node.externalURL?.absoluteString, "https://relay.mere.run")
+        XCTAssertTrue(graph.arguments(from: graph.defaultDraft()).isEmpty)
+        XCTAssertTrue(node.arguments(from: node.defaultDraft()).isEmpty)
+    }
+
     func testStudioServerStatusParsesSnapshot() {
         let json = """
         {"server":{"url":"http://127.0.0.1:8080","health":"ok","loadedModels":["text-chat-gemma4"]},\
