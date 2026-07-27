@@ -149,7 +149,16 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.musicAnalyze) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "analyze", "/a.wav"])
         XCTAssertEqual(try args(.musicTranscribe) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "transcribe", "/a.wav"])
         XCTAssertEqual(try args(.musicRealtime).prefix(2).map { $0 }, ["music", "realtime"])
-        XCTAssertTrue(try args(.musicRealtime).contains("--no-play"))
+        XCTAssertFalse(try args(.musicRealtime).contains("--no-play"))
+        XCTAssertTrue(try args(.musicRealtime) { $0.musicPlay = false }.contains("--no-play"))
+        XCTAssertEqual(
+            try args(.musicTrainAdapter) {
+                $0.inputPath = "/dataset.jsonl"
+                $0.outputPath = "/adapter.safetensors"
+            }.prefix(2).map { $0 },
+            ["music", "train-adapter"]
+        )
+        XCTAssertEqual(try args(.musicServe).prefix(2).map { $0 }, ["music", "serve"])
         XCTAssertEqual(try args(.sfxAEEncode) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "ae", "encode"])
         XCTAssertEqual(try args(.sfxAEDecode) { $0.inputPath = "/a.npy" }.prefix(3).map { $0 }, ["sfx", "ae", "decode"])
         XCTAssertEqual(try args(.sfxClapScore) { $0.prompt = "door"; $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "clap", "score"])
@@ -159,6 +168,190 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.pluginInstall) { $0.prompt = "mere-runpod"; $0.force = true }, ["plugin", "install", "mere-runpod", "--yes"])
         XCTAssertEqual(try args(.pluginDoctor) { $0.prompt = "mere-runpod" }, ["plugin", "doctor", "mere-runpod"])
         XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
+    }
+
+    func testMusicAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.musicGenerate, "music.generate", {
+                $0.musicTask = "repaint"
+                $0.musicSourceAudio = "/tmp/source.wav"
+                $0.musicReferenceAudioPaths = "/tmp/voice.wav\n/tmp/timbre.wav"
+                $0.musicLRCFile = "/tmp/lyrics.lrc"
+                $0.musicLRCOutput = "/tmp/out.lrc"
+                $0.musicAdapterPaths = "/tmp/a.safetensors\n/tmp/b.safetensors"
+                $0.musicAdapterScales = "0.5\n0.75"
+                $0.musicStems = "Drums,Bass,Vocals"
+                $0.musicDAWBundle = "/tmp/session"
+                $0.musicLMMode = "use"
+                $0.musicAnalyzeSourceAudio = true
+                $0.musicOverrideSteps = true
+                $0.useDuration = true
+                $0.musicCandidates = 3
+                $0.musicKeepCandidates = true
+                $0.musicRetakeSeed = "99"
+                $0.musicFlowEdit = true
+                $0.musicSourceCaption = "original demo"
+                $0.musicSourceLyrics = "old words"
+                $0.musicBPM = "122"
+                $0.musicKey = "D minor"
+                $0.musicTimeSignature = "4"
+                $0.musicNoTiledVAE = true
+                $0.musicNoRecipe = true
+            }),
+            (.musicAnalyze, "music.analyze", {
+                $0.inputPath = "/tmp/song.wav"
+                $0.useDuration = true
+                $0.musicIncludeRawLM = true
+                $0.musicIncludeAudioCodes = true
+            }),
+            (.musicTranscribe, "music.transcribe", {
+                $0.inputPath = "/tmp/song.wav"
+                $0.musicSampling = true
+                $0.musicStrictEOS = true
+                $0.musicContextOutput = "/tmp/context.json"
+            }),
+            (.musicRealtime, "music.realtime", {
+                $0.musicPlay = false
+                $0.musicInteractive = true
+                $0.musicMIDIInput = "OP-1"
+                $0.musicMIDICCMappings = "1=temp:0.2:1.4"
+            }),
+            (.musicTrainAdapter, "music.train-adapter", {
+                $0.inputPath = "/tmp/dataset.jsonl"
+                $0.outputPath = "/tmp/music.safetensors"
+                $0.musicTrainingKind = "lokr"
+            }),
+            (.musicServe, "music.serve", {
+                $0.musicAdapterPaths = "/tmp/music.safetensors"
+                $0.musicAdapterScales = "0.8"
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testMusicGenerateBuildsCompleteProductionWorkflow() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
+        var draft = template.defaultDraft()
+        draft.prompt = "dream-pop vocals over live drums"
+        draft.secondaryText = "[verse]\nwe rise"
+        draft.musicQuality = "final"
+        draft.musicTask = "repaint"
+        draft.musicSourceAudio = "/tmp/demo.wav"
+        draft.musicReferenceAudioPaths = "/tmp/vocal.wav\n/tmp/band.wav"
+        draft.musicLMMode = "use"
+        draft.musicAnalyzeSourceAudio = true
+        draft.useDuration = true
+        draft.durationSeconds = 42
+        draft.musicOverrideSteps = true
+        draft.steps = 50
+        draft.musicCandidates = 4
+        draft.musicKeepCandidates = true
+        draft.musicAdapterPaths = "/tmp/style.safetensors\n/tmp/singer.safetensors"
+        draft.musicAdapterScales = "0.6\n0.8"
+        draft.musicStems = "Drums,Bass,Vocals"
+        draft.musicDAWBundle = "/tmp/session"
+        draft.musicFlowEdit = true
+        draft.musicSourceCaption = "rough acoustic demo"
+        draft.musicSourceLyrics = "old lyric"
+
+        let args = template.arguments(from: draft)
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--task-type", "repaint")
+        assertPair(args, "--source-audio", "/tmp/demo.wav")
+        XCTAssertEqual(args.filter { $0 == "--reference-audio" }.count, 2)
+        XCTAssertEqual(args.filter { $0 == "--adapter" }.count, 2)
+        XCTAssertEqual(args.filter { $0 == "--adapter-scale" }.count, 2)
+        assertPair(args, "--duration", "42")
+        assertPair(args, "--steps", "50")
+        assertPair(args, "--candidates", "4")
+        assertPair(args, "--stems", "Drums,Bass,Vocals")
+        assertPair(args, "--daw-bundle", "/tmp/session")
+        XCTAssertTrue(args.contains("--use-lm"))
+        XCTAssertTrue(args.contains("--analyze-source-audio"))
+        XCTAssertTrue(args.contains("--keep-candidates"))
+        XCTAssertTrue(args.contains("--flow-edit"))
+    }
+
+    func testMusicStudioMapsProductionWorkflow() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .music)
+        draft.prompt = "cinematic art-pop single"
+        draft.secondaryText = "[chorus]\nwe are alive"
+        draft.musicQuality = "final"
+        draft.musicTask = "cover"
+        draft.musicSourceAudio = "/tmp/source.wav"
+        draft.musicReferenceAudioPaths = "/tmp/timbre.wav"
+        draft.musicLMMode = "use"
+        draft.musicAnalyzeSourceAudio = true
+        draft.useDuration = true
+        draft.durationSeconds = 60
+        draft.musicOverrideSteps = true
+        draft.steps = 50
+        draft.musicCandidates = 4
+        draft.musicKeepCandidates = true
+        draft.musicAdapterPaths = "/tmp/artist.safetensors"
+        draft.musicAdapterScales = "0.7"
+        draft.musicStems = "Drums,Bass,Vocals"
+        draft.musicDAWBundle = "/tmp/daw"
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--task-type", "cover")
+        assertPair(args, "--source-audio", "/tmp/source.wav")
+        assertPair(args, "--duration", "60")
+        assertPair(args, "--steps", "50")
+        assertPair(args, "--candidates", "4")
+        assertPair(args, "--adapter", "/tmp/artist.safetensors")
+        assertPair(args, "--adapter-scale", "0.7")
+        assertPair(args, "--stems", "Drums,Bass,Vocals")
+        assertPair(args, "--daw-bundle", "/tmp/daw")
+        XCTAssertTrue(args.contains("--use-lm"))
+        XCTAssertTrue(args.contains("--analyze-source-audio"))
+        XCTAssertTrue(args.contains("--keep-candidates"))
+    }
+
+    func testMusicEditingRequiresSourceAudioInStudioAndAdvanced() throws {
+        var studio = StudioDraft()
+        studio.reset(for: .music)
+        studio.prompt = "new arrangement"
+        studio.musicTask = "repaint"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .music, draft: studio))
+
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
+        var advanced = template.defaultDraft()
+        advanced.musicTask = "cover"
+        XCTAssertNotNil(template.validationMessage(for: advanced))
+        advanced.musicSourceAudio = "/tmp/source.wav"
+        XCTAssertNil(template.validationMessage(for: advanced))
+    }
+
+    func testMusicServerInjectsAPIKeyOutsideProcessArguments() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicServe))
+        var draft = template.defaultDraft()
+        draft.host = "0.0.0.0"
+        draft.apiKey = "music-secret"
+
+        let arguments = template.arguments(from: draft)
+        XCTAssertFalse(arguments.contains("--api-key"))
+        XCTAssertFalse(arguments.contains("music-secret"))
+        XCTAssertEqual(
+            CommandLaunchEnvironment.overrides(templateID: .musicServe, draft: draft),
+            ["MERERUN_API_KEY": "music-secret"]
+        )
+        XCTAssertNil(template.validationMessage(for: draft))
     }
 
     func testStudioServerStatusParsesSnapshot() {

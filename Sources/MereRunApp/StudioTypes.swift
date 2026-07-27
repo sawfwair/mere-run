@@ -327,6 +327,34 @@ struct StudioDraft: Codable, Equatable {
     var kreaConditioningLayerWeights = ""
     var kreaBaseQuantizationBits = ""
     var progressJSON = false
+    var musicQuality = "song"
+    var musicTask = "text2music"
+    var musicSourceAudio = ""
+    var musicReferenceAudioPaths = ""
+    var musicLRCFile = ""
+    var musicLMMode = "auto"
+    var musicAnalyzeSourceAudio = false
+    var musicOverrideSteps = false
+    var musicCandidates = 0
+    var musicKeepCandidates = false
+    var musicCoverStrength = 1.0
+    var musicCoverNoiseStrength = 0.0
+    var musicRetakeSeed = ""
+    var musicRetakeVariance = 0.0
+    var musicRepaintStart = 0.0
+    var musicRepaintEnd = -1.0
+    var musicRepaintMode = "balanced"
+    var musicRepaintStrength = 0.5
+    var musicFlowEdit = false
+    var musicSourceCaption = ""
+    var musicSourceLyrics = ""
+    var musicAdapterPaths = ""
+    var musicAdapterKind = "auto"
+    var musicAdapterScales = ""
+    var musicStems = ""
+    var musicDAWBundle = ""
+    var musicExportFormat = "pcm24"
+    var musicNoRecipe = false
     var language = "auto"
     var timestamps = true
     var backend = "auto"
@@ -400,6 +428,34 @@ struct StudioDraft: Codable, Equatable {
         kreaConditioningLayerWeights = ""
         kreaBaseQuantizationBits = ""
         progressJSON = false
+        musicQuality = "song"
+        musicTask = "text2music"
+        musicSourceAudio = ""
+        musicReferenceAudioPaths = ""
+        musicLRCFile = ""
+        musicLMMode = "auto"
+        musicAnalyzeSourceAudio = false
+        musicOverrideSteps = false
+        musicCandidates = 0
+        musicKeepCandidates = false
+        musicCoverStrength = 1
+        musicCoverNoiseStrength = 0
+        musicRetakeSeed = ""
+        musicRetakeVariance = 0
+        musicRepaintStart = 0
+        musicRepaintEnd = -1
+        musicRepaintMode = "balanced"
+        musicRepaintStrength = 0.5
+        musicFlowEdit = false
+        musicSourceCaption = ""
+        musicSourceLyrics = ""
+        musicAdapterPaths = ""
+        musicAdapterKind = "auto"
+        musicAdapterScales = ""
+        musicStems = ""
+        musicDAWBundle = ""
+        musicExportFormat = "pcm24"
+        musicNoRecipe = false
         language = base?.language ?? "auto"
         timestamps = base?.timestamps ?? true
         backend = base?.backend ?? "auto"
@@ -663,6 +719,35 @@ enum StudioCommandAdapter {
             draft.durationSeconds = studioDraft.durationSeconds
             draft.steps = studioDraft.steps
             draft.seed = studioDraft.seed
+            draft.useDuration = studioDraft.useDuration
+            draft.musicQuality = studioDraft.musicQuality
+            draft.musicTask = studioDraft.musicTask
+            draft.musicSourceAudio = studioDraft.musicSourceAudio
+            draft.musicReferenceAudioPaths = studioDraft.musicReferenceAudioPaths
+            draft.musicLRCFile = studioDraft.musicLRCFile
+            draft.musicLMMode = studioDraft.musicLMMode
+            draft.musicAnalyzeSourceAudio = studioDraft.musicAnalyzeSourceAudio
+            draft.musicOverrideSteps = studioDraft.musicOverrideSteps
+            draft.musicCandidates = studioDraft.musicCandidates
+            draft.musicKeepCandidates = studioDraft.musicKeepCandidates
+            draft.musicCoverStrength = studioDraft.musicCoverStrength
+            draft.musicCoverNoiseStrength = studioDraft.musicCoverNoiseStrength
+            draft.musicRetakeSeed = studioDraft.musicRetakeSeed
+            draft.musicRetakeVariance = studioDraft.musicRetakeVariance
+            draft.musicRepaintStart = studioDraft.musicRepaintStart
+            draft.musicRepaintEnd = studioDraft.musicRepaintEnd
+            draft.musicRepaintMode = studioDraft.musicRepaintMode
+            draft.musicRepaintStrength = studioDraft.musicRepaintStrength
+            draft.musicFlowEdit = studioDraft.musicFlowEdit
+            draft.musicSourceCaption = studioDraft.musicSourceCaption
+            draft.musicSourceLyrics = studioDraft.musicSourceLyrics
+            draft.musicAdapterPaths = studioDraft.musicAdapterPaths
+            draft.musicAdapterKind = studioDraft.musicAdapterKind
+            draft.musicAdapterScales = studioDraft.musicAdapterScales
+            draft.musicStems = studioDraft.musicStems
+            draft.musicDAWBundle = studioDraft.musicDAWBundle
+            draft.musicExportFormat = studioDraft.musicExportFormat
+            draft.musicNoRecipe = studioDraft.musicNoRecipe
 
         case .video:
             draft.prompt = prompt
@@ -776,6 +861,13 @@ enum StudioCommandAdapter {
         if mode == .speak, draft.voiceMode == "clone",
            draft.voiceProfile.isBlank, draft.refAudioPath.isBlank {
             throw StudioCommandError.missingPrompt("A saved voice profile or reference audio")
+        }
+        if mode == .music {
+            let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+            if (sourceTasks.contains(draft.musicTask) || draft.musicFlowEdit)
+                && draft.musicSourceAudio.isBlank {
+                throw StudioCommandError.missingInput("source audio")
+            }
         }
 
         let promptRequired: Bool

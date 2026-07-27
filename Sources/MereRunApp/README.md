@@ -33,3 +33,12 @@ TRELLIS.2, and InstantMesh. The primary Studio surface includes multi-reference
 editing, structured prompts, LoRA catalog IDs or local adapters, Krea tuning,
 preflight, and machine-readable progress; Advanced exposes every specialist
 workflow and training control.
+
+Music is a production workspace, not a prompt-only wrapper. Studio exposes
+quality planning, covers/repaint/flow edits, source and timbre-reference audio,
+candidate ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW
+delivery. Advanced adds the complete ACE-Step diffusion/layout controls,
+standalone audio understanding, MuScriptor MIDI/event transcription, Magenta
+RT2 playback and MIDI steering, LoRA/LoKr training, and the resident music API.
+The API key is injected through `MERERUN_API_KEY`, never placed in process
+arguments.

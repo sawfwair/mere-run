@@ -392,7 +392,17 @@ private struct CommandEditor: View {
         case .visionSegment, .visionTrack, .visionTrackLive:
             VisionTrackingOptions()
         case .musicGenerate:
-            MusicOptions()
+            MusicGenerationOptions()
+        case .musicAnalyze:
+            MusicAnalysisOptions()
+        case .musicTranscribe:
+            MusicTranscriptionOptions()
+        case .musicRealtime:
+            MusicRealtimeOptions()
+        case .musicTrainAdapter:
+            MusicTrainingOptions()
+        case .musicServe:
+            MusicServeOptions()
         case .videoGenerate:
             DimensionsGrid()
             VideoOptions()
@@ -1704,21 +1714,626 @@ private struct VisionTrackingOptions: View {
     }
 }
 
-private struct MusicOptions: View {
+private struct MusicGenerationOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
     var body: some View {
-        EditorSection("Music") {
+        EditorSection("Production") {
             VStack(spacing: 10) {
+                Picker("Quality", selection: $controller.draft.musicQuality) {
+                    Text("Draft").tag("draft")
+                    Text("Song").tag("song")
+                    Text("Final").tag("final")
+                    Text("Edit").tag("edit")
+                }
+                .pickerStyle(.segmented)
+                Picker("Task", selection: $controller.draft.musicTask) {
+                    Text("Create").tag("text2music")
+                    Text("Cover").tag("cover")
+                    Text("No-FSQ cover").tag("cover-nofsq")
+                    Text("Repaint").tag("repaint")
+                    Text("Extract").tag("extract")
+                    Text("Lego").tag("lego")
+                    Text("Complete").tag("complete")
+                }
                 AdaptiveControlRow {
-                    NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
-                    NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...80, step: 1)
+                    Toggle("Set duration", isOn: $controller.draft.useDuration)
+                    if controller.draft.useDuration {
+                        NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
+                    }
+                    NumberStepper(
+                        title: "Candidates",
+                        value: $controller.draft.musicCandidates,
+                        range: 0...16,
+                        step: 1
+                    )
+                }
+                AdaptiveControlRow {
+                    Toggle("Override steps", isOn: $controller.draft.musicOverrideSteps)
+                    if controller.draft.musicOverrideSteps {
+                        NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...200, step: 1)
+                    }
+                    Toggle("Keep candidates", isOn: $controller.draft.musicKeepCandidates)
                 }
                 TextField("Seed", text: $controller.draft.seed)
                     .textFieldStyle(.plain)
                     .padding(10)
                     .merePanel()
                 Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+
+        EditorSection("Conditioning & editing") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.musicSourceAudio,
+                    placeholder: "Source audio for cover/edit",
+                    mode: .openFile([.audio])
+                )
+                MultiPathField(
+                    paths: $controller.draft.musicReferenceAudioPaths,
+                    title: "Timbre reference audio",
+                    allowedTypes: [.audio]
+                )
+                AdaptiveControlRow {
+                    NumberField(title: "Cover strength", value: $controller.draft.musicCoverStrength)
+                    NumberField(title: "Cover noise", value: $controller.draft.musicCoverNoiseStrength)
+                    NumberField(title: "Retake variance", value: $controller.draft.musicRetakeVariance)
+                }
+                TextField("Retake seed", text: $controller.draft.musicRetakeSeed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                if ["extract", "lego"].contains(controller.draft.musicTask) {
+                    TextField("Track name", text: $controller.draft.musicTrackName)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                if controller.draft.musicTask == "complete" {
+                    TextField("Track classes (Drums,Bass,…)", text: $controller.draft.musicCompleteTrackClasses)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                if ["repaint", "lego"].contains(controller.draft.musicTask) {
+                    AdaptiveControlRow {
+                        NumberField(title: "Repaint start", value: $controller.draft.musicRepaintStart)
+                        NumberField(title: "Repaint end", value: $controller.draft.musicRepaintEnd)
+                        NumberField(title: "Strength", value: $controller.draft.musicRepaintStrength)
+                    }
+                    Picker("Preservation", selection: $controller.draft.musicRepaintMode) {
+                        Text("Conservative").tag("conservative")
+                        Text("Balanced").tag("balanced")
+                        Text("Aggressive").tag("aggressive")
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Chunk mask", selection: $controller.draft.musicChunkMaskMode) {
+                        Text("Auto").tag("auto")
+                        Text("Explicit").tag("explicit")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Toggle("Flow edit toward this prompt", isOn: $controller.draft.musicFlowEdit)
+                if controller.draft.musicFlowEdit {
+                    TextField("Source caption", text: $controller.draft.musicSourceCaption)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Source lyrics", text: $controller.draft.musicSourceLyrics, axis: .vertical)
+                        .lineLimit(2...6)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    AdaptiveControlRow {
+                        NumberField(title: "Flow start", value: $controller.draft.musicFlowEditNMin)
+                        NumberField(title: "Flow end", value: $controller.draft.musicFlowEditNMax)
+                        NumberStepper(
+                            title: "Noise draws",
+                            value: $controller.draft.musicFlowEditNAverage,
+                            range: 1...64,
+                            step: 1
+                        )
+                    }
+                }
+            }
+        }
+
+        EditorSection("Lyrics & planning") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.musicLyricsFile,
+                    placeholder: "Plain lyrics file",
+                    mode: .openFile([.plainText])
+                )
+                PathField(
+                    path: $controller.draft.musicLRCFile,
+                    placeholder: "Synchronized LRC file",
+                    mode: .openFile([.plainText])
+                )
+                Picker("LM planning", selection: $controller.draft.musicLMMode) {
+                    Text("Quality preset").tag("auto")
+                    Text("Force on").tag("use")
+                    Text("Force off").tag("disable")
+                }
+                .pickerStyle(.segmented)
+                Toggle("Analyze source to fill metadata", isOn: $controller.draft.musicAnalyzeSourceAudio)
+                AdaptiveControlRow {
+                    TextField("BPM", text: $controller.draft.musicBPM)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Key (C major)", text: $controller.draft.musicKey)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Time signature", text: $controller.draft.musicTimeSignature)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                AdaptiveControlRow {
+                    NumberStepper(title: "LM top-k", value: $controller.draft.musicLMTopK, range: 0...2_048, step: 1)
+                    NumberField(title: "LM top-p", value: $controller.draft.musicLMTopP)
+                }
+                TextField("Vocal language", text: $controller.draft.musicVocalLanguage)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                TextField("ACE-Step instruction", text: $controller.draft.musicInstruction, axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+            }
+        }
+
+        EditorSection("Diffusion controls") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    TextField("Shift (preset)", text: $controller.draft.musicShift)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Guidance (preset)", text: $controller.draft.musicGuidanceScale)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                Picker("Inference", selection: $controller.draft.musicInferMethod) {
+                    Text("Preset").tag("")
+                    Text("ODE").tag("ode")
+                    Text("SDE").tag("sde")
+                }
+                .pickerStyle(.segmented)
+                Picker("Sampler", selection: $controller.draft.musicSampler) {
+                    Text("Preset").tag("")
+                    Text("Euler").tag("euler")
+                    Text("Heun").tag("heun")
+                }
+                .pickerStyle(.segmented)
+                Picker("Guidance mode", selection: $controller.draft.musicGuidanceMode) {
+                    Text("Preset").tag("")
+                    Text("APG").tag("apg")
+                    Text("ADG").tag("adg")
+                    Text("CFG").tag("cfg")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    TextField("CFG start", text: $controller.draft.musicCFGIntervalStart)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("CFG end", text: $controller.draft.musicCFGIntervalEnd)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Velocity clamp", text: $controller.draft.musicVelocityNormThreshold)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Velocity EMA", text: $controller.draft.musicVelocityEMAFactor)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                AdaptiveControlRow {
+                    Toggle("Disable tiled VAE", isOn: $controller.draft.musicNoTiledVAE)
+                    NumberStepper(
+                        title: "VAE chunk",
+                        value: $controller.draft.musicVAEChunkSize,
+                        range: 64...4_096,
+                        step: 64
+                    )
+                    NumberStepper(
+                        title: "Overlap",
+                        value: $controller.draft.musicVAEOverlap,
+                        range: 0...1_024,
+                        step: 16
+                    )
+                }
+            }
+        }
+
+        MusicAdapterAndLayoutOptions()
+        MusicDeliveryOptions()
+        if controller.draft.model.localizedCaseInsensitiveContains("magenta") {
+            MusicMagentaOptions()
+        }
+    }
+}
+
+private struct MusicAnalysisOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Audio understanding") {
+            VStack(spacing: 10) {
+                Toggle("Limit analysis duration", isOn: $controller.draft.useDuration)
+                if controller.draft.useDuration {
+                    NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
+                }
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Max tokens",
+                        value: $controller.draft.musicAnalysisMaxTokens,
+                        range: 1...32_768,
+                        step: 128
+                    )
+                    NumberField(title: "Temperature", value: $controller.draft.musicAnalysisTemperature)
+                    NumberStepper(title: "Top-k", value: $controller.draft.musicLMTopK, range: 0...2_048, step: 1)
+                    NumberField(title: "Top-p", value: $controller.draft.musicLMTopP)
+                }
+                AdaptiveControlRow {
+                    Toggle("Include raw LM", isOn: $controller.draft.musicIncludeRawLM)
+                    Toggle("Include audio codes", isOn: $controller.draft.musicIncludeAudioCodes)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+            }
+        }
+        MusicModelLayoutOptions(includesLM: true, includesText: false, includesAdapters: false)
+    }
+}
+
+private struct MusicTranscriptionOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("MuScriptor") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.musicTranscribeModelPath,
+                    placeholder: "Explicit model directory",
+                    mode: .openDirectory
+                )
+                Picker("Architecture", selection: $controller.draft.musicTranscribeVariant) {
+                    Text("Auto").tag("")
+                    Text("Small").tag("small")
+                    Text("Medium").tag("medium")
+                    Text("Large").tag("large")
+                }
+                .pickerStyle(.segmented)
+                Picker("Output", selection: $controller.draft.musicTranscribeFormat) {
+                    Text("MIDI").tag("midi")
+                    Text("JSON").tag("json")
+                    Text("JSONL").tag("jsonl")
+                }
+                .pickerStyle(.segmented)
+                TextField("Instrument groups", text: $controller.draft.musicInstruments)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                AdaptiveControlRow {
+                    Toggle("List instruments", isOn: $controller.draft.musicListInstruments)
+                    Toggle("Sample tokens", isOn: $controller.draft.musicSampling)
+                    Toggle("Strict EOS", isOn: $controller.draft.musicStrictEOS)
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Temperature", value: $controller.draft.temperature)
+                    NumberStepper(
+                        title: "Tokens/chunk",
+                        value: $controller.draft.musicMaxTokensPerChunk,
+                        range: 1...32_768,
+                        step: 100
+                    )
+                    NumberStepper(title: "Beam", value: $controller.draft.musicBeamSize, range: 1...32, step: 1)
+                    NumberStepper(
+                        title: "Chunk batch",
+                        value: $controller.draft.musicChunkBatchSize,
+                        range: 1...64,
+                        step: 1
+                    )
+                }
+                Picker("Compute", selection: $controller.draft.musicDType) {
+                    Text("bfloat16").tag("bfloat16")
+                    Text("float16").tag("float16")
+                    Text("float32").tag("float32")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    Toggle("Legacy fixed tempo", isOn: $controller.draft.musicNoMusicalContext)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+                PathField(
+                    path: $controller.draft.musicContextOutput,
+                    placeholder: "Musical context JSON output",
+                    mode: .saveFile
+                )
+            }
+        }
+    }
+}
+
+private struct MusicRealtimeOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Realtime session") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    NumberField(title: "Seconds", value: $controller.draft.durationSeconds)
+                    Toggle("Play audio", isOn: $controller.draft.musicPlay)
+                    Toggle("Interactive stdin", isOn: $controller.draft.musicInteractive)
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
+                }
+                MusicMagentaOptions()
+            }
+        }
+        EditorSection("MIDI steering") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    Toggle("List inputs", isOn: $controller.draft.musicListMIDIInputs)
+                    Toggle("Monitor only", isOn: $controller.draft.musicMIDIMonitor)
+                    Toggle("Log events", isOn: $controller.draft.musicMIDILogEvents)
+                    Toggle("Log raw bytes", isOn: $controller.draft.musicMIDILogRaw)
+                }
+                AdaptiveControlRow {
+                    TextField("MIDI source", text: $controller.draft.musicMIDIInput)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("Channel (all or 1–16)", text: $controller.draft.musicMIDIChannel)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    NumberStepper(
+                        title: "Transpose",
+                        value: $controller.draft.musicMIDINoteOffset,
+                        range: -127...127,
+                        step: 1
+                    )
+                }
+                TextField(
+                    "MIDI CC mappings, one per line (1=temp:0.2:1.4)",
+                    text: $controller.draft.musicMIDICCMappings,
+                    axis: .vertical
+                )
+                .lineLimit(2...8)
+                .textFieldStyle(.plain)
+                .padding(10)
+                .merePanel()
+            }
+        }
+    }
+}
+
+private struct MusicTrainingOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Adapter training") {
+            VStack(spacing: 10) {
+                Picker("Kind", selection: $controller.draft.musicTrainingKind) {
+                    Text("LoRA").tag("lora")
+                    Text("LoKr").tag("lokr")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...1_000_000, step: 100)
+                    NumberStepper(title: "Rank", value: $controller.draft.rank, range: 1...1_024, step: 1)
+                    NumberField(title: "Alpha", value: $controller.draft.alpha)
+                    NumberStepper(
+                        title: "LoKr factor",
+                        value: $controller.draft.musicTrainingFactor,
+                        range: -1...1_024,
+                        step: 1
+                    )
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Learning rate", value: $controller.draft.learningRate)
+                    NumberField(title: "Weight decay", value: $controller.draft.musicTrainingWeightDecay)
+                    NumberField(title: "Max seconds", value: $controller.draft.musicTrainingMaxDuration)
+                    NumberStepper(
+                        title: "Log every",
+                        value: $controller.draft.musicTrainingLogEvery,
+                        range: 1...100_000,
+                        step: 1
+                    )
+                }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+            }
+        }
+        MusicModelLayoutOptions(includesLM: false, includesText: true, includesAdapters: false)
+    }
+}
+
+private struct MusicServeOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Resident API") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    TextField("Host", text: $controller.draft.host)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    NumberStepper(title: "Port", value: $controller.draft.port, range: 1...65_535, step: 1)
+                }
+                SecureField("API key (required off localhost)", text: $controller.draft.apiKey)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+            }
+        }
+        MusicModelLayoutOptions(includesLM: true, includesText: true, includesAdapters: true)
+    }
+}
+
+private struct MusicAdapterAndLayoutOptions: View {
+    var body: some View {
+        MusicModelLayoutOptions(includesLM: true, includesText: true, includesAdapters: true)
+    }
+}
+
+private struct MusicModelLayoutOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+    let includesLM: Bool
+    let includesText: Bool
+    let includesAdapters: Bool
+
+    var body: some View {
+        EditorSection("Model layout & adapters") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.musicCheckpointsRoot,
+                    placeholder: "Checkpoints root (auto)",
+                    mode: .openDirectory
+                )
+                AdaptiveControlRow {
+                    TextField("Decoder subdirectory", text: $controller.draft.musicDecoderSubdirectory)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    TextField("VAE subdirectory", text: $controller.draft.musicVAESubdirectory)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                if includesLM {
+                    TextField("5Hz LM subdirectory (auto)", text: $controller.draft.musicLMSubdirectory)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                if includesText {
+                    TextField("Text encoder subdirectory (auto)", text: $controller.draft.musicTextSubdirectory)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                }
+                if includesAdapters {
+                    MultiPathField(
+                        paths: $controller.draft.musicAdapterPaths,
+                        title: "ACE-Step adapters",
+                        allowedTypes: [.data]
+                    )
+                    Picker("Adapter kind", selection: $controller.draft.musicAdapterKind) {
+                        Text("Auto").tag("auto")
+                        Text("LoRA").tag("lora")
+                        Text("LoKr").tag("lokr")
+                    }
+                    .pickerStyle(.segmented)
+                    TextField(
+                        "Adapter scales, one per line",
+                        text: $controller.draft.musicAdapterScales,
+                        axis: .vertical
+                    )
+                    .lineLimit(1...6)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                }
+            }
+        }
+    }
+}
+
+private struct MusicDeliveryOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Delivery") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    Picker("Encoding", selection: $controller.draft.musicExportFormat) {
+                        Text("PCM 16").tag("pcm16")
+                        Text("PCM 24").tag("pcm24")
+                        Text("Float 32").tag("float32")
+                    }
+                    Picker("Normalize", selection: $controller.draft.musicNormalization) {
+                        Text("Peak").tag("peak")
+                        Text("None").tag("none")
+                    }
+                }
+                AdaptiveControlRow {
+                    NumberField(title: "Peak dBFS", value: $controller.draft.musicTargetPeakDB)
+                    NumberField(title: "Fade in ms", value: $controller.draft.musicFadeInMS)
+                    NumberField(title: "Fade out ms", value: $controller.draft.musicFadeOutMS)
+                }
+                AdaptiveControlRow {
+                    Toggle("Disable dither", isOn: $controller.draft.musicNoDither)
+                    Toggle("Disable recipe", isOn: $controller.draft.musicNoRecipe)
+                }
+                PathField(
+                    path: $controller.draft.musicLRCOutput,
+                    placeholder: "Synchronized LRC output",
+                    mode: .saveFile
+                )
+                PathField(
+                    path: $controller.draft.musicRecipeOutput,
+                    placeholder: "Recipe JSON output",
+                    mode: .saveFile
+                )
+                TextField("DAW bundle directory", text: $controller.draft.musicDAWBundle)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                TextField("Stems (Drums,Bass,Vocals,…)", text: $controller.draft.musicStems)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+            }
+        }
+    }
+}
+
+private struct MusicMagentaOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Picker("Style conditioning", selection: $controller.draft.musicStyleConditioning) {
+                Text("Streaming").tag("streaming")
+                Text("Full").tag("full")
+            }
+            .pickerStyle(.segmented)
+            AdaptiveControlRow {
+                NumberField(title: "Temperature", value: $controller.draft.musicTemperature)
+                NumberStepper(title: "Top-k", value: $controller.draft.musicTopK, range: 0...2_048, step: 1)
+                NumberField(title: "MusicCoCa CFG", value: $controller.draft.musicCFGMusicCoCa)
+                NumberField(title: "Notes CFG", value: $controller.draft.musicCFGNotes)
+                NumberField(title: "Drums CFG", value: $controller.draft.musicCFGDrums)
+            }
+            AdaptiveControlRow {
+                Toggle("Drumless", isOn: $controller.draft.musicDrumless)
+                Toggle("Prefill silence", isOn: $controller.draft.musicPrefillSilence)
+                NumberStepper(
+                    title: "Unmask width",
+                    value: $controller.draft.musicUnmaskWidth,
+                    range: 0...8_192,
+                    step: 1
+                )
+                NumberStepper(
+                    title: "Seed rotation",
+                    value: $controller.draft.musicSeedRotation,
+                    range: 0...8_192,
+                    step: 1
+                )
+                NumberField(title: "Prefill seconds", value: $controller.draft.musicPrefillDuration)
             }
         }
     }

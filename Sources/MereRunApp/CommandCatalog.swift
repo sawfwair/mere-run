@@ -58,6 +58,8 @@ enum CommandTemplateID: String, CaseIterable {
     case musicAnalyze
     case musicTranscribe
     case musicRealtime
+    case musicTrainAdapter
+    case musicServe
     case videoGenerate
     case videoAnimate
     case videoCosmos3
@@ -293,6 +295,120 @@ struct CommandDraft: Equatable {
     var noVertexColors = false
     var camerasPath = ""
     var durationSeconds = 10.0
+    // Music production workspace. Empty strings intentionally mean "let the CLI quality
+    // preset choose" for optional numeric overrides.
+    var musicLyricsFile = ""
+    var musicLRCFile = ""
+    var musicLRCOutput = ""
+    var musicExportFormat = "pcm24"
+    var musicNormalization = "peak"
+    var musicTargetPeakDB = -1.0
+    var musicFadeInMS = 5.0
+    var musicFadeOutMS = 20.0
+    var musicNoDither = false
+    var musicRecipeOutput = ""
+    var musicNoRecipe = false
+    var musicDAWBundle = ""
+    var musicStems = ""
+    var musicAdapterPaths = ""
+    var musicAdapterKind = "auto"
+    var musicAdapterScales = ""
+    var musicCheckpointsRoot = ""
+    var musicDecoderSubdirectory = "acestep-v15-turbo"
+    var musicVAESubdirectory = "vae"
+    var musicLMSubdirectory = ""
+    var musicTextSubdirectory = ""
+    var musicLMMode = "auto"
+    var musicAnalyzeSourceAudio = false
+    var musicQuality = "song"
+    var musicOverrideSteps = false
+    var musicShift = ""
+    var musicInferMethod = ""
+    var musicSampler = ""
+    var musicGuidanceScale = ""
+    var musicGuidanceMode = ""
+    var musicCFGIntervalStart = ""
+    var musicCFGIntervalEnd = ""
+    var musicVelocityNormThreshold = ""
+    var musicVelocityEMAFactor = ""
+    var musicCandidates = 0
+    var musicKeepCandidates = false
+    var musicCoverStrength = 1.0
+    var musicCoverNoiseStrength = 0.0
+    var musicRetakeSeed = ""
+    var musicRetakeVariance = 0.0
+    var musicVocalLanguage = "en"
+    var musicInstruction = "Fill the audio semantic mask based on the given conditions:"
+    var musicTask = "text2music"
+    var musicSourceAudio = ""
+    var musicReferenceAudioPaths = ""
+    var musicTrackName = ""
+    var musicCompleteTrackClasses = ""
+    var musicNonCover = false
+    var musicRepaintStart = 0.0
+    var musicRepaintEnd = -1.0
+    var musicChunkMaskMode = "auto"
+    var musicRepaintMode = "balanced"
+    var musicRepaintStrength = 0.5
+    var musicFlowEdit = false
+    var musicSourceCaption = ""
+    var musicSourceLyrics = ""
+    var musicFlowEditNMin = 0.0
+    var musicFlowEditNMax = 1.0
+    var musicFlowEditNAverage = 1
+    var musicBPM = ""
+    var musicKey = ""
+    var musicTimeSignature = ""
+    var musicLMTopK = 0
+    var musicLMTopP = 0.9
+    var musicMetadataDuration = ""
+    var musicMetadataLanguage = ""
+    var musicNoTiledVAE = false
+    var musicVAEChunkSize = 512
+    var musicVAEOverlap = 64
+    var musicStyleConditioning = "streaming"
+    var musicTemperature = 1.0
+    var musicTopK = 100
+    var musicCFGMusicCoCa = 3.0
+    var musicCFGNotes = 5.0
+    var musicCFGDrums = 1.0
+    var musicDrumless = false
+    var musicUnmaskWidth = 0
+    var musicSeedRotation = 0
+    var musicPrefillSilence = false
+    var musicPrefillDuration = 1.64
+    var musicIncludeRawLM = false
+    var musicIncludeAudioCodes = false
+    var musicAnalysisMaxTokens = 2048
+    var musicAnalysisTemperature = 0.3
+    var musicTranscribeModelPath = ""
+    var musicTranscribeVariant = ""
+    var musicTranscribeFormat = "midi"
+    var musicInstruments = ""
+    var musicListInstruments = false
+    var musicSampling = false
+    var musicMaxTokensPerChunk = 2_000
+    var musicStrictEOS = false
+    var musicBeamSize = 1
+    var musicChunkBatchSize = 4
+    var musicDType = "bfloat16"
+    var musicNoMusicalContext = false
+    var musicContextOutput = ""
+    var musicPlay = true
+    var musicInteractive = false
+    var musicListMIDIInputs = false
+    var musicMIDIMonitor = false
+    var musicMIDILogEvents = false
+    var musicMIDILogRaw = false
+    var musicMIDIInput = ""
+    var musicMIDIChannel = "all"
+    var musicMIDINoteOffset = 0
+    var musicMIDICCMappings = ""
+    var musicTrainingKind = "lora"
+    var musicTrainingFactor = -1
+    var musicTrainingWeightDecay = 0.0001
+    var musicTrainingMaxDuration = 30.0
+    var musicTrainingLogEvery = 10
     var fps = 24
     var numFrames = 65
     var useDuration = false
@@ -490,6 +606,23 @@ struct CommandTemplate: Identifiable, Equatable {
         case .musicGenerate:
             draft.steps = 8
             draft.durationSeconds = 10
+            draft.useDuration = false
+            draft.musicOverrideSteps = false
+        case .musicAnalyze:
+            draft.useDuration = false
+        case .musicTranscribe:
+            draft.temperature = 1
+        case .musicRealtime:
+            draft.durationSeconds = 30
+            draft.musicPlay = true
+        case .musicTrainAdapter:
+            draft.steps = 1_000
+            draft.rank = 8
+            draft.alpha = 16
+            draft.learningRate = 0.0001
+            draft.seed = "42"
+        case .musicServe:
+            draft.port = 8081
         case .sfxGenerate, .sfxVideo:
             draft.steps = 4
             draft.durationSeconds = 8
@@ -516,11 +649,19 @@ struct CommandTemplate: Identifiable, Equatable {
     }
 
     func validationMessage(for draft: CommandDraft) -> String? {
-        if promptLabel != nil && id != .custom && draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if promptLabel != nil
+            && id != .custom
+            && id != .musicRealtime
+            && draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "\(promptLabel ?? "Prompt") is required."
         }
 
-        let optionalInputs: Set<CommandTemplateID> = [.imageGenerate, .imageTrainLoRA, .videoGenerate]
+        let optionalInputs: Set<CommandTemplateID> = [
+            .imageGenerate,
+            .imageTrainLoRA,
+            .videoGenerate,
+            .musicTranscribe
+        ]
         if inputKind != .none
             && !optionalInputs.contains(id)
             && draft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -528,6 +669,40 @@ struct CommandTemplate: Identifiable, Equatable {
         }
 
         switch id {
+        case .musicGenerate:
+            if !draft.musicLRCFile.isBlank
+                && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {
+                return "Use synchronized LRC or plain lyrics, not both."
+            }
+            let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+            if (sourceTasks.contains(draft.musicTask) || draft.musicFlowEdit)
+                && draft.musicSourceAudio.isBlank {
+                return "Source audio is required for \(draft.musicTask) and flow-edit workflows."
+            }
+        case .musicTranscribe:
+            if draft.inputPath.isBlank && !draft.musicListInstruments {
+                return "Audio path is required unless listing instruments."
+            }
+        case .musicRealtime:
+            if draft.prompt.isBlank && !draft.musicListMIDIInputs && !draft.musicMIDIMonitor {
+                return "A prompt is required unless listing or monitoring MIDI inputs."
+            }
+            if !draft.musicPlay && draft.outputPath.isBlank && !draft.musicListMIDIInputs
+                && !draft.musicMIDIMonitor {
+                return "Enable playback or choose an output file."
+            }
+        case .musicTrainAdapter:
+            if draft.inputPath.isBlank {
+                return "Dataset manifest is required."
+            }
+            if draft.outputPath.isBlank {
+                return "Adapter output is required."
+            }
+        case .musicServe:
+            if draft.host != "127.0.0.1" && draft.host != "localhost"
+                && draft.host != "::1" && draft.apiKey.isBlank {
+                return "An API key is required for non-loopback music servers."
+            }
         case .imageTrainLoRA:
             if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
                 return "A dataset directory is required unless synthetic samples are enabled."
@@ -1023,8 +1198,147 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.secondaryText.isBlank { args += ["--lyrics", draft.secondaryText] }
-            args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
+            if !draft.musicLyricsFile.isBlank { args += ["--lyrics-file", draft.musicLyricsFile] }
+            if !draft.musicLRCFile.isBlank { args += ["--lrc-file", draft.musicLRCFile] }
+            if !draft.musicLRCOutput.isBlank { args += ["--lrc-output", draft.musicLRCOutput] }
+            args += [
+                "--export-format", draft.musicExportFormat,
+                "--normalize", draft.musicNormalization,
+                "--target-peak-db", format(draft.musicTargetPeakDB),
+                "--fade-in-ms", format(draft.musicFadeInMS),
+                "--fade-out-ms", format(draft.musicFadeOutMS)
+            ]
+            if draft.musicNoDither { args.append("--no-dither") }
+            if !draft.musicRecipeOutput.isBlank { args += ["--recipe-output", draft.musicRecipeOutput] }
+            if draft.musicNoRecipe { args.append("--no-recipe") }
+            if !draft.musicDAWBundle.isBlank { args += ["--daw-bundle", draft.musicDAWBundle] }
+            if !draft.musicStems.isBlank { args += ["--stems", draft.musicStems] }
+            for path in pathList(draft.musicAdapterPaths) {
+                args += ["--adapter", path]
+            }
+            if !draft.musicAdapterPaths.isBlank {
+                args += ["--adapter-kind", draft.musicAdapterKind]
+                for scale in pathList(draft.musicAdapterScales) {
+                    args += ["--adapter-scale", scale]
+                }
+            }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicDecoderSubdirectory.isBlank {
+                args += ["--decoder-subdirectory", draft.musicDecoderSubdirectory]
+            }
+            if !draft.musicVAESubdirectory.isBlank {
+                args += ["--vae-subdirectory", draft.musicVAESubdirectory]
+            }
+            if !draft.musicLMSubdirectory.isBlank {
+                args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if !draft.musicTextSubdirectory.isBlank {
+                args += ["--text-subdirectory", draft.musicTextSubdirectory]
+            }
+            if draft.musicLMMode == "use" { args.append("--use-lm") }
+            if draft.musicLMMode == "disable" { args.append("--no-lm") }
+            if draft.musicAnalyzeSourceAudio { args.append("--analyze-source-audio") }
+            if draft.useDuration { args += ["--duration", format(draft.durationSeconds)] }
+            args += ["--quality", draft.musicQuality]
+            if draft.musicOverrideSteps { args += ["--steps", String(draft.steps)] }
+            if !draft.musicShift.isBlank { args += ["--shift", draft.musicShift] }
+            if !draft.musicInferMethod.isBlank { args += ["--infer-method", draft.musicInferMethod] }
+            if !draft.musicSampler.isBlank { args += ["--sampler", draft.musicSampler] }
+            if !draft.musicGuidanceScale.isBlank { args += ["--guidance-scale", draft.musicGuidanceScale] }
+            if !draft.musicGuidanceMode.isBlank { args += ["--guidance-mode", draft.musicGuidanceMode] }
+            if !draft.musicCFGIntervalStart.isBlank {
+                args += ["--cfg-interval-start", draft.musicCFGIntervalStart]
+            }
+            if !draft.musicCFGIntervalEnd.isBlank {
+                args += ["--cfg-interval-end", draft.musicCFGIntervalEnd]
+            }
+            if !draft.musicVelocityNormThreshold.isBlank {
+                args += ["--velocity-norm-threshold", draft.musicVelocityNormThreshold]
+            }
+            if !draft.musicVelocityEMAFactor.isBlank {
+                args += ["--velocity-ema-factor", draft.musicVelocityEMAFactor]
+            }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.musicCandidates > 0 { args += ["--candidates", String(draft.musicCandidates)] }
+            if draft.musicKeepCandidates { args.append("--keep-candidates") }
+            args += [
+                "--audio-cover-strength", format(draft.musicCoverStrength),
+                "--cover-noise-strength", format(draft.musicCoverNoiseStrength),
+                "--retake-variance", format(draft.musicRetakeVariance),
+                "--vocal-language", draft.musicVocalLanguage,
+                "--instruction", draft.musicInstruction,
+                "--task-type", draft.musicTask
+            ]
+            if !draft.musicRetakeSeed.isBlank { args += ["--retake-seed", draft.musicRetakeSeed] }
+            if !draft.musicSourceAudio.isBlank { args += ["--source-audio", draft.musicSourceAudio] }
+            for path in pathList(draft.musicReferenceAudioPaths) {
+                args += ["--reference-audio", path]
+            }
+            if !draft.musicTrackName.isBlank { args += ["--track-name", draft.musicTrackName] }
+            if !draft.musicCompleteTrackClasses.isBlank {
+                args += ["--complete-track-classes", draft.musicCompleteTrackClasses]
+            }
+            if draft.musicNonCover { args.append("--non-cover") }
+            if ["repaint", "lego"].contains(draft.musicTask) {
+                args += [
+                    "--repaint-start", format(draft.musicRepaintStart),
+                    "--repaint-end", format(draft.musicRepaintEnd),
+                    "--chunk-mask-mode", draft.musicChunkMaskMode,
+                    "--repaint-mode", draft.musicRepaintMode,
+                    "--repaint-strength", format(draft.musicRepaintStrength)
+                ]
+            }
+            if draft.musicFlowEdit {
+                args += [
+                    "--flow-edit",
+                    "--flow-edit-n-min", format(draft.musicFlowEditNMin),
+                    "--flow-edit-n-max", format(draft.musicFlowEditNMax),
+                    "--flow-edit-n-average", String(draft.musicFlowEditNAverage)
+                ]
+                if !draft.musicSourceCaption.isBlank {
+                    args += ["--source-caption", draft.musicSourceCaption]
+                }
+                if !draft.musicSourceLyrics.isBlank {
+                    args += ["--source-lyrics", draft.musicSourceLyrics]
+                }
+            }
+            if !draft.musicBPM.isBlank { args += ["--bpm", draft.musicBPM] }
+            if !draft.musicKey.isBlank { args += ["--keyscale", draft.musicKey] }
+            if !draft.musicTimeSignature.isBlank {
+                args += ["--timesignature", draft.musicTimeSignature]
+            }
+            args += [
+                "--lm-top-k", String(draft.musicLMTopK),
+                "--lm-top-p", format(draft.musicLMTopP)
+            ]
+            if !draft.musicMetadataDuration.isBlank {
+                args += ["--metadata-duration", draft.musicMetadataDuration]
+            }
+            if !draft.musicMetadataLanguage.isBlank {
+                args += ["--metadata-language", draft.musicMetadataLanguage]
+            }
+            if draft.musicNoTiledVAE { args.append("--no-tiled-vae") }
+            args += [
+                "--vae-chunk-size", String(draft.musicVAEChunkSize),
+                "--vae-overlap", String(draft.musicVAEOverlap)
+            ]
+            if draft.model.localizedCaseInsensitiveContains("magenta") {
+                args += [
+                    "--temperature", format(draft.musicTemperature),
+                    "--style-conditioning", draft.musicStyleConditioning,
+                    "--top-k", String(draft.musicTopK),
+                    "--cfg-musiccoca", format(draft.musicCFGMusicCoCa),
+                    "--cfg-notes", format(draft.musicCFGNotes),
+                    "--cfg-drums", format(draft.musicCFGDrums),
+                    "--unmask-width", String(draft.musicUnmaskWidth),
+                    "--seed-rotation", String(draft.musicSeedRotation),
+                    "--prefill-duration", format(draft.musicPrefillDuration)
+                ]
+                if draft.musicDrumless { args.append("--drumless") }
+                if draft.musicPrefillSilence { args.append("--prefill-silence") }
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .videoGenerate:
@@ -1188,25 +1502,150 @@ struct CommandTemplate: Identifiable, Equatable {
         case .musicAnalyze:
             args = ["music", "analyze", draft.inputPath]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if draft.all { args.append("--include-raw-lm") }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicDecoderSubdirectory.isBlank {
+                args += ["--decoder-subdirectory", draft.musicDecoderSubdirectory]
+            }
+            if !draft.musicVAESubdirectory.isBlank {
+                args += ["--vae-subdirectory", draft.musicVAESubdirectory]
+            }
+            if !draft.musicLMSubdirectory.isBlank {
+                args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if draft.useDuration { args += ["--duration", format(draft.durationSeconds)] }
+            args += [
+                "--max-new-tokens", String(draft.musicAnalysisMaxTokens),
+                "--lm-temperature", format(draft.musicAnalysisTemperature),
+                "--lm-top-k", String(draft.musicLMTopK),
+                "--lm-top-p", format(draft.musicLMTopP)
+            ]
+            if draft.musicIncludeRawLM { args.append("--include-raw-lm") }
+            if draft.musicIncludeAudioCodes { args.append("--include-audio-codes") }
             if draft.quiet { args.append("--quiet") }
 
         case .musicTranscribe:
-            args = ["music", "transcribe", draft.inputPath]
+            args = ["music", "transcribe"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.musicTranscribeModelPath.isBlank {
+                args += ["--model-path", draft.musicTranscribeModelPath]
+            }
+            if !draft.musicTranscribeVariant.isBlank {
+                args += ["--variant", draft.musicTranscribeVariant]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            args += ["--format", draft.musicTranscribeFormat]
+            if !draft.musicInstruments.isBlank {
+                args += ["--instruments", draft.musicInstruments]
+            }
+            if draft.musicListInstruments { args.append("--list-instruments") }
+            if draft.musicSampling { args.append("--sampling") }
+            args += [
+                "--temperature", format(draft.temperature),
+                "--max-tokens-per-chunk", String(draft.musicMaxTokensPerChunk),
+                "--beam-size", String(draft.musicBeamSize),
+                "--chunk-batch-size", String(draft.musicChunkBatchSize),
+                "--dtype", draft.musicDType
+            ]
+            if draft.musicStrictEOS { args.append("--strict-eos") }
+            if draft.musicNoMusicalContext { args.append("--no-musical-context") }
+            if !draft.musicContextOutput.isBlank {
+                args += ["--context-output", draft.musicContextOutput]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .musicRealtime:
-            args = ["music", "realtime", draft.prompt]
+            args = ["music", "realtime"]
+            if !draft.prompt.isBlank { args.append(draft.prompt) }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--duration", format(draft.durationSeconds)]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
-            // GUI subprocesses have no audio device contract or stdin TTY, so capture to the
-            // output WAV without live playback; interactive steering stays CLI-only.
-            args.append("--no-play")
+            if !draft.musicPlay { args.append("--no-play") }
+            args += [
+                "--style-conditioning", draft.musicStyleConditioning,
+                "--temperature", format(draft.musicTemperature),
+                "--top-k", String(draft.musicTopK),
+                "--cfg-musiccoca", format(draft.musicCFGMusicCoCa),
+                "--cfg-notes", format(draft.musicCFGNotes),
+                "--cfg-drums", format(draft.musicCFGDrums),
+                "--unmask-width", String(draft.musicUnmaskWidth),
+                "--seed-rotation", String(draft.musicSeedRotation),
+                "--prefill-duration", format(draft.musicPrefillDuration),
+                "--midi-channel", draft.musicMIDIChannel,
+                "--midi-note-offset", String(draft.musicMIDINoteOffset)
+            ]
+            if draft.musicDrumless { args.append("--drumless") }
+            if draft.musicPrefillSilence { args.append("--prefill-silence") }
+            if draft.musicInteractive { args.append("--interactive") }
+            if draft.musicListMIDIInputs { args.append("--list-midi-inputs") }
+            if draft.musicMIDIMonitor { args.append("--midi-monitor") }
+            if draft.musicMIDILogEvents { args.append("--midi-log-events") }
+            if draft.musicMIDILogRaw { args.append("--midi-log-raw") }
+            if !draft.musicMIDIInput.isBlank { args += ["--midi-input", draft.musicMIDIInput] }
+            for mapping in pathList(draft.musicMIDICCMappings) {
+                args += ["--midi-cc", mapping]
+            }
             if draft.quiet { args.append("--quiet") }
 
+        case .musicTrainAdapter:
+            args = [
+                "music", "train-adapter",
+                "--dataset", draft.inputPath,
+                "--output", draft.outputPath,
+                "--kind", draft.musicTrainingKind,
+                "--rank", String(draft.rank),
+                "--alpha", format(draft.alpha),
+                "--factor", String(draft.musicTrainingFactor),
+                "--steps", String(draft.steps),
+                "--learning-rate", format(draft.learningRate),
+                "--weight-decay", format(draft.musicTrainingWeightDecay),
+                "--seed", draft.seed,
+                "--max-duration", format(draft.musicTrainingMaxDuration),
+                "--decoder-subdirectory", draft.musicDecoderSubdirectory,
+                "--vae-subdirectory", draft.musicVAESubdirectory,
+                "--log-every", String(draft.musicTrainingLogEvery)
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicTextSubdirectory.isBlank {
+                args += ["--text-subdirectory", draft.musicTextSubdirectory]
+            }
+
+        case .musicServe:
+            args = [
+                "music", "serve",
+                "--host", draft.host,
+                "--port", String(draft.port)
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicDecoderSubdirectory.isBlank {
+                args += ["--decoder-subdirectory", draft.musicDecoderSubdirectory]
+            }
+            if !draft.musicVAESubdirectory.isBlank {
+                args += ["--vae-subdirectory", draft.musicVAESubdirectory]
+            }
+            if !draft.musicLMSubdirectory.isBlank {
+                args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if !draft.musicTextSubdirectory.isBlank {
+                args += ["--text-subdirectory", draft.musicTextSubdirectory]
+            }
+            for path in pathList(draft.musicAdapterPaths) {
+                args += ["--adapter", path]
+            }
+            if !draft.musicAdapterPaths.isBlank {
+                args += ["--adapter-kind", draft.musicAdapterKind]
+                for scale in pathList(draft.musicAdapterScales) {
+                    args += ["--adapter-scale", scale]
+                }
+            }
         case .sfxAEEncode:
             args = ["sfx", "ae", "encode", draft.inputPath]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
@@ -1299,7 +1738,7 @@ enum CommandLaunchEnvironment {
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
 
     static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
-        guard templateID == .apiServe else { return [:] }
+        guard templateID == .apiServe || templateID == .musicServe else { return [:] }
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else { return [:] }
         return [apiKeyEnvironmentKey: apiKey]
@@ -1726,11 +2165,30 @@ enum CommandCatalog {
             id: .musicRealtime,
             category: .media,
             title: "Realtime music",
-            subtitle: "Magenta RT2 capture to WAV",
+            subtitle: "Magenta RT2 playback, capture, and MIDI steering",
             systemImage: "dot.radiowaves.left.and.right",
             promptLabel: "Prompt",
             outputKind: .file("wav"),
-            defaultPrompt: "warm ambient pads with a slow build"
+            defaultPrompt: "warm ambient pads with a slow build",
+            defaultModel: "music-magenta-rt2-small"
+        ),
+        CommandTemplate(
+            id: .musicTrainAdapter,
+            category: .media,
+            title: "Train music adapter",
+            subtitle: "Native ACE-Step LoRA or LoKr training",
+            systemImage: "tuningfork",
+            inputKind: .file([.json]),
+            outputKind: .file("safetensors"),
+            defaultModel: "music-acestep"
+        ),
+        CommandTemplate(
+            id: .musicServe,
+            category: .media,
+            title: "Resident music API",
+            subtitle: "Keep ACE-Step, LM, and adapters warm",
+            systemImage: "server.rack",
+            defaultModel: "music-acestep"
         ),
         CommandTemplate(
             id: .sfxAEEncode,

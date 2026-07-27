@@ -13,6 +13,14 @@ and `mere.run music transcribe`.
 - `mere.run music realtime`
 - `mere.run music transcribe`
 
+The macOS Studio app exposes the same six workflows through typed forms backed
+by `MereRunContract`. Its primary Music composer covers the normal production
+loop—create or edit, source/reference audio, quality and LM planning, ranked
+candidates, adapter stacks, stems, LRC, recipes, and DAW export—while Advanced
+contains every specialist generation, analysis, transcription, realtime MIDI,
+training, and resident-server control. App-to-CLI tests reject any emitted flag
+that is absent from the machine-readable `mere.run catalog --json` contract.
+
 ## Model family
 
 - `music-acestep`

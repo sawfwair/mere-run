@@ -168,6 +168,12 @@ public enum MereRunCapabilityCatalog {
             imageReconstruct3D,
             imageReconstruct3DTrellis2,
             imageReconstruct3DMultiview,
+            musicGenerate,
+            musicAnalyze,
+            musicTranscribe,
+            musicRealtime,
+            musicTrainAdapter,
+            musicServe,
             videoGenerate,
             videoAnimate,
             videoCosmos3,
@@ -568,6 +574,254 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
         output: .init(kind: .directory)
+    )
+
+    public static let musicGenerate = MereRunCommandCapability(
+        id: "music.generate",
+        command: ["music", "generate"],
+        title: "Generate and edit music",
+        summary: "Create, cover, repaint, flow-edit, rank, stem, and export production music.",
+        arguments: [
+            .init(name: "caption", label: "Music prompt", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--lyrics", label: "Lyrics", kind: .string),
+            .init(flag: "--lyrics-file", label: "Lyrics file", kind: .file),
+            .init(flag: "--lrc-file", label: "LRC file", kind: .file),
+            .init(flag: "--lrc-output", label: "LRC output", kind: .file),
+            .init(flag: "--output", label: "Audio output", kind: .file),
+            .init(flag: "--export-format", label: "Audio format", kind: .choice, choices: ["pcm16", "pcm24", "float32"]),
+            .init(flag: "--normalize", label: "Normalization", kind: .choice, choices: ["none", "peak"]),
+            .init(flag: "--target-peak-db", label: "Peak target", kind: .number),
+            .init(flag: "--fade-in-ms", label: "Fade in", kind: .number),
+            .init(flag: "--fade-out-ms", label: "Fade out", kind: .number),
+            .init(flag: "--no-dither", label: "Disable dither", kind: .boolean),
+            .init(flag: "--recipe-output", label: "Recipe output", kind: .file),
+            .init(flag: "--no-recipe", label: "Disable recipe", kind: .boolean),
+            .init(flag: "--daw-bundle", label: "DAW bundle", kind: .directory),
+            .init(flag: "--stems", label: "Stems", kind: .string),
+            .init(flag: "--adapter", label: "Adapter", kind: .file, repeatable: true),
+            .init(flag: "--adapter-kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"]),
+            .init(flag: "--adapter-scale", label: "Adapter scale", kind: .number, repeatable: true),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
+            .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
+            .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
+            .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
+            .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
+            .init(flag: "--use-lm", label: "Use LM planning", kind: .boolean),
+            .init(flag: "--no-lm", label: "Disable LM planning", kind: .boolean),
+            .init(flag: "--analyze-source-audio", label: "Analyze source", kind: .boolean),
+            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--quality", label: "Quality", kind: .choice, choices: ["draft", "song", "final", "edit"]),
+            .init(flag: "--steps", label: "Steps", kind: .integer),
+            .init(flag: "--shift", label: "Scheduler shift", kind: .number),
+            .init(flag: "--infer-method", label: "Inference method", kind: .choice, choices: ["ode", "sde"]),
+            .init(flag: "--sampler", label: "Sampler", kind: .choice, choices: ["euler", "heun"]),
+            .init(flag: "--guidance-scale", label: "Guidance scale", kind: .number),
+            .init(flag: "--guidance-mode", label: "Guidance mode", kind: .choice, choices: ["apg", "adg", "cfg"]),
+            .init(flag: "--cfg-interval-start", label: "CFG start", kind: .number),
+            .init(flag: "--cfg-interval-end", label: "CFG end", kind: .number),
+            .init(flag: "--velocity-norm-threshold", label: "Velocity clamp", kind: .number),
+            .init(flag: "--velocity-ema-factor", label: "Velocity EMA", kind: .number),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--candidates", label: "Candidate count", kind: .integer),
+            .init(flag: "--keep-candidates", label: "Keep candidates", kind: .boolean),
+            .init(flag: "--audio-cover-strength", label: "Cover strength", kind: .number),
+            .init(flag: "--cover-noise-strength", label: "Cover noise", kind: .number),
+            .init(flag: "--retake-seed", label: "Retake seed", kind: .integer),
+            .init(flag: "--retake-variance", label: "Retake variance", kind: .number),
+            .init(flag: "--vocal-language", label: "Vocal language", kind: .string),
+            .init(flag: "--instruction", label: "Instruction", kind: .string),
+            .init(
+                flag: "--task-type",
+                label: "Task",
+                kind: .choice,
+                choices: ["text2music", "repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+            ),
+            .init(flag: "--source-audio", label: "Source audio", kind: .file),
+            .init(flag: "--reference-audio", label: "Reference audio", kind: .file, repeatable: true),
+            .init(flag: "--track-name", label: "Track name", kind: .string),
+            .init(flag: "--complete-track-classes", label: "Track classes", kind: .string),
+            .init(flag: "--non-cover", label: "No FSQ cover", kind: .boolean),
+            .init(flag: "--repaint-start", label: "Repaint start", kind: .number),
+            .init(flag: "--repaint-end", label: "Repaint end", kind: .number),
+            .init(flag: "--chunk-mask-mode", label: "Chunk mask", kind: .choice, choices: ["auto", "explicit"]),
+            .init(flag: "--repaint-mode", label: "Repaint mode", kind: .choice, choices: ["conservative", "balanced", "aggressive"]),
+            .init(flag: "--repaint-strength", label: "Repaint strength", kind: .number),
+            .init(flag: "--flow-edit", label: "Flow edit", kind: .boolean),
+            .init(flag: "--source-caption", label: "Source caption", kind: .string),
+            .init(flag: "--source-lyrics", label: "Source lyrics", kind: .string),
+            .init(flag: "--flow-edit-n-min", label: "Flow start", kind: .number),
+            .init(flag: "--flow-edit-n-max", label: "Flow end", kind: .number),
+            .init(flag: "--flow-edit-n-average", label: "Flow samples", kind: .integer),
+            .init(flag: "--bpm", label: "BPM", kind: .integer),
+            .init(flag: "--keyscale", label: "Key", kind: .string),
+            .init(flag: "--timesignature", label: "Time signature", kind: .string),
+            .init(flag: "--lm-top-k", label: "LM top-k", kind: .integer),
+            .init(flag: "--lm-top-p", label: "LM top-p", kind: .number),
+            .init(flag: "--metadata-duration", label: "Metadata duration", kind: .string),
+            .init(flag: "--metadata-language", label: "Metadata language", kind: .string),
+            .init(flag: "--no-tiled-vae", label: "Disable tiled VAE", kind: .boolean),
+            .init(flag: "--vae-chunk-size", label: "VAE chunk", kind: .integer),
+            .init(flag: "--vae-overlap", label: "VAE overlap", kind: .integer),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
+            .init(flag: "--temperature", label: "RT2 temperature", kind: .number),
+            .init(flag: "--style-conditioning", label: "RT2 style", kind: .choice, choices: ["streaming", "full"]),
+            .init(flag: "--top-k", label: "RT2 top-k", kind: .integer),
+            .init(flag: "--cfg-musiccoca", label: "MusicCoCa CFG", kind: .number),
+            .init(flag: "--cfg-notes", label: "Notes CFG", kind: .number),
+            .init(flag: "--cfg-drums", label: "Drums CFG", kind: .number),
+            .init(flag: "--drumless", label: "Drumless", kind: .boolean),
+            .init(flag: "--unmask-width", label: "Unmask width", kind: .integer),
+            .init(flag: "--seed-rotation", label: "Seed rotation", kind: .integer),
+            .init(flag: "--prefill-silence", label: "Prefill silence", kind: .boolean),
+            .init(flag: "--prefill-duration", label: "Prefill duration", kind: .number)
+        ],
+        output: .init(kind: .file, fileExtension: "wav")
+    )
+
+    public static let musicAnalyze = MereRunCommandCapability(
+        id: "music.analyze",
+        command: ["music", "analyze"],
+        title: "Analyze music",
+        summary: "Extract structured music metadata and optional ACE-Step audio codes.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
+            .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
+            .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
+            .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
+            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--max-new-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--lm-temperature", label: "LM temperature", kind: .number),
+            .init(flag: "--lm-top-k", label: "LM top-k", kind: .integer),
+            .init(flag: "--lm-top-p", label: "LM top-p", kind: .number),
+            .init(flag: "--include-raw-lm", label: "Raw LM", kind: .boolean),
+            .init(flag: "--include-audio-codes", label: "Audio codes", kind: .boolean),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let musicTranscribe = MereRunCommandCapability(
+        id: "music.transcribe",
+        command: ["music", "transcribe"],
+        title: "Transcribe music",
+        summary: "Turn a full mix into separated MIDI or structured events with musical context.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: false)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-path", label: "Model path", kind: .directory),
+            .init(flag: "--variant", label: "Variant", kind: .choice, choices: ["small", "medium", "large"]),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--format", label: "Format", kind: .choice, choices: ["midi", "json", "jsonl"]),
+            .init(flag: "--instruments", label: "Instruments", kind: .string),
+            .init(flag: "--list-instruments", label: "List instruments", kind: .boolean),
+            .init(flag: "--sampling", label: "Sampling", kind: .boolean),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--max-tokens-per-chunk", label: "Tokens per chunk", kind: .integer),
+            .init(flag: "--strict-eos", label: "Strict EOS", kind: .boolean),
+            .init(flag: "--beam-size", label: "Beam size", kind: .integer),
+            .init(flag: "--chunk-batch-size", label: "Chunk batch", kind: .integer),
+            .init(flag: "--dtype", label: "Compute type", kind: .choice, choices: ["bfloat16", "float16", "float32"]),
+            .init(flag: "--no-musical-context", label: "Disable context", kind: .boolean),
+            .init(flag: "--context-output", label: "Context output", kind: .file),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file)
+    )
+
+    public static let musicRealtime = MereRunCommandCapability(
+        id: "music.realtime",
+        command: ["music", "realtime"],
+        title: "Realtime music",
+        summary: "Run live Magenta RT2 generation with text, interactive, and MIDI steering.",
+        arguments: [
+            .init(name: "prompt", label: "Prompt", kind: .string, required: false)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--no-play", label: "Disable playback", kind: .boolean),
+            .init(flag: "--style-conditioning", label: "Style", kind: .choice, choices: ["streaming", "full"]),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--cfg-musiccoca", label: "MusicCoCa CFG", kind: .number),
+            .init(flag: "--cfg-notes", label: "Notes CFG", kind: .number),
+            .init(flag: "--cfg-drums", label: "Drums CFG", kind: .number),
+            .init(flag: "--drumless", label: "Drumless", kind: .boolean),
+            .init(flag: "--unmask-width", label: "Unmask width", kind: .integer),
+            .init(flag: "--seed-rotation", label: "Seed rotation", kind: .integer),
+            .init(flag: "--prefill-silence", label: "Prefill silence", kind: .boolean),
+            .init(flag: "--prefill-duration", label: "Prefill duration", kind: .number),
+            .init(flag: "--interactive", label: "Interactive", kind: .boolean),
+            .init(flag: "--list-midi-inputs", label: "List MIDI", kind: .boolean),
+            .init(flag: "--midi-monitor", label: "MIDI monitor", kind: .boolean),
+            .init(flag: "--midi-log-events", label: "Log MIDI", kind: .boolean),
+            .init(flag: "--midi-log-raw", label: "Log raw MIDI", kind: .boolean),
+            .init(flag: "--midi-input", label: "MIDI input", kind: .string),
+            .init(flag: "--midi-channel", label: "MIDI channel", kind: .string),
+            .init(flag: "--midi-note-offset", label: "MIDI transpose", kind: .integer),
+            .init(flag: "--midi-cc", label: "MIDI CC map", kind: .string, repeatable: true),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .service)
+    )
+
+    public static let musicTrainAdapter = MereRunCommandCapability(
+        id: "music.train-adapter",
+        command: ["music", "train-adapter"],
+        title: "Train music adapter",
+        summary: "Train a native ACE-Step LoRA or LoKr adapter.",
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--dataset", label: "Dataset", kind: .file, required: true),
+            .init(flag: "--output", label: "Output", kind: .file, required: true),
+            .init(flag: "--kind", label: "Adapter kind", kind: .choice, choices: ["lora", "lokr"]),
+            .init(flag: "--rank", label: "Rank", kind: .integer),
+            .init(flag: "--alpha", label: "Alpha", kind: .number),
+            .init(flag: "--factor", label: "LoKr factor", kind: .integer),
+            .init(flag: "--steps", label: "Steps", kind: .integer),
+            .init(flag: "--learning-rate", label: "Learning rate", kind: .number),
+            .init(flag: "--weight-decay", label: "Weight decay", kind: .number),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--max-duration", label: "Max duration", kind: .number),
+            .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
+            .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
+            .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
+            .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
+            .init(flag: "--log-every", label: "Progress interval", kind: .integer)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    public static let musicServe = MereRunCommandCapability(
+        id: "music.serve",
+        command: ["music", "serve"],
+        title: "Serve resident music",
+        summary: "Keep ACE-Step, its language model, and adapter stack warm behind a local API.",
+        options: [
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
+            .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
+            .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
+            .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
+            .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
+            .init(flag: "--adapter", label: "Adapter", kind: .file, repeatable: true),
+            .init(flag: "--adapter-kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"]),
+            .init(flag: "--adapter-scale", label: "Adapter scale", kind: .number, repeatable: true),
+            .init(flag: "--api-key", label: "API key", kind: .string)
+        ],
+        output: .init(kind: .service)
     )
 
     public static let videoGenerate = MereRunCommandCapability(

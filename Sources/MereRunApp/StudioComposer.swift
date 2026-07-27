@@ -471,6 +471,10 @@ struct StudioOptionsPanel: View {
                     imageOptions
                 }
 
+                if mode == .music {
+                    musicOptions
+                }
+
                 if [.createImage, .video].contains(mode) {
                     HStack(spacing: MereRunTheme.Spacing.sm) {
                         Stepper("Width \(draft.width)", value: $draft.width, in: 64...4096, step: 64)
@@ -479,12 +483,12 @@ struct StudioOptionsPanel: View {
                     .font(MereRunTheme.captionFont)
                 }
 
-                if [.createImage, .music, .sfx].contains(mode) {
+                if [.createImage, .sfx].contains(mode) {
                     Stepper("Steps \(draft.steps)", value: $draft.steps, in: 1...80, step: 1)
                         .font(MereRunTheme.captionFont)
                 }
 
-                if [.music, .sfx].contains(mode) {
+                if mode == .sfx {
                     HStack {
                         Text("Duration seconds")
                             .font(MereRunTheme.captionFont)
@@ -824,6 +828,121 @@ struct StudioOptionsPanel: View {
             .font(MereRunTheme.captionFont)
     }
 
+    @ViewBuilder
+    private var musicOptions: some View {
+        Picker("Quality", selection: $draft.musicQuality) {
+            Text("Draft").tag("draft")
+            Text("Song").tag("song")
+            Text("Final").tag("final")
+            Text("Edit").tag("edit")
+        }
+        .pickerStyle(.segmented)
+
+        Picker("Task", selection: $draft.musicTask) {
+            Text("Create").tag("text2music")
+            Text("Cover").tag("cover")
+            Text("No-FSQ").tag("cover-nofsq")
+            Text("Repaint").tag("repaint")
+            Text("Extract").tag("extract")
+            Text("Lego").tag("lego")
+            Text("Complete").tag("complete")
+        }
+
+        if draft.musicTask != "text2music" || draft.musicFlowEdit {
+            videoAssetRow(title: "Source audio", path: $draft.musicSourceAudio, type: .audio)
+            numberField("Cover strength", value: $draft.musicCoverStrength)
+            numberField("Cover noise", value: $draft.musicCoverNoiseStrength)
+        }
+
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Text(draft.musicReferenceAudioPaths.isBlank
+                ? "No timbre references"
+                : "\(musicReferencePaths.count) timbre reference\(musicReferencePaths.count == 1 ? "" : "s")")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
+            Spacer()
+            Button("References…", action: chooseMusicReferences)
+                .controlSize(.small)
+        }
+
+        Picker("LM planning", selection: $draft.musicLMMode) {
+            Text("Preset").tag("auto")
+            Text("On").tag("use")
+            Text("Off").tag("disable")
+        }
+        .pickerStyle(.segmented)
+        Toggle("Analyze source metadata", isOn: $draft.musicAnalyzeSourceAudio)
+            .font(MereRunTheme.captionFont)
+
+        Toggle("Set exact duration", isOn: $draft.useDuration)
+            .font(MereRunTheme.captionFont)
+        if draft.useDuration {
+            numberField("Duration seconds", value: $draft.durationSeconds)
+        }
+        Toggle("Override preset steps", isOn: $draft.musicOverrideSteps)
+            .font(MereRunTheme.captionFont)
+        if draft.musicOverrideSteps {
+            Stepper("Steps \(draft.steps)", value: $draft.steps, in: 1...200)
+                .font(MereRunTheme.captionFont)
+        }
+        Stepper(
+            "Candidates \(draft.musicCandidates == 0 ? "preset" : String(draft.musicCandidates))",
+            value: $draft.musicCandidates,
+            in: 0...16
+        )
+        .font(MereRunTheme.captionFont)
+        Toggle("Keep all ranked candidates", isOn: $draft.musicKeepCandidates)
+            .font(MereRunTheme.captionFont)
+
+        Toggle("Flow edit source toward prompt", isOn: $draft.musicFlowEdit)
+            .font(MereRunTheme.captionFont)
+        if draft.musicFlowEdit {
+            TextField("Source caption", text: $draft.musicSourceCaption)
+                .mereField()
+            TextField("Source lyrics", text: $draft.musicSourceLyrics, axis: .vertical)
+                .lineLimit(1...4)
+                .mereField()
+        }
+
+        DisclosureGroup("Adapters & delivery") {
+            VStack(spacing: MereRunTheme.Spacing.sm) {
+                HStack(spacing: MereRunTheme.Spacing.sm) {
+                    Text(draft.musicAdapterPaths.isBlank
+                        ? "No ACE-Step adapters"
+                        : "\(musicAdapterPaths.count) adapter\(musicAdapterPaths.count == 1 ? "" : "s")")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                    Spacer()
+                    Button("Adapters…", action: chooseMusicAdapters)
+                        .controlSize(.small)
+                }
+                Picker("Adapter kind", selection: $draft.musicAdapterKind) {
+                    Text("Auto").tag("auto")
+                    Text("LoRA").tag("lora")
+                    Text("LoKr").tag("lokr")
+                }
+                .pickerStyle(.segmented)
+                TextField("Adapter scales, one per line", text: $draft.musicAdapterScales)
+                    .mereField()
+                videoAssetRow(title: "LRC lyrics", path: $draft.musicLRCFile, type: .plainText)
+                TextField("Stems (Drums,Bass,Vocals)", text: $draft.musicStems)
+                    .mereField()
+                TextField("DAW bundle directory", text: $draft.musicDAWBundle)
+                    .mereField()
+                Picker("WAV format", selection: $draft.musicExportFormat) {
+                    Text("PCM 16").tag("pcm16")
+                    Text("PCM 24").tag("pcm24")
+                    Text("Float 32").tag("float32")
+                }
+                .pickerStyle(.segmented)
+                Toggle("Skip recipe sidecar", isOn: $draft.musicNoRecipe)
+                    .font(MereRunTheme.captionFont)
+            }
+            .padding(.top, MereRunTheme.Spacing.xs)
+        }
+    }
+
     private func numberField(_ label: String, value: Binding<Double>) -> some View {
         HStack {
             Text(label)
@@ -851,7 +970,7 @@ struct StudioOptionsPanel: View {
                 panel.canChooseDirectories = false
                 if panel.runModal() == .OK, let url = panel.url {
                     path.wrappedValue = url.path
-                    if type == .audio {
+                    if mode == .video && type == .audio {
                         draft.videoQuality = .final
                         draft.videoOutputMode = .audioVideo
                     }
@@ -877,6 +996,21 @@ struct StudioOptionsPanel: View {
             .filter { !$0.isEmpty }
     }
 
+    private var musicReferencePaths: [String] {
+        separatedPaths(draft.musicReferenceAudioPaths)
+    }
+
+    private var musicAdapterPaths: [String] {
+        separatedPaths(draft.musicAdapterPaths)
+    }
+
+    private func separatedPaths(_ raw: String) -> [String] {
+        raw.components(separatedBy: .newlines)
+            .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     private func chooseImageReferences() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
@@ -894,6 +1028,26 @@ struct StudioOptionsPanel: View {
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url {
             draft.loraPath = url.path
+        }
+    }
+
+    private func chooseMusicReferences() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK {
+            draft.musicReferenceAudioPaths = panel.urls.map(\.path).joined(separator: "\n")
+        }
+    }
+
+    private func chooseMusicAdapters() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.data]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK {
+            draft.musicAdapterPaths = panel.urls.map(\.path).joined(separator: "\n")
         }
     }
 
